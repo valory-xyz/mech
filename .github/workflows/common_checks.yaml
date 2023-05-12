@@ -44,7 +44,7 @@ jobs:
 
       - name: Lint
         env:
-          PYTHONPATH=.
+          PYTHONPATH: .
         run: |
           poetry run adev lint -v
 
