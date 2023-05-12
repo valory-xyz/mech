@@ -26,16 +26,12 @@ from typing import Generator, Set, Tuple, Type, cast
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour,
-    BaseBehaviour,
-)
+    AbstractRoundBehaviour, BaseBehaviour)
 from packages.valory.skills.multiplexer_abci.models import Params, SharedState
-from packages.valory.skills.multiplexer_abci.rounds import (
-    MultiplexerAbciApp,
-    MultiplexerPayload,
-    MultiplexerRound,
-    SynchronizedData,
-)
+from packages.valory.skills.multiplexer_abci.rounds import (MultiplexerAbciApp,
+                                                            MultiplexerPayload,
+                                                            MultiplexerRound,
+                                                            SynchronizedData)
 
 
 class MultiplexerBaseBehaviour(BaseBehaviour, ABC):
