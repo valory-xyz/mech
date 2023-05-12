@@ -19,35 +19,24 @@
 
 """This package contains round behaviours of TransactionPreparationAbciApp."""
 
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Hashable, Optional, Type
-from dataclasses import dataclass, field
 
 import pytest
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour,
-    BaseBehaviour,
-    make_degenerate_behaviour,
-)
+    AbstractRoundBehaviour, BaseBehaviour, make_degenerate_behaviour)
+from packages.valory.skills.abstract_round_abci.test_tools.base import \
+    FSMBehaviourBaseCase
 from packages.valory.skills.transaction_preparation_abci.behaviours import (
-    TransactionPreparationBaseBehaviour,
-    TransactionPreparationRoundBehaviour,
-    TransactionPreparationAbciBehaviour,
-)
+    TransactionPreparationAbciBehaviour, TransactionPreparationBaseBehaviour,
+    TransactionPreparationRoundBehaviour)
 from packages.valory.skills.transaction_preparation_abci.rounds import (
-    SynchronizedData,
-    DegenerateRound,
-    Event,
-    TransactionPreparationAbciApp,
-    FinishedTransactionPreparationAbciRound,
-    TransactionPreparationAbciRound,
-)
-
-from packages.valory.skills.abstract_round_abci.test_tools.base import (
-    FSMBehaviourBaseCase,
-)
+    DegenerateRound, Event, FinishedTransactionPreparationAbciRound,
+    SynchronizedData, TransactionPreparationAbciApp,
+    TransactionPreparationAbciRound)
 
 
 @dataclass

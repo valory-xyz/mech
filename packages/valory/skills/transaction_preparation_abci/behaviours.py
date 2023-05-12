@@ -19,28 +19,21 @@
 
 """This package contains round behaviours of TransactionPreparationAbciApp."""
 
-from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
+import json
 from abc import ABC
-from typing import Generator, Set, Type, cast, Optional
+from typing import Generator, Optional, Set, Type, cast
+
+from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour,
-    BaseBehaviour,
-)
-import json
+    AbstractRoundBehaviour, BaseBehaviour)
 from packages.valory.skills.transaction_preparation_abci.models import Params
 from packages.valory.skills.transaction_preparation_abci.rounds import (
-    SynchronizedData,
-    TransactionPreparationAbciApp,
-    TransactionPreparationAbciRound,
-)
-from packages.valory.skills.transaction_preparation_abci.rounds import (
-    TransactionPreparationAbciPayload,
-)
-from packages.valory.skills.transaction_settlement_abci.payload_tools import (
-    hash_payload_to_hex,
-)
+    SynchronizedData, TransactionPreparationAbciApp,
+    TransactionPreparationAbciPayload, TransactionPreparationAbciRound)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import \
+    hash_payload_to_hex
 
 SAFE_TX_GAS = 0
 ETHER_VALUE = 0

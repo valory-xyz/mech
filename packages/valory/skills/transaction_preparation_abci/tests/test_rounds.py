@@ -19,29 +19,20 @@
 
 """This package contains the tests for rounds of TransactionPreparation."""
 
-from typing import Any, Type, Dict, List, Callable, Hashable, Mapping
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, Hashable, List, Mapping, Type
 
 import pytest
 
-from packages.valory.skills.transaction_preparation_abci.payloads import (
-    TransactionPreparationAbciPayload,
-)
-from packages.valory.skills.transaction_preparation_abci.rounds import (
-    AbstractRound,
-    Event,
-    SynchronizedData,
-    TransactionPreparationAbciRound,
-)
-from packages.valory.skills.abstract_round_abci.base import (
-    BaseTxPayload,
-)
+from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 from packages.valory.skills.abstract_round_abci.test_tools.rounds import (
-    BaseRoundTestClass,
-    BaseOnlyKeeperSendsRoundTest,
     BaseCollectDifferentUntilThresholdRoundTest,
-    BaseCollectSameUntilThresholdRoundTest,
- )
+    BaseCollectSameUntilThresholdRoundTest, BaseOnlyKeeperSendsRoundTest,
+    BaseRoundTestClass)
+from packages.valory.skills.transaction_preparation_abci.payloads import \
+    TransactionPreparationAbciPayload
+from packages.valory.skills.transaction_preparation_abci.rounds import (
+    AbstractRound, Event, SynchronizedData, TransactionPreparationAbciRound)
 
 
 @dataclass

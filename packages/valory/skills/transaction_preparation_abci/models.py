@@ -20,14 +20,14 @@
 """This module contains the shared state for the abci skill of TransactionPreparationAbciApp."""
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
-from packages.valory.skills.abstract_round_abci.models import (
-    BenchmarkTool as BaseBenchmarkTool,
-)
-from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
-from packages.valory.skills.abstract_round_abci.models import (
-    SharedState as BaseSharedState,
-)
-from packages.valory.skills.transaction_preparation_abci.rounds import TransactionPreparationAbciApp
+from packages.valory.skills.abstract_round_abci.models import \
+    BenchmarkTool as BaseBenchmarkTool
+from packages.valory.skills.abstract_round_abci.models import \
+    Requests as BaseRequests
+from packages.valory.skills.abstract_round_abci.models import \
+    SharedState as BaseSharedState
+from packages.valory.skills.transaction_preparation_abci.rounds import \
+    TransactionPreparationAbciApp
 
 
 class SharedState(BaseSharedState):

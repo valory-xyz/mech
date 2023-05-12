@@ -19,15 +19,13 @@
 
 """This package contains payload tests for the TransactionPreparationAbciApp."""
 
-from typing import Type, Hashable
 from dataclasses import dataclass
+from typing import Hashable, Type
 
 import pytest
 
 from packages.valory.skills.transaction_preparation_abci.payloads import (
-    BaseTxPayload,
-    TransactionPreparationAbciPayload,
-)
+    BaseTxPayload, TransactionPreparationAbciPayload)
 
 
 @dataclass
