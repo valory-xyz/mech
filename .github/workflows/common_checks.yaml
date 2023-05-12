@@ -40,9 +40,9 @@ jobs:
 
       - name: Lint
         run: |
-          poetry run adev lint -p .
+          poetry run adev lint -v
 
       - name: Tests
         run: |
-          poetry run adev test -p .
+          poetry run adev test -v
 
