@@ -40,7 +40,7 @@ jobs:
 
       - name: Sync Packages
         run: |
-          poetry autonomy packages sync
+          poetry run autonomy packages sync
 
       - name: Lint
         run: |
