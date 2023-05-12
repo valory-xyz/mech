@@ -17,18 +17,17 @@
 #
 # ------------------------------------------------------------------------------
 """Scaffold connection and channel."""
-from typing import Any, Optional
-from aea.configurations.base import PublicId
-from aea.connections.base import BaseSyncConnection, Connection, ConnectionStates
-from aea.mail.base import Envelope
+from threading import Thread
+from typing import Any
+
 import websocket
+from aea.configurations.base import PublicId
+from aea.connections.base import Connection, ConnectionStates
+from aea.mail.base import Envelope
 
 from packages.fetchai.protocols.default.message import DefaultMessage
 
-
 CONNECTION_ID = PublicId.from_str("eightballer/websocket_client:0.1.0")
-
-from threading import Thread
 
 
 class WebSocketClient(Connection):
@@ -58,8 +57,8 @@ class WebSocketClient(Connection):
         :param kwargs: keyword arguments passed to component base
         """
         self._new_messages = []
-        self._endpoint = kwargs['configuration'].config['endpoint']
-        self._target_skill_id = kwargs['configuration'].config['target_skill_id']
+        self._endpoint = kwargs["configuration"].config["endpoint"]
+        self._target_skill_id = kwargs["configuration"].config["target_skill_id"]
         assert self._endpoint is not None, "Endpoint must be provided!"
         super().__init__(**kwargs)  # pragma: no cover
 
@@ -84,7 +83,7 @@ class WebSocketClient(Connection):
         self.logger.debug("Disconnecting...")  # pragma: no cover
         self.state = ConnectionStates.disconnected
 
-    async def send(self, envelope: Envelope) -> None:
+    async def send(self, envelope: Envelope):
         """
         Send an envelope.
 
@@ -94,7 +93,7 @@ class WebSocketClient(Connection):
         context = envelope.message.content  # type: ignore
         self._wss.send(context)
 
-    async def receive(self, *args: Any, **kwargs: Any) -> Optional[Envelope]:
+    async def receive(self, *args: Any, **kwargs: Any):
         """
         Receive an envelope. Blocking.
 
@@ -102,22 +101,21 @@ class WebSocketClient(Connection):
         :param kwargs: keyword arguments to receive
         :return: the envelope received, if present.  # noqa: DAR202
         """
+        self.logger.debug(*args, **kwargs)
 
         if self._new_messages:
             new_msg = self._new_messages.pop()
-            self.logger.debug("Received message from wss connection: {}".format(new_msg))
+            self.logger.debug(f"Received message from wss connection: {new_msg}")
             return self._from_wss_msg_to_envelope(new_msg)
 
     def _from_wss_msg_to_envelope(self, msg: str):
         """Convert a message from the wss to an envelope."""
         msg = DefaultMessage(
             performative=DefaultMessage.Performative.BYTES,
-            content=bytes(msg, 'utf-8'),
+            content=bytes(msg, "utf-8"),
         )
         envelope = Envelope(
-            to=self._target_skill_id,
-            sender=str(self.connection_id),
-            message=msg
+            to=self._target_skill_id, sender=str(self.connection_id), message=msg
         )
         return envelope
 
@@ -126,5 +124,3 @@ class WebSocketClient(Connection):
         while True:
             msg = self._wss.recv()
             self._new_messages.append(msg)
-
-
