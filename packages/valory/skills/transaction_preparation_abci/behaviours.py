@@ -58,6 +58,12 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
 
     matching_round: Type[AbstractRound] = TransactionPreparationRound
 
+
+    def _get_proposal_info(self):
+        """Returns the proposal"""
+        self.context.logger.info("To Fix")
+        return "ToDo"
+
     def async_act(self) -> Generator:
         """Do the act, supporting asynchronous execution."""
 
@@ -66,7 +72,8 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
 
             finished_task_data = self.synchronized_data.finished_task_data
 
-            # TODO: pass data to _get_safe_tx_hash
+            self.context.logger.info(f"Finished Task Data: {finished_task_data}")
+
             tx_hash = yield from self._get_safe_tx_hash()
 
             if not tx_hash:
@@ -96,9 +103,9 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
         # Get the raw transaction from the Bravo Delegate contract
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=, # TODO
-            contract_id=str(.contract_id), # TODO
-            contract_callable="", # TODO
+            contract_address="TODO",
+            contract_id=str("TODO"),
+            contract_callable="TODO"
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -118,7 +125,7 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
             contract_address=self.synchronized_data.safe_contract_address,
             contract_id=str(GnosisSafeContract.contract_id),
             contract_callable="get_raw_safe_transaction_hash",
-            to_address=, # TODO
+            to_address="TODO",
             value=ether_value,
             data=data,
             safe_tx_gas=safe_tx_gas,
@@ -136,8 +143,9 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
         # temp hack:
+        governor_address = "ToDo"
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ether_value, safe_tx_gas, governor_address, data  # TODO
+            safe_tx_hash, ether_value, safe_tx_gas, governor_address, data
         )
 
         return payload_string
@@ -148,6 +156,6 @@ class TransactionPreparationRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = TransactionPreparationAbciBehaviour
     abci_app_cls = TransactionPreparationAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = [
+    behaviours: Set[Type[BaseBehaviour]] = {
         TransactionPreparationAbciBehaviour
-    ]
+    }

@@ -29,4 +29,3 @@ class TransactionPreparationAbciPayload(BaseTxPayload):
     """Represent a transaction payload for the TransactionPreparationRound."""
 
     content: str
-
