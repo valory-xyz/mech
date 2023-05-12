@@ -18,3 +18,5 @@ packages/valory/skills/reset_pause_abci/
 packages/valory/skills/transaction_settlement_abci/
 
 packages/valory/skills/termination_abci/
+.idea
+**/__pycache__/
