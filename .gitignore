@@ -20,3 +20,4 @@ packages/valory/skills/transaction_settlement_abci/
 packages/valory/skills/termination_abci/
 .idea
 **/__pycache__/
+*.DS_Store
