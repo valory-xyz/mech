@@ -8,6 +8,7 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.10"
 open-autonomy = "==0.10.4"
+autonomy-dev = "^0.1.1"
 
 
 [tool.poetry.group.dev.dependencies]
@@ -18,3 +19,4 @@ pylama = "^8.4.1"
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+

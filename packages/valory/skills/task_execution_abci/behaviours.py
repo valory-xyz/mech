@@ -20,27 +20,18 @@
 """This package contains round behaviours of TaskExecutionAbciApp."""
 
 from abc import ABC
-from typing import Generator, Set, Type, cast, Any, Optional
 from multiprocessing.pool import AsyncResult
+from typing import Any, Generator, Optional, Set, Type, cast
+
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour,
-    BaseBehaviour,
-)
-from packages.valory.skills.abstract_round_abci.io_.store import (
-    SupportedFiletype,
-)
-
+    AbstractRoundBehaviour, BaseBehaviour)
+from packages.valory.skills.abstract_round_abci.io_.store import \
+    SupportedFiletype
 from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
-    SynchronizedData,
-    TaskExecutionAbciApp,
-    TaskExecutionAbciRound,
-)
-from packages.valory.skills.task_execution_abci.rounds import (
-    TaskExecutionAbciPayload,
-)
-
+    SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
+    TaskExecutionAbciRound)
 from packages.valory.skills.task_execution_abci.tasks import LLMTask
 
 

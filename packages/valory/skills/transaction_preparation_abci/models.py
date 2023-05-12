@@ -17,11 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the shared state for the abci skill of MultiplexerAbciApp."""
-
-from typing import Any, List
-
-from aea.skills.base import SkillContext
+"""This module contains the shared state for the abci skill of TransactionPreparationAbciApp."""
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import \
@@ -30,31 +26,16 @@ from packages.valory.skills.abstract_round_abci.models import \
     Requests as BaseRequests
 from packages.valory.skills.abstract_round_abci.models import \
     SharedState as BaseSharedState
-from packages.valory.skills.multiplexer_abci.rounds import MultiplexerAbciApp
+from packages.valory.skills.transaction_preparation_abci.rounds import \
+    TransactionPreparationAbciApp
 
 
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
-    abci_app_cls = MultiplexerAbciApp
-
-    def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
-        """Init"""
-        super().__init__(*args, skill_context=skill_context, **kwargs)
-
-        self.pending_tasks: List = []
+    abci_app_cls = TransactionPreparationAbciApp
 
 
-class Params(BaseParams):
-    """Parameters."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the parameters object."""
-
-        self.post_hour_utc = self._ensure("post_hour_utc", kwargs, int)
-
-        super().__init__(*args, **kwargs)
-
-
+Params = BaseParams
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool

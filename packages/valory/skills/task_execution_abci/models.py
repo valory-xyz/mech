@@ -19,17 +19,20 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 
-from packages.valory.skills.abstract_round_abci.models import BaseParams
-from packages.valory.skills.abstract_round_abci.models import (
-    BenchmarkTool as BaseBenchmarkTool,
-)
-from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
-from packages.valory.skills.abstract_round_abci.models import (
-    SharedState as BaseSharedState,
-)
-from packages.valory.skills.task_execution_abci.rounds import TaskExecutionAbciApp
 from typing import Any, List
+
 from aea.skills.base import SkillContext
+
+from packages.valory.skills.abstract_round_abci.models import BaseParams
+from packages.valory.skills.abstract_round_abci.models import \
+    BenchmarkTool as BaseBenchmarkTool
+from packages.valory.skills.abstract_round_abci.models import \
+    Requests as BaseRequests
+from packages.valory.skills.abstract_round_abci.models import \
+    SharedState as BaseSharedState
+from packages.valory.skills.task_execution_abci.rounds import \
+    TaskExecutionAbciApp
+
 
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
