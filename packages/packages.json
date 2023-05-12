@@ -3,9 +3,9 @@
         "connection/eightballer/websocket_client/0.1.0": "bafybeif73ah44x4445fmpzbyo4uv23kuc7hn63ocuzzlgi2y224na76m4i",
         "skill/eightballer/contract_subscription/0.1.0": "bafybeic3ko72mcafz7d43nq4ifkhs7w4yirwxbvre3dbh6cgmeksbtsfpi",
         "agent/eightballer/mech/0.1.0": "bafybeieylo6ev4w4p7ui7vr5lyenb2lb33mbyqr7xtq43vcihwu5ttn3a4",
-        "skill/valory/multiplexer_abci/0.1.0": "bafybeigutf2xr66oczfpj2kc33h6k76p2lzn3oyio6eltep6puia7tgq3q",
-        "skill/valory/task_execution_abci/0.1.0": "bafybeidu5omws2ra7gfuyc37dyuocmo346cywn4edauq6jfdb7zhox6hgu"
-
+        "skill/valory/multiplexer_abci/0.1.0": "bafybeic7mchgdylpagz4htnilchjhmmuqthilzo27tqy7appx3pszmwujy",
+        "skill/valory/task_execution_abci/0.1.0": "bafybeiapnqcuxvvsvnjthtcimzfvyeh5ajkbumfgll6zfliemba2k4w2he",
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeietgxotdsagncug6lyncjt5gc3zdlhtdtirt4nyypbrjs3jwdmexq"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y",
