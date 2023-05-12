@@ -6,21 +6,15 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigzqzfnwdliwo3qkptwcon6floz3ndyjtbmspzc4oz76obllh4a2y
-  behaviours.py: bafybeiefvj3y4cfow2dzssjnckonavczeyz6tshgwa2asw5ggmbvkcaple
+  .behaviours.py.swp: bafybeiduqzaegjc2vkfurxtvgkvrz7jrjrasf5d4kfbxhje5j6cerdupqm
+  __init__.py: bafybeicffbkqynejxmx6kqcdbhhaopn7phg2yfpcufp4d774jfwqsm7gx4
+  behaviours.py: bafybeihm4shxtdguba3tvwy5od5wk6am7j5sraz6dxw2dd5tva32aszwpu
   dialogues.py: bafybeidwzysmmicss6myr36mqja6annr72nyuc5vmvp2zifcza54zayjye
-  fsm_specification.yaml: bafybeide6wbwjdh52zaqxnixvzlwwy4tihawwykdg66l6766qy64gnzpdm
+  fsm_specification.yaml: bafybeieo54rhf4jgo5cijmyfwyoacpsrdptndes77c2l5k7rv2zrjapz5e
   handlers.py: bafybeihp7c6cvr5ui7qkwfuv463tnwpn2p3kxandm5fntilugdaxgr66ei
   models.py: bafybeihxhcombe6nzmjinnf4hwhhdl3kxqmtfnkpodbbwb6ul4zeniobzm
-  payloads.py: bafybeicsif7ma7dqowk6youpodube4d6g3nytww3565rigder5xid3sloq
-  rounds.py: bafybeidhduldbm5d6kn3xb32iol6smxm6zcwnha4pjxmkqssqs5rzmwrhy
-  tests/__init__.py: bafybeic3534aro4pdtsdcuxywzlgkccczx2elhnwisiq3r6okvnrdu4aia
-  tests/test_behaviours.py: bafybeigb2u5iobmdgp644zsjonkexr22ej3tst32iufcxp3leb7wbal46y
-  tests/test_dialogues.py: bafybeiazandbpzwo6tm7fvhcaupodg7r4wzla3mpiyenzvd37qufkeavsm
-  tests/test_handlers.py: bafybeien7wnb5robzpagps7blx6jxllogfdnl4chypc27rdfgs2vtos7hu
-  tests/test_models.py: bafybeihp7hjptnrn7d2lp5wvvcsxrlmfwpu7ifk6t7o6vdh5ypknbywcxu
-  tests/test_payloads.py: bafybeigrhy6iqh5xrxogvtidxxstzhyp443yilwrkwbmlmk2rajsp5w75a
-  tests/test_rounds.py: bafybeieijvyixl3fsuq2cs4uxdn6ttxxjspbs7j6qdl6is6bn4luvx3ilm
+  payloads.py: bafybeifzn5lav6fcbt4pqrytsrm72hf3662qmcylf6efwrc2qhssg7apq4
+  rounds.py: bafybeib7jx62ljby2qlt3k56m25swuqk2iq2l6rfy5miv2fsoadulwm2tm
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []

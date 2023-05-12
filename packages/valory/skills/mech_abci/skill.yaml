@@ -6,24 +6,25 @@ description: The chained abci for the mech skill.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigk2kb335wy5vmgapbrqmfotvwqm4dqsuqr7gt7qic4v4npx2pqxy
-  behaviours.py: bafybeib5jc5p56epym4zduwbmmywzqrjzudmyncmv2rafq363ibykewlte
-  composition.py: bafybeif3plpfgtiqrkhglmxk4cf4nnpmutsiranqdwk5zl2nzibl4px5wu
+  __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
+  behaviours.py: bafybeiflva5sqc6jtwq6kegz7xireg7wsaa6ssnrw5hbknwalbdeg5kdiy
+  composition.py: bafybeidl6evgww6y4sdtizze7y66smetopuiwfswgio232iedpngsfal3e
   dialogues.py: bafybeiayva5koyr6upomicnhbfefypjk2sebogk7ew24wxwwnccuqktcki
-  fsm_specification.yaml: bafybeiczkbxbwp7bukawv6xj7id44f3jma2psmgba7xsoju7yx3eeseami
+  fsm_specification.yaml: bafybeifnw2wanrc7zmtokz6xpkq7blfp3tjbh4jv4sfsyiuamdiktxpzzi
   handlers.py: bafybeiefhvk666md6clddjpkv6ccnletnxmekptz2p5qjjnubfokwlofia
-  models.py: bafybeidvdzh4x4mq7ae3mh6q42cxkjclwoottxfethtou3anqdjpad65ge
+  models.py: bafybeig7epm7a7hvgr5zrjw24m6o63hoq2yjr7bbbd27wzfuzsiwwmdpgu
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
 protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/proposal_collector_abci:0.1.0:bafybeifocl5jl6umznqixvx4zn72axt7zet77ieho5g6pcyzpx5h5hta64
-- valory/proposal_voter_abci:0.1.0:bafybeigoi46ukregxxspzteyh3xe6zwkexmewm23dirsnihtut2ty6w52e
+- valory/multiplexer_abci:0.1.0:bafybeiasnzbdjouazce73me2rn5kjn3h4i6ebb3psqea4nmdttyztyjn2i
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
+- valory/task_execution_abci:0.1.0:bafybeiaebuxdbfuu6pvm3ar4hrvcmosj52b62orhzu7ex6mbj3rhxj4pwy
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
+- valory/transaction_preparation_abci:0.1.0:bafybeiftsmbbn3mmbw2yo54dtqj6n3gz37mlmvujk6j3rvmxfh7poqcw7q
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 behaviours:
   main:
