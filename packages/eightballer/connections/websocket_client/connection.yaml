@@ -20,6 +20,8 @@ config:
   target_skill_id: null
 excluded_protocols: []
 restricted_to_protocols: []
-dependencies: {}
+dependencies:
+  websocket_client:
+    version: ==1.5.1
 is_abstract: false
 cert_requests: []

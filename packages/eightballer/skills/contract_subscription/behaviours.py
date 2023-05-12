@@ -19,6 +19,8 @@
 
 """This package contains a scaffold of a behaviour."""
 
+import json
+
 from aea.mail.base import Envelope
 from aea.skills.behaviours import OneShotBehaviour
 
@@ -26,7 +28,6 @@ from packages.eightballer.connections.websocket_client.connection import \
     CONNECTION_ID
 from packages.fetchai.protocols.default.message import DefaultMessage
 
-SUBSCRIPTION_MSG_TEMPLATE = '{"jsonrpc":  "2.0",  "id":  1,  "method":  "eth_subscribe",  "params":  ["logs", {"address": "{contract}"}]}'  # pylint: disable=line-too-long
 DEFAULT_ENCODING = "utf-8"
 
 
@@ -39,8 +40,14 @@ class SubscriptionBehaviour(OneShotBehaviour):
     def act(self) -> None:
         """Implement the act."""
         for contract in self._contracts:
+            subscription_msg_template = {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "eth_subscribe",
+                "params": ["logs", {"address": contract}]
+            }
             self.context.logger.info(f"Sending subscription to: {contract}")
-            self._create_subscription(bytes(SUBSCRIPTION_MSG_TEMPLATE.format(contract), DEFAULT_ENCODING))
+            self._create_subscription(bytes(json.dumps(subscription_msg_template), DEFAULT_ENCODING))
         self.context.logger.info("Act completed.")
 
     def teardown(self) -> None:

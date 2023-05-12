@@ -7,13 +7,13 @@ aea_version: '>=1.33.0, <2.0.0'
 fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/websocket_client:0.1.0:bafybeif73ah44x4445fmpzbyo4uv23kuc7hn63ocuzzlgi2y224na76m4i
+- eightballer/websocket_client:0.1.0:bafybeihwcracii3fvvdbvku2wmz7ephsi6dlhycisq5yn3xemryxovqn5i
 contracts: []
 protocols:
 - fetchai/default:1.0.0:bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y
 - open_aea/signing:1.0.0:bafybeibqlfmikg5hk4phzak6gqzhpkt6akckx7xppbp53mvwt6r73h7tk4
 skills:
-- eightballer/contract_subscription:0.1.0:bafybeic3ko72mcafz7d43nq4ifkhs7w4yirwxbvre3dbh6cgmeksbtsfpi
+- eightballer/contract_subscription:0.1.0:bafybeif7epfsq5rmmtam2oqyhspem2jfcwdtyd4i6k5mgxiea3wyjm5s74
 default_ledger: ethereum
 required_ledgers:
 - ethereum
