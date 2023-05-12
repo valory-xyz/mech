@@ -24,6 +24,8 @@ from packages.valory.skills.abstract_round_abci.handlers import \
 from packages.valory.skills.abstract_round_abci.handlers import \
     ContractApiHandler as BaseContractApiHandler
 from packages.valory.skills.abstract_round_abci.handlers import \
+    HttpHandler as BaseHttpHandler
+from packages.valory.skills.abstract_round_abci.handlers import \
     IpfsHandler as BaseIpfsHandler
 from packages.valory.skills.abstract_round_abci.handlers import \
     LedgerApiHandler as BaseLedgerApiHandler
@@ -31,10 +33,6 @@ from packages.valory.skills.abstract_round_abci.handlers import \
     SigningHandler as BaseSigningHandler
 from packages.valory.skills.abstract_round_abci.handlers import \
     TendermintHandler as BaseTendermintHandler
-from packages.valory.skills.proposal_collector_abci.handlers import \
-    HttpHandler as BaseHttpHandler
-from packages.valory.skills.proposal_voter_abci.handlers import \
-    LlmHandler as BaseLlmHandler
 
 ABCIRoundHandler = BaseABCIRoundHandler
 HttpHandler = BaseHttpHandler
@@ -43,4 +41,3 @@ LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
-LlmHandler = BaseLlmHandler

@@ -83,10 +83,10 @@ class SharedState(BaseSharedState):
             ResetPauseEvent.ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
 
-        MechAbciApp.event_to_timeout[
-            ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT
-        ] = (self.context.params.reset_pause_duration + MARGIN)
+        MechAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT] = (
+            self.context.params.reset_pause_duration + MARGIN
+        )
 
 
-class Params(MultiplexerParams, TerminationParams):
+class Params(MultiplexerParams, TerminationParams):  # type: ignore
     """A model to represent params for multiple abci apps."""

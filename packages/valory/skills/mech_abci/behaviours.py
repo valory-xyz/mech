@@ -48,7 +48,7 @@ class MechConsensusBehaviour(AbstractRoundBehaviour):
     behaviours: Set[Type[BaseBehaviour]] = {
         *TransactionPreparationRoundBehaviour.behaviours,
         *MultiplexerRoundBehaviour.behaviours,
-        *TaskExecutionRoundBehaviour.behaviour,
+        *TaskExecutionRoundBehaviour.behaviours,
         *AgentRegistrationRoundBehaviour.behaviours,
         *ResetPauseABCIConsensusBehaviour.behaviours,
         *TransactionSettlementRoundBehaviour.behaviours,
