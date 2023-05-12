@@ -6,8 +6,7 @@
         "skill/valory/multiplexer_abci/0.1.0": "bafybeiasnzbdjouazce73me2rn5kjn3h4i6ebb3psqea4nmdttyztyjn2i",
         "skill/valory/task_execution_abci/0.1.0": "bafybeiaebuxdbfuu6pvm3ar4hrvcmosj52b62orhzu7ex6mbj3rhxj4pwy",
         "skill/valory/mech_abci/0.1.0": "bafybeibhszc3xrltl3acydouhi2tiq6ylxxfs3inzute5b4y52u5kyw4yy",
-        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeiftsmbbn3mmbw2yo54dtqj6n3gz37mlmvujk6j3rvmxfh7poqcw7q",
-        "agent/valory/transaction_hash_preparation_abci/0.1.0": "bafybeigmwl5dfpykatdjawnu6azw5mbi3d2plbwjt6wbcagaqc2jugbmwa"
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeiftsmbbn3mmbw2yo54dtqj6n3gz37mlmvujk6j3rvmxfh7poqcw7q"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y",
