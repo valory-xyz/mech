@@ -10,6 +10,11 @@ python = "^3.10"
 open-autonomy = "==0.10.4"
 
 
+[tool.poetry.group.dev.dependencies]
+black = "22.6.0"
+isort = "5.10.1"
+pylama = "^8.4.1"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
