@@ -2,7 +2,7 @@
     "dev": {
         "skill/valory/multiplexer_abci/0.1.0": "bafybeigutf2xr66oczfpj2kc33h6k76p2lzn3oyio6eltep6puia7tgq3q",
         "skill/valory/task_execution_abci/0.1.0": "bafybeidwue5k7uqzb6evyo6spt7qxsfe7ms557ifmgjje73gh65r3eha3y",
-        "agent/valory/transaction_hash_preparation_abci/0.1.0": "bafybeigmwl5dfpykatdjawnu6azw5mbi3d2plbwjt6wbcagaqc2jugbmwa"
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeid5z7p5bgggfwmpgyrc4meeamoia5es266tjp7bhqau54ylyvpd5m"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeibqlfmikg5hk4phzak6gqzhpkt6akckx7xppbp53mvwt6r73h7tk4",
