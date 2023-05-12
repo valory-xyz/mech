@@ -17,16 +17,9 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the transaction payloads of the TransactionPreparationAbciApp."""
+"""This module contains the implementation of the mech_abci skill."""
 
-from dataclasses import dataclass
-
-from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
+from aea.configurations.base import PublicId
 
 
-@dataclass(frozen=True)
-class TransactionPreparationAbciPayload(BaseTxPayload):
-    """Represent a transaction payload for the TransactionPreparationRound."""
-
-    content: str
-
+PUBLIC_ID = PublicId.from_str("valory/mech_abci:0.1.0")

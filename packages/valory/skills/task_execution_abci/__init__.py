@@ -16,7 +16,7 @@
     #   limitations under the License.
     #
     # ------------------------------------------------------------------------------
-     
+
 """This module contains the implementation of the default skill."""
 
 from aea.configurations.base import PublicId

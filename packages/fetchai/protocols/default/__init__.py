@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2022 fetchai
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,16 +17,13 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the transaction payloads of the TransactionPreparationAbciApp."""
+"""
+This module contains the support resources for the default protocol.
 
-from dataclasses import dataclass
+It was created with protocol buffer compiler version `libprotoc 3.17.3` and aea version `1.4.0`.
+"""
 
-from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
+from packages.fetchai.protocols.default.message import DefaultMessage
+from packages.fetchai.protocols.default.serialization import DefaultSerializer
 
-
-@dataclass(frozen=True)
-class TransactionPreparationAbciPayload(BaseTxPayload):
-    """Represent a transaction payload for the TransactionPreparationRound."""
-
-    content: str
-
+DefaultMessage.serializer = DefaultSerializer

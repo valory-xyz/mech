@@ -31,7 +31,7 @@ from packages.valory.skills.abstract_round_abci.io_.store import \
 from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
     SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
-    TaskExecutionAbciRound)
+    TaskExecutionRound)
 from packages.valory.skills.task_execution_abci.tasks import LLMTask
 
 
@@ -52,7 +52,7 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
 class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
     """TaskExecutionAbciBehaviour"""
 
-    matching_round: Type[AbstractRound] = TaskExecutionAbciRound
+    matching_round: Type[AbstractRound] = TaskExecutionRound
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize Behaviour."""
@@ -69,7 +69,6 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             if not self._is_task_prepared:
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 # Verify the data format
-                # TODO
 
                 # For now, data is a hash
                 file_hash = task_data
@@ -102,7 +101,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self.set_done()
 
 
-    def prepare_task(self, task_data) -> Generator:
+    def prepare_task(self, task_data):
         """Prepare the task."""
         if task_data["type"] == "llm":
             llm_task = LLMTask()
@@ -110,7 +109,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 llm_task, args=(task_data)
             )
             self._async_result = self.context.task_manager.get_task_result(task_id)
-            self._task_prepared = True
+            self._is_task_prepared = True
 
 
 class TaskExecutionRoundBehaviour(AbstractRoundBehaviour):
@@ -118,6 +117,6 @@ class TaskExecutionRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = TaskExecutionAbciBehaviour
     abci_app_cls = TaskExecutionAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = [
+    behaviours: Set[Type[BaseBehaviour]] = {
         TaskExecutionAbciBehaviour
-    ]
+    }
