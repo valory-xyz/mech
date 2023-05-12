@@ -6,27 +6,21 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeicsnfjrs5fxamrmewolc23inu54tmni3kzowocz2huhp6lw7rifhu
-  behaviours.py: bafybeidvqmttqmhncayej2ys63postconb53oxb4vmztjyq55rdmxdj7k4
-  dialogues.py: bafybeibxhpre2cczhgs4weohyhdovh7n3qnreqech6zs7xzbpef7kizxsm
+  __init__.py: bafybeihxcbavhoiwxljak5ehxdcinfxakk4g56l7rysuskj7zf4jlkv2fq
+  behaviours.py: bafybeicd2ylpucud4g3vqqfkh5hke3wso36hr4wxktlmw5v3jguperq2hy
+  dialogues.py: bafybeift7ubqn3fculjpbkihmensbfu26f2ptuec2zvwqybdwlodbz6mpe
   fsm_specification.yaml: bafybeihaeqhytibpky7yoxifz3sinyjuvr5wxasty6lyooh756enem6j2e
-  handlers.py: bafybeigz4pfyn3i553ttxkqjerynyoud5obi366b3yregtgznupcnryjha
-  models.py: bafybeibvpn76nrh5xm6yqaotudwsu4in4rj7ceexvsoh23yl5cbd6lrbz4
-  payloads.py: bafybeidwlgyqz2l4we2efhub5zjorfuxqh4wt3dyfwy4dkg35vfxweg6i4
-  rounds.py: bafybeiczhmb7wgmrpyl7tihvil2tvgqqbucs4yyx67bnuaxtjz3e3abbfm
-  tests/__init__.py: bafybeic3534aro4pdtsdcuxywzlgkccczx2elhnwisiq3r6okvnrdu4aia
-  tests/test_behaviours.py: bafybeieilowavi4yeziuxsdf7kawqnq6knh7cz37swy2kdx4msnyz2bvnq
-  tests/test_dialogues.py: bafybeidxolnlazx733pxnl57ivbnkyjbyrxvapzyq5vsqqsj45q4vvwkaa
-  tests/test_handlers.py: bafybeiag5l6kbpixup42gkmdhdei5pxmxqmfbsxmxnv7bjmhmrhdrzvfsu
-  tests/test_models.py: bafybeihgwvztc3tdkfh7f5wvl2znefjqa6hli4lfvlzxasdob2z4uiynqa
-  tests/test_payloads.py: bafybeieiw2i7idx77bktvkqkixiyps3brnsg2p6jzb6d3ptkfsfrait4eu
-  tests/test_rounds.py: bafybeidrfwm637tc7pa5tixpk4k4rjtsvivfoqsy4mjwhttf2cdroqi33e
+  handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
+  models.py: bafybeif2nmwkb5eg7zrvyjiz5d5idi3u27fka4y6vy2pdp7gkdxb2w4igq
+  payloads.py: bafybeihqqb35bhbl3du5ludfrycrc4pyzsm5wfogy3htvxds3peumgfmxy
+  rounds.py: bafybeihsf6wqc7tvnvrc6jfmuilx4cd3fhm5zpmopbprjinwtiitkzdweu
+  tasks.py: bafybeid3yk7f3vevqxnfkp7ndue2wkru5emmfqg5rqn667t7kukfbtc3au
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
 protocols: []
 skills:
-- valory/abstract_round_abci:0.1.0
+- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
 behaviours:
   main:
     args: {}
