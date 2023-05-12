@@ -93,7 +93,7 @@ class WebSocketClient(Connection):
         context = envelope.message.content  # type: ignore
         self._wss.send(context)
 
-    async def receive(self, *args: Any, **kwargs: Any):
+    async def receive(self, *args: Any, **kwargs: Any):  # noqa: V107
         """
         Receive an envelope. Blocking.
 
@@ -101,8 +101,6 @@ class WebSocketClient(Connection):
         :param kwargs: keyword arguments to receive
         :return: the envelope received, if present.  # noqa: DAR202
         """
-        self.logger.debug(*args, **kwargs)
-
         if self._new_messages:
             new_msg = self._new_messages.pop()
             self.logger.debug(f"Received message from wss connection: {new_msg}")

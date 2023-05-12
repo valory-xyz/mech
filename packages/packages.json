@@ -1,16 +1,15 @@
 {
     "dev": {
+        "connection/eightballer/websocket_client/0.1.0": "bafybeif73ah44x4445fmpzbyo4uv23kuc7hn63ocuzzlgi2y224na76m4i",
+        "skill/eightballer/contract_subscription/0.1.0": "bafybeic3ko72mcafz7d43nq4ifkhs7w4yirwxbvre3dbh6cgmeksbtsfpi",
+        "agent/eightballer/mech/0.1.0": "bafybeieylo6ev4w4p7ui7vr5lyenb2lb33mbyqr7xtq43vcihwu5ttn3a4",
         "skill/valory/multiplexer_abci/0.1.0": "bafybeigutf2xr66oczfpj2kc33h6k76p2lzn3oyio6eltep6puia7tgq3q",
-        "skill/valory/task_execution_abci/0.1.0": "bafybeidwue5k7uqzb6evyo6spt7qxsfe7ms557ifmgjje73gh65r3eha3y",
-        "agent/valory/transaction_hash_preparation_abci/0.1.0": "bafybeigmwl5dfpykatdjawnu6azw5mbi3d2plbwjt6wbcagaqc2jugbmwa",
-        "connection/eightballer/websocket_client/0.1.0": "bafybeig4svgj7xosrimtdzpr2dvuzo2xha2ndgfrsr5cv4rni3op3d5giu"
+        "skill/valory/task_execution_abci/0.1.0": "bafybeidu5omws2ra7gfuyc37dyuocmo346cywn4edauq6jfdb7zhox6hgu",
+        "agent/valory/transaction_hash_preparation_abci/0.1.0": "bafybeigmwl5dfpykatdjawnu6azw5mbi3d2plbwjt6wbcagaqc2jugbmwa"  
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeibqlfmikg5hk4phzak6gqzhpkt6akckx7xppbp53mvwt6r73h7tk4",
-        "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y"
-        "skill/valory/multiplexer_abci/0.1.0": "bafybeigutf2xr66oczfpj2kc33h6k76p2lzn3oyio6eltep6puia7tgq3q",
-        "skill/valory/task_execution_abci/0.1.0": "bafybeidu5omws2ra7gfuyc37dyuocmo346cywn4edauq6jfdb7zhox6hgu",
-        "agent/valory/transaction_hash_preparation_abci/0.1.0": "bafybeigmwl5dfpykatdjawnu6azw5mbi3d2plbwjt6wbcagaqc2jugbmwa"
+        "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y",
         "protocol/valory/abci/0.1.0": "bafybeig3dj5jhsowlvg3t73kgobf6xn4nka7rkttakdb2gwsg5bp7rt7q4",
         "protocol/valory/contract_api/1.0.0": "bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy",
         "protocol/valory/http/1.0.0": "bafybeifyoio7nlh5zzyn5yz7krkou56l22to3cwg7gw5v5o3vxwklibhty",
