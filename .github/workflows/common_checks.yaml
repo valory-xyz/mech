@@ -38,6 +38,10 @@ jobs:
         run: |
           poetry install -v
 
+      - name: Sync Packages
+        run: |
+          poetry autonomy packages sync
+
       - name: Lint
         run: |
           poetry run adev lint -v
