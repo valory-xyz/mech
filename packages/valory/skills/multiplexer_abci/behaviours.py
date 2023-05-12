@@ -51,11 +51,6 @@ class MultiplexerBaseBehaviour(BaseBehaviour, ABC):
         """Return the params."""
         return cast(Params, super().params)
 
-    @property
-    def local_state(self) -> SharedState:
-        """Return the state."""
-        return cast(SharedState, self.context.state)
-
 
 class MultiplexerBehaviour(MultiplexerBaseBehaviour):
     """MultiplexerBehaviour"""
