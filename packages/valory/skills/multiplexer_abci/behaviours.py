@@ -81,4 +81,4 @@ class MultiplexerRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = MultiplexerBehaviour
     abci_app_cls = MultiplexerAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = [MultiplexerBehaviour]
+    behaviours: Set[Type[BaseBehaviour]] = {MultiplexerBehaviour}
