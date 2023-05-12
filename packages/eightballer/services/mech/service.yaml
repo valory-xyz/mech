@@ -1,0 +1,11 @@
+name: mech
+author: eightballer
+version: 0.1.0
+description: A decentralised task execution engine.
+aea_version: '>=1.0.0, <2.0.0'
+license: Apache-2.0
+fingerprint: {}
+fingerprint_ignore_patterns: []
+agent: eightballer/mech:0.1.0:bafybeieylo6ev4w4p7ui7vr5lyenb2lb33mbyqr7xtq43vcihwu5ttn3a4
+number_of_agents: 1
+deployment: {}
