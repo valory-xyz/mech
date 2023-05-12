@@ -19,10 +19,8 @@
 
 """This package contains round behaviours of MultiplexerAbciApp."""
 
-import json
 from abc import ABC
-from datetime import datetime, timezone
-from typing import Generator, Set, Tuple, Type, cast
+from typing import Generator, Set, Type, cast
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (

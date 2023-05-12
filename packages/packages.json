@@ -1,5 +1,8 @@
 {
     "dev": {
+        "skill/valory/multiplexer_abci/0.1.0": "bafybeigutf2xr66oczfpj2kc33h6k76p2lzn3oyio6eltep6puia7tgq3q",
+        "skill/valory/task_execution_abci/0.1.0": "bafybeidwue5k7uqzb6evyo6spt7qxsfe7ms557ifmgjje73gh65r3eha3y",
+        "agent/valory/transaction_hash_preparation_abci/0.1.0": "bafybeigmwl5dfpykatdjawnu6azw5mbi3d2plbwjt6wbcagaqc2jugbmwa",
         "connection/eightballer/websocket_client/0.1.0": "bafybeig4svgj7xosrimtdzpr2dvuzo2xha2ndgfrsr5cv4rni3op3d5giu"
     },
     "third_party": {
