@@ -19,20 +19,12 @@
 
 """This package contains the rounds of MultiplexerAbciApp."""
 
-import json
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
-    AbciApp,
-    AbciAppTransitionFunction,
-    AppState,
-    BaseSynchronizedData,
-    CollectSameUntilThresholdRound,
-    DegenerateRound,
-    EventToTimeout,
-    get_name,
-)
+    AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
+    CollectSameUntilThresholdRound, DegenerateRound, EventToTimeout, get_name)
 from packages.valory.skills.multiplexer_abci.payloads import MultiplexerPayload
 
 
