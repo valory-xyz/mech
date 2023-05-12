@@ -19,7 +19,6 @@
 
 """This package contains the rounds of MultiplexerAbciApp."""
 
-import json
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
@@ -72,7 +71,7 @@ class MultiplexerRound(CollectSameUntilThresholdRound):
         """Process the end of the block."""
         if self.threshold_reached:
 
-            period_counter = self.synchronized_data.period_counter
+            period_counter = cast(SynchronizedData, self.synchronized_data).period_counter
 
             event = Event.WAIT
 
