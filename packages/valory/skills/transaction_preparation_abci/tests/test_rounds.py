@@ -32,7 +32,7 @@ from packages.valory.skills.abstract_round_abci.test_tools.rounds import (
 from packages.valory.skills.transaction_preparation_abci.payloads import \
     TransactionPreparationAbciPayload
 from packages.valory.skills.transaction_preparation_abci.rounds import (
-    AbstractRound, Event, SynchronizedData, TransactionPreparationAbciRound)
+    AbstractRound, Event, SynchronizedData, TransactionPreparationRound)
 
 
 @dataclass
@@ -81,9 +81,9 @@ class BaseTransactionPreparationRoundTest(BaseRoundTestClass):
 
 
 class TestTransactionPreparationAbciRound(BaseTransactionPreparationRoundTest):
-    """Tests for TransactionPreparationAbciRound."""
+    """Tests for TransactionPreparationRound."""
 
-    round_class = TransactionPreparationAbciRound
+    round_class = TransactionPreparationRound
 
     # TODO: provide test cases
     @pytest.mark.parametrize("test_case", [])

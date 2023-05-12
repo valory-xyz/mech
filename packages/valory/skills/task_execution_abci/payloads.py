@@ -26,7 +26,7 @@ from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 
 @dataclass(frozen=True)
 class TaskExecutionAbciPayload(BaseTxPayload):
-    """Represent a transaction payload for the TaskExecutionAbciRound."""
+    """Represent a transaction payload for the TaskExecutionRound."""
 
     content: str
 

@@ -31,7 +31,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 from packages.valory.skills.transaction_preparation_abci.models import Params
 from packages.valory.skills.transaction_preparation_abci.rounds import (
     SynchronizedData, TransactionPreparationAbciApp,
-    TransactionPreparationAbciPayload, TransactionPreparationAbciRound)
+    TransactionPreparationAbciPayload, TransactionPreparationRound)
 from packages.valory.skills.transaction_settlement_abci.payload_tools import \
     hash_payload_to_hex
 
@@ -56,7 +56,7 @@ class TransactionPreparationBaseBehaviour(BaseBehaviour, ABC):
 class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
     """TransactionPreparationAbciBehaviour"""
 
-    matching_round: Type[AbstractRound] = TransactionPreparationAbciRound
+    matching_round: Type[AbstractRound] = TransactionPreparationRound
 
     def async_act(self) -> Generator:
         """Do the act, supporting asynchronous execution."""
@@ -70,7 +70,7 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
             tx_hash = yield from self._get_safe_tx_hash()
 
             if not tx_hash:
-                tx_hash = TransactionPreparationAbciRound.ERROR_PAYLOAD
+                tx_hash = TransactionPreparationRound.ERROR_PAYLOAD
 
             payload_content = {
                 "tx_hash": tx_hash,

@@ -2,16 +2,16 @@ alphabet_in:
 - DONE
 - NO_MAJORITY
 - ROUND_TIMEOUT
-default_start_state: TaskExecutionAbciRound
+default_start_state: TaskExecutionRound
 final_states:
-- FinishedTaskExecutionAbciRound
+- FinishedTaskExecutionRound
 label: TaskExecutionAbciApp
 start_states:
-- TaskExecutionAbciRound
+- TaskExecutionRound
 states:
-- TaskExecutionAbciRound
-- FinishedTaskExecutionAbciRound
+- TaskExecutionRound
+- FinishedTaskExecutionRound
 transition_func:
-    (TaskExecutionAbciRound, DONE): FinishedTaskExecutionAbciRound
-    (TaskExecutionAbciRound, NO_MAJORITY): TaskExecutionAbciRound
-    (TaskExecutionAbciRound, ROUND_TIMEOUT): TaskExecutionAbciRound
+    (TaskExecutionRound, DONE): FinishedTaskExecutionRound
+    (TaskExecutionRound, NO_MAJORITY): TaskExecutionRound
+    (TaskExecutionRound, ROUND_TIMEOUT): TaskExecutionRound

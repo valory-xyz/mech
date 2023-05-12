@@ -51,8 +51,8 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the finished_task_data."""
         return cast(int, self.db.get_strict("finished_task_data"))
 
-class TaskExecutionAbciRound(CollectSameUntilThresholdRound):
-    """TaskExecutionAbciRound"""
+class TaskExecutionRound(CollectSameUntilThresholdRound):
+    """TaskExecutionRound"""
 
     payload_class = TaskExecutionAbciPayload
     synchronized_data_class = SynchronizedData
@@ -76,29 +76,29 @@ class TaskExecutionAbciRound(CollectSameUntilThresholdRound):
         return None
 
 
-class FinishedTaskExecutionAbciRound(DegenerateRound):
-    """FinishedTaskExecutionAbciRound"""
+class FinishedTaskExecutionRound(DegenerateRound):
+    """FinishedTaskExecutionRound"""
 
 
 class TaskExecutionAbciApp(AbciApp[Event]):
     """TaskExecutionAbciApp"""
 
-    initial_round_cls: AppState = TaskExecutionAbciRound
-    initial_states: Set[AppState] = {TaskExecutionAbciRound}
+    initial_round_cls: AppState = TaskExecutionRound
+    initial_states: Set[AppState] = {TaskExecutionRound}
     transition_function: AbciAppTransitionFunction = {
-        TaskExecutionAbciRound: {
-            Event.DONE: FinishedTaskExecutionAbciRound,
-            Event.NO_MAJORITY: TaskExecutionAbciRound,
-            Event.ROUND_TIMEOUT: TaskExecutionAbciRound
+        TaskExecutionRound: {
+            Event.DONE: FinishedTaskExecutionRound,
+            Event.NO_MAJORITY: TaskExecutionRound,
+            Event.ROUND_TIMEOUT: TaskExecutionRound
         },
-        FinishedTaskExecutionAbciRound: {}
+        FinishedTaskExecutionRound: {}
     }
-    final_states: Set[AppState] = {FinishedTaskExecutionAbciRound}
+    final_states: Set[AppState] = {FinishedTaskExecutionRound}
     event_to_timeout: EventToTimeout = {}
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
-        TaskExecutionAbciRound: set(),
+        TaskExecutionRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
-        FinishedTaskExecutionAbciRound: set(),
+        FinishedTaskExecutionRound: set(),
     }

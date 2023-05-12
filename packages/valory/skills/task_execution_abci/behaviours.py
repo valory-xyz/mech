@@ -31,7 +31,7 @@ from packages.valory.skills.abstract_round_abci.io_.store import \
 from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
     SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
-    TaskExecutionAbciRound)
+    TaskExecutionRound)
 from packages.valory.skills.task_execution_abci.tasks import LLMTask
 
 
@@ -52,7 +52,7 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
 class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
     """TaskExecutionAbciBehaviour"""
 
-    matching_round: Type[AbstractRound] = TaskExecutionAbciRound
+    matching_round: Type[AbstractRound] = TaskExecutionRound
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialize Behaviour."""

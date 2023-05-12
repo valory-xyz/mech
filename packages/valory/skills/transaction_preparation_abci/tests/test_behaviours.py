@@ -34,9 +34,9 @@ from packages.valory.skills.transaction_preparation_abci.behaviours import (
     TransactionPreparationAbciBehaviour, TransactionPreparationBaseBehaviour,
     TransactionPreparationRoundBehaviour)
 from packages.valory.skills.transaction_preparation_abci.rounds import (
-    DegenerateRound, Event, FinishedTransactionPreparationAbciRound,
+    DegenerateRound, Event, FinishedTransactionPreparationRound,
     SynchronizedData, TransactionPreparationAbciApp,
-    TransactionPreparationAbciRound)
+    TransactionPreparationRound)
 
 
 @dataclass
