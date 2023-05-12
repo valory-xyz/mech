@@ -43,6 +43,8 @@ jobs:
           poetry run autonomy packages sync
 
       - name: Lint
+        env:
+          PYTHONPATH=.
         run: |
           poetry run adev lint -v
 

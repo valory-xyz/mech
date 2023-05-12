@@ -20,38 +20,28 @@
 """This module contains the shared state for the abci skill of Mech."""
 
 from packages.valory.skills.abstract_round_abci.models import ApiSpecs
-from packages.valory.skills.abstract_round_abci.models import (
-    BenchmarkTool as BaseBenchmarkTool,
-)
-from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
+from packages.valory.skills.abstract_round_abci.models import \
+    BenchmarkTool as BaseBenchmarkTool
+from packages.valory.skills.abstract_round_abci.models import \
+    Requests as BaseRequests
+from packages.valory.skills.abstract_round_abci.models import \
+    SharedState as BaseSharedState
 from packages.valory.skills.mech_abci.composition import MechAbciApp
-from packages.valory.skills.abstract_round_abci.models import (
-    SharedState as BaseSharedState,
-)
-
-from packages.valory.skills.multiplexer_abci.models import (
-    Params as MultiplexerAbciParams,
-)
-from packages.valory.skills.task_execution_abci.models import (
-    Params as TaskExecutionAbciParams,
-)
-from packages.valory.skills.transaction_preparation_abci.models import (
-    Params as TransactionPreparationAbciParams,
-)
-
-from packages.valory.skills.multiplexer_abci.rounds import (
-    Event as MultiplexerEvent,
-)
-from packages.valory.skills.task_execution_abci.rounds import (
-    Event as TaskExecutionEvent,
-)
-from packages.valory.skills.transaction_preparation_abci.rounds import (
-    Event as TransactionPreparationEvent,
-)
-
-from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
+from packages.valory.skills.multiplexer_abci.models import \
+    Params as MultiplexerAbciParams
+from packages.valory.skills.multiplexer_abci.rounds import \
+    Event as MultiplexerEvent
+from packages.valory.skills.reset_pause_abci.rounds import \
+    Event as ResetPauseEvent
+from packages.valory.skills.task_execution_abci.models import \
+    Params as TaskExecutionAbciParams
+from packages.valory.skills.task_execution_abci.rounds import \
+    Event as TaskExecutionEvent
 from packages.valory.skills.termination_abci.models import TerminationParams
-
+from packages.valory.skills.transaction_preparation_abci.models import \
+    Params as TransactionPreparationAbciParams
+from packages.valory.skills.transaction_preparation_abci.rounds import \
+    Event as TransactionPreparationEvent
 
 MultiplexerParams = MultiplexerAbciParams
 TaskExecutionParams = TaskExecutionAbciParams

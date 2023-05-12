@@ -6,13 +6,13 @@ description: The chained abci for the mech skill.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
-  behaviours.py: bafybeiflva5sqc6jtwq6kegz7xireg7wsaa6ssnrw5hbknwalbdeg5kdiy
-  composition.py: bafybeidl6evgww6y4sdtizze7y66smetopuiwfswgio232iedpngsfal3e
-  dialogues.py: bafybeiayva5koyr6upomicnhbfefypjk2sebogk7ew24wxwwnccuqktcki
+  __init__.py: bafybeia33nkx3vpttbjokbubh2ov7qa6fnjwbvyktwmwua4dxujaajnxze
+  behaviours.py: bafybeiar7vx4bm3maqiktzyobig5cnnpgrldslqrzcg3av2dy7msijjwsu
+  composition.py: bafybeihkytxwxatc23lkxycqbb5mqdyuy3mi33q6l2nqufglqfilt4vxtu
+  dialogues.py: bafybeice5rd4m7ftvqcqmhd4dbzhedsv63ddxto44nsyf6a355oklixqbu
   fsm_specification.yaml: bafybeifnw2wanrc7zmtokz6xpkq7blfp3tjbh4jv4sfsyiuamdiktxpzzi
-  handlers.py: bafybeiefhvk666md6clddjpkv6ccnletnxmekptz2p5qjjnubfokwlofia
-  models.py: bafybeig7epm7a7hvgr5zrjw24m6o63hoq2yjr7bbbd27wzfuzsiwwmdpgu
+  handlers.py: bafybeiackylafg7gpphvo7oor5soiesvzkm4iz7evb5uowi3qbsmvdcxve
+  models.py: bafybeidfk32ekrbxjxwxheqnoqf3hnmguj76mdbu32wt4wsfmi67wpemhq
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -24,7 +24,7 @@ skills:
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
 - valory/task_execution_abci:0.1.0:bafybeiaebuxdbfuu6pvm3ar4hrvcmosj52b62orhzu7ex6mbj3rhxj4pwy
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeiftsmbbn3mmbw2yo54dtqj6n3gz37mlmvujk6j3rvmxfh7poqcw7q
+- valory/transaction_preparation_abci:0.1.0:bafybeihilhms4sxdvaygn46x4v4vq3kbnapxrdtorpgtdiaiuricambjzq
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 behaviours:
   main:

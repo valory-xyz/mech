@@ -5,8 +5,8 @@
         "agent/eightballer/mech/0.1.0": "bafybeieylo6ev4w4p7ui7vr5lyenb2lb33mbyqr7xtq43vcihwu5ttn3a4",
         "skill/valory/multiplexer_abci/0.1.0": "bafybeiasnzbdjouazce73me2rn5kjn3h4i6ebb3psqea4nmdttyztyjn2i",
         "skill/valory/task_execution_abci/0.1.0": "bafybeiaebuxdbfuu6pvm3ar4hrvcmosj52b62orhzu7ex6mbj3rhxj4pwy",
-        "skill/valory/mech_abci/0.1.0": "bafybeibhszc3xrltl3acydouhi2tiq6ylxxfs3inzute5b4y52u5kyw4yy",
-        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeiftsmbbn3mmbw2yo54dtqj6n3gz37mlmvujk6j3rvmxfh7poqcw7q"
+        "skill/valory/mech_abci/0.1.0": "bafybeig4jv6m5ks7aobnad2h5i5wpkkxy6e6zfnqso2nrgg2fcy2c6yoqu",
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeihilhms4sxdvaygn46x4v4vq3kbnapxrdtorpgtdiaiuricambjzq"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y",
