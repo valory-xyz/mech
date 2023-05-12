@@ -17,8 +17,20 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the default skill."""
+"""Contains the background tasks of the APY estimation skill."""
 
-from aea.configurations.base import PublicId
+from typing import Any
 
-PUBLIC_ID = PublicId.from_str("valory/multiplexer_abci:0.1.0")
+from aea.skills.tasks import Task
+
+
+def do_llm_request():
+    pass
+
+
+class LLMTask(Task):
+    """"""
+
+    def execute(self, *args: Any, **kwargs: Any):
+        """Execute the task."""
+        return do_llm_request(*args, **kwargs)

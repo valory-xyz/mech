@@ -17,8 +17,16 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the default skill."""
+"""This module contains the transaction payloads of the TaskExecutionAbciApp."""
 
-from aea.configurations.base import PublicId
+from dataclasses import dataclass
 
-PUBLIC_ID = PublicId.from_str("valory/multiplexer_abci:0.1.0")
+from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
+
+
+@dataclass(frozen=True)
+class TaskExecutionAbciPayload(BaseTxPayload):
+    """Represent a transaction payload for the TaskExecutionAbciRound."""
+
+    content: str
+

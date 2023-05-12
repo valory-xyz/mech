@@ -17,8 +17,18 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the default skill."""
+"""Test the models.py module of the TransactionPreparation."""
 
-from aea.configurations.base import PublicId
+from packages.valory.skills.abstract_round_abci.test_tools.base import \
+    DummyContext
+from packages.valory.skills.transaction_preparation_abci.models import \
+    SharedState
 
-PUBLIC_ID = PublicId.from_str("valory/multiplexer_abci:0.1.0")
+
+class TestSharedState:
+    """Test SharedState of TransactionPreparation."""
+
+    def test_initialization(self) -> None:
+        """Test initialization."""
+        SharedState(name="", skill_context=DummyContext())
+
