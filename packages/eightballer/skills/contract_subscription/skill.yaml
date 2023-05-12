@@ -8,12 +8,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihby72yquictws2b6dxskiuskjbkcojyhelkl7hs4uilmmafukvim
-  behaviours.py: bafybeigmlky7s2gcvj6ueaz52rf7twbtx6cbdaxqxlfelgez6coubhgtga
+  behaviours.py: bafybeigqp6w2kzozaln7l57wq757mzpj3tsolboc7av2bn3r6h5sm4h3ey
   dialogues.py: bafybeiaaho77tsg4s7k2k27u2xqcoi2juze6cwx4psuueu7gbumpw5kgiu
   handlers.py: bafybeienjn74ndf46krggagimd4hkqvmake7jwejprx4tawdtt2pn4tgxm
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/websocket_client:0.1.0:bafybeif73ah44x4445fmpzbyo4uv23kuc7hn63ocuzzlgi2y224na76m4i
+- eightballer/websocket_client:0.1.0:bafybeihwcracii3fvvdbvku2wmz7ephsi6dlhycisq5yn3xemryxovqn5i
 contracts: []
 protocols:
 - fetchai/default:1.0.0:bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y
