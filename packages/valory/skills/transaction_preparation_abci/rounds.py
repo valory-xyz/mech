@@ -57,8 +57,8 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(str, self.db.get_strict("most_voted_tx_hash"))
 
 
-class TransactionPreparationAbciRound(CollectSameUntilThresholdRound):
-    """TransactionPreparationAbciRound"""
+class TransactionPreparationRound(CollectSameUntilThresholdRound):
+    """TransactionPreparationRound"""
 
     payload_class = TransactionPreparationAbciPayload
     synchronized_data_class = SynchronizedData
@@ -71,7 +71,7 @@ class TransactionPreparationAbciRound(CollectSameUntilThresholdRound):
 
             payload = json.loads(self.most_voted_payload)
 
-            if payload["tx_hash"] == TransactionPreparationAbciRound.ERROR_PAYLOAD:
+            if payload["tx_hash"] == TransactionPreparationRound.ERROR_PAYLOAD:
                 return self.synchronized_data, Event.CONTRACT_ERROR
 
             synchronized_data = self.synchronized_data.update(
@@ -88,30 +88,30 @@ class TransactionPreparationAbciRound(CollectSameUntilThresholdRound):
         return None
 
 
-class FinishedTransactionPreparationAbciRound(DegenerateRound):
-    """FinishedTransactionPreparationAbciRound"""
+class FinishedTransactionPreparationRound(DegenerateRound):
+    """FinishedTransactionPreparationRound"""
 
 
 class TransactionPreparationAbciApp(AbciApp[Event]):
     """TransactionPreparationAbciApp"""
 
-    initial_round_cls: AppState = TransactionPreparationAbciRound
-    initial_states: Set[AppState] = {TransactionPreparationAbciRound}
+    initial_round_cls: AppState = TransactionPreparationRound
+    initial_states: Set[AppState] = {TransactionPreparationRound}
     transition_function: AbciAppTransitionFunction = {
-        TransactionPreparationAbciRound: {
-            Event.DONE: FinishedTransactionPreparationAbciRound,
-            Event.NO_MAJORITY: TransactionPreparationAbciRound,
-            Event.ROUND_TIMEOUT: TransactionPreparationAbciRound,
-            Event.CONTRACT_ERROR: TransactionPreparationAbciRound
+        TransactionPreparationRound: {
+            Event.DONE: FinishedTransactionPreparationRound,
+            Event.NO_MAJORITY: TransactionPreparationRound,
+            Event.ROUND_TIMEOUT: TransactionPreparationRound,
+            Event.CONTRACT_ERROR: TransactionPreparationRound
         },
-        FinishedTransactionPreparationAbciRound: {}
+        FinishedTransactionPreparationRound: {}
     }
-    final_states: Set[AppState] = {FinishedTransactionPreparationAbciRound}
+    final_states: Set[AppState] = {FinishedTransactionPreparationRound}
     event_to_timeout: EventToTimeout = {}
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
-        TransactionPreparationAbciRound: set(),
+        TransactionPreparationRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
-        FinishedTransactionPreparationAbciRound: set(),
+        FinishedTransactionPreparationRound: set(),
     }

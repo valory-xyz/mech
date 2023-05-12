@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the handlers for the skill of MultiplexerAbciApp."""
+"""This module contains the handlers for the skill of AutonomousFundAbciApp."""
 
 from packages.valory.skills.abstract_round_abci.handlers import \
     ABCIRoundHandler as BaseABCIRoundHandler
@@ -34,7 +34,7 @@ from packages.valory.skills.abstract_round_abci.handlers import \
 from packages.valory.skills.abstract_round_abci.handlers import \
     TendermintHandler as BaseTendermintHandler
 
-ABCIHandler = BaseABCIRoundHandler
+ABCIRoundHandler = BaseABCIRoundHandler
 HttpHandler = BaseHttpHandler
 SigningHandler = BaseSigningHandler
 LedgerApiHandler = BaseLedgerApiHandler

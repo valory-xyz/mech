@@ -6,15 +6,15 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeihxcbavhoiwxljak5ehxdcinfxakk4g56l7rysuskj7zf4jlkv2fq
-  behaviours.py: bafybeicd2ylpucud4g3vqqfkh5hke3wso36hr4wxktlmw5v3jguperq2hy
+  __init__.py: bafybeid6hvgpcx3ktpompbdirmm2fqm5eif7h24bkfcyrentwbytpvb3ym
+  behaviours.py: bafybeihblvnut4ztseeo7jdq7k7zg3ich2nwe6pjlbo275zqhdisx3qejy
   dialogues.py: bafybeift7ubqn3fculjpbkihmensbfu26f2ptuec2zvwqybdwlodbz6mpe
-  fsm_specification.yaml: bafybeihaeqhytibpky7yoxifz3sinyjuvr5wxasty6lyooh756enem6j2e
+  fsm_specification.yaml: bafybeicuk3lz4xszonjmrmm6gz5x3kmtky3gc3fs5nooaihqxijggit4ia
   handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
   models.py: bafybeif2nmwkb5eg7zrvyjiz5d5idi3u27fka4y6vy2pdp7gkdxb2w4igq
-  payloads.py: bafybeihqqb35bhbl3du5ludfrycrc4pyzsm5wfogy3htvxds3peumgfmxy
-  rounds.py: bafybeihsf6wqc7tvnvrc6jfmuilx4cd3fhm5zpmopbprjinwtiitkzdweu
-  tasks.py: bafybeid3yk7f3vevqxnfkp7ndue2wkru5emmfqg5rqn667t7kukfbtc3au
+  payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
+  rounds.py: bafybeigtwfeckpc2wtvhxyh7o5vz4pzhser56vowb65tixhjryj7a5f63u
+  tasks.py: bafybeihqj4uhdbsvuw7k4z37uucvzpjpmljypfwj3tf5rs7mmpkorrh4qi
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []

@@ -3,17 +3,17 @@ alphabet_in:
 - NO_MAJORITY
 - ROUND_TIMEOUT
 - CONTRACT_ERROR
-default_start_state: TransactionPreparationAbciRound
+default_start_state: TransactionPreparationRound
 final_states:
-- FinishedTransactionPreparationAbciRound
+- FinishedTransactionPreparationRound
 label: TransactionPreparationAbciApp
 start_states:
-- TransactionPreparationAbciRound
+- TransactionPreparationRound
 states:
-- TransactionPreparationAbciRound
-- FinishedTransactionPreparationAbciRound
+- TransactionPreparationRound
+- FinishedTransactionPreparationRound
 transition_func:
-    (TransactionPreparationAbciRound, DONE): FinishedTransactionPreparationAbciRound
-    (TransactionPreparationAbciRound, NO_MAJORITY): TransactionPreparationAbciRound
-    (TransactionPreparationAbciRound, ROUND_TIMEOUT): TransactionPreparationAbciRound
-    (TransactionPreparationAbciRound, CONTRACT_ERROR): TransactionPreparationAbciRound
+    (TransactionPreparationRound, DONE): FinishedTransactionPreparationRound
+    (TransactionPreparationRound, NO_MAJORITY): TransactionPreparationRound
+    (TransactionPreparationRound, ROUND_TIMEOUT): TransactionPreparationRound
+    (TransactionPreparationRound, CONTRACT_ERROR): TransactionPreparationRound

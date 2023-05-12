@@ -17,10 +17,8 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Test the dialogues.py module of the TransactionPreparation."""
+"""This module contains the implementation of the mech_abci skill."""
 
-import packages.valory.skills.transaction_preparation_abci.dialogues  # noqa
+from aea.configurations.base import PublicId
 
-
-def test_import() -> None:
-    """Test that the 'dialogues.py' of the TransactionPreparation can be imported."""
+PUBLIC_ID = PublicId.from_str("valory/mech_abci:0.1.0")

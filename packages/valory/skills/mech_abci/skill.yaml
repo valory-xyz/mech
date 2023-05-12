@@ -1,33 +1,39 @@
-name: transaction_preparation_abci
+name: mech_abci
 author: valory
 version: 0.1.0
 type: skill
-description: The scaffold skill is a scaffold for your own skill implementation.
+description: The chained abci for the mech skill.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeicffbkqynejxmx6kqcdbhhaopn7phg2yfpcufp4d774jfwqsm7gx4
-  behaviours.py: bafybeihm4shxtdguba3tvwy5od5wk6am7j5sraz6dxw2dd5tva32aszwpu
-  dialogues.py: bafybeidwzysmmicss6myr36mqja6annr72nyuc5vmvp2zifcza54zayjye
-  fsm_specification.yaml: bafybeieo54rhf4jgo5cijmyfwyoacpsrdptndes77c2l5k7rv2zrjapz5e
-  handlers.py: bafybeihp7c6cvr5ui7qkwfuv463tnwpn2p3kxandm5fntilugdaxgr66ei
-  models.py: bafybeihxhcombe6nzmjinnf4hwhhdl3kxqmtfnkpodbbwb6ul4zeniobzm
-  payloads.py: bafybeifzn5lav6fcbt4pqrytsrm72hf3662qmcylf6efwrc2qhssg7apq4
-  rounds.py: bafybeib7jx62ljby2qlt3k56m25swuqk2iq2l6rfy5miv2fsoadulwm2tm
+  __init__.py: bafybeia33nkx3vpttbjokbubh2ov7qa6fnjwbvyktwmwua4dxujaajnxze
+  behaviours.py: bafybeiar7vx4bm3maqiktzyobig5cnnpgrldslqrzcg3av2dy7msijjwsu
+  composition.py: bafybeihkytxwxatc23lkxycqbb5mqdyuy3mi33q6l2nqufglqfilt4vxtu
+  dialogues.py: bafybeice5rd4m7ftvqcqmhd4dbzhedsv63ddxto44nsyf6a355oklixqbu
+  fsm_specification.yaml: bafybeifnw2wanrc7zmtokz6xpkq7blfp3tjbh4jv4sfsyiuamdiktxpzzi
+  handlers.py: bafybeiackylafg7gpphvo7oor5soiesvzkm4iz7evb5uowi3qbsmvdcxve
+  models.py: bafybeidfk32ekrbxjxwxheqnoqf3hnmguj76mdbu32wt4wsfmi67wpemhq
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
 protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
+- valory/multiplexer_abci:0.1.0:bafybeiasnzbdjouazce73me2rn5kjn3h4i6ebb3psqea4nmdttyztyjn2i
+- valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
+- valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
+- valory/task_execution_abci:0.1.0:bafybeiaebuxdbfuu6pvm3ar4hrvcmosj52b62orhzu7ex6mbj3rhxj4pwy
+- valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
+- valory/transaction_preparation_abci:0.1.0:bafybeihilhms4sxdvaygn46x4v4vq3kbnapxrdtorpgtdiaiuricambjzq
+- valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 behaviours:
   main:
     args: {}
-    class_name: TransactionPreparationRoundBehaviour
+    class_name: MechConsensusBehaviour
 handlers:
   abci:
     args: {}
-    class_name: ABCIHandler
+    class_name: ABCIRoundHandler
   contract_api:
     args: {}
     class_name: ContractApiHandler
@@ -40,6 +46,9 @@ handlers:
   ledger_api:
     args: {}
     class_name: LedgerApiHandler
+  llm:
+    args: {}
+    class_name: LlmHandler
   signing:
     args: {}
     class_name: SigningHandler
@@ -66,6 +75,9 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
+  llm_dialogues:
+    args: {}
+    class_name: LlmDialogues
   params:
     args:
       cleanup_history_depth: 1
@@ -73,6 +85,7 @@ models:
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0
       genesis_config:
+        genesis_time: '2022-09-26T00:00:00.000000000Z'
         chain_id: chain-c4daS1
         consensus_params:
           block:
@@ -80,21 +93,21 @@ models:
             max_gas: '-1'
             time_iota_ms: '1000'
           evidence:
-            max_age_duration: '172800000000000'
             max_age_num_blocks: '100000'
+            max_age_duration: '172800000000000'
             max_bytes: '1048576'
           validator:
             pub_key_types:
             - ed25519
           version: {}
-        genesis_time: '2022-05-20T16:00:21.735122717Z'
         voting_power: '10'
       history_check_timeout: 1205
-      ipfs_domain_name: null
+      init_fallback_gas: 0
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
       max_attempts: 10
       max_healthcheck: 120
+      multisend_address: '0x0000000000000000000000000000000000000000'
       on_chain_service_id: null
       request_retry_delay: 1.0
       request_timeout: 10.0
@@ -103,23 +116,38 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
-      service_id: transaction_preparation
+      service_id: mech
       service_registry_address: null
       setup:
-        all_participants:
-        - '0x0000000000000000000000000000000000000000'
-        consensus_threshold: null
+        all_participants: []
         safe_contract_address: '0x0000000000000000000000000000000000000000'
+        consensus_threshold: null
       share_tm_config_on_startup: false
       sleep_time: 1
+      tally_api_endpoint: https://api.tally.xyz/query
+      tally_api_key: <tally_api_key>
       tendermint_check_sleep_delay: 3
       tendermint_com_url: http://localhost:8080
       tendermint_max_retries: 5
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
+      termination_sleep: 900
       tx_timeout: 10.0
+      use_termination: false
       validate_timeout: 1205
+      voting_block_threshold: 300
     class_name: Params
+  randomness_api:
+    args:
+      api_id: cloudflare
+      headers: {}
+      method: GET
+      parameters: {}
+      response_key: null
+      response_type: dict
+      retries: 5
+      url: https://drand.cloudflare.com/public/latest
+    class_name: RandomnessApi
   requests:
     args: {}
     class_name: Requests
@@ -132,5 +160,7 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
-dependencies: {}
+dependencies:
+  open-aea-cli-ipfs:
+    version: <2.0.0,>=1.27.0
 is_abstract: false
