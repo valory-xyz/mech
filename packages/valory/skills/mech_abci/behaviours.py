@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of Governatooorr."""
+"""This package contains round behaviours of Mech."""
 
 from typing import Set, Type
 
@@ -51,7 +51,7 @@ from packages.valory.skills.transaction_settlement_abci.behaviours import (
 )
 
 
-class GovernatooorrConsensusBehaviour(AbstractRoundBehaviour):
+class MechConsensusBehaviour(AbstractRoundBehaviour):
     """Class to define the behaviours this AbciApp has."""
 
     initial_behaviour_cls = RegistrationStartupBehaviour

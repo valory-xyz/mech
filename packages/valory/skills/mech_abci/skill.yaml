@@ -28,7 +28,7 @@ skills:
 behaviours:
   main:
     args: {}
-    class_name: GovernatooorrConsensusBehaviour
+    class_name: MechConsensusBehaviour
 handlers:
   abci:
     args: {}
@@ -115,8 +115,7 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
-      service_endpoint_base: https://governatooorr.staging.autonolas.tech/
-      service_id: governatooorr
+      service_id: mech
       service_registry_address: null
       setup:
         all_participants: []
