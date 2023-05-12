@@ -19,7 +19,6 @@
 
 """This package contains the rounds of MultiplexerAbciApp."""
 
-import json
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 

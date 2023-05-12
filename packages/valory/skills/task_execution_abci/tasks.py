@@ -25,11 +25,11 @@ from aea.skills.tasks import Task
 
 
 def do_llm_request():
-    pass
+    """do_llm_request"""
 
 
 class LLMTask(Task):
-    """"""
+    """LLMTask"""
 
     def execute(self, *args: Any, **kwargs: Any):
         """Execute the task."""

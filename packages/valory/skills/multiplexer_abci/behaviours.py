@@ -19,15 +19,13 @@
 
 """This package contains round behaviours of MultiplexerAbciApp."""
 
-import json
 from abc import ABC
-from datetime import datetime, timezone
-from typing import Generator, Set, Tuple, Type, cast
+from typing import Generator, Set, Type, cast
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour, BaseBehaviour)
-from packages.valory.skills.multiplexer_abci.models import Params, SharedState
+from packages.valory.skills.multiplexer_abci.models import Params
 from packages.valory.skills.multiplexer_abci.rounds import (MultiplexerAbciApp,
                                                             MultiplexerPayload,
                                                             MultiplexerRound,
@@ -83,4 +81,4 @@ class MultiplexerRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = MultiplexerBehaviour
     abci_app_cls = MultiplexerAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = [MultiplexerBehaviour]
+    behaviours: Set[Type[BaseBehaviour]] = {MultiplexerBehaviour}

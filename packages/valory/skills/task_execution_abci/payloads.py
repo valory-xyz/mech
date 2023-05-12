@@ -29,4 +29,3 @@ class TaskExecutionAbciPayload(BaseTxPayload):
     """Represent a transaction payload for the TaskExecutionRound."""
 
     content: str
-
