@@ -6,14 +6,14 @@ description: A skill that implements decision logic.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeicq2o3mkcgbmi4hkmpr3c6fieemutea2gxthymxnbhpemrzlcp2la
-  behaviours.py: bafybeia4foanplcrwujoyxedcx2cmz5ssicnl7dljmgp6g6o4mvpo4tofm
-  dialogues.py: bafybeic5nwnax5tz6plxi5rww6davp23vgb6fixnlhzv2isoknuvb2bhye
-  fsm_specification.yaml: bafybeih3ezlkl7agcma64z5wcwqy3ovkdxvawg6yfog6wzzadw3x3xwqcu
-  handlers.py: bafybeibo54pwzdc5o4zwsqqaveiebxsfqtk2px5nh662bb5mxydtc2oz5q
-  models.py: bafybeigqpdm5ra5icg6ufhwl57bmk2hc73n3ml4fwo2hsvzslgr5irvo2m
-  payloads.py: bafybeif5bomwy74bwnphsk6bty6qb6efugvjnnopsz7qjunpe6gtgjaxya
-  rounds.py: bafybeie56dqcu2x7bsfna2lctsoa5eaqtmk4psqscawmbbpyblmtd5gr5q
+  __init__.py: bafybeihmlhtsobnj6vrhthmy3bgnwbb2x27wjbzea35ypraag6bgbazr4e
+  behaviours.py: bafybeif6eacr45s5bejquv7jtu26y5gr5g6yblbxbhd36xreb7aum4nxti
+  dialogues.py: bafybeie777tjh4xvxo5rrig4kq66vxg5vvmyie576ptot43olwrzfrc64a
+  fsm_specification.yaml: bafybeifyggm5hedfeyb35lyrkhqeyagoigcuymgzdryw2xw3bezypc7zje
+  handlers.py: bafybeicvz7yi657itruyh7ofhfbq2jlw2mhdujcprqf3vtr6ply3nebefa
+  models.py: bafybeifb5p3omvzsvm75e2vpauhmju4vkhxab2uxlvei2nk3uy7divkmji
+  payloads.py: bafybeibhg7q5ejfhjkjvcfeqjyzp32msn4alu5btnywimh2zd5arr2f2mm
+  rounds.py: bafybeih6axi4ql7aptvko7ruvlfg3wfuza5pc7hmhyaaq3u6465qrdwnrm
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -100,6 +100,7 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
+      reset_period_count: 100
       reset_tendermint_after: 2
       retry_attempts: 400
       retry_timeout: 3
@@ -120,7 +121,6 @@ models:
       tx_timeout: 10.0
       use_termination: false
       validate_timeout: 1205
-      reset_period_count: 100
     class_name: Params
   requests:
     args: {}

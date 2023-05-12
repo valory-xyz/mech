@@ -6,27 +6,27 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeidoueqz7w6txss2of5557257sl3tys5tinhjn4krteerhudklksmi
-  behaviours.py: bafybeiasjvoou6fqtyjcglh7fljtoai3u76pjipjbm62hwiglbg2e6vjme
-  dialogues.py: bafybeiakgebtuasrjngutlcps5uwko52rxeg6ik2xxjd52jcdni6et5soi
+  __init__.py: bafybeigzqzfnwdliwo3qkptwcon6floz3ndyjtbmspzc4oz76obllh4a2y
+  behaviours.py: bafybeiefvj3y4cfow2dzssjnckonavczeyz6tshgwa2asw5ggmbvkcaple
+  dialogues.py: bafybeidwzysmmicss6myr36mqja6annr72nyuc5vmvp2zifcza54zayjye
   fsm_specification.yaml: bafybeide6wbwjdh52zaqxnixvzlwwy4tihawwykdg66l6766qy64gnzpdm
-  handlers.py: bafybeib4aec42o3unewvcphldzqyu6dybwtfrvqdz7idrgu7mb3tr3kqzy
-  models.py: bafybeiefhhx4nbeiwpph2vn43resxjpjv3633giwwyxul6qwwdqipz3fiq
-  payloads.py: bafybeihpdwpvhtsiozar6lwbmb3zx6kz6nypxirp4l4nky3kj6tx5hi3xm
-  rounds.py: bafybeicavi4lejpkqzhd6cjoqq6sov3mglmlve5zzhfsiid2bhgrxintga
+  handlers.py: bafybeihp7c6cvr5ui7qkwfuv463tnwpn2p3kxandm5fntilugdaxgr66ei
+  models.py: bafybeihxhcombe6nzmjinnf4hwhhdl3kxqmtfnkpodbbwb6ul4zeniobzm
+  payloads.py: bafybeicsif7ma7dqowk6youpodube4d6g3nytww3565rigder5xid3sloq
+  rounds.py: bafybeidhduldbm5d6kn3xb32iol6smxm6zcwnha4pjxmkqssqs5rzmwrhy
   tests/__init__.py: bafybeic3534aro4pdtsdcuxywzlgkccczx2elhnwisiq3r6okvnrdu4aia
-  tests/test_behaviours.py: bafybeicogt5g6o6bxxhwbykruj4cdbm45szdbx5mkxmwbc74vm6ead5yje
+  tests/test_behaviours.py: bafybeigb2u5iobmdgp644zsjonkexr22ej3tst32iufcxp3leb7wbal46y
   tests/test_dialogues.py: bafybeiazandbpzwo6tm7fvhcaupodg7r4wzla3mpiyenzvd37qufkeavsm
   tests/test_handlers.py: bafybeien7wnb5robzpagps7blx6jxllogfdnl4chypc27rdfgs2vtos7hu
-  tests/test_models.py: bafybeiffg3n2r2vppy7egb56h7vxgy67gwezgehekfvvalupihyfxvygce
-  tests/test_payloads.py: bafybeibbsbe3wiod5d675dvuigpnuwld4v6mr3ehnl5tdh2hkuru6y5wom
-  tests/test_rounds.py: bafybeicszggpframznsuwpik6depv7hza3uq6cldd4mu3kmgc3sjiem7ga
+  tests/test_models.py: bafybeihp7hjptnrn7d2lp5wvvcsxrlmfwpu7ifk6t7o6vdh5ypknbywcxu
+  tests/test_payloads.py: bafybeigrhy6iqh5xrxogvtidxxstzhyp443yilwrkwbmlmk2rajsp5w75a
+  tests/test_rounds.py: bafybeieijvyixl3fsuq2cs4uxdn6ttxxjspbs7j6qdl6is6bn4luvx3ilm
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
 protocols: []
 skills:
-- valory/abstract_round_abci:0.1.0
+- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
 behaviours:
   main:
     args: {}
