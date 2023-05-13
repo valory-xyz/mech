@@ -1,15 +1,15 @@
 {
     "dev": {
-        "connection/eightballer/websocket_client/0.1.0": "bafybeicqkljjzvdl4v7pzbmsfd3al7uv7563x3qa5gmnzxeuoxgtmolpta",
-        "skill/eightballer/contract_subscription/0.1.0": "bafybeieesh5ghctqaacqn74uqj5suwsbpq42md2kpvxqv4vcu2r5fodfoi",
-        "agent/eightballer/mech/0.1.0": "bafybeihindbpv55n4e2kyjxl4rlrbg3z3dbxnsqahhkkatfgftpy7nwj3m",
-        "service/eightballer/mech/0.1.0": "bafybeia4hvhiq4v2ekdojsn55mm7737jovxthbk2mpzarqqah5dexny5a4",
+        "connection/eightballer/websocket_client/0.1.0": "bafybeihwcracii3fvvdbvku2wmz7ephsi6dlhycisq5yn3xemryxovqn5i",
+        "skill/eightballer/contract_subscription/0.1.0": "bafybeidhgfkrxh7ki56ua2fg27vpu2doxri7lh2yqlag6vf64e6e6qtsne",
+        "agent/eightballer/mech/0.1.0": "bafybeiehdbar2qbah5htjdvtntcsza4vc3bq23fqd6hozrxspiknud6qzi",
+        "service/eightballer/mech/0.1.0": "bafybeih6ltevdwi57z2vbuooaxzhactak4bett2sdkjwz67h67hatykqcy",
         "skill/valory/multiplexer_abci/0.1.0": "bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq",
-        "skill/valory/task_execution_abci/0.1.0": "bafybeibi6wkm4cohoihxh4hjrhfa7vemvfavvopl7n36yhqbsuclruqirm",
-        "skill/valory/mech_abci/0.1.0": "bafybeiejbqxagpkm3t6qwylwndcq75bc53sq6i3pvukobdg6osuvqx53fm",
+        "skill/valory/task_execution_abci/0.1.0": "bafybeidawkf34s5qnge5tkkyucc3ey5bxyfas6upfht5wdxgf2mks7qak4",
+        "skill/valory/mech_abci/0.1.0": "bafybeighhmmuihekbby4hpw765ulie77iftzpuq27roteuonqp5degyu4a",
         "skill/valory/transaction_preparation_abci/0.1.0": "bafybeihl2em35ayozamxwzpdwzoo7za7wedndwrhvw5irkyvqtcpzewixy",
         "contract/valory/agent_mech/0.1.0": "bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy",
-        "service/valory/mech/0.1.0": "bafybeictcsry3mmk6ulyl4yf6xte5zfa2t7vwvlhoayr4jom5w5n25chse"
+        "service/valory/mech/0.1.0": "bafybeibooi4prw7alc3ghxb72ci3jwl3bqbtg2wrrmexe7fpblkhszjvuq"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y",
