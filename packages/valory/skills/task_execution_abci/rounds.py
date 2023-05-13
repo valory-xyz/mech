@@ -24,7 +24,8 @@ from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectSameUntilThresholdRound, DegenerateRound, EventToTimeout, get_name)
+    CollectDifferentUntilAllRound, CollectSameUntilThresholdRound,
+    DegenerateRound, EventToTimeout, get_name)
 from packages.valory.skills.task_execution_abci.payloads import \
     TaskExecutionAbciPayload
 
@@ -49,19 +50,21 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the finished_task_data."""
         return cast(int, self.db.get_strict("finished_task_data"))
 
-class TaskExecutionRound(CollectSameUntilThresholdRound):
+class TaskExecutionRound(CollectDifferentUntilAllRound):
     """TaskExecutionRound"""
 
     payload_class = TaskExecutionAbciPayload
-    synchronized_data_class = SynchronizedData
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
-        if self.threshold_reached:
+        if self.collection_threshold_reached:
+
+            payloads_json = [payload.json for payload in self.collection.values()]
+
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
-                    get_name(SynchronizedData.finished_task_data): self.most_voted_payload,
+                    get_name(SynchronizedData.finished_task_data): payloads_json,
                 }
             )
 
