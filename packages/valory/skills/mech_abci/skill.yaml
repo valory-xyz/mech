@@ -24,7 +24,7 @@ skills:
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
 - valory/task_execution_abci:0.1.0:bafybeidfm4r2c76c47mjyt4gvw5k6ansyeztu32ke3vnajknnhzjsbk554
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeifbxhzb27xozff3stfhzmu7f6amtrrf22pn65ty55vxj4abt6edwu
+- valory/transaction_preparation_abci:0.1.0:bafybeidtvjb2kogmptedhv7cxqtemnoknyxttu7arqfyhqodkkwawzpecy
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 behaviours:
   main:
@@ -74,6 +74,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
+      agent_mech_contract_address: '0x3504fB5053ec12f748017248a395b4Ed31739705'
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31

@@ -7,11 +7,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeicffbkqynejxmx6kqcdbhhaopn7phg2yfpcufp4d774jfwqsm7gx4
-  behaviours.py: bafybeifdlb6f2vjhwm22wqxqbishyc2byqyyggqzsr3vtmdrgofqsrwu7a
+  behaviours.py: bafybeietkswidbysrqvz3v2x7kyclhgelnofop5f43yythycobepyaqxum
   dialogues.py: bafybeidwzysmmicss6myr36mqja6annr72nyuc5vmvp2zifcza54zayjye
   fsm_specification.yaml: bafybeickup5aqc3ejxbjxc5d6seax5kn5l5apgvvayxq7pxu2qmknkd7di
   handlers.py: bafybeihp7c6cvr5ui7qkwfuv463tnwpn2p3kxandm5fntilugdaxgr66ei
-  models.py: bafybeihxhcombe6nzmjinnf4hwhhdl3kxqmtfnkpodbbwb6ul4zeniobzm
+  models.py: bafybeihyk4u4noudvlydnxjpetr6puslqngv3hwnbh52nsn5j54jdpbbqe
   payloads.py: bafybeifzn5lav6fcbt4pqrytsrm72hf3662qmcylf6efwrc2qhssg7apq4
   rounds.py: bafybeiecktz7wqpn24ycruptraatj2cjzwervxo37dh2z6vn2uj3di7cfu
 fingerprint_ignore_patterns: []
@@ -72,6 +72,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
+      agent_mech_contract_address: '0x3504fB5053ec12f748017248a395b4Ed31739705'
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31

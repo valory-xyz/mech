@@ -39,8 +39,6 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import \
 SAFE_TX_GAS = 0
 ETHER_VALUE = 0
 
-AGENT_MECH_CONTRACT = "DUMMY_ADDRESS"
-
 
 class TransactionPreparationBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the transaction_preparation_abci skill."""
@@ -99,7 +97,7 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
         # Get the raw transaction from the Bravo Delegate contract
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=AGENT_MECH_CONTRACT,
+            contract_address=self.params.agent_mech_contract,
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_data",
             data=task_data
