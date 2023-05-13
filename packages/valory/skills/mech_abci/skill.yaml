@@ -7,24 +7,24 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia33nkx3vpttbjokbubh2ov7qa6fnjwbvyktwmwua4dxujaajnxze
-  behaviours.py: bafybeiar7vx4bm3maqiktzyobig5cnnpgrldslqrzcg3av2dy7msijjwsu
-  composition.py: bafybeihkytxwxatc23lkxycqbb5mqdyuy3mi33q6l2nqufglqfilt4vxtu
-  dialogues.py: bafybeice5rd4m7ftvqcqmhd4dbzhedsv63ddxto44nsyf6a355oklixqbu
+  behaviours.py: bafybeiencihxf3bqkn5f24rqfzyhrbfu5lo6i74fh7sl2hz4egjrb7t7mi
+  composition.py: bafybeifdqsb2xug7pcjvt6bwomvpzwjo67oujcgo2dgjkb6imfokrk6uba
+  dialogues.py: bafybeid6ntx5nmtkhuiml5pwt3drafvjejr7x4vu35gqekl4m6tgtxf6am
   fsm_specification.yaml: bafybeifnw2wanrc7zmtokz6xpkq7blfp3tjbh4jv4sfsyiuamdiktxpzzi
-  handlers.py: bafybeiackylafg7gpphvo7oor5soiesvzkm4iz7evb5uowi3qbsmvdcxve
-  models.py: bafybeidfk32ekrbxjxwxheqnoqf3hnmguj76mdbu32wt4wsfmi67wpemhq
+  handlers.py: bafybeihi6pbfapfmwxlom6bp7cclybswzejyrrv65gn3fpzwejekvjyxeu
+  models.py: bafybeihmncsoveqphq73aucfy43g7nahgqxjwcjeidp6aro5azw3fnrpnq
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
 protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/multiplexer_abci:0.1.0:bafybeiasnzbdjouazce73me2rn5kjn3h4i6ebb3psqea4nmdttyztyjn2i
+- valory/multiplexer_abci:0.1.0:bafybeihva2744qd76gxsonrmi27m3kmdcdfprwip5bf2uyzszs333qun5i
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeiaebuxdbfuu6pvm3ar4hrvcmosj52b62orhzu7ex6mbj3rhxj4pwy
+- valory/task_execution_abci:0.1.0:bafybeibe7ftk4p5g4bae3bocqbrxcjvf5gw3ncsis5uiiixcrji2zqauue
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeihilhms4sxdvaygn46x4v4vq3kbnapxrdtorpgtdiaiuricambjzq
+- valory/transaction_preparation_abci:0.1.0:bafybeihrmjurs6ptpu6bll34rw2lkdz5bmhkt7rq4tyetfxwt74kdqxkde
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 behaviours:
   main:
@@ -46,9 +46,6 @@ handlers:
   ledger_api:
     args: {}
     class_name: LedgerApiHandler
-  llm:
-    args: {}
-    class_name: LlmHandler
   signing:
     args: {}
     class_name: SigningHandler
@@ -75,9 +72,6 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
-  llm_dialogues:
-    args: {}
-    class_name: LlmDialogues
   params:
     args:
       cleanup_history_depth: 1
@@ -112,6 +106,7 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
+      reset_period_count: 100
       reset_tendermint_after: 2
       retry_attempts: 400
       retry_timeout: 3

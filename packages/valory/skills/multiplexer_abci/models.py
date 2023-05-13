@@ -51,7 +51,7 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.post_hour_utc = self._ensure("post_hour_utc", kwargs, int)
+        self.reset_period_count = self._ensure("reset_period_count", kwargs, int)
 
         super().__init__(*args, **kwargs)
 

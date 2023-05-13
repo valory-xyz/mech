@@ -4,8 +4,18 @@ version: 0.1.0
 description: A decentralised task execution engine.
 aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
-fingerprint: {}
+fingerprint:
+  keys.json: bafybeibqzb5bnhr6k4waztk2hy2trcfiybtfwrlkhzvfknqr62ieqem6vm
 fingerprint_ignore_patterns: []
-agent: eightballer/mech:0.1.0:bafybeigl64h2r3ncgxiq3adeuphfat2ehboaozovdxrrccoxsv4lizm4aa
+agent: eightballer/mech:0.1.0:bafybeibjz5uofdguddzmyc475kqqrqq4w5tehan42w3kgtdaum67p5v6pm
 number_of_agents: 1
 deployment: {}
+---
+public_id: valory/mech_abci:0.1.0
+type: skill
+models:
+  params:
+    args:
+      setup:
+        all_participants: ${ALL_PARTICIPANTS:list:["0xf3b0900530C969Fba60Daf3b0BbbaDa331c2Dfa1"]}
+      tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}

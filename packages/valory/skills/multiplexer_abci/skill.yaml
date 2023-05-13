@@ -7,11 +7,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihmlhtsobnj6vrhthmy3bgnwbb2x27wjbzea35ypraag6bgbazr4e
-  behaviours.py: bafybeihrgfubmwgw7abjooqkww4ld32vcpgiads2uksqg2hq36a6nweqo4
+  behaviours.py: bafybeiavf36mpv5uqhmqz2ozj45l5junuhap63cq65k526smmkooyowuam
   dialogues.py: bafybeiew6j4u7ggc43scytblq7r6ulijcbqr2tjvtp7cr6hru4sb3irl3m
   fsm_specification.yaml: bafybeifyggm5hedfeyb35lyrkhqeyagoigcuymgzdryw2xw3bezypc7zje
   handlers.py: bafybeifuvjckl3yjdwjoz6uj3sbdbmcesggfuidolfzpvfbnhb4e73wxb4
-  models.py: bafybeihsczclabkvqsynugqslz5zbfdo3lrw2mcgkfqmkbqtltom5bvgza
+  models.py: bafybeiagy2uislg4scfhrycfdasrss6styw4q7aeztozwbjtumth3juuxu
   payloads.py: bafybeibhg7q5ejfhjkjvcfeqjyzp32msn4alu5btnywimh2zd5arr2f2mm
   rounds.py: bafybeie7v3fxxycbtvsqkwz3zoi4g4a5jk4dq574e3y7tzeezmp4ijt3ae
 fingerprint_ignore_patterns: []
@@ -96,7 +96,6 @@ models:
       max_attempts: 10
       max_healthcheck: 120
       on_chain_service_id: null
-      post_hour_utc: 12
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
