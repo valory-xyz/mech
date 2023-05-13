@@ -26,7 +26,6 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
-from web3.types import BlockIdentifier
 
 
 class AgentMechContract(Contract):
