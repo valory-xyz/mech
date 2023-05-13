@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: eightballer/mech:0.1.0:bafybeigdah4ajdrz7z2ievqw76eqodoz23usjerxq7g7augt6tu5xpnai4
+agent: eightballer/mech:0.1.0:bafybeiauilrxolbidnrj75nlwpbx2vrrl2adhfpsh3d3uopo7huvssywpe
 number_of_agents: 4
 deployment:
   agent:
