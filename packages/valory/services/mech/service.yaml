@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: eightballer/mech:0.1.0:bafybeig2h2oclp4m2eknbzwkeumvcu267et6udnatyzdiua76zhpczhvam
+agent: eightballer/mech:0.1.0:bafybeifbwpzwexbtspy6isya7p3ijyx4jc5i4wgaeamk3um3jrknq6msyu
 number_of_agents: 4
 deployment:
   agent:
@@ -66,7 +66,7 @@ type: skill
         request_retry_delay: 1.0
         request_timeout: 10.0
         round_timeout_seconds: 30.0
-        service_id: governatooorr
+        service_id: mech
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
         setup: &id003
           all_participants: ${ALL_PARTICIPANTS:list:[]}
@@ -110,7 +110,7 @@ type: skill
         request_retry_delay: 1.0
         request_timeout: 10.0
         round_timeout_seconds: 30.0
-        service_id: governatooorr
+        service_id: mech
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
         setup: *id003
         share_tm_config_on_startup: ${USE_ACN:bool:false}
@@ -151,7 +151,7 @@ type: skill
         request_retry_delay: 1.0
         request_timeout: 10.0
         round_timeout_seconds: 30.0
-        service_id: governatooorr
+        service_id: mech
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
         setup: *id003
         share_tm_config_on_startup: ${USE_ACN:bool:false}
@@ -192,7 +192,7 @@ type: skill
         request_retry_delay: 1.0
         request_timeout: 10.0
         round_timeout_seconds: 30.0
-        service_id: governatooorr
+        service_id: mech
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
         setup: *id003
         share_tm_config_on_startup: ${USE_ACN:bool:false}

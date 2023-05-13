@@ -68,6 +68,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             # Check whether the task already exists
             if not self._is_task_prepared:
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
+                self.context.logger.info(f"Preparing task with data: {task_data}")
                 # Verify the data format
 
                 # For now, data is a hash
