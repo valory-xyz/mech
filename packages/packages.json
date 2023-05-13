@@ -2,14 +2,14 @@
     "dev": {
         "connection/eightballer/websocket_client/0.1.0": "bafybeicqkljjzvdl4v7pzbmsfd3al7uv7563x3qa5gmnzxeuoxgtmolpta",
         "skill/eightballer/contract_subscription/0.1.0": "bafybeia34gosqtnrwdrkfipfrajosu4t6gidhnuxykh57a7abaoqwssemi",
-        "agent/eightballer/mech/0.1.0": "bafybeibitmnv4ozn6r2n6ht2imcfhusqguk4g6m5b542pxccvtvgzg3bby",
-        "service/eightballer/mech/0.1.0": "bafybeih7w5y4ucuboqz2qla7672ynr4ywk5giycg3thejek7zpts3x5cd4",
+        "agent/eightballer/mech/0.1.0": "bafybeicp3k2yz7vfcmk3qmgicg4p5uewqy73jfqyjdoear4mtyow6dyvhy",
+        "service/eightballer/mech/0.1.0": "bafybeiahh2hbpk7r65lh3fu6bvjtizkz4i3hxlbb3bk3mkpzg5bm7rzdtq",
         "skill/valory/multiplexer_abci/0.1.0": "bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq",
         "skill/valory/task_execution_abci/0.1.0": "bafybeicxwktnvx543bdu3qj3r7w6jrwxv6q45cqb6veam3ertwexd2b5sa",
-        "skill/valory/mech_abci/0.1.0": "bafybeia3ct2dabqgjtceocskwp7aybezst3ynx6z5nzbtolyxfalfecvhi",
-        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeie3u5qk4fwgc7cnguy2i4l7vaqrftbms67gzuqoibhs5ai3smgcjq",
+        "skill/valory/mech_abci/0.1.0": "bafybeieqq4t5kjlpxfabkns2nls4t4fknfnh46kpjms4hes4vsy35533s4",
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeigszghftir47cu6qz3akrp6rxe626etyt4cl7tykku353udzzzkyi",
         "contract/valory/agent_mech/0.1.0": "bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy",
-        "service/valory/mech/0.1.0": "bafybeiesbjh7wsw6ruai2lbxtikyhyr5xamhvap5h4twyc5kr2xme5wncq"
+        "service/valory/mech/0.1.0": "bafybeibkmsf6vrawt6ftkmiu6m75efyv5d523jgj5aiqvnlv2a2pn4beua"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y",

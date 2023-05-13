@@ -121,7 +121,7 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
             contract_address=self.synchronized_data.safe_contract_address,
             contract_id=str(GnosisSafeContract.contract_id),
             contract_callable="get_raw_safe_transaction_hash",
-            to_address="TODO",
+            to_address=self.params.agent_mech_contract,
             value=ether_value,
             data=data,
             safe_tx_gas=safe_tx_gas,
@@ -138,10 +138,9 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
         safe_tx_hash = safe_tx_hash[2:]
         self.context.logger.info(f"Hash of the Safe transaction: {safe_tx_hash}")
 
-        # temp hack:
-        governor_address = "ToDo"
+        # temp hack
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ether_value, safe_tx_gas, governor_address, data
+            safe_tx_hash, ether_value, safe_tx_gas, self.params.agent_mech_contract, data
         )
 
         return payload_string
