@@ -54,6 +54,7 @@ class TaskExecutionRound(CollectDifferentUntilAllRound):
     """TaskExecutionRound"""
 
     payload_class = TaskExecutionAbciPayload
+    synchronized_data_class = SynchronizedData
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
