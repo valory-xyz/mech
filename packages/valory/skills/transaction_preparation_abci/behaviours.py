@@ -94,7 +94,7 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
         task_data,
     ) -> Generator[None, None, Optional[str]]:
         """Get the transaction hash of the Safe tx."""
-        # Get the raw transaction from the Bravo Delegate contract
+        # Get the raw transaction from the AgentMech contract
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=self.params.agent_mech_contract,
