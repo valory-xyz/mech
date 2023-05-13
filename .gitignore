@@ -27,3 +27,5 @@ packages/valory/contracts/gnosis_safe/
 keys.json
 
 leak_report
+
+agent/
