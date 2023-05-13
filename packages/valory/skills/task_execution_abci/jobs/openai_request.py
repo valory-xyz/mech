@@ -19,11 +19,7 @@
 import openai
 
 DEFAULT_OPENAI_SETTINGS = dict(
-    engine="text-davinci-003",
-    prompt = None,
     max_tokens = 500,
-    n = 1,
-    stop = None,
     temperature=0.7,
 )
 
@@ -32,15 +28,33 @@ def run(*args, **kwargs) -> str:
 
     openai.api_key = kwargs["openai_api_key"]
 
-    request_args = {
-        key: kwargs.get(key, DEFAULT_OPENAI_SETTINGS[key])
-        for key in DEFAULT_OPENAI_SETTINGS.keys()
-    }
+    max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+    temperature =  kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
-    # Call the OpenAI API
-    response = openai.Completion.create(**request_args)
+    if kwargs["use_gpt4"]:
+        messages = [{"role": "user", "content": kwargs["prompt"]}]
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            n=1,
+            stop=None,
+        )
+        return response.choices[0].message.content.strip()
+    response = openai.Completion.create(
+        engine="text-davinci-003",
+        prompt=kwargs["prompt"],
+        temperature=temperature,
+        max_tokens=max_tokens,
+        top_p=1,
+        frequency_penalty=0,
+        presence_penalty=0,
+    )
 
     # Extract the result from the API response
-    result = response.choices[0].text
+    result = response.choices[0].text.strip()
 
     return result
+
+
