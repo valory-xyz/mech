@@ -27,8 +27,8 @@ from packages.valory.skills.task_execution_abci.jobs.openai_request import \
     run as run_openai_request
 
 
-class LLMTask(Task):
-    """LLMTask"""
+class OpenAITask(Task):
+    """OpenAITask"""
 
     def execute(self, *args: Any, **kwargs: Any):
         """Execute the task."""

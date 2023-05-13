@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeid6hvgpcx3ktpompbdirmm2fqm5eif7h24bkfcyrentwbytpvb3ym
-  behaviours.py: bafybeiat3z4yu6rj7uosjyon5psqrtopp2gycdmdi7uo7gmu2wwjqk3s5y
+  behaviours.py: bafybeifmyynwvc3fnxqgka5mz6ibn535w6lxxveam7kgpzvsevxp6exhjm
   dialogues.py: bafybeift7ubqn3fculjpbkihmensbfu26f2ptuec2zvwqybdwlodbz6mpe
   fsm_specification.yaml: bafybeieldx3rylsiyb6sfqxqzoogmtnda7jf4czgyjn3ddtzo4bze6sfza
   handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
@@ -15,7 +15,7 @@ fingerprint:
   models.py: bafybeif2nmwkb5eg7zrvyjiz5d5idi3u27fka4y6vy2pdp7gkdxb2w4igq
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
   rounds.py: bafybeiesscjgaeg6rbve3lua7tgftbh6uqyiibjxe2xo763ixskpdg4wcm
-  tasks.py: bafybeibc2adulu2x4tnm5qmrsje3apfpw2zlzgty5fxwlo6mterkv3ghrq
+  tasks.py: bafybeiakpyohjnvf6g63kq72qfvy4jaqlvjinvoy7qczy34u5hqoitmgim
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []

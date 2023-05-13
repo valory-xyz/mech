@@ -35,7 +35,7 @@ from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
     SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
     TaskExecutionRound)
-from packages.valory.skills.task_execution_abci.tasks import LLMTask
+from packages.valory.skills.task_execution_abci.tasks import OpenAITask
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
@@ -120,10 +120,12 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
     def prepare_task(self, task_data):
         """Prepare the task."""
-        if task_data["type"] == "llm":
-            llm_task = LLMTask()
+        if task_data["tool"] == "openai-gpt4":
+            openai_task = OpenAITask()
+            task_data["use_gpt4"] = True
+            task_data["openai_api_key"] = self.params.openai_api_key
             task_id = self.context.task_manager.enqueue_task(
-                llm_task, args=(task_data)
+                openai_task, args=(task_data)
             )
             self._async_result = self.context.task_manager.get_task_result(task_id)
             self._is_task_prepared = True
