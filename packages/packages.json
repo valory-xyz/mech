@@ -5,9 +5,9 @@
         "agent/eightballer/mech/0.1.0": "bafybeiauilrxolbidnrj75nlwpbx2vrrl2adhfpsh3d3uopo7huvssywpe",
         "service/eightballer/mech/0.1.0": "bafybeickm2j7kacftbkz3ikd2fletbodiay23mbhbqurxaa4s4znnxcy5y",
         "skill/valory/multiplexer_abci/0.1.0": "bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq",
-        "skill/valory/task_execution_abci/0.1.0": "bafybeidawkf34s5qnge5tkkyucc3ey5bxyfas6upfht5wdxgf2mks7qak4",
-        "skill/valory/mech_abci/0.1.0": "bafybeighhmmuihekbby4hpw765ulie77iftzpuq27roteuonqp5degyu4a",
-        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeihl2em35ayozamxwzpdwzoo7za7wedndwrhvw5irkyvqtcpzewixy",
+        "skill/valory/task_execution_abci/0.1.0": "bafybeicelraqao5qvvppuifuvpqvdzmjbot5rxl5ju6yv2vfh54kins32y",
+        "skill/valory/mech_abci/0.1.0": "bafybeia47d2jl4koylsbuw23ovvfypmvaezoncutx6e5mk4j7ylra62mye",
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeie3u5qk4fwgc7cnguy2i4l7vaqrftbms67gzuqoibhs5ai3smgcjq",
         "contract/valory/agent_mech/0.1.0": "bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy",
         "service/valory/mech/0.1.0": "bafybeiejjafdghvml43qu4e35gtnq3jiw52doexwwaz5eoyy6su6jkqeh4"
     },

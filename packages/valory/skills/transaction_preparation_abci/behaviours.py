@@ -100,7 +100,8 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
             contract_address=self.params.agent_mech_contract,
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_data",
-            data=task_data
+            request_id=task_data["request_id"],
+            data=task_data["task_result"]
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE

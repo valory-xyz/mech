@@ -22,9 +22,9 @@ skills:
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeidawkf34s5qnge5tkkyucc3ey5bxyfas6upfht5wdxgf2mks7qak4
+- valory/task_execution_abci:0.1.0:bafybeicelraqao5qvvppuifuvpqvdzmjbot5rxl5ju6yv2vfh54kins32y
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeihl2em35ayozamxwzpdwzoo7za7wedndwrhvw5irkyvqtcpzewixy
+- valory/transaction_preparation_abci:0.1.0:bafybeie3u5qk4fwgc7cnguy2i4l7vaqrftbms67gzuqoibhs5ai3smgcjq
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 behaviours:
   main:
@@ -104,6 +104,7 @@ models:
       max_healthcheck: 120
       multisend_address: '0x0000000000000000000000000000000000000000'
       on_chain_service_id: null
+      openai_api_key: dummy_api_key
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10

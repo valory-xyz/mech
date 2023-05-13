@@ -19,3 +19,4 @@ models:
         all_participants: ${ALL_PARTICIPANTS:list:["0xf3b0900530C969Fba60Daf3b0BbbaDa331c2Dfa1"]}
       tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
       agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0x3504fB5053ec12f748017248a395b4Ed31739705}
+      openai_api_key: ${OPENAI_API_KEY:str:dummy_api_key}
