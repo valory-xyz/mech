@@ -21,13 +21,11 @@
 
 import json
 
-
 from aea.protocols.base import Message
 from aea.skills.base import Handler
-
-from packages.fetchai.protocols.default.message import DefaultMessage
 from web3 import Web3
 
+from packages.fetchai.protocols.default.message import DefaultMessage
 
 JOB_QUEUE = "pending_tasks"
 
@@ -76,6 +74,6 @@ class WebSocketHandler(Handler):
     def _get_tx_args(self, tx_hash: str):
         """Get the transaction arguments."""
         tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
-        rich_logs = self.contract.events.Request().processReceipt(tx_receipt)
+        rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
         return dict(rich_logs[0]['args'])
 
