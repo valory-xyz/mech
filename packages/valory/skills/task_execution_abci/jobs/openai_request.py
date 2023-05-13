@@ -16,20 +16,31 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
+import openai
 
-"""Contains the background tasks of the APY estimation skill."""
+DEFAULT_OPENAI_SETTINGS = dict(
+    engine="text-davinci-003",
+    prompt = None,
+    max_tokens = 500,
+    n = 1,
+    stop = None,
+    temperature=0.7,
+)
 
-from typing import Any
 
-from aea.skills.tasks import Task
+def run(*args, **kwargs) -> str:
 
-from packages.valory.skills.task_execution_abci.jobs.openai_request import \
-    run as run_openai_request
+    openai.api_key = kwargs["openai_api_key"]
 
+    request_args = {
+        key: kwargs.get(key, DEFAULT_OPENAI_SETTINGS[key])
+        for key in DEFAULT_OPENAI_SETTINGS.keys()
+    }
 
-class LLMTask(Task):
-    """LLMTask"""
+    # Call the OpenAI API
+    response = openai.Completion.create(**request_args)
 
-    def execute(self, *args: Any, **kwargs: Any):
-        """Execute the task."""
-        return run_openai_request(*args, **kwargs)
+    # Extract the result from the API response
+    result = response.choices[0].text
+
+    return result
