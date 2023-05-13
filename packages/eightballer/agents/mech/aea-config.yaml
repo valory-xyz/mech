@@ -32,11 +32,11 @@ skills:
 - eightballer/contract_subscription:0.1.0:bafybeidhgfkrxh7ki56ua2fg27vpu2doxri7lh2yqlag6vf64e6e6qtsne
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeihvcdg2o2u3dz7xzeynxwqt35ngdjrqo7gxnqzu54rfvfnex5rdvi
+- valory/mech_abci:0.1.0:bafybeigj7nunlkdo5ujcrcqehz36s5c6pt5cr453rlfolq3fyt6ry5hzxa
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeianl2ughcb2vhlaszhkcge7wczr7j4nq33opjzquibguvtags75yy
+- valory/task_execution_abci:0.1.0:bafybeiavaq5cad2imas2ywbktex2zwezkrzpmacuyj3svs3rhtk22qasma
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
 - valory/transaction_preparation_abci:0.1.0:bafybeihl2em35ayozamxwzpdwzoo7za7wedndwrhvw5irkyvqtcpzewixy
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
@@ -104,5 +104,6 @@ models:
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
       agent_mech_contract_address: ${str:0x3504fB5053ec12f748017248a395b4Ed31739705}
+      openai_api_key: ${str:dummy_api_key}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}

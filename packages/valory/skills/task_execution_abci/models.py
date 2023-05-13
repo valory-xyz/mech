@@ -39,13 +39,16 @@ class SharedState(BaseSharedState):
 
     abci_app_cls = TaskExecutionAbciApp
 
-    def __init__(self, *args: Any, skill_context: SkillContext, **kwargs: Any) -> None:
-        """Init"""
-        super().__init__(*args, skill_context=skill_context, **kwargs)
 
-        self.pending_tasks: List = []
+class Params(BaseParams):
+    """Parameters."""
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the parameters object."""
 
-Params = BaseParams
+        self.openai_api_key = self._ensure("openai_api_key", kwargs, str)
+
+        super().__init__(*args, **kwargs)
+
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool
