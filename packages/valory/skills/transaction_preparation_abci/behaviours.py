@@ -23,6 +23,7 @@ import json
 from abc import ABC
 from typing import Generator, Optional, Set, Type, cast
 
+from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -59,30 +60,22 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
     matching_round: Type[AbstractRound] = TransactionPreparationRound
 
 
-    def _get_proposal_info(self):
-        """Returns the proposal"""
-        self.context.logger.info("To Fix")
-        return "ToDo"
-
     def async_act(self) -> Generator:
         """Do the act, supporting asynchronous execution."""
 
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            votable_proposal_ids, proposals = self._get_proposal_info()
 
             finished_task_data = self.synchronized_data.finished_task_data
 
             self.context.logger.info(f"Finished Task Data: {finished_task_data}")
 
-            tx_hash = yield from self._get_safe_tx_hash()
+            tx_hash = yield from self._get_safe_tx_hash(finished_task_data)
 
             if not tx_hash:
                 tx_hash = TransactionPreparationRound.ERROR_PAYLOAD
 
             payload_content = {
                 "tx_hash": tx_hash,
-                "proposals": proposals,
-                "votable_proposal_ids": votable_proposal_ids,
             }
 
             payload = TransactionPreparationAbciPayload(
@@ -98,20 +91,22 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
 
     def _get_safe_tx_hash(
         self,
+        task_data,
     ) -> Generator[None, None, Optional[str]]:
         """Get the transaction hash of the Safe tx."""
         # Get the raw transaction from the Bravo Delegate contract
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address="TODO",
-            contract_id=str("TODO"),
-            contract_callable="TODO"
+            contract_address=self.params.agent_mech_contract,
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_deliver_data",
+            data=task_data
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
         ):  # pragma: nocover
             self.context.logger.warning(
-                f"get_cast_vote_data unsuccessful!: {contract_api_msg}"
+                f"get_deliver_data unsuccessful!: {contract_api_msg}"
             )
             return None
         data = cast(bytes, contract_api_msg.state.body["data"])

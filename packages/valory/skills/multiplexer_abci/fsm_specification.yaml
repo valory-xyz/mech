@@ -1,19 +1,23 @@
 alphabet_in:
-- API_ERROR
-- DONE
+- EXECUTE
 - NO_MAJORITY
+- RESET
 - ROUND_TIMEOUT
+- WAIT
 default_start_state: MultiplexerRound
 final_states:
-- FinishedDecisionMakingRound
+- FinishedMultiplexerExecuteRound
+- FinishedMultiplexerResetRound
 label: MultiplexerAbciApp
 start_states:
 - MultiplexerRound
 states:
-- FinishedDecisionMakingRound
+- FinishedMultiplexerExecuteRound
+- FinishedMultiplexerResetRound
 - MultiplexerRound
 transition_func:
-    (MultiplexerRound, API_ERROR): MultiplexerRound
-    (MultiplexerRound, DONE): FinishedDecisionMakingRound
+    (MultiplexerRound, EXECUTE): FinishedMultiplexerExecuteRound
     (MultiplexerRound, NO_MAJORITY): MultiplexerRound
+    (MultiplexerRound, RESET): FinishedMultiplexerResetRound
     (MultiplexerRound, ROUND_TIMEOUT): MultiplexerRound
+    (MultiplexerRound, WAIT): MultiplexerRound
