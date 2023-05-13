@@ -73,6 +73,7 @@ jobs:
             shell: bash
             run: |
               echo "Building Docker Images"
+              ls
               export AUTHOR=valory
               export SERVICE=mech
               autonomy init --reset --author $AUTHOR --ipfs --remote
