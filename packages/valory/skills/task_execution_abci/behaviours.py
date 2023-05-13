@@ -62,6 +62,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         super().__init__(**kwargs)
         self._async_result: Optional[AsyncResult] = None
         self._is_task_prepared = False
+        self._invalid_request = False
 
     def async_act(self) -> Generator:
         """Do the act, supporting asynchronous execution."""
@@ -69,7 +70,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
 
             # Check whether the task already exists
-            if not self._is_task_prepared:
+            if not self._is_task_prepared and not self._invalid_request:
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 self.context.logger.info(f"Preparing task with data: {task_data}")
                 # Verify the data format
@@ -89,18 +90,23 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                         self.prepare_task(task_data)
                     else:
                         self.context.logger.warning("Data is not valid")
+                        self._invalid_request = True
                 else:
                     self.context.logger.warning("Data does not match the IPFS hash regex")
+                    self._invalid_request = True
 
-            # Check whether the task is finished
-            self._async_result = cast(AsyncResult, self._async_result)
-            if not self._async_result.ready():
-                self.context.logger.debug("The task is not finished yet.")
-                yield from self.sleep(self.params.sleep_time)
-                return
+            if self._invalid_request:
+                completed_task = "no_op"
+            else:
+                # Check whether the task is finished
+                self._async_result = cast(AsyncResult, self._async_result)
+                if not self._async_result.ready():
+                    self.context.logger.debug("The task is not finished yet.")
+                    yield from self.sleep(self.params.sleep_time)
+                    return
 
-            # The task is finished
-            completed_task = self._async_result.get()
+                # The task is finished
+                completed_task = self._async_result.get()
 
             sender = self.context.agent_address
             payload = TaskExecutionAbciPayload(sender=sender, content=completed_task)
