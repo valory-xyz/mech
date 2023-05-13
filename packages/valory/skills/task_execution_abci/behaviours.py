@@ -19,9 +19,12 @@
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
 
+import re
 from abc import ABC
 from multiprocessing.pool import AsyncResult
 from typing import Any, Generator, Optional, Set, Type, cast
+
+from aea.helpers.base import IPFS_HASH_REGEX
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
@@ -70,17 +73,24 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 self.context.logger.info(f"Preparing task with data: {task_data}")
                 # Verify the data format
+                if re.match(IPFS_HASH_REGEX, task_data):
+                    # For now, data is a hash
+                    file_hash = task_data
 
-                # For now, data is a hash
-                file_hash = task_data
+                    # Get the file from IPFS
+                    task_data = yield from self.get_from_ipfs(
+                        ipfs_hash=file_hash,
+                        filetype=SupportedFiletype.JSON,
+                    )
 
-                # Get the file from IPFS
-                task_data = yield from self.get_from_ipfs(
-                    ipfs_hash=file_hash,
-                    filetype=SupportedFiletype.JSON,
-                )
-
-                self.prepare_task(task_data)
+                    # Verify the file data (TODO)
+                    is_data_valid = True
+                    if is_data_valid:
+                        self.prepare_task(task_data)
+                    else:
+                        self.context.logger.warning(f"Data is not valid")
+                else:
+                    self.context.logger.warning(f"Data does not match the IPFS hash regex")
 
             # Check whether the task is finished
             self._async_result = cast(AsyncResult, self._async_result)
