@@ -9,8 +9,8 @@ label: TaskExecutionAbciApp
 start_states:
 - TaskExecutionRound
 states:
-- TaskExecutionRound
 - FinishedTaskExecutionRound
+- TaskExecutionRound
 transition_func:
     (TaskExecutionRound, DONE): FinishedTaskExecutionRound
     (TaskExecutionRound, NO_MAJORITY): TaskExecutionRound

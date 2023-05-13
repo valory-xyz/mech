@@ -40,7 +40,7 @@ clean-test:
 	find . -name 'log.txt' -exec rm -fr {} +
 	find . -name 'log.*.txt' -exec rm -fr {} +
 
-format: clean 
+format: clean
 	poetry run isort packages scripts tests && \
 	poetry run black packages scripts tests
 
@@ -69,3 +69,10 @@ run-single-agent:
 
 run-mas:
 	bash scripts/start_multi_agent.sh
+
+
+.PHONY: generators
+generators:
+	find . -empty -type d -delete  # remove empty directories to avoid wrong hashes
+	autonomy hash all
+	autonomy packages lock
