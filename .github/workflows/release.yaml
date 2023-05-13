@@ -73,9 +73,8 @@ jobs:
             shell: bash
             run: |
               echo "Building Docker Images"
-              cd /work
-              source env.sh || exit 1
-              echo "Building images for $AUTHOR for service $SERVICE"
+              export AUTHOR=valory
+              export SERVICE=mech
               autonomy init --reset --author $AUTHOR --ipfs --remote
               autonomy fetch $AUTHOR/$SERVICE --service --local || exit 1
               cd $SERVICE || exit 1
