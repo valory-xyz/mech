@@ -23,3 +23,5 @@ packages/valory/contracts/gnosis_safe/
 .env
 
 keys.json
+
+leak_report
