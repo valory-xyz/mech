@@ -21,22 +21,36 @@
 
 import json
 
+
 from aea.protocols.base import Message
 from aea.skills.base import Handler
 
 from packages.fetchai.protocols.default.message import DefaultMessage
+from web3 import Web3
+
 
 JOB_QUEUE = "pending_tasks"
+
+DEFAULT_CONTRACT = "0x3504fB5053ec12f748017248a395b4Ed31739705"
+DEFAULT_ENDPOINT = "https://rpc.gnosischain.com"
 
 
 class WebSocketHandler(Handler):
     """This class scaffolds a handler."""
 
     SUPPORTED_PROTOCOL = DefaultMessage.protocol_id
+    w3: Web3 = None
+    contract = None
 
     def setup(self) -> None:
         """Implement the setup."""
         self.context.shared_state[JOB_QUEUE] = []
+        # loads the contracts from the config file
+        with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r") as file:
+            abi = json.load(file)['abi']
+
+        self.w3 = Web3(Web3.HTTPProvider(DEFAULT_ENDPOINT))
+        self.contract = self.w3.eth.contract(address=DEFAULT_CONTRACT, abi=abi)
 
     def handle(self, message: Message) -> None:
         """
@@ -49,7 +63,19 @@ class WebSocketHandler(Handler):
         if set(data.keys()) == {"id", "result", "jsonrpc"}:
             self.context.logger.info(f"Received subscription response: {data}")
             return
-        self.context.shared_state[JOB_QUEUE].append(json.loads(message.content))
+
+        self.context.logger.info(f"Extracting data")
+        tx_hash = data['params']['result']['transactionHash']
+        event_args = self._get_tx_args(tx_hash)
+        self.context.shared_state[JOB_QUEUE].append(event_args)
+        self.context.logger.info(f"Added job to queue: {event_args}")
 
     def teardown(self) -> None:
         """Implement the handler teardown."""
+
+    def _get_tx_args(self, tx_hash: str):
+        """Get the transaction arguments."""
+        tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
+        rich_logs = self.contract.events.Request().processReceipt(tx_receipt)
+        return dict(rich_logs[0]['args'])
+
