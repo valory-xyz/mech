@@ -75,26 +75,22 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 self.context.logger.info(f"Preparing task with data: {task_data}")
                 # Verify the data format
-                if re.match(IPFS_HASH_REGEX, task_data):
-                    # For now, data is a hash
-                    file_hash = task_data["data"]
-                    self.request_id = task_data["requestId"]
+                file_hash = task_data["data"].decode("utf-8")
+                # For now, data is a hash
+                self.request_id = task_data["requestId"]
 
-                    # Get the file from IPFS
-                    task_data = yield from self.get_from_ipfs(
-                        ipfs_hash=file_hash,
-                        filetype=SupportedFiletype.JSON,
-                    )
+                # Get the file from IPFS
+                task_data = yield from self.get_from_ipfs(
+                    ipfs_hash=file_hash,
+                    filetype=SupportedFiletype.JSON,
+                )
 
-                    # Verify the file data (TODO)
-                    is_data_valid = True
-                    if is_data_valid:
-                        self.prepare_task(task_data)
-                    else:
-                        self.context.logger.warning("Data is not valid")
-                        self._invalid_request = True
+                # Verify the file data (TODO)
+                is_data_valid = True
+                if is_data_valid:
+                    self.prepare_task(task_data)
                 else:
-                    self.context.logger.warning("Data does not match the IPFS hash regex")
+                    self.context.logger.warning("Data is not valid")
                     self._invalid_request = True
 
             if self._invalid_request:
@@ -120,15 +116,16 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
         self.set_done()
 
-
     def prepare_task(self, task_data):
         """Prepare the task."""
         if task_data["tool"] == "openai-gpt4":
             openai_task = OpenAITask()
-            task_data["use_gpt4"] = True
-            task_data["openai_api_key"] = self.context.params.openai_api_key
+            task_data["use_gpt4"] = False
+            # task_data["openai_api_key"] = self.params.openai_api_key
+            import os
+            task_data["openai_api_key"] = os.environ.get("OPENAI_API_KEY")
             task_id = self.context.task_manager.enqueue_task(
-                openai_task, args=(task_data)
+                openai_task, kwargs=task_data
             )
             self._async_result = self.context.task_manager.get_task_result(task_id)
             self._is_task_prepared = True
