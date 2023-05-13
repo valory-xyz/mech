@@ -12,12 +12,10 @@ fingerprint:
   fsm_specification.yaml: bafybeieldx3rylsiyb6sfqxqzoogmtnda7jf4czgyjn3ddtzo4bze6sfza
   handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
   jobs/openai_request.py: bafybeigwhqawu524qmcqfgs4qxfzvjc345w2zuiekxnmt4ikczyezlu4ra
-  models.py: bafybeiehehfkv3wsdbwzsiv644kqvxmpbjkfw55s6qz5y6lmbctkvu3scm
+  models.py: bafybeibnwveizh5tao6ohuisxbeefburq7vej74pn6vubp54dbbn2dil5u
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
   rounds.py: bafybeiazyiomy6p4onqxkofnykzvxh557gmu2g3eclofmxbulmhns2oyo4
   tasks.py: bafybeiakpyohjnvf6g63kq72qfvy4jaqlvjinvoy7qczy34u5hqoitmgim
-  tests/__init__.py: bafybeih4hhuw4p2nocm7f33rliqggjsafjvrsutfovnjh6czw7a6krthxi
-  tests/test_behaviours.py: bafybeifsgxcsgybyfutvf2fi5wz5umoavpqkgcpzj3uw5i2v2ugmkmt3ym
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
