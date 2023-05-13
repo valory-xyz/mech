@@ -20,3 +20,7 @@ packages/valory/contracts/multisend/
 packages/valory/contracts/service_registry/
 
 packages/valory/contracts/gnosis_safe/
+
+.env
+
+keys.json
