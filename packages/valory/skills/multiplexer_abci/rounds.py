@@ -48,7 +48,7 @@ class SynchronizedData(BaseSynchronizedData):
     @property
     def period_counter(self) -> int:
         """Get the period_counter."""
-        return cast(int, self.db.get("period_counter", 0))
+        return cast(int, self.db.get("period_counter", 1))
 
 class MultiplexerRound(CollectSameUntilThresholdRound):
     """MultiplexerRound"""
