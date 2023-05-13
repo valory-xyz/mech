@@ -104,4 +104,4 @@ models:
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
       setup:
-        all_participants: ${list:["0xf3b0900530C969Fba60Daf3b0BbbaDa331c2Dfa1"]}
+        all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
