@@ -19,9 +19,7 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 
-from typing import Any, List
-
-from aea.skills.base import SkillContext
+from typing import Any
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import \
