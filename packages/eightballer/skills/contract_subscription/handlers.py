@@ -45,6 +45,10 @@ class WebSocketHandler(Handler):
         :param message: the message
         """
         self.context.logger.info(f"Received message: {message}")
+        data = json.loads(message.content)
+        if set(data.keys()) == {"id", "result", "jsonrpc"}:
+            self.context.logger.info(f"Received subscription response: {data}")
+            return
         self.context.shared_state[JOB_QUEUE].append(json.loads(message.content))
 
     def teardown(self) -> None:

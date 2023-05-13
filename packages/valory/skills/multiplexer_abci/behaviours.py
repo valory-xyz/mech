@@ -61,7 +61,7 @@ class MultiplexerBehaviour(MultiplexerBaseBehaviour):
             period_counter = self.synchronized_data.period_counter
             do_reset = period_counter % self.params.reset_period_count == 0
 
-            if self.context.state.task_queue:
+            if self.context.shared_state["pending_tasks"]:
                 payload_content = MultiplexerRound.EXECUTE_PAYLOAD
             elif do_reset:
                 payload_content = MultiplexerRound.RESET_PAYLOAD

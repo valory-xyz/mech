@@ -113,5 +113,5 @@ class TransactionPreparationAbciApp(AbciApp[Event]):
         TransactionPreparationRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
-        FinishedTransactionPreparationRound: set(),
+        FinishedTransactionPreparationRound: {"most_voted_tx_hash"}
     }
