@@ -6,16 +6,16 @@ description: agent mech contract
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeied73rq2fac7zwgdhfevcwjjxrqphrdkrbqzarvejsd3ayjza76w4
-  build/AgentMech.json: bafybeicq5ee4hba3h6tsluzvdrtyvzllpqsseqys66e24bfrpjlegnxome
-  contract.py: bafybeihe56ot6vzvudti5y6yoami2bkgm2pl45o4p3s7dh2criefk47ijy
+  __init__.py: bafybeigpq5lxfj2aza6ok3fjuywtdafelkbvoqwaits7regfbgu4oynmku
+  build/AgentMech.json: bafybeidrlu7vpusp2tzovyf5rbnqy2jicuq3e6czizfkzswjq4rjusu72i
+  contract.py: bafybeifmqrzx4he4oiwbgkmckg3f3qsagk7cu26h3iiu6lrazxocazjyqi
 fingerprint_ignore_patterns: []
 class_name: AgentMechContract
 contract_interface_paths:
   ethereum: build/AgentMech.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.31.0
+    version: ==1.33.0
   web3:
     version: ==5.25.0
 contracts: []

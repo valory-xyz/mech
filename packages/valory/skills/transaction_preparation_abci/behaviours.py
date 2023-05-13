@@ -23,6 +23,7 @@ import json
 from abc import ABC
 from typing import Generator, Optional, Set, Type, cast
 
+from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -34,7 +35,6 @@ from packages.valory.skills.transaction_preparation_abci.rounds import (
     TransactionPreparationAbciPayload, TransactionPreparationRound)
 from packages.valory.skills.transaction_settlement_abci.payload_tools import \
     hash_payload_to_hex
-from packages.valory.contracts.agent_mech.contract import AgentMechContract
 
 SAFE_TX_GAS = 0
 ETHER_VALUE = 0
