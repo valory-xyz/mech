@@ -61,9 +61,12 @@ class TaskExecutionRound(CollectDifferentUntilAllRound):
         if self.collection_threshold_reached:
 
             payloads_json = json.dumps(
-                [
-                    cast(TaskExecutionAbciPayload, payload).content for payload in self.collection.values()
-                ],
+                {
+                    "request_id": self.collection[list(self.collection.keys())[0]], # get the if from the first payload
+                    "task_result": [
+                        payload.json["task_result"] for payload in self.collection.values()
+                    ]
+                },
                 sort_keys=True
             )
 

@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
-
+import json
 import re
 from abc import ABC
 from multiprocessing.pool import AsyncResult
@@ -61,6 +61,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         """Initialize Behaviour."""
         super().__init__(**kwargs)
         self._async_result: Optional[AsyncResult] = None
+        self.request_id = None
         self._is_task_prepared = False
         self._invalid_request = False
 
@@ -76,7 +77,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 # Verify the data format
                 if re.match(IPFS_HASH_REGEX, task_data):
                     # For now, data is a hash
-                    file_hash = task_data
+                    file_hash = task_data["data"]
+                    self.request_id = task_data["requestId"]
 
                     # Get the file from IPFS
                     task_data = yield from self.get_from_ipfs(
@@ -108,8 +110,9 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 # The task is finished
                 task_result = self._async_result.get()
 
+            payload_content = json.dumps({"request_id": self.request_id, "task_result": task_result}, sort_keys=True)
             sender = self.context.agent_address
-            payload = TaskExecutionAbciPayload(sender=sender, content=task_result)
+            payload = TaskExecutionAbciPayload(sender=sender, content=payload_content)
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
