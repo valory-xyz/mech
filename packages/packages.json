@@ -8,7 +8,8 @@
         "skill/valory/task_execution_abci/0.1.0": "bafybeiaqtew4cb2gqbfddmk5hvpr7ugjmgibdh55md4qm7u2urogjzfisu",
         "skill/valory/mech_abci/0.1.0": "bafybeiezkmsvfxcguvfwfcwtbj7a5gn77drdreimxshkzypsu6xfln2lyu",
         "skill/valory/transaction_preparation_abci/0.1.0": "bafybeifjcan7yqnscsnw3x6536nfubz5zpjot7zo5egpqzfovpoqieus64",
-        "contract/valory/agent_mech/0.1.0": "bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy"
+        "contract/valory/agent_mech/0.1.0": "bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy",
+        "service/valory/mech/0.1.0": "bafybeia6aypdkoqgc5psrsxghh2jkin2onl5ql6nwmxsgkzpbqdlu4wtx4"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y",

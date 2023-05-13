@@ -11,7 +11,6 @@ packages/valory/skills/termination_abci/
 .idea
 **/__pycache__/
 *.DS_Store
-mech/
 
 packages/valory/contracts/gnosis_safe_proxy_factory/
 

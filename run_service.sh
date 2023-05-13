@@ -15,7 +15,7 @@ make clean
 
 autonomy push-all
 
-autonomy fetch --local --service eightballer/mech && cd mech
+autonomy fetch --local --service valory/mech && cd mech
 
 # Build the image
 autonomy build-image
