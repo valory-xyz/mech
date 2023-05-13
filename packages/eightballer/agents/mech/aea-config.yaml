@@ -56,7 +56,7 @@ default_connection: null
 public_id: eightballer/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
 type: connection
 config:
-  endpoint: wss://polygon-mainnet.g.alchemy.com/v2/NoF8MPitnddMlyaaSSIg2ix4tt66N11U
+  endpoint: wss://rpc.gnosischain.com/wss
   target_skill_id: eightballer/contract_subscription:0.1.0
 ---
 public_id: eightballer/contract_subscription:0.1.0:bafybeiby5ajjc7a3m2uq73d2pprx6enqt4ghfcq2gkmrtsr75e4d4napi4
@@ -65,7 +65,7 @@ behaviours:
   subscriptions:
     args:
       contracts:
-      - '0xf25212e676d1f7f89cd72ffee66158f541246445'
+      - '0x3504fB5053ec12f748017248a395b4Ed31739705'
 ---
 public_id: valory/abci:0.1.0
 type: connection

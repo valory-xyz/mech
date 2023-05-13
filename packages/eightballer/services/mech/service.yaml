@@ -4,9 +4,10 @@ version: 0.1.0
 description: A decentralised task execution engine.
 aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
-fingerprint: {}
+fingerprint:
+  keys.json: bafybeigvk3axprg3gj3p4dmdenkvx4x37s43bzfgem2c5itggotn7pwzhm
 fingerprint_ignore_patterns: []
-agent: eightballer/mech:0.1.0:bafybeifl7bniliowno5rphvbmtr6qyckgm5vjnz7ld3aasuxwawhnsi7ym
+agent: eightballer/mech:0.1.0:bafybeiftlxqm5gc6laegdjypqcrwi5rd7s7q5k5jlkishm6zf6yyr6xc74
 number_of_agents: 1
 deployment: {}
 ---
