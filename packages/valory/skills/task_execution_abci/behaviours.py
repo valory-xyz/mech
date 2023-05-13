@@ -88,9 +88,9 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                     if is_data_valid:
                         self.prepare_task(task_data)
                     else:
-                        self.context.logger.warning(f"Data is not valid")
+                        self.context.logger.warning("Data is not valid")
                 else:
-                    self.context.logger.warning(f"Data does not match the IPFS hash regex")
+                    self.context.logger.warning("Data does not match the IPFS hash regex")
 
             # Check whether the task is finished
             self._async_result = cast(AsyncResult, self._async_result)
