@@ -19,9 +19,12 @@
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
 
+import re
 from abc import ABC
 from multiprocessing.pool import AsyncResult
 from typing import Any, Generator, Optional, Set, Type, cast
+
+from aea.helpers.base import IPFS_HASH_REGEX
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
@@ -32,7 +35,7 @@ from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
     SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
     TaskExecutionRound)
-from packages.valory.skills.task_execution_abci.tasks import LLMTask
+from packages.valory.skills.task_execution_abci.tasks import OpenAITask
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
@@ -59,6 +62,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         super().__init__(**kwargs)
         self._async_result: Optional[AsyncResult] = None
         self._is_task_prepared = False
+        self._invalid_request = False
 
     def async_act(self) -> Generator:
         """Do the act, supporting asynchronous execution."""
@@ -66,30 +70,43 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
 
             # Check whether the task already exists
-            if not self._is_task_prepared:
+            if not self._is_task_prepared and not self._invalid_request:
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
+                self.context.logger.info(f"Preparing task with data: {task_data}")
                 # Verify the data format
+                if re.match(IPFS_HASH_REGEX, task_data):
+                    # For now, data is a hash
+                    file_hash = task_data
 
-                # For now, data is a hash
-                file_hash = task_data
+                    # Get the file from IPFS
+                    task_data = yield from self.get_from_ipfs(
+                        ipfs_hash=file_hash,
+                        filetype=SupportedFiletype.JSON,
+                    )
 
-                # Get the file from IPFS
-                task_data = yield from self.get_from_ipfs(
-                    ipfs_hash=file_hash,
-                    filetype=SupportedFiletype.JSON,
-                )
+                    # Verify the file data (TODO)
+                    is_data_valid = True
+                    if is_data_valid:
+                        self.prepare_task(task_data)
+                    else:
+                        self.context.logger.warning("Data is not valid")
+                        self._invalid_request = True
+                else:
+                    self.context.logger.warning("Data does not match the IPFS hash regex")
+                    self._invalid_request = True
 
-                self.prepare_task(task_data)
+            if self._invalid_request:
+                completed_task = "no_op"
+            else:
+                # Check whether the task is finished
+                self._async_result = cast(AsyncResult, self._async_result)
+                if not self._async_result.ready():
+                    self.context.logger.debug("The task is not finished yet.")
+                    yield from self.sleep(self.params.sleep_time)
+                    return
 
-            # Check whether the task is finished
-            self._async_result = cast(AsyncResult, self._async_result)
-            if not self._async_result.ready():
-                self.context.logger.debug("The task is not finished yet.")
-                yield from self.sleep(self.params.sleep_time)
-                return
-
-            # The task is finished
-            completed_task = self._async_result.get()
+                # The task is finished
+                completed_task = self._async_result.get()
 
             sender = self.context.agent_address
             payload = TaskExecutionAbciPayload(sender=sender, content=completed_task)
@@ -103,10 +120,12 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
     def prepare_task(self, task_data):
         """Prepare the task."""
-        if task_data["type"] == "llm":
-            llm_task = LLMTask()
+        if task_data["tool"] == "openai-gpt4":
+            openai_task = OpenAITask()
+            task_data["use_gpt4"] = True
+            task_data["openai_api_key"] = self.params.openai_api_key
             task_id = self.context.task_manager.enqueue_task(
-                llm_task, args=(task_data)
+                openai_task, args=(task_data)
             )
             self._async_result = self.context.task_manager.get_task_result(task_id)
             self._is_task_prepared = True

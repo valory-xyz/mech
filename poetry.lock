@@ -2169,6 +2169,29 @@ all = ["click (==8.0.2)", "open-aea-cli-ipfs (==1.33.0)", "open-aea-ledger-ether
 cli = ["click (==8.0.2)", "open-aea-cli-ipfs (==1.33.0)", "open-aea-ledger-ethereum-hwi (==1.33.0)"]
 
 [[package]]
+name = "openai"
+version = "0.27.2"
+description = "Python client library for the OpenAI API"
+category = "main"
+optional = false
+python-versions = ">=3.7.1"
+files = [
+    {file = "openai-0.27.2-py3-none-any.whl", hash = "sha256:6df674cf257e9e0504f1fd191c333d3f6a2442b13218d0eccf06230eb24d320e"},
+    {file = "openai-0.27.2.tar.gz", hash = "sha256:5869fdfa34b0ec66c39afa22f4a0fb83a135dff81f6505f52834c6ab3113f762"},
+]
+
+[package.dependencies]
+aiohttp = "*"
+requests = ">=2.20"
+tqdm = "*"
+
+[package.extras]
+datalib = ["numpy", "openpyxl (>=3.0.7)", "pandas (>=1.2.3)", "pandas-stubs (>=1.1.0.11)"]
+dev = ["black (>=21.6b0,<22.0)", "pytest (>=6.0.0,<7.0.0)", "pytest-asyncio", "pytest-mock"]
+embeddings = ["matplotlib", "numpy", "openpyxl (>=3.0.7)", "pandas (>=1.2.3)", "pandas-stubs (>=1.1.0.11)", "plotly", "scikit-learn (>=1.0.2)", "scipy", "tenacity (>=8.0.1)"]
+wandb = ["numpy", "openpyxl (>=3.0.7)", "pandas (>=1.2.3)", "pandas-stubs (>=1.1.0.11)", "wandb"]
+
+[[package]]
 name = "packaging"
 version = "21.3"
 description = "Core utilities for Python packages"
@@ -3098,6 +3121,27 @@ files = [
 ]
 
 [[package]]
+name = "tqdm"
+version = "4.65.0"
+description = "Fast, Extensible Progress Meter"
+category = "main"
+optional = false
+python-versions = ">=3.7"
+files = [
+    {file = "tqdm-4.65.0-py3-none-any.whl", hash = "sha256:c4f53a17fe37e132815abceec022631be8ffe1b9381c2e6e30aa70edc99e9671"},
+    {file = "tqdm-4.65.0.tar.gz", hash = "sha256:1871fb68a86b8fb3b59ca4cdd3dcccbc7e6d613eeed31f4c332531977b89beb5"},
+]
+
+[package.dependencies]
+colorama = {version = "*", markers = "platform_system == \"Windows\""}
+
+[package.extras]
+dev = ["py-make (>=0.1.0)", "twine", "wheel"]
+notebook = ["ipywidgets (>=6)"]
+slack = ["slack-sdk"]
+telegram = ["requests"]
+
+[[package]]
 name = "typing-extensions"
 version = "4.5.0"
 description = "Backported and Experimental Type Hints for Python 3.7+"
@@ -3480,4 +3524,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "e6dbd94bdbfea649ffbe867ce192035efdc5bb8c9541cdeca9c614eb5765951d"
+content-hash = "aac58afc8873cd8dabf64ea6f41c43ad8c7efb666c9b9d0302ea1cc8d1545377"

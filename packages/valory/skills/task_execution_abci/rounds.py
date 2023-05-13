@@ -19,13 +19,13 @@
 
 """This package contains the rounds of TaskExecutionAbciApp."""
 
+import json
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectDifferentUntilAllRound, CollectSameUntilThresholdRound,
-    DegenerateRound, EventToTimeout, get_name)
+    CollectDifferentUntilAllRound, DegenerateRound, EventToTimeout, get_name)
 from packages.valory.skills.task_execution_abci.payloads import \
     TaskExecutionAbciPayload
 
@@ -54,12 +54,13 @@ class TaskExecutionRound(CollectDifferentUntilAllRound):
     """TaskExecutionRound"""
 
     payload_class = TaskExecutionAbciPayload
+    synchronized_data_class = SynchronizedData
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
         if self.collection_threshold_reached:
 
-            payloads_json = [payload.json for payload in self.collection.values()]
+            payloads_json = json.dumps([payload.json for payload in self.collection.values()], sort_keys=True)
 
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,

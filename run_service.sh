@@ -4,8 +4,8 @@
 export $(grep -v '^#' .env | xargs)
 
 # Remove previous builds
-# if [ -d "governatooorr" ]; then
-#     echo $PASSWORD | sudo -S sudo rm -Rf governatooorr;
+# if [ -d "mech" ]; then
+#     echo $PASSWORD | sudo -S sudo rm -Rf mech;
 # fi
 
 # Push packages and fetch service

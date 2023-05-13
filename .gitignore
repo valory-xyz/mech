@@ -1,3 +1,5 @@
+*/keys.json
+*private_key.txt
 packages/fetchai/
 packages/open_aea/
 packages/valory/connections/
@@ -25,3 +27,5 @@ packages/valory/contracts/gnosis_safe/
 keys.json
 
 leak_report
+
+agent/
