@@ -96,7 +96,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                     self._invalid_request = True
 
             if self._invalid_request:
-                completed_task = "no_op"
+                task_result = "no_op"
             else:
                 # Check whether the task is finished
                 self._async_result = cast(AsyncResult, self._async_result)
@@ -106,10 +106,10 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                     return
 
                 # The task is finished
-                completed_task = self._async_result.get()
+                task_result = self._async_result.get()
 
             sender = self.context.agent_address
-            payload = TaskExecutionAbciPayload(sender=sender, content=completed_task)
+            payload = TaskExecutionAbciPayload(sender=sender, content=task_result)
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
