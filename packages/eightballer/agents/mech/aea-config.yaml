@@ -32,8 +32,8 @@ skills:
 - eightballer/contract_subscription:0.1.0:bafybeidhgfkrxh7ki56ua2fg27vpu2doxri7lh2yqlag6vf64e6e6qtsne
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeibvysjytckvghfnrgt7qwtz7yp3jhatfjmx6hlom5kmrnjsmnnlaa
-- valory/multiplexer_abci:0.1.0:bafybeig7oiekvvbgja6gjmi7dprhmixdyuefbis4s2et2ptab6xh5nomfy
+- valory/mech_abci:0.1.0:bafybeiereg4viubn5edqcxpzwzqbnfdkay7a3s4sr35qq57fsk3wl35xwa
+- valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
 - valory/task_execution_abci:0.1.0:bafybeigh4pvazehmf32me3diguprvoi2iyh2jqz332maorof2vdswa5qka
