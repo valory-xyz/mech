@@ -16,15 +16,17 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
+"""Contains the job definitions"""
 import openai
 
-DEFAULT_OPENAI_SETTINGS = dict(
-    max_tokens = 500,
-    temperature=0.7,
-)
+DEFAULT_OPENAI_SETTINGS = {
+    "max_tokens": 500,
+    "temperature": 0.7,
+}
 
 
-def run(*args, **kwargs) -> str:
+def run(**kwargs) -> str:
+    """Run the task"""
 
     openai.api_key = kwargs["openai_api_key"]
 
@@ -56,5 +58,3 @@ def run(*args, **kwargs) -> str:
     result = response.choices[0].text.strip()
 
     return result
-
-
