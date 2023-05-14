@@ -33,11 +33,11 @@ skills:
 - eightballer/contract_subscription:0.1.0:bafybeia34gosqtnrwdrkfipfrajosu4t6gidhnuxykh57a7abaoqwssemi
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeihtvsm5ns5eo46cd6ozck4pqywdu3bgaqzsqtabppev5zzkxd63iq
+- valory/mech_abci:0.1.0:bafybeiewy7bnw4ullafj32ey4txs5rqpg4tas3avheti5ccr7lw3got6wy
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeia2fujfj43yj7gbtklwrxdni4iotpl2fiydqyt76ivfhdeduhhbju
+- valory/task_execution_abci:0.1.0:bafybeiaxchp4fohflipj3xpaczoecswml7dhq6kpcv6d7hxirmmlqf6cda
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
 - valory/transaction_preparation_abci:0.1.0:bafybeie6nxcdifu7sfzwk5j3ibv4jkouwuikbk3dmqy3bn6sdkf24gny7a
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
