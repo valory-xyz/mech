@@ -101,7 +101,7 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_data",
             request_id=task_data["request_id"],
-            data="0x" + json.dumps(task_data["task_result"]).encode("utf-8").hex(),
+            data=task_data["task_result"][0].encode("utf-8"),
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -116,8 +116,6 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
         # Get the safe transaction hash
         ether_value = ETHER_VALUE
         safe_tx_gas = SAFE_TX_GAS
-        self.context.logger.info(f"HERRRREEE")
-        breakpoint()
 
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
