@@ -121,9 +121,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         if task_data["tool"] == "openai-gpt4":
             openai_task = OpenAITask()
             task_data["use_gpt4"] = False
-            # task_data["openai_api_key"] = self.params.openai_api_key
-            import os
-            task_data["openai_api_key"] = os.environ.get("OPENAI_API_KEY")
+            task_data["openai_api_key"] = self.params.openai_api_key
             task_id = self.context.task_manager.enqueue_task(
                 openai_task, kwargs=task_data
             )
