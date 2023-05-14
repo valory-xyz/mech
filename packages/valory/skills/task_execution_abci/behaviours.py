@@ -105,7 +105,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
             # Write to IPFS
             import os
-            file_path = os.path.join(self.context.data_dir, self.request_id)
+            file_path = os.path.join(self.context.data_dir, str(self.request_id))
             obj = {"requestId": self.request_id, "result": task_result}
             obj_hash = yield from self.send_to_ipfs(
                 filename=file_path,

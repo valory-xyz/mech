@@ -33,11 +33,11 @@ skills:
 - eightballer/contract_subscription:0.1.0:bafybeiabdhk26aswckxsxxnsl3kyd6bkvqimjvubi3qswpfnaektekbe3e
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeiewosjsglqk5iu27dlaupvr2aog7gpvpqef726s3tm5a33ewh65gm
+- valory/mech_abci:0.1.0:bafybeidoqu4sifxyet44d2yfkyfysxmecn2fgmrnzmewgrxc46vkw5xue4
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeialtfr77n2egtcgexgrv3ctf4eecc6kz2b33jyvnsnsiu7zx7j7s4
+- valory/task_execution_abci:0.1.0:bafybeicpw4pmaht7icmhk2m2qcqn3qta6znf4b22eap6ngl534nql4lnva
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
 - valory/transaction_preparation_abci:0.1.0:bafybeib2odqrmm5kfonectt46ujsigomhkpczmd2ga3h6cudec2ilglncu
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
