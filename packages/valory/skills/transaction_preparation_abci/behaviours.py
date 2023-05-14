@@ -97,11 +97,11 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
         # Get the raw transaction from the AgentMech contract
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_mech_contract,
+            contract_address=self.params.agent_mech_contract_address,
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_data",
             request_id=task_data["request_id"],
-            data=task_data["task_result"]
+            data="0x" + json.dumps(task_data["task_result"]).encode("utf-8").hex(),
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -110,18 +110,21 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
                 f"get_deliver_data unsuccessful!: {contract_api_msg}"
             )
             return None
+
         data = cast(bytes, contract_api_msg.state.body["data"])
 
         # Get the safe transaction hash
         ether_value = ETHER_VALUE
         safe_tx_gas = SAFE_TX_GAS
+        self.context.logger.info(f"HERRRREEE")
+        breakpoint()
 
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=self.synchronized_data.safe_contract_address,
             contract_id=str(GnosisSafeContract.contract_id),
             contract_callable="get_raw_safe_transaction_hash",
-            to_address=self.params.agent_mech_contract,
+            to_address=self.params.agent_mech_contract_address,
             value=ether_value,
             data=data,
             safe_tx_gas=safe_tx_gas,
@@ -140,7 +143,7 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
 
         # temp hack
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ether_value, safe_tx_gas, self.params.agent_mech_contract, data
+            safe_tx_hash, ether_value, safe_tx_gas, self.params.agent_mech_contract_address, data
         )
 
         return payload_string

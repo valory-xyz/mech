@@ -88,6 +88,6 @@ class SharedState(BaseSharedState):
         )
 
 
-class Params(MultiplexerParams, TerminationParams, TaskExecutionParams):
+class Params(MultiplexerParams, TerminationParams, TaskExecutionParams, TransactionPreparationParams):
     """A model to represent params for multiple abci apps."""
 
