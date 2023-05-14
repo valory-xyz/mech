@@ -44,10 +44,10 @@ class WebSocketHandler(Handler):
         """Implement the setup."""
         self.context.shared_state[JOB_QUEUE] = []
         # loads the contracts from the config file
-        with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r") as file:
+        with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r", encoding="utf-8") as file:
             abi = json.load(file)['abi']
 
-        self.w3 = Web3(Web3.HTTPProvider(DEFAULT_ENDPOINT))
+        self.w3 = Web3(Web3.HTTPProvider(DEFAULT_ENDPOINT))  # pylint: disable=C0103
         self.contract = self.w3.eth.contract(address=DEFAULT_CONTRACT, abi=abi)
 
     def handle(self, message: Message) -> None:
@@ -62,7 +62,7 @@ class WebSocketHandler(Handler):
             self.context.logger.info(f"Received subscription response: {data}")
             return
 
-        self.context.logger.info(f"Extracting data")
+        self.context.logger.info("Extracting data")
         tx_hash = data['params']['result']['transactionHash']
         event_args = self._get_tx_args(tx_hash)
         self.context.shared_state[JOB_QUEUE].append(event_args)
@@ -76,4 +76,3 @@ class WebSocketHandler(Handler):
         tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
         rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
         return dict(rich_logs[0]['args'])
-

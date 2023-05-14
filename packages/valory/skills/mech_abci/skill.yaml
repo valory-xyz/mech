@@ -12,7 +12,7 @@ fingerprint:
   dialogues.py: bafybeid6ntx5nmtkhuiml5pwt3drafvjejr7x4vu35gqekl4m6tgtxf6am
   fsm_specification.yaml: bafybeihiynklron7mm3hsykwbhdbkosdtoimgkkxckuvvlwafevayjp7ia
   handlers.py: bafybeihi6pbfapfmwxlom6bp7cclybswzejyrrv65gn3fpzwejekvjyxeu
-  models.py: bafybeih7xno42rlar3jaojaswbuncyi7nk7pchw3kldzuptmx4ppzmetse
+  models.py: bafybeiaqcfy4oh3rtarma6oapxxga4k4eghe63zla5erk6t3xhapqb3p7e
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/multiplexer_abci:0.1.0:bafybeidcojuyb566szdavp5z7qgn7t7tf3w2vi5t7hjv3cdxxrjcuhq4ou
 - valory/registration_abci:0.1.0:bafybeihlpvphrchj77drsvdlpqspkmui2s3k4z32odym7th2g33wdcmqm4
 - valory/reset_pause_abci:0.1.0:bafybeieqidrqt64hojofj3p3rwdr4pokyaiq7u3w6j4jbfrl22zuxtudqi
-- valory/task_execution_abci:0.1.0:bafybeidcgrn7hwz2uaahsgw5ulobaqtaybdvgkuqlyv3xgjjfsr55nquua
+- valory/task_execution_abci:0.1.0:bafybeihn3b7u2daas2gcfiiadf4x6h4yibqpebswkiioabcf2tu6uqllsq
 - valory/termination_abci:0.1.0:bafybeiax4i7amotci2dyzynkjxvfbowfcrstnz6fz53rckrohlzovjbwlq
 - valory/transaction_preparation_abci:0.1.0:bafybeig6nca65ei7cbblb5ic2ktgobr235jiiddjhrztyk76gvtfz2o3kq
 - valory/transaction_settlement_abci:0.1.0:bafybeicrukffwwjkqvdalzgguixpixchccg33gocray5uchigtjnsx7vwm
@@ -74,7 +74,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      agent_mech_contract_address: '0x80f8cba027c830e06316e8d1fd9eb770772e3172'
+      agent_mech_contract_address: '0x3504fB5053ec12f748017248a395b4Ed31739705'
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
@@ -104,11 +104,10 @@ models:
       max_healthcheck: 120
       multisend_address: '0x0000000000000000000000000000000000000000'
       on_chain_service_id: null
-      openai_api_key: dummy_api_key
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
-      reset_period_count: 10000
+      reset_period_count: 100
       reset_tendermint_after: 2
       retry_attempts: 400
       retry_timeout: 3

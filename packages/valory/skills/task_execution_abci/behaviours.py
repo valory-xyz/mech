@@ -19,12 +19,9 @@
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
 import json
-import re
 from abc import ABC
 from multiprocessing.pool import AsyncResult
 from typing import Any, Generator, Optional, Set, Type, cast
-
-from aea.helpers.base import IPFS_HASH_REGEX
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
@@ -121,9 +118,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         if task_data["tool"] == "openai-gpt4":
             openai_task = OpenAITask()
             task_data["use_gpt4"] = False
-            # task_data["openai_api_key"] = self.params.openai_api_key
-            import os
-            task_data["openai_api_key"] = os.environ.get("OPENAI_API_KEY")
+            task_data["openai_api_key"] = self.params.openai_api_key
             task_id = self.context.task_manager.enqueue_task(
                 openai_task, kwargs=task_data
             )

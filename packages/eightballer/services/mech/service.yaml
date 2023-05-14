@@ -1,0 +1,21 @@
+name: mech
+author: eightballer
+version: 0.1.0
+description: A decentralised task execution engine.
+aea_version: '>=1.0.0, <2.0.0'
+license: Apache-2.0
+fingerprint: {}
+fingerprint_ignore_patterns: []
+agent: eightballer/mech:0.1.0:bafybeicc67zqkn7xr3mnvqxqqaojvwbo6mvmr6fvyd3jljoy4gdbbakd3i
+number_of_agents: 1
+deployment: {}
+---
+public_id: valory/mech_abci:0.1.0
+type: skill
+models:
+  params:
+    args:
+      setup:
+        all_participants: ${ALL_PARTICIPANTS:list:["0xf3b0900530C969Fba60Daf3b0BbbaDa331c2Dfa1"]}
+      tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
+      agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0x3504fB5053ec12f748017248a395b4Ed31739705}
