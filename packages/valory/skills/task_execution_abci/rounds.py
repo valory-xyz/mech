@@ -25,7 +25,7 @@ from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectDifferentUntilAllRound, DegenerateRound, EventToTimeout, get_name)
+    CollectDifferentUntilAllRound, DegenerateRound, EventToTimeout, get_name, TransactionNotValidError)
 from packages.valory.skills.task_execution_abci.payloads import \
     TaskExecutionAbciPayload
 
@@ -56,13 +56,39 @@ class TaskExecutionRound(CollectDifferentUntilAllRound):
     payload_class = TaskExecutionAbciPayload
     synchronized_data_class = SynchronizedData
 
+    def check_payload(self, payload: TaskExecutionAbciPayload) -> None:
+        """Check Payload"""
+        # new = payload.values
+        # existing = [
+        #     collection_payload.values
+        #     for collection_payload in self.collection.values()
+        #     # do not consider empty delegations
+        #     if json.loads(collection_payload.json["new_delegations"])
+        # ]
+
+        # if payload.sender not in self.collection and new in existing:
+        #     raise TransactionNotValidError(
+        #         f"`CollectDifferentUntilAllRound` encountered a value {new!r} that already exists. "
+        #         f"All values: {existing}"
+        #     )
+
+        if payload.round_count != self.synchronized_data.round_count:
+            raise TransactionNotValidError(
+                f"Expected round count {self.synchronized_data.round_count} and got {payload.round_count}."
+            )
+
+        if payload.sender in self.collection:
+            raise TransactionNotValidError(
+                f"sender {payload.sender} has already sent value for round: {self.round_id}"
+            )
+
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
         if self.collection_threshold_reached:
 
             payloads_json = {
                     "request_id": json.loads(self.collection[list(self.collection.keys())[0]].content)['request_id'],
-                    "task_result": [json.loads(f.content)['task_result'] for f in self.collection.values()] 
+                    "task_result": [json.loads(f.content)['task_result'] for f in self.collection.values()]
             }
 
             synchronized_data = self.synchronized_data.update(
