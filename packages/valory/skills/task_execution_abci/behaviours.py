@@ -112,11 +112,32 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 obj=obj,
                 filetype=SupportedFiletype.JSON,
             )
+            from aea.helpers.cid import to_v1
+            obj_hash= to_v1(obj_hash) # from 2 to 1. base32 encoded CID
+
+            import multibase
+            import multicodec
+
+            # The original Base32 encoded CID
+            base32_cid = obj_hash
+
+            # Decode the Base32 CID to bytes
+            cid_bytes = multibase.decode(base32_cid)
+
+            # Remove the multicodec prefix (0x01) from the bytes
+            multihash_bytes = multicodec.remove_prefix(cid_bytes)
+
+            # Convert the multihash bytes to a hexadecimal string
+            hex_multihash = multihash_bytes.hex()
+
+            hex_multihash = hex_multihash[6:]
+
+            # self.context.logger(f"IPFS hash of response obj: {obj_hash}. Obj: {obj}. file_path: {file_path}")
 
             # with open(file_path, "w", encoding="utf-8") as fil:
             #     json.dump(obj, fil)
 
-            payload_content = json.dumps({"request_id": self.request_id, "task_result": obj_hash}, sort_keys=True)
+            payload_content = json.dumps({"request_id": self.request_id, "task_result": hex_multihash}, sort_keys=True)
             sender = self.context.agent_address
             payload = TaskExecutionAbciPayload(sender=sender, content=payload_content)
 
@@ -131,7 +152,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         if task_data["tool"] == "openai-gpt4":
             openai_task = OpenAITask()
             task_data["use_gpt4"] = False
-            task_data["openai_api_key"] = self.params.openai_api_key
+            task_data["openai_api_key"] = "sk-key-here"
             task_id = self.context.task_manager.enqueue_task(
                 openai_task, kwargs=task_data
             )
