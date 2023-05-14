@@ -76,4 +76,3 @@ class WebSocketHandler(Handler):
         tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
         rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
         return dict(rich_logs[0]['args'])
-

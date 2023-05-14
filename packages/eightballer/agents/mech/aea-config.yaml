@@ -30,10 +30,10 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeibo4bdtcrxi2suyzldwoetjar6pqfzm6vt5xal22ravkkcvdmtksi
 - valory/tendermint:0.1.0:bafybeicusvezoqlmyt6iqomcbwaz3xkhk2qf3d56q5zprmj3xdxfy64k54
 skills:
-- eightballer/contract_subscription:0.1.0:bafybeia34gosqtnrwdrkfipfrajosu4t6gidhnuxykh57a7abaoqwssemi
+- eightballer/contract_subscription:0.1.0:bafybeig7zzuuorepqj444ncii4lcqvylndfsh3wl4ikjkj4yib6eryicea
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeiewy7bnw4ullafj32ey4txs5rqpg4tas3avheti5ccr7lw3got6wy
+- valory/mech_abci:0.1.0:bafybeianbixp6hlejgs7zruoznobe2l6ldk7uuj6lzompaciebhta5k6ke
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
