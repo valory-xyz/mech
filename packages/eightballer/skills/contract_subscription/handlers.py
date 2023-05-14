@@ -44,7 +44,7 @@ class WebSocketHandler(Handler):
         """Implement the setup."""
         self.context.shared_state[JOB_QUEUE] = []
         # loads the contracts from the config file
-        with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r") as file:
+        with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r", encoding="utf-8") as file:
             abi = json.load(file)['abi']
 
         self.w3 = Web3(Web3.HTTPProvider(DEFAULT_ENDPOINT))  # pylint: disable=C0103
