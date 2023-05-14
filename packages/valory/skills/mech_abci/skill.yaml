@@ -18,14 +18,14 @@ connections: []
 contracts: []
 protocols: []
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
-- valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
-- valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeihd3jo5z2tsarm4orevpuxi2w36ajxmlgyx4ndrcnzm2idbjpdj3e
-- valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeie6nxcdifu7sfzwk5j3ibv4jkouwuikbk3dmqy3bn6sdkf24gny7a
-- valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
+- valory/abstract_round_abci:0.1.0:bafybeiazxtiytef4odb23yjnlz5agmbc6ixey446ibfmjau2d4n4vv5kke
+- valory/multiplexer_abci:0.1.0:bafybeidcojuyb566szdavp5z7qgn7t7tf3w2vi5t7hjv3cdxxrjcuhq4ou
+- valory/registration_abci:0.1.0:bafybeihlpvphrchj77drsvdlpqspkmui2s3k4z32odym7th2g33wdcmqm4
+- valory/reset_pause_abci:0.1.0:bafybeieqidrqt64hojofj3p3rwdr4pokyaiq7u3w6j4jbfrl22zuxtudqi
+- valory/task_execution_abci:0.1.0:bafybeidcgrn7hwz2uaahsgw5ulobaqtaybdvgkuqlyv3xgjjfsr55nquua
+- valory/termination_abci:0.1.0:bafybeiax4i7amotci2dyzynkjxvfbowfcrstnz6fz53rckrohlzovjbwlq
+- valory/transaction_preparation_abci:0.1.0:bafybeig6nca65ei7cbblb5ic2ktgobr235jiiddjhrztyk76gvtfz2o3kq
+- valory/transaction_settlement_abci:0.1.0:bafybeicrukffwwjkqvdalzgguixpixchccg33gocray5uchigtjnsx7vwm
 behaviours:
   main:
     args: {}
@@ -74,7 +74,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      agent_mech_contract_address: '0x3504fB5053ec12f748017248a395b4Ed31739705'
+      agent_mech_contract_address: '0x80f8cba027c830e06316e8d1fd9eb770772e3172'
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
@@ -108,7 +108,7 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
-      reset_period_count: 100
+      reset_period_count: 10000
       reset_tendermint_after: 2
       retry_attempts: 400
       retry_timeout: 3

@@ -22,8 +22,8 @@ contracts:
 protocols:
 - valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
+- valory/abstract_round_abci:0.1.0:bafybeiazxtiytef4odb23yjnlz5agmbc6ixey446ibfmjau2d4n4vv5kke
+- valory/transaction_settlement_abci:0.1.0:bafybeicrukffwwjkqvdalzgguixpixchccg33gocray5uchigtjnsx7vwm
 behaviours:
   main:
     args: {}
@@ -72,7 +72,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      agent_mech_contract_address: '0x3504fB5053ec12f748017248a395b4Ed31739705'
+      agent_mech_contract_address: '0x80F8cBa027C830e06316E8d1fd9eb770772e3172'
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31

@@ -1,15 +1,15 @@
 {
     "dev": {
         "connection/eightballer/websocket_client/0.1.0": "bafybeicqkljjzvdl4v7pzbmsfd3al7uv7563x3qa5gmnzxeuoxgtmolpta",
-        "skill/eightballer/contract_subscription/0.1.0": "bafybeia34gosqtnrwdrkfipfrajosu4t6gidhnuxykh57a7abaoqwssemi",
-        "agent/eightballer/mech/0.1.0": "bafybeicf7sttqhen26vcvuvaq4eupspbwnujb2egtgfxk3snzcgilyk2te",
+        "skill/eightballer/contract_subscription/0.1.0": "bafybeiamoas5q2dea6mjrcnit6fyz3t3n5ssvtbajsjwnpzuls3tevxpaq",
+        "agent/eightballer/mech/0.1.0": "bafybeic7dorltjrtes7l44trxmxx3gvwrtzwitkyzvgbxjytq25swcdl5m",
         "service/eightballer/mech/0.1.0": "bafybeiflye6gx25figbiwu34e6vu27cczfwm6jblakwqdn4zirrrdbro5q",
-        "skill/valory/multiplexer_abci/0.1.0": "bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq",
-        "skill/valory/task_execution_abci/0.1.0": "bafybeihd3jo5z2tsarm4orevpuxi2w36ajxmlgyx4ndrcnzm2idbjpdj3e",
-        "skill/valory/mech_abci/0.1.0": "bafybeidn7f5cncvxyowbr2jqubiqqgqkkoib5jsxf4fceeekye6gmmaobu",
-        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeie6nxcdifu7sfzwk5j3ibv4jkouwuikbk3dmqy3bn6sdkf24gny7a",
+        "skill/valory/multiplexer_abci/0.1.0": "bafybeidcojuyb566szdavp5z7qgn7t7tf3w2vi5t7hjv3cdxxrjcuhq4ou",
+        "skill/valory/task_execution_abci/0.1.0": "bafybeidcgrn7hwz2uaahsgw5ulobaqtaybdvgkuqlyv3xgjjfsr55nquua",
+        "skill/valory/mech_abci/0.1.0": "bafybeid65zzb3dieaddza6ppsv4pjrsfkgrow7q6aeo7gey7uign4kn7ve",
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeig6nca65ei7cbblb5ic2ktgobr235jiiddjhrztyk76gvtfz2o3kq",
         "contract/valory/agent_mech/0.1.0": "bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy",
-        "service/valory/mech/0.1.0": "bafybeid2j3rszqvbbz2hclm6zdol7r3oz56mhe2dpwx4xqgblod6i23v4i"
+        "service/valory/mech/0.1.0": "bafybeiajlfzmr6zjauaz6do5dxtdtkhwfped6o6zy7wkq57dr6v6lkrhm4"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y",
@@ -22,9 +22,9 @@
         "protocol/valory/ipfs/0.1.0": "bafybeic72ncgqbzoz2guj4p4yjqulid7mv6yroeh65hxznloamoveeg7hq",
         "protocol/valory/tendermint/0.1.0": "bafybeicusvezoqlmyt6iqomcbwaz3xkhk2qf3d56q5zprmj3xdxfy64k54",
         "skill/valory/abstract_abci/0.1.0": "bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di",
-        "skill/valory/reset_pause_abci/0.1.0": "bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4",
-        "skill/valory/registration_abci/0.1.0": "bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq",
-        "skill/valory/abstract_round_abci/0.1.0": "bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm",
+        "skill/valory/reset_pause_abci/0.1.0": "bafybeieqidrqt64hojofj3p3rwdr4pokyaiq7u3w6j4jbfrl22zuxtudqi",
+        "skill/valory/registration_abci/0.1.0": "bafybeihlpvphrchj77drsvdlpqspkmui2s3k4z32odym7th2g33wdcmqm4",
+        "skill/valory/abstract_round_abci/0.1.0": "bafybeiazxtiytef4odb23yjnlz5agmbc6ixey446ibfmjau2d4n4vv5kke",
         "contract/valory/service_registry/0.1.0": "bafybeidutcg64sih4syvaetggyswynfs4jlswaj63itoh4tqnwqz3ydywi",
         "connection/valory/abci/0.1.0": "bafybeieogrpktpxfq74leeeeylfx33sob2hovhpl5coxlswae6xblzbezy",
         "connection/valory/http_client/0.23.0": "bafybeidykl4elwbcjkqn32wt5h4h7tlpeqovrcq3c5bcplt6nhpznhgczi",
@@ -33,8 +33,8 @@
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeidwcobzb7ut3efegoedad7jfckvt2n6prcmd4g7xnkm6hp6aafrva",
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeib2rat7ht33l6r6ix45x5yifotq7l6oqczmqe5edxh2ackv4i72jq",
         "contract/valory/gnosis_safe/0.1.0": "bafybeigfnb6hdixmdwoxingxrevx7beawm2voudgtexo6vazzfa4vhyx5m",
-        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye",
+        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeicrukffwwjkqvdalzgguixpixchccg33gocray5uchigtjnsx7vwm",
         "contract/valory/multisend/0.1.0": "bafybeigjywkl7hydjsrkogob3xebj2ifhqwmfhhxoeyrndzhhxi5u6amey",
-        "skill/valory/termination_abci/0.1.0": "bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe"
+        "skill/valory/termination_abci/0.1.0": "bafybeiax4i7amotci2dyzynkjxvfbowfcrstnz6fz53rckrohlzovjbwlq"
     }
 }

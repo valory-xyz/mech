@@ -19,7 +19,7 @@ connections: []
 contracts: []
 protocols: []
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
+- valory/abstract_round_abci:0.1.0:bafybeiazxtiytef4odb23yjnlz5agmbc6ixey446ibfmjau2d4n4vv5kke
 behaviours:
   main:
     args: {}
@@ -99,7 +99,7 @@ models:
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
-      reset_period_count: 100
+      reset_period_count: 10000
       reset_tendermint_after: 2
       retry_attempts: 400
       retry_timeout: 3
