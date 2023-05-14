@@ -24,8 +24,6 @@ from abc import ABC
 from multiprocessing.pool import AsyncResult
 from typing import Any, Generator, Optional, Set, Type, cast
 
-from aea.helpers.base import IPFS_HASH_REGEX
-
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour, BaseBehaviour)

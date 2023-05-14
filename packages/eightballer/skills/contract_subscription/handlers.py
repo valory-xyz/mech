@@ -62,7 +62,7 @@ class WebSocketHandler(Handler):
             self.context.logger.info(f"Received subscription response: {data}")
             return
 
-        self.context.logger.info(f"Extracting data")
+        self.context.logger.info("Extracting data")
         tx_hash = data['params']['result']['transactionHash']
         event_args = self._get_tx_args(tx_hash)
         self.context.shared_state[JOB_QUEUE].append(event_args)
