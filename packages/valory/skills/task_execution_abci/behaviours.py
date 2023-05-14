@@ -103,7 +103,20 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 # The task is finished
                 task_result = self._async_result.get()
 
-            payload_content = json.dumps({"request_id": self.request_id, "task_result": task_result}, sort_keys=True)
+            # Write to IPFS
+            import os
+            file_path = os.path.join(self.context.data_dir, self.request_id)
+            obj = {"requestId": self.request_id, "result": task_result}
+            obj_hash = yield from self.send_to_ipfs(
+                filename=file_path,
+                obj=obj,
+                filetype=SupportedFiletype.JSON,
+            )
+
+            # with open(file_path, "w", encoding="utf-8") as fil:
+            #     json.dump(obj, fil)
+
+            payload_content = json.dumps({"request_id": self.request_id, "task_result": obj_hash}, sort_keys=True)
             sender = self.context.agent_address
             payload = TaskExecutionAbciPayload(sender=sender, content=payload_content)
 

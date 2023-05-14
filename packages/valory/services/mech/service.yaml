@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: eightballer/mech:0.1.0:bafybeihzhdxwewyh2bw5pzld6jsm3ritk6igpsmxfo2aogwmnd35cwzxry
+agent: eightballer/mech:0.1.0:bafybeibet247p43b6agqqnt2e37g37a5ysubofd6hzrv3jlr7f6a4syqte
 number_of_agents: 4
 deployment:
   agent:
@@ -83,7 +83,7 @@ type: skill
         tx_timeout: 10.0
         use_termination: ${USE_TERMINATION:bool:false}
         validate_timeout: 1205
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0x3504fB5053ec12f748017248a395b4Ed31739705}
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         openai_api_key: ${OPENAI_API_KEY_0:str:null}
 1:
   models:
@@ -124,7 +124,7 @@ type: skill
         tx_timeout: 10.0
         use_termination: ${USE_TERMINATION:bool:false}
         validate_timeout: 1205
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0x3504fB5053ec12f748017248a395b4Ed31739705}
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         openai_api_key: ${OPENAI_API_KEY_1:str:null}
 2:
   models:
@@ -165,7 +165,7 @@ type: skill
         tx_timeout: 10.0
         use_termination: ${USE_TERMINATION:bool:false}
         validate_timeout: 1205
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0x3504fB5053ec12f748017248a395b4Ed31739705}
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         openai_api_key: ${OPENAI_API_KEY_2:str:null}
 3:
   models:
@@ -206,7 +206,7 @@ type: skill
         tx_timeout: 10.0
         use_termination: ${USE_TERMINATION:bool:false}
         validate_timeout: 1205
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0x3504fB5053ec12f748017248a395b4Ed31739705}
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         openai_api_key: ${OPENAI_API_KEY_3:str:null}
 ---
 public_id: valory/ledger:0.19.0

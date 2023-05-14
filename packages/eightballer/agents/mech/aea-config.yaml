@@ -30,16 +30,16 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeibo4bdtcrxi2suyzldwoetjar6pqfzm6vt5xal22ravkkcvdmtksi
 - valory/tendermint:0.1.0:bafybeicusvezoqlmyt6iqomcbwaz3xkhk2qf3d56q5zprmj3xdxfy64k54
 skills:
-- eightballer/contract_subscription:0.1.0:bafybeifqxzminifah3azjns7gphtuvgrm2jubqgwl6yd2j3xamjeirdc34
+- eightballer/contract_subscription:0.1.0:bafybeiabdhk26aswckxsxxnsl3kyd6bkvqimjvubi3qswpfnaektekbe3e
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeifqk5croomrexc6kw2v4zlvp4mlmqxab3l2nhevhgix25ns3xzkxy
+- valory/mech_abci:0.1.0:bafybeiewosjsglqk5iu27dlaupvr2aog7gpvpqef726s3tm5a33ewh65gm
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeiebmk27babjfjbhb3pw6t24bepsyxgxrjhuidsx4c2g4ldckl7jce
+- valory/task_execution_abci:0.1.0:bafybeialtfr77n2egtcgexgrv3ctf4eecc6kz2b33jyvnsnsiu7zx7j7s4
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeie6nxcdifu7sfzwk5j3ibv4jkouwuikbk3dmqy3bn6sdkf24gny7a
+- valory/transaction_preparation_abci:0.1.0:bafybeib2odqrmm5kfonectt46ujsigomhkpczmd2ga3h6cudec2ilglncu
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 default_ledger: ethereum
 required_ledgers:
@@ -66,7 +66,7 @@ behaviours:
   subscriptions:
     args:
       contracts:
-      - '0x3504fB5053ec12f748017248a395b4Ed31739705'
+      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
 ---
 public_id: valory/abci:0.1.0
 type: connection
@@ -104,18 +104,18 @@ models:
       tendermint_max_retries: 5
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
-      agent_mech_contract_address: ${str:0x3504fB5053ec12f748017248a395b4Ed31739705}
+      agent_mech_contract_address: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
       openai_api_key: ${OPENAI_API_KEY:str:dummy_api_key}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
-        safe_contract_address: ${str:0xEC58BEDB8DcFD77ca2BAf8B2D8D31204DD3D12ce}
+        safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
 config:
   ledger_apis:
     ethereum:
-      address: https://prettiest-capable-diagram.xdai.discover.quiknode.pro/1489461512139e9641e4b18634d599cd22c68713/
+      address: https://rpc.gnosischain.com/
       chain_id: 100
       poa_chain: false
       default_gas_price_strategy: eip1559

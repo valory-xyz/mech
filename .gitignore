@@ -29,3 +29,5 @@ keys.json
 leak_report
 
 agent/
+
+.1env

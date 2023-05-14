@@ -29,7 +29,7 @@ from packages.fetchai.protocols.default.message import DefaultMessage
 
 JOB_QUEUE = "pending_tasks"
 
-DEFAULT_CONTRACT = "0x3504fB5053ec12f748017248a395b4Ed31739705"
+DEFAULT_CONTRACT = "0xFf82123dFB52ab75C417195c5fDB87630145ae81"
 DEFAULT_ENDPOINT = "https://rpc.gnosischain.com"
 
 
