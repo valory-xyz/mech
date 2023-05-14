@@ -108,7 +108,7 @@ models:
       openai_api_key: ${OPENAI_API_KEY:str:dummy_api_key}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
-        safe_contract_address: ${str::0x000000000000000000000000000000000000000}
+        safe_contract_address: ${str:0xEC58BEDB8DcFD77ca2BAf8B2D8D31204DD3D12ce}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
