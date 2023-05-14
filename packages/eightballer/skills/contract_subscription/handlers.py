@@ -47,7 +47,7 @@ class WebSocketHandler(Handler):
         with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r") as file:
             abi = json.load(file)['abi']
 
-        self.w3 = Web3(Web3.HTTPProvider(DEFAULT_ENDPOINT))
+        self.w3 = Web3(Web3.HTTPProvider(DEFAULT_ENDPOINT))  # pylint: disable=C0103
         self.contract = self.w3.eth.contract(address=DEFAULT_CONTRACT, abi=abi)
 
     def handle(self, message: Message) -> None:

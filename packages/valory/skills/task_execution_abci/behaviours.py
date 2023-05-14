@@ -19,7 +19,6 @@
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
 import json
-import re
 from abc import ABC
 from multiprocessing.pool import AsyncResult
 from typing import Any, Generator, Optional, Set, Type, cast
