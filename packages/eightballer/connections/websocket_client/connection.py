@@ -17,6 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 """Scaffold connection and channel."""
+import asyncio
 from threading import Thread
 from typing import Any
 
@@ -71,7 +72,7 @@ class WebSocketClient(Connection):
         self._wss = websocket.create_connection(self._endpoint)
         self.state = ConnectionStates.connected
         self.logger.info("Websocket connection established.")
-        self._thread = Thread(target=self._run)
+        self._thread = Thread(target=asyncio.run, args=(self._run(),))
         self._thread.start()
 
     async def disconnect(self) -> None:
@@ -117,8 +118,14 @@ class WebSocketClient(Connection):
         )
         return envelope
 
-    def _run(self):
+    async def _run(self):
         """Run a loop to receive messages from the wss."""
         while True:
-            msg = self._wss.recv()
-            self._new_messages.append(msg)
+            try:
+                msg = self._wss.recv()
+                self._new_messages.append(msg)
+            except websocket.WebSocketConnectionClosedException:
+                self.logger.error("Websocket connection closed.")
+                self.state = ConnectionStates.disconnected
+                break
+        await self.connect()

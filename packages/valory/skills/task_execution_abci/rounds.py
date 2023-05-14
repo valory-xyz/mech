@@ -60,7 +60,10 @@ class TaskExecutionRound(CollectDifferentUntilAllRound):
         """Process the end of the block."""
         if self.collection_threshold_reached:
 
-            payloads_json = json.dumps([payload.json for payload in self.collection.values()], sort_keys=True)
+            payloads_json = {
+                    "request_id": json.loads(self.collection[list(self.collection.keys())[0]].content)['request_id'],
+                    "task_result": [json.loads(f.content)['task_result'] for f in self.collection.values()] 
+            }
 
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,

@@ -7,13 +7,14 @@ aea_version: '>=1.33.0, <2.0.0'
 fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/websocket_client:0.1.0:bafybeihwcracii3fvvdbvku2wmz7ephsi6dlhycisq5yn3xemryxovqn5i
+- eightballer/websocket_client:0.1.0:bafybeicqkljjzvdl4v7pzbmsfd3al7uv7563x3qa5gmnzxeuoxgtmolpta
 - valory/abci:0.1.0:bafybeieogrpktpxfq74leeeeylfx33sob2hovhpl5coxlswae6xblzbezy
 - valory/http_client:0.23.0:bafybeidykl4elwbcjkqn32wt5h4h7tlpeqovrcq3c5bcplt6nhpznhgczi
 - valory/ipfs:0.1.0:bafybeifkzgdzuoxqovcjswsnzsehjh7bjwbska26ufmcrk7hbufk4c4dae
 - valory/ledger:0.19.0:bafybeicgfupeudtmvehbwziqfxiz6ztsxr5rxzvalzvsdsspzz73o5fzfi
 - valory/p2p_libp2p_client:0.1.0:bafybeidwcobzb7ut3efegoedad7jfckvt2n6prcmd4g7xnkm6hp6aafrva
 contracts:
+- valory/agent_mech:0.1.0:bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy
 - valory/gnosis_safe:0.1.0:bafybeigfnb6hdixmdwoxingxrevx7beawm2voudgtexo6vazzfa4vhyx5m
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeib2rat7ht33l6r6ix45x5yifotq7l6oqczmqe5edxh2ackv4i72jq
 - valory/multisend:0.1.0:bafybeigjywkl7hydjsrkogob3xebj2ifhqwmfhhxoeyrndzhhxi5u6amey
@@ -29,16 +30,16 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeibo4bdtcrxi2suyzldwoetjar6pqfzm6vt5xal22ravkkcvdmtksi
 - valory/tendermint:0.1.0:bafybeicusvezoqlmyt6iqomcbwaz3xkhk2qf3d56q5zprmj3xdxfy64k54
 skills:
-- eightballer/contract_subscription:0.1.0:bafybeidhgfkrxh7ki56ua2fg27vpu2doxri7lh2yqlag6vf64e6e6qtsne
+- eightballer/contract_subscription:0.1.0:bafybeifqxzminifah3azjns7gphtuvgrm2jubqgwl6yd2j3xamjeirdc34
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeighhmmuihekbby4hpw765ulie77iftzpuq27roteuonqp5degyu4a
+- valory/mech_abci:0.1.0:bafybeifqk5croomrexc6kw2v4zlvp4mlmqxab3l2nhevhgix25ns3xzkxy
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeidawkf34s5qnge5tkkyucc3ey5bxyfas6upfht5wdxgf2mks7qak4
+- valory/task_execution_abci:0.1.0:bafybeiebmk27babjfjbhb3pw6t24bepsyxgxrjhuidsx4c2g4ldckl7jce
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeihl2em35ayozamxwzpdwzoo7za7wedndwrhvw5irkyvqtcpzewixy
+- valory/transaction_preparation_abci:0.1.0:bafybeie6nxcdifu7sfzwk5j3ibv4jkouwuikbk3dmqy3bn6sdkf24gny7a
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 default_ledger: ethereum
 required_ledgers:
@@ -56,7 +57,7 @@ default_connection: null
 public_id: eightballer/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
 type: connection
 config:
-  endpoint: wss://rpc.gnosischain.com/wss
+  endpoint: wss://prettiest-capable-diagram.xdai.discover.quiknode.pro/1489461512139e9641e4b18634d599cd22c68713/
   target_skill_id: eightballer/contract_subscription:0.1.0
 ---
 public_id: eightballer/contract_subscription:0.1.0:bafybeiby5ajjc7a3m2uq73d2pprx6enqt4ghfcq2gkmrtsr75e4d4napi4
@@ -104,5 +105,17 @@ models:
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
       agent_mech_contract_address: ${str:0x3504fB5053ec12f748017248a395b4Ed31739705}
+      openai_api_key: ${OPENAI_API_KEY:str:dummy_api_key}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
+        safe_contract_address: ${str:0xEC58BEDB8DcFD77ca2BAf8B2D8D31204DD3D12ce}
+---
+public_id: valory/ledger:0.19.0
+type: connection
+config:
+  ledger_apis:
+    ethereum:
+      address: https://prettiest-capable-diagram.xdai.discover.quiknode.pro/1489461512139e9641e4b18634d599cd22c68713/
+      chain_id: 100
+      poa_chain: false
+      default_gas_price_strategy: eip1559
