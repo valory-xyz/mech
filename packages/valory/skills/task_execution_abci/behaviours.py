@@ -19,9 +19,14 @@
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
 import json
+import os
 from abc import ABC
 from multiprocessing.pool import AsyncResult
 from typing import Any, Generator, Optional, Set, Type, cast
+
+import multibase
+import multicodec
+from aea.helpers.cid import to_v1
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
@@ -62,6 +67,14 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self._is_task_prepared = False
         self._invalid_request = False
 
+    def is_json(self, obj: Any) -> bool:
+        """Checks whether an object is json"""
+        try:
+            json.loads(obj)
+        except ValueError as _:
+            return False
+        return True
+
     def async_act(self) -> Generator:
         """Do the act, supporting asynchronous execution."""
 
@@ -72,7 +85,10 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 self.context.logger.info(f"Preparing task with data: {task_data}")
                 # Verify the data format
-                file_hash = task_data["data"].decode("utf-8")
+                file_hash = task_data["data"]
+                # Handle encoding
+                file_hash = "f01701220" + file_hash[2:]
+
                 # For now, data is a hash
                 self.request_id = task_data["requestId"]
 
@@ -82,8 +98,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                     filetype=SupportedFiletype.JSON,
                 )
 
-                # Verify the file data (TODO)
-                is_data_valid = True
+                # Verify the file data
+                is_data_valid = self.is_json(task_data) and "prompt" in task_data and "tool" in task_data
                 if is_data_valid:
                     self.prepare_task(task_data)
                 else:
@@ -92,6 +108,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
             if self._invalid_request:
                 task_result = "no_op"
+                obj = {"requestId": self.request_id, "result": task_result}
+
             else:
                 # Check whether the task is finished
                 self._async_result = cast(AsyncResult, self._async_result)
@@ -103,20 +121,17 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 # The task is finished
                 task_result = self._async_result.get()
 
+                obj = {"requestId": self.request_id, "result": task_result}
+
             # Write to IPFS
-            import os
             file_path = os.path.join(self.context.data_dir, str(self.request_id))
-            obj = {"requestId": self.request_id, "result": task_result}
+
             obj_hash = yield from self.send_to_ipfs(
                 filename=file_path,
                 obj=obj,
                 filetype=SupportedFiletype.JSON,
             )
-            from aea.helpers.cid import to_v1
-            obj_hash= to_v1(obj_hash) # from 2 to 1. base32 encoded CID
-
-            import multibase
-            import multicodec
+            obj_hash= to_v1(obj_hash) # from 2 to 1: base32 encoded CID
 
             # The original Base32 encoded CID
             base32_cid = obj_hash
@@ -131,11 +146,6 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             hex_multihash = multihash_bytes.hex()
 
             hex_multihash = hex_multihash[6:]
-
-            # self.context.logger(f"IPFS hash of response obj: {obj_hash}. Obj: {obj}. file_path: {file_path}")
-
-            # with open(file_path, "w", encoding="utf-8") as fil:
-            #     json.dump(obj, fil)
 
             payload_content = json.dumps({"request_id": self.request_id, "task_result": hex_multihash}, sort_keys=True)
             sender = self.context.agent_address
