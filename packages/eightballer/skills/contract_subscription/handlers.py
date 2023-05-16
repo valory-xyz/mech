@@ -81,4 +81,4 @@ class WebSocketHandler(Handler):
             return dict(rich_logs[0]['args'])
 
         except:
-            return dict()
+            return {}

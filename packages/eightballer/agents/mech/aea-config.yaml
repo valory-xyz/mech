@@ -30,7 +30,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeibo4bdtcrxi2suyzldwoetjar6pqfzm6vt5xal22ravkkcvdmtksi
 - valory/tendermint:0.1.0:bafybeicusvezoqlmyt6iqomcbwaz3xkhk2qf3d56q5zprmj3xdxfy64k54
 skills:
-- eightballer/contract_subscription:0.1.0:bafybeibw7yof5gqzxto72sxbvy3ff7cneq7tmuuhjrcbdrhddxpkfqvys4
+- eightballer/contract_subscription:0.1.0:bafybeiduqeidr2z6ltx5njus5o6v5cpr6kxtxdfqmx3honlqbobhkajfyq
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
 - valory/mech_abci:0.1.0:bafybeicpg4g4kiqrimr6l7c5sa75laaiu4kliyywmrv7fvhvga6mf7b4gq
