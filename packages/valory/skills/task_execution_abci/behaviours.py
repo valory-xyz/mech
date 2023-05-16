@@ -82,14 +82,13 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
             # Check whether the task already exists
             if not self._is_task_prepared and not self._invalid_request:
+                # Get the first task in the queue
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 self.context.logger.info(f"Preparing task with data: {task_data}")
-                # Verify the data format
-                file_hash = task_data["data"]
-                # Handle encoding
-                file_hash = "f01701220" + file_hash[2:]
 
-                # For now, data is a hash
+                # Verify the data format and handle encoding: for now, data is a hash
+                file_hash = task_data["data"].decode("utf-8")
+                file_hash = "f01701220" + file_hash[2:]  # CID prefix
                 self.request_id = task_data["requestId"]
 
                 # Get the file from IPFS
@@ -99,7 +98,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 )
 
                 # Verify the file data
-                is_data_valid = self.is_json(task_data) and "prompt" in task_data and "tool" in task_data
+                is_data_valid = task_data and self.is_json(task_data) and "prompt" in task_data and "tool" in task_data
                 if is_data_valid:
                     self.prepare_task(task_data)
                 else:
@@ -122,6 +121,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 task_result = self._async_result.get()
 
                 obj = {"requestId": self.request_id, "result": task_result}
+
+            self.context.logger.info(f"Response object: {obj}")
 
             # Write to IPFS
             file_path = os.path.join(self.context.data_dir, str(self.request_id))
