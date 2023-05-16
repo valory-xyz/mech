@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeicffbkqynejxmx6kqcdbhhaopn7phg2yfpcufp4d774jfwqsm7gx4
-  behaviours.py: bafybeibypzdqbwto42q5ajj3sclorkyiedbcgizjzxz24z5ihz3hgmvfle
+  behaviours.py: bafybeie6dlkzplo73spxi4e4w4kqurjwsxe7e7s7bwjdvwrhnz674sskca
   dialogues.py: bafybeidwzysmmicss6myr36mqja6annr72nyuc5vmvp2zifcza54zayjye
   fsm_specification.yaml: bafybeickup5aqc3ejxbjxc5d6seax5kn5l5apgvvayxq7pxu2qmknkd7di
   handlers.py: bafybeihp7c6cvr5ui7qkwfuv463tnwpn2p3kxandm5fntilugdaxgr66ei
@@ -72,7 +72,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      agent_mech_contract_address: '0x3504fB5053ec12f748017248a395b4Ed31739705'
+      agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31

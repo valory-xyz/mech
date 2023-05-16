@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: eightballer/mech:0.1.0:bafybeihzhdxwewyh2bw5pzld6jsm3ritk6igpsmxfo2aogwmnd35cwzxry
+agent: eightballer/mech:0.1.0:bafybeifpm7jgddtzcmsbhlcfyng2oksr6bjmfrnwxdxasufrgfa6ksm6pa
 number_of_agents: 1
 deployment: {}
 ---
@@ -20,5 +20,6 @@ models:
         safe_contract_address: ${SAFE_CONTRACT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         consensus_threshold: null
       tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
-      agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0x3504fB5053ec12f748017248a395b4Ed31739705}
+      agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
       openai_api_key: ${OPENAI_API_KEY:str:dummy_api_key}
+      reset_period_count: ${RESET_PERIOD_COUNT:int:1000}

@@ -7,3 +7,4 @@ e3653c8157c302fc899da945e2d2ec29a0e647fa:packages/valory/skills/mech_abci/skill.
 cb0aa13c739c75508bed148cde7fa8842c582807:packages/valory/skills/transaction_preparation_abci/skill.yaml:generic-api-key:80
 20ffa80f724b5e88df4ec4e79bc543c66d8b59bc:packages/valory/skills/task_execution_abci/skill.yaml:generic-api-key:80
 88c7afaca5a79760271a78fadf94beeb2754acf5:packages/valory/skills/multiplexer_abci/skill.yaml:generic-api-key:73
+ab4630c49b5fc7fe9cdc7b48c9f4d7018abbe2c5:packages/eightballer/services/mech/service.yaml:generic-api-key:8

@@ -29,7 +29,7 @@ from packages.fetchai.protocols.default.message import DefaultMessage
 
 JOB_QUEUE = "pending_tasks"
 
-DEFAULT_CONTRACT = "0x3504fB5053ec12f748017248a395b4Ed31739705"
+DEFAULT_CONTRACT = "0xFf82123dFB52ab75C417195c5fDB87630145ae81"
 DEFAULT_ENDPOINT = "https://rpc.gnosischain.com"
 
 
@@ -65,6 +65,8 @@ class WebSocketHandler(Handler):
         self.context.logger.info("Extracting data")
         tx_hash = data['params']['result']['transactionHash']
         event_args = self._get_tx_args(tx_hash)
+        if len(event_args) == 0:
+            return
         self.context.shared_state[JOB_QUEUE].append(event_args)
         self.context.logger.info(f"Added job to queue: {event_args}")
 
@@ -73,6 +75,10 @@ class WebSocketHandler(Handler):
 
     def _get_tx_args(self, tx_hash: str):
         """Get the transaction arguments."""
-        tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
-        rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
-        return dict(rich_logs[0]['args'])
+        try:
+            tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
+            rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
+            return dict(rich_logs[0]['args'])
+
+        except Exception:  # pylint: disable=W0718
+            return {}
