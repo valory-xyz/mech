@@ -80,5 +80,5 @@ class WebSocketHandler(Handler):
             rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
             return dict(rich_logs[0]['args'])
 
-        except:
+        except Exception:
             return {}
