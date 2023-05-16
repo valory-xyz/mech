@@ -33,14 +33,14 @@ skills:
 - eightballer/contract_subscription:0.1.0:bafybeibw7yof5gqzxto72sxbvy3ff7cneq7tmuuhjrcbdrhddxpkfqvys4
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeihfh5ayce7dwqfa42pevpvjb2nt5ko5fr5xqgfxypksii4vchljqu
+- valory/mech_abci:0.1.0:bafybeig7zjkzpdeolh5bhkkkduj5vjsqflojpns5z7e6caivtv7x54woga
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
 - valory/task_execution_abci:0.1.0:bafybeicfaz5gehiyfoh7tgsujonegj6gknqm4quywr2mydylfnots2kshu
-- valory/termination_abci:0.1.0:bafybeibfgdbyowccb3l6iiel5ylsqnwvrm7qys4qinyckwofnhubfzufdq
-- valory/transaction_preparation_abci:0.1.0:bafybeidfd76uwt2gnk7qhovilegak7yixwk2l4euvgewtoxb2xy7y42jkm
-- valory/transaction_settlement_abci:0.1.0:bafybeiaq352jr2ik22vbk2gke5q7fxjwdank5yfxpttvlxbpedzqbrqife
+- valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
+- valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
+- valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -106,6 +106,7 @@ models:
       use_termination: ${bool:false}
       agent_mech_contract_address: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
       openai_api_key: ${str:dummy_api_key}
+      reset_period_count: ${int:1000}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}

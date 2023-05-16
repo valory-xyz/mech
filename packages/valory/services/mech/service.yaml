@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: eightballer/mech:0.1.0:bafybeibhn56k5swnfy6va4c64si2yn5xmngcpg2jnsa5kvix7wsylqoriy
+agent: eightballer/mech:0.1.0:bafybeibzshj2yg7pzyhxr35avc7hingkrigecded7sztesiijd5nhnmwnm
 number_of_agents: 4
 deployment:
   agent:
@@ -85,6 +85,7 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         openai_api_key: ${OPENAI_API_KEY_0:str:null}
+        reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
 1:
   models:
     benchmark_tool: *id001
@@ -126,6 +127,7 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         openai_api_key: ${OPENAI_API_KEY_1:str:null}
+        reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
 2:
   models:
     benchmark_tool: *id001
@@ -167,6 +169,7 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         openai_api_key: ${OPENAI_API_KEY_2:str:null}
+        reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
 3:
   models:
     benchmark_tool: *id001
@@ -208,6 +211,7 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         openai_api_key: ${OPENAI_API_KEY_3:str:null}
+        reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

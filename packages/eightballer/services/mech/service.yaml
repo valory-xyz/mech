@@ -6,7 +6,7 @@ aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint: {}
 fingerprint_ignore_patterns: []
-agent: eightballer/mech:0.1.0:bafybeibhn56k5swnfy6va4c64si2yn5xmngcpg2jnsa5kvix7wsylqoriy
+agent: eightballer/mech:0.1.0:bafybeibzshj2yg7pzyhxr35avc7hingkrigecded7sztesiijd5nhnmwnm
 number_of_agents: 1
 deployment: {}
 ---
@@ -22,3 +22,4 @@ models:
       tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
       agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
       openai_api_key: ${OPENAI_API_KEY:str:dummy_api_key}
+      reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
