@@ -89,7 +89,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 # Request format
                 # {
                 #     "requestId": <id>
-                #     "data": >ipfs_hash>
+                #     "data": <ipfs_hash>
                 # }
 
                 self.request_id = task_data["requestId"]
