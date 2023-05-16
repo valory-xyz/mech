@@ -112,30 +112,34 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                     self.context.logger.warning("Data is not valid")
                     self._invalid_request = True
 
+            response_obj = None
+
+            # Handle invalid requests
             if self._invalid_request:
                 task_result = "no_op"
-                obj = {"requestId": self.request_id, "result": task_result}
+                response_obj = {"requestId": self.request_id, "result": task_result}
 
-            else:
-                # Check whether the task is finished
-                self._async_result = cast(AsyncResult, self._async_result)
-                if not self._async_result.ready():
-                    self.context.logger.debug("The task is not finished yet.")
-                    yield from self.sleep(self.params.sleep_time)
-                    return
+            self._async_result = cast(AsyncResult, self._async_result)
 
-                # The task is finished
+            # Handle unfinished task
+            if not self._invalid_request and not self._async_result.ready():
+                self.context.logger.debug("The task is not finished yet.")
+                yield from self.sleep(self.params.sleep_time)
+                return
+
+            # Handle finished task
+            if not self._invalid_request and self._async_result.ready():
                 task_result = self._async_result.get()
-                obj = {"requestId": self.request_id, "result": task_result}
+                response_obj = {"requestId": self.request_id, "result": task_result}
 
-            self.context.logger.info(f"Response object: {obj}")
+            self.context.logger.info(f"Response object: {response_obj}")
 
             # Write to IPFS
             file_path = os.path.join(self.context.data_dir, str(self.request_id))
 
             obj_hash = yield from self.send_to_ipfs(
                 filename=file_path,
-                obj=obj,
+                obj=response_obj,
                 filetype=SupportedFiletype.JSON,
             )
             obj_hash= to_v1(obj_hash) # from 2 to 1: base32 encoded CID
