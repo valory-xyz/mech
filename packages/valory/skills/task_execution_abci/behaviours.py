@@ -86,10 +86,17 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 self.context.logger.info(f"Preparing task with data: {task_data}")
 
-                # Verify the data format and handle encoding: for now, data is a hash
+                # Request format
+                # {
+                #     "requestId": <id>
+                #     "data": >ipfs_hash>
+                # }
+
+                self.request_id = task_data["requestId"]
+
+                # Verify the data hash and handle encoding
                 file_hash = task_data["data"].decode("utf-8")
                 file_hash = "f01701220" + file_hash[2:]  # CID prefix
-                self.request_id = task_data["requestId"]
 
                 # Get the file from IPFS
                 task_data = yield from self.get_from_ipfs(
@@ -119,7 +126,6 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
                 # The task is finished
                 task_result = self._async_result.get()
-
                 obj = {"requestId": self.request_id, "result": task_result}
 
             self.context.logger.info(f"Response object: {obj}")
