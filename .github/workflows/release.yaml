@@ -58,6 +58,7 @@ jobs:
                   echo "You are not on a tagged branch"
                   exit 1
               fi
+              rm env.sh
               echo VERSION=$TAG> env.sh
               echo AUTHOR=$(grep 'service' packages/packages.json | awk -F/ '{print $2}' | head -1) >> env.sh
               echo SERVICE=$(grep 'service' packages/packages.json | awk -F/ '{print $3}' | head -1) >> env.sh
@@ -73,14 +74,16 @@ jobs:
             shell: bash
             run: |
               echo "Building Docker Images"
-              cd work
+              cd /work
               source env.sh || exit 1
               pip install requests==2.28.2
+              echo "Building images for $AUTHOR for service $SERVICE"
               autonomy init --reset --author $AUTHOR --ipfs --remote
               autonomy fetch $AUTHOR/$SERVICE --service --local || exit 1
               cd $SERVICE || exit 1
               autonomy build-image || exit 1
               autonomy build-image --version $VERSION || exit 1
+
       - name: Docker login
         run: |
             echo  $DOCKER_PASSWORD | docker login -u $DOCKER_USER --password-stdin
