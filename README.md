@@ -9,21 +9,16 @@ poetry shell
 poetry install
 ```
 
-Fetch all the packages
-```bash
-autonomy packages sync --update-packages
-```
-
 ### Option 1: Run the agent standalone
 
 From one terminal run
 ```bash
-bash run_agent.sh
+run_agent.sh
 ```
 
 From another terminal run
 ```bash
-bash run_tm.sh
+run_tm.sh
 ```
 
 ### Option 2: Run the service
@@ -37,5 +32,5 @@ Provide your OpenAI API key in `.1env`.
 
 Run, the service:
 ```bash
-bash run_service.sh
+run_service.sh
 ```
