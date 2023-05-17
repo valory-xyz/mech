@@ -20,6 +20,7 @@
 """This package contains a scaffold of a handler."""
 
 import json
+import time
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler

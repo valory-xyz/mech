@@ -10,7 +10,7 @@ fingerprint:
   __init__.py: bafybeihby72yquictws2b6dxskiuskjbkcojyhelkl7hs4uilmmafukvim
   behaviours.py: bafybeigqp6w2kzozaln7l57wq757mzpj3tsolboc7av2bn3r6h5sm4h3ey
   dialogues.py: bafybeiaaho77tsg4s7k2k27u2xqcoi2juze6cwx4psuueu7gbumpw5kgiu
-  handlers.py: bafybeief4d742p33ku4ioczcqcaxmssxbggp7o4hpaicakkxmb6g4yyjdm
+  handlers.py: bafybeihajjrykfxplrc3nrlacndnqul6wju67atejmxf3qzarsel5ryvxy
 fingerprint_ignore_patterns: []
 connections:
 - eightballer/websocket_client:0.1.0:bafybeicqkljjzvdl4v7pzbmsfd3al7uv7563x3qa5gmnzxeuoxgtmolpta
