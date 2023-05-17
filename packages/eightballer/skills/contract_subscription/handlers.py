@@ -20,6 +20,7 @@
 """This package contains a scaffold of a handler."""
 
 import json
+import time
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -64,10 +65,19 @@ class WebSocketHandler(Handler):
 
         self.context.logger.info("Extracting data")
         tx_hash = data['params']['result']['transactionHash']
-        event_args = self._get_tx_args(tx_hash)
-        if len(event_args) == 0:
-            self.context.logger.info(f"Could not get event args. tx_hash={tx_hash}")
-            return
+        no_args = True
+        limit = 0
+        while no_args and limit < 10:
+            event_args, no_request = self._get_tx_args(tx_hash)
+            if no_request:
+                self.context.logger.info(f"Event not a Request.")
+                break
+            if len(event_args) == 0:
+                self.context.logger.info(f"Could not get event args. tx_hash={tx_hash}")
+                time.sleep(1)
+                limit += 1
+                return
+            no_args = False
         self.context.shared_state[JOB_QUEUE].append(event_args)
         self.context.logger.info(f"Added job to queue: {event_args}")
 
@@ -79,7 +89,7 @@ class WebSocketHandler(Handler):
         try:
             tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
             rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
-            return dict(rich_logs[0]['args'])
+            return dict(rich_logs[0]['args']), False
 
         except Exception:  # pylint: disable=W0718
-            return {}
+            return {}, True
