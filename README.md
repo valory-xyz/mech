@@ -39,7 +39,7 @@ bash run_tm.sh
 
 ### Option 2: Run the service
 
-Ensure you have a file with the private key at `keys.jso`.
+Ensure you have a file with the private key at `keys.json`.
 
 First, copy the env file:
 ```bash
