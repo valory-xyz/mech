@@ -14,7 +14,18 @@ Fetch all the packages
 autonomy packages sync --update-packages
 ```
 
+After development:
+```bash
+poetry run autonomy packages lock
+poetry run autonomy push-all
+poetry run autonomy build-image --service-dir packages/valory/services/mech
+```
+
+Then run on Propel.
+
 ### Option 1: Run the agent standalone
+
+Ensure you have a file with the private key at `ethereum_private_key.txt`.
 
 From one terminal run
 ```bash
@@ -27,6 +38,8 @@ bash run_tm.sh
 ```
 
 ### Option 2: Run the service
+
+Ensure you have a file with the private key at `keys.json`.
 
 First, copy the env file:
 ```bash
