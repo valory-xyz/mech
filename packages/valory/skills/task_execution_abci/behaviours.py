@@ -101,13 +101,13 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                     self.context.logger.info(f"Got data from IPFS: {task_data}")
 
                     # Verify the file data
-                    is_data_valid = task_data and isinstance(task_data, dict) and "prompt" in task_data and "tool" in task_data
+                    is_data_valid = task_data and isinstance(task_data, dict) and "prompt" in task_data and "tool" in task_data  # pylint: disable=C0301
                     if is_data_valid:
                         self.prepare_task(task_data)
                     else:
                         self.context.logger.warning("Data is not valid.")
                         self._invalid_request = True
-                except Exception:
+                except Exception:  # pylint: disable=W0718
                     self.context.logger.warning("Exception when handling data.")
                     self._invalid_request = True
 
@@ -169,7 +169,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
     def prepare_task(self, task_data):
         """Prepare the task."""
-        # TODO: condition on tool
+        # TODO: condition on tool  # pylint: disable=W0511
         openai_task = OpenAITask()
         task_data["use_gpt4"] = False
         task_data["openai_api_key"] = self.params.openai_api_key
