@@ -76,7 +76,7 @@ default_connection: null
 public_id: eightballer/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
 type: connection
 config:
-  endpoint: wss://prettiest-capable-diagram.xdai.discover.quiknode.pro/1489461512139e9641e4b18634d599cd22c68713/
+  endpoint: ${str:wss://rpc.gnosischain.com/wss}
   target_skill_id: eightballer/contract_subscription:0.1.0
 ---
 public_id: eightballer/contract_subscription:0.1.0:bafybeiby5ajjc7a3m2uq73d2pprx6enqt4ghfcq2gkmrtsr75e4d4napi4
@@ -135,7 +135,7 @@ type: connection
 config:
   ledger_apis:
     ethereum:
-      address: https://prettiest-capable-diagram.xdai.discover.quiknode.pro/1489461512139e9641e4b18634d599cd22c68713/
+      address: ${str:https://rpc.gnosischain.com/}
       chain_id: 100
       poa_chain: false
       default_gas_price_strategy: eip1559
