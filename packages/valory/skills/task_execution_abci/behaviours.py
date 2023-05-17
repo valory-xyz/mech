@@ -100,7 +100,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 self.context.logger.info(f"Got data from IPFS: {task_data}")
 
                 # Verify the file data
-                is_data_valid = task_data and "prompt" in task_data and "tool" in task_data
+                is_data_valid = task_data and isinstance(task_data, dict) and "prompt" in task_data and "tool" in task_data
                 if is_data_valid:
                     self.context.logger.warning("Data is valid")
                     self.prepare_task(task_data)
