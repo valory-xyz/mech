@@ -70,7 +70,7 @@ class WebSocketHandler(Handler):
         while no_args and limit < 10:
             event_args, no_request = self._get_tx_args(tx_hash)
             if no_request:
-                self.context.logger.info(f"Event not a Request.")
+                self.context.logger.info("Event not a Request.")
                 break
             if len(event_args) == 0:
                 self.context.logger.info(f"Could not get event args. tx_hash={tx_hash}")
