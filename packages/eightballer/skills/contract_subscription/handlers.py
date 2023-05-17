@@ -66,6 +66,7 @@ class WebSocketHandler(Handler):
         tx_hash = data['params']['result']['transactionHash']
         event_args = self._get_tx_args(tx_hash)
         if len(event_args) == 0:
+            self.context.logger.info(f"Could not get event args. tx_hash={tx_hash}")
             return
         self.context.shared_state[JOB_QUEUE].append(event_args)
         self.context.logger.info(f"Added job to queue: {event_args}")
