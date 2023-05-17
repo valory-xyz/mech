@@ -76,6 +76,7 @@ jobs:
               cd work
               export AUTHOR=valory
               export SERVICE=mech
+              pip install requests==2.28.2
               autonomy init --reset --author $AUTHOR --ipfs --remote
               autonomy fetch $AUTHOR/$SERVICE --service --local || exit 1
               cd $SERVICE || exit 1

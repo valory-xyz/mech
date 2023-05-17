@@ -78,8 +78,9 @@ class WebSocketHandler(Handler):
                 limit += 1
                 return
             no_args = False
-        self.context.shared_state[JOB_QUEUE].append(event_args)
-        self.context.logger.info(f"Added job to queue: {event_args}")
+        if len(event_args) != 0:
+            self.context.shared_state[JOB_QUEUE].append(event_args)
+            self.context.logger.info(f"Added job to queue: {event_args}")
 
     def teardown(self) -> None:
         """Implement the handler teardown."""
