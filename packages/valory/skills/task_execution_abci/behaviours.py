@@ -78,7 +78,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 self.context.logger.info(f"Preparing task with data: {task_data}")
 
-                # Request format
+                # Request event format
                 # {
                 #     "requestId": <id>
                 #     "data": <ipfs_hash>
@@ -103,12 +103,12 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                     # Verify the file data
                     is_data_valid = task_data and isinstance(task_data, dict) and "prompt" in task_data and "tool" in task_data
                     if is_data_valid:
-                        self.context.logger.warning("Data is valid")
                         self.prepare_task(task_data)
                     else:
-                        self.context.logger.warning("Data is not valid")
+                        self.context.logger.warning("Data is not valid.")
                         self._invalid_request = True
                 except Exception:
+                    self.context.logger.warning("Exception when handling data.")
                     self._invalid_request = True
 
             response_obj = None
@@ -169,15 +169,15 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
     def prepare_task(self, task_data):
         """Prepare the task."""
-        if task_data["tool"] == "openai-gpt4":
-            openai_task = OpenAITask()
-            task_data["use_gpt4"] = False
-            task_data["openai_api_key"] = self.params.openai_api_key
-            task_id = self.context.task_manager.enqueue_task(
-                openai_task, kwargs=task_data
-            )
-            self._async_result = self.context.task_manager.get_task_result(task_id)
-            self._is_task_prepared = True
+        # TODO: condition on tool
+        openai_task = OpenAITask()
+        task_data["use_gpt4"] = False
+        task_data["openai_api_key"] = self.params.openai_api_key
+        task_id = self.context.task_manager.enqueue_task(
+            openai_task, kwargs=task_data
+        )
+        self._async_result = self.context.task_manager.get_task_result(task_id)
+        self._is_task_prepared = True
 
 
 class TaskExecutionRoundBehaviour(AbstractRoundBehaviour):
