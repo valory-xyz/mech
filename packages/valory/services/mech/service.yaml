@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: eightballer/mech:0.1.0:bafybeidqujj4g7tgkahmyyxmezixev3wkt3ihj55i27qjgidcr7hvnqleq
+agent: valory/mech:0.1.0:bafybeidqujj4g7tgkahmyyxmezixev3wkt3ihj55i27qjgidcr7hvnqleq
 number_of_agents: 4
 deployment:
   agent:
@@ -269,16 +269,12 @@ type: connection
 0:
   config:
     endpoint: ${ETHEREUM_WEBSOCKET_RPC_0:str:wss://rpc.gnosischain.com/wss}
-    target_skill_id: eightballer/contract_subscription:0.1.0
 1:
   config:
     endpoint: ${ETHEREUM_WEBSOCKET_RPC_1:str:wss://rpc.gnosischain.com/wss}
-    target_skill_id: eightballer/contract_subscription:0.1.0
 2:
   config:
     endpoint: ${ETHEREUM_WEBSOCKET_RPC_2:str:wss://rpc.gnosischain.com/wss}
-    target_skill_id: eightballer/contract_subscription:0.1.0
 3:
   config:
     endpoint: ${ETHEREUM_WEBSOCKET_RPC_3:str:wss://rpc.gnosischain.com/wss}
-    target_skill_id: eightballer/contract_subscription:0.1.0

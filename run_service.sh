@@ -15,13 +15,13 @@ make clean
 
 autonomy push-all
 
-autonomy fetch --local --service eightballer/mech && cd mech
+autonomy fetch --local --service valory/mech && cd mech
 
 # Build the image
 autonomy build-image
 
 # Copy keys and build the deployment
-cp /home/david/Valory/repos/mech/keys.json ./keys.json
+cp $PWD/../mech/keys.json ./keys.json
 
 autonomy deploy build -ltm
 

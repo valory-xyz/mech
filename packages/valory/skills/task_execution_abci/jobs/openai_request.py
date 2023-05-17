@@ -32,9 +32,16 @@ def run(**kwargs) -> str:
 
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature =  kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+    prompt = kwargs["prompt"]
 
-    if kwargs["use_gpt4"]:
-        messages = [{"role": "user", "content": kwargs["prompt"]}]
+    # Call OpenAI's moderation endpoint
+    moderation_result = openai.Moderation.create(prompt)
+
+    if moderation_result["results"][0]["flagged"]:
+        return "violation of terms"
+
+    if kwargs.get("use_gpt4", False):
+        messages = [{"role": "user", "content": prompt}]
         response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=messages,
@@ -46,7 +53,7 @@ def run(**kwargs) -> str:
         return response.choices[0].message.content.strip()
     response = openai.Completion.create(
         engine="text-davinci-003",
-        prompt=kwargs["prompt"],
+        prompt=prompt,
         temperature=temperature,
         max_tokens=max_tokens,
         top_p=1,
