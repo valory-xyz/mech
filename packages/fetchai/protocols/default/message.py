@@ -27,8 +27,7 @@ from aea.configurations.base import PublicId
 from aea.exceptions import AEAEnforceError, enforce
 from aea.protocols.base import Message
 
-from packages.fetchai.protocols.default.custom_types import \
-    ErrorCode as CustomErrorCode
+from packages.fetchai.protocols.default.custom_types import ErrorCode as CustomErrorCode
 
 _default_logger = logging.getLogger("aea.packages.fetchai.protocols.default.message")
 
