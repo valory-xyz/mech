@@ -13,10 +13,10 @@ fingerprint:
   handlers.py: bafybeihmacljklkhzlzggjpg7mvu3vy4yajxsoaks7nx5u5aablwkmxh5u
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/websocket_client:0.1.0:bafybeicqkljjzvdl4v7pzbmsfd3al7uv7563x3qa5gmnzxeuoxgtmolpta
+- eightballer/websocket_client:0.1.0:bafybeicf2z7s2edn3nbiqxoadcmzc735lcxervz3ncbplma2fzpitaod2q
 contracts: []
 protocols:
-- fetchai/default:1.0.0:bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y
+- fetchai/default:1.0.0:bafybeiaobn62fqxofbx6gkuihyjjb76g6fwsvw6ikcnazt7evdnldhitxe
 skills: []
 behaviours:
   subscriptions:

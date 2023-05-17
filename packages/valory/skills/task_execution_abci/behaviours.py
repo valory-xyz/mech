@@ -23,10 +23,10 @@ import os
 from abc import ABC
 from multiprocessing.pool import AsyncResult
 from typing import Any, Generator, Optional, Set, Type, cast
-from aea.helpers.cid import CID
+
 import multibase
 import multicodec
-from aea.helpers.cid import to_v1
+from aea.helpers.cid import CID, to_v1
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
