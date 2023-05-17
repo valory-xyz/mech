@@ -23,7 +23,7 @@ import os
 from abc import ABC
 from multiprocessing.pool import AsyncResult
 from typing import Any, Generator, Optional, Set, Type, cast
-
+from aea.helpers.cid import CID
 import multibase
 import multicodec
 from aea.helpers.cid import to_v1
@@ -67,14 +67,6 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self._is_task_prepared = False
         self._invalid_request = False
 
-    def is_json(self, obj: Any) -> bool:
-        """Checks whether an object is json"""
-        try:
-            json.loads(obj)
-        except ValueError as _:
-            return False
-        return True
-
     def async_act(self) -> Generator:
         """Do the act, supporting asynchronous execution."""
 
@@ -95,18 +87,22 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 self.request_id = task_data["requestId"]
 
                 # Verify the data hash and handle encoding
-                file_hash = task_data["data"].decode("utf-8")
-                file_hash = "f01701220" + file_hash[2:]  # CID prefix
+                file_hash = task_data["data"].hex()
+                file_hash = "f01701220" + file_hash  # CID prefix
+                file_hash = str(CID.from_string(file_hash))
 
                 # Get the file from IPFS
+                self.context.logger.info(f"Getting data from IPFS: {file_hash}")
                 task_data = yield from self.get_from_ipfs(
                     ipfs_hash=file_hash,
                     filetype=SupportedFiletype.JSON,
                 )
+                self.context.logger.info(f"Got data from IPFS: {task_data}")
 
                 # Verify the file data
-                is_data_valid = task_data and self.is_json(task_data) and "prompt" in task_data and "tool" in task_data
+                is_data_valid = task_data and "prompt" in task_data and "tool" in task_data
                 if is_data_valid:
+                    self.context.logger.warning("Data is valid")
                     self.prepare_task(task_data)
                 else:
                     self.context.logger.warning("Data is not valid")
