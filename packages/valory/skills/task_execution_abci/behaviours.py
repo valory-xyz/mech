@@ -87,25 +87,28 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 self.request_id = task_data["requestId"]
 
                 # Verify the data hash and handle encoding
-                file_hash = task_data["data"].hex()
-                file_hash = "f01701220" + file_hash  # CID prefix
-                file_hash = str(CID.from_string(file_hash))
+                try:
+                    file_hash = task_data["data"].hex()
+                    file_hash = "f01701220" + file_hash  # CID prefix
+                    file_hash = str(CID.from_string(file_hash))
 
-                # Get the file from IPFS
-                self.context.logger.info(f"Getting data from IPFS: {file_hash}")
-                task_data = yield from self.get_from_ipfs(
-                    ipfs_hash=file_hash,
-                    filetype=SupportedFiletype.JSON,
-                )
-                self.context.logger.info(f"Got data from IPFS: {task_data}")
+                    # Get the file from IPFS
+                    self.context.logger.info(f"Getting data from IPFS: {file_hash}")
+                    task_data = yield from self.get_from_ipfs(
+                        ipfs_hash=file_hash,
+                        filetype=SupportedFiletype.JSON,
+                    )
+                    self.context.logger.info(f"Got data from IPFS: {task_data}")
 
-                # Verify the file data
-                is_data_valid = task_data and isinstance(task_data, dict) and "prompt" in task_data and "tool" in task_data
-                if is_data_valid:
-                    self.context.logger.warning("Data is valid")
-                    self.prepare_task(task_data)
-                else:
-                    self.context.logger.warning("Data is not valid")
+                    # Verify the file data
+                    is_data_valid = task_data and isinstance(task_data, dict) and "prompt" in task_data and "tool" in task_data
+                    if is_data_valid:
+                        self.context.logger.warning("Data is valid")
+                        self.prepare_task(task_data)
+                    else:
+                        self.context.logger.warning("Data is not valid")
+                        self._invalid_request = True
+                except Exception:
                     self._invalid_request = True
 
             response_obj = None

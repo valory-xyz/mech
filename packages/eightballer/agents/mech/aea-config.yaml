@@ -33,11 +33,11 @@ skills:
 - eightballer/contract_subscription:0.1.0:bafybeiegckmgvway7u75woxdc3ecuyjfjc3qgxfm6crlopmkalxcfwnwea
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeifn2cwy3r2faxl5frwkxuqfipekhkbc3xnspaxx4sxx3nerrwixlu
+- valory/mech_abci:0.1.0:bafybeihlhikqhgfqfuov6vtjvyryyzzrnfqqb3bhoix3636km2cmwfpnem
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeics24jmiqld76advgohvjfjjo4ogsffyiqv3fqhgdmbv6iioonhf4
+- valory/task_execution_abci:0.1.0:bafybeihy52unxvoxfq6pgbrkvokk6setijknd6t4m7dck4wu76zg4q4jxi
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
 - valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
