@@ -10,3 +10,4 @@ def main(file):
 if __name__ == '__main__':
     _, file_path = sys.argv
     main(file_path)
+
