@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeicgpa7tjl4kkz2rhp3dfcuwuef26fvuiqdd7ozseoxmwbjjce65sa
+agent: valory/mech:0.1.0:bafybeianpplx5bz2xo6mctw2a44rkfxty3ux3czci2wbt2pv3fqayfjq4m
 number_of_agents: 4
 deployment:
   agent:
@@ -85,8 +85,8 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools: ${FILE_HASH_TO_TOOLS_1:dict:{}}
-        api_keys: ${API_KEYS_1:dict:null}
+        file_hash_to_tools: ${FILE_HASH_TO_TOOLS_0:dict:{}}
+        api_keys: ${API_KEYS_0:dict:null}
 1:
   models:
     benchmark_tool: *id001
@@ -128,8 +128,8 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools: ${FILE_HASH_TO_TOOLS_4:dict:{}}
-        api_keys: ${API_KEYS_4:dict:null}
+        file_hash_to_tools: ${FILE_HASH_TO_TOOLS_1:dict:{}}
+        api_keys: ${API_KEYS_1:dict:null}
 2:
   models:
     benchmark_tool: *id001
