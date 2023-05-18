@@ -9,12 +9,12 @@ This is a protocol for two agents exchanging any bytes messages.
 ```yaml
 ---
 name: default
-author: fetchai
-version: 1.0.0
+author: valory
+version: 0.1.0
 description: A protocol for exchanging any bytes message.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
-protocol_specification_id: fetchai/default:1.0.0
+protocol_specification_id: valory/default:0.1.0
 speech_acts:
   bytes:
     content: pt:bytes

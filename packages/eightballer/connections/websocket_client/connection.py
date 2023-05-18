@@ -26,7 +26,7 @@ from aea.configurations.base import PublicId
 from aea.connections.base import Connection, ConnectionStates
 from aea.mail.base import Envelope
 
-from packages.fetchai.protocols.default.message import DefaultMessage
+from packages.valory.protocols.default.message import DefaultMessage
 
 CONNECTION_ID = PublicId.from_str("eightballer/websocket_client:0.1.0")
 

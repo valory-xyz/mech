@@ -8,12 +8,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibebl36eaaewytw3b75m6k6drk5bldooxf4lhcbcfi4nmyuiwrcny
-  connection.py: bafybeiflbcyru7gciunu2mxvegrcu54ru66vhiuhp4n4xedixbwloenyka
+  connection.py: bafybeicwqgimb477iql3x7jzbpb47rykaikkugkwokanqmsqri5o5xu7je
   readme.md: bafybeihg5yfzgqvg5ngy7r2o5tfeqnelx2ffxw4po5hmheqjfhumpmxpoq
 fingerprint_ignore_patterns: []
 connections: []
 protocols:
-- fetchai/default:1.0.0:bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y
+- valory/default:0.1.0:bafybeichtbwtahhd2lqvc5vsxxwzlfycvs3plh256kzj2bmxskzakehfhi
 class_name: WebSocketClient
 config:
   endpoint: null

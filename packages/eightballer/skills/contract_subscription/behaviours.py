@@ -26,7 +26,7 @@ from aea.skills.behaviours import OneShotBehaviour
 
 from packages.eightballer.connections.websocket_client.connection import \
     CONNECTION_ID
-from packages.fetchai.protocols.default.message import DefaultMessage
+from packages.valory.protocols.default.message import DefaultMessage
 
 DEFAULT_ENCODING = "utf-8"
 

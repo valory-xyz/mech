@@ -1,0 +1,22 @@
+name: default
+author: valory
+version: 0.1.0
+protocol_specification_id: valory/default:0.1.0
+type: protocol
+description: A protocol for exchanging any bytes message.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  README.md: bafybeien6f3n7jt7gne3luwrfru57mc2cs6gc6e2zqby4tqwupkvse2yve
+  __init__.py: bafybeical6mif3pfnvpi2ifvec6qj622teodwyfwehjschvi7jyehnhm6u
+  custom_types.py: bafybeibyzzhja4ro6r6rihb3isketut4ebd6hwxpijzqdexl7gni2vz4oq
+  default.proto: bafybeidcaav7d6i44twvam4itxrx6ev67ocokbyxqs7icxufijvf4zdnuq
+  default_pb2.py: bafybeid43jscasodhlhtvxlmt7qduw7uo45m2y6kjo7b5dsdjlrhtlevcu
+  dialogues.py: bafybeibpxuq6eqn53xwtbjnqjaeme5pbeuvteefpq54w7qbdhjvhick53q
+  message.py: bafybeics63mr6vx52syowt5eqcbt4mrajd653tfawitidgwpmvtygkiori
+  serialization.py: bafybeiet2c74y2oyoprofvwxviersnc256aaxdskhtgfyqnpgtycb62iom
+  tests/test_default_dialogues.py: bafybeib4u3jf724x3fozrinusj4oxwzhzzbqufsy2zwiiv2fjxzmjgq23q
+  tests/test_default_messages.py: bafybeia6co34qgntogmgq7ove5qo4ooiujcbprs7p4vxqtacc56bcadpra
+fingerprint_ignore_patterns: []
+dependencies:
+  protobuf: {}

@@ -9,9 +9,9 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue as BaseDialogue
 from aea.skills.base import Model
 
-from packages.fetchai.protocols.default.dialogues import \
+from packages.valory.protocols.default.dialogues import \
     DefaultDialogue as BaseDefaultDialogue
-from packages.fetchai.protocols.default.dialogues import \
+from packages.valory.protocols.default.dialogues import \
     DefaultDialogues as BaseDefaultDialogues
 
 DefaultDialogue = BaseDefaultDialogue

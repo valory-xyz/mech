@@ -8,15 +8,15 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihby72yquictws2b6dxskiuskjbkcojyhelkl7hs4uilmmafukvim
-  behaviours.py: bafybeigqp6w2kzozaln7l57wq757mzpj3tsolboc7av2bn3r6h5sm4h3ey
-  dialogues.py: bafybeiaaho77tsg4s7k2k27u2xqcoi2juze6cwx4psuueu7gbumpw5kgiu
-  handlers.py: bafybeicnaq27xj5gorjirbnlbqlsx5h535x6iitkd54pv5w6g2oixqgnuq
+  behaviours.py: bafybeid2feszxh4xtvbwkjuozx2i4f2otzm2kfiu3klsdf2ch5bvovbyzi
+  dialogues.py: bafybeibjebotcjyvdlqbteiwb767s3f4ovgza6zr4gpgft3nk5ipgmyoqa
+  handlers.py: bafybeicqglnkx7mnxcc73vhvly2r2ierwhqocauac7ubrf7uh6p5l64laq
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/websocket_client:0.1.0:bafybeicqkljjzvdl4v7pzbmsfd3al7uv7563x3qa5gmnzxeuoxgtmolpta
+- eightballer/websocket_client:0.1.0:bafybeibnjqvfypsxo3xjd42n4ppp2smnuei66cv5emyp5dyocqri6l5pk4
 contracts: []
 protocols:
-- fetchai/default:1.0.0:bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y
+- valory/default:0.1.0:bafybeichtbwtahhd2lqvc5vsxxwzlfycvs3plh256kzj2bmxskzakehfhi
 skills: []
 behaviours:
   subscriptions:

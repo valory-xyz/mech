@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2022 fetchai
+#   Copyright 2023 valory
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -27,9 +27,10 @@ from aea.configurations.base import PublicId
 from aea.exceptions import AEAEnforceError, enforce
 from aea.protocols.base import Message
 
-from packages.fetchai.protocols.default.custom_types import ErrorCode as CustomErrorCode
+from packages.valory.protocols.default.custom_types import ErrorCode as CustomErrorCode
 
-_default_logger = logging.getLogger("aea.packages.fetchai.protocols.default.message")
+
+_default_logger = logging.getLogger("aea.packages.valory.protocols.default.message")
 
 DEFAULT_BODY_SIZE = 4
 
@@ -37,8 +38,8 @@ DEFAULT_BODY_SIZE = 4
 class DefaultMessage(Message):
     """A protocol for exchanging any bytes message."""
 
-    protocol_id = PublicId.from_str("fetchai/default:1.0.0")
-    protocol_specification_id = PublicId.from_str("fetchai/default:1.0.0")
+    protocol_id = PublicId.from_str("valory/default:0.1.0")
+    protocol_specification_id = PublicId.from_str("valory/default:0.1.0")
 
     ErrorCode = CustomErrorCode
 
