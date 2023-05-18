@@ -12,7 +12,7 @@ fingerprint:
   dialogues.py: bafybeid6ntx5nmtkhuiml5pwt3drafvjejr7x4vu35gqekl4m6tgtxf6am
   fsm_specification.yaml: bafybeihiynklron7mm3hsykwbhdbkosdtoimgkkxckuvvlwafevayjp7ia
   handlers.py: bafybeihi6pbfapfmwxlom6bp7cclybswzejyrrv65gn3fpzwejekvjyxeu
-  models.py: bafybeiaqcfy4oh3rtarma6oapxxga4k4eghe63zla5erk6t3xhapqb3p7e
+  models.py: bafybeic2dmee2tv5edfoy77q3ptbzyxzuju5j6jlg2vx4tilegde4vmaou
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeigdi6aqoxbq6wjsjhs7m6ijkqmg5d7sfuhbpoqx3jcquxt2mhvoga
+- valory/task_execution_abci:0.1.0:bafybeih5r5qcvrtwjuzxin4bugzt6gqgqt7feulvah75zou7gjpqqg4yz4
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
 - valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
@@ -75,9 +75,13 @@ models:
   params:
     args:
       agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      api_keys_json: '{"openai": "dummy_api_key"}'
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
+      file_hash_to_tools_json: '{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":
+        ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
+        "openai-gpt-4"]}'
       finalize_timeout: 60.0
       genesis_config:
         genesis_time: '2022-09-26T00:00:00.000000000Z'
@@ -127,10 +131,6 @@ models:
       tendermint_url: http://localhost:26657
       termination_sleep: 900
       tx_timeout: 10.0
-      file_hash_to_tools_json: '{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":
-        ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
-        "openai-gpt-4"]}'
-      api_keys_json: '{"openai": "dummy_api_key"}'
       use_termination: false
       validate_timeout: 1205
     class_name: Params
