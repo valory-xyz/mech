@@ -28,6 +28,20 @@ python push_to_ipfs.py "tools/openai_request.py"
 
 Then run on Propel.
 
+### Prepare env file
+
+First, copy the env file:
+```bash
+cp .example.env .1env
+```
+
+Provide your OpenAI API key in place of `dummy_api_key` in `.1env`.
+
+Source the env file:
+```bash
+source .env
+```
+
 ### Option 1: Run the agent standalone
 
 Ensure you have a file with the private key at `ethereum_private_key.txt`.
@@ -45,13 +59,6 @@ bash run_tm.sh
 ### Option 2: Run the service
 
 Ensure you have a file with the private key at `keys.json`.
-
-First, copy the env file:
-```bash
-cp .example.env .1env
-```
-
-Provide your OpenAI API key in `.1env`.
 
 Run, the service:
 ```bash
