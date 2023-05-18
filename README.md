@@ -21,6 +21,11 @@ poetry run autonomy push-all
 poetry run autonomy build-image --service-dir packages/valory/services/mech
 ```
 
+To generate a hash of the tools:
+```bash
+python push_to_ipfs.py "tools/openai_request.py"
+```
+
 Then run on Propel.
 
 ### Option 1: Run the agent standalone

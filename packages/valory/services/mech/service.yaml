@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeicgpa7tjl4kkz2rhp3dfcuwuef26fvuiqdd7ozseoxmwbjjce65sa
+agent: valory/mech:0.1.0:bafybeige3d3hqnvrz265iravgj2l2qfa3m7tbaehvvgv2tnrehkyzqpade
 number_of_agents: 4
 deployment:
   agent:
@@ -85,8 +85,8 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools: ${FILE_HASH_TO_TOOLS_1:dict:{}}
-        api_keys: ${API_KEYS_1:dict:null}
+        file_hash_to_tools: ${FILE_HASH_TO_TOOLS:str:null}
+        api_keys: ${API_KEYS:str:null}
 1:
   models:
     benchmark_tool: *id001
@@ -128,8 +128,8 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools: ${FILE_HASH_TO_TOOLS_4:dict:{}}
-        api_keys: ${API_KEYS_4:dict:null}
+        file_hash_to_tools: ${FILE_HASH_TO_TOOLS:str:null}
+        api_keys: ${API_KEYS:str:null}
 2:
   models:
     benchmark_tool: *id001
@@ -171,8 +171,8 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools: ${FILE_HASH_TO_TOOLS_2:dict:{}}
-        api_keys: ${API_KEYS_2:dict:null}
+        file_hash_to_tools: ${FILE_HASH_TO_TOOLS:str:null}
+        api_keys: ${API_KEYS:str:null}
 3:
   models:
     benchmark_tool: *id001
@@ -214,8 +214,8 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools: ${FILE_HASH_TO_TOOLS_3:dict:{}}
-        api_keys: ${API_KEYS_3:dict:null}
+        file_hash_to_tools: ${FILE_HASH_TO_TOOLS:str:null}
+        api_keys: ${API_KEYS:str:null}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

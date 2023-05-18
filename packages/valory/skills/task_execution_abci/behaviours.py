@@ -39,7 +39,6 @@ from packages.valory.skills.task_execution_abci.rounds import (
     TaskExecutionRound)
 from packages.valory.skills.task_execution_abci.tasks import AnyToolAsTask
 
-
 CID_PREFIX = "f01701220"
 
 
