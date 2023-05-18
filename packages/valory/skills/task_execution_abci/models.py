@@ -45,9 +45,9 @@ class Params(BaseParams):
         """Initialize the parameters object."""
 
         self.api_keys = self._ensure("api_keys", kwargs, Dict[str, str])
-        self.file_hash_to_tools = self._ensure("file_hash_to_tools", kwargs, Dict[str, List[str]])
-        self.tools_to_file_hash = {value: key for key, value in self.file_hash_to_tools.items()}
-        self.all_tools = {}
+        self.file_hash_to_tools: Dict[str, List[str]] = self._ensure("file_hash_to_tools", kwargs, Dict[str, List[str]])
+        self.tools_to_file_hash = {value: key for key, values in self.file_hash_to_tools.items() for value in values}
+        self.all_tools: Dict[str, str] = {}
 
         super().__init__(*args, **kwargs)
 

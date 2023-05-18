@@ -22,7 +22,7 @@ import json
 import os
 from abc import ABC
 from multiprocessing.pool import AsyncResult
-from typing import Any, Generator, Optional, Set, Type, cast
+from typing import Any, Dict, Generator, Optional, Set, Type, cast
 
 import multibase
 import multicodec
@@ -70,7 +70,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self._is_task_prepared = False
         self._invalid_request = False
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
 
         if not self.context.params.all_tools:
@@ -78,7 +78,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             for file_hash, tools in self.context.params.file_hash_to_tools:
                 tool_py = yield from self.get_from_ipfs(file_hash)
                 if tool_py is None:
-                    self.context.logger.error(f"Failed to get the tool {tool} with file_hash {file_hash} from IPFS!")
+                    self.context.logger.error(f"Failed to get the tools {tools} with file_hash {file_hash} from IPFS!")
                 all_tools.update({tool: tool_py for tool in tools})
             self.context.params.all_tools = all_tools
 
@@ -185,8 +185,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         """Prepare the task."""
         tool_task = AnyToolAsTask()
         tool_py = self.context.params.all_tools[task_data["tool"]]
-        local_namespace = {}
-        exec(tool_py, globals(), local_namespace)
+        local_namespace: Dict[str, Any] = {}
+        exec(tool_py, globals(), local_namespace)  # pylint: disable=W0122
         task_data["method"] = local_namespace['run']
         task_data["api_keys"] = self.params.api_keys
         task_id = self.context.task_manager.enqueue_task(
