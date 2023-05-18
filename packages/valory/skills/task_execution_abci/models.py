@@ -19,7 +19,7 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 
-from typing import Any
+from typing import Any, Dict, List
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import \
@@ -44,9 +44,13 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.openai_api_key = self._ensure("openai_api_key", kwargs, str)
+        self.api_keys = self._ensure("api_keys", kwargs, Dict[str, str])
+        self.file_hash_to_tools = self._ensure("file_hash_to_tools", kwargs, Dict[str, List[str]])
+        self.tools_to_file_hash = {value: key for key, value in self.file_hash_to_tools.items()}
+        self.all_tools = {}
 
         super().__init__(*args, **kwargs)
+
 
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool

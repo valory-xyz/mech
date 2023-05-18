@@ -23,13 +23,11 @@ from typing import Any
 
 from aea.skills.tasks import Task
 
-from packages.valory.skills.task_execution_abci.jobs.openai_request import \
-    run as run_openai_request
 
-
-class OpenAITask(Task):
-    """OpenAITask"""
+class AnyToolAsTask(Task):
+    """AnyToolAsTask"""
 
     def execute(self, *args: Any, **kwargs: Any):
         """Execute the task."""
-        return run_openai_request(*args, **kwargs)
+        method = kwargs.pop("method")
+        return method(*args, **kwargs)

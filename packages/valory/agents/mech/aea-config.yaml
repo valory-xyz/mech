@@ -33,11 +33,11 @@ skills:
 - eightballer/contract_subscription:0.1.0:bafybeifqgxfdljed46swbd7352vhkiveinifscyjje5hztxbv3wbjz32iu
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeihelkmzwrqcn425vdm7xqy2haqhglbcjbvycinsflepfn7v4n4zea
+- valory/mech_abci:0.1.0:bafybeiaomen2ridzv4kzey3tyu4vipblbkgfxrgssmttomnhxcqet5zplu
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeigzbjwfq5j5fl2xzfybraiot6p32g2xbduu5ovs6jumwn3jea5d2u
+- valory/task_execution_abci:0.1.0:bafybeielsarj3wqdu5owtgmdvomkik4eppugje5sjwfnhwgyntexj6g5ti
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
 - valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
@@ -129,6 +129,14 @@ models:
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
+      file_hash_to_tools:
+        xyz:
+        - openai-text-davinci-002
+        - openai-text-davinci-003
+        - openai-gpt-3.5-turbo
+        - openai-gpt-4
+      api_keys:
+        openai: <key_here>
 ---
 public_id: valory/ledger:0.19.0
 type: connection

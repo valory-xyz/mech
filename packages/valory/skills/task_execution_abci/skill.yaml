@@ -7,15 +7,14 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeid6hvgpcx3ktpompbdirmm2fqm5eif7h24bkfcyrentwbytpvb3ym
-  behaviours.py: bafybeigydr6ml6sifxawkubpdvu6er2lxrzjyqlu7g7mzfry74gmvswxv4
+  behaviours.py: bafybeiglshf4t74qbnogiwhmorjuisgpouhgxl5b2rmrwdudrpq3vykq6q
   dialogues.py: bafybeift7ubqn3fculjpbkihmensbfu26f2ptuec2zvwqybdwlodbz6mpe
   fsm_specification.yaml: bafybeieldx3rylsiyb6sfqxqzoogmtnda7jf4czgyjn3ddtzo4bze6sfza
   handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
-  jobs/openai_request.py: bafybeickic5yp3ruig2gswuhwnlmz5qrsd3jvxre5hdh3yqbdi7mg36prq
-  models.py: bafybeibnwveizh5tao6ohuisxbeefburq7vej74pn6vubp54dbbn2dil5u
+  models.py: bafybeihstsieg2t2g73tzd2moiojotrcxynsfowkxjnerjyuodgm5vrgce
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
   rounds.py: bafybeihkwtxa43gty5xqmffbgzgqp5ho4md2u7sabqq6cexq7ofvgecxfe
-  tasks.py: bafybeiakpyohjnvf6g63kq72qfvy4jaqlvjinvoy7qczy34u5hqoitmgim
+  tasks.py: bafybeib7xk34qy7dssg5crtgcmcnoxagkhdz5xrc6xz2pw5h7uvs2aqgly
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -120,6 +119,14 @@ models:
       tendermint_max_retries: 5
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
+      file_hash_to_tools:
+        xyz:
+        - openai-text-davinci-002
+        - openai-text-davinci-003
+        - openai-gpt-3.5-turbo
+        - openai-gpt-4
+      api_keys:
+        openai: <key_here>
       tx_timeout: 10.0
       use_termination: false
       validate_timeout: 1205
