@@ -30,9 +30,6 @@ from packages.fetchai.protocols.default.message import DefaultMessage
 
 JOB_QUEUE = "pending_tasks"
 
-DEFAULT_CONTRACT = "0xFf82123dFB52ab75C417195c5fDB87630145ae81"
-DEFAULT_ENDPOINT = "https://rpc.gnosischain.com"
-
 
 class WebSocketHandler(Handler):
     """This class scaffolds a handler."""
@@ -41,6 +38,11 @@ class WebSocketHandler(Handler):
     w3: Web3 = None
     contract = None
 
+    def __init__(self, **kwargs) -> None:
+        self.websocket_provider = kwargs.pop("websocket_provider")
+        self.contract_to_monitor = kwargs.pop("contract_to_monitor")
+        super().__init__(**kwargs)
+
     def setup(self) -> None:
         """Implement the setup."""
         self.context.shared_state[JOB_QUEUE] = []
@@ -48,8 +50,8 @@ class WebSocketHandler(Handler):
         with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r", encoding="utf-8") as file:
             abi = json.load(file)['abi']
 
-        self.w3 = Web3(Web3.HTTPProvider(DEFAULT_ENDPOINT))  # pylint: disable=C0103
-        self.contract = self.w3.eth.contract(address=DEFAULT_CONTRACT, abi=abi)
+        self.w3 = Web3(Web3.HTTPProvider(self.websocket_provider))  # pylint: disable=C0103
+        self.contract = self.w3.eth.contract(address=self.contract_to_monitor, abi=abi)
 
     def handle(self, message: Message) -> None:
         """

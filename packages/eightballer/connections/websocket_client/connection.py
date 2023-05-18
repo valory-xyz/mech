@@ -40,6 +40,9 @@ class WebSocketClient(Connection):
     _thread: Thread
     _wss: websocket.WebSocket
 
+    MAX_RETRIES = 3
+    RETRY_DELAY = 5  # seconds
+
     def __init__(self, **kwargs: Any) -> None:
         """
         Initialize the connection.
@@ -69,11 +72,22 @@ class WebSocketClient(Connection):
 
         In the implementation, remember to update 'connection_status' accordingly.
         """
-        self._wss = websocket.create_connection(self._endpoint)
-        self.state = ConnectionStates.connected
-        self.logger.info("Websocket connection established.")
-        self._thread = Thread(target=asyncio.run, args=(self._run(),))
-        self._thread.start()
+        retries = 0
+        while retries < self.MAX_RETRIES:
+            try:
+                self._wss = websocket.create_connection(self._endpoint)
+                self.state = ConnectionStates.connected
+                self.logger.info("Websocket connection established.")
+                self._thread = Thread(target=asyncio.run, args=(self._run(),))
+                self._thread.start()
+                return
+            except Exception as e:
+                self.logger.error(f"Failed to establish WebSocket connection: {e}")
+                self.state = ConnectionStates.disconnected
+                retries += 1
+                await asyncio.sleep(self.RETRY_DELAY)
+
+        raise Exception(f"Failed to establish connection after {self.MAX_RETRIES} attempts.")
 
     async def disconnect(self) -> None:
         """
@@ -82,6 +96,7 @@ class WebSocketClient(Connection):
         In the implementation, remember to update 'connection_status' accordingly.
         """
         self.logger.debug("Disconnecting...")  # pragma: no cover
+        self._wss.close()
         self.state = ConnectionStates.disconnected
 
     async def send(self, envelope: Envelope):
@@ -90,9 +105,16 @@ class WebSocketClient(Connection):
 
         :param envelope: the envelope to send.
         """
+        if self.state != ConnectionStates.connected:
+            raise Exception("Cannot send message. Connection is not established.")
+
         self.logger.debug("Sending content from envelope...")
-        context = envelope.message.content  # type: ignore
-        self._wss.send(context)
+        context = envelope.message.content
+        try:
+            self._wss.send(context)
+        except websocket.WebSocketConnectionClosedException:
+            self.logger.error("Websocket connection closed.")
+            self.state = ConnectionStates.disconnected
 
     async def receive(self, *args: Any, **kwargs: Any):  # noqa: V107
         """
@@ -102,6 +124,9 @@ class WebSocketClient(Connection):
         :param kwargs: keyword arguments to receive
         :return: the envelope received, if present.  # noqa: DAR202
         """
+        if self.state != ConnectionStates.connected:
+            raise Exception("Cannot receive message. Connection is not established.")
+
         if self._new_messages:
             new_msg = self._new_messages.pop()
             self.logger.debug(f"Received message from wss connection: {new_msg}")
@@ -122,10 +147,29 @@ class WebSocketClient(Connection):
         """Run a loop to receive messages from the wss."""
         while True:
             try:
+                if self.state != ConnectionStates.connected:
+                    break
                 msg = self._wss.recv()
                 self._new_messages.append(msg)
             except websocket.WebSocketConnectionClosedException:
                 self.logger.error("Websocket connection closed.")
                 self.state = ConnectionStates.disconnected
-                break
-        await self.connect()
+
+                # Start the reconnection process
+                self.logger.info("Attempting to reconnect...")
+                await self._reconnect()
+
+    async def _reconnect(self):
+        """Attempt to reconnect."""
+        retries = 0
+        while retries < self.MAX_RETRIES:
+            try:
+                await self.connect()
+                self.logger.info("Reconnected successfully.")
+                return
+            except Exception as e:
+                self.logger.error(f"Failed to reconnect: {e}")
+                retries += 1
+                await asyncio.sleep(self.RETRY_DELAY)
+        self.logger.error(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")
+        raise Exception(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")

@@ -10,10 +10,10 @@ fingerprint:
   __init__.py: bafybeihby72yquictws2b6dxskiuskjbkcojyhelkl7hs4uilmmafukvim
   behaviours.py: bafybeigqp6w2kzozaln7l57wq757mzpj3tsolboc7av2bn3r6h5sm4h3ey
   dialogues.py: bafybeiaaho77tsg4s7k2k27u2xqcoi2juze6cwx4psuueu7gbumpw5kgiu
-  handlers.py: bafybeicnaq27xj5gorjirbnlbqlsx5h535x6iitkd54pv5w6g2oixqgnuq
+  handlers.py: bafybeifuhf4k5mmvxn6msqqkzgttz7k5orjbkyjnwevgy6mmy233a4rrje
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/websocket_client:0.1.0:bafybeicqkljjzvdl4v7pzbmsfd3al7uv7563x3qa5gmnzxeuoxgtmolpta
+- eightballer/websocket_client:0.1.0:bafybeihriyojnsigmoznb7iflimierokjpbb5zbgsszrzo6cr73lnv7jl4
 contracts: []
 protocols:
 - fetchai/default:1.0.0:bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y
@@ -21,11 +21,14 @@ skills: []
 behaviours:
   subscriptions:
     args:
-      contracts: []
+      contracts:
+      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
     class_name: SubscriptionBehaviour
 handlers:
   new_event:
-    args: {}
+    args:
+      websocket_provider: https://rpc.gnosischain.com
+      contract_to_monitor: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
     class_name: WebSocketHandler
 models:
   default_dialogues:
