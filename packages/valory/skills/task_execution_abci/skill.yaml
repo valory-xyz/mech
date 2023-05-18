@@ -11,7 +11,7 @@ fingerprint:
   dialogues.py: bafybeift7ubqn3fculjpbkihmensbfu26f2ptuec2zvwqybdwlodbz6mpe
   fsm_specification.yaml: bafybeieldx3rylsiyb6sfqxqzoogmtnda7jf4czgyjn3ddtzo4bze6sfza
   handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
-  models.py: bafybeibjdytwwv4xrdpv3fn4fxdzrqghbc6yndzqkhvwqnm3e7kvdnfuby
+  models.py: bafybeihtzaha2fa4shumdggv7ajpbrkwcbf2ai24x2xweb42t5fxkuddvi
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
   rounds.py: bafybeihkwtxa43gty5xqmffbgzgqp5ho4md2u7sabqq6cexq7ofvgecxfe
   tasks.py: bafybeib7xk34qy7dssg5crtgcmcnoxagkhdz5xrc6xz2pw5h7uvs2aqgly
@@ -97,7 +97,6 @@ models:
       max_attempts: 10
       max_healthcheck: 120
       on_chain_service_id: null
-      openai_api_key: dummy_api_key
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
@@ -119,14 +118,10 @@ models:
       tendermint_max_retries: 5
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
-      file_hash_to_tools:
-        xyz:
-        - openai-text-davinci-002
-        - openai-text-davinci-003
-        - openai-gpt-3.5-turbo
-        - openai-gpt-4
-      api_keys:
-        openai: <key_here>
+      file_hash_to_tools_json: '{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":
+        ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
+        "openai-gpt-4"]}'
+      api_keys_json: '{"openai": "dummy_api_key"}'
       tx_timeout: 10.0
       use_termination: false
       validate_timeout: 1205

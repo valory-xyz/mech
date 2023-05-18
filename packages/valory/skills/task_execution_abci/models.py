@@ -19,6 +19,7 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 
+import json
 from typing import Any, Dict, List
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
@@ -44,8 +45,8 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.api_keys = self._ensure("api_keys", kwargs, Dict[str, str])
-        self.file_hash_to_tools: Dict[str, List[str]] = self._ensure("file_hash_to_tools", kwargs, Dict[str, List[str]])
+        self.api_keys: Dict[str, str] = json.loads(self._ensure("api_keys", kwargs, str))
+        self.file_hash_to_tools: Dict[str, List[str]] = json.loads(self._ensure("file_hash_to_tools", kwargs, str))
         self.tools_to_file_hash = {value: key for key, values in self.file_hash_to_tools.items() for value in values}
         self.all_tools: Dict[str, str] = {}
 

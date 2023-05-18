@@ -33,11 +33,11 @@ skills:
 - eightballer/contract_subscription:0.1.0:bafybeigl7acyrlefawvdc7rrorarf3hncjrwpm22iobh76fdk3dluvc2a4
 - valory/abstract_abci:0.1.0:bafybeieme4bswcztypobk4ivxv2ayyttjlldfybrtgusvccev5vmaebitu
 - valory/abstract_round_abci:0.1.0:bafybeidokmoxnlaw3kflf2wwrmvae7tuldklp3xehqzhdijgywf75op4my
-- valory/mech_abci:0.1.0:bafybeifsrzsi23gpklqrnvmbwyd25hwza26xzot5b4txbvmj3qsxa6lcvq
+- valory/mech_abci:0.1.0:bafybeifwrx7lwfzgswma3qiqywjjgqg7buuglrlvo4opkv2txoqewwxe6y
 - valory/multiplexer_abci:0.1.0:bafybeigdqv4x5ipvv5czef3tdzrxv3i6wdff74osily2feqwkrafp3ewuu
 - valory/registration_abci:0.1.0:bafybeifjubdxnij5mijfgp5hchcy42xq3zs3xd3aqi4ckfkga23c6255vi
 - valory/reset_pause_abci:0.1.0:bafybeibewhznknbxy3llqdum7fv65j6fcqvubxklhuz4dxjmi4lbohu6bq
-- valory/task_execution_abci:0.1.0:bafybeibjeberq7jae5wbp3xwkrlrr3uuwnftwjhjr5xdmon2zlsg6fttba
+- valory/task_execution_abci:0.1.0:bafybeid7qeftqies5zzwjtro5zhf355bwd2mdbtgcug4e4wbshzkcc7hj4
 - valory/termination_abci:0.1.0:bafybeiachuwj7wmnkxjod4ajbf5ico2rhbelraz5h27tesekvk2pan4eqq
 - valory/transaction_preparation_abci:0.1.0:bafybeibgb6khaokc33s5io3k2txvolqjkh7v3t7lui2srsph37m5i7fk34
 - valory/transaction_settlement_abci:0.1.0:bafybeiaipca2dcqipr4bq7f2uz3te7drmvvy3l6rv5gdkjcs6ntke7tnhu
@@ -124,19 +124,14 @@ models:
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
       agent_mech_contract_address: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
-      openai_api_key: ${str:dummy_api_key}
       reset_period_count: ${int:1000}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
-      file_hash_to_tools:
-        xyz:
-        - openai-text-davinci-002
-        - openai-text-davinci-003
-        - openai-gpt-3.5-turbo
-        - openai-gpt-4
-      api_keys:
-        openai: <key_here>
+      file_hash_to_tools_json: '{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":
+        ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
+        "openai-gpt-4"]}'
+      api_keys_json: '{"openai": "dummy_api_key"}'
 ---
 public_id: valory/ledger:0.19.0
 type: connection
