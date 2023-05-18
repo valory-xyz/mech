@@ -13,7 +13,7 @@ fingerprint:
   default.proto: bafybeid2a3fq62vzd7no6bfcq6adpt55kcqpzhktw3fag6s2mp2qajx6te
   default_pb2.py: bafybeidfy4qhnkiilp5mo422b7yq5odeozj6co5evke75t45n7j74hojmq
   dialogues.py: bafybeihzqqwczdvfzskslup72mpmzumic7irvgz274olbuqbdjm3hdnj4q
-  message.py: bafybeievdrjjkssiwcrdvz6hgglh7v53kd2n6gn7isddhzmorramz47d6q
+  message.py: bafybeic73di5cxy7l3g4bl5wqvii4edmdrgyguppc2vtj7d4y2kekcpgze
   serialization.py: bafybeiefqupq73s7eczkga2t5yd622owcm6elj7fa4fm5hq236j3avwhpy
 fingerprint_ignore_patterns: []
 dependencies:
