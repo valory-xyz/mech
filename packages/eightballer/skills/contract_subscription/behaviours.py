@@ -84,31 +84,19 @@ class SubscriptionBehaviour(SimpleBehaviour):
             self.context.logger.info(
                 "Getting parts that were missed while disconnected."
             )
-            self.context.shared_state[DISCONNECTION_POINT] = None
             return
-
-        if not is_connected and disconnection_point is None:
-            self._subscription_required = True
-            # TODO think how to do this. We cannot get the block number while rpc connection is dropped,
-            #  we need a way to perform a request to get the block number at this point,
-            #  but the request needs to be performed after reconnecting
-            # block_number_msg_template = {
-            #     "method": "eth_blockNumber",
-            #     "params": [],
-            #     "id": 1,
-            #     "jsonrpc": "2.0",
-            # }
-            # self._create_call(
-            #     bytes(json.dumps(block_number_msg_template), DEFAULT_ENCODING)
-            # )
 
         if (
             not is_connected
+            and not self._subscription_required
             and disconnection_point is not None
         ):
             self.context.logger.warning(
                 f"Disconnection detected on block {disconnection_point}."
             )
+
+        if not is_connected:
+            self._subscription_required = True
 
     def _create_call(self, content: bytes) -> None:
         """Create a call."""
