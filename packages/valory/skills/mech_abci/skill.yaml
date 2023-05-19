@@ -12,7 +12,7 @@ fingerprint:
   dialogues.py: bafybeid6ntx5nmtkhuiml5pwt3drafvjejr7x4vu35gqekl4m6tgtxf6am
   fsm_specification.yaml: bafybeihiynklron7mm3hsykwbhdbkosdtoimgkkxckuvvlwafevayjp7ia
   handlers.py: bafybeihi6pbfapfmwxlom6bp7cclybswzejyrrv65gn3fpzwejekvjyxeu
-  models.py: bafybeic2dmee2tv5edfoy77q3ptbzyxzuju5j6jlg2vx4tilegde4vmaou
+  models.py: bafybeib4gqxe6esytsnqxhyk5qnu7gf6s5i23k4rvzxnj23w2syxno2rge
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeie4vnnznikhb3fcflszwoophzuyuumgrvrg7jiwuqzpvv5cn6m24i
+- valory/task_execution_abci:0.1.0:bafybeifq3h3pdicqgx6iz4if5a34xk6luvdgfvruxw46x7felpojqmmypa
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
 - valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye

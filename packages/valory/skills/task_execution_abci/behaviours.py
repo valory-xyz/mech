@@ -33,8 +33,6 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour, BaseBehaviour)
 from packages.valory.skills.abstract_round_abci.io_.store import \
     SupportedFiletype
-from packages.valory.skills.task_execution_abci.io_.naive_loader import \
-    NaiveLoader
 from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
     SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,

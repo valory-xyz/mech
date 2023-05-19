@@ -24,8 +24,6 @@ from packages.valory.skills.abstract_round_abci.models import \
     BenchmarkTool as BaseBenchmarkTool
 from packages.valory.skills.abstract_round_abci.models import \
     Requests as BaseRequests
-from packages.valory.skills.task_execution_abci.models import \
-    SharedState as TaskExecSharedState
 from packages.valory.skills.mech_abci.composition import MechAbciApp
 from packages.valory.skills.multiplexer_abci.models import \
     Params as MultiplexerAbciParams
@@ -35,6 +33,8 @@ from packages.valory.skills.reset_pause_abci.rounds import \
     Event as ResetPauseEvent
 from packages.valory.skills.task_execution_abci.models import \
     Params as TaskExecutionAbciParams
+from packages.valory.skills.task_execution_abci.models import \
+    SharedState as TaskExecSharedState
 from packages.valory.skills.task_execution_abci.rounds import \
     Event as TaskExecutionEvent
 from packages.valory.skills.termination_abci.models import TerminationParams
