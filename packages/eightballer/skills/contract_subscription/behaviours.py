@@ -88,7 +88,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
             return
 
         if not is_connected and disconnection_point is None:
-            pass
+            self._subscription_required = True
             # TODO think how to do this. We cannot get the block number while rpc connection is dropped,
             #  we need a way to perform a request to get the block number at this point,
             #  but the request needs to be performed after reconnecting
@@ -105,12 +105,10 @@ class SubscriptionBehaviour(SimpleBehaviour):
         if (
             not is_connected
             and disconnection_point is not None
-            and not self._subscription_required
         ):
             self.context.logger.warning(
                 f"Disconnection detected on block {disconnection_point}."
             )
-            self._subscription_required = True
 
     def _create_call(self, content: bytes) -> None:
         """Create a call."""
