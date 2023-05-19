@@ -20,7 +20,7 @@
 """Websocket client connection."""
 
 import asyncio
-from threading import Thread, Event
+from threading import Event, Thread
 from typing import Any, Optional
 
 import websocket
@@ -86,12 +86,16 @@ class WebSocketClient(Connection):
                 self._thread.start()
                 return
             except Exception as exception:  # pylint: disable=W0718
-                self.logger.error(f"Failed to establish WebSocket connection: {exception}")
+                self.logger.error(
+                    f"Failed to establish WebSocket connection: {exception}"
+                )
                 self.state = ConnectionStates.disconnected
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
 
-        raise Exception(f"Failed to establish connection after {self.MAX_RETRIES} attempts.")  # pylint: disable=W0719
+        raise Exception(
+            f"Failed to establish connection after {self.MAX_RETRIES} attempts."
+        )  # pylint: disable=W0719
 
     async def disconnect(self) -> None:
         """
@@ -111,7 +115,9 @@ class WebSocketClient(Connection):
         :param envelope: the envelope to send.
         """
         if self.state != ConnectionStates.connected:
-            raise Exception("Cannot send message. Connection is not established.")  # pylint: disable=W0719
+            raise Exception(
+                "Cannot send message. Connection is not established."
+            )  # pylint: disable=W0719
 
         self.logger.debug("Sending content from envelope...")
         context = envelope.message.content
@@ -130,7 +136,9 @@ class WebSocketClient(Connection):
         :return: the envelope received, if present.  # noqa: DAR202
         """
         if self.state != ConnectionStates.connected:
-            raise Exception("Cannot receive message. Connection is not established.")  # pylint: disable=W0719
+            raise Exception(
+                "Cannot receive message. Connection is not established."
+            )  # pylint: disable=W0719
 
         if self._new_messages:
             new_msg = self._new_messages.pop()
@@ -181,4 +189,6 @@ class WebSocketClient(Connection):
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
         self.logger.error(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")
-        raise Exception(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")  # pylint: disable=W0719
+        raise Exception(
+            f"Failed to reconnect after {self.MAX_RETRIES} attempts."
+        )  # pylint: disable=W0719
