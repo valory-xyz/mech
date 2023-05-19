@@ -29,6 +29,7 @@ from web3 import Web3
 from packages.fetchai.protocols.default.message import DefaultMessage
 
 JOB_QUEUE = "pending_tasks"
+DISCONNECTION_POINT = "disconnection_point"
 
 
 class WebSocketHandler(Handler):
@@ -62,10 +63,15 @@ class WebSocketHandler(Handler):
         self.context.logger.info(f"Received message: {message}")
         data = json.loads(message.content)
         if set(data.keys()) == {"id", "result", "jsonrpc"}:
-            self.context.logger.info(f"Received subscription response: {data}")
+            self.context.logger.info(f"Received response: {data}")
             return
 
         self.context.logger.info("Extracting data")
+        result = data['params']['result']
+        if isinstance(result, str):
+            self.context.shared_state[DISCONNECTION_POINT] = result
+            return
+
         tx_hash = data['params']['result']['transactionHash']
         no_args = True
         limit = 0
