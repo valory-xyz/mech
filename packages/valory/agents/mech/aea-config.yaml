@@ -7,7 +7,7 @@ aea_version: '>=1.33.0, <2.0.0'
 fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/websocket_client:0.1.0:bafybeihriyojnsigmoznb7iflimierokjpbb5zbgsszrzo6cr73lnv7jl4
+- eightballer/websocket_client:0.1.0:bafybeifacbodthkpad4fuu5uzlrcvo6pp2hgb2s3v7qzf2ctk7rse7fs4q
 - valory/abci:0.1.0:bafybeieogrpktpxfq74leeeeylfx33sob2hovhpl5coxlswae6xblzbezy
 - valory/http_client:0.23.0:bafybeidykl4elwbcjkqn32wt5h4h7tlpeqovrcq3c5bcplt6nhpznhgczi
 - valory/ipfs:0.1.0:bafybeifkzgdzuoxqovcjswsnzsehjh7bjwbska26ufmcrk7hbufk4c4dae
@@ -30,14 +30,14 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeibo4bdtcrxi2suyzldwoetjar6pqfzm6vt5xal22ravkkcvdmtksi
 - valory/tendermint:0.1.0:bafybeicusvezoqlmyt6iqomcbwaz3xkhk2qf3d56q5zprmj3xdxfy64k54
 skills:
-- eightballer/contract_subscription:0.1.0:bafybeibzlqldnxc2djcl3dljas5jpkobpnryobsfmbqqrz2wugdbw5ikli
+- eightballer/contract_subscription:0.1.0:bafybeidtpdxhm4mgmqtutwwcof3o6zk7c4cofwdniz5x4wtu5hq2wb523u
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeiadll4xgpkgz7tmazzttakvvctcfhamodpzuoc7ufwwm5f6ibofue
+- valory/mech_abci:0.1.0:bafybeiasbcvq6yd7vsztttfxd7mok5qoh7qdh5iokwokawrvlwsp3mkqti
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeih5r5qcvrtwjuzxin4bugzt6gqgqt7feulvah75zou7gjpqqg4yz4
+- valory/task_execution_abci:0.1.0:bafybeie4vnnznikhb3fcflszwoophzuyuumgrvrg7jiwuqzpvv5cn6m24i
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
 - valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye

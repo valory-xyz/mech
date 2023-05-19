@@ -13,7 +13,7 @@ fingerprint:
   handlers.py: bafybeifuhf4k5mmvxn6msqqkzgttz7k5orjbkyjnwevgy6mmy233a4rrje
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/websocket_client:0.1.0:bafybeihriyojnsigmoznb7iflimierokjpbb5zbgsszrzo6cr73lnv7jl4
+- eightballer/websocket_client:0.1.0:bafybeifacbodthkpad4fuu5uzlrcvo6pp2hgb2s3v7qzf2ctk7rse7fs4q
 contracts: []
 protocols:
 - fetchai/default:1.0.0:bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y

@@ -81,13 +81,13 @@ class WebSocketClient(Connection):
                 self._thread = Thread(target=asyncio.run, args=(self._run(),))
                 self._thread.start()
                 return
-            except Exception as e:
-                self.logger.error(f"Failed to establish WebSocket connection: {e}")
+            except Exception as exception:  # pylint: disable=W0718
+                self.logger.error(f"Failed to establish WebSocket connection: {exception}")
                 self.state = ConnectionStates.disconnected
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
 
-        raise Exception(f"Failed to establish connection after {self.MAX_RETRIES} attempts.")
+        raise Exception(f"Failed to establish connection after {self.MAX_RETRIES} attempts.")  # pylint: disable=W0719
 
     async def disconnect(self) -> None:
         """
@@ -106,7 +106,7 @@ class WebSocketClient(Connection):
         :param envelope: the envelope to send.
         """
         if self.state != ConnectionStates.connected:
-            raise Exception("Cannot send message. Connection is not established.")
+            raise Exception("Cannot send message. Connection is not established.")  # pylint: disable=W0719
 
         self.logger.debug("Sending content from envelope...")
         context = envelope.message.content
@@ -125,7 +125,7 @@ class WebSocketClient(Connection):
         :return: the envelope received, if present.  # noqa: DAR202
         """
         if self.state != ConnectionStates.connected:
-            raise Exception("Cannot receive message. Connection is not established.")
+            raise Exception("Cannot receive message. Connection is not established.")  # pylint: disable=W0719
 
         if self._new_messages:
             new_msg = self._new_messages.pop()
@@ -167,9 +167,9 @@ class WebSocketClient(Connection):
                 await self.connect()
                 self.logger.info("Reconnected successfully.")
                 return
-            except Exception as e:
-                self.logger.error(f"Failed to reconnect: {e}")
+            except Exception as exception:  # pylint: disable=W0718
+                self.logger.error(f"Failed to reconnect: {exception}")
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
         self.logger.error(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")
-        raise Exception(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")
+        raise Exception(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")  # pylint: disable=W0719
