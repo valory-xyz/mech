@@ -38,6 +38,11 @@ class SharedState(BaseSharedState):
 
     abci_app_cls = TaskExecutionAbciApp
 
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the shared state object."""
+        self.all_tools: Dict[str, str] = {}
+        super().__init__(*args, **kwargs)
+
 
 class Params(BaseParams):
     """Parameters."""

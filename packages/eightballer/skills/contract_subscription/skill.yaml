@@ -27,8 +27,8 @@ behaviours:
 handlers:
   new_event:
     args:
-      websocket_provider: https://rpc.gnosischain.com
       contract_to_monitor: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      websocket_provider: https://rpc.gnosischain.com
     class_name: WebSocketHandler
 models:
   default_dialogues:
