@@ -16,7 +16,9 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""Scaffold connection and channel."""
+
+"""Websocket client connection."""
+
 import asyncio
 from threading import Thread
 from typing import Any
@@ -147,24 +149,26 @@ class WebSocketClient(Connection):
         """Run a loop to receive messages from the wss."""
         while True:
             try:
-                if self.state != ConnectionStates.connected:
-                    break
                 msg = self._wss.recv()
                 self._new_messages.append(msg)
             except websocket.WebSocketConnectionClosedException:
                 self.logger.error("Websocket connection closed.")
                 self.state = ConnectionStates.disconnected
 
-                # Start the reconnection process
+            # Start the reconnection process
+            if self.state == ConnectionStates.disconnected:
                 self.logger.info("Attempting to reconnect...")
                 await self._reconnect()
 
     async def _reconnect(self):
         """Attempt to reconnect."""
         retries = 0
+        # these are the retry attempts for reconnecting; also the called connection logic has its own retry logic
         while retries < self.MAX_RETRIES:
             try:
+                self.state = ConnectionStates.connecting
                 await self.connect()
+                self.state = ConnectionStates.connected
                 self.logger.info("Reconnected successfully.")
                 return
             except Exception as exception:  # pylint: disable=W0718
