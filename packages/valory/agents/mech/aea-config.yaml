@@ -44,6 +44,7 @@ skills:
 default_ledger: ethereum
 required_ledgers:
 - ethereum
+- cosmos
 default_routing: {}
 connection_private_key_paths: {}
 private_key_paths: {}
