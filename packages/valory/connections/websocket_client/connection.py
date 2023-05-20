@@ -93,9 +93,9 @@ class WebSocketClient(Connection):
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
 
-        raise Exception(
+        raise Exception(  # pylint: disable=W0719
             f"Failed to establish connection after {self.MAX_RETRIES} attempts."
-        )  # pylint: disable=W0719
+        )
 
     async def disconnect(self) -> None:
         """
@@ -105,7 +105,8 @@ class WebSocketClient(Connection):
         """
         self.logger.debug("Disconnecting...")  # pragma: no cover
         self._wss.close()
-        self._event.set()
+        if self._event is not None:
+            self._event.set()
         self.state = ConnectionStates.disconnected
 
     async def send(self, envelope: Envelope):
@@ -115,9 +116,9 @@ class WebSocketClient(Connection):
         :param envelope: the envelope to send.
         """
         if self.state != ConnectionStates.connected:
-            raise Exception(
+            raise Exception(  # pylint: disable=W0719
                 "Cannot send message. Connection is not established."
-            )  # pylint: disable=W0719
+            )
 
         self.logger.debug("Sending content from envelope...")
         context = envelope.message.content
@@ -136,9 +137,9 @@ class WebSocketClient(Connection):
         :return: the envelope received, if present.  # noqa: DAR202
         """
         if self.state != ConnectionStates.connected:
-            raise Exception(
+            raise Exception(  # pylint: disable=W0719
                 "Cannot receive message. Connection is not established."
-            )  # pylint: disable=W0719
+            )
 
         if self._new_messages:
             new_msg = self._new_messages.pop()
@@ -189,6 +190,6 @@ class WebSocketClient(Connection):
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
         self.logger.error(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")
-        raise Exception(
+        raise Exception(  # pylint: disable=W0719
             f"Failed to reconnect after {self.MAX_RETRIES} attempts."
-        )  # pylint: disable=W0719
+        )

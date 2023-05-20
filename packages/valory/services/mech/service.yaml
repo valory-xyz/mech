@@ -268,7 +268,7 @@ cert_requests:
   save_path: .certs/acn_cosmos_11000.txt
 is_abstract: false
 ---
-public_id: eightballer/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
+public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
 type: connection
 0:
   config:

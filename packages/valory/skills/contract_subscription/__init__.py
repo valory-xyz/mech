@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
+#   Copyright 2023 Valory AG
 #   Copyright 2023 eightballer
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -21,4 +22,4 @@
 
 from aea.configurations.base import PublicId
 
-PUBLIC_ID = PublicId.from_str("eightballer/contract_subscription:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/contract_subscription:0.1.0")

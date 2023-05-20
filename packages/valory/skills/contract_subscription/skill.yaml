@@ -1,5 +1,5 @@
 name: contract_subscription
-author: eightballer
+author: valory
 version: 0.1.0
 type: skill
 description: The scaffold skill is a simple client to subscribe to transactions using
@@ -13,7 +13,7 @@ fingerprint:
   handlers.py: bafybeiboajn5m4hmpglmq4n3eyifmt2k24p2d5dvjmul4fznsospsv5viu
 fingerprint_ignore_patterns: []
 connections:
-- eightballer/websocket_client:0.1.0:bafybeihogv7dgn2clvhbfxlyfrellkgx47qy33pegils53ssep2eggoqtu
+- valory/websocket_client:0.1.0:bafybeihogv7dgn2clvhbfxlyfrellkgx47qy33pegils53ssep2eggoqtu
 contracts: []
 protocols:
 - fetchai/default:1.0.0:bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y

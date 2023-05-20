@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
+#   Copyright 2023 Valory AG
 #   Copyright 2023 eightballer
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,14 +26,11 @@ from typing import List, Optional, cast
 from aea.mail.base import Envelope
 from aea.skills.behaviours import SimpleBehaviour
 
-from packages.eightballer.connections.websocket_client.connection import (
-    CONNECTION_ID,
-    WebSocketClient,
-)
-from packages.eightballer.skills.contract_subscription.handlers import (
-    DISCONNECTION_POINT,
-)
 from packages.fetchai.protocols.default.message import DefaultMessage
+from packages.valory.connections.websocket_client.connection import (
+    CONNECTION_ID, WebSocketClient)
+from packages.valory.skills.contract_subscription.handlers import \
+    DISCONNECTION_POINT
 
 DEFAULT_ENCODING = "utf-8"
 WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
@@ -41,9 +39,17 @@ WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
 class SubscriptionBehaviour(SimpleBehaviour):
     """This class scaffolds a behaviour."""
 
+
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialise the agent."""
+        self._contracts: List[str] = kwargs.pop("contracts", [])
+        self._ws_client_connection: Optional[WebSocketClient] = None
+        self._subscription_required: bool = True
+        super().__init__(**kwargs)
+
     def setup(self) -> None:
         """Implement the setup."""
-        for connection in self.context.outbox._multiplexer.connections:
+        for connection in self.context.outbox._multiplexer.connections:  # pylint: disable=W0212
             if connection.component_id.name == WEBSOCKET_CLIENT_CONNECTION_NAME:
                 self._ws_client_connection = cast(WebSocketClient, connection)
 
@@ -109,10 +115,3 @@ class SubscriptionBehaviour(SimpleBehaviour):
         msg._sender = str(self.context.skill_id)
         envelope = Envelope(to=msg.to, sender=msg._sender, message=msg)
         self.context.outbox.put(envelope)
-
-    def __init__(self, **kwargs):
-        """Initialise the agent."""
-        self._contracts: List[str] = kwargs.pop("contracts", [])
-        self._ws_client_connection: Optional[WebSocketClient] = None
-        self._subscription_required: bool = True
-        super().__init__(**kwargs)

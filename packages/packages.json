@@ -1,7 +1,7 @@
 {
     "dev": {
-        "connection/eightballer/websocket_client/0.1.0": "bafybeihogv7dgn2clvhbfxlyfrellkgx47qy33pegils53ssep2eggoqtu",
-        "skill/eightballer/contract_subscription/0.1.0": "bafybeiaj7awu6rj4dgzj3oq64m5bjhs4gm2umurpnyj2qxymiy4gccvu5e",
+        "connection/valory/websocket_client/0.1.0": "bafybeihogv7dgn2clvhbfxlyfrellkgx47qy33pegils53ssep2eggoqtu",
+        "skill/valory/contract_subscription/0.1.0": "bafybeiaj7awu6rj4dgzj3oq64m5bjhs4gm2umurpnyj2qxymiy4gccvu5e",
         "agent/valory/mech/0.1.0": "bafybeieoermwwpiajok6xxz44x72zy3nbezzf6kd5lgrehahrc3r4n44cq",
         "skill/valory/multiplexer_abci/0.1.0": "bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq",
         "skill/valory/task_execution_abci/0.1.0": "bafybeig5l2smlt2kx52pvztjp5cwywip5zs4x5gcpb3vivhjnak2jij5pq",
