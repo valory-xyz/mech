@@ -16,10 +16,12 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""Scaffold connection and channel."""
+
+"""Websocket client connection."""
+
 import asyncio
-from threading import Thread
-from typing import Any
+from threading import Event, Thread
+from typing import Any, Optional
 
 import websocket
 from aea.configurations.base import PublicId
@@ -61,6 +63,7 @@ class WebSocketClient(Connection):
         :param kwargs: keyword arguments passed to component base
         """
         self._new_messages = []
+        self._event: Optional[Event] = None
         self._endpoint = kwargs["configuration"].config["endpoint"]
         self._target_skill_id = kwargs["configuration"].config["target_skill_id"]
         assert self._endpoint is not None, "Endpoint must be provided!"
@@ -78,16 +81,21 @@ class WebSocketClient(Connection):
                 self._wss = websocket.create_connection(self._endpoint)
                 self.state = ConnectionStates.connected
                 self.logger.info("Websocket connection established.")
-                self._thread = Thread(target=asyncio.run, args=(self._run(),))
+                self._event = Event()
+                self._thread = Thread(target=self._run, args=(self._event,))
                 self._thread.start()
                 return
             except Exception as exception:  # pylint: disable=W0718
-                self.logger.error(f"Failed to establish WebSocket connection: {exception}")
+                self.logger.error(
+                    f"Failed to establish WebSocket connection: {exception}"
+                )
                 self.state = ConnectionStates.disconnected
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
 
-        raise Exception(f"Failed to establish connection after {self.MAX_RETRIES} attempts.")  # pylint: disable=W0719
+        raise Exception(
+            f"Failed to establish connection after {self.MAX_RETRIES} attempts."
+        )  # pylint: disable=W0719
 
     async def disconnect(self) -> None:
         """
@@ -97,6 +105,7 @@ class WebSocketClient(Connection):
         """
         self.logger.debug("Disconnecting...")  # pragma: no cover
         self._wss.close()
+        self._event.set()
         self.state = ConnectionStates.disconnected
 
     async def send(self, envelope: Envelope):
@@ -106,7 +115,9 @@ class WebSocketClient(Connection):
         :param envelope: the envelope to send.
         """
         if self.state != ConnectionStates.connected:
-            raise Exception("Cannot send message. Connection is not established.")  # pylint: disable=W0719
+            raise Exception(
+                "Cannot send message. Connection is not established."
+            )  # pylint: disable=W0719
 
         self.logger.debug("Sending content from envelope...")
         context = envelope.message.content
@@ -125,7 +136,9 @@ class WebSocketClient(Connection):
         :return: the envelope received, if present.  # noqa: DAR202
         """
         if self.state != ConnectionStates.connected:
-            raise Exception("Cannot receive message. Connection is not established.")  # pylint: disable=W0719
+            raise Exception(
+                "Cannot receive message. Connection is not established."
+            )  # pylint: disable=W0719
 
         if self._new_messages:
             new_msg = self._new_messages.pop()
@@ -143,33 +156,39 @@ class WebSocketClient(Connection):
         )
         return envelope
 
-    async def _run(self):
+    async def _run(self, event: Event) -> None:
         """Run a loop to receive messages from the wss."""
         while True:
             try:
-                if self.state != ConnectionStates.connected:
-                    break
                 msg = self._wss.recv()
                 self._new_messages.append(msg)
             except websocket.WebSocketConnectionClosedException:
+                event.set()
                 self.logger.error("Websocket connection closed.")
                 self.state = ConnectionStates.disconnected
 
-                # Start the reconnection process
+            # Start the reconnection process
+            if self.state == ConnectionStates.disconnected:
                 self.logger.info("Attempting to reconnect...")
                 await self._reconnect()
 
     async def _reconnect(self):
         """Attempt to reconnect."""
         retries = 0
+        # these are the retry attempts for reconnecting; also the called connection logic has its own retry logic
         while retries < self.MAX_RETRIES:
             try:
+                self.state = ConnectionStates.connecting
                 await self.connect()
+                self.state = ConnectionStates.connected
                 self.logger.info("Reconnected successfully.")
                 return
             except Exception as exception:  # pylint: disable=W0718
+                self.state = ConnectionStates.disconnected
                 self.logger.error(f"Failed to reconnect: {exception}")
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
         self.logger.error(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")
-        raise Exception(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")  # pylint: disable=W0719
+        raise Exception(
+            f"Failed to reconnect after {self.MAX_RETRIES} attempts."
+        )  # pylint: disable=W0719

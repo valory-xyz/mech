@@ -19,6 +19,12 @@ requests = "2.28.2"
 black = "22.6.0"
 isort = "5.10.1"
 pylama = "^8.4.1"
+py-eth-sig-utils = "0.4.0"
+hypothesis = "6.75.3"
+grpcio = "1.54.2"
+asn1crypto = "1.5.1"
+open-aea-ledger-ethereum = "1.33.0"
+open-aea-ledger-cosmos = "1.33.0"
 
 [build-system]
 requires = ["poetry-core"]

@@ -25,10 +25,12 @@ import time
 from aea.protocols.base import Message
 from aea.skills.base import Handler
 from web3 import Web3
+from web3.types import TxReceipt
 
 from packages.fetchai.protocols.default.message import DefaultMessage
 
 JOB_QUEUE = "pending_tasks"
+DISCONNECTION_POINT = "disconnection_point"
 
 
 class WebSocketHandler(Handler):
@@ -46,6 +48,7 @@ class WebSocketHandler(Handler):
     def setup(self) -> None:
         """Implement the setup."""
         self.context.shared_state[JOB_QUEUE] = []
+        self.context.shared_state[DISCONNECTION_POINT] = None
         # loads the contracts from the config file
         with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r", encoding="utf-8") as file:
             abi = json.load(file)['abi']
@@ -62,7 +65,7 @@ class WebSocketHandler(Handler):
         self.context.logger.info(f"Received message: {message}")
         data = json.loads(message.content)
         if set(data.keys()) == {"id", "result", "jsonrpc"}:
-            self.context.logger.info(f"Received subscription response: {data}")
+            self.context.logger.info(f"Received response: {data}")
             return
 
         self.context.logger.info("Extracting data")
@@ -90,7 +93,8 @@ class WebSocketHandler(Handler):
     def _get_tx_args(self, tx_hash: str):
         """Get the transaction arguments."""
         try:
-            tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
+            tx_receipt: TxReceipt = self.w3.eth.get_transaction_receipt(tx_hash)
+            self.context.shared_state[DISCONNECTION_POINT] = tx_receipt["blockNumber"]
             rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
             return dict(rich_logs[0]['args']), False
 
