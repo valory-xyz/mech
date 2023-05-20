@@ -1,5 +1,5 @@
 name: websocket_client
-author: eightballer
+author: valory
 version: 0.1.0
 type: connection
 description: Simple Websocket Client to allow the agent to interact with a Websocket
@@ -7,8 +7,8 @@ description: Simple Websocket Client to allow the agent to interact with a Webso
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeibebl36eaaewytw3b75m6k6drk5bldooxf4lhcbcfi4nmyuiwrcny
-  connection.py: bafybeihgdrlzgiiqqfrlzizphpsda3ugs4rxdunvvjpn545sgx46caw5oi
+  __init__.py: bafybeicyrebbic2h3ytyxeg776zelg2bpshcepnkm4qc5oypqqqfq3sqmq
+  connection.py: bafybeigjon5tikswcb2zcd5t4s5jlwt6zs5gtte5m52sn2g3q4tdwymehm
   readme.md: bafybeihg5yfzgqvg5ngy7r2o5tfeqnelx2ffxw4po5hmheqjfhumpmxpoq
 fingerprint_ignore_patterns: []
 connections: []

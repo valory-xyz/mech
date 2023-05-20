@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
+#   Copyright 2023 Valory AG
 #   Copyright 2023 eightballer
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -30,7 +31,7 @@ from aea.mail.base import Envelope
 
 from packages.fetchai.protocols.default.message import DefaultMessage
 
-CONNECTION_ID = PublicId.from_str("eightballer/websocket_client:0.1.0")
+CONNECTION_ID = PublicId.from_str("valory/websocket_client:0.1.0")
 
 
 class WebSocketClient(Connection):
