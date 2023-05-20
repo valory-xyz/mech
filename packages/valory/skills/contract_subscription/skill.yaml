@@ -13,10 +13,10 @@ fingerprint:
   handlers.py: bafybeiegnnn3vmi36osddoof7cee3hkmrj6lxv6dzdeswi426t2r4n45pa
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeihca5zh5f3wtyb3mpx3do4yxnyx2dvrawrlmpuibs2ucy67juyucm
+- valory/websocket_client:0.1.0:bafybeibampud6z5ok2qi7ctxpbrh4fvd57wreejfe55knpabkyfojkm4re
 contracts: []
 protocols:
-- fetchai/default:1.0.0:bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y
+- fetchai/default:1.0.0:bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4
 skills: []
 behaviours:
   subscriptions:
