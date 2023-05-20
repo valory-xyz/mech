@@ -37,3 +37,5 @@ agent/
 .1env
 
 mech/
+
+.mypy_cache

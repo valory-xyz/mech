@@ -39,7 +39,7 @@ Provide your OpenAI API key in place of `dummy_api_key` in `.1env`.
 
 Source the env file:
 ```bash
-source .env
+source .1env
 ```
 
 ### Option 1: Run the agent standalone

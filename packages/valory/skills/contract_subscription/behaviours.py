@@ -21,7 +21,7 @@
 """This package contains a scaffold of a behaviour."""
 
 import json
-from typing import List, Optional, cast
+from typing import Any, List, Optional, cast
 
 from aea.mail.base import Envelope
 from aea.skills.behaviours import SimpleBehaviour
