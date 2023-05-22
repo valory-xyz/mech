@@ -2,7 +2,11 @@
 *private_key.txt
 packages/fetchai/
 packages/open_aea/
-packages/valory/connections/
+packages/valory/connections/abci/
+packages/valory/connections/http_client/
+packages/valory/connections/ipfs/
+packages/valory/connections/ledger/
+packages/valory/connections/p2p_libp2p_client/
 packages/valory/protocols/
 packages/valory/skills/abstract_abci/
 packages/valory/skills/abstract_round_abci/
@@ -31,3 +35,7 @@ leak_report
 agent/
 
 .1env
+
+mech/
+
+.mypy_cache

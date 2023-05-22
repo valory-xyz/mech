@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
+#   Copyright 2023 Valory AG
 #   Copyright 2023 eightballer
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -25,13 +26,12 @@ import time
 from aea.protocols.base import Message
 from aea.skills.base import Handler
 from web3 import Web3
+from web3.types import TxReceipt
 
 from packages.fetchai.protocols.default.message import DefaultMessage
 
 JOB_QUEUE = "pending_tasks"
-
-DEFAULT_CONTRACT = "0xFf82123dFB52ab75C417195c5fDB87630145ae81"
-DEFAULT_ENDPOINT = "https://rpc.gnosischain.com"
+DISCONNECTION_POINT = "disconnection_point"
 
 
 class WebSocketHandler(Handler):
@@ -41,15 +41,21 @@ class WebSocketHandler(Handler):
     w3: Web3 = None
     contract = None
 
+    def __init__(self, **kwargs) -> None:
+        self.websocket_provider = kwargs.pop("websocket_provider")
+        self.contract_to_monitor = kwargs.pop("contract_to_monitor")
+        super().__init__(**kwargs)
+
     def setup(self) -> None:
         """Implement the setup."""
         self.context.shared_state[JOB_QUEUE] = []
+        self.context.shared_state[DISCONNECTION_POINT] = None
         # loads the contracts from the config file
         with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r", encoding="utf-8") as file:
             abi = json.load(file)['abi']
 
-        self.w3 = Web3(Web3.HTTPProvider(DEFAULT_ENDPOINT))  # pylint: disable=C0103
-        self.contract = self.w3.eth.contract(address=DEFAULT_CONTRACT, abi=abi)
+        self.w3 = Web3(Web3.HTTPProvider(self.websocket_provider))  # pylint: disable=C0103
+        self.contract = self.w3.eth.contract(address=self.contract_to_monitor, abi=abi)
 
     def handle(self, message: Message) -> None:
         """
@@ -60,7 +66,7 @@ class WebSocketHandler(Handler):
         self.context.logger.info(f"Received message: {message}")
         data = json.loads(message.content)
         if set(data.keys()) == {"id", "result", "jsonrpc"}:
-            self.context.logger.info(f"Received subscription response: {data}")
+            self.context.logger.info(f"Received response: {data}")
             return
 
         self.context.logger.info("Extracting data")
@@ -88,7 +94,8 @@ class WebSocketHandler(Handler):
     def _get_tx_args(self, tx_hash: str):
         """Get the transaction arguments."""
         try:
-            tx_receipt = self.w3.eth.get_transaction_receipt(tx_hash)
+            tx_receipt: TxReceipt = self.w3.eth.get_transaction_receipt(tx_hash)
+            self.context.shared_state[DISCONNECTION_POINT] = tx_receipt["blockNumber"]
             rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
             return dict(rich_logs[0]['args']), False
 

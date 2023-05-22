@@ -23,36 +23,47 @@ DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
 }
+PREFIX = "openai-"
+ENGINES = {
+    "chat": ["gpt-3.5-turbo", "gpt-4"],
+    "completion": ["text-davinci-002", "text-davinci-003"]
+}
+ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
 
 
 def run(**kwargs) -> str:
     """Run the task"""
 
-    openai.api_key = kwargs["openai_api_key"]
-
+    openai.api_key = kwargs["api_keys"]["openai"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature =  kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
     prompt = kwargs["prompt"]
+    tool = kwargs["tool"]
+    if tool not in ALLOWED_TOOLS:
+        raise ValueError(f"Tool {tool} is not supported.")
+    engine = tool.strip(PREFIX)
 
-    # Call OpenAI's moderation endpoint
     moderation_result = openai.Moderation.create(prompt)
 
     if moderation_result["results"][0]["flagged"]:
-        return "violation of terms"
+        return "Moderation flagged the prompt as in violation of terms."
 
-    if kwargs.get("use_gpt4", False):
-        messages = [{"role": "user", "content": prompt}]
+    if engine in ENGINES["chat"]:
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ]
         response = openai.ChatCompletion.create(
-            model="gpt-4",
+            model=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
             n=1,
             stop=None,
         )
-        return response.choices[0].message.content.strip()
+        return response.choices[0].message.content
     response = openai.Completion.create(
-        engine="text-davinci-003",
+        engine=engine,
         prompt=prompt,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -60,8 +71,4 @@ def run(**kwargs) -> str:
         frequency_penalty=0,
         presence_penalty=0,
     )
-
-    # Extract the result from the API response
-    result = response.choices[0].text.strip()
-
-    return result
+    return response.choices[0].text

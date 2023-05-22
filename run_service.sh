@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
+rm -r mech
+
 # Load env vars
-export $(grep -v '^#' .1env | xargs)
+source .1env
 
 # Remove previous builds
 # if [ -d "mech" ]; then
@@ -21,7 +23,7 @@ autonomy fetch --local --service valory/mech && cd mech
 autonomy build-image
 
 # Copy keys and build the deployment
-cp $PWD/../mech/keys.json ./keys.json
+cp $PWD/../keys.json .
 
 autonomy deploy build -ltm
 

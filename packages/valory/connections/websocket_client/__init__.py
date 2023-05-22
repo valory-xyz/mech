@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2022 fetchai
+#   Copyright 2023 Valory AG
+#   Copyright 2023 eightballer
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,13 +18,4 @@
 #
 # ------------------------------------------------------------------------------
 
-"""
-This module contains the support resources for the default protocol.
-
-It was created with protocol buffer compiler version `libprotoc 3.17.3` and aea version `1.4.0`.
-"""
-
-from packages.fetchai.protocols.default.message import DefaultMessage
-from packages.fetchai.protocols.default.serialization import DefaultSerializer
-
-DefaultMessage.serializer = DefaultSerializer
+"""Scaffold of a connection."""

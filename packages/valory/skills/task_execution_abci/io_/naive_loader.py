@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 eightballer
+#   Copyright 2023 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,8 +17,23 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the default skill."""
+"""This package contains a custom Loader for the ipfs connection."""
 
-from aea.configurations.base import PublicId
+from typing import Dict
 
-PUBLIC_ID = PublicId.from_str("eightballer/contract_subscription:0.1.0")
+from packages.valory.skills.abstract_round_abci.io_.load import Loader
+from packages.valory.skills.abstract_round_abci.io_.store import \
+    SupportedObjectType
+
+
+class NaiveLoader(Loader):
+    """A simple loader that doesn't deserialize the response from ipfs, but returns it as is."""
+
+    def load(self, serialized_objects: Dict[str, str]) -> SupportedObjectType:
+        """
+        Return the objects as is.
+
+        :param serialized_objects: A mapping of filenames to serialized object they contained.
+        :return: the loaded file(s).
+        """
+        return serialized_objects

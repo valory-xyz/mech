@@ -22,7 +22,7 @@ import json
 import os
 from abc import ABC
 from multiprocessing.pool import AsyncResult
-from typing import Any, Generator, Optional, Set, Type, cast
+from typing import Any, Dict, Generator, Optional, Set, Type, cast
 
 import multibase
 import multicodec
@@ -37,7 +37,9 @@ from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
     SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
     TaskExecutionRound)
-from packages.valory.skills.task_execution_abci.tasks import OpenAITask
+from packages.valory.skills.task_execution_abci.tasks import AnyToolAsTask
+
+CID_PREFIX = "f01701220"
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
@@ -67,29 +69,36 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self._is_task_prepared = False
         self._invalid_request = False
 
-    def async_act(self) -> Generator:
+    def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
+
+        if not self.context.params.all_tools:
+            all_tools = {}
+            for file_hash, tools in self.context.params.file_hash_to_tools:
+                tool_py = yield from self.get_from_ipfs(file_hash)
+                if tool_py is None:
+                    self.context.logger.error(f"Failed to get the tools {tools} with file_hash {file_hash} from IPFS!")
+                all_tools.update({tool: tool_py for tool in tools})
+            self.context.params.all_tools = all_tools
 
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
 
             # Check whether the task already exists
             if not self._is_task_prepared and not self._invalid_request:
-                # Get the first task in the queue
-                task_data = self.context.shared_state.get("pending_tasks").pop(0)
-                self.context.logger.info(f"Preparing task with data: {task_data}")
-
-                # Request event format
+                # Get the first task in the queue - format:
                 # {
                 #     "requestId": <id>
                 #     "data": <ipfs_hash>
                 # }
-
+                task_data = self.context.shared_state.get("pending_tasks").pop(0)
+                self.context.logger.info(f"Preparing task with data: {task_data}")
                 self.request_id = task_data["requestId"]
+                task_data_ = task_data["data"]
 
                 # Verify the data hash and handle encoding
                 try:
-                    file_hash = task_data["data"].hex()
-                    file_hash = "f01701220" + file_hash  # CID prefix
+                    file_hash = task_data_.hex()
+                    file_hash = CID_PREFIX + file_hash
                     file_hash = str(CID.from_string(file_hash))
 
                     # Get the file from IPFS
@@ -102,8 +111,12 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
                     # Verify the file data
                     is_data_valid = task_data and isinstance(task_data, dict) and "prompt" in task_data and "tool" in task_data  # pylint: disable=C0301
-                    if is_data_valid:
+                    if is_data_valid and task_data["tool"] in self.context.params.tools_to_file_hash:
                         self.prepare_task(task_data)
+                    elif is_data_valid:
+                        tool = task_data["tool"]
+                        self.context.logger.warning(f"Tool {tool} is not valid.")
+                        self._invalid_request = True
                     else:
                         self.context.logger.warning("Data is not valid.")
                         self._invalid_request = True
@@ -167,14 +180,16 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
         self.set_done()
 
-    def prepare_task(self, task_data):
+    def prepare_task(self, task_data: Dict[str, Any]):
         """Prepare the task."""
-        # TODO: condition on tool  # pylint: disable=W0511
-        openai_task = OpenAITask()
-        task_data["use_gpt4"] = False
-        task_data["openai_api_key"] = self.params.openai_api_key
+        tool_task = AnyToolAsTask()
+        tool_py = self.context.params.all_tools[task_data["tool"]]
+        local_namespace: Dict[str, Any] = {}
+        exec(tool_py, globals(), local_namespace)  # pylint: disable=W0122
+        task_data["method"] = local_namespace['run']
+        task_data["api_keys"] = self.params.api_keys
         task_id = self.context.task_manager.enqueue_task(
-            openai_task, kwargs=task_data
+            tool_task, kwargs=task_data
         )
         self._async_result = self.context.task_manager.get_task_result(task_id)
         self._is_task_prepared = True

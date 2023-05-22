@@ -1,17 +1,17 @@
 {
     "dev": {
-        "connection/eightballer/websocket_client/0.1.0": "bafybeicqkljjzvdl4v7pzbmsfd3al7uv7563x3qa5gmnzxeuoxgtmolpta",
-        "skill/eightballer/contract_subscription/0.1.0": "bafybeifqgxfdljed46swbd7352vhkiveinifscyjje5hztxbv3wbjz32iu",
-        "agent/valory/mech/0.1.0": "bafybeifjla44wyrcrtv27lo4ovlyhlsd65jy4v4gxhtalbv6zi5qeozgz4",
+        "connection/valory/websocket_client/0.1.0": "bafybeibampud6z5ok2qi7ctxpbrh4fvd57wreejfe55knpabkyfojkm4re",
+        "skill/valory/contract_subscription/0.1.0": "bafybeiduj5ejb24g3v2gmabe2sryaeh3hg4aehc7amethaesr5wybuuxru",
+        "agent/valory/mech/0.1.0": "bafybeiajmdfpmaaoct5x3cxzpf5dvk6ffx4zjcbie3i6ok34gh3wrinm4u",
         "skill/valory/multiplexer_abci/0.1.0": "bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq",
-        "skill/valory/task_execution_abci/0.1.0": "bafybeigzbjwfq5j5fl2xzfybraiot6p32g2xbduu5ovs6jumwn3jea5d2u",
-        "skill/valory/mech_abci/0.1.0": "bafybeihelkmzwrqcn425vdm7xqy2haqhglbcjbvycinsflepfn7v4n4zea",
+        "skill/valory/task_execution_abci/0.1.0": "bafybeig5l2smlt2kx52pvztjp5cwywip5zs4x5gcpb3vivhjnak2jij5pq",
+        "skill/valory/mech_abci/0.1.0": "bafybeihvjdrof3523ou7zp7yjucbkpfxm3ecgrphg3bjxcmt7kospe4mfy",
         "skill/valory/transaction_preparation_abci/0.1.0": "bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e",
         "contract/valory/agent_mech/0.1.0": "bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy",
-        "service/valory/mech/0.1.0": "bafybeig57jy2d2n4gkijog6toastawu2mzvd3ivckzjgzidxequ7fgksmu"
+        "service/valory/mech/0.1.0": "bafybeidca6y5xjuar4mij73pk3z4rec46f4ck24bu266nne654osawwpiq"
     },
     "third_party": {
-        "protocol/fetchai/default/1.0.0": "bafybeig3w57l7laofhuyl7nco2lfzgtbqf4cto75edfccymugtixjqnm6y",
+        "protocol/fetchai/default/1.0.0": "bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4",
         "protocol/open_aea/signing/1.0.0": "bafybeibqlfmikg5hk4phzak6gqzhpkt6akckx7xppbp53mvwt6r73h7tk4",
         "protocol/valory/abci/0.1.0": "bafybeig3dj5jhsowlvg3t73kgobf6xn4nka7rkttakdb2gwsg5bp7rt7q4",
         "protocol/valory/contract_api/1.0.0": "bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy",

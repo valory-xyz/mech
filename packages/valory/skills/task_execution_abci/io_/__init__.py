@@ -16,18 +16,4 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
-"""Contains the background tasks of the APY estimation skill."""
-
-from typing import Any
-
-from aea.skills.tasks import Task
-
-
-class AnyToolAsTask(Task):
-    """AnyToolAsTask"""
-
-    def execute(self, *args: Any, **kwargs: Any):
-        """Execute the task."""
-        method = kwargs.pop("method")
-        return method(*args, **kwargs)
+"""This module contains helper classes for IPFS interaction."""
