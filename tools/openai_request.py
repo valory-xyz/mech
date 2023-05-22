@@ -28,7 +28,8 @@ ENGINES = {
     "chat": ["gpt-3.5-turbo", "gpt-4"],
     "completion": ["text-davinci-002", "text-davinci-003"]
 }
-ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
+#ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
+ALLOWED_TOOLS = [PREFIX + value for values in ENGINES for value in values]
 
 
 def run(**kwargs) -> str:
@@ -39,9 +40,11 @@ def run(**kwargs) -> str:
     temperature =  kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
     prompt = kwargs["prompt"]
     tool = kwargs["tool"]
+    print("TOOL: ", tool)
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
     engine = tool.strip(PREFIX)
+    engine = tool
 
     moderation_result = openai.Moderation.create(prompt)
 
