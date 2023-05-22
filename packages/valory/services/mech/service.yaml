@@ -86,7 +86,7 @@ type: skill
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
         file_hash_to_tools: ${FILE_HASH_TO_TOOLS:str:null}
-        api_keys: ${API_KEYS:str:null}
+        api_keys_json: ${API_KEYS:str:null}
 1:
   models:
     benchmark_tool: *id001
@@ -129,7 +129,7 @@ type: skill
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
         file_hash_to_tools: ${FILE_HASH_TO_TOOLS:str:null}
-        api_keys: ${API_KEYS:str:null}
+        api_keys_json: ${API_KEYS:str:null}
 2:
   models:
     benchmark_tool: *id001
@@ -172,7 +172,7 @@ type: skill
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
         file_hash_to_tools: ${FILE_HASH_TO_TOOLS:str:null}
-        api_keys: ${API_KEYS:str:null}
+        api_keys_json: ${API_KEYS:str:null}
 3:
   models:
     benchmark_tool: *id001
@@ -215,7 +215,7 @@ type: skill
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
         file_hash_to_tools: ${FILE_HASH_TO_TOOLS:str:null}
-        api_keys: ${API_KEYS:str:null}
+        api_keys_json: ${API_KEYS:str:null}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
