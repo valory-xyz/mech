@@ -129,10 +129,10 @@ models:
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
-      file_hash_to_tools_json: '{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":
-        ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
-        "openai-gpt-4"]}'
-      api_keys_json: '{"openai": "dummy_api_key"}'
+      file_hash_to_tools_json: ${str:'\\{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":\\
+        \\["openai\\-text\\-davinci\\-002",\\ "openai\\-text\\-davinci\\-003",\\ "openai\\-gpt\\-3\\.5\\-turbo",\\
+        "openai\\-gpt\\-4"\\]\\}'}
+      api_keys_json: ${str:'\\{"openai":\\ "dummy_api_key"\\}'}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
