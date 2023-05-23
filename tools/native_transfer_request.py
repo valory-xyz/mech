@@ -5,17 +5,17 @@ WIP
 """
 
 import ast
-import json
 import os
-import re
 import sys
 from web3 import Web3
 from openai_request import run
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 AGENT_PRIVATE_KEY = os.getenv("AGENT_PRIVATE_KEY")
-ETHEREUM_LEDGER_RPC_1 = os.getenv("ETHEREUM_LEDGER_RPC_1")
+ETHEREUM_LEDGER_RPC_0 = os.getenv("ETHEREUM_LEDGER_RPC_0")
 
+
+"""NOTE: In the case of native token transfers on evm chains we do not need any contract address or ABI. The only unknowns are the "recipient address" and the "value" to send for evm native transfers."""
 native_token_transfer_prompt = """
 You are an LLM inside a multi-agent system that takes in a prompt from a user requesting you to execute a native gas token (ETH) transfer to another public address on Ethereum. 
 The agent process you are sending your response to requires the transaction object written by you in your response as an input to sign and execute the transaction in the agent process. 
@@ -23,17 +23,12 @@ The agent already knows the owned address for the agent service, "my_address", t
 nonce of the transaction in the variable "current_nonce". The agent does not know the receiving address, “recipient_address” or the value, “value”, the user prompt indicates to send. 
 The rest of the transaction object that is not known beforehand must be constructed by you from the user's prompt information. 
 
-User Prompt: transfer 0.001 ETH to 0x812ecd8740Bfbd4b808860a442a0d3aF9C146c32
+User Prompt: {user_prompt}
 
 only respond with the format below using curly brackets to encapsulate the variables:
 
-"from": my_address, 
 "to": recipient_address, 
 "value": value, 
-"gas": gas_limit, 
-"gasPrice": gas_price, 
-"nonce": current_nonce, 
-
 
 Do not respond with anything else other than the transaction object you constructed with the correct known variables the agent had before the request and the correct unknown values found in the user request prompt as input to the web3.py signing method.
 """
@@ -58,15 +53,14 @@ def native_transfer(**kwargs) -> str:
     print(tool_prompt)
 
     # create a web3 instance
-    # w3 = Web3(Web3.HTTPProvider((ETHEREUM_LEDGER_RPC_1)))
+    w3 = Web3(Web3.HTTPProvider((ETHEREUM_LEDGER_RPC_0)))
 
     # Define the known variables
+    # Agent address
     my_address = "0x812ecd8740Bfbd4b808860a442a0d3aF9C146c32"
     gas_limit = 21000
-    #gas_price = w3.eth.gas_price
-    gas_price = 1000000000
-    #current_nonce = w3.eth.get_transaction_count(my_address)
-    current_nonce = 0
+    gas_price = w3.eth.gas_price
+    current_nonce = w3.eth.get_transaction_count(my_address)
 
     # use openai_request tool
     response = run(api_keys={"openai": OPENAI_API_KEY}, prompt=tool_prompt, tool="gpt-3.5-turbo")
@@ -97,7 +91,7 @@ def native_transfer(**kwargs) -> str:
     # send the transaction
     tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)
 
-    return response
+    return response, tx_hash
 
 
 
@@ -114,8 +108,9 @@ def main(task: str):
         "api_keys": {"openai": OPENAI_API_KEY},
     }
 
-    response = native_transfer(prompt=kwargs["prompt"]), 
-    print(response)
+    response, tx_hash = native_transfer(prompt=kwargs["prompt"]), 
+    print("RESPONSE FROM GPT: " + response)
+    print("TX HASH: " + tx_hash)
 
 
 if __name__ == "__main__":
