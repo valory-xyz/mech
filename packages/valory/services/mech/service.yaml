@@ -282,3 +282,46 @@ type: connection
 3:
   config:
     endpoint: ${ETHEREUM_WEBSOCKET_RPC_3:str:wss://rpc.gnosischain.com/wss}
+---
+public_id: valory/contract_subscription:0.1.0:bafybeiby5ajjc7a3m2uq73d2pprx6enqt4ghfcq2gkmrtsr75e4d4napi4
+type: skill
+0:
+  behaviours:
+    subscriptions:
+      args:
+        contracts: ${SUBSCRIPTIONS_CONTRACTS:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
+  handlers:
+    new_event:
+      args:
+        contract_to_monitor: ${CONTRACT_TO_MONITOR:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        websocket_provider: ${ETHEREUM_LEDGER_RPC_0:str:https://rpc.gnosischain.com}
+1:
+  behaviours:
+    subscriptions:
+      args:
+        contracts: ${SUBSCRIPTIONS_CONTRACTS:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
+  handlers:
+    new_event:
+      args:
+        contract_to_monitor: ${CONTRACT_TO_MONITOR:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        websocket_provider: ${ETHEREUM_LEDGER_RPC_1:str:https://rpc.gnosischain.com}
+2:
+  behaviours:
+    subscriptions:
+      args:
+        contracts: ${SUBSCRIPTIONS_CONTRACTS:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
+  handlers:
+    new_event:
+      args:
+        contract_to_monitor: ${CONTRACT_TO_MONITOR:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        websocket_provider: ${ETHEREUM_LEDGER_RPC_2:str:https://rpc.gnosischain.com}
+3:
+  behaviours:
+    subscriptions:
+      args:
+        contracts: ${SUBSCRIPTIONS_CONTRACTS:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
+  handlers:
+    new_event:
+      args:
+        contract_to_monitor: ${CONTRACT_TO_MONITOR:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        websocket_provider: ${ETHEREUM_LEDGER_RPC_3:str:https://rpc.gnosischain.com}
