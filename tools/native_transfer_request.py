@@ -35,7 +35,7 @@ only respond with the format below using curly brackets to encapsulate the varia
 "nonce": current_nonce, 
 
 
-Do not respond with anything else other than the json transaction object you constructed with the correct known variables the agent had before the request and the correct unknown values found in the user request prompt as input to the web3.py signing method.
+Do not respond with anything else other than the transaction object you constructed with the correct known variables the agent had before the request and the correct unknown values found in the user request prompt as input to the web3.py signing method.
 """
 
 
@@ -58,13 +58,15 @@ def native_transfer(**kwargs) -> str:
     print(tool_prompt)
 
     # create a web3 instance
-    w3 = Web3(Web3.HTTPProvider((ETHEREUM_LEDGER_RPC_1)))
+    # w3 = Web3(Web3.HTTPProvider((ETHEREUM_LEDGER_RPC_1)))
 
     # Define the known variables
     my_address = "0x812ecd8740Bfbd4b808860a442a0d3aF9C146c32"
     gas_limit = 21000
-    gas_price = w3.eth.gas_price
-    current_nonce = w3.eth.get_transaction_count(my_address)
+    #gas_price = w3.eth.gas_price
+    gas_price = 1000000000
+    #current_nonce = w3.eth.get_transaction_count(my_address)
+    current_nonce = 0
 
     # use openai_request tool
     response = run(api_keys={"openai": OPENAI_API_KEY}, prompt=tool_prompt, tool="gpt-3.5-turbo")
