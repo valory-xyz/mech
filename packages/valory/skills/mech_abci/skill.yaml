@@ -75,13 +75,18 @@ models:
   params:
     args:
       agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
-      api_keys_json: '{"openai": "dummy_api_key"}'
+      api_keys_json:
+      - - openai
+        - dummy_api_key
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-      file_hash_to_tools_json: '{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":
-        ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
-        "openai-gpt-4"]}'
+      file_hash_to_tools_json:
+      - - bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4
+        - - openai-text-davinci-002
+          - openai-text-davinci-003
+          - openai-gpt-3.5-turbo
+          - openai-gpt-4
       finalize_timeout: 60.0
       genesis_config:
         genesis_time: '2022-09-26T00:00:00.000000000Z'
