@@ -79,7 +79,9 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 if tool_py is None:
                     self.context.logger.error(f"Failed to get the tools {tools} with file_hash {file_hash} from IPFS!")
                 all_tools.update({tool: tool_py for tool in tools})
+            self.context.params.__dict__["_frozen"] = False
             self.context.params.all_tools = all_tools
+            self.context.params.__dict__["_frozen"] = True
 
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
 
