@@ -74,7 +74,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
         if not self.context.params.all_tools:
             all_tools = {}
-            for file_hash, tools in self.context.params.file_hash_to_tools:
+            for file_hash, tools in self.context.params.file_hash_to_tools.items():
                 tool_py = yield from self.get_from_ipfs(file_hash)
                 if tool_py is None:
                     self.context.logger.error(f"Failed to get the tools {tools} with file_hash {file_hash} from IPFS!")
