@@ -1,6 +1,8 @@
 import sys
-from aea_cli_ipfs.ipfs_utils import IPFSTool
+
 from aea.helpers.cid import to_v1
+from aea_cli_ipfs.ipfs_utils import IPFSTool
+
 
 def main(file):
     response = IPFSTool().client.add(file, pin=True, recursive=True, wrap_with_directory=False)

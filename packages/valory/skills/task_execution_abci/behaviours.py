@@ -26,6 +26,7 @@ from typing import Any, Dict, Generator, Optional, Set, Type, cast
 
 import multibase
 import multicodec
+import openai  # noqa
 from aea.helpers.cid import CID, to_v1
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -186,8 +187,10 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         """Prepare the task."""
         tool_task = AnyToolAsTask()
         tool_py = self.context.params.all_tools[task_data["tool"]]
-        local_namespace: Dict[str, Any] = {}
-        exec(tool_py, globals(), local_namespace)  # pylint: disable=W0122
+        local_namespace: Dict[str, Any] = globals().copy()
+        if "run" in local_namespace:
+            del local_namespace["run"]
+        exec(tool_py, local_namespace)  # pylint: disable=W0122
         task_data["method"] = local_namespace['run']
         task_data["api_keys"] = self.params.api_keys
         task_id = self.context.task_manager.enqueue_task(
