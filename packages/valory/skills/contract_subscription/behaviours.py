@@ -45,6 +45,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
         self._contracts: List[str] = kwargs.pop("contracts", [])
         self._ws_client_connection: Optional[WebSocketClient] = None
         self._subscription_required: bool = True
+        self._missed_parts: bool = False
         super().__init__(**kwargs)
 
     def setup(self) -> None:
@@ -72,9 +73,10 @@ class SubscriptionBehaviour(SimpleBehaviour):
                     bytes(json.dumps(subscription_msg_template), DEFAULT_ENCODING)
                 )
             self._subscription_required = False
-            return
+            if disconnection_point is not None:
+                self._missed_parts = True
 
-        if is_connected and disconnection_point is not None:
+        if is_connected and self._missed_parts:
             # if we are connected and have a disconnection point, then we need to fetch the parts that were missed
             for contract in self._contracts:
                 filter_msg_template = {
@@ -90,7 +92,6 @@ class SubscriptionBehaviour(SimpleBehaviour):
             self.context.logger.info(
                 "Getting parts that were missed while disconnected."
             )
-            return
 
         if (
             not is_connected

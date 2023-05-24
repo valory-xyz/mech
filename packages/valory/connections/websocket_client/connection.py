@@ -21,7 +21,7 @@
 """Websocket client connection."""
 
 import asyncio
-from threading import Event, Thread
+from threading import Thread
 from typing import Any, Optional
 
 import websocket
@@ -40,7 +40,6 @@ class WebSocketClient(Connection):
     connection_id = CONNECTION_ID
     _new_messages: list
     _endpoint: str
-    _thread: Thread
     _wss: websocket.WebSocket
 
     MAX_RETRIES = 3
@@ -64,9 +63,10 @@ class WebSocketClient(Connection):
         :param kwargs: keyword arguments passed to component base
         """
         self._new_messages = []
-        self._event: Optional[Event] = None
         self._endpoint = kwargs["configuration"].config["endpoint"]
         self._target_skill_id = kwargs["configuration"].config["target_skill_id"]
+        self._attempt_reconnect: bool = True
+        self._thread: Optional[Thread] = None
         assert self._endpoint is not None, "Endpoint must be provided!"
         super().__init__(**kwargs)  # pragma: no cover
 
@@ -76,24 +76,25 @@ class WebSocketClient(Connection):
 
         In the implementation, remember to update 'connection_status' accordingly.
         """
+        self._attempt_reconnect = True
         retries = 0
         while retries < self.MAX_RETRIES:
             try:
                 self._wss = websocket.create_connection(self._endpoint)
                 self.state = ConnectionStates.connected
                 self.logger.info("Websocket connection established.")
-                self._event = Event()
-                self._thread = Thread(target=self._run, args=(self._event,))
-                self._thread.start()
+                if self._thread is None:
+                    self._thread = Thread(target=asyncio.run, args=(self._run(),))
+                    self._thread.start()
                 return
             except Exception as exception:  # pylint: disable=W0718
                 self.logger.error(
                     f"Failed to establish WebSocket connection: {exception}"
                 )
-                self.state = ConnectionStates.disconnected
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
 
+        self.state = ConnectionStates.disconnected
         raise Exception(  # pylint: disable=W0719
             f"Failed to establish connection after {self.MAX_RETRIES} attempts."
         )
@@ -106,8 +107,7 @@ class WebSocketClient(Connection):
         """
         self.logger.debug("Disconnecting...")  # pragma: no cover
         self._wss.close()
-        if self._event is not None:
-            self._event.set()
+        self._attempt_reconnect = False
         self.state = ConnectionStates.disconnected
 
     async def send(self, envelope: Envelope):
@@ -116,10 +116,13 @@ class WebSocketClient(Connection):
 
         :param envelope: the envelope to send.
         """
-        if self.state != ConnectionStates.connected:
+        if self.state == ConnectionStates.disconnected:
             raise Exception(  # pylint: disable=W0719
-                "Cannot send message. Connection is not established."
+                "Cannot receive message. Connection is not established."
             )
+
+        while self.is_connecting:
+            return
 
         self.logger.debug("Sending content from envelope...")
         context = envelope.message.content
@@ -137,10 +140,13 @@ class WebSocketClient(Connection):
         :param kwargs: keyword arguments to receive
         :return: the envelope received, if present.  # noqa: DAR202
         """
-        if self.state != ConnectionStates.connected:
+        if self.state == ConnectionStates.disconnected:
             raise Exception(  # pylint: disable=W0719
                 "Cannot receive message. Connection is not established."
             )
+
+        while self.is_connecting:
+            return
 
         if self._new_messages:
             new_msg = self._new_messages.pop()
@@ -158,21 +164,20 @@ class WebSocketClient(Connection):
         )
         return envelope
 
-    async def _run(self, event: Event) -> None:
+    async def _run(self):
         """Run a loop to receive messages from the wss."""
         while True:
             try:
                 msg = self._wss.recv()
-                self._new_messages.append(msg)
             except websocket.WebSocketConnectionClosedException:
-                event.set()
                 self.logger.error("Websocket connection closed.")
-                self.state = ConnectionStates.disconnected
-
-            # Start the reconnection process
-            if self.state == ConnectionStates.disconnected:
-                self.logger.info("Attempting to reconnect...")
-                await self._reconnect()
+                self.state = ConnectionStates.disconnecting
+                # Start the reconnection process
+                if self.state == ConnectionStates.disconnecting and self._attempt_reconnect:
+                    self.logger.info("Attempting to reconnect...")
+                    await self._reconnect()
+            else:
+                self._new_messages.append(msg)
 
     async def _reconnect(self):
         """Attempt to reconnect."""
@@ -186,10 +191,10 @@ class WebSocketClient(Connection):
                 self.logger.info("Reconnected successfully.")
                 return
             except Exception as exception:  # pylint: disable=W0718
-                self.state = ConnectionStates.disconnected
                 self.logger.error(f"Failed to reconnect: {exception}")
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
+        self.state = ConnectionStates.disconnected
         self.logger.error(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")
         raise Exception(  # pylint: disable=W0719
             f"Failed to reconnect after {self.MAX_RETRIES} attempts."
