@@ -39,3 +39,5 @@ agent/
 mech/
 
 .mypy_cache
+
+ethereum_private_key.txt

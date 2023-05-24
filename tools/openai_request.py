@@ -29,7 +29,9 @@ ENGINES = {
     "completion": ["text-davinci-002", "text-davinci-003"]
 }
 #ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
-ALLOWED_TOOLS = [PREFIX + value for values in ENGINES for value in values]
+#ALLOWED_TOOLS = [PREFIX + value for values in ENGINES for value in values]
+ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["chat"] + ENGINES["completion"]]
+
 
 
 def run(**kwargs) -> str:
@@ -41,10 +43,11 @@ def run(**kwargs) -> str:
     prompt = kwargs["prompt"]
     tool = kwargs["tool"]
     print("TOOL: ", tool)
+    print("ALLOWED TOOLS: ", ALLOWED_TOOLS)
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
-    engine = tool.strip(PREFIX)
-    engine = tool
+    engine = tool.removeprefix(PREFIX)
+    #engine = str(kwargs["engine"])
 
     moderation_result = openai.Moderation.create(prompt)
 

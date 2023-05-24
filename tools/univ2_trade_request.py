@@ -39,7 +39,7 @@ Do not respond with anything else other than the json transaction object contain
 
 def univ2_trade(**kwargs):
     """
-    Execute a uniV2 swap on an evm chain. This involves:
+    Execute a uniV2 swap on an evm chain.
     """
 
     print("\033[95m\033[1m" + "\n USER PROMPT:" + "\033[0m\033[0m")
@@ -103,11 +103,11 @@ def univ2_trade(**kwargs):
         'from': my_address,
         'gas': 200000,
         'gasPrice': gas_price,
-        'nonce': w3.eth.getTransactionCount(my_address),
+        'nonce': current_nonce,
     })
 
     # sign the transaction
-    signed_txn = w3.eth.account.sign_transaction(txn_dict, private_key=AGENT_PRIVATE_KEY)
+    signed_txn = w3.eth.account.sign_transaction(transaction, private_key=AGENT_PRIVATE_KEY)
 
     # send the transaction
     tx_hash = w3.eth.send_raw_transaction(signed_txn.rawTransaction)

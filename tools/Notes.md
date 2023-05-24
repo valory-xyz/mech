@@ -24,10 +24,10 @@ if **account_call**:
 
 if **contract_call**:
 - define the undefined contract(s) needed to complete the transaction from the request using their respective **addresses**
-    - we will need to grab these "addresses" for our python to evm interaction library (web3.py for example) from some sort of database/API (rpc, block explorer api, nodes, etc.)
+    - we will need to grab these "addresses" for our python to evm interaction library (web3.py for example) from some sort of database/mapping made to associate specific names of contracts on the chain in question (USDC for example) to the contract addresses we want the agent process to use or simply use an API (rpc, block explorer api, nodes, etc.) and pray that the "address locator" pulls the correct address
     - Make a new LLM tool **address_locator** that takes in a prompt and retrieves the addresses of the contract(s) needed to complete the transaction (could be extended to multi-txs and/or multi-chain logic given their is multiple databases/APIs to pull from)
 - define the contract(s) ABI
-    - we will need to grab these ABIs from some sort of database/API (block explorer APIs, etc.) new LLM tool, **abi_locator** for ex.
+    - we will need to grab these ABIs from some sort of database/API (block explorer APIs, etc.) new LLM tool, **abi_locator** for example, given we have the address of the contract(s) needed to complete the transaction
     - Preceding this step we need the addresses of the contract(s) to retrieve the ABIs successfully (can be done also with block explorer APIs, RPCs, and potentially other data sources)
 - define the contract function(s) in scope needed to complete the requested transaction/action from the user request data and the ABIs
     - LLM tool **function_locator**, responds with the inferred contract function(s) in scope of ABI needed to complete the requested transaction/action from the user request data + ABIs
