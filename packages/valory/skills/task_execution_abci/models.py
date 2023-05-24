@@ -19,8 +19,7 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 
-import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Union
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import \
@@ -50,11 +49,13 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.api_keys: Dict[str, str] = json.loads(
-            self._ensure("api_keys_json", kwargs, str).replace("\\", "")
+        self.api_keys: Dict[str, str] = self._nested_list_todict_workaround(
+            kwargs, "api_keys_json", List[List[str]]
         )
-        self.file_hash_to_tools: Dict[str, List[str]] = json.loads(
-            self._ensure("file_hash_to_tools_json", kwargs, str).replace("\\", "")
+        self.file_hash_to_tools: Dict[
+            str, List[str]
+        ] = self._nested_list_todict_workaround(
+            kwargs, "file_hash_to_tools_json", List[List[Union[str, List[str]]]]
         )
         self.tools_to_file_hash = {
             value: key
@@ -64,6 +65,19 @@ class Params(BaseParams):
         self.all_tools: Dict[str, str] = {}
 
         super().__init__(*args, **kwargs)
+
+    def _nested_list_todict_workaround(
+        self, kwargs: Dict, key: str, type_: Any
+    ) -> Dict:
+        """
+        Get a nested list from the kwargs and convert it to a dictionary.
+
+        This is a workaround because we currently cannot input a json string on Propel.
+        """
+        values = self._ensure(key, kwargs, type_)
+        if len(values) == 0:
+            raise ValueError(f"No {key} specified!")
+        return {value[0]: value[1] for value in values}
 
 
 Requests = BaseRequests
