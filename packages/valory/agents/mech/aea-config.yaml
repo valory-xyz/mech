@@ -133,7 +133,7 @@ models:
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
-      file_hash_to_tools_json: ${list:[["bafybeigh3ytdhsx7px7rqea5hpieesqqsgzs5anvnssjx7n3pnvc52ftle",
+      file_hash_to_tools_json: ${list:[["bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e",
         ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
         "openai-gpt-4"]]]}
       api_keys_json: ${list:[["openai", "dummy_api_key"]]}
