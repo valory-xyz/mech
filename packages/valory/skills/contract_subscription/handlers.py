@@ -99,8 +99,8 @@ class WebSocketHandler(Handler):
             rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
             return dict(rich_logs[0]['args']), False
 
-        except Exception as e:  # pylint: disable=W0718
+        except Exception as exc:  # pylint: disable=W0718
             self.context.logger.error(
-                f"An exception occurred while trying to get the transaction arguments for {tx_hash}: {e}"
+                f"An exception occurred while trying to get the transaction arguments for {tx_hash}: {exc}"
             )
             return {}, True
