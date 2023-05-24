@@ -33,11 +33,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
 - valory/contract_subscription:0.1.0:bafybeihlnwgav7alqjdcosciaoxn4rye7woav7x3bfkivdjpdlnn5l7bty
-- valory/mech_abci:0.1.0:bafybeihucnk2lemjswaujj24ksxcarwv4vlpn6lz6ftg46h5v752fgco5m
+- valory/mech_abci:0.1.0:bafybeib6eya3z2bhb2attd3l4xtl4yo7axwvzodkrbnqzevl3nrdzt2jve
 - valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeiatki3wisrf5tzc2mhpfpskbz3xp3lmrunv2k75cjlfpas6q3uv3u
+- valory/task_execution_abci:0.1.0:bafybeifnmwpwpjz3553gvc7bsr6xefbrd6m2xmtduu2rfpjkfaz2xwdvem
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
 - valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
