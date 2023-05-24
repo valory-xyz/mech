@@ -116,6 +116,11 @@ class WebSocketClient(Connection):
 
         :param envelope: the envelope to send.
         """
+        if self.state == ConnectionStates.disconnected:
+            raise Exception(  # pylint: disable=W0719
+                "Cannot receive message. Connection is not established."
+            )
+
         while self.is_connecting:
             return
 
@@ -135,6 +140,11 @@ class WebSocketClient(Connection):
         :param kwargs: keyword arguments to receive
         :return: the envelope received, if present.  # noqa: DAR202
         """
+        if self.state == ConnectionStates.disconnected:
+            raise Exception(  # pylint: disable=W0719
+                "Cannot receive message. Connection is not established."
+            )
+
         while self.is_connecting:
             return
 
@@ -181,10 +191,10 @@ class WebSocketClient(Connection):
                 self.logger.info("Reconnected successfully.")
                 return
             except Exception as exception:  # pylint: disable=W0718
-                self.state = ConnectionStates.disconnected
                 self.logger.error(f"Failed to reconnect: {exception}")
                 retries += 1
                 await asyncio.sleep(self.RETRY_DELAY)
+        self.state = ConnectionStates.disconnected
         self.logger.error(f"Failed to reconnect after {self.MAX_RETRIES} attempts.")
         raise Exception(  # pylint: disable=W0719
             f"Failed to reconnect after {self.MAX_RETRIES} attempts."
