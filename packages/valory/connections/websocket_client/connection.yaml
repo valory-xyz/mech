@@ -21,7 +21,7 @@ config:
 excluded_protocols: []
 restricted_to_protocols: []
 dependencies:
-  websocket_client:
-    version: ==1.5.1
+  aiohttp:
+    version: ==3.8.4
 is_abstract: false
 cert_requests: []
