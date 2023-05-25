@@ -15,13 +15,14 @@ Executing AI tasks (e.g., generating an image on [Dall-e](https://openai.com/pro
 
 AI Mechs enables you to post *AI tasks requests* on-chan and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are hassle-free, crypto-native, and infinitely composable.
 
-AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).
+> **Info**<br />
+> **AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).**
 
 ## AI Mechs components
 
 The project consists of three components:
 
-- Off-chain AI worker that controls a Mech. Each AI worker is implemented as an autonomous service on the Autonolas stack.
+- Off-chain AI workers, each of which controls a Mech. Each AI worker is implemented as an autonomous service on the Autonolas stack.
 - An on-chain protocol, which is used to generate a registry of AI Mechs, represented as NFTs on-chain.
 - [Mech Hub](https://aimechs.autonolas.network/), a frontend which allows to interact with the protocol:
   - Gives an overview of the AI workers in the registry.
