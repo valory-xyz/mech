@@ -22,13 +22,17 @@ import json
 import os
 from abc import ABC
 from multiprocessing.pool import AsyncResult
-from typing import Any, Dict, Generator, Optional, Set, Type, cast
+from typing import Any, Dict, Generator, Optional, Set, Type, cast, List
 
 import multibase
 import multicodec
 import openai  # noqa
 from aea.helpers.cid import CID, to_v1
 
+from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.gnosis_safe.contract import SafeOperation, GnosisSafeContract
+from packages.valory.contracts.multisend.contract import MultiSendOperation, MultiSendContract
+from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour, BaseBehaviour)
@@ -39,9 +43,11 @@ from packages.valory.skills.task_execution_abci.rounds import (
     SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
     TaskExecutionRound)
 from packages.valory.skills.task_execution_abci.tasks import AnyToolAsTask
+from packages.valory.skills.transaction_settlement_abci.payload_tools import hash_payload_to_hex
 
 CID_PREFIX = "f01701220"
-
+ZERO_ETHER_VALUE = 0
+SAFE_GAS = 0
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the task_execution_abci skill."""
@@ -186,7 +192,9 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 {"request_id": self.request_id, "task_result": hex_multihash},
                 sort_keys=True,
             )
-            sender = self.context.agent_address
+            deliver_tx = yield from self._get_deliver_tx({"request_id": self.request_id, "task_result": hex_multihash})
+            txs = [deliver_tx]  # TODO: add other txs
+            yield from self.to_multisend(txs)
             payload = TaskExecutionAbciPayload(sender=sender, content=payload_content)
 
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
@@ -220,6 +228,109 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self._async_result = self.context.task_manager.get_task_result(task_id)
         self._is_task_prepared = True
 
+    def to_multisend(self, txs: List[Dict]) -> Generator[None, None, Optional[str]]:
+        """Transform payload to MultiSend."""
+        multi_send_txs = []
+        for tx in txs:
+            tx = {
+                "operation": tx.get("operation", MultiSendOperation.CALL),
+                "to": tx["to"],
+                "value": tx["value"],
+                "data": tx.get("data", b''),
+            }
+            multi_send_txs.append(tx)
+
+        response = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=self.params.multisend_address,
+            contract_id=str(MultiSendContract.contract_id),
+            contract_callable="get_tx_data",
+            multi_send_txs=multi_send_txs,
+        )
+        if response.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
+            self.context.logger.error(
+                f"Couldn't compile the multisend tx. "
+                f"Expected response performative {ContractApiMessage.Performative.RAW_TRANSACTION.value}, "  # type: ignore
+                f"received {response.performative.value}."
+            )
+            return None
+
+        # strip "0x" from the response
+        multisend_data_str = cast(str, response.raw_transaction.body["data"])[2:]
+        tx_data = bytes.fromhex(multisend_data_str)
+        tx_hash = yield from self._get_safe_tx_hash(tx_data)
+        if tx_hash is None:
+            # something went wrong
+            return None
+
+        payload_data = hash_payload_to_hex(
+            safe_tx_hash=tx_hash,
+            ether_value=ZERO_ETHER_VALUE,
+            safe_tx_gas=SAFE_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value,
+            to_address=self.params.multisend_address,
+            data=tx_data,
+        )
+        return payload_data
+
+    def _get_safe_tx_hash(self, data: bytes) -> Generator[None, None, Optional[str]]:
+        """
+        Prepares and returns the safe tx hash.
+
+        This hash will be signed later by the agents, and submitted to the safe contract.
+        Note that this is the transaction that the safe will execute, with the provided data.
+
+        :param data: the safe tx data. This is the data of the function being called, in this case `updateWeightGradually`.
+        :return: the tx hash
+        """
+        response = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.synchronized_data.safe_contract_address,
+            contract_id=str(GnosisSafeContract.contract_id),
+            contract_callable="get_raw_safe_transaction_hash",
+            to_address=self.params.multisend_address,  # we send the tx to the multisend address
+            value=ZERO_ETHER_VALUE,
+            data=data,
+            safe_tx_gas=SAFE_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value,
+        )
+
+        if response.performative != ContractApiMessage.Performative.STATE:
+            self.context.logger.error(
+                f"Couldn't get safe hash. "
+                f"Expected response performative {ContractApiMessage.Performative.STATE.value}, "  # type: ignore
+                f"received {response.performative.value}."
+            )
+            return None
+
+        # strip "0x" from the response hash
+        tx_hash = cast(str, response.state.body["tx_hash"])[2:]
+        return tx_hash
+
+    def _get_deliver_tx(self, task_data: Dict[str, Any]) -> Generator:
+        """Get the deliver tx."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_mech_contract_address,
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_deliver_data",
+            request_id=task_data["request_id"],
+            data=task_data["task_result"],
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_deliver_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": self.params.agent_mech_contract_address,
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
 
 class TaskExecutionRoundBehaviour(AbstractRoundBehaviour):
     """TaskExecutionRoundBehaviour"""
