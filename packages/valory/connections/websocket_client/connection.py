@@ -22,6 +22,7 @@
 
 import asyncio
 from contextlib import suppress
+from time import time
 from typing import Any, Optional
 
 import aiohttp
@@ -112,8 +113,12 @@ class WebSocketHandler:
                 send_task.cancel()
                 with suppress(asyncio.CancelledError):
                     await send_task
+
             if self._ws:
-                await self._ws.close()
+                # stupid trick
+                with suppress(asyncio.exceptions.TimeoutError):
+                    await asyncio.wait_for(self._ws.close(), timeout=0.1)
+
             await self._session.close()
 
     async def _send_loop(self):
@@ -146,10 +151,8 @@ class WebSocketHandler:
     async def disconnect(self):
         if not self._connection_task:
             return
-
         if self._connection_task.done():
             return
-
         self._connection_task.cancel()
         with suppress(asyncio.CancelledError):
             await self._connection_task
@@ -253,6 +256,7 @@ class WebSocketClient(Connection):
         except Exception:
             self.logger.error("Websocket connection closed.")
             self.state = ConnectionStates.disconnected
+            raise
 
     def _from_wss_msg_to_envelope(self, msg: str):
         """Convert a message from the wss to an envelope."""
