@@ -76,9 +76,13 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         if not self.context.params.all_tools:
             all_tools = {}
             for file_hash, tools in self.context.params.file_hash_to_tools.items():
-                tool_py = yield from self.get_from_ipfs(file_hash, custom_loader=lambda plain: plain)
+                tool_py = yield from self.get_from_ipfs(
+                    file_hash, custom_loader=lambda plain: plain
+                )
                 if tool_py is None:
-                    self.context.logger.error(f"Failed to get the tools {tools} with file_hash {file_hash} from IPFS!")
+                    self.context.logger.error(
+                        f"Failed to get the tools {tools} with file_hash {file_hash} from IPFS!"
+                    )
                 all_tools.update({tool: tool_py for tool in tools})
             self.context.params.__dict__["_frozen"] = False
             self.context.params.all_tools = all_tools
@@ -110,8 +114,16 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                     self.context.logger.info(f"Got data from IPFS: {task_data}")
 
                     # Verify the file data
-                    is_data_valid = task_data and isinstance(task_data, dict) and "prompt" in task_data and "tool" in task_data  # pylint: disable=C0301
-                    if is_data_valid and task_data["tool"] in self.context.params.tools_to_file_hash:
+                    is_data_valid = (
+                        task_data
+                        and isinstance(task_data, dict)
+                        and "prompt" in task_data
+                        and "tool" in task_data
+                    )  # pylint: disable=C0301
+                    if (
+                        is_data_valid
+                        and task_data["tool"] in self.context.params.tools_to_file_hash
+                    ):
                         self.prepare_task(task_data)
                     elif is_data_valid:
                         tool = task_data["tool"]
@@ -154,7 +166,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 obj=response_obj,
                 filetype=SupportedFiletype.JSON,
             )
-            obj_hash= to_v1(obj_hash) # from 2 to 1: base32 encoded CID
+            obj_hash = to_v1(obj_hash)  # from 2 to 1: base32 encoded CID
 
             # The original Base32 encoded CID
             base32_cid = obj_hash
@@ -170,7 +182,10 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
             hex_multihash = hex_multihash[6:]
 
-            payload_content = json.dumps({"request_id": self.request_id, "task_result": hex_multihash}, sort_keys=True)
+            payload_content = json.dumps(
+                {"request_id": self.request_id, "task_result": hex_multihash},
+                sort_keys=True,
+            )
             sender = self.context.agent_address
             payload = TaskExecutionAbciPayload(sender=sender, content=payload_content)
 
@@ -184,12 +199,13 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         """Get hash from bytes"""
         try:
             return str(CID.from_string(data.decode()))
-        except Exception:
+        except Exception:  # noqa
             # if something goes wrong, fallback to sha256
             file_hash = data.hex()
             file_hash = CID_PREFIX + file_hash
             file_hash = str(CID.from_string(file_hash))
             return file_hash
+
     def prepare_task(self, task_data: Dict[str, Any]):
         """Prepare the task."""
         tool_task = AnyToolAsTask()
@@ -198,11 +214,9 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         if "run" in local_namespace:
             del local_namespace["run"]
         exec(tool_py, local_namespace)  # pylint: disable=W0122
-        task_data["method"] = local_namespace['run']
+        task_data["method"] = local_namespace["run"]
         task_data["api_keys"] = self.params.api_keys
-        task_id = self.context.task_manager.enqueue_task(
-            tool_task, kwargs=task_data
-        )
+        task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)
         self._async_result = self.context.task_manager.get_task_result(task_id)
         self._is_task_prepared = True
 
@@ -212,6 +226,4 @@ class TaskExecutionRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = TaskExecutionAbciBehaviour
     abci_app_cls = TaskExecutionAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = {
-        TaskExecutionAbciBehaviour
-    }
+    behaviours: Set[Type[BaseBehaviour]] = {TaskExecutionAbciBehaviour}

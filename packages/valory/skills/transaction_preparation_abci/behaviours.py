@@ -59,7 +59,6 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
 
     matching_round: Type[AbstractRound] = TransactionPreparationRound
 
-
     def async_act(self) -> Generator:
         """Do the act, supporting asynchronous execution."""
 
@@ -101,7 +100,7 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_data",
             request_id=task_data["request_id"],
-            data=task_data["task_result"][0], # multiple rsponses from multiple agents
+            data=task_data["task_result"][0],  # multiple rsponses from multiple agents
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -141,7 +140,11 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
 
         # temp hack
         payload_string = hash_payload_to_hex(
-            safe_tx_hash, ether_value, safe_tx_gas, self.params.agent_mech_contract_address, data
+            safe_tx_hash,
+            ether_value,
+            safe_tx_gas,
+            self.params.agent_mech_contract_address,
+            data,
         )
 
         return payload_string
@@ -152,6 +155,4 @@ class TransactionPreparationRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = TransactionPreparationAbciBehaviour
     abci_app_cls = TransactionPreparationAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = {
-        TransactionPreparationAbciBehaviour
-    }
+    behaviours: Set[Type[BaseBehaviour]] = {TransactionPreparationAbciBehaviour}

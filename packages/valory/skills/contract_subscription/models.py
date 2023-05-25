@@ -25,6 +25,7 @@ from aea.skills.base import Model
 
 class Params(Model):
     """A model to represent params for multiple abci apps."""
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
         self.use_polling = kwargs.get("use_polling", False)

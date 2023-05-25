@@ -87,11 +87,7 @@ class AgentMechContract(Contract):
 
     @classmethod
     def get_deliver_data(
-        cls,
-        ledger_api: LedgerApi,
-        contract_address: str,
-        request_id: int,
-        data: bytes
+        cls, ledger_api: LedgerApi, contract_address: str, request_id: int, data: bytes
     ) -> JSONLike:
         """
         Deliver a response to a request.
@@ -108,9 +104,7 @@ class AgentMechContract(Contract):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="deliver", args=[request_id, data]
-        )
+        data = contract_instance.encodeABI(fn_name="deliver", args=[request_id, data])
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
 
     @classmethod
@@ -133,11 +127,11 @@ class AgentMechContract(Contract):
             toBlock=to_block,
         ).get_all_entries()
         request_events = list(
-            dict(
-                tx_hash=entry.transactionHash.hex(),
-                block_number=entry.blockNumber,
+            {
+                "tx_hash": entry.transactionHash.hex(),
+                "block_number": entry.blockNumber,
                 **entry["args"],
-            )
+            }
             for entry in entries
         )
         return {"data": request_events}
@@ -162,12 +156,11 @@ class AgentMechContract(Contract):
             toBlock=to_block,
         ).get_all_entries()
         deliver_events = list(
-            dict(
-                tx_hash=entry.transactionHash.hex(),
-                block_number=entry.blockNumber,
+            {
+                "tx_hash": entry.transactionHash.hex(),
+                "block_number": entry.blockNumber,
                 **entry["args"],
-            )
+            }
             for entry in entries
         )
         return {"data": deliver_events}
-

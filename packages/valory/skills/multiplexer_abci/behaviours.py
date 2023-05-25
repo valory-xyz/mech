@@ -20,7 +20,7 @@
 """This package contains round behaviours of MultiplexerAbciApp."""
 
 from abc import ABC
-from typing import Generator, Set, Type, cast, List, Dict
+from typing import Dict, Generator, List, Set, Type, cast
 
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -99,17 +99,24 @@ class MultiplexerBaseBehaviour(BaseBehaviour, ABC):
         delivers = yield from self._get_deliver(from_block)
         pending_tasks = self.context.shared_state.get("pending_tasks", [])
         for request in requests:
-            if request["block_number"] > self.shared_state.last_processed_request_block_number:
-                self.shared_state.last_processed_request_block_number = request["block_number"]
-
             if (
-                request["requestId"] not in [deliver["requestId"] for deliver in delivers]
-                and request["requestId"] not in [pending_req["requestId"] for pending_req in pending_tasks]
+                request["block_number"]
+                > self.shared_state.last_processed_request_block_number
             ):
+                self.shared_state.last_processed_request_block_number = request[
+                    "block_number"
+                ]
+
+            if request["requestId"] not in [
+                deliver["requestId"] for deliver in delivers
+            ] and request["requestId"] not in [
+                pending_req["requestId"] for pending_req in pending_tasks
+            ]:
                 # store each requests in the pending_tasks list, make sure each req is stored once
                 pending_tasks.append(request)
         pending_tasks.sort(key=lambda x: x["block_number"])
         return pending_tasks
+
 
 class MultiplexerBehaviour(MultiplexerBaseBehaviour):
     """MultiplexerBehaviour"""
@@ -125,11 +132,15 @@ class MultiplexerBehaviour(MultiplexerBaseBehaviour):
 
             period_counter = self.synchronized_data.period_counter
             do_reset = period_counter % self.params.reset_period_count == 0
-            should_poll_events = self.params.use_polling and (period_counter % self.params.polling_interval == 0)
+            should_poll_events = self.params.use_polling and (
+                period_counter % self.params.polling_interval == 0
+            )
             self.context.logger.info(
                 f"Period counter: {period_counter}/{self.params.reset_period_count}. Do reset? {do_reset}"
             )
-            self.context.logger.info(f"Pending tasks: {self.context.shared_state.get('pending_tasks', [])}")
+            self.context.logger.info(
+                f"Pending tasks: {self.context.shared_state.get('pending_tasks', [])}"
+            )
             if should_poll_events:
                 pending_tasks = yield from self.extend_pending_tasks()
                 self.context.shared_state["pending_tasks"] = pending_tasks

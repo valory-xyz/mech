@@ -102,9 +102,9 @@ class TransactionPreparationAbciApp(AbciApp[Event]):
             Event.DONE: FinishedTransactionPreparationRound,
             Event.NO_MAJORITY: TransactionPreparationRound,
             Event.ROUND_TIMEOUT: TransactionPreparationRound,
-            Event.CONTRACT_ERROR: TransactionPreparationRound
+            Event.CONTRACT_ERROR: TransactionPreparationRound,
         },
-        FinishedTransactionPreparationRound: {}
+        FinishedTransactionPreparationRound: {},
     }
     final_states: Set[AppState] = {FinishedTransactionPreparationRound}
     event_to_timeout: EventToTimeout = {}

@@ -55,7 +55,9 @@ class Params(BaseParams):
         self.reset_period_count = self._ensure("reset_period_count", kwargs, int)
         self.use_polling = self._ensure("use_polling", kwargs, bool)
         self.polling_interval = self._ensure("polling_interval", kwargs, int)
-        self.agent_mech_contract_address = kwargs.get("agent_mech_contract_address", None)
+        self.agent_mech_contract_address = kwargs.get(
+            "agent_mech_contract_address", None
+        )
         if self.agent_mech_contract_address is None:
             raise ValueError("agent_mech_contract_address is required")
         super().__init__(*args, **kwargs)

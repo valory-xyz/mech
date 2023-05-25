@@ -41,8 +41,8 @@ clean-test:
 	find . -name 'log.*.txt' -exec rm -fr {} +
 
 format: clean
-	poetry run isort packages scripts tests && \
-	poetry run black packages scripts tests
+	poetry run isort packages && \
+	poetry run black packages
 
 is_dirty: clean
 	if [ ! -z "$(shell git status -s)" ];\

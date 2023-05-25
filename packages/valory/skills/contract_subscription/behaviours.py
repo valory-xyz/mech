@@ -39,7 +39,6 @@ WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
 class SubscriptionBehaviour(SimpleBehaviour):
     """This class scaffolds a behaviour."""
 
-
     def __init__(self, **kwargs: Any) -> None:
         """Initialise the agent."""
         self._contracts: List[str] = kwargs.pop("contracts", [])
@@ -54,7 +53,9 @@ class SubscriptionBehaviour(SimpleBehaviour):
         if use_polling:
             # if we are using polling, then we don't set up an contract subscription
             return
-        for connection in self.context.outbox._multiplexer.connections:  # pylint: disable=W0212
+        for (
+            connection
+        ) in self.context.outbox._multiplexer.connections:  # pylint: disable=W0212
             if connection.component_id.name == WEBSOCKET_CLIENT_CONNECTION_NAME:
                 self._ws_client_connection = cast(WebSocketClient, connection)
 

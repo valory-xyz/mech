@@ -64,6 +64,7 @@ class SharedState(TaskExecSharedState):
     """Keep the current shared state of the skill."""
 
     abci_app_cls = MechAbciApp
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the shared state."""
         self.last_processed_request_block_number: int = 0
