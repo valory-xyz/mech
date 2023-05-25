@@ -133,6 +133,7 @@ models:
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
       agent_mech_contract_address: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+      round_timeout_seconds: ${int:30.0}
       reset_period_count: ${int:1000}
       on_chain_service_id: ${int:1}
       multisend_address: ${str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
@@ -140,7 +141,7 @@ models:
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
-      file_hash_to_tools_json: ${list:[["bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e",
+      file_hash_to_tools_json: ${list:[["bafybeib6ro4lzsm4jk43bzgqzxyoiabyhlcx5ejdd5z6rrfffktbnhlerm",
         ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
         "openai-gpt-4"]]]}
       api_keys_json: ${list:[["openai", "dummy_api_key"]]}
