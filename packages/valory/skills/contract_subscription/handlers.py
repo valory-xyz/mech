@@ -51,10 +51,16 @@ class WebSocketHandler(Handler):
         self.context.shared_state[JOB_QUEUE] = []
         self.context.shared_state[DISCONNECTION_POINT] = None
         # loads the contracts from the config file
-        with open("vendor/valory/contracts/agent_mech/build/AgentMech.json", "r", encoding="utf-8") as file:
-            abi = json.load(file)['abi']
+        with open(
+            "vendor/valory/contracts/agent_mech/build/AgentMech.json",
+            "r",
+            encoding="utf-8",
+        ) as file:
+            abi = json.load(file)["abi"]
 
-        self.w3 = Web3(Web3.HTTPProvider(self.websocket_provider))  # pylint: disable=C0103
+        self.w3 = Web3(  # pylint: disable=C0103
+            Web3.HTTPProvider(self.websocket_provider)
+        )
         self.contract = self.w3.eth.contract(address=self.contract_to_monitor, abi=abi)
 
     def handle(self, message: Message) -> None:
@@ -70,7 +76,7 @@ class WebSocketHandler(Handler):
             return
 
         self.context.logger.info("Extracting data")
-        tx_hash = data['params']['result']['transactionHash']
+        tx_hash = data["params"]["result"]["transactionHash"]
         no_args = True
         limit = 0
         while no_args and limit < 10:
@@ -97,7 +103,7 @@ class WebSocketHandler(Handler):
             tx_receipt: TxReceipt = self.w3.eth.get_transaction_receipt(tx_hash)
             self.context.shared_state[DISCONNECTION_POINT] = tx_receipt["blockNumber"]
             rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
-            return dict(rich_logs[0]['args']), False
+            return dict(rich_logs[0]["args"]), False
 
         except Exception as exc:  # pylint: disable=W0718
             self.context.logger.error(

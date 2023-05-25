@@ -50,6 +50,7 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the period_counter."""
         return cast(int, self.db.get("period_counter", 1))
 
+
 class MultiplexerRound(CollectSameUntilThresholdRound):
     """MultiplexerRound"""
 
@@ -64,7 +65,9 @@ class MultiplexerRound(CollectSameUntilThresholdRound):
         """Process the end of the block."""
         if self.threshold_reached:
 
-            period_counter = cast(SynchronizedData, self.synchronized_data).period_counter
+            period_counter = cast(
+                SynchronizedData, self.synchronized_data
+            ).period_counter
 
             event = Event.WAIT
 

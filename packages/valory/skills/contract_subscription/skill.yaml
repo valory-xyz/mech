@@ -8,12 +8,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeifmvtpeq7ksqq262e2lupzv54sfdzygg2qxiygyztq7f2sujg4cwi
-  behaviours.py: bafybeifab4lcl3zcyenoyy7wdnxnpmdxqu7b4lwvnouibz3gv2jjj4dp2e
+  behaviours.py: bafybeih6piikykeydxin5c5iofgzc7xfrxkwnokh3em6yvh37ibylc3t2q
   dialogues.py: bafybeiaaho77tsg4s7k2k27u2xqcoi2juze6cwx4psuueu7gbumpw5kgiu
-  handlers.py: bafybeiael5dkexws5fqtt4ssymxj27ygpb6nf227lx72wogtot3xnpg4em
+  handlers.py: bafybeieagcgzoggy6jspn2hzw4yhlwtii7nprouysxrjb7hrwt5fqntvbq
+  models.py: bafybeicxiv2m6whj37zffrqmb3zw6tzlouqvziocallca4gcghx3vigs6q
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeidkxhrfnwx4j5zzca3xlrtledw52eel4fstebdscqw5hl26eywjpm
+- valory/websocket_client:0.1.0:bafybeiawlga3on5ijbxpt3zxgks5ssi4jbpez2vchzqfv3nxw3ixqcutfy
 contracts: []
 protocols:
 - fetchai/default:1.0.0:bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4
@@ -34,5 +35,9 @@ models:
   default_dialogues:
     args: {}
     class_name: DefaultDialogues
+  params:
+    args:
+      use_polling: false
+    class_name: Params
 dependencies: {}
 is_abstract: false

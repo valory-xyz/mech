@@ -50,6 +50,7 @@ class SynchronizedData(BaseSynchronizedData):
         """Get the finished_task_data."""
         return cast(int, self.db.get_strict("finished_task_data"))
 
+
 class TaskExecutionRound(CollectDifferentUntilAllRound):
     """TaskExecutionRound"""
 
@@ -61,8 +62,13 @@ class TaskExecutionRound(CollectDifferentUntilAllRound):
         if self.collection_threshold_reached:
 
             payloads_json = {
-                    "request_id": json.loads(self.collection[list(self.collection.keys())[0]].content)['request_id'],
-                    "task_result": [json.loads(f.content)['task_result'] for f in self.collection.values()] 
+                "request_id": json.loads(
+                    self.collection[list(self.collection.keys())[0]].content
+                )["request_id"],
+                "task_result": [
+                    json.loads(f.content)["task_result"]
+                    for f in self.collection.values()
+                ],
             }
 
             synchronized_data = self.synchronized_data.update(
@@ -94,9 +100,9 @@ class TaskExecutionAbciApp(AbciApp[Event]):
         TaskExecutionRound: {
             Event.DONE: FinishedTaskExecutionRound,
             Event.NO_MAJORITY: TaskExecutionRound,
-            Event.ROUND_TIMEOUT: TaskExecutionRound
+            Event.ROUND_TIMEOUT: TaskExecutionRound,
         },
-        FinishedTaskExecutionRound: {}
+        FinishedTaskExecutionRound: {},
     }
     final_states: Set[AppState] = {FinishedTaskExecutionRound}
     event_to_timeout: EventToTimeout = {}

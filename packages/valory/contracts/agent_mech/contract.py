@@ -26,6 +26,7 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
+from web3.types import BlockIdentifier
 
 
 class AgentMechContract(Contract):
@@ -86,11 +87,7 @@ class AgentMechContract(Contract):
 
     @classmethod
     def get_deliver_data(
-        cls,
-        ledger_api: LedgerApi,
-        contract_address: str,
-        request_id: int,
-        data: bytes
+        cls, ledger_api: LedgerApi, contract_address: str, request_id: int, data: bytes
     ) -> JSONLike:
         """
         Deliver a response to a request.
@@ -107,7 +104,63 @@ class AgentMechContract(Contract):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="deliver", args=[request_id, data]
-        )
+        data = contract_instance.encodeABI(fn_name="deliver", args=[request_id, data])
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
+
+    @classmethod
+    def get_request_events(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
+    ) -> JSONLike:
+        """
+        Get the Request events emitted by the contract.
+
+        :return: the events emitted by the contract.
+        """
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        entries = contract_instance.events.Request.createFilter(
+            fromBlock=from_block,
+            toBlock=to_block,
+        ).get_all_entries()
+        request_events = list(
+            {
+                "tx_hash": entry.transactionHash.hex(),
+                "block_number": entry.blockNumber,
+                **entry["args"],
+            }
+            for entry in entries
+        )
+        return {"data": request_events}
+
+    @classmethod
+    def get_deliver_events(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
+    ) -> JSONLike:
+        """
+        Get the Deliver events emitted by the contract.
+
+        :return: the events emitted by the contract.
+        """
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        entries = contract_instance.events.Deliver.createFilter(
+            fromBlock=from_block,
+            toBlock=to_block,
+        ).get_all_entries()
+        deliver_events = list(
+            {
+                "tx_hash": entry.transactionHash.hex(),
+                "block_number": entry.blockNumber,
+                **entry["args"],
+            }
+            for entry in entries
+        )
+        return {"data": deliver_events}

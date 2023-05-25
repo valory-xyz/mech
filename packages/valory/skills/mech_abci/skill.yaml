@@ -12,19 +12,19 @@ fingerprint:
   dialogues.py: bafybeid6ntx5nmtkhuiml5pwt3drafvjejr7x4vu35gqekl4m6tgtxf6am
   fsm_specification.yaml: bafybeihiynklron7mm3hsykwbhdbkosdtoimgkkxckuvvlwafevayjp7ia
   handlers.py: bafybeihi6pbfapfmwxlom6bp7cclybswzejyrrv65gn3fpzwejekvjyxeu
-  models.py: bafybeib4gqxe6esytsnqxhyk5qnu7gf6s5i23k4rvzxnj23w2syxno2rge
+  models.py: bafybeifemtkfquz672h4c33nr7mn6dtqcauq75cawblcf5g4uf6va57jdi
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
 protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
+- valory/multiplexer_abci:0.1.0:bafybeihurusyhcbmmwmiprs3bmotbfpf7phu5icg2ooiwaaeh6yaerdf2q
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeifnmwpwpjz3553gvc7bsr6xefbrd6m2xmtduu2rfpjkfaz2xwdvem
+- valory/task_execution_abci:0.1.0:bafybeicql4ntiwnpdu7hogj33gvmszf6q42fpx2y3nz4rr4pjhcwh3qpu4
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
+- valory/transaction_preparation_abci:0.1.0:bafybeihrlkuskgfy353gbrjosbobqlcrpqwgftaqxf7kgtzqs5bo2a6clq
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 behaviours:
   main:
@@ -113,6 +113,7 @@ models:
       max_healthcheck: 120
       multisend_address: '0x0000000000000000000000000000000000000000'
       on_chain_service_id: null
+      polling_interval: 25
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
@@ -136,6 +137,7 @@ models:
       tendermint_url: http://localhost:26657
       termination_sleep: 900
       tx_timeout: 10.0
+      use_polling: false
       use_termination: false
       validate_timeout: 1205
     class_name: Params
