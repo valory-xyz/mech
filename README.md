@@ -1,103 +1,163 @@
-# mech
-Mech for EthLisbon hack
+<p align="center">
+   <img src="./docs/images/mechs-logo.png" width=300>
+</p>
 
-## Installation
+<h1 align="center" style="margin-bottom: 0;">
+    Autonolas AI Mechs
+    <br><a href="https://github.com/valory-xyz/mech/blob/main/LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/valory-xyz/mech"></a>
+    <a href="https://pypi.org/project/open-autonomy/0.10.4/"><img alt="Framework: Open Autonomy 0.10.4" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.10.4-blueviolet"></a>
+    <!-- <a href="https://github.com/valory-xyz/mech/releases/latest">
+    <img alt="Latest release" src="https://img.shields.io/github/v/release/valory-xyz/mech"> -->
+    </a>
+</h1>
 
-Install project dependencies (you can find install instructions for Poetry [here](https://python-poetry.org/docs/)):
-```bash
-poetry shell
-poetry install
-```
+Executing AI tasks (e.g., generating an image on [Dall-e](https://openai.com/product/dall-e-2), running a prompt on [ChatGPT](https://chat.openai.com/), or more sophisticated composed versions, or tasks involving on-chain operations) requires access to proprietary APIs or expertise in using open-source technologies which might entail certain complexity.
 
-Fetch all the packages
-```bash
-autonomy packages sync --update-packages
-```
+AI Mechs enables you to post *AI tasks requests* on-chan and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are hassle-free, crypto-native, and infinitely composable.
 
-## Run locally as is
+AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).
 
-Note - the service is by default configured to match a specific on-chain representation (id 3 here: https://aimechs.autonolas.network/registry) - since you won't hold the private key for that agent your local instance won't be able to transact. However, you will receive events from transactions (Request type) sent to the on-chain mech here: https://aimechs.autonolas.network/mech. These Requests will be worked by the deployed instance. Your local deployment will fail when trying to send the transaction (Deliver type).
+## AI Mechs components
 
-### Prepare env file
+The project consists of three components:
 
-First, copy the env file:
-```bash
-cp .example.env .1env
-```
+- Off-chain AI worker that controls a Mech. Each AI worker is implemented as an autonomous service on the Autonolas stack.
+- An on-chain protocol, which is used to generate a registry of AI Mechs, represented as NFTs on-chain.
+- [Mech Hub](https://aimechs.autonolas.network/), a frontend which allows to interact with the protocol:
+  - Gives an overview of the AI workers in the registry.
+  - Allows Mech owners to create new workers.
+  - Allows users to request work from an existing worker.
 
-Provide your OpenAI API key in place of `dummy_api_key` in `.1env`.
+## Requirements
 
-Source the env file:
-```bash
-source .1env
-```
+This repository contains a demo AI Mech. You can clone and extend the codebase to create your own AI Mech. You need the following requirements installed in your system:
 
-### Option 1: Run the agent standalone
+- [Python](https://www.python.org/) (recommended `3.10`)
+- [Poetry](https://python-poetry.org/docs/)
+- [Docker Engine](https://docs.docker.com/engine/install/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+- [Tendermint](https://docs.tendermint.com/v0.34/introduction/install.html) `==0.34.19`
 
-Ensure you have a file with the private key at `ethereum_private_key.txt`.
+## Run the demo
 
-From one terminal run
-```bash
-bash run_agent.sh
-```
+Follow the instructions below to run the demo.
 
-From another terminal run
-```bash
-bash run_tm.sh
-```
+> **Note**<br />
+> **The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry). Since you will not have access to its private key, your local instance will not be able to transact.
+> However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).**
 
-### Option 2: Run the service
+1. Create a Poetry virtual environment and install the dependencies:
 
-Ensure you have a file with the private key at `keys.json`.
+    ```bash
+    poetry shell
+    poetry install
+    ```
 
-Run, the service:
-```bash
-bash run_service.sh
-```
+2. Fetch the software packages using the [Open Autonomy](https://docs.autonolas.network/open-autonomy/) CLI 
 
-## Create your own instance
+    ```bash
+    autonomy packages sync --update-packages
+    ```
 
-### 1. Create a new tool
+    This will populate the Open Autonomy local registry (folder `./packages`) with the required components to run the worker service.
 
-You can add your tool in `tools` as a single python file. The file must contain a `run` function that accepts `kwargs` and returns a string.
+3. Configure the worker service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
 
-```python
-def run(**kwargs) -> str:
-    """Run the task"""
+    ```bash
+    # Copy the prefilled template
+    cp .example.env .1env
+    
+    # Edit ".1env" and replace "dummy_api_key" with your OpenAI API key.
 
-    # YOUR CODE
+    # Source the env file
+    source .1env
+    ```
 
-    return result  # a string
-```
+Now, you have two options to run the worker: as a standalone agent or as a service.
 
-The `kwargs` are guaranteed to contain the keys `api_keys`, (`kwargs["api_keys"]`) a dictionary itself and discussed below, `prompt`, a string containing the prompt, and `tool`, a string specifying the tool to be used.
+### Option 1: Run the Mech as a standalone agent
 
-Once finished, upload the tool file to IPFS and generate a hash, e.g.:
-```bash
-python push_to_ipfs.py "tools/openai_request.py"
-```
+1. Ensure you have a file with a private key (`ethereum_private_key.txt`). You can generate a new private key file using the Open Autonomy CLI:
+   ```bash
+   autonomy generate-key ethereum 
+   ```
 
-### 2. Configure your service
+2. From one terminal, run the agent:
+    ```bash
+    bash run_agent.sh
+    ```
 
-The default service has this configuration:
-```bash
-FILE_HASH_TO_TOOLS=[[bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e, [openai-text-davinci-002, openai-text-davinci-003, openai-gpt-3.5-turbo, openai-gpt-4]]]
-API_KEYS=[[openai, dummy_api_key]]
-```
+3. From another terminal, run the Tendermint node:
+    ```bash
+    bash run_tm.sh
+    ```
 
-To add a tool with hash `xyz` and tool list `[a, b, c]` and api keys `secret` simply update this to:
-```bash
-FILE_HASH_TO_TOOLS=[[bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e, [openai-text-davinci-002, openai-text-davinci-003, openai-gpt-3.5-turbo, openai-gpt-4]],[xyz, [a,b,c]]]
-API_KEYS=[[openai, dummy_api_key],[xyz, secret]]
-```
+### Option 2: Run the Mech as an agent service
 
-Then also register your service on [Autonolas](https://protocol.autonolas.network/services/mint) and create a mech for it [here](https://aimechs.autonolas.network/factory). This will allow you to set `SAFE_CONTRACT_ADDRESS` and `AGENT_MECH_CONTRACT_ADDRESS`.
+1. Ensure you have a file with the agents private keys (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
+    ```bash
+    autonomy generate-key ethereum -n 4
+    ```
 
-Here an example of the agent NFT metadata:
-```json
-{"name":"Autonolas Mech III","description":"The mech executes AI tasks requested on-chain and delivers the results to the requester.","inputFormat":"ipfs-v0.1","outputFormat":"ipfs-v0.1","image":"tbd","tools": ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo", "openai-gpt-4"]}
-```
+2. Run, the service:
+    ```bash
+    bash run_service.sh
+    ```
 
-### 3. Run your service locally as per above
+## Build your own
 
-Once your service works locally, you have the option to run it on hosted service [Propel](https://propel.valory.xyz/).
+You can create and mint your own AI Mech that handles requests for tasks that you can define.
+
+1. **Create a new tool.** Tools are the components that execute Requests for AI tasks. Add your tool to the folder `./tools` as a single Python file. The file must contain a `run` function that accepts `kwargs` and returns a `string`:
+
+    ```python
+    def run(**kwargs) -> str:
+        """Run the task"""
+
+        # Your code here
+
+        return result  # a string
+    ```
+
+    The `kwargs` are guaranteed to contain:
+    * `api_keys` (`kwargs["api_keys"]`): the required API keys. This is a dictionary containing the API keys required by your Mech:
+        ```python
+        <api_key>=kwargs["api_keys"][<api_key_id>]).
+        ```
+    * `prompt` (`kwargs["prompt"]`): a string containing the user prompt.
+    * `tool` (`kwargs["tool"]`): a string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
+
+2. **Upload the tool file to IPFS.** You can use the following script:
+    ```bash
+    python push_to_ipfs.py "tools/<your_tool>.py"
+    ```
+
+    You should see an output similar to this:
+    ```
+    IPFS file hash v1: bafybei0123456789abcdef...0
+    IPFS file hash v1 hex: f017012200123456789abcdef...0
+    ```
+    Note down the generated hashes for your tool.
+
+3. **Configure your service.** Edit the `.1env` file. The demo service has this configuration:
+    ```bash
+    FILE_HASH_TO_TOOLS=[[bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e, [openai-text-davinci-002, openai-text-davinci-003, openai-gpt-3.5-turbo, openai-gpt-4]]]
+    API_KEYS=[[openai, dummy_api_key]]
+    ```
+
+    To add your new tool with hash `<your_tool_hash>` and sub-tool list `[a, b, c]` and API key `<your_api_key>` simply update the variables above to:
+    ```bash
+    FILE_HASH_TO_TOOLS=[[bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e, [openai-text-davinci-002, openai-text-davinci-003, openai-gpt-3.5-turbo, openai-gpt-4]],[<your_tool_hash>, [a,b,c]]]
+    API_KEYS=[[openai, dummy_api_key],[<your_api_key_id>, <your_api_key>]]
+    ```
+
+4. **Mint your agent service** in the [Autonolas Protocol](https://protocol.autonolas.network/services/mint), and create a Mech for it in [Mech Hub](https://aimechs.autonolas.network/factory). This will allow you to set the `SAFE_CONTRACT_ADDRESS` and `AGENT_MECH_CONTRACT_ADDRESS` in the `.1env` file.
+
+    Here is an example of the agent NFT metadata once you create the Mech:
+    ```json
+    {"name":"Autonolas Mech III","description":"The mech executes AI tasks requested on-chain and delivers the results to the requester.","inputFormat":"ipfs-v0.1","outputFormat":"ipfs-v0.1","image":"tbd","tools": ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo", "openai-gpt-4"]}
+    ```
+
+5. **Run your service.** You can take a look at the `run_service.sh` script and execute your service locally as [above](#option-2-run-the-mech-as-an-agent-service).
+
+    Once your service works locally, you have the option to run it on a hosted service like [Propel](https://propel.valory.xyz/).
