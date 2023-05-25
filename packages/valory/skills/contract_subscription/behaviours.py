@@ -59,7 +59,24 @@ class SubscriptionBehaviour(SimpleBehaviour):
         is_connected = cast(WebSocketClient, self._ws_client_connection).is_connected
         disconnection_point = self.context.shared_state.get(DISCONNECTION_POINT, None)
 
-        if is_connected and self._subscription_required:
+        if not is_connected and self._subscription_required:
+            self.context.logger.warning(
+                f"Disconnected, waitinf for connection to be established to resubscribe."
+            )
+            return
+
+        if (
+            not is_connected
+        ):
+            self.context.logger.warning(
+                f"Disconnection detected on block {disconnection_point}." if disconnection_point is not None else "Disconnection detected."
+            )
+            self._subscription_required = True
+            return
+
+        # is_connected = True
+
+        if self._subscription_required:
             # we only subscribe once, because the envelope will remain in the multiplexer until handled
             for contract in self._contracts:
                 subscription_msg_template = {
@@ -76,7 +93,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
             if disconnection_point is not None:
                 self._missed_parts = True
 
-        if is_connected and self._missed_parts:
+        if self._missed_parts:
             # if we are connected and have a disconnection point, then we need to fetch the parts that were missed
             for contract in self._contracts:
                 filter_msg_template = {
@@ -92,18 +109,6 @@ class SubscriptionBehaviour(SimpleBehaviour):
             self.context.logger.info(
                 "Getting parts that were missed while disconnected."
             )
-
-        if (
-            not is_connected
-            and not self._subscription_required
-            and disconnection_point is not None
-        ):
-            self.context.logger.warning(
-                f"Disconnection detected on block {disconnection_point}."
-            )
-
-        if not is_connected:
-            self._subscription_required = True
 
     def _create_call(self, content: bytes) -> None:
         """Create a call."""

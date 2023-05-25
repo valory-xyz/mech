@@ -86,6 +86,8 @@ class WebSocketClient(Connection):
                 if self._thread is None:
                     self._thread = Thread(target=asyncio.run, args=(self._run(),))
                     self._thread.start()
+                else:
+                    # ??
                 return
             except Exception as exception:  # pylint: disable=W0718
                 self.logger.error(
