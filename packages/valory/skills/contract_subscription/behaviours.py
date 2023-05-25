@@ -28,9 +28,10 @@ from aea.skills.behaviours import SimpleBehaviour
 
 from packages.fetchai.protocols.default.message import DefaultMessage
 from packages.valory.connections.websocket_client.connection import (
-    CONNECTION_ID, WebSocketClient)
-from packages.valory.skills.contract_subscription.handlers import \
-    DISCONNECTION_POINT
+    CONNECTION_ID,
+    WebSocketClient,
+)
+from packages.valory.skills.contract_subscription.handlers import DISCONNECTION_POINT
 
 DEFAULT_ENCODING = "utf-8"
 WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
@@ -38,7 +39,6 @@ WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
 
 class SubscriptionBehaviour(SimpleBehaviour):
     """This class scaffolds a behaviour."""
-
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialise the agent."""
@@ -50,7 +50,9 @@ class SubscriptionBehaviour(SimpleBehaviour):
 
     def setup(self) -> None:
         """Implement the setup."""
-        for connection in self.context.outbox._multiplexer.connections:  # pylint: disable=W0212
+        for (
+            connection
+        ) in self.context.outbox._multiplexer.connections:  # pylint: disable=W0212
             if connection.component_id.name == WEBSOCKET_CLIENT_CONNECTION_NAME:
                 self._ws_client_connection = cast(WebSocketClient, connection)
 
@@ -92,6 +94,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
             self.context.logger.info(
                 "Getting parts that were missed while disconnected."
             )
+            self._missed_parts = False
 
         if (
             not is_connected
