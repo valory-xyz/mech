@@ -173,7 +173,10 @@ class WebSocketClient(Connection):
                 self.logger.error("Websocket connection closed.")
                 self.state = ConnectionStates.disconnecting
                 # Start the reconnection process
-                if self.state == ConnectionStates.disconnecting and self._attempt_reconnect:
+                if (
+                    self.state == ConnectionStates.disconnecting
+                    and self._attempt_reconnect
+                ):
                     self.logger.info("Attempting to reconnect...")
                     await self._reconnect()
             else:

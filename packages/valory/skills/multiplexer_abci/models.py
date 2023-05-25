@@ -43,6 +43,7 @@ class SharedState(BaseSharedState):
         super().__init__(*args, skill_context=skill_context, **kwargs)
 
         self.pending_tasks: List = []
+        self.last_processed_request_block_number: int = 0
 
 
 class Params(BaseParams):
@@ -52,7 +53,13 @@ class Params(BaseParams):
         """Initialize the parameters object."""
 
         self.reset_period_count = self._ensure("reset_period_count", kwargs, int)
-
+        self.use_polling = self._ensure("use_polling", kwargs, bool)
+        self.polling_interval = self._ensure("polling_interval", kwargs, int)
+        self.agent_mech_contract_address = kwargs.get(
+            "agent_mech_contract_address", None
+        )
+        if self.agent_mech_contract_address is None:
+            raise ValueError("agent_mech_contract_address is required")
         super().__init__(*args, **kwargs)
 
 

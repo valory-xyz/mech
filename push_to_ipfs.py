@@ -1,7 +1,7 @@
-import multibase
-import multicodec
 import sys
 
+import multibase
+import multicodec
 from aea.helpers.cid import to_v1
 from aea_cli_ipfs.ipfs_utils import IPFSTool
 

@@ -7,17 +7,19 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihmlhtsobnj6vrhthmy3bgnwbb2x27wjbzea35ypraag6bgbazr4e
-  behaviours.py: bafybeifmh7vdhg3fozgngneutdmkaupfvbxcm33iwkxoduy4tcxdfjqwxa
+  behaviours.py: bafybeid6yzopvxmwtin6jujtnsytc4jhutazbist74y7c6m7wrszkj5umq
   dialogues.py: bafybeiew6j4u7ggc43scytblq7r6ulijcbqr2tjvtp7cr6hru4sb3irl3m
   fsm_specification.yaml: bafybeibmbpdgq7h6sgaxtdb2aawha5xdwd6oszbn3nwr2tolaijoswkfly
   handlers.py: bafybeifuvjckl3yjdwjoz6uj3sbdbmcesggfuidolfzpvfbnhb4e73wxb4
-  models.py: bafybeiagy2uislg4scfhrycfdasrss6styw4q7aeztozwbjtumth3juuxu
+  models.py: bafybeih3ezuzrbw72qclv4xdyvqj32kurcskw7d4t3f54pazie4gwchxem
   payloads.py: bafybeibhg7q5ejfhjkjvcfeqjyzp32msn4alu5btnywimh2zd5arr2f2mm
-  rounds.py: bafybeiaemvgm6j6vycfwvelp7ig3puprh2g2yygixb6uymnczln6zi6hx4
+  rounds.py: bafybeigeumeoxkgnq2hulyz6t5muwnj2jq6zuc7pi2wouhpskeonyll75y
 fingerprint_ignore_patterns: []
 connections: []
-contracts: []
-protocols: []
+contracts:
+- valory/agent_mech:0.1.0:bafybeieu6zilpud6hul3t7v3ggwpzjyydtyknnh7zwazgez4oiznzrp64u
+protocols:
+- valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
 behaviours:
@@ -96,6 +98,7 @@ models:
       max_attempts: 10
       max_healthcheck: 120
       on_chain_service_id: null
+      polling_interval: 25
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
@@ -118,6 +121,7 @@ models:
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
       tx_timeout: 10.0
+      use_polling: false
       use_termination: false
       validate_timeout: 1205
     class_name: Params
