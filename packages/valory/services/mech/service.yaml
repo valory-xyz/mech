@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeigvou7kv4gqbsvyeebfudd3dq7tmyzu5wwt7rtcrignpbqnbp3qze
+agent: valory/mech:0.1.0:bafybeia73lbnxz4ofdv6exppmbj5drrmqju6lf6gmgxcrmne4wtjavnzii
 number_of_agents: 4
 deployment:
   agent:
@@ -65,7 +65,7 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         request_retry_delay: 1.0
         request_timeout: 10.0
-        round_timeout_seconds: 30.0
+        round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         service_id: mech
         use_polling: ${USE_POLLING:bool:false}
         polling_interval: ${POLLING_INTERVAL:int:25}
@@ -113,7 +113,7 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         request_retry_delay: 1.0
         request_timeout: 10.0
-        round_timeout_seconds: 30.0
+        round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         service_id: mech
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
         setup: *id003
@@ -158,7 +158,7 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         request_retry_delay: 1.0
         request_timeout: 10.0
-        round_timeout_seconds: 30.0
+        round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         service_id: mech
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
         setup: *id003
@@ -203,7 +203,7 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         request_retry_delay: 1.0
         request_timeout: 10.0
-        round_timeout_seconds: 30.0
+        round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         polling_interval: ${POLLING_INTERVAL:int:25}
         service_id: mech

@@ -39,6 +39,7 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     MultiplexerAbciApp.FinishedMultiplexerResetRound: ResetAndPauseAbci.ResetAndPauseRound,
     MultiplexerAbciApp.FinishedMultiplexerExecuteRound: TaskExecutionAbciApp.TaskExecutionRound,
     TaskExecutionAbciApp.FinishedTaskExecutionRound: TransactionPreparationAbciApp.TransactionPreparationRound,
+    TaskExecutionAbciApp.FinishedTaskExecutionWithErrorRound: MultiplexerAbciApp.MultiplexerRound,
     TransactionPreparationAbciApp.FinishedTransactionPreparationRound: TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound,  # pylint: disable=C0301
     TransactionSubmissionAbciApp.FinishedTransactionSubmissionRound: MultiplexerAbciApp.MultiplexerRound,
     TransactionSubmissionAbciApp.FailedRound: TransactionPreparationAbciApp.TransactionPreparationRound,
