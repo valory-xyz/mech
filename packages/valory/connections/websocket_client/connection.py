@@ -40,7 +40,7 @@ class WebSocketHandler:
 
     def __init__(self, url: str):
         self.url = url
-        self._session = aiohttp.ClientSession()
+
         self._ws = None
         self._connected_future = None
         self._connection_exception = None
@@ -131,6 +131,7 @@ class WebSocketHandler:
                     await asyncio.sleep(0.1)
 
     async def connect(self):
+        self._session = aiohttp.ClientSession()
         self._connected_future = asyncio.Future()
         self._connection_task = asyncio.ensure_future(self._connection_loop())
         try:
