@@ -40,8 +40,6 @@ def run(**kwargs) -> str:
     temperature =  kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
     prompt = kwargs["prompt"]
     tool = kwargs["tool"]
-    print("TOOL: ", tool)
-    print("ALLOWED TOOLS: ", ALLOWED_TOOLS)
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
     engine = tool.removeprefix(PREFIX)

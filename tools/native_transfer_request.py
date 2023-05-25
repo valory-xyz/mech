@@ -7,8 +7,6 @@ WIP
 import ast
 import os
 import sys
-from web3 import Web3
-from rlp import encode
 from openai_request import run
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -46,24 +44,8 @@ def native_transfer(**kwargs) -> str:
     4. return the encoded transaction object (WIP)
     """
 
-    print("\033[95m\033[1m" + "\n USER PROMPT:" + "\033[0m\033[0m")
-    print(str(kwargs["prompt"]))
-
+    # format the tool prompt
     tool_prompt = native_token_transfer_prompt.format(user_prompt=str(kwargs["prompt"]))
-
-    print("\033[95m\033[1m" + "\n FORMATTED PROMPT FOR TOOL:" + "\033[0m\033[0m")
-    print(tool_prompt)
-
-    # create a web3 instance
-    w3 = Web3(Web3.HTTPProvider('https://eth-goerli.g.alchemy.com/v2/-1lXbXViKV4qB9YQzllxfadnGxlemEJX'))
-
-    # Define the known variables
-    # Agent address
-    w3.eth.default_account = "0x812ecd8740Bfbd4b808860a442a0d3aF9C146c32"
-    agent_address = w3.eth.default_account
-    gas_limit = 21000
-    gas_price = w3.eth.gas_price
-    current_nonce = w3.eth.get_transaction_count(agent_address)
 
     # use openai_request tool
     response = run(api_keys={"openai": OPENAI_API_KEY}, prompt=tool_prompt, tool='openai-gpt-3.5-turbo')
@@ -77,41 +59,19 @@ def native_transfer(**kwargs) -> str:
     print("\033[95m\033[1m" + "\n PARSED TXS OBJECT:" + "\033[0m\033[0m")
     print(parsed_txs)
 
+    # Txs List
+    txs_list = []
+
     # build the transaction object, unknowns are referenced from parsed_txs
     transaction = {
-        "from": agent_address,
         "to": str(parsed_txs["to"]),
-        "signature": "", # empty signature
-        "nonce": current_nonce,
         "value": str(parsed_txs["wei_value"]),
-        "gas": gas_limit,
-        "gasPrice": gas_price,
-        "maxFeePerGas": "300",
-        "maxPriorityFeePerGas": "10"
     }
 
-    # encode the transaction object
-    # encoded_transaction = encode(transaction)
-
-    encoded_transaction = encode([
-    agent_address,
-    transaction['to'],
-    transaction['signature'],
-    transaction['nonce'],
-    transaction['value'],
-    transaction['gas'],
-    transaction['gasPrice'],
-    transaction['maxFeePerGas'],
-    transaction['maxPriorityFeePerGas'],
-    ])
-
-    print("\033[95m\033[1m" + "\n ENCODED TXS OBJECT:" + "\033[0m\033[0m")
-    print(encoded_transaction)
-
     # return the encoded transaction object
-    txs_tuple = (encoded_transaction)
+    txs_list = [transaction]
 
-    return txs_tuple
+    return txs_list
 
 
 
@@ -129,8 +89,8 @@ def main(task: str):
         "api_keys": {"openai": OPENAI_API_KEY},
     }
 
-    txs_tuple = native_transfer(prompt=kwargs["prompt"]), 
-    print("RESPONSE Txs Tuple: " + str(txs_tuple))
+    txs_list = native_transfer(prompt=kwargs["prompt"]), 
+    print("RETURNED DICT LIST : " + str(txs_list))
 
 
 if __name__ == "__main__":
