@@ -100,10 +100,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
                 # Verify the data hash and handle encoding
                 try:
-                    file_hash = task_data_.hex()
-                    file_hash = CID_PREFIX + file_hash
-                    file_hash = str(CID.from_string(file_hash))
-
+                    file_hash = self.get_ipfs_file_hash(task_data_)
                     # Get the file from IPFS
                     self.context.logger.info(f"Getting data from IPFS: {file_hash}")
                     task_data = yield from self.get_from_ipfs(
@@ -183,6 +180,16 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
         self.set_done()
 
+    def get_ipfs_file_hash(self, data: bytes) -> str:
+        """Get hash from bytes"""
+        try:
+            return str(CID.from_string(data.decode()))
+        except Exception:
+            # if something goes wrong, fallback to sha256
+            file_hash = data.hex()
+            file_hash = CID_PREFIX + file_hash
+            file_hash = str(CID.from_string(file_hash))
+            return file_hash
     def prepare_task(self, task_data: Dict[str, Any]):
         """Prepare the task."""
         tool_task = AnyToolAsTask()

@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of Mech."""
+from typing import Any
 
 from packages.valory.skills.abstract_round_abci.models import ApiSpecs
 from packages.valory.skills.abstract_round_abci.models import \
@@ -63,6 +64,10 @@ class SharedState(TaskExecSharedState):
     """Keep the current shared state of the skill."""
 
     abci_app_cls = MechAbciApp
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the shared state."""
+        self.last_processed_request_block_number: int = 0
+        super().__init__(*args, **kwargs)
 
     def setup(self) -> None:
         """Set up."""

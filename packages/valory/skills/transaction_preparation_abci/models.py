@@ -43,8 +43,9 @@ class Params(BaseParams):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
-
-        self.agent_mech_contract_address = self._ensure("agent_mech_contract_address", kwargs, str)
+        self.agent_mech_contract_address = kwargs.get("agent_mech_contract_address", None)
+        if self.agent_mech_contract_address is None:
+            raise ValueError("agent_mech_contract_address is required")
 
         super().__init__(*args, **kwargs)
 

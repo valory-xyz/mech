@@ -11,13 +11,13 @@ fingerprint:
   dialogues.py: bafybeidwzysmmicss6myr36mqja6annr72nyuc5vmvp2zifcza54zayjye
   fsm_specification.yaml: bafybeickup5aqc3ejxbjxc5d6seax5kn5l5apgvvayxq7pxu2qmknkd7di
   handlers.py: bafybeihp7c6cvr5ui7qkwfuv463tnwpn2p3kxandm5fntilugdaxgr66ei
-  models.py: bafybeihyk4u4noudvlydnxjpetr6puslqngv3hwnbh52nsn5j54jdpbbqe
+  models.py: bafybeihhcufsu7xk6hciubnlpapxdfjqacnxlt7zw7uu4rvbzeo6777duy
   payloads.py: bafybeifzn5lav6fcbt4pqrytsrm72hf3662qmcylf6efwrc2qhssg7apq4
   rounds.py: bafybeiecktz7wqpn24ycruptraatj2cjzwervxo37dh2z6vn2uj3di7cfu
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy
+- valory/agent_mech:0.1.0:bafybeibpyb5kgxrmu76pjz4hae4j2n6os34ohxena3dm3bzwd6t32gsacy
 - valory/gnosis_safe:0.1.0:bafybeigfnb6hdixmdwoxingxrevx7beawm2voudgtexo6vazzfa4vhyx5m
 protocols:
 - valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
