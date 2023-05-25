@@ -28,10 +28,9 @@ from aea.skills.behaviours import SimpleBehaviour
 
 from packages.fetchai.protocols.default.message import DefaultMessage
 from packages.valory.connections.websocket_client.connection import (
-    CONNECTION_ID,
-    WebSocketClient,
-)
-from packages.valory.skills.contract_subscription.handlers import DISCONNECTION_POINT
+    CONNECTION_ID, WebSocketClient)
+from packages.valory.skills.contract_subscription.handlers import \
+    DISCONNECTION_POINT
 
 DEFAULT_ENCODING = "utf-8"
 WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"

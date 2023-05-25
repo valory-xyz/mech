@@ -21,6 +21,7 @@
 """Websocket client connection."""
 
 import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from threading import Thread
 from typing import Any, Optional
 
@@ -29,13 +30,12 @@ from aea.configurations.base import PublicId
 from aea.connections.base import Connection, ConnectionStates
 from aea.mail.base import Envelope
 
-from concurrent.futures import ThreadPoolExecutor
 from packages.fetchai.protocols.default.message import DefaultMessage
 
 CONNECTION_ID = PublicId.from_str("valory/websocket_client:0.1.0")
 
 
-class WebSocketClient(Connection):
+class WebSocketClient(Connection):  # pylint: disable=Too many instance attributes
     """Proxy to the functionality of the SDK or API."""
 
     connection_id = CONNECTION_ID
