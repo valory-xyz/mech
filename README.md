@@ -173,7 +173,14 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
     Here is an example of the agent NFT metadata once you create the Mech:
     ```json
-    {"name":"Autonolas Mech III","description":"The mech executes AI tasks requested on-chain and delivers the results to the requester.","inputFormat":"ipfs-v0.1","outputFormat":"ipfs-v0.1","image":"tbd","tools": ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo", "openai-gpt-4"]}
+    {
+      "name": "Autonolas Mech III",
+      "description": "The mech executes AI tasks requested on-chain and delivers the results to the requester.",
+      "inputFormat": "ipfs-v0.1",
+      "outputFormat": "ipfs-v0.1",
+      "image": "tbd",
+      "tools": ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo", "openai-gpt-4"]
+    }
     ```
 
 5. **Run your service.** You can take a look at the `run_service.sh` script and execute your service locally as [above](#option-2-run-the-mech-as-an-agent-service).
