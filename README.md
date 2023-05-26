@@ -13,7 +13,7 @@
 
 Executing AI tasks (e.g., generating an image on [Dall-e](https://openai.com/product/dall-e-2), running a prompt on [ChatGPT](https://chat.openai.com/), or more sophisticated composed versions, or tasks involving on-chain operations) requires access to proprietary APIs or expertise in using open-source technologies which might entail certain complexity.
 
-AI Mechs enables you to post *AI tasks requests* on-chan and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are hassle-free, crypto-native, and infinitely composable.
+AI Mechs enables you to post *AI tasks requests* on-chain and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are hassle-free, crypto-native, and infinitely composable.
 
 > **Info**<br />
 > **AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).**
