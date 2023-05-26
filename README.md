@@ -109,7 +109,10 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
     autonomy generate-key ethereum -n 1
     ```
 
-2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`.
+2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`:
+   ```bash
+   ALL_PARTICIPANTS='["your_agent_address"]'
+   ```
 
 3. Run, the service:
     ```bash
