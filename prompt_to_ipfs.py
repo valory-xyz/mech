@@ -43,7 +43,7 @@ def push_metadata_to_ipfs(prompt: str, tool: str) -> Tuple[str, str]:
         json.dump(metadata, f)
     _, v1_file_hash_hex = push_to_ipfs(file_name)
     shutil.rmtree(dirpath)
-    return "0x" + v1_file_hash_hex[6:], v1_file_hash_hex
+    return "0x" + v1_file_hash_hex[9:], v1_file_hash_hex
 
 
 def main(prompt: str, tool: str) -> None:
