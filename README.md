@@ -19,8 +19,8 @@ These are just a few ideas on what capabilities can be brought on-chain with AI 
 
 - fetch real-time **web search** results
 - integrate **multi-sig wallets**,
-- simulate chain transactions
-- execute a variety of AI models:
+- **simulate** chain transactions
+- execute a variety of **AI models**:
   - generative (e.g, Stability AI, Midjourney),
   - action-based AI agents (e.g., AutoGPT, Langchain)
 
