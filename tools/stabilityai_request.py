@@ -27,7 +27,6 @@ api_host = os.getenv('API_HOST', 'https://api.stability.ai')
 # for testing (remove later)
 STABILITYAI_API_KEY = os.getenv("STABILITYAI_API_KEY")
 
-
 DEFAULT_STABILITYAI_SETTINGS = {
     "cfg_scale": 7,
     "weight": 0.5,
@@ -105,7 +104,7 @@ def run(**kwargs) -> str:
 
 
 def main(task: str):
-    """Run the task"""
+    """Run the task"""    
 
     # build dictionary of kwargs
     kwargs = {
@@ -114,13 +113,13 @@ def main(task: str):
         "tool": "stabilityai-stable-diffusion-v1-5",
     }
 
-    data = run(prompt=kwargs["prompt"])
+    data = run(prompt=kwargs["prompt"], tool=kwargs["tool"], api_keys=kwargs["api_keys"])
     print("IMAGE DATA:\n")
     print(data)
 
 
 if __name__ == "__main__":
-    task = sys.argv
+    task = sys.argv[1] if len(sys.argv) > 1 else "Default task"
     try:
         main(task)
     except KeyboardInterrupt:
