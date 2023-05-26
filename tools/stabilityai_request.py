@@ -19,14 +19,13 @@
 """Contains the job definitions"""
 import base64
 import os
+import sys
 import requests
 
 api_host = os.getenv('API_HOST', 'https://api.stability.ai')
 
 # for testing (remove later)
 STABILITYAI_API_KEY = os.getenv("STABILITYAI_API_KEY")
-if STABILITYAI_API_KEY is None:
-    raise Exception("Missing Stability API key.")
 
 
 DEFAULT_STABILITYAI_SETTINGS = {
@@ -43,7 +42,9 @@ ENGINES = {
     "picture": ["stable-diffusion-v1-5", "stable-diffusion-xl-beta-v2-2-2", "stable-diffusion-512-v2-1", "stable-diffusion-768-v2-1"]
 }
 
-ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
+
+# ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
+ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
 
 
 def run(**kwargs) -> str:
@@ -103,23 +104,19 @@ def run(**kwargs) -> str:
     return data
 
 
-
-
 def main(task: str):
     """Run the task"""
 
     # build dictionary of kwargs
     kwargs = {
+        "api_keys": {"stabilityai": STABILITYAI_API_KEY},
         "prompt": task,
         "tool": "stabilityai-stable-diffusion-v1-5",
-        "max_tokens": 500,
-        "temperature": .7,
-        "top_p": 1,
-        "api_keys": {"openai": STABILITYAI_API_KEY},
     }
 
-    txs_list = native_transfer(prompt=kwargs["prompt"]), 
-    print("RETURNED DICT LIST : " + str(txs_list))
+    data = run(prompt=kwargs["prompt"])
+    print("IMAGE DATA:\n")
+    print(data)
 
 
 if __name__ == "__main__":

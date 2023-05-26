@@ -18,6 +18,10 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 import openai
+import os
+import sys
+
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
@@ -28,7 +32,9 @@ ENGINES = {
     "chat": ["gpt-3.5-turbo", "gpt-4"],
     "completion": ["text-davinci-002", "text-davinci-003"]
 }
-ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
+
+#ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
+ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["chat"] + ENGINES["completion"]]
 
 
 def run(**kwargs) -> str:
@@ -41,7 +47,7 @@ def run(**kwargs) -> str:
     tool = kwargs["tool"]
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
-    engine = tool.strip(PREFIX)
+    engine = tool.removeprefix(PREFIX)
 
     moderation_result = openai.Moderation.create(prompt)
 
@@ -72,3 +78,21 @@ def run(**kwargs) -> str:
         presence_penalty=0,
     )
     return response.choices[0].text
+
+
+def main(task: str):
+    """Run the task"""
+
+    # use openai_request tool
+    response = run(api_keys={"openai": OPENAI_API_KEY}, prompt=str(task), tool='openai-gpt-3.5-turbo')
+
+    print("\033[95m\033[1m" + "\n RESPONSE FROM GPT:" + "\033[0m\033[0m")
+    print(response)
+
+
+if __name__ == "__main__":
+    task = sys.argv
+    try:
+        main(task)
+    except KeyboardInterrupt:
+        pass
