@@ -15,14 +15,13 @@ Executing AI tasks (e.g., generating an image on [Dall-e](https://openai.com/pro
 
 AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to post *AI tasks requests* on-chain and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are **hassle-free**, **crypto-native**, and **infinitely composable**.
 
-These are just a few ideas on what capabilities can be brought on-chain with AI Mechs:
-
-- fetch real-time **web search** results
-- integrate **multi-sig wallets**,
-- **simulate** chain transactions
-- execute a variety of **AI models**:
-  - generative (e.g, Stability AI, Midjourney),
-  - action-based AI agents (e.g., AutoGPT, Langchain)
+> :bulb: These are just a few ideas on what capabilities can be brought on-chain with AI Mechs:
+> - fetch real-time **web search** results
+> - integrate **multi-sig wallets**,
+> - **simulate** chain transactions
+> - execute a variety of **AI models**:
+>   - **generative** (e.g, Stability AI, Midjourney),
+>   - **action-based** AI agents (e.g., AutoGPT, Langchain)
 
 
 > **Note**<br />
