@@ -104,12 +104,14 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 ### Option 2: Run the Mech as an agent service
 
-1. Ensure you have a file with the agents private keys (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
+1. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
     ```bash
     autonomy generate-key ethereum -n 1
     ```
 
-2. Run, the service:
+2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`.
+
+3. Run, the service:
     ```bash
     bash run_service.sh
     ```
