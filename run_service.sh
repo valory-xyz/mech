@@ -25,7 +25,7 @@ autonomy build-image
 # Copy keys and build the deployment
 cp $PWD/../keys.json .
 
-autonomy deploy build -ltm
+autonomy deploy build --n 1 -ltm
 
 # Run the deployment
 autonomy deploy run --build-dir abci_build/

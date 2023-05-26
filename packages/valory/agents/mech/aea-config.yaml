@@ -32,14 +32,13 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/contract_subscription:0.1.0:bafybeifqutglt3m6jgur3dh22dc7onq5h2bvn3n3hbprm64rfnbfdjlyty
-- valory/mech_abci:0.1.0:bafybeifowf3fhj76pl2qkydvhbuadnmfaqj3ayjhnw4gslpegpvq6vovau
-- valory/multiplexer_abci:0.1.0:bafybeihurusyhcbmmwmiprs3bmotbfpf7phu5icg2ooiwaaeh6yaerdf2q
+- valory/contract_subscription:0.1.0:bafybeihif3upph6pblozny73s65mdsp55wfcpz6dq6u2k6zhrrpeekwnkq
+- valory/mech_abci:0.1.0:bafybeiewggczpd72jz5wewovkfofnle2usaxczoywwsu7jolmwrbms2mna
+- valory/multiplexer_abci:0.1.0:bafybeieaovj6xwaaju3co44dmlymff3jkgdw7rmucmdnsjaui2myark43e
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeibuoaujewlgxfto2h4vv3q2wpyiqf2rk4ofxuhrtx2zigmrhy2dxe
+- valory/task_execution_abci:0.1.0:bafybeidkaxnyny4luqmilzo5j72sv6yrrx5omnkvgdsvb3pmget57veina
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeihrlkuskgfy353gbrjosbobqlcrpqwgftaqxf7kgtzqs5bo2a6clq
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 default_ledger: ethereum
 required_ledgers:
