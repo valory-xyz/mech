@@ -21,7 +21,7 @@ AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to p
 > - **simulate** chain transactions
 > - execute a variety of **AI models**:
 >   - **generative** (e.g, Stability AI, Midjourney),
->   - **action-based** AI agents (e.g., AutoGPT, Langchain)
+>   - **action-based** AI agents (e.g., AutoGPT, LangChain)
 
 **AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).**
 
