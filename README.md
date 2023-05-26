@@ -106,7 +106,7 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 1. Ensure you have a file with the agents private keys (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
     ```bash
-    autonomy generate-key ethereum -n 4
+    autonomy generate-key ethereum -n 1
     ```
 
 2. Run, the service:
