@@ -36,6 +36,7 @@ class Event(Enum):
     ROUND_TIMEOUT = "round_timeout"
     NO_MAJORITY = "no_majority"
     DONE = "done"
+    ERROR = "error"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -56,21 +57,31 @@ class TaskExecutionRound(CollectDifferentUntilAllRound):
 
     payload_class = TaskExecutionAbciPayload
     synchronized_data_class = SynchronizedData
+    ERROR_PAYLOAD = "error"
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
         if self.collection_threshold_reached:
+            num_errors = 0
+            ok_payloads = {}
+            for sender, payload in self.collection.items():
+                if payload.content == self.ERROR_PAYLOAD:
+                    num_errors += 1
+                    continue
+                ok_payloads[sender] = payload
+
+            if num_errors == self.synchronized_data.max_participants:
+                # All payloads are errors
+                return self.synchronized_data, Event.ERROR
 
             payloads_json = {
-                "request_id": json.loads(
-                    self.collection[list(self.collection.keys())[0]].content
-                )["request_id"],
+                "request_id": json.loads(ok_payloads[list(ok_payloads)[0]].content)[
+                    "request_id"
+                ],
                 "task_result": [
-                    json.loads(f.content)["task_result"]
-                    for f in self.collection.values()
+                    json.loads(f.content)["task_result"] for f in ok_payloads.values()
                 ],
             }
-
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
@@ -91,6 +102,10 @@ class FinishedTaskExecutionRound(DegenerateRound):
     """FinishedTaskExecutionRound"""
 
 
+class FinishedTaskExecutionWithErrorRound(DegenerateRound):
+    """FinishedTaskExecutionWithErrorRound"""
+
+
 class TaskExecutionAbciApp(AbciApp[Event]):
     """TaskExecutionAbciApp"""
 
@@ -101,10 +116,15 @@ class TaskExecutionAbciApp(AbciApp[Event]):
             Event.DONE: FinishedTaskExecutionRound,
             Event.NO_MAJORITY: TaskExecutionRound,
             Event.ROUND_TIMEOUT: TaskExecutionRound,
+            Event.ERROR: FinishedTaskExecutionWithErrorRound,
         },
         FinishedTaskExecutionRound: {},
+        FinishedTaskExecutionWithErrorRound: {},
     }
-    final_states: Set[AppState] = {FinishedTaskExecutionRound}
+    final_states: Set[AppState] = {
+        FinishedTaskExecutionRound,
+        FinishedTaskExecutionWithErrorRound,
+    }
     event_to_timeout: EventToTimeout = {}
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
@@ -112,4 +132,5 @@ class TaskExecutionAbciApp(AbciApp[Event]):
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedTaskExecutionRound: set(),
+        FinishedTaskExecutionWithErrorRound: set(),
     }
