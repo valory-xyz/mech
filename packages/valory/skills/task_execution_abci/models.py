@@ -22,14 +22,14 @@
 from typing import Any, Dict, List, Union
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
-from packages.valory.skills.abstract_round_abci.models import (
-    BenchmarkTool as BaseBenchmarkTool,
-)
-from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
-from packages.valory.skills.abstract_round_abci.models import (
-    SharedState as BaseSharedState,
-)
-from packages.valory.skills.task_execution_abci.rounds import TaskExecutionAbciApp
+from packages.valory.skills.abstract_round_abci.models import \
+    BenchmarkTool as BaseBenchmarkTool
+from packages.valory.skills.abstract_round_abci.models import \
+    Requests as BaseRequests
+from packages.valory.skills.abstract_round_abci.models import \
+    SharedState as BaseSharedState
+from packages.valory.skills.task_execution_abci.rounds import \
+    TaskExecutionAbciApp
 
 
 class SharedState(BaseSharedState):

@@ -19,22 +19,14 @@
 
 """This package contains the rounds of TaskExecutionAbciApp."""
 
-import json
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
-    AbciApp,
-    AbciAppTransitionFunction,
-    AppState,
-    BaseSynchronizedData,
-    CollectDifferentUntilAllRound,
-    CollectSameUntilThresholdRound,
-    DegenerateRound,
-    EventToTimeout,
-    get_name,
-)
-from packages.valory.skills.task_execution_abci.payloads import TaskExecutionAbciPayload
+    AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
+    CollectSameUntilThresholdRound, DegenerateRound, EventToTimeout, get_name)
+from packages.valory.skills.task_execution_abci.payloads import \
+    TaskExecutionAbciPayload
 
 
 class Event(Enum):

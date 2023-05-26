@@ -18,7 +18,6 @@
 # ------------------------------------------------------------------------------
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
-import json
 import os
 from abc import ABC
 from multiprocessing.pool import AsyncResult
@@ -30,32 +29,23 @@ import openai  # noqa
 from aea.helpers.cid import CID, to_v1
 
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
-from packages.valory.contracts.gnosis_safe.contract import (
-    GnosisSafeContract,
-    SafeOperation,
-)
-from packages.valory.contracts.multisend.contract import (
-    MultiSendContract,
-    MultiSendOperation,
-)
+from packages.valory.contracts.gnosis_safe.contract import (GnosisSafeContract,
+                                                            SafeOperation)
+from packages.valory.contracts.multisend.contract import (MultiSendContract,
+                                                          MultiSendOperation)
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour,
-    BaseBehaviour,
-)
-from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
+    AbstractRoundBehaviour, BaseBehaviour)
+from packages.valory.skills.abstract_round_abci.io_.store import \
+    SupportedFiletype
 from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
-    SynchronizedData,
-    TaskExecutionAbciApp,
-    TaskExecutionAbciPayload,
-    TaskExecutionRound,
-)
+    SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
+    TaskExecutionRound)
 from packages.valory.skills.task_execution_abci.tasks import AnyToolAsTask
-from packages.valory.skills.transaction_settlement_abci.payload_tools import (
-    hash_payload_to_hex,
-)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import \
+    hash_payload_to_hex
 
 CID_PREFIX = "f01701220"
 ZERO_ETHER_VALUE = 0
@@ -138,19 +128,19 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
         all_txs = multisend_txs + [deliver_tx]
         multisend_tx_str = yield from self._to_multisend(all_txs)
-        if multisend_txs is None:
+        if multisend_tx_str is None:
             # something went wrong, respond with ERROR payload for now
             return TaskExecutionRound.ERROR_PAYLOAD
 
         return multisend_tx_str
 
-    def get_task_result(
+    def get_task_result(  # pylint: disable=R0914,R1710
         self,
     ) -> Generator[None, None, Optional[Tuple[str, str, List[Dict]]]]:
         """
         Execute a task in the background and wait for the result asynchronously.
 
-        :return: A tuple containing request_id, deliver_msg_hash and multisend txs.
+        :return: A tuple containing request_id, deliver_msg_hash and multisend transactions.
         :yields: None
         """
         # Check whether the task already exists
@@ -209,8 +199,9 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         # Handle invalid requests
         if self._invalid_request:
             deliver_msg = "no_op"
-            # respond with no_op and no multisend txs
-            return self.request_id, deliver_msg, []
+            # respond with no_op and no multisend transactions
+            request_id = cast(str, self.request_id)
+            return request_id, deliver_msg, []
 
         self._async_result = cast(AsyncResult, self._async_result)
 
@@ -218,19 +209,20 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         if not self._invalid_request and not self._async_result.ready():
             self.context.logger.debug("The task is not finished yet.")
             yield from self.sleep(self.params.sleep_time)
-            return
+            return None
 
         # Handle finished task
-        txs = []
+        transactions: List[Dict] = []
         if not self._invalid_request and self._async_result.ready():
             # the expected response for the task is:
-            # Tuple[str, List[Dict]] = (deliver_msg, txs)
+            # Tuple[str, List[Dict]] = (deliver_msg, transactions)
             # deliver_msg: str = is the string containing the deliver message.
-            # txs: List[Dict] = is the list of txs to be multisent. Should be an empty list if no txs are needed.
+            # transactions: List[Dict] = is the list of transactions to be multisent.
+            # Should be an empty list if no transactions are needed.
             # example response
             # ("task_result", [{"to": "0x123", "value": 0, "data": "0x123"}])
             task_result: Tuple[str, List[Dict]] = self._async_result.get()
-            deliver_msg, txs = task_result
+            deliver_msg, transactions = task_result
             response_obj = {"requestId": self.request_id, "result": deliver_msg}
 
         self.context.logger.info(f"Response object: {response_obj}")
@@ -258,7 +250,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         hex_multihash = multihash_bytes.hex()
 
         hex_multihash = hex_multihash[6:]
-        return self.request_id, hex_multihash, txs
+        request_id = cast(str, self.request_id)
+        return request_id, hex_multihash, transactions
 
     def _get_ipfs_file_hash(self, data: bytes) -> str:
         """Get hash from bytes"""
@@ -285,17 +278,17 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self._async_result = self.context.task_manager.get_task_result(task_id)
         self._is_task_prepared = True
 
-    def _to_multisend(self, txs: List[Dict]) -> Generator[None, None, Optional[str]]:
+    def _to_multisend(self, transactions: List[Dict]) -> Generator[None, None, Optional[str]]:
         """Transform payload to MultiSend."""
         multi_send_txs = []
-        for tx in txs:
-            tx = {
-                "operation": tx.get("operation", MultiSendOperation.CALL),
-                "to": tx["to"],
-                "value": tx["value"],
-                "data": tx.get("data", b""),
+        for transaction in transactions:
+            transaction = {
+                "operation": transaction.get("operation", MultiSendOperation.CALL),
+                "to": transaction["to"],
+                "value": transaction["value"],
+                "data": transaction.get("data", b""),
             }
-            multi_send_txs.append(tx)
+            multi_send_txs.append(transaction)
 
         response = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
@@ -307,7 +300,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         if response.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
             self.context.logger.error(
                 f"Couldn't compile the multisend tx. "
-                f"Expected response performative {ContractApiMessage.Performative.RAW_TRANSACTION.value}, "  # type: ignore
+                f"Expected performative {ContractApiMessage.Performative.RAW_TRANSACTION.value}, "  # type: ignore
                 f"received {response.performative.value}."
             )
             return None
@@ -337,7 +330,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         This hash will be signed later by the agents, and submitted to the safe contract.
         Note that this is the transaction that the safe will execute, with the provided data.
 
-        :param data: the safe tx data. This is the data of the function being called, in this case `updateWeightGradually`.
+        :param data: the safe tx data.
         :return: the tx hash
         """
         response = yield from self.get_contract_api_response(

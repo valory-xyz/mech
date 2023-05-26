@@ -22,7 +22,8 @@
 from typing import Dict
 
 from packages.valory.skills.abstract_round_abci.io_.load import Loader
-from packages.valory.skills.abstract_round_abci.io_.store import SupportedObjectType
+from packages.valory.skills.abstract_round_abci.io_.store import \
+    SupportedObjectType
 
 
 class NaiveLoader(Loader):

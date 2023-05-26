@@ -6,7 +6,6 @@
         "skill/valory/multiplexer_abci/0.1.0": "bafybeieaovj6xwaaju3co44dmlymff3jkgdw7rmucmdnsjaui2myark43e",
         "skill/valory/task_execution_abci/0.1.0": "bafybeidkaxnyny4luqmilzo5j72sv6yrrx5omnkvgdsvb3pmget57veina",
         "skill/valory/mech_abci/0.1.0": "bafybeiewggczpd72jz5wewovkfofnle2usaxczoywwsu7jolmwrbms2mna",
-        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeihrlkuskgfy353gbrjosbobqlcrpqwgftaqxf7kgtzqs5bo2a6clq",
         "contract/valory/agent_mech/0.1.0": "bafybeieu6zilpud6hul3t7v3ggwpzjyydtyknnh7zwazgez4oiznzrp64u",
         "service/valory/mech/0.1.0": "bafybeighz54amfqrdrptvltrs2lik6i4c7cx6zfcp6it2cen6674cih57a"
     },
