@@ -10,10 +10,6 @@ import sys
 from openai_request import run
 
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-AGENT_PRIVATE_KEY = os.getenv("AGENT_PRIVATE_KEY")
-ETHEREUM_LEDGER_RPC_0 = os.getenv("ETHEREUM_LEDGER_RPC_0")
-TEST_RPC = os.getenv("TEST_RPC")
-
 
 """NOTE: In the case of native token transfers on evm chains we do not need any contract address or ABI. The only unknowns are the "recipient address" and the "value" to send for evm native transfers."""
 native_token_transfer_prompt = """
@@ -34,14 +30,13 @@ Do not respond with anything else other than the transaction object you construc
 """
 
 
-def native_transfer(**kwargs) -> str:
+def run(**kwargs) -> str:
     """
     Execute a native token transfer on the EVM. This involves:
-    1. using the user prompt to create the formatted tool prompt for the LLM (Done)
-    2. using the tool prompt to create the transaction object in string form (Done)
-    3. parsing the transaction object string to get the transaction object (WIP)
-    4. encoding the transaction object (WIP)
-    4. return the encoded transaction object (WIP)
+    1. using the user prompt to create the formatted tool prompt for the LLM 
+    2. using the tool prompt to create the transaction object in string form 
+    3. parsing the transaction object string to get the transaction object
+    4. return the transaction object
     """
 
     # format the tool prompt
@@ -50,14 +45,8 @@ def native_transfer(**kwargs) -> str:
     # use openai_request tool
     response = run(api_keys={"openai": OPENAI_API_KEY}, prompt=tool_prompt, tool='openai-gpt-3.5-turbo')
 
-    print("\033[95m\033[1m" + "\n RESPONSE FROM GPT:" + "\033[0m\033[0m")
-    print(response)
-
     # parse the response to get the transaction object string itself
     parsed_txs = ast.literal_eval(response)
-    
-    print("\033[95m\033[1m" + "\n PARSED TXS OBJECT:" + "\033[0m\033[0m")
-    print(parsed_txs)
 
     # Txs List
     txs_list = []
@@ -89,7 +78,7 @@ def main(task: str):
         "api_keys": {"openai": OPENAI_API_KEY},
     }
 
-    txs_list = native_transfer(prompt=kwargs["prompt"]), 
+    txs_list = run(prompt=kwargs["prompt"]), 
     print("RETURNED DICT LIST : " + str(txs_list))
 
 
