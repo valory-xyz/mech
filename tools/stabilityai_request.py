@@ -17,10 +17,8 @@
 #
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
-import os
+import sys
 import requests
-
-api_host = os.getenv('API_HOST', 'https://api.stability.ai')
 
 DEFAULT_STABILITYAI_SETTINGS = {
     "cfg_scale": 7,
@@ -36,8 +34,6 @@ ENGINES = {
     "picture": ["stable-diffusion-v1-5", "stable-diffusion-xl-beta-v2-2-2", "stable-diffusion-512-v2-1", "stable-diffusion-768-v2-1"]
 }
 
-
-# ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
 
 
@@ -49,9 +45,9 @@ def run(**kwargs) -> str:
     prompt = kwargs["prompt"]
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
-    engine = tool.removeprefix(PREFIX)
+    engine = tool.replace(PREFIX, "")
 
-    # Moderation?
+    # Place content moderation request here if needed
 
     # default values or kwargs
     cfg_scale = kwargs.get("cfg_scale", DEFAULT_STABILITYAI_SETTINGS["cfg_scale"])
@@ -64,7 +60,7 @@ def run(**kwargs) -> str:
 
     # request stabilityai api
     response = requests.post(
-    f"{api_host}/v1/generation/{engine}/text-to-image",
+    f"https://api.stability.ai/v1/generation/{engine}/text-to-image",
     headers={
         "Content-Type": "application/json",
         "Accept": "application/json",
