@@ -18,13 +18,9 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 import os
-import sys
 import requests
 
 api_host = os.getenv('API_HOST', 'https://api.stability.ai')
-
-# for testing (remove later)
-STABILITYAI_API_KEY = os.getenv("STABILITYAI_API_KEY")
 
 DEFAULT_STABILITYAI_SETTINGS = {
     "cfg_scale": 7,
@@ -66,6 +62,7 @@ def run(**kwargs) -> str:
     samples = kwargs.get("samples", DEFAULT_STABILITYAI_SETTINGS["samples"])
     steps = kwargs.get("steps", DEFAULT_STABILITYAI_SETTINGS["steps"])
 
+    # request stabilityai api
     response = requests.post(
     f"{api_host}/v1/generation/{engine}/text-to-image",
     headers={
@@ -94,32 +91,5 @@ def run(**kwargs) -> str:
 
     data = response.json()
 
-    # decode into png file
-    #for i, image in enumerate(data["artifacts"]):
-    #   with open(f"./out/v1_txt2img_{i}.png", "wb") as f:
-    #        f.write(base64.b64decode(image["base64"]))
-
+    # return image data
     return data
-
-
-def main(task: str):
-    """Run the task"""    
-
-    # build dictionary of kwargs
-    kwargs = {
-        "api_keys": {"stabilityai": STABILITYAI_API_KEY},
-        "prompt": task,
-        "tool": "stabilityai-stable-diffusion-v1-5",
-    }
-
-    data = run(prompt=kwargs["prompt"], tool=kwargs["tool"], api_keys=kwargs["api_keys"])
-    print("IMAGE DATA:\n")
-    print(data)
-
-
-if __name__ == "__main__":
-    task = sys.argv[1] if len(sys.argv) > 1 else "Default task"
-    try:
-        main(task)
-    except KeyboardInterrupt:
-        pass

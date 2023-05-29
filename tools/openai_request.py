@@ -18,10 +18,6 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 import openai
-import os
-import sys
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
