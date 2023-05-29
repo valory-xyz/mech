@@ -60,7 +60,7 @@ def run(**kwargs) -> str:
             timeout=120,
             stop=None,
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content, []
     response = openai.Completion.create(
         engine=engine,
         prompt=prompt,
@@ -71,4 +71,4 @@ def run(**kwargs) -> str:
         timeout=120,
         presence_penalty=0,
     )
-    return response.choices[0].text
+    return response.choices[0].text, []

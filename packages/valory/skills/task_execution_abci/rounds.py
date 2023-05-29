@@ -19,13 +19,12 @@
 
 """This package contains the rounds of TaskExecutionAbciApp."""
 
-import json
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectDifferentUntilAllRound, DegenerateRound, EventToTimeout, get_name)
+    CollectSameUntilThresholdRound, DegenerateRound, EventToTimeout, get_name)
 from packages.valory.skills.task_execution_abci.payloads import \
     TaskExecutionAbciPayload
 
@@ -47,50 +46,34 @@ class SynchronizedData(BaseSynchronizedData):
     """
 
     @property
-    def finished_task_data(self) -> int:
-        """Get the finished_task_data."""
-        return cast(int, self.db.get_strict("finished_task_data"))
+    def most_voted_tx_hash(self) -> str:
+        """Get the most_voted_tx_hash."""
+        return cast(str, self.db.get_strict("most_voted_tx_hash"))
 
 
-class TaskExecutionRound(CollectDifferentUntilAllRound):
+class TaskExecutionRound(CollectSameUntilThresholdRound):
     """TaskExecutionRound"""
 
     payload_class = TaskExecutionAbciPayload
     synchronized_data_class = SynchronizedData
-    ERROR_PAYLOAD = "error"
+
+    ERROR_PAYLOAD = "ERROR"
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
-        if self.collection_threshold_reached:
-            num_errors = 0
-            ok_payloads = {}
-            for sender, payload in self.collection.items():
-                if payload.content == self.ERROR_PAYLOAD:
-                    num_errors += 1
-                    continue
-                ok_payloads[sender] = payload
-
-            if num_errors == self.synchronized_data.max_participants:
-                # All payloads are errors
+        if self.threshold_reached:
+            if self.most_voted_payload == TaskExecutionRound.ERROR_PAYLOAD:
                 return self.synchronized_data, Event.ERROR
 
-            payloads_json = {
-                "request_id": json.loads(ok_payloads[list(ok_payloads)[0]].content)[
-                    "request_id"
-                ],
-                "task_result": [
-                    json.loads(f.content)["task_result"] for f in ok_payloads.values()
-                ],
-            }
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
-                    get_name(SynchronizedData.finished_task_data): payloads_json,
+                    get_name(
+                        SynchronizedData.most_voted_tx_hash
+                    ): self.most_voted_payload,
                 }
             )
-
             return synchronized_data, Event.DONE
-
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
@@ -131,6 +114,6 @@ class TaskExecutionAbciApp(AbciApp[Event]):
         TaskExecutionRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
-        FinishedTaskExecutionRound: set(),
+        FinishedTaskExecutionRound: {"most_voted_tx_hash"},
         FinishedTaskExecutionWithErrorRound: set(),
     }

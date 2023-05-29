@@ -63,7 +63,14 @@ class Params(BaseParams):
             for value in values
         }
         self.all_tools: Dict[str, str] = {}
-
+        self.multisend_address = kwargs.get("multisend_address", None)
+        if self.multisend_address is None:
+            raise ValueError("No multisend_address specified!")
+        self.agent_mech_contract_address = kwargs.get(
+            "agent_mech_contract_address", None
+        )
+        if self.agent_mech_contract_address is None:
+            raise ValueError("agent_mech_contract_address is required")
         super().__init__(*args, **kwargs)
 
     def _nested_list_todict_workaround(

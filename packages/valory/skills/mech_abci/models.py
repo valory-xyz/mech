@@ -39,14 +39,9 @@ from packages.valory.skills.task_execution_abci.models import \
 from packages.valory.skills.task_execution_abci.rounds import \
     Event as TaskExecutionEvent
 from packages.valory.skills.termination_abci.models import TerminationParams
-from packages.valory.skills.transaction_preparation_abci.models import \
-    Params as TransactionPreparationAbciParams
-from packages.valory.skills.transaction_preparation_abci.rounds import \
-    Event as TransactionPreparationEvent
 
 MultiplexerParams = MultiplexerAbciParams
 TaskExecutionParams = TaskExecutionAbciParams
-TransactionPreparationParams = TransactionPreparationAbciParams
 
 
 Requests = BaseRequests
@@ -83,10 +78,6 @@ class SharedState(TaskExecSharedState):
         ] = self.context.params.round_timeout_seconds
 
         MechAbciApp.event_to_timeout[
-            TransactionPreparationEvent.ROUND_TIMEOUT
-        ] = self.context.params.round_timeout_seconds
-
-        MechAbciApp.event_to_timeout[
             ResetPauseEvent.ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
 
@@ -95,5 +86,5 @@ class SharedState(TaskExecSharedState):
         )
 
 
-class Params(MultiplexerParams, TerminationParams, TaskExecutionParams, TransactionPreparationParams):  # type: ignore
+class Params(MultiplexerParams, TaskExecutionParams, TerminationParams):  # type: ignore
     """A model to represent params for multiple abci apps."""
