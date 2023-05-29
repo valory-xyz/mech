@@ -146,7 +146,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
 2. **Upload the tool file to IPFS.** You can use the following script:
     ```bash
-    mechx push-to-ipfs "tools/<your_tool>.py"
+    python push_to_ipfs.py "tools/<your_tool>.py"
     ```
 
     You should see an output similar to this:
