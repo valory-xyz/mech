@@ -83,7 +83,7 @@ def run(**kwargs) -> str:
     )
 
     if response.status_code != 200:
-        raise Exception("Non-200 response: " + str(response.text))
+        raise Exception(f"Non-200 response ({response.status_code}): {response.text}")
 
     data = response.json()
 
