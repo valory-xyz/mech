@@ -32,22 +32,18 @@ ENGINES = {
     "chat": ["gpt-3.5-turbo", "gpt-4"],
     "completion": ["text-davinci-002", "text-davinci-003"]
 }
-
-#ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
-ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["chat"] + ENGINES["completion"]]
-
+ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in values]
 
 def run(**kwargs) -> str:
     """Run the task"""
-
     openai.api_key = kwargs["api_keys"]["openai"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-    temperature =  kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+    temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
     prompt = kwargs["prompt"]
     tool = kwargs["tool"]
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
-    engine = tool.removeprefix(PREFIX)
+    engine = tool.replace(PREFIX, "")
 
     moderation_result = openai.Moderation.create(prompt)
 
@@ -65,6 +61,7 @@ def run(**kwargs) -> str:
             temperature=temperature,
             max_tokens=max_tokens,
             n=1,
+            timeout=120,
             stop=None,
         )
         return response.choices[0].message.content
@@ -75,6 +72,7 @@ def run(**kwargs) -> str:
         max_tokens=max_tokens,
         top_p=1,
         frequency_penalty=0,
+        timeout=120,
         presence_penalty=0,
     )
     return response.choices[0].text

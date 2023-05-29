@@ -97,6 +97,18 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 #     "requestId": <id>
                 #     "data": <ipfs_hash>
                 # }
+                pendings_tasks = self.context.shared_state.get("pending_tasks")
+                if len(pendings_tasks) == 0:
+                    # something went wrong, we should not be here, send an error payload
+                    payload = TaskExecutionAbciPayload(
+                        self.context.agent_address,
+                        content=TaskExecutionRound.ERROR_PAYLOAD,
+                    )
+                    yield from self.send_a2a_transaction(payload)
+                    yield from self.wait_until_round_end()
+                    self.set_done()
+                    return
+
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 self.context.logger.info(f"Preparing task with data: {task_data}")
                 self.request_id = task_data["requestId"]
