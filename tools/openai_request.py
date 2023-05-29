@@ -76,21 +76,3 @@ def run(**kwargs) -> str:
         presence_penalty=0,
     )
     return response.choices[0].text
-
-
-def main(task: str):
-    """Run the task"""
-
-    # use openai_request tool
-    response = run(api_keys={"openai": OPENAI_API_KEY}, prompt=str(task), tool='openai-gpt-3.5-turbo')
-
-    print("\033[95m\033[1m" + "\n RESPONSE FROM GPT:" + "\033[0m\033[0m")
-    print(response)
-
-
-if __name__ == "__main__":
-    task = sys.argv
-    try:
-        main(task)
-    except KeyboardInterrupt:
-        pass
