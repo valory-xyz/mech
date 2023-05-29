@@ -8,23 +8,23 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeia33nkx3vpttbjokbubh2ov7qa6fnjwbvyktwmwua4dxujaajnxze
   behaviours.py: bafybeiencihxf3bqkn5f24rqfzyhrbfu5lo6i74fh7sl2hz4egjrb7t7mi
-  composition.py: bafybeifdqsb2xug7pcjvt6bwomvpzwjo67oujcgo2dgjkb6imfokrk6uba
+  composition.py: bafybeibisdz5zesrm2jkfivnz6i6xsusnjgnfyzctib2d3gf3tmqajl6qm
   dialogues.py: bafybeid6ntx5nmtkhuiml5pwt3drafvjejr7x4vu35gqekl4m6tgtxf6am
   fsm_specification.yaml: bafybeihiynklron7mm3hsykwbhdbkosdtoimgkkxckuvvlwafevayjp7ia
   handlers.py: bafybeihi6pbfapfmwxlom6bp7cclybswzejyrrv65gn3fpzwejekvjyxeu
-  models.py: bafybeib4gqxe6esytsnqxhyk5qnu7gf6s5i23k4rvzxnj23w2syxno2rge
+  models.py: bafybeifemtkfquz672h4c33nr7mn6dtqcauq75cawblcf5g4uf6va57jdi
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
 protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
+- valory/multiplexer_abci:0.1.0:bafybeihurusyhcbmmwmiprs3bmotbfpf7phu5icg2ooiwaaeh6yaerdf2q
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeig5l2smlt2kx52pvztjp5cwywip5zs4x5gcpb3vivhjnak2jij5pq
+- valory/task_execution_abci:0.1.0:bafybeibuoaujewlgxfto2h4vv3q2wpyiqf2rk4ofxuhrtx2zigmrhy2dxe
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
+- valory/transaction_preparation_abci:0.1.0:bafybeihrlkuskgfy353gbrjosbobqlcrpqwgftaqxf7kgtzqs5bo2a6clq
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 behaviours:
   main:
@@ -75,13 +75,18 @@ models:
   params:
     args:
       agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
-      api_keys_json: '{"openai": "dummy_api_key"}'
+      api_keys_json:
+      - - openai
+        - dummy_api_key
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-      file_hash_to_tools_json: '{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":
-        ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
-        "openai-gpt-4"]}'
+      file_hash_to_tools_json:
+      - - bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e
+        - - openai-text-davinci-002
+          - openai-text-davinci-003
+          - openai-gpt-3.5-turbo
+          - openai-gpt-4
       finalize_timeout: 60.0
       genesis_config:
         genesis_time: '2022-09-26T00:00:00.000000000Z'
@@ -108,6 +113,7 @@ models:
       max_healthcheck: 120
       multisend_address: '0x0000000000000000000000000000000000000000'
       on_chain_service_id: null
+      polling_interval: 25
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
@@ -131,6 +137,7 @@ models:
       tendermint_url: http://localhost:26657
       termination_sleep: 900
       tx_timeout: 10.0
+      use_polling: false
       use_termination: false
       validate_timeout: 1205
     class_name: Params

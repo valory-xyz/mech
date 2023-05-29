@@ -6,16 +6,16 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeid6hvgpcx3ktpompbdirmm2fqm5eif7h24bkfcyrentwbytpvb3ym
-  behaviours.py: bafybeicyuaa6v3hgmxzuxl3b3qjeu6ml3meb35xz7reruffbsfbkeowfpy
+  __init__.py: bafybeieflonnccu5vcro6f3aldbkxl5l2rueb6vu7ula5ytczszifrgbsq
+  behaviours.py: bafybeicsps6wrnnotxmbw55doi6ri6lh42ajyvminhylfnq7jet5xqxxnu
   dialogues.py: bafybeift7ubqn3fculjpbkihmensbfu26f2ptuec2zvwqybdwlodbz6mpe
   fsm_specification.yaml: bafybeieldx3rylsiyb6sfqxqzoogmtnda7jf4czgyjn3ddtzo4bze6sfza
   handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/naive_loader.py: bafybeia2p4zqlhgeh2ygdhh6kewwg3pyva4kyvwunchpkairghjbkznhmq
-  models.py: bafybeicjwuqjuuu7hvnwi2klj3zosde4w3hnkusilxvvvg5g5yznf3w5dy
+  models.py: bafybeih7i7cmxgz7ujtfiw6fi7r54anwhvtwuoupju6dtaswdz7ngfprm4
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
-  rounds.py: bafybeihkwtxa43gty5xqmffbgzgqp5ho4md2u7sabqq6cexq7ofvgecxfe
+  rounds.py: bafybeici2uq42z6jqtrduggfvt52xyuv5v44wg6sfqg25sg2fs6ibik76m
   tasks.py: bafybeib7xk34qy7dssg5crtgcmcnoxagkhdz5xrc6xz2pw5h7uvs2aqgly
 fingerprint_ignore_patterns: []
 connections: []
@@ -71,13 +71,18 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      api_keys_json: '{"openai": "dummy_api_key"}'
+      api_keys_json:
+      - - openai
+        - dummy_api_key
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-      file_hash_to_tools_json: '{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":
-        ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
-        "openai-gpt-4"]}'
+      file_hash_to_tools_json:
+      - - bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e
+        - - openai-text-davinci-002
+          - openai-text-davinci-003
+          - openai-gpt-3.5-turbo
+          - openai-gpt-4
       finalize_timeout: 60.0
       genesis_config:
         chain_id: chain-c4daS1

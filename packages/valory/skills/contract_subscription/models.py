@@ -17,8 +17,16 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the default skill."""
+"""This module contains the shared state for the abci skill of Mech."""
+from typing import Any
 
-from aea.configurations.base import PublicId
+from aea.skills.base import Model
 
-PUBLIC_ID = PublicId.from_str("valory/task_execution_abci:0.1.0")
+
+class Params(Model):
+    """A model to represent params for multiple abci apps."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize the parameters object."""
+        self.use_polling = kwargs.get("use_polling", False)
+        super().__init__(*args, **kwargs)

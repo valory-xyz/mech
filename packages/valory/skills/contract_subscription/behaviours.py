@@ -39,22 +39,32 @@ WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
 class SubscriptionBehaviour(SimpleBehaviour):
     """This class scaffolds a behaviour."""
 
-
     def __init__(self, **kwargs: Any) -> None:
         """Initialise the agent."""
         self._contracts: List[str] = kwargs.pop("contracts", [])
         self._ws_client_connection: Optional[WebSocketClient] = None
         self._subscription_required: bool = True
+        self._missed_parts: bool = False
         super().__init__(**kwargs)
 
     def setup(self) -> None:
         """Implement the setup."""
-        for connection in self.context.outbox._multiplexer.connections:  # pylint: disable=W0212
+        use_polling = self.context.params.use_polling
+        if use_polling:
+            # if we are using polling, then we don't set up an contract subscription
+            return
+        for (
+            connection
+        ) in self.context.outbox._multiplexer.connections:  # pylint: disable=W0212
             if connection.component_id.name == WEBSOCKET_CLIENT_CONNECTION_NAME:
                 self._ws_client_connection = cast(WebSocketClient, connection)
 
     def act(self) -> None:
         """Implement the act."""
+        use_polling = self.context.params.use_polling
+        if use_polling:
+            # do nothing if we are polling
+            return
         is_connected = cast(WebSocketClient, self._ws_client_connection).is_connected
         disconnection_point = self.context.shared_state.get(DISCONNECTION_POINT, None)
 
@@ -72,9 +82,10 @@ class SubscriptionBehaviour(SimpleBehaviour):
                     bytes(json.dumps(subscription_msg_template), DEFAULT_ENCODING)
                 )
             self._subscription_required = False
-            return
+            if disconnection_point is not None:
+                self._missed_parts = True
 
-        if is_connected and disconnection_point is not None:
+        if is_connected and self._missed_parts:
             # if we are connected and have a disconnection point, then we need to fetch the parts that were missed
             for contract in self._contracts:
                 filter_msg_template = {
@@ -90,7 +101,6 @@ class SubscriptionBehaviour(SimpleBehaviour):
             self.context.logger.info(
                 "Getting parts that were missed while disconnected."
             )
-            return
 
         if (
             not is_connected

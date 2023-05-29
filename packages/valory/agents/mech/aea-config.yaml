@@ -7,14 +7,14 @@ aea_version: '>=1.33.0, <2.0.0'
 fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeibampud6z5ok2qi7ctxpbrh4fvd57wreejfe55knpabkyfojkm4re
 - valory/abci:0.1.0:bafybeieogrpktpxfq74leeeeylfx33sob2hovhpl5coxlswae6xblzbezy
 - valory/http_client:0.23.0:bafybeidykl4elwbcjkqn32wt5h4h7tlpeqovrcq3c5bcplt6nhpznhgczi
 - valory/ipfs:0.1.0:bafybeifkzgdzuoxqovcjswsnzsehjh7bjwbska26ufmcrk7hbufk4c4dae
 - valory/ledger:0.19.0:bafybeicgfupeudtmvehbwziqfxiz6ztsxr5rxzvalzvsdsspzz73o5fzfi
 - valory/p2p_libp2p_client:0.1.0:bafybeidwcobzb7ut3efegoedad7jfckvt2n6prcmd4g7xnkm6hp6aafrva
+- valory/websocket_client:0.1.0:bafybeiawlga3on5ijbxpt3zxgks5ssi4jbpez2vchzqfv3nxw3ixqcutfy
 contracts:
-- valory/agent_mech:0.1.0:bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy
+- valory/agent_mech:0.1.0:bafybeieu6zilpud6hul3t7v3ggwpzjyydtyknnh7zwazgez4oiznzrp64u
 - valory/gnosis_safe:0.1.0:bafybeigfnb6hdixmdwoxingxrevx7beawm2voudgtexo6vazzfa4vhyx5m
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeib2rat7ht33l6r6ix45x5yifotq7l6oqczmqe5edxh2ackv4i72jq
 - valory/multisend:0.1.0:bafybeigjywkl7hydjsrkogob3xebj2ifhqwmfhhxoeyrndzhhxi5u6amey
@@ -30,16 +30,16 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeibo4bdtcrxi2suyzldwoetjar6pqfzm6vt5xal22ravkkcvdmtksi
 - valory/tendermint:0.1.0:bafybeicusvezoqlmyt6iqomcbwaz3xkhk2qf3d56q5zprmj3xdxfy64k54
 skills:
-- valory/contract_subscription:0.1.0:bafybeiduj5ejb24g3v2gmabe2sryaeh3hg4aehc7amethaesr5wybuuxru
 - valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
 - valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/mech_abci:0.1.0:bafybeihvjdrof3523ou7zp7yjucbkpfxm3ecgrphg3bjxcmt7kospe4mfy
-- valory/multiplexer_abci:0.1.0:bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq
+- valory/contract_subscription:0.1.0:bafybeifqutglt3m6jgur3dh22dc7onq5h2bvn3n3hbprm64rfnbfdjlyty
+- valory/mech_abci:0.1.0:bafybeifowf3fhj76pl2qkydvhbuadnmfaqj3ayjhnw4gslpegpvq6vovau
+- valory/multiplexer_abci:0.1.0:bafybeihurusyhcbmmwmiprs3bmotbfpf7phu5icg2ooiwaaeh6yaerdf2q
 - valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
 - valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeig5l2smlt2kx52pvztjp5cwywip5zs4x5gcpb3vivhjnak2jij5pq
+- valory/task_execution_abci:0.1.0:bafybeibuoaujewlgxfto2h4vv3q2wpyiqf2rk4ofxuhrtx2zigmrhy2dxe
 - valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e
+- valory/transaction_preparation_abci:0.1.0:bafybeihrlkuskgfy353gbrjosbobqlcrpqwgftaqxf7kgtzqs5bo2a6clq
 - valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
 default_ledger: ethereum
 required_ledgers:
@@ -85,8 +85,16 @@ type: skill
 behaviours:
   subscriptions:
     args:
-      contracts:
-      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      contracts: ${list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
+handlers:
+  new_event:
+    args:
+      contract_to_monitor: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+      websocket_provider: ${str:https://rpc.gnosischain.com}
+models:
+  params:
+    args:
+      use_polling: ${bool:false}
 ---
 public_id: valory/abci:0.1.0
 type: connection
@@ -125,14 +133,20 @@ models:
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
       agent_mech_contract_address: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+      round_timeout_seconds: ${float:30.0}
       reset_period_count: ${int:1000}
+      on_chain_service_id: ${int:1}
+      multisend_address: ${str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
+      service_registry_address: ${str:0x9338b5153AE39BB89f50468E608eD9d764B755fD}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
-      file_hash_to_tools_json: '{"bafybeifu2ytuac4nhaf5hsgr6g5ksjtfckwb47nzeqrcih6q3gk5lomdp4":
+      file_hash_to_tools_json: ${list:[["bafybeidtwynomroawb6z26exetb6v6l3icm33fgo2ot4j3vpk3fitz7iwi",
         ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
-        "openai-gpt-4"]}'
-      api_keys_json: '{"openai": "dummy_api_key"}'
+        "openai-gpt-4"]]]}
+      api_keys_json: ${list:[["openai", "dummy_api_key"]]}
+      use_polling: ${bool:false}
+      polling_interval: ${int:25}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

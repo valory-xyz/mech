@@ -1,14 +1,14 @@
 {
     "dev": {
-        "connection/valory/websocket_client/0.1.0": "bafybeibampud6z5ok2qi7ctxpbrh4fvd57wreejfe55knpabkyfojkm4re",
-        "skill/valory/contract_subscription/0.1.0": "bafybeiduj5ejb24g3v2gmabe2sryaeh3hg4aehc7amethaesr5wybuuxru",
-        "agent/valory/mech/0.1.0": "bafybeiajmdfpmaaoct5x3cxzpf5dvk6ffx4zjcbie3i6ok34gh3wrinm4u",
-        "skill/valory/multiplexer_abci/0.1.0": "bafybeibhqjim6pyttouw66eoulhq3p3bdgvdzaxwq6jsxntmu6cqoemkdq",
-        "skill/valory/task_execution_abci/0.1.0": "bafybeig5l2smlt2kx52pvztjp5cwywip5zs4x5gcpb3vivhjnak2jij5pq",
-        "skill/valory/mech_abci/0.1.0": "bafybeihvjdrof3523ou7zp7yjucbkpfxm3ecgrphg3bjxcmt7kospe4mfy",
-        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeico5h2zwlqqchjnqxq7qt3ihd2e7q7mgc3nld3gwko2ltcabenv7e",
-        "contract/valory/agent_mech/0.1.0": "bafybeifjjnnbtqttvq3ox5fpmdbppl5vzkcbfdnxes3bdt4z53ayet2yiy",
-        "service/valory/mech/0.1.0": "bafybeidca6y5xjuar4mij73pk3z4rec46f4ck24bu266nne654osawwpiq"
+        "connection/valory/websocket_client/0.1.0": "bafybeiawlga3on5ijbxpt3zxgks5ssi4jbpez2vchzqfv3nxw3ixqcutfy",
+        "skill/valory/contract_subscription/0.1.0": "bafybeifqutglt3m6jgur3dh22dc7onq5h2bvn3n3hbprm64rfnbfdjlyty",
+        "agent/valory/mech/0.1.0": "bafybeiff2zspo43nlznsn2aur7gdp27aotkviuwdnt75nnizsr5t6lzcmi",
+        "skill/valory/multiplexer_abci/0.1.0": "bafybeihurusyhcbmmwmiprs3bmotbfpf7phu5icg2ooiwaaeh6yaerdf2q",
+        "skill/valory/task_execution_abci/0.1.0": "bafybeibuoaujewlgxfto2h4vv3q2wpyiqf2rk4ofxuhrtx2zigmrhy2dxe",
+        "skill/valory/mech_abci/0.1.0": "bafybeifowf3fhj76pl2qkydvhbuadnmfaqj3ayjhnw4gslpegpvq6vovau",
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeihrlkuskgfy353gbrjosbobqlcrpqwgftaqxf7kgtzqs5bo2a6clq",
+        "contract/valory/agent_mech/0.1.0": "bafybeieu6zilpud6hul3t7v3ggwpzjyydtyknnh7zwazgez4oiznzrp64u",
+        "service/valory/mech/0.1.0": "bafybeiat52ouvrl2f2c6hpcvbtccpvldo4fwx5yp2x2yckud4m6g22otem"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4",
