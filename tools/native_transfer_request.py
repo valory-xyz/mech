@@ -27,13 +27,7 @@ Do not respond with anything else other than the transaction object you construc
 
 
 def run(**kwargs) -> str:
-    """
-    Execute a native token transfer on the EVM. This involves:
-    1. using the user prompt to create the formatted tool prompt for the LLM 
-    2. using the tool prompt to create the transaction object in string form 
-    3. parsing the transaction object string to get the transaction object
-    4. return the transaction object
-    """
+    """Run the task"""
 
     # format the tool prompt
     tool_prompt = native_token_transfer_prompt.format(user_prompt=str(kwargs["prompt"]))
