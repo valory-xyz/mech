@@ -39,7 +39,7 @@ def run(**kwargs) -> str:
     tool_prompt = native_token_transfer_prompt.format(user_prompt=str(kwargs["prompt"]))
 
     # use openai_request tool
-    response = openai_run(api_keys={"openai": OPENAI_API_KEY}, prompt=tool_prompt, tool='openai-gpt-3.5-turbo')
+    response = openai_run(api_keys={"openai": kwargs["api_keys"]["openai"]}, prompt=tool_prompt, tool='openai-gpt-3.5-turbo')
 
     # parse the response to get the transaction object string itself
     parsed_txs = ast.literal_eval(response)
