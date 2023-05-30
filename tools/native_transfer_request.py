@@ -5,11 +5,7 @@ WIP
 """
 
 import ast
-import os
-import sys
 from openai_request import run as openai_run
-
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 """NOTE: In the case of native token transfers on evm chains we do not need any contract address or ABI. The only unknowns are the "recipient address" and the "value" to send for evm native transfers."""
 native_token_transfer_prompt = """
