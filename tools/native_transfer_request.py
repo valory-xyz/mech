@@ -61,30 +61,3 @@ def run(**kwargs) -> str:
     txs_list = [transaction]
 
     return txs_list
-
-
-
-def main(task: str):
-    """Run the task"""
-
-    # build dictionary of kwargs
-    kwargs = {
-        "prompt": task,
-        "tool": "openai-gpt3.5-turbo",
-        "engine": "gpt-3.5-turbo",
-        "max_tokens": 500,
-        "temperature": .7,
-        "top_p": 1,
-        "api_keys": {"openai": OPENAI_API_KEY},
-    }
-
-    txs_list = run(prompt=kwargs["prompt"]), 
-    print("RETURNED DICT LIST : " + str(txs_list))
-
-
-if __name__ == "__main__":
-    task = sys.argv
-    try:
-        main(task)
-    except KeyboardInterrupt:
-        pass
