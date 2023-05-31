@@ -19,6 +19,9 @@
 
 """Contains the job definitions"""
 
+from enum import Enum
+from typing import Any, List, Dict, Union
+
 import requests
 
 DEFAULT_STABILITYAI_SETTINGS = {
@@ -43,7 +46,15 @@ ENGINES = {
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
 
 
-def run(**kwargs) -> str:
+class FinishReason(Enum):
+    """The finish reasons of the API."""
+
+    SUCCESS = 0
+    CONTENT_FILTERED = 1
+    ERROR = 2
+
+
+def run(**kwargs: Any) -> Union[Dict, List]:
     """Run the task"""
 
     api_key = kwargs["api_keys"]["stabilityai"]
@@ -100,5 +111,13 @@ def run(**kwargs) -> str:
 
     data = response.json()
 
-    # return image data
-    return data
+    finish_reason = data.get("finishReason", FinishReason.SUCCESS.name)
+    if finish_reason == FinishReason.SUCCESS.name:
+        # return image data
+        return data
+    if finish_reason == FinishReason.CONTENT_FILTERED.name:
+        raise ValueError(
+            f"The result was affected by the content filter and may be blurred: {data}"
+        )
+    if finish_reason == FinishReason.ERROR.name:
+        raise ValueError(f"There was an error while generating the image: {data}")
