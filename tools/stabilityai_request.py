@@ -58,28 +58,32 @@ def run(**kwargs) -> str:
     samples = kwargs.get("samples", DEFAULT_STABILITYAI_SETTINGS["samples"])
     steps = kwargs.get("steps", DEFAULT_STABILITYAI_SETTINGS["steps"])
 
-    # request stabilityai api
-    response = requests.post(
-    f"https://api.stability.ai/v1/generation/{engine}/text-to-image",
-    headers={
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "Authorization": f"Bearer {api_key}"
-    },
-    json={
-        "text_prompts": [
-            {
-                "text": prompt,
-                "weight": weight
-            }
-        ],
+    optional_params = {}
+    for optional in ("sampler", "seed", "style_preset", "extras"):
+        value = kwargs.get(optional, None)
+        if value is not None:
+            optional_params[optional] = value
+
+    json_params = {
+        "text_prompts": [{"text": prompt, "weight": weight}],
         "cfg_scale": cfg_scale,
         "clip_guidance_preset": clip_guidance_preset,
         "height": height,
         "width": width,
         "samples": samples,
         "steps": steps,
-    },
+    }
+    json_params.update(optional_params)
+
+    # request stabilityai api
+    response = requests.post(
+        f"https://api.stability.ai/v1/generation/{engine}/text-to-image",
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        },
+        json=json_params,
     )
 
     if response.status_code != 200:
