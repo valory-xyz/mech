@@ -158,7 +158,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
 3. **Configure your service.** Edit the `.1env` file. The demo service has this configuration:
     ```bash
-    FILE_HASH_TO_TOOLS=[[bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e, [openai-text-davinci-002, openai-text-davinci-003, openai-gpt-3.5-turbo, openai-gpt-4]]]
+    FILE_HASH_TO_TOOLS=[[bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e, [openai-text-davinci-002, openai-text-davinci-003, openai-gpt-3.5-turbo, openai-gpt-4]], ["bafybeicc6xur4bozq5tw26ofjn7dfoamo7lx7ypknpxqy7hapbt35d6wvy", [evm-native-transfer]]]
     API_KEYS=[[openai, dummy_api_key]]
     ```
 
