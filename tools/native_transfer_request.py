@@ -1,7 +1,5 @@
 """
 python native_transfer_request.py “transfer 0.0001 ETH to 0x4253cB6Fbf9Cb7CD6cF58FF9Ed7FC3BDbd8312fe"
-
-WIP
 """
 
 import ast
@@ -26,7 +24,7 @@ Do not respond with anything else other than the transaction object you construc
 """
 
 
-def run(**kwargs) -> str:
+def run(**kwargs):
     """Run the task"""
 
     # format the tool prompt
