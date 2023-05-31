@@ -16,6 +16,7 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
+
 """Contains the job definitions"""
 
 import requests
@@ -31,7 +32,12 @@ DEFAULT_STABILITYAI_SETTINGS = {
 }
 PREFIX = "stabilityai-"
 ENGINES = {
-    "picture": ["stable-diffusion-v1-5", "stable-diffusion-xl-beta-v2-2-2", "stable-diffusion-512-v2-1", "stable-diffusion-768-v2-1"]
+    "picture": [
+        "stable-diffusion-v1-5",
+        "stable-diffusion-xl-beta-v2-2-2",
+        "stable-diffusion-512-v2-1",
+        "stable-diffusion-768-v2-1",
+    ]
 }
 
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
@@ -52,7 +58,9 @@ def run(**kwargs) -> str:
     # default values or kwargs
     cfg_scale = kwargs.get("cfg_scale", DEFAULT_STABILITYAI_SETTINGS["cfg_scale"])
     weight = kwargs.get("weight", DEFAULT_STABILITYAI_SETTINGS["weight"])
-    clip_guidance_preset = kwargs.get("clip_guidance_preset", DEFAULT_STABILITYAI_SETTINGS["clip_guidance_preset"])
+    clip_guidance_preset = kwargs.get(
+        "clip_guidance_preset", DEFAULT_STABILITYAI_SETTINGS["clip_guidance_preset"]
+    )
     height = kwargs.get("height", DEFAULT_STABILITYAI_SETTINGS["height"])
     width = kwargs.get("width", DEFAULT_STABILITYAI_SETTINGS["width"])
     samples = kwargs.get("samples", DEFAULT_STABILITYAI_SETTINGS["samples"])
