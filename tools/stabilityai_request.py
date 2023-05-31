@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
-import sys
+
 import requests
 
 DEFAULT_STABILITYAI_SETTINGS = {
