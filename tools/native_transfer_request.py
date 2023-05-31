@@ -1,3 +1,22 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2023 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
 """
 python native_transfer_request.py “transfer 0.0001 ETH to 0x4253cB6Fbf9Cb7CD6cF58FF9Ed7FC3BDbd8312fe"
 """
@@ -36,16 +55,13 @@ def run(**kwargs):
     # parse the response to get the transaction object string itself
     parsed_txs = ast.literal_eval(response)
 
-    # Txs List
-    txs_list = []
-
     # build the transaction object, unknowns are referenced from parsed_txs
     transaction = {
         "to": str(parsed_txs["to"]),
         "value": str(parsed_txs["wei_value"]),
     }
 
-    # return the encoded transaction object
+    # return the encoded transaction object(s) within a list
     txs_list = [transaction]
 
     return txs_list
