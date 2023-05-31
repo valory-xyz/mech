@@ -81,7 +81,8 @@ def run(**kwargs) -> str:
         headers={
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "Authorization": f"Bearer {api_key}"
+            "Authorization": f"Bearer {api_key}",
+            "Stability-Client-ID": "mechs-tool",
         },
         json=json_params,
     )
