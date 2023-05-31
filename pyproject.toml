@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.10"
-open-autonomy = "==0.10.4"
+open-autonomy = "==0.10.5.post1"
 autonomy-dev = "^0.1.1"
 mypy = "^1.3.0"
 pylint = "^2.17.4"
@@ -24,8 +24,8 @@ py-eth-sig-utils = "0.4.0"
 hypothesis = "6.75.3"
 grpcio = "1.54.2"
 asn1crypto = "1.5.1"
-open-aea-ledger-ethereum = "1.33.0"
-open-aea-ledger-cosmos = "1.33.0"
+open-aea-ledger-ethereum = "1.34.0"
+open-aea-ledger-cosmos = "1.34.0"
 
 [build-system]
 requires = ["poetry-core"]
