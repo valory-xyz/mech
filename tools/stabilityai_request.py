@@ -107,7 +107,7 @@ def run(**kwargs: Any) -> Union[Dict, List]:
     )
 
     if response.status_code != 200:
-        raise Exception(f"Non-200 response ({response.status_code}): {response.text}")
+        raise ValueError(f"Non-200 response ({response.status_code}): {response.text}")
 
     data = response.json()
 
