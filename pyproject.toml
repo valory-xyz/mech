@@ -42,6 +42,9 @@ pylint = "^2.17.4"
 openai = "0.27.2"
 requests = "2.28.2"
 mech-client = "^0.1.5"
+py-multibase = "1.0.3"
+py-multicodec = "0.2.1"
+web3 = "5.25.0"
 
 [tool.poetry.group.dev.dependencies]
 tomte = {version = "==0.2.12", extras = ["cli", "tests"]}

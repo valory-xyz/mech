@@ -155,4 +155,8 @@ models:
 dependencies:
   openai:
     version: ==0.27.2
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
 is_abstract: true

@@ -39,5 +39,7 @@ models:
     args:
       use_polling: false
     class_name: Params
-dependencies: {}
+dependencies:
+  web3:
+    version: ==5.25.0
 is_abstract: false
