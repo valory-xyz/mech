@@ -133,7 +133,9 @@ class TransactionPreparationAbciApp(AbciApp[Event]):
         FinishedTransactionPreparationRound: {},
     }
     final_states: Set[AppState] = {FinishedTransactionPreparationRound}
-    event_to_timeout: EventToTimeout = {}
+    event_to_timeout: EventToTimeout = {
+        Event.ROUND_TIMEOUT: 30.0,
+    }
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TransactionPreparationRound: set(),

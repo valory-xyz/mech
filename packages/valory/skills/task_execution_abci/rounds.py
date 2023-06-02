@@ -151,7 +151,9 @@ class TaskExecutionAbciApp(AbciApp[Event]):
         FinishedTaskExecutionRound,
         FinishedTaskExecutionWithErrorRound,
     }
-    event_to_timeout: EventToTimeout = {}
+    event_to_timeout: EventToTimeout = {
+        Event.ROUND_TIMEOUT: 30.0,
+    }
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskExecutionRound: set(),
