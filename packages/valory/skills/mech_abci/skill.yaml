@@ -19,12 +19,12 @@ contracts: []
 protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigsbglflua5vdwmwmo2rjsogp4anxtpqjbtrcwfivuxjiv6xczpba
-- valory/multiplexer_abci:0.1.0:bafybeidc6yv3jzrkegm57gwdpiolcay5ogekf36kb625dirrwdm4do55sm
+- valory/multiplexer_abci:0.1.0:bafybeifodzg32h7m2ua336yk3jvkev45uerhtaccpsfwbbci32uvedhvty
 - valory/registration_abci:0.1.0:bafybeidc7vaj5rw3rzkd6aj3x7bl7r76kcaklqwat2cg7dlzh4yo6h6hhu
 - valory/reset_pause_abci:0.1.0:bafybeigvfkbdmro6dddejdo5vcimdbp7macbez4ejv2beucm7nrje5oz34
-- valory/task_execution_abci:0.1.0:bafybeicae3ig6awoxm4wzorxra64wt6rohavgfavm7377z3sldlni5m3h4
+- valory/task_execution_abci:0.1.0:bafybeignltj6rfmgsvv3i56bayesig3bup4qbqkcssemvspjhquv4lzy5a
 - valory/termination_abci:0.1.0:bafybeif7y4wcmjc4g5iyjkfedephvqwzgkxnkj3tucu24rqz6fsw267l2e
-- valory/transaction_preparation_abci:0.1.0:bafybeihatdenhbxgzv2pi5niimjlmbqcrwo3fcnkx2enw645tltcezga7i
+- valory/transaction_preparation_abci:0.1.0:bafybeie74hu2csk3j5u3dlhmp44jpx4ifpg3anupnmjowsvaaifuhmsnru
 - valory/transaction_settlement_abci:0.1.0:bafybeiahvk5lgkpwnaruzr34yp7to4fed7tgoufceerwqhvl57t4blqmiu
 behaviours:
   main:

@@ -132,7 +132,7 @@ class TaskExecutionAbciApp(AbciApp[Event]):
     Final states: {FinishedTaskExecutionRound, FinishedTaskExecutionWithErrorRound}
 
     Timeouts:
-
+        round timeout: 30.0
     """
 
     initial_round_cls: AppState = TaskExecutionRound

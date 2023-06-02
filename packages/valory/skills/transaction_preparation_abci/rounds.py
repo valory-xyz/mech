@@ -118,7 +118,7 @@ class TransactionPreparationAbciApp(AbciApp[Event]):
     Final states: {FinishedTransactionPreparationRound}
 
     Timeouts:
-
+        round timeout: 30.0
     """
 
     initial_round_cls: AppState = TransactionPreparationRound
