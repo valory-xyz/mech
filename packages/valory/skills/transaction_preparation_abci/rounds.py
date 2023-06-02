@@ -101,7 +101,25 @@ class FinishedTransactionPreparationRound(DegenerateRound):
 
 
 class TransactionPreparationAbciApp(AbciApp[Event]):
-    """TransactionPreparationAbciApp"""
+    """TransactionPreparationAbciApp
+
+    Initial round: TransactionPreparationRound
+
+    Initial states: {TransactionPreparationRound}
+
+    Transition states:
+        0. TransactionPreparationRound
+            - done: 1.
+            - no majority: 0.
+            - round timeout: 0.
+            - contract error: 0.
+        1. FinishedTransactionPreparationRound
+
+    Final states: {FinishedTransactionPreparationRound}
+
+    Timeouts:
+
+    """
 
     initial_round_cls: AppState = TransactionPreparationRound
     initial_states: Set[AppState] = {TransactionPreparationRound}

@@ -110,7 +110,27 @@ class FinishedMultiplexerExecuteRound(DegenerateRound):
 
 
 class MultiplexerAbciApp(AbciApp[Event]):
-    """MultiplexerAbciApp"""
+    """MultiplexerAbciApp
+
+    Initial round: MultiplexerRound
+
+    Initial states: {MultiplexerRound}
+
+    Transition states:
+        0. MultiplexerRound
+            - done post: 0.
+            - reset: 1.
+            - execute: 2.
+            - no majority: 0.
+            - round timeout: 0.
+        1. FinishedMultiplexerResetRound
+        2. FinishedMultiplexerExecuteRound
+
+    Final states: {FinishedMultiplexerExecuteRound, FinishedMultiplexerResetRound}
+
+    Timeouts:
+        round timeout: 30.0
+    """
 
     initial_round_cls: AppState = MultiplexerRound
     initial_states: Set[AppState] = {MultiplexerRound}

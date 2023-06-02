@@ -114,7 +114,26 @@ class FinishedTaskExecutionWithErrorRound(DegenerateRound):
 
 
 class TaskExecutionAbciApp(AbciApp[Event]):
-    """TaskExecutionAbciApp"""
+    """TaskExecutionAbciApp
+
+    Initial round: TaskExecutionRound
+
+    Initial states: {TaskExecutionRound}
+
+    Transition states:
+        0. TaskExecutionRound
+            - done: 1.
+            - no majority: 0.
+            - round timeout: 0.
+            - error: 2.
+        1. FinishedTaskExecutionRound
+        2. FinishedTaskExecutionWithErrorRound
+
+    Final states: {FinishedTaskExecutionRound, FinishedTaskExecutionWithErrorRound}
+
+    Timeouts:
+
+    """
 
     initial_round_cls: AppState = TaskExecutionRound
     initial_states: Set[AppState] = {TaskExecutionRound}
