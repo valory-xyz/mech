@@ -28,7 +28,7 @@ from aea.skills.behaviours import SimpleBehaviour
 
 from packages.fetchai.protocols.default.message import DefaultMessage
 from packages.valory.connections.websocket_client.connection import (
-    CONNECTION_ID,
+    PUBLIC_ID,
     WebSocketClient,
 )
 from packages.valory.skills.contract_subscription.handlers import DISCONNECTION_POINT
@@ -119,7 +119,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
     def _create_call(self, content: bytes) -> None:
         """Create a call."""
         msg, _ = self.context.default_dialogues.create(
-            counterparty=str(CONNECTION_ID),
+            counterparty=str(PUBLIC_ID),
             performative=DefaultMessage.Performative.BYTES,
             content=content,
         )

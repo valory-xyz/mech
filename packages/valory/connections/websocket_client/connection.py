@@ -32,13 +32,13 @@ from aea.mail.base import Envelope
 from packages.fetchai.protocols.default.message import DefaultMessage
 
 
-CONNECTION_ID = PublicId.from_str("valory/websocket_client:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/websocket_client:0.1.0")
 
 
 class WebSocketClient(Connection):
     """Proxy to the functionality of the SDK or API."""
 
-    connection_id = CONNECTION_ID
+    connection_id = PUBLIC_ID
     _new_messages: list
     _endpoint: str
     _wss: websocket.WebSocket
