@@ -6,25 +6,25 @@ description: The chained abci for the mech skill.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeia33nkx3vpttbjokbubh2ov7qa6fnjwbvyktwmwua4dxujaajnxze
-  behaviours.py: bafybeiencihxf3bqkn5f24rqfzyhrbfu5lo6i74fh7sl2hz4egjrb7t7mi
-  composition.py: bafybeibisdz5zesrm2jkfivnz6i6xsusnjgnfyzctib2d3gf3tmqajl6qm
-  dialogues.py: bafybeid6ntx5nmtkhuiml5pwt3drafvjejr7x4vu35gqekl4m6tgtxf6am
-  fsm_specification.yaml: bafybeihiynklron7mm3hsykwbhdbkosdtoimgkkxckuvvlwafevayjp7ia
-  handlers.py: bafybeihi6pbfapfmwxlom6bp7cclybswzejyrrv65gn3fpzwejekvjyxeu
-  models.py: bafybeifemtkfquz672h4c33nr7mn6dtqcauq75cawblcf5g4uf6va57jdi
+  __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
+  behaviours.py: bafybeibccqxw4frr6ihaikhyggpjk4b52m3aeuz7psf5cyvhjmfmqt3t3a
+  composition.py: bafybeigelq77cevkbd4vnugmuf4g5ypnqpdrwjkjy6e3y5ftrogbpvtupu
+  dialogues.py: bafybeigpwuzku3we7axmxeamg7vn656maww6emuztau5pg3ebsoquyfdqm
+  fsm_specification.yaml: bafybeidi4h3xmvfcae7onmwbuygsfa4mbt6zghdti65eplprrdkjbbtbfq
+  handlers.py: bafybeiffuduhg433qsu6lbet5jsaub63bzv2l4x756aj2fbnu5bnfu4ble
+  models.py: bafybeifurgh47hicl26udg6a2iurinbwnms2yfvdotnainf6qkcrtj5icm
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
 protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigsbglflua5vdwmwmo2rjsogp4anxtpqjbtrcwfivuxjiv6xczpba
-- valory/multiplexer_abci:0.1.0:bafybeieng3uhqflncc4a62gucuurbcfn4oiwlvyvdwddu7him35yrhbwmy
+- valory/multiplexer_abci:0.1.0:bafybeidc6yv3jzrkegm57gwdpiolcay5ogekf36kb625dirrwdm4do55sm
 - valory/registration_abci:0.1.0:bafybeidc7vaj5rw3rzkd6aj3x7bl7r76kcaklqwat2cg7dlzh4yo6h6hhu
 - valory/reset_pause_abci:0.1.0:bafybeigvfkbdmro6dddejdo5vcimdbp7macbez4ejv2beucm7nrje5oz34
-- valory/task_execution_abci:0.1.0:bafybeieggsfsgj3zwe6iunkqhhkdshrjbabzuyy6gidn4sv3b7cxv6kbie
+- valory/task_execution_abci:0.1.0:bafybeicae3ig6awoxm4wzorxra64wt6rohavgfavm7377z3sldlni5m3h4
 - valory/termination_abci:0.1.0:bafybeif7y4wcmjc4g5iyjkfedephvqwzgkxnkj3tucu24rqz6fsw267l2e
-- valory/transaction_preparation_abci:0.1.0:bafybeidhhaex4e66iauokx3fhdh33kasfj235iyesz6exbpee2ijbt2ita
+- valory/transaction_preparation_abci:0.1.0:bafybeihatdenhbxgzv2pi5niimjlmbqcrwo3fcnkx2enw645tltcezga7i
 - valory/transaction_settlement_abci:0.1.0:bafybeiahvk5lgkpwnaruzr34yp7to4fed7tgoufceerwqhvl57t4blqmiu
 behaviours:
   main:

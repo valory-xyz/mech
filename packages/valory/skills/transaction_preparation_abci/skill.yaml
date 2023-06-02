@@ -6,18 +6,18 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeicffbkqynejxmx6kqcdbhhaopn7phg2yfpcufp4d774jfwqsm7gx4
-  behaviours.py: bafybeihzxxzg3lhe6tl2mlds5mykcopsvycq64iwdkelyzgos36bx5xmwe
-  dialogues.py: bafybeidwzysmmicss6myr36mqja6annr72nyuc5vmvp2zifcza54zayjye
+  __init__.py: bafybeibjzh5on7qfxqunwy5v2on6bn5wpwppkrepko655ww7noclox64sy
+  behaviours.py: bafybeidckvedyimv5ewt5jtrvycmg572oqb3wyyfgvwobedvqzbjmgspdy
+  dialogues.py: bafybeiakgebtuasrjngutlcps5uwko52rxeg6ik2xxjd52jcdni6et5soi
   fsm_specification.yaml: bafybeickup5aqc3ejxbjxc5d6seax5kn5l5apgvvayxq7pxu2qmknkd7di
-  handlers.py: bafybeihp7c6cvr5ui7qkwfuv463tnwpn2p3kxandm5fntilugdaxgr66ei
-  models.py: bafybeifz45fdcdwp4vudfjobphrlahnglyrysiqjpoik6qim3t7znzplfe
+  handlers.py: bafybeib4aec42o3unewvcphldzqyu6dybwtfrvqdz7idrgu7mb3tr3kqzy
+  models.py: bafybeibwz7wp3htuivkf4k34amxnjwwugrsgj3zwhngjnzil4wqzysohdq
   payloads.py: bafybeifzn5lav6fcbt4pqrytsrm72hf3662qmcylf6efwrc2qhssg7apq4
-  rounds.py: bafybeiaqyxephk6lgeomkirbboa6dvjvcay76gnmgwkamo4pwjty4yazrm
+  rounds.py: bafybeib2ogii6hfgqqk7c4zsxvusmdvk5ka7cwuh5cjy2wb4gnc6qht5ym
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeiff3trbofi4xj5ibn7g52weszjlal6u3kpvd5gh3pjv5zs4wtdwdm
+- valory/agent_mech:0.1.0:bafybeib7v5fujyrio64trg5vmkuxpz42mc6fwjrmdyg3dr6ifudkn5rhle
 - valory/gnosis_safe:0.1.0:bafybeie4e3ifwa3ch3rqeouzkzndyscrfidbmj2p4ykzwh4zptvsocxcya
 protocols:
 - valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
