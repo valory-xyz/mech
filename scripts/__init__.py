@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
@@ -17,3 +16,5 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
+
+"""This directory contains scripts for workflow automation and project maintenance."""
