@@ -24,10 +24,18 @@ from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
-    AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectSameUntilThresholdRound, DegenerateRound, EventToTimeout, get_name)
-from packages.valory.skills.transaction_preparation_abci.payloads import \
-    TransactionPreparationAbciPayload
+    AbciApp,
+    AbciAppTransitionFunction,
+    AppState,
+    BaseSynchronizedData,
+    CollectSameUntilThresholdRound,
+    DegenerateRound,
+    EventToTimeout,
+    get_name,
+)
+from packages.valory.skills.transaction_preparation_abci.payloads import (
+    TransactionPreparationAbciPayload,
+)
 
 
 class Event(Enum):
@@ -47,9 +55,9 @@ class SynchronizedData(BaseSynchronizedData):
     """
 
     @property
-    def finished_task_data(self) -> int:
+    def finished_task_data(self) -> Dict:
         """Get the finished_task_data."""
-        return cast(int, self.db.get_strict("finished_task_data"))
+        return cast(Dict, self.db.get_strict("finished_task_data"))
 
     @property
     def most_voted_tx_hash(self) -> str:

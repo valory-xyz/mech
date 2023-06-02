@@ -21,4 +21,5 @@
 
 from aea.configurations.base import PublicId
 
+
 PUBLIC_ID = PublicId.from_str("valory/task_execution_abci:0.1.0")

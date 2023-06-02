@@ -31,6 +31,7 @@ from aea.mail.base import Envelope
 
 from packages.fetchai.protocols.default.message import DefaultMessage
 
+
 CONNECTION_ID = PublicId.from_str("valory/websocket_client:0.1.0")
 
 
