@@ -126,7 +126,8 @@ jobs:
         tox -e check-abci-docstrings
         tox -e check-abciapp-specs
         tox -e check-handlers
-        tox -e analyse-service
+        # ignore for now due to https://github.com/valory-xyz/open-autonomy/issues/1988
+        # tox -e analyse-service
 
   scan:
     name: gitleaks
