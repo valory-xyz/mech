@@ -111,7 +111,6 @@ def get_package_dependencies() -> List[str]:
     # return [
     #     " ".join(package.get_pip_install_args()) for package in dependencies.values()
     # ]
-    import pdb; pdb.set_trace()
     return {package.name: package.version for package in dependencies.values()}
 
 
@@ -130,7 +129,6 @@ def update_toml(new_package_dependencies: dict) -> None:
 
 if __name__ == "__main__":
     package_dependencies = get_package_dependencies()
-    import pdb; pdb.set_trace()
     listed_package_dependencies = load_pyproject_toml()
     listed_package_dependencies.update(package_dependencies)
     update_toml(listed_package_dependencies)
