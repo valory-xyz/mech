@@ -24,10 +24,16 @@ from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
-    AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectDifferentUntilAllRound, DegenerateRound, EventToTimeout, get_name)
-from packages.valory.skills.task_execution_abci.payloads import \
-    TaskExecutionAbciPayload
+    AbciApp,
+    AbciAppTransitionFunction,
+    AppState,
+    BaseSynchronizedData,
+    CollectDifferentUntilAllRound,
+    DegenerateRound,
+    EventToTimeout,
+    get_name,
+)
+from packages.valory.skills.task_execution_abci.payloads import TaskExecutionAbciPayload
 
 
 class Event(Enum):
@@ -47,9 +53,9 @@ class SynchronizedData(BaseSynchronizedData):
     """
 
     @property
-    def finished_task_data(self) -> int:
+    def finished_task_data(self) -> Dict:
         """Get the finished_task_data."""
-        return cast(int, self.db.get_strict("finished_task_data"))
+        return cast(Dict, self.db.get_strict("finished_task_data"))
 
 
 class TaskExecutionRound(CollectDifferentUntilAllRound):
@@ -65,6 +71,7 @@ class TaskExecutionRound(CollectDifferentUntilAllRound):
             num_errors = 0
             ok_payloads = {}
             for sender, payload in self.collection.items():
+                payload = cast(TaskExecutionAbciPayload, payload)
                 if payload.content == self.ERROR_PAYLOAD:
                     num_errors += 1
                     continue
@@ -107,7 +114,26 @@ class FinishedTaskExecutionWithErrorRound(DegenerateRound):
 
 
 class TaskExecutionAbciApp(AbciApp[Event]):
-    """TaskExecutionAbciApp"""
+    """TaskExecutionAbciApp
+
+    Initial round: TaskExecutionRound
+
+    Initial states: {TaskExecutionRound}
+
+    Transition states:
+        0. TaskExecutionRound
+            - done: 1.
+            - no majority: 0.
+            - round timeout: 0.
+            - error: 2.
+        1. FinishedTaskExecutionRound
+        2. FinishedTaskExecutionWithErrorRound
+
+    Final states: {FinishedTaskExecutionRound, FinishedTaskExecutionWithErrorRound}
+
+    Timeouts:
+        round timeout: 30.0
+    """
 
     initial_round_cls: AppState = TaskExecutionRound
     initial_states: Set[AppState] = {TaskExecutionRound}
@@ -125,7 +151,9 @@ class TaskExecutionAbciApp(AbciApp[Event]):
         FinishedTaskExecutionRound,
         FinishedTaskExecutionWithErrorRound,
     }
-    event_to_timeout: EventToTimeout = {}
+    event_to_timeout: EventToTimeout = {
+        Event.ROUND_TIMEOUT: 30.0,
+    }
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskExecutionRound: set(),

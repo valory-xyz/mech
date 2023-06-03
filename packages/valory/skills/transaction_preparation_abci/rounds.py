@@ -24,10 +24,18 @@ from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
-    AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectSameUntilThresholdRound, DegenerateRound, EventToTimeout, get_name)
-from packages.valory.skills.transaction_preparation_abci.payloads import \
-    TransactionPreparationAbciPayload
+    AbciApp,
+    AbciAppTransitionFunction,
+    AppState,
+    BaseSynchronizedData,
+    CollectSameUntilThresholdRound,
+    DegenerateRound,
+    EventToTimeout,
+    get_name,
+)
+from packages.valory.skills.transaction_preparation_abci.payloads import (
+    TransactionPreparationAbciPayload,
+)
 
 
 class Event(Enum):
@@ -47,9 +55,9 @@ class SynchronizedData(BaseSynchronizedData):
     """
 
     @property
-    def finished_task_data(self) -> int:
+    def finished_task_data(self) -> Dict:
         """Get the finished_task_data."""
-        return cast(int, self.db.get_strict("finished_task_data"))
+        return cast(Dict, self.db.get_strict("finished_task_data"))
 
     @property
     def most_voted_tx_hash(self) -> str:
@@ -93,7 +101,25 @@ class FinishedTransactionPreparationRound(DegenerateRound):
 
 
 class TransactionPreparationAbciApp(AbciApp[Event]):
-    """TransactionPreparationAbciApp"""
+    """TransactionPreparationAbciApp
+
+    Initial round: TransactionPreparationRound
+
+    Initial states: {TransactionPreparationRound}
+
+    Transition states:
+        0. TransactionPreparationRound
+            - done: 1.
+            - no majority: 0.
+            - round timeout: 0.
+            - contract error: 0.
+        1. FinishedTransactionPreparationRound
+
+    Final states: {FinishedTransactionPreparationRound}
+
+    Timeouts:
+        round timeout: 30.0
+    """
 
     initial_round_cls: AppState = TransactionPreparationRound
     initial_states: Set[AppState] = {TransactionPreparationRound}
@@ -107,7 +133,9 @@ class TransactionPreparationAbciApp(AbciApp[Event]):
         FinishedTransactionPreparationRound: {},
     }
     final_states: Set[AppState] = {FinishedTransactionPreparationRound}
-    event_to_timeout: EventToTimeout = {}
+    event_to_timeout: EventToTimeout = {
+        Event.ROUND_TIMEOUT: 30.0,
+    }
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TransactionPreparationRound: set(),

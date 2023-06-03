@@ -4,6 +4,7 @@ alphabet_in:
 - CHECK_TIMEOUT
 - CONTRACT_ERROR
 - DONE
+- ERROR
 - EXECUTE
 - FINALIZATION_FAILED
 - FINALIZE_TIMEOUT
@@ -101,6 +102,7 @@ transition_func:
     (SynchronizeLateMessagesRound, ROUND_TIMEOUT): SynchronizeLateMessagesRound
     (SynchronizeLateMessagesRound, SUSPICIOUS_ACTIVITY): TransactionPreparationRound
     (TaskExecutionRound, DONE): TransactionPreparationRound
+    (TaskExecutionRound, ERROR): MultiplexerRound
     (TaskExecutionRound, NO_MAJORITY): TaskExecutionRound
     (TaskExecutionRound, ROUND_TIMEOUT): TaskExecutionRound
     (TransactionPreparationRound, CONTRACT_ERROR): TransactionPreparationRound

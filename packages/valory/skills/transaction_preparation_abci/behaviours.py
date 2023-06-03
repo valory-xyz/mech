@@ -21,20 +21,27 @@
 
 import json
 from abc import ABC
-from typing import Generator, Optional, Set, Type, cast
+from typing import Any, Dict, Generator, Optional, Set, Type, cast
 
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.contracts.gnosis_safe.contract import GnosisSafeContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour, BaseBehaviour)
+    AbstractRoundBehaviour,
+    BaseBehaviour,
+)
 from packages.valory.skills.transaction_preparation_abci.models import Params
 from packages.valory.skills.transaction_preparation_abci.rounds import (
-    SynchronizedData, TransactionPreparationAbciApp,
-    TransactionPreparationAbciPayload, TransactionPreparationRound)
-from packages.valory.skills.transaction_settlement_abci.payload_tools import \
-    hash_payload_to_hex
+    SynchronizedData,
+    TransactionPreparationAbciApp,
+    TransactionPreparationAbciPayload,
+    TransactionPreparationRound,
+)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    hash_payload_to_hex,
+)
+
 
 SAFE_TX_GAS = 0
 ETHER_VALUE = 0
@@ -90,7 +97,7 @@ class TransactionPreparationAbciBehaviour(TransactionPreparationBaseBehaviour):
 
     def _get_safe_tx_hash(
         self,
-        task_data,
+        task_data: Dict[str, Any],
     ) -> Generator[None, None, Optional[str]]:
         """Get the transaction hash of the Safe tx."""
         # Get the raw transaction from the AgentMech contract
@@ -155,4 +162,4 @@ class TransactionPreparationRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = TransactionPreparationAbciBehaviour
     abci_app_cls = TransactionPreparationAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = {TransactionPreparationAbciBehaviour}
+    behaviours: Set[Type[BaseBehaviour]] = {TransactionPreparationAbciBehaviour}  # type: ignore

@@ -6,17 +6,17 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeieflonnccu5vcro6f3aldbkxl5l2rueb6vu7ula5ytczszifrgbsq
-  behaviours.py: bafybeicsps6wrnnotxmbw55doi6ri6lh42ajyvminhylfnq7jet5xqxxnu
-  dialogues.py: bafybeift7ubqn3fculjpbkihmensbfu26f2ptuec2zvwqybdwlodbz6mpe
-  fsm_specification.yaml: bafybeieldx3rylsiyb6sfqxqzoogmtnda7jf4czgyjn3ddtzo4bze6sfza
-  handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
+  __init__.py: bafybeihrkpey6kxur2uoimrskq2wfpelqidxeapdxie6iuv2x7dk77ksvu
+  behaviours.py: bafybeideg36fl4qg4anpmg5gxqlfqdoyfo27hxc75dar7nz7wr2ju6fmva
+  dialogues.py: bafybeibxhpre2cczhgs4weohyhdovh7n3qnreqech6zs7xzbpef7kizxsm
+  fsm_specification.yaml: bafybeigwmblh6bcfny3ezl2nsxjsrk44zmytcdr7mqchds7keqgpdcm764
+  handlers.py: bafybeigz4pfyn3i553ttxkqjerynyoud5obi366b3yregtgznupcnryjha
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
-  io_/naive_loader.py: bafybeia2p4zqlhgeh2ygdhh6kewwg3pyva4kyvwunchpkairghjbkznhmq
-  models.py: bafybeih7i7cmxgz7ujtfiw6fi7r54anwhvtwuoupju6dtaswdz7ngfprm4
+  io_/naive_loader.py: bafybeihqrt34jso7dwfcedh7itmmovfv55tdjhw2tkqifsbiohetbonynu
+  models.py: bafybeiafzocnjxnrsbdb47odj2z43danznqdr55tdlxc7clwhiru5l4pwy
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
-  rounds.py: bafybeici2uq42z6jqtrduggfvt52xyuv5v44wg6sfqg25sg2fs6ibik76m
-  tasks.py: bafybeib7xk34qy7dssg5crtgcmcnoxagkhdz5xrc6xz2pw5h7uvs2aqgly
+  rounds.py: bafybeiahwl3wahupy3ouiy3ss2h5aagbmtpceosyjldr4c53cbz6jvwz2a
+  tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -155,4 +155,8 @@ models:
 dependencies:
   openai:
     version: ==0.27.2
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
 is_abstract: true
