@@ -25,9 +25,16 @@ In particular:
 
 It is assumed the script is run from the repository root.
 """
+import os
 import re
 import sys
 from pathlib import Path
+from typing import Any, Dict
+
+import toml
+from aea.configurations.data_types import Dependency, PackageType
+from aea.package_manager.base import load_configuration
+from aea.package_manager.v1 import PackageManagerV1
 
 
 UNPINNED_PACKAGE_REGEX = r'(?P<package_name>.*)\s?=\s?"\*"'
@@ -53,24 +60,13 @@ def check_pipfile(pipfile_path: Path) -> bool:
     return True
 
 
-import os
-from typing import List
-try:
-    from aea.configurations.data_types import Dependency, PackageType
-    from aea.package_manager.base import load_configuration
-    from aea.package_manager.v1 import PackageManagerV1
-except ImportError as e:
-    raise ImportError("open-aea installation not found") from e
-
-
-import toml
-
 def load_pyproject_toml() -> dict:
+    """Load the pyproject.toml file contents."""
     # Path to the pyproject.toml file
     pyproject_toml_path = "./pyproject.toml"
 
     # Load the pyproject.toml file
-    with open(pyproject_toml_path, "r") as toml_file:
+    with open(pyproject_toml_path, "r", encoding="utf-8") as toml_file:
         toml_data = toml.load(toml_file)
 
     # Get the [tool.poetry.dependencies] section
@@ -79,7 +75,7 @@ def load_pyproject_toml() -> dict:
     return dependencies
 
 
-def get_package_dependencies() -> List[str]:
+def get_package_dependencies() -> Dict[str, Any]:
     """Returns a list of package dependencies."""
     package_manager = PackageManagerV1.from_dir(
         Path(os.environ.get("PACKAGES_DIR", str(Path.cwd() / "packages")))
@@ -105,27 +101,30 @@ def get_package_dependencies() -> List[str]:
                 elif value == dependencies[key]:
                     continue
                 else:
-                    print(f"Non-matching dependency versions for {key}: {value} vs {dependencies[key]}")
-                    #raise ValueError(f"Non-matching dependency versions for {key}: {value} vs {dependencies[key]}")
+                    print(
+                        f"Non-matching dependency versions for {key}: {value} vs {dependencies[key]}"
+                    )
 
-    # return [
-    #     " ".join(package.get_pip_install_args()) for package in dependencies.values()
-    # ]
     return {package.name: package.version for package in dependencies.values()}
 
 
 def update_toml(new_package_dependencies: dict) -> None:
+    """Update the pyproject.toml file with the new package dependencies."""
     pyproject_toml_path = "./pyproject.toml"
 
     # Load the pyproject.toml file
-    with open(pyproject_toml_path, "r") as toml_file:
+    with open(pyproject_toml_path, "r", encoding="utf-8") as toml_file:
         toml_data = toml.load(toml_file)
 
-    toml_data["tool"]["poetry"]["dependencies"] = {key: value if value != "" else "*" for key, value in new_package_dependencies.items()}
+    toml_data["tool"]["poetry"]["dependencies"] = {
+        key: value if value != "" else "*"
+        for key, value in new_package_dependencies.items()
+    }
 
     # Write the updated TOML content back to the file
-    with open(pyproject_toml_path, "w") as toml_file:
+    with open(pyproject_toml_path, "w", encoding="utf-8") as toml_file:
         toml.dump(toml_data, toml_file)
+
 
 if __name__ == "__main__":
     package_dependencies = get_package_dependencies()

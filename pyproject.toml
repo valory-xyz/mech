@@ -45,6 +45,7 @@ py-ecc = "==5.2.0"
 pytz = "==2022.2.1"
 typing_extensions = ">=3.10.0.2"
 websocket_client = "<1,>=0.32.0"
+toml = "^0.10.2"
 
 [tool.poetry.group.dev.dependencies.tomte]
 version = "==0.2.12"
