@@ -31,39 +31,15 @@ import sys
 from pathlib import Path
 from typing import Any, Dict
 
+from copy import deepcopy
 import toml
 from aea.configurations.data_types import Dependency, PackageType
 from aea.package_manager.base import load_configuration
 from aea.package_manager.v1 import PackageManagerV1
 
 
-UNPINNED_PACKAGE_REGEX = r'(?P<package_name>.*)\s?=\s?"\*"'
-
-
-def check_pipfile(pipfile_path: Path) -> bool:
-    """Check a Pipfile"""
-
-    print(f"Checking {pipfile_path.joinpath()}... ", end="")
-    with open(pipfile_path, "r", encoding="utf-8") as pipfile:
-        lines = pipfile.readlines()
-        unpinned = []
-        for line in lines:
-            m = re.match(UNPINNED_PACKAGE_REGEX, line)
-            if m:
-                unpinned.append(m.groupdict()["package_name"])
-        if unpinned:
-            print(
-                f"\nThe packages {unpinned} have not been pinned in {pipfile_path.joinpath()}"
-            )
-            return False
-    print("OK")
-    return True
-
-
-def load_pyproject_toml() -> dict:
+def load_pyproject_toml(pyproject_toml_path: str = "./pyproject.toml") -> dict:
     """Load the pyproject.toml file contents."""
-    # Path to the pyproject.toml file
-    pyproject_toml_path = "./pyproject.toml"
 
     # Load the pyproject.toml file
     with open(pyproject_toml_path, "r", encoding="utf-8") as toml_file:
@@ -108,9 +84,8 @@ def get_package_dependencies() -> Dict[str, Any]:
     return {package.name: package.version for package in dependencies.values()}
 
 
-def update_toml(new_package_dependencies: dict) -> None:
+def update_toml(new_package_dependencies: dict, pyproject_toml_path: str = "./pyproject.toml") -> None:
     """Update the pyproject.toml file with the new package dependencies."""
-    pyproject_toml_path = "./pyproject.toml"
 
     # Load the pyproject.toml file
     with open(pyproject_toml_path, "r", encoding="utf-8") as toml_file:
@@ -126,12 +101,57 @@ def update_toml(new_package_dependencies: dict) -> None:
         toml.dump(toml_data, toml_file)
 
 
+def update_tox_ini(new_package_dependencies: dict, tox_ini_path: str = "./tox.ini") -> None:
+    new_package_dependencies.pop("python", None)
+    for key, value in new_package_dependencies.items():
+        if len(value) > 0 and "^" == value[0]:
+            new_package_dependencies[key] = "==" + value[1:]
+    with open(tox_ini_path, "r", encoding="utf-8") as file:
+        lines = file.readlines()
+
+    # Find the [deps-packages] section and replace the deps value
+    start_line = None
+    end_line = None
+    for i, line in enumerate(lines):
+        if line.strip() == "[deps-packages]":
+            start_line = i + 1
+            break
+
+    if start_line is not None:
+        for i in range(start_line, len(lines)):
+            if lines[i].strip().startswith("["):
+                end_line = i
+                break
+        else:
+            end_line = len(lines)
+
+        lines[start_line:end_line] = ["deps =\n"] + ["    {[deps-tests]deps}\n"] +[f"    {key}{value}\n" for key, value in new_package_dependencies.items()] + ["\n"]
+
+    # Write the modified content back to the tox.ini file
+    with open(tox_ini_path, "w", encoding="utf-8") as file:
+        file.writelines(lines)
+
+import subprocess
+
+def check_for_no_changes(pyproject_toml_path: str = "./pyproject.toml", tox_ini_path: str = "./tox.ini") -> None:
+    """Check if there are any changes in the current repository."""
+
+    # Check if there are any changes
+    result = subprocess.run(["git", "diff", "--quiet", "--", pyproject_toml_path, tox_ini_path], capture_output=True, text=True)
+
+    return result.returncode == 0
+
+
 if __name__ == "__main__":
+    update = len(sys.argv[1:]) > 0
     package_dependencies = get_package_dependencies()
+    ## temp hack
+    package_dependencies["requests"] = "==2.28.2"
     listed_package_dependencies = load_pyproject_toml()
+    original_listed_package_dependencies = deepcopy(listed_package_dependencies)
     listed_package_dependencies.update(package_dependencies)
     update_toml(listed_package_dependencies)
-    root_path = Path(".")
-    for file_path in root_path.rglob("*Pipfile*"):
-        if not check_pipfile(pipfile_path=file_path):
-            sys.exit(1)
+    update_tox_ini(listed_package_dependencies)
+    if not update and not check_for_no_changes():
+        print("There are mismatching package dependencies in the pyproject.toml file and the packages.")
+        sys.exit(1)
