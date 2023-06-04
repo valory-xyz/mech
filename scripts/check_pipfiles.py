@@ -26,12 +26,12 @@ In particular:
 It is assumed the script is run from the repository root.
 """
 import os
-import re
+import subprocess
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Dict
 
-from copy import deepcopy
 import toml
 from aea.configurations.data_types import Dependency, PackageType
 from aea.package_manager.base import load_configuration
@@ -84,7 +84,9 @@ def get_package_dependencies() -> Dict[str, Any]:
     return {package.name: package.version for package in dependencies.values()}
 
 
-def update_toml(new_package_dependencies: dict, pyproject_toml_path: str = "./pyproject.toml") -> None:
+def update_toml(
+    new_package_dependencies: dict, pyproject_toml_path: str = "./pyproject.toml"
+) -> None:
     """Update the pyproject.toml file with the new package dependencies."""
 
     # Load the pyproject.toml file
@@ -101,7 +103,10 @@ def update_toml(new_package_dependencies: dict, pyproject_toml_path: str = "./py
         toml.dump(toml_data, toml_file)
 
 
-def update_tox_ini(new_package_dependencies: dict, tox_ini_path: str = "./tox.ini") -> None:
+def update_tox_ini(
+    new_package_dependencies: dict, tox_ini_path: str = "./tox.ini"
+) -> None:
+    """Update the tox.ini file with the new package dependencies."""
     new_package_dependencies.pop("python", None)
     for key, value in new_package_dependencies.items():
         if len(value) > 0 and "^" == value[0]:
@@ -125,19 +130,29 @@ def update_tox_ini(new_package_dependencies: dict, tox_ini_path: str = "./tox.in
         else:
             end_line = len(lines)
 
-        lines[start_line:end_line] = ["deps =\n"] + ["    {[deps-tests]deps}\n"] +[f"    {key}{value}\n" for key, value in new_package_dependencies.items()] + ["\n"]
+        lines[start_line:end_line] = (
+            ["deps =\n"]
+            + ["    {[deps-tests]deps}\n"]
+            + [f"    {key}{value}\n" for key, value in new_package_dependencies.items()]
+            + ["\n"]
+        )
 
     # Write the modified content back to the tox.ini file
     with open(tox_ini_path, "w", encoding="utf-8") as file:
         file.writelines(lines)
 
-import subprocess
 
-def check_for_no_changes(pyproject_toml_path: str = "./pyproject.toml", tox_ini_path: str = "./tox.ini") -> None:
+def check_for_no_changes(
+    pyproject_toml_path: str = "./pyproject.toml", tox_ini_path: str = "./tox.ini"
+) -> bool:
     """Check if there are any changes in the current repository."""
 
     # Check if there are any changes
-    result = subprocess.run(["git", "diff", "--quiet", "--", pyproject_toml_path, tox_ini_path], capture_output=True, text=True)
+    result = subprocess.run(  # pylint: disable=W1510
+        ["git", "diff", "--quiet", "--", pyproject_toml_path, tox_ini_path],
+        capture_output=True,
+        text=True,
+    )
 
     return result.returncode == 0
 
@@ -145,7 +160,7 @@ def check_for_no_changes(pyproject_toml_path: str = "./pyproject.toml", tox_ini_
 if __name__ == "__main__":
     update = len(sys.argv[1:]) > 0
     package_dependencies = get_package_dependencies()
-    ## temp hack
+    # temp hack
     package_dependencies["requests"] = "==2.28.2"
     listed_package_dependencies = load_pyproject_toml()
     original_listed_package_dependencies = deepcopy(listed_package_dependencies)
@@ -153,5 +168,7 @@ if __name__ == "__main__":
     update_toml(listed_package_dependencies)
     update_tox_ini(listed_package_dependencies)
     if not update and not check_for_no_changes():
-        print("There are mismatching package dependencies in the pyproject.toml file and the packages.")
+        print(
+            "There are mismatching package dependencies in the pyproject.toml file and the packages."
+        )
         sys.exit(1)
