@@ -26,7 +26,7 @@ In particular:
 It is assumed the script is run from the repository root.
 """
 import os
-import subprocess # nosec
+import subprocess  # nosec
 import sys
 from copy import deepcopy
 from pathlib import Path
