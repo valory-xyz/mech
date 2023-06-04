@@ -26,7 +26,7 @@ In particular:
 It is assumed the script is run from the repository root.
 """
 import os
-import subprocess
+import subprocess # nosec
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -148,7 +148,7 @@ def check_for_no_changes(
     """Check if there are any changes in the current repository."""
 
     # Check if there are any changes
-    result = subprocess.run(  # pylint: disable=W1510
+    result = subprocess.run(  # pylint: disable=W1510 # nosec
         ["git", "diff", "--quiet", "--", pyproject_toml_path, tox_ini_path],
         capture_output=True,
         text=True,
