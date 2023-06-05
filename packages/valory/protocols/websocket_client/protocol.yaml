@@ -7,6 +7,7 @@ description: A protocol for websocket client.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
+  README.md: bafybeieot47xhqlvc3dwl2hc4yq3f6wcva7xf5dx5wz5n4ir6woknyqrsi
   __init__.py: bafybeifhhqtcfac5lcrjxrcdpsrs3kyyxt7uf2qv2a4ivllyyt3c62q4aq
   dialogues.py: bafybeienrjdbwqsx4dikqo3wjfgner5pz5qtbwfb2qtzsukn6iog6e4iyi
   message.py: bafybeigpuhz4fw5ng3qay7duci7qhb4rj336wb2qwiyszddkjmnjebf72e

@@ -1,14 +1,16 @@
 {
     "dev": {
-        "connection/valory/websocket_client/0.1.0": "bafybeia7yedzg3gmksnourlmmr7nivgz573yskk2gyhylhjrxjeejffvoe",
-        "skill/valory/contract_subscription/0.1.0": "bafybeidqxhevukgj3elcfehvk5wbkd77eiftscptbv56lpzy3l2u52z7ii",
-        "agent/valory/mech/0.1.0": "bafybeiafuos4r3xaptypggabxktui6thtvgmzrfcculyg55qm4wg2seurm",
-        "skill/valory/multiplexer_abci/0.1.0": "bafybeihurusyhcbmmwmiprs3bmotbfpf7phu5icg2ooiwaaeh6yaerdf2q",
+        "protocol/valory/websocket_client/0.1.0": "bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4",
+        "connection/valory/websocket_client/0.1.0": "bafybeibgkxjivbw53qz5hnvnaf656pnubmsxr3v4yyye5xhryhn3hws6xe",
+        "skill/valory/contract_subscription/0.1.0": "bafybeick2yczww7gju4ca6hohdlntpinejdf2f66ququl2gzlwgon7z6ji",
+        "agent/valory/mech/0.1.0": "bafybeigqsud4c6qxq7v62pfjjch3z27tajxkobvv3uofvnsnifz5prcsle",
+        "skill/valory/multiplexer_abci/0.1.0": "bafybeifmct2xjtane2j423yy3yvelh7eprqbseii2v2v3l2gvluyqevikm",
         "skill/valory/task_execution_abci/0.1.0": "bafybeicql4ntiwnpdu7hogj33gvmszf6q42fpx2y3nz4rr4pjhcwh3qpu4",
-        "skill/valory/mech_abci/0.1.0": "bafybeigwucpgxoeouogkr5wf2k4pviskkiu46gfr77icya3mqcxkwd3l6m",
-        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeihrlkuskgfy353gbrjosbobqlcrpqwgftaqxf7kgtzqs5bo2a6clq",
-        "contract/valory/agent_mech/0.1.0": "bafybeieu6zilpud6hul3t7v3ggwpzjyydtyknnh7zwazgez4oiznzrp64u",
-        "service/valory/mech/0.1.0": "bafybeig4dsgnsztte5wpmlhmyyxyzvsg2bypeqp2pxfmgmioaeaytxhe5i"
+        "skill/valory/mech_abci/0.1.0": "bafybeibmz6pr5rsm3cjomjhqqqfbqkcqenpaxqmxlklm3dty5ejhelktsm",
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeiazlqxkwcjr2nhpgbfav7nsmbgklmdpelqcnehqzs2qb4vfeyq24a",
+        "contract/valory/agent_mech/0.1.0": "bafybeicv54ejr2vie5vk65rzs3lxiwskjr3rhkyt47rqmiwrzfvhto6c4a",
+        "service/valory/mech/0.1.0": "bafybeihlvt4tfdbmhv6l7yartsbl42empkjvjt5bemgiynql6o4yy23nje",
+        "skill/valory/websocket_client/0.1.0": "bafybeidhpmutf6mjf4c3dwzpf4ymiyxasrcxggufgld7wn337omdvxujzi"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4",
