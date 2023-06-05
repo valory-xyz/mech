@@ -96,7 +96,7 @@ class AgentMechContract(Contract):
         :param contract_address: the address of the token to be used
         :param request_id: the id of the target request
         :param data: the response data
-        :return:
+        :return: the deliver data
         """
         ledger_api = cast(EthereumApi, ledger_api)
 
@@ -115,11 +115,7 @@ class AgentMechContract(Contract):
         from_block: BlockIdentifier = "earliest",
         to_block: BlockIdentifier = "latest",
     ) -> JSONLike:
-        """
-        Get the Request events emitted by the contract.
-
-        :return: the events emitted by the contract.
-        """
+        """Get the Request events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         entries = contract_instance.events.Request.createFilter(
@@ -144,11 +140,7 @@ class AgentMechContract(Contract):
         from_block: BlockIdentifier = "earliest",
         to_block: BlockIdentifier = "latest",
     ) -> JSONLike:
-        """
-        Get the Deliver events emitted by the contract.
-
-        :return: the events emitted by the contract.
-        """
+        """Get the Deliver events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         entries = contract_instance.events.Deliver.createFilter(

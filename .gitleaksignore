@@ -8,3 +8,9 @@ cb0aa13c739c75508bed148cde7fa8842c582807:packages/valory/skills/transaction_prep
 20ffa80f724b5e88df4ec4e79bc543c66d8b59bc:packages/valory/skills/task_execution_abci/skill.yaml:generic-api-key:80
 88c7afaca5a79760271a78fadf94beeb2754acf5:packages/valory/skills/multiplexer_abci/skill.yaml:generic-api-key:73
 ab4630c49b5fc7fe9cdc7b48c9f4d7018abbe2c5:packages/eightballer/services/mech/service.yaml:generic-api-key:8
+67cd348064f2579db198c930c4dfbd4fba398094:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:14
+67cd348064f2579db198c930c4dfbd4fba398094:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:15
+67cd348064f2579db198c930c4dfbd4fba398094:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:16
+67cd348064f2579db198c930c4dfbd4fba398094:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:17
+bcaf3802a6d7f1ae37003d94f8f26b77de530dad:tools/univ2_trade_request.py:generic-api-key:62
+bcaf3802a6d7f1ae37003d94f8f26b77de530dad:tools/univ2_trade_request.py:generic-api-key:63

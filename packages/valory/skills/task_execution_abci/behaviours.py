@@ -31,14 +31,19 @@ from aea.helpers.cid import CID, to_v1
 
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour, BaseBehaviour)
-from packages.valory.skills.abstract_round_abci.io_.store import \
-    SupportedFiletype
+    AbstractRoundBehaviour,
+    BaseBehaviour,
+)
+from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
-    SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
-    TaskExecutionRound)
+    SynchronizedData,
+    TaskExecutionAbciApp,
+    TaskExecutionAbciPayload,
+    TaskExecutionRound,
+)
 from packages.valory.skills.task_execution_abci.tasks import AnyToolAsTask
+
 
 CID_PREFIX = "f01701220"
 
@@ -93,10 +98,22 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             # Check whether the task already exists
             if not self._is_task_prepared and not self._invalid_request:
                 # Get the first task in the queue - format:
-                # {
-                #     "requestId": <id>
-                #     "data": <ipfs_hash>
-                # }
+                # {  # noqa: E800
+                #     "requestId": <id>  # noqa: E800
+                #     "data": <ipfs_hash>  # noqa: E800
+                # }  # noqa: E800
+                pendings_tasks = self.context.shared_state.get("pending_tasks")
+                if len(pendings_tasks) == 0:
+                    # something went wrong, we should not be here, send an error payload
+                    payload = TaskExecutionAbciPayload(
+                        self.context.agent_address,
+                        content=TaskExecutionRound.ERROR_PAYLOAD,
+                    )
+                    yield from self.send_a2a_transaction(payload)
+                    yield from self.wait_until_round_end()
+                    self.set_done()
+                    return
+
                 task_data = self.context.shared_state.get("pending_tasks").pop(0)
                 self.context.logger.info(f"Preparing task with data: {task_data}")
                 self.request_id = task_data["requestId"]
@@ -206,14 +223,14 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             file_hash = str(CID.from_string(file_hash))
             return file_hash
 
-    def prepare_task(self, task_data: Dict[str, Any]):
+    def prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         tool_task = AnyToolAsTask()
         tool_py = self.context.params.all_tools[task_data["tool"]]
         local_namespace: Dict[str, Any] = globals().copy()
         if "run" in local_namespace:
             del local_namespace["run"]
-        exec(tool_py, local_namespace)  # pylint: disable=W0122
+        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
         task_data["method"] = local_namespace["run"]
         task_data["api_keys"] = self.params.api_keys
         task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)

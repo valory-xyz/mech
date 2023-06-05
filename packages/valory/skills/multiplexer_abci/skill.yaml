@@ -6,22 +6,22 @@ description: A skill that implements decision logic.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeihmlhtsobnj6vrhthmy3bgnwbb2x27wjbzea35ypraag6bgbazr4e
-  behaviours.py: bafybeid6yzopvxmwtin6jujtnsytc4jhutazbist74y7c6m7wrszkj5umq
-  dialogues.py: bafybeiew6j4u7ggc43scytblq7r6ulijcbqr2tjvtp7cr6hru4sb3irl3m
+  __init__.py: bafybeifx5c6xdzvj5v6old2ek56fek6zapsfuxgdiokpacjp57td3wbalm
+  behaviours.py: bafybeibevecu5s3ewnq2btswcsnwqfslw5hz5spkkjtnkggclqa23h222a
+  dialogues.py: bafybeie777tjh4xvxo5rrig4kq66vxg5vvmyie576ptot43olwrzfrc64a
   fsm_specification.yaml: bafybeibmbpdgq7h6sgaxtdb2aawha5xdwd6oszbn3nwr2tolaijoswkfly
-  handlers.py: bafybeifuvjckl3yjdwjoz6uj3sbdbmcesggfuidolfzpvfbnhb4e73wxb4
-  models.py: bafybeih3ezuzrbw72qclv4xdyvqj32kurcskw7d4t3f54pazie4gwchxem
+  handlers.py: bafybeic77bbhvm7yqhimzosdjnmocy4gm677t3f4gp73c5dll5qhn7xeqy
+  models.py: bafybeiets4yg4p7g7mclpdmpekfmbgd6z3dy4x2kvd6rhqhjqr3njdxlcy
   payloads.py: bafybeibhg7q5ejfhjkjvcfeqjyzp32msn4alu5btnywimh2zd5arr2f2mm
-  rounds.py: bafybeigeumeoxkgnq2hulyz6t5muwnj2jq6zuc7pi2wouhpskeonyll75y
+  rounds.py: bafybeibsi2tm4sovnaevbc6dw3ljxlc6jkta33k4aqest4q423kb5okrui
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeieu6zilpud6hul3t7v3ggwpzjyydtyknnh7zwazgez4oiznzrp64u
+- valory/agent_mech:0.1.0:bafybeib7v5fujyrio64trg5vmkuxpz42mc6fwjrmdyg3dr6ifudkn5rhle
 protocols:
 - valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
+- valory/abstract_round_abci:0.1.0:bafybeigsbglflua5vdwmwmo2rjsogp4anxtpqjbtrcwfivuxjiv6xczpba
 behaviours:
   main:
     args: {}
