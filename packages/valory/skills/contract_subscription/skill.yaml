@@ -8,23 +8,22 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeifmvtpeq7ksqq262e2lupzv54sfdzygg2qxiygyztq7f2sujg4cwi
-  behaviours.py: bafybeiggboijmlxctkh4xegoikza2y7rbn2mdnk4rfkz72jk5rgw7lvi4a
-  dialogues.py: bafybeiaaho77tsg4s7k2k27u2xqcoi2juze6cwx4psuueu7gbumpw5kgiu
-  handlers.py: bafybeieagcgzoggy6jspn2hzw4yhlwtii7nprouysxrjb7hrwt5fqntvbq
-  models.py: bafybeicxiv2m6whj37zffrqmb3zw6tzlouqvziocallca4gcghx3vigs6q
+  behaviours.py: bafybeifrgsxtfwnmkfrry6puikuus43spztfmlg2py33aokxqj6e7wgwki
+  dialogues.py: bafybeicc26sbiipnfublma3ywvh54elbx5y5sj7xckq3xyqyfmmoamiouy
+  handlers.py: bafybeibe57iavphkbssjnp2rprgnntel74pvy72ytcpobvoxx4vmmyio3a
+  models.py: bafybeie5elh5kfxrbzbaes4cp3bn7z6tsz62iay52kpfwl6ie5444zdmrq
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeia7yedzg3gmksnourlmmr7nivgz573yskk2gyhylhjrxjeejffvoe
+- valory/websocket_client:0.1.0:bafybeibgkxjivbw53qz5hnvnaf656pnubmsxr3v4yyye5xhryhn3hws6xe
 contracts: []
 protocols:
-- fetchai/default:1.0.0:bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4
-skills: []
+- valory/websocket_client:0.1.0:bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4
+skills:
+- valory/websocket_client:0.1.0:bafybeidhpmutf6mjf4c3dwzpf4ymiyxasrcxggufgld7wn337omdvxujzi
 behaviours:
-  subscriptions:
-    args:
-      contracts:
-      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
-    class_name: SubscriptionBehaviour
+  contract_subscriptions:
+    args: {}
+    class_name: ContractSubscriptionBehaviour
 handlers:
   new_event:
     args:
@@ -32,12 +31,15 @@ handlers:
       websocket_provider: https://rpc.gnosischain.com
     class_name: WebSocketHandler
 models:
-  default_dialogues:
+  websocket_client_dialogues:
     args: {}
-    class_name: DefaultDialogues
+    class_name: WebsocketClientDialogues
   params:
     args:
       use_polling: false
+      websocket_provider: ws://localhost:8001
+      contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      subscription_id: mech-contract-subscription
     class_name: Params
 dependencies: {}
 is_abstract: false
