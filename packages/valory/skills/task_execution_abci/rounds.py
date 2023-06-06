@@ -18,7 +18,6 @@
 # ------------------------------------------------------------------------------
 
 """This package contains the rounds of TaskExecutionAbciApp."""
-
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
@@ -27,7 +26,7 @@ from packages.valory.skills.abstract_round_abci.base import (
     AbciAppTransitionFunction,
     AppState,
     BaseSynchronizedData,
-    CollectSameUntilThresholdRound,
+    CollectDifferentUntilAllRound,
     DegenerateRound,
     EventToTimeout,
     get_name,
@@ -57,7 +56,7 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(str, self.db.get_strict("most_voted_tx_hash"))
 
 
-class TaskExecutionRound(CollectSameUntilThresholdRound):
+class TaskExecutionRound(CollectDifferentUntilAllRound):
     """TaskExecutionRound"""
 
     payload_class = TaskExecutionAbciPayload
@@ -67,23 +66,19 @@ class TaskExecutionRound(CollectSameUntilThresholdRound):
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
-        if self.threshold_reached:
-            if self.most_voted_payload == TaskExecutionRound.ERROR_PAYLOAD:
-                return self.synchronized_data, Event.ERROR
-
-            synchronized_data = self.synchronized_data.update(
-                synchronized_data_class=SynchronizedData,
-                **{
-                    get_name(
-                        SynchronizedData.most_voted_tx_hash
-                    ): self.most_voted_payload,
-                }
-            )
-            return synchronized_data, Event.DONE
-        if not self.is_majority_possible(
-            self.collection, self.synchronized_data.nb_participants
-        ):
-            return self.synchronized_data, Event.NO_MAJORITY
+        if self.collection_threshold_reached:
+            for payload in self.collection.values():
+                payload = cast(TaskExecutionAbciPayload, payload)
+                if payload.content == self.ERROR_PAYLOAD:
+                    continue
+                synchronized_data = self.synchronized_data.update(
+                    synchronized_data_class=SynchronizedData,
+                    **{
+                        get_name(SynchronizedData.most_voted_tx_hash): payload.content,
+                    }
+                )
+                return synchronized_data, Event.DONE
+            return self.synchronized_data, Event.ERROR
         return None
 
 
