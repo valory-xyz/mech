@@ -1,7 +1,6 @@
 alphabet_in:
 - DONE
 - ERROR
-- NO_MAJORITY
 - ROUND_TIMEOUT
 default_start_state: TaskExecutionRound
 final_states:
@@ -17,5 +16,4 @@ states:
 transition_func:
     (TaskExecutionRound, DONE): FinishedTaskExecutionRound
     (TaskExecutionRound, ERROR): FinishedTaskExecutionWithErrorRound
-    (TaskExecutionRound, NO_MAJORITY): TaskExecutionRound
     (TaskExecutionRound, ROUND_TIMEOUT): TaskExecutionRound

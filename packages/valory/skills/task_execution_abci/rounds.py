@@ -100,7 +100,6 @@ class TaskExecutionAbciApp(AbciApp[Event]):
     Transition states:
         0. TaskExecutionRound
             - done: 1.
-            - no majority: 0.
             - round timeout: 0.
             - error: 2.
         1. FinishedTaskExecutionRound
@@ -117,7 +116,6 @@ class TaskExecutionAbciApp(AbciApp[Event]):
     transition_function: AbciAppTransitionFunction = {
         TaskExecutionRound: {
             Event.DONE: FinishedTaskExecutionRound,
-            Event.NO_MAJORITY: TaskExecutionRound,
             Event.ROUND_TIMEOUT: TaskExecutionRound,
             Event.ERROR: FinishedTaskExecutionWithErrorRound,
         },
