@@ -73,7 +73,14 @@ class WebSocketHandler(Handler):
         :param message: the message
         """
         self.context.logger.info(f"Received message: {message}")
-        data = json.loads(message.content)
+        try:
+            data = json.loads(message.content)
+        except json.JSONDecodeError:
+            self.context.logger.info(
+                f"Error decoding data from the websocket connection; data={message.content}"
+            )
+            return
+
         if set(data.keys()) == {"id", "result", "jsonrpc"}:
             self.context.logger.info(f"Received response: {data}")
             return

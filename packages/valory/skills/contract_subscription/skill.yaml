@@ -10,7 +10,7 @@ fingerprint:
   __init__.py: bafybeihmbiavlq5ekiat57xuekfuxjkoniizurn77hivqwtsaqydv32owu
   behaviours.py: bafybeid7c4n255554s3ihqo45elf54ob2qp3nygckdvvlvewvtyhykg7fq
   dialogues.py: bafybeihln4gvktrwncsd7ytz243jrhlsmgeusg3qk3u5cccv4e56nwptv4
-  handlers.py: bafybeic3hhsfhlrnvurcmda5ljl2kczi3ufu4f36p2s5y4vijgwtahh52u
+  handlers.py: bafybeidxinxqmgxbdo3kriks54etx5icqzyjsoqga7px7tksh2dgf7cxie
   models.py: bafybeicxiv2m6whj37zffrqmb3zw6tzlouqvziocallca4gcghx3vigs6q
 fingerprint_ignore_patterns: []
 connections:
