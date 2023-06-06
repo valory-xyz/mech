@@ -17,8 +17,9 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains the rounds of TaskExecutionAbciApp."""
+"""This package contains the rounds of TransactionPreparationAbciApp."""
 
+import json
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
@@ -32,16 +33,18 @@ from packages.valory.skills.abstract_round_abci.base import (
     EventToTimeout,
     get_name,
 )
-from packages.valory.skills.task_execution_abci.payloads import TaskExecutionAbciPayload
+from packages.valory.skills.transaction_preparation_abci.payloads import (
+    TransactionPreparationAbciPayload,
+)
 
 
 class Event(Enum):
-    """TaskExecutionAbciApp Events"""
+    """TransactionPreparationAbciApp Events"""
 
-    ROUND_TIMEOUT = "round_timeout"
     NO_MAJORITY = "no_majority"
     DONE = "done"
-    ERROR = "error"
+    ROUND_TIMEOUT = "round_timeout"
+    CONTRACT_ERROR = "contract_error"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -52,15 +55,20 @@ class SynchronizedData(BaseSynchronizedData):
     """
 
     @property
+    def finished_task_data(self) -> Dict:
+        """Get the finished_task_data."""
+        return cast(Dict, self.db.get_strict("finished_task_data"))
+
+    @property
     def most_voted_tx_hash(self) -> str:
         """Get the most_voted_tx_hash."""
         return cast(str, self.db.get_strict("most_voted_tx_hash"))
 
 
-class TaskExecutionRound(CollectSameUntilThresholdRound):
-    """TaskExecutionRound"""
+class TransactionPreparationRound(CollectSameUntilThresholdRound):
+    """TransactionPreparationRound"""
 
-    payload_class = TaskExecutionAbciPayload
+    payload_class = TransactionPreparationAbciPayload
     synchronized_data_class = SynchronizedData
 
     ERROR_PAYLOAD = "ERROR"
@@ -68,15 +76,16 @@ class TaskExecutionRound(CollectSameUntilThresholdRound):
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            if self.most_voted_payload == TaskExecutionRound.ERROR_PAYLOAD:
-                return self.synchronized_data, Event.ERROR
+
+            payload = json.loads(self.most_voted_payload)
+
+            if payload["tx_hash"] == TransactionPreparationRound.ERROR_PAYLOAD:
+                return self.synchronized_data, Event.CONTRACT_ERROR
 
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
-                    get_name(
-                        SynchronizedData.most_voted_tx_hash
-                    ): self.most_voted_payload,
+                    get_name(SynchronizedData.most_voted_tx_hash): payload["tx_hash"],
                 }
             )
             return synchronized_data, Event.DONE
@@ -87,60 +96,50 @@ class TaskExecutionRound(CollectSameUntilThresholdRound):
         return None
 
 
-class FinishedTaskExecutionRound(DegenerateRound):
-    """FinishedTaskExecutionRound"""
+class FinishedTransactionPreparationRound(DegenerateRound):
+    """FinishedTransactionPreparationRound"""
 
 
-class FinishedTaskExecutionWithErrorRound(DegenerateRound):
-    """FinishedTaskExecutionWithErrorRound"""
+class TransactionPreparationAbciApp(AbciApp[Event]):
+    """TransactionPreparationAbciApp
 
+    Initial round: TransactionPreparationRound
 
-class TaskExecutionAbciApp(AbciApp[Event]):
-    """TaskExecutionAbciApp
-
-    Initial round: TaskExecutionRound
-
-    Initial states: {TaskExecutionRound}
+    Initial states: {TransactionPreparationRound}
 
     Transition states:
-        0. TaskExecutionRound
+        0. TransactionPreparationRound
             - done: 1.
             - no majority: 0.
             - round timeout: 0.
-            - error: 2.
-        1. FinishedTaskExecutionRound
-        2. FinishedTaskExecutionWithErrorRound
+            - contract error: 0.
+        1. FinishedTransactionPreparationRound
 
-    Final states: {FinishedTaskExecutionRound, FinishedTaskExecutionWithErrorRound}
+    Final states: {FinishedTransactionPreparationRound}
 
     Timeouts:
         round timeout: 30.0
     """
 
-    initial_round_cls: AppState = TaskExecutionRound
-    initial_states: Set[AppState] = {TaskExecutionRound}
+    initial_round_cls: AppState = TransactionPreparationRound
+    initial_states: Set[AppState] = {TransactionPreparationRound}
     transition_function: AbciAppTransitionFunction = {
-        TaskExecutionRound: {
-            Event.DONE: FinishedTaskExecutionRound,
-            Event.NO_MAJORITY: TaskExecutionRound,
-            Event.ROUND_TIMEOUT: TaskExecutionRound,
-            Event.ERROR: FinishedTaskExecutionWithErrorRound,
+        TransactionPreparationRound: {
+            Event.DONE: FinishedTransactionPreparationRound,
+            Event.NO_MAJORITY: TransactionPreparationRound,
+            Event.ROUND_TIMEOUT: TransactionPreparationRound,
+            Event.CONTRACT_ERROR: TransactionPreparationRound,
         },
-        FinishedTaskExecutionRound: {},
-        FinishedTaskExecutionWithErrorRound: {},
+        FinishedTransactionPreparationRound: {},
     }
-    final_states: Set[AppState] = {
-        FinishedTaskExecutionRound,
-        FinishedTaskExecutionWithErrorRound,
-    }
+    final_states: Set[AppState] = {FinishedTransactionPreparationRound}
     event_to_timeout: EventToTimeout = {
         Event.ROUND_TIMEOUT: 30.0,
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
-        TaskExecutionRound: set(),
+        TransactionPreparationRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
-        FinishedTaskExecutionRound: {"most_voted_tx_hash"},
-        FinishedTaskExecutionWithErrorRound: set(),
+        FinishedTransactionPreparationRound: {"most_voted_tx_hash"}
     }

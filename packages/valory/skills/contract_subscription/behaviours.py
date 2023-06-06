@@ -28,9 +28,11 @@ from aea.skills.behaviours import SimpleBehaviour
 
 from packages.fetchai.protocols.default.message import DefaultMessage
 from packages.valory.connections.websocket_client.connection import (
-    CONNECTION_ID, WebSocketClient)
-from packages.valory.skills.contract_subscription.handlers import \
-    DISCONNECTION_POINT
+    PUBLIC_ID,
+    WebSocketClient,
+)
+from packages.valory.skills.contract_subscription.handlers import DISCONNECTION_POINT
+
 
 DEFAULT_ENCODING = "utf-8"
 WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
@@ -101,6 +103,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
             self.context.logger.info(
                 "Getting parts that were missed while disconnected."
             )
+            self._missed_parts = False
 
         if (
             not is_connected
@@ -117,7 +120,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
     def _create_call(self, content: bytes) -> None:
         """Create a call."""
         msg, _ = self.context.default_dialogues.create(
-            counterparty=str(CONNECTION_ID),
+            counterparty=str(PUBLIC_ID),
             performative=DefaultMessage.Performative.BYTES,
             content=content,
         )

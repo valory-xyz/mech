@@ -26,12 +26,16 @@ from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour, BaseBehaviour)
+    AbstractRoundBehaviour,
+    BaseBehaviour,
+)
 from packages.valory.skills.multiplexer_abci.models import Params, SharedState
-from packages.valory.skills.multiplexer_abci.rounds import (MultiplexerAbciApp,
-                                                            MultiplexerPayload,
-                                                            MultiplexerRound,
-                                                            SynchronizedData)
+from packages.valory.skills.multiplexer_abci.rounds import (
+    MultiplexerAbciApp,
+    MultiplexerPayload,
+    MultiplexerRound,
+    SynchronizedData,
+)
 
 
 class MultiplexerBaseBehaviour(BaseBehaviour, ABC):
@@ -165,4 +169,4 @@ class MultiplexerRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = MultiplexerBehaviour
     abci_app_cls = MultiplexerAbciApp  # type: ignore
-    behaviours: Set[Type[BaseBehaviour]] = {MultiplexerBehaviour}
+    behaviours: Set[Type[BaseBehaviour]] = {MultiplexerBehaviour}  # type: ignore

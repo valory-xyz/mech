@@ -36,16 +36,21 @@ from packages.valory.contracts.multisend.contract import (MultiSendContract,
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour, BaseBehaviour)
-from packages.valory.skills.abstract_round_abci.io_.store import \
-    SupportedFiletype
+    AbstractRoundBehaviour,
+    BaseBehaviour,
+)
+from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
-    SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
-    TaskExecutionRound)
+    SynchronizedData,
+    TaskExecutionAbciApp,
+    TaskExecutionAbciPayload,
+    TaskExecutionRound,
+)
 from packages.valory.skills.task_execution_abci.tasks import AnyToolAsTask
 from packages.valory.skills.transaction_settlement_abci.payload_tools import \
     hash_payload_to_hex
+
 
 CID_PREFIX = "f01701220"
 ZERO_ETHER_VALUE = 0
@@ -271,7 +276,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         local_namespace: Dict[str, Any] = globals().copy()
         if "run" in local_namespace:
             del local_namespace["run"]
-        exec(tool_py, local_namespace)  # pylint: disable=W0122
+        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
         task_data["method"] = local_namespace["run"]
         task_data["api_keys"] = self.params.api_keys
         task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)

@@ -25,11 +25,13 @@ import packages.valory.skills.reset_pause_abci.rounds as ResetAndPauseAbci
 import packages.valory.skills.task_execution_abci.rounds as TaskExecutionAbciApp
 import packages.valory.skills.transaction_settlement_abci.rounds as TransactionSubmissionAbciApp
 from packages.valory.skills.abstract_round_abci.abci_app_chain import (
-    AbciAppTransitionMapping, chain)
+    AbciAppTransitionMapping,
+    chain,
+)
 from packages.valory.skills.termination_abci.rounds import BackgroundRound
-from packages.valory.skills.termination_abci.rounds import \
-    Event as TerminationEvent
+from packages.valory.skills.termination_abci.rounds import Event as TerminationEvent
 from packages.valory.skills.termination_abci.rounds import TerminationAbciApp
+
 
 # Here we define how the transition between the FSMs should happen
 # more information here: https://docs.autonolas.network/fsm_app_introduction/#composition-of-fsm-apps

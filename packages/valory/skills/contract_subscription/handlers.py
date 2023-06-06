@@ -22,6 +22,7 @@
 
 import json
 import time
+from typing import Any, Dict, Tuple
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -29,6 +30,7 @@ from web3 import Web3
 from web3.types import TxReceipt
 
 from packages.fetchai.protocols.default.message import DefaultMessage
+
 
 JOB_QUEUE = "pending_tasks"
 DISCONNECTION_POINT = "disconnection_point"
@@ -41,7 +43,8 @@ class WebSocketHandler(Handler):
     w3: Web3 = None
     contract = None
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the handler."""
         self.websocket_provider = kwargs.pop("websocket_provider")
         self.contract_to_monitor = kwargs.pop("contract_to_monitor")
         super().__init__(**kwargs)
@@ -97,7 +100,7 @@ class WebSocketHandler(Handler):
     def teardown(self) -> None:
         """Implement the handler teardown."""
 
-    def _get_tx_args(self, tx_hash: str):
+    def _get_tx_args(self, tx_hash: str) -> Tuple[Dict, bool]:
         """Get the transaction arguments."""
         try:
             tx_receipt: TxReceipt = self.w3.eth.get_transaction_receipt(tx_hash)
