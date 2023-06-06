@@ -42,6 +42,7 @@ from packages.valory.skills.task_execution_abci.rounds import (
 )
 from packages.valory.skills.termination_abci.models import TerminationParams
 
+
 MultiplexerParams = MultiplexerAbciParams
 TaskExecutionParams = TaskExecutionAbciParams
 

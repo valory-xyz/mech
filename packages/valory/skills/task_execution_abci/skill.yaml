@@ -6,28 +6,28 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeieflonnccu5vcro6f3aldbkxl5l2rueb6vu7ula5ytczszifrgbsq
-  behaviours.py: bafybeicd3wqunopciruxhqvp2vz4iwh3nv364yzwg6vshibvyduosewdfe
-  dialogues.py: bafybeift7ubqn3fculjpbkihmensbfu26f2ptuec2zvwqybdwlodbz6mpe
-  fsm_specification.yaml: bafybeieldx3rylsiyb6sfqxqzoogmtnda7jf4czgyjn3ddtzo4bze6sfza
-  handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
+  __init__.py: bafybeihrkpey6kxur2uoimrskq2wfpelqidxeapdxie6iuv2x7dk77ksvu
+  behaviours.py: bafybeiemhu7esaz542fbo6xthqx2gmjmzgw24w2zld45pslqdh352agxei
+  dialogues.py: bafybeibxhpre2cczhgs4weohyhdovh7n3qnreqech6zs7xzbpef7kizxsm
+  fsm_specification.yaml: bafybeigwmblh6bcfny3ezl2nsxjsrk44zmytcdr7mqchds7keqgpdcm764
+  handlers.py: bafybeigz4pfyn3i553ttxkqjerynyoud5obi366b3yregtgznupcnryjha
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
-  io_/naive_loader.py: bafybeia2p4zqlhgeh2ygdhh6kewwg3pyva4kyvwunchpkairghjbkznhmq
-  models.py: bafybeidsqa4qv6vbgm5h5axdox5sjorygjmeicntkxii3ynly53ukakgde
+  io_/naive_loader.py: bafybeihqrt34jso7dwfcedh7itmmovfv55tdjhw2tkqifsbiohetbonynu
+  models.py: bafybeibbk2wtddxxe37svippbn6lfojqzxc36tgqi2v42mohergl3pimmm
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
-  rounds.py: bafybeigtsfqpbq2gcf2h5k2736huj73d2x4obo5kesledagq7res3jvddq
-  tasks.py: bafybeib7xk34qy7dssg5crtgcmcnoxagkhdz5xrc6xz2pw5h7uvs2aqgly
+  rounds.py: bafybeihif7a5725dwmodo7bwdrn6t4jfj4lgu3kbftamu2ti7jukclobkm
+  tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeieu6zilpud6hul3t7v3ggwpzjyydtyknnh7zwazgez4oiznzrp64u
-- valory/gnosis_safe:0.1.0:bafybeigfnb6hdixmdwoxingxrevx7beawm2voudgtexo6vazzfa4vhyx5m
+- valory/agent_mech:0.1.0:bafybeib7v5fujyrio64trg5vmkuxpz42mc6fwjrmdyg3dr6ifudkn5rhle
+- valory/gnosis_safe:0.1.0:bafybeie4e3ifwa3ch3rqeouzkzndyscrfidbmj2p4ykzwh4zptvsocxcya
 - valory/multisend:0.1.0:bafybeigjywkl7hydjsrkogob3xebj2ifhqwmfhhxoeyrndzhhxi5u6amey
 protocols:
 - valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
+- valory/abstract_round_abci:0.1.0:bafybeigsbglflua5vdwmwmo2rjsogp4anxtpqjbtrcwfivuxjiv6xczpba
+- valory/transaction_settlement_abci:0.1.0:bafybeiahvk5lgkpwnaruzr34yp7to4fed7tgoufceerwqhvl57t4blqmiu
 behaviours:
   main:
     args: {}
