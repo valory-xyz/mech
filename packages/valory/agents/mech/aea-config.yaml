@@ -12,7 +12,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeigr2cipad23aebjpnqtzpgymiwrwgmnior2fk4inbscdnqyl5epla
 - valory/ledger:0.19.0:bafybeicgfupeudtmvehbwziqfxiz6ztsxr5rxzvalzvsdsspzz73o5fzfi
 - valory/p2p_libp2p_client:0.1.0:bafybeidwcobzb7ut3efegoedad7jfckvt2n6prcmd4g7xnkm6hp6aafrva
-- valory/websocket_client:0.1.0:bafybeihrnovuhaj5ad6ogvbo4v32i5yda5wtfihpo4ruffzlufqcz6p2ha
+- valory/websocket_client:0.1.0:bafybeibffszgha5w424ifiwovx5tsvccaylaj3vmfgpe44gettsqhlm6nu
 contracts:
 - valory/agent_mech:0.1.0:bafybeib7v5fujyrio64trg5vmkuxpz42mc6fwjrmdyg3dr6ifudkn5rhle
 - valory/gnosis_safe:0.1.0:bafybeie4e3ifwa3ch3rqeouzkzndyscrfidbmj2p4ykzwh4zptvsocxcya
@@ -32,7 +32,7 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeigte2l4en4otdp2maaoc3uesqdga5z4sqozrybsmcdp26bgfbcy54
 - valory/abstract_round_abci:0.1.0:bafybeigsbglflua5vdwmwmo2rjsogp4anxtpqjbtrcwfivuxjiv6xczpba
-- valory/contract_subscription:0.1.0:bafybeicwoex5sbpr337rwougsoezeqtrgyu5fzkguhdqklsqcrogvn734u
+- valory/contract_subscription:0.1.0:bafybeia4375al2j3amhkl2zg3ciwfnrycmlde2y7nupawfmio4mkp5thvq
 - valory/mech_abci:0.1.0:bafybeigu6nhy3egaevwu45yqmku3afnbzoji5ijijjcltyrt6xrtehdlxa
 - valory/multiplexer_abci:0.1.0:bafybeifodzg32h7m2ua336yk3jvkev45uerhtaccpsfwbbci32uvedhvty
 - valory/registration_abci:0.1.0:bafybeidc7vaj5rw3rzkd6aj3x7bl7r76kcaklqwat2cg7dlzh4yo6h6hhu

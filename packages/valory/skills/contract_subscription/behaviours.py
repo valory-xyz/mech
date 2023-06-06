@@ -103,6 +103,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
             self.context.logger.info(
                 "Getting parts that were missed while disconnected."
             )
+            self._missed_parts = False
 
         if (
             not is_connected
