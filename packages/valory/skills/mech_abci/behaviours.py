@@ -41,9 +41,6 @@ from packages.valory.skills.termination_abci.behaviours import (
     BackgroundBehaviour,
     TerminationAbciBehaviours,
 )
-from packages.valory.skills.transaction_preparation_abci.behaviours import (
-    TransactionPreparationRoundBehaviour,
-)
 from packages.valory.skills.transaction_settlement_abci.behaviours import (
     TransactionSettlementRoundBehaviour,
 )
@@ -55,7 +52,6 @@ class MechConsensusBehaviour(AbstractRoundBehaviour):
     initial_behaviour_cls = RegistrationStartupBehaviour
     abci_app_cls = MechAbciApp
     behaviours: Set[Type[BaseBehaviour]] = {
-        *TransactionPreparationRoundBehaviour.behaviours,
         *MultiplexerRoundBehaviour.behaviours,
         *TaskExecutionRoundBehaviour.behaviours,
         *AgentRegistrationRoundBehaviour.behaviours,

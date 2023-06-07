@@ -32,14 +32,13 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeigte2l4en4otdp2maaoc3uesqdga5z4sqozrybsmcdp26bgfbcy54
 - valory/abstract_round_abci:0.1.0:bafybeigsbglflua5vdwmwmo2rjsogp4anxtpqjbtrcwfivuxjiv6xczpba
-- valory/contract_subscription:0.1.0:bafybeia4375al2j3amhkl2zg3ciwfnrycmlde2y7nupawfmio4mkp5thvq
-- valory/mech_abci:0.1.0:bafybeigu6nhy3egaevwu45yqmku3afnbzoji5ijijjcltyrt6xrtehdlxa
+- valory/contract_subscription:0.1.0:bafybeihozkmtmfs3iqrreewvnixx6hod4rpcfdxqu4c6cfmubwwojc2dzu
+- valory/mech_abci:0.1.0:bafybeidxihotug4irjvxl2crpody4oubs7e7c6zxnu7ivwwfrdsd4xadxa
 - valory/multiplexer_abci:0.1.0:bafybeifodzg32h7m2ua336yk3jvkev45uerhtaccpsfwbbci32uvedhvty
 - valory/registration_abci:0.1.0:bafybeidc7vaj5rw3rzkd6aj3x7bl7r76kcaklqwat2cg7dlzh4yo6h6hhu
 - valory/reset_pause_abci:0.1.0:bafybeigvfkbdmro6dddejdo5vcimdbp7macbez4ejv2beucm7nrje5oz34
-- valory/task_execution_abci:0.1.0:bafybeignltj6rfmgsvv3i56bayesig3bup4qbqkcssemvspjhquv4lzy5a
+- valory/task_execution_abci:0.1.0:bafybeigvc6pp6y3smqpght2axwwjpoghnn36ks7ranmjqxcivfauz47xki
 - valory/termination_abci:0.1.0:bafybeif7y4wcmjc4g5iyjkfedephvqwzgkxnkj3tucu24rqz6fsw267l2e
-- valory/transaction_preparation_abci:0.1.0:bafybeie74hu2csk3j5u3dlhmp44jpx4ifpg3anupnmjowsvaaifuhmsnru
 - valory/transaction_settlement_abci:0.1.0:bafybeiahvk5lgkpwnaruzr34yp7to4fed7tgoufceerwqhvl57t4blqmiu
 default_ledger: ethereum
 required_ledgers:
@@ -141,7 +140,7 @@ models:
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
-      file_hash_to_tools_json: ${list:[["bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e",
+      file_hash_to_tools_json: ${list:[["bafybeiepacjq6yjukta4gfiq2fyvsj4b4r2g7swtkb2qfjugbbtsjt47ya",
         ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
         "openai-gpt-4"]], ["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",
         ["stabilityai-stable-diffusion-v1-5", "stabilityai-stable-diffusion-xl-beta-v2-2-2",

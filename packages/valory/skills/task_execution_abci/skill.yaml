@@ -7,22 +7,27 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihrkpey6kxur2uoimrskq2wfpelqidxeapdxie6iuv2x7dk77ksvu
-  behaviours.py: bafybeideg36fl4qg4anpmg5gxqlfqdoyfo27hxc75dar7nz7wr2ju6fmva
+  behaviours.py: bafybeib5rrf6vzmdna5lul6qkwxpyjvwqltdtqlb7it3oawvwmeoqtcqxa
   dialogues.py: bafybeibxhpre2cczhgs4weohyhdovh7n3qnreqech6zs7xzbpef7kizxsm
-  fsm_specification.yaml: bafybeigwmblh6bcfny3ezl2nsxjsrk44zmytcdr7mqchds7keqgpdcm764
+  fsm_specification.yaml: bafybeiggzywf6zpq2mb4ite6ptnb2zqcjjdhyu7jyb5npn7id4hcrm5tiy
   handlers.py: bafybeigz4pfyn3i553ttxkqjerynyoud5obi366b3yregtgznupcnryjha
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/naive_loader.py: bafybeihqrt34jso7dwfcedh7itmmovfv55tdjhw2tkqifsbiohetbonynu
-  models.py: bafybeiafzocnjxnrsbdb47odj2z43danznqdr55tdlxc7clwhiru5l4pwy
+  models.py: bafybeibbk2wtddxxe37svippbn6lfojqzxc36tgqi2v42mohergl3pimmm
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
-  rounds.py: bafybeiahwl3wahupy3ouiy3ss2h5aagbmtpceosyjldr4c53cbz6jvwz2a
+  rounds.py: bafybeig6gdswlwfpfvpnacpcy7vp7rt4y6cwxlmkl24wzyt4xhnd2z4zkq
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
 fingerprint_ignore_patterns: []
 connections: []
-contracts: []
-protocols: []
+contracts:
+- valory/agent_mech:0.1.0:bafybeib7v5fujyrio64trg5vmkuxpz42mc6fwjrmdyg3dr6ifudkn5rhle
+- valory/gnosis_safe:0.1.0:bafybeie4e3ifwa3ch3rqeouzkzndyscrfidbmj2p4ykzwh4zptvsocxcya
+- valory/multisend:0.1.0:bafybeigjywkl7hydjsrkogob3xebj2ifhqwmfhhxoeyrndzhhxi5u6amey
+protocols:
+- valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigsbglflua5vdwmwmo2rjsogp4anxtpqjbtrcwfivuxjiv6xczpba
+- valory/transaction_settlement_abci:0.1.0:bafybeiahvk5lgkpwnaruzr34yp7to4fed7tgoufceerwqhvl57t4blqmiu
 behaviours:
   main:
     args: {}
