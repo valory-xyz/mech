@@ -18,15 +18,21 @@
 # ------------------------------------------------------------------------------
 
 """This package contains the rounds of TaskExecutionAbciApp."""
-
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
-    AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectSameUntilThresholdRound, DegenerateRound, EventToTimeout, get_name)
-from packages.valory.skills.task_execution_abci.payloads import \
-    TaskExecutionAbciPayload
+    AbciApp,
+    AbciAppTransitionFunction,
+    AppState,
+    BaseSynchronizedData,
+    BaseTxPayload,
+    CollectionRound,
+    DegenerateRound,
+    EventToTimeout,
+    get_name,
+)
+from packages.valory.skills.task_execution_abci.payloads import TaskExecutionAbciPayload
 
 
 class Event(Enum):
@@ -51,33 +57,45 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(str, self.db.get_strict("most_voted_tx_hash"))
 
 
-class TaskExecutionRound(CollectSameUntilThresholdRound):
+class TaskExecutionRound(CollectionRound):
     """TaskExecutionRound"""
 
     payload_class = TaskExecutionAbciPayload
     synchronized_data_class = SynchronizedData
 
+    move_forward_payload: Optional[TaskExecutionAbciPayload] = None
+
     ERROR_PAYLOAD = "ERROR"
+
+    @property
+    def collection_threshold_reached(
+        self,
+    ) -> bool:
+        """Check that the collection threshold has been reached."""
+        return len(self.collection) >= self.synchronized_data.max_participants
+
+    def process_payload(self, payload: BaseTxPayload) -> None:
+        """Process payload."""
+        super().process_payload(payload)
+        if cast(TaskExecutionAbciPayload, payload).content != self.ERROR_PAYLOAD:
+            self.move_forward_payload = cast(TaskExecutionAbciPayload, payload)
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
-        if self.threshold_reached:
-            if self.most_voted_payload == TaskExecutionRound.ERROR_PAYLOAD:
-                return self.synchronized_data, Event.ERROR
+        if self.collection_threshold_reached and self.move_forward_payload is None:
+            return self.synchronized_data, Event.ERROR
 
+        if self.move_forward_payload is not None:
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
                     get_name(
                         SynchronizedData.most_voted_tx_hash
-                    ): self.most_voted_payload,
+                    ): self.move_forward_payload.content,
                 }
             )
             return synchronized_data, Event.DONE
-        if not self.is_majority_possible(
-            self.collection, self.synchronized_data.nb_participants
-        ):
-            return self.synchronized_data, Event.NO_MAJORITY
+
         return None
 
 
@@ -90,14 +108,31 @@ class FinishedTaskExecutionWithErrorRound(DegenerateRound):
 
 
 class TaskExecutionAbciApp(AbciApp[Event]):
-    """TaskExecutionAbciApp"""
+    """TaskExecutionAbciApp
+
+    Initial round: TaskExecutionRound
+
+    Initial states: {TaskExecutionRound}
+
+    Transition states:
+        0. TaskExecutionRound
+            - done: 1.
+            - round timeout: 0.
+            - error: 2.
+        1. FinishedTaskExecutionRound
+        2. FinishedTaskExecutionWithErrorRound
+
+    Final states: {FinishedTaskExecutionRound, FinishedTaskExecutionWithErrorRound}
+
+    Timeouts:
+        round timeout: 30.0
+    """
 
     initial_round_cls: AppState = TaskExecutionRound
     initial_states: Set[AppState] = {TaskExecutionRound}
     transition_function: AbciAppTransitionFunction = {
         TaskExecutionRound: {
             Event.DONE: FinishedTaskExecutionRound,
-            Event.NO_MAJORITY: TaskExecutionRound,
             Event.ROUND_TIMEOUT: TaskExecutionRound,
             Event.ERROR: FinishedTaskExecutionWithErrorRound,
         },
@@ -108,7 +143,9 @@ class TaskExecutionAbciApp(AbciApp[Event]):
         FinishedTaskExecutionRound,
         FinishedTaskExecutionWithErrorRound,
     }
-    event_to_timeout: EventToTimeout = {}
+    event_to_timeout: EventToTimeout = {
+        Event.ROUND_TIMEOUT: 30.0,
+    }
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskExecutionRound: set(),

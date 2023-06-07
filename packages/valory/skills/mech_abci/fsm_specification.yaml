@@ -2,8 +2,8 @@ alphabet_in:
 - CHECK_HISTORY
 - CHECK_LATE_ARRIVING_MESSAGE
 - CHECK_TIMEOUT
-- CONTRACT_ERROR
 - DONE
+- ERROR
 - EXECUTE
 - FINALIZATION_FAILED
 - FINALIZE_TIMEOUT
@@ -41,20 +41,19 @@ states:
 - SelectKeeperTransactionSubmissionBRound
 - SynchronizeLateMessagesRound
 - TaskExecutionRound
-- TransactionPreparationRound
 - ValidateTransactionRound
 transition_func:
     (CheckLateTxHashesRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckLateTxHashesRound, CHECK_TIMEOUT): CheckLateTxHashesRound
     (CheckLateTxHashesRound, DONE): MultiplexerRound
-    (CheckLateTxHashesRound, NEGATIVE): TransactionPreparationRound
-    (CheckLateTxHashesRound, NONE): TransactionPreparationRound
-    (CheckLateTxHashesRound, NO_MAJORITY): TransactionPreparationRound
+    (CheckLateTxHashesRound, NEGATIVE): TaskExecutionRound
+    (CheckLateTxHashesRound, NONE): TaskExecutionRound
+    (CheckLateTxHashesRound, NO_MAJORITY): TaskExecutionRound
     (CheckTransactionHistoryRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckTransactionHistoryRound, CHECK_TIMEOUT): CheckTransactionHistoryRound
     (CheckTransactionHistoryRound, DONE): MultiplexerRound
     (CheckTransactionHistoryRound, NEGATIVE): SelectKeeperTransactionSubmissionBRound
-    (CheckTransactionHistoryRound, NONE): TransactionPreparationRound
+    (CheckTransactionHistoryRound, NONE): TaskExecutionRound
     (CheckTransactionHistoryRound, NO_MAJORITY): CheckTransactionHistoryRound
     (CollectSignatureRound, DONE): FinalizationRound
     (CollectSignatureRound, NO_MAJORITY): ResetRound
@@ -80,33 +79,29 @@ transition_func:
     (ResetAndPauseRound, NO_MAJORITY): RegistrationRound
     (ResetAndPauseRound, RESET_AND_PAUSE_TIMEOUT): RegistrationRound
     (ResetRound, DONE): RandomnessTransactionSubmissionRound
-    (ResetRound, NO_MAJORITY): TransactionPreparationRound
-    (ResetRound, RESET_TIMEOUT): TransactionPreparationRound
+    (ResetRound, NO_MAJORITY): TaskExecutionRound
+    (ResetRound, RESET_TIMEOUT): TaskExecutionRound
     (SelectKeeperTransactionSubmissionARound, DONE): CollectSignatureRound
-    (SelectKeeperTransactionSubmissionARound, INCORRECT_SERIALIZATION): TransactionPreparationRound
+    (SelectKeeperTransactionSubmissionARound, INCORRECT_SERIALIZATION): TaskExecutionRound
     (SelectKeeperTransactionSubmissionARound, NO_MAJORITY): ResetRound
     (SelectKeeperTransactionSubmissionARound, ROUND_TIMEOUT): SelectKeeperTransactionSubmissionARound
     (SelectKeeperTransactionSubmissionBAfterTimeoutRound, CHECK_HISTORY): CheckTransactionHistoryRound
     (SelectKeeperTransactionSubmissionBAfterTimeoutRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (SelectKeeperTransactionSubmissionBAfterTimeoutRound, DONE): FinalizationRound
-    (SelectKeeperTransactionSubmissionBAfterTimeoutRound, INCORRECT_SERIALIZATION): TransactionPreparationRound
+    (SelectKeeperTransactionSubmissionBAfterTimeoutRound, INCORRECT_SERIALIZATION): TaskExecutionRound
     (SelectKeeperTransactionSubmissionBAfterTimeoutRound, NO_MAJORITY): ResetRound
     (SelectKeeperTransactionSubmissionBAfterTimeoutRound, ROUND_TIMEOUT): SelectKeeperTransactionSubmissionBAfterTimeoutRound
     (SelectKeeperTransactionSubmissionBRound, DONE): FinalizationRound
-    (SelectKeeperTransactionSubmissionBRound, INCORRECT_SERIALIZATION): TransactionPreparationRound
+    (SelectKeeperTransactionSubmissionBRound, INCORRECT_SERIALIZATION): TaskExecutionRound
     (SelectKeeperTransactionSubmissionBRound, NO_MAJORITY): ResetRound
     (SelectKeeperTransactionSubmissionBRound, ROUND_TIMEOUT): SelectKeeperTransactionSubmissionBRound
     (SynchronizeLateMessagesRound, DONE): CheckLateTxHashesRound
     (SynchronizeLateMessagesRound, NONE): SelectKeeperTransactionSubmissionBRound
     (SynchronizeLateMessagesRound, ROUND_TIMEOUT): SynchronizeLateMessagesRound
-    (SynchronizeLateMessagesRound, SUSPICIOUS_ACTIVITY): TransactionPreparationRound
-    (TaskExecutionRound, DONE): TransactionPreparationRound
-    (TaskExecutionRound, NO_MAJORITY): TaskExecutionRound
+    (SynchronizeLateMessagesRound, SUSPICIOUS_ACTIVITY): TaskExecutionRound
+    (TaskExecutionRound, DONE): RandomnessTransactionSubmissionRound
+    (TaskExecutionRound, ERROR): MultiplexerRound
     (TaskExecutionRound, ROUND_TIMEOUT): TaskExecutionRound
-    (TransactionPreparationRound, CONTRACT_ERROR): TransactionPreparationRound
-    (TransactionPreparationRound, DONE): RandomnessTransactionSubmissionRound
-    (TransactionPreparationRound, NO_MAJORITY): TransactionPreparationRound
-    (TransactionPreparationRound, ROUND_TIMEOUT): TransactionPreparationRound
     (ValidateTransactionRound, DONE): MultiplexerRound
     (ValidateTransactionRound, NEGATIVE): CheckTransactionHistoryRound
     (ValidateTransactionRound, NONE): SelectKeeperTransactionSubmissionBRound

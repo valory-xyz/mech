@@ -7,14 +7,14 @@ description: The scaffold skill is a simple client to subscribe to transactions 
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeifmvtpeq7ksqq262e2lupzv54sfdzygg2qxiygyztq7f2sujg4cwi
-  behaviours.py: bafybeih6piikykeydxin5c5iofgzc7xfrxkwnokh3em6yvh37ibylc3t2q
-  dialogues.py: bafybeiaaho77tsg4s7k2k27u2xqcoi2juze6cwx4psuueu7gbumpw5kgiu
-  handlers.py: bafybeieagcgzoggy6jspn2hzw4yhlwtii7nprouysxrjb7hrwt5fqntvbq
+  __init__.py: bafybeihmbiavlq5ekiat57xuekfuxjkoniizurn77hivqwtsaqydv32owu
+  behaviours.py: bafybeid7c4n255554s3ihqo45elf54ob2qp3nygckdvvlvewvtyhykg7fq
+  dialogues.py: bafybeihln4gvktrwncsd7ytz243jrhlsmgeusg3qk3u5cccv4e56nwptv4
+  handlers.py: bafybeidxinxqmgxbdo3kriks54etx5icqzyjsoqga7px7tksh2dgf7cxie
   models.py: bafybeicxiv2m6whj37zffrqmb3zw6tzlouqvziocallca4gcghx3vigs6q
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeiawlga3on5ijbxpt3zxgks5ssi4jbpez2vchzqfv3nxw3ixqcutfy
+- valory/websocket_client:0.1.0:bafybeibffszgha5w424ifiwovx5tsvccaylaj3vmfgpe44gettsqhlm6nu
 contracts: []
 protocols:
 - fetchai/default:1.0.0:bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4
@@ -39,5 +39,7 @@ models:
     args:
       use_polling: false
     class_name: Params
-dependencies: {}
+dependencies:
+  web3:
+    version: ==5.25.0
 is_abstract: false

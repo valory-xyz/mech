@@ -29,23 +29,33 @@ import openai  # noqa
 from aea.helpers.cid import CID, to_v1
 
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
-from packages.valory.contracts.gnosis_safe.contract import (GnosisSafeContract,
-                                                            SafeOperation)
-from packages.valory.contracts.multisend.contract import (MultiSendContract,
-                                                          MultiSendOperation)
+from packages.valory.contracts.gnosis_safe.contract import (
+    GnosisSafeContract,
+    SafeOperation,
+)
+from packages.valory.contracts.multisend.contract import (
+    MultiSendContract,
+    MultiSendOperation,
+)
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour, BaseBehaviour)
-from packages.valory.skills.abstract_round_abci.io_.store import \
-    SupportedFiletype
+    AbstractRoundBehaviour,
+    BaseBehaviour,
+)
+from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_execution_abci.models import Params
 from packages.valory.skills.task_execution_abci.rounds import (
-    SynchronizedData, TaskExecutionAbciApp, TaskExecutionAbciPayload,
-    TaskExecutionRound)
+    SynchronizedData,
+    TaskExecutionAbciApp,
+    TaskExecutionAbciPayload,
+    TaskExecutionRound,
+)
 from packages.valory.skills.task_execution_abci.tasks import AnyToolAsTask
-from packages.valory.skills.transaction_settlement_abci.payload_tools import \
-    hash_payload_to_hex
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    hash_payload_to_hex,
+)
+
 
 CID_PREFIX = "f01701220"
 ZERO_ETHER_VALUE = 0
@@ -145,11 +155,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         """
         # Check whether the task already exists
         if not self._is_task_prepared and not self._invalid_request:
-            # Get the first task in the queue - format:
-            # {
-            #     "requestId": <id>
-            #     "data": <ipfs_hash>
-            # }
+            # Get the first task in the queue - format: {"requestId": <id>, "data": <ipfs_hash>}
             pending_tasks = self.context.shared_state.get("pending_tasks")
             if len(pending_tasks) == 0:
                 # something went wrong, we should not be here, send an error payload
@@ -214,14 +220,14 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         # Handle finished task
         transactions: List[Dict] = []
         if not self._invalid_request and self._async_result.ready():
-            # the expected response for the task is:
-            # Tuple[str, List[Dict]] = (deliver_msg, transactions)
+            # the expected response for the task is: Tuple[str, List[Dict]] = (deliver_msg, transactions)
             # deliver_msg: str = is the string containing the deliver message.
             # transactions: List[Dict] = is the list of transactions to be multisent.
             # Should be an empty list if no transactions are needed.
-            # example response
-            # ("task_result", [{"to": "0x123", "value": 0, "data": "0x123"}])
+            # example response: ("task_result", [{"to": "0x123", "value": 0, "data": "0x123"}])
             task_result: Tuple[str, List[Dict]] = self._async_result.get()
+            if task_result is None:
+                return None
             deliver_msg, transactions = task_result
             response_obj = {"requestId": self.request_id, "result": deliver_msg}
 
@@ -264,21 +270,23 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             file_hash = str(CID.from_string(file_hash))
             return file_hash
 
-    def _prepare_task(self, task_data: Dict[str, Any]):
+    def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         tool_task = AnyToolAsTask()
         tool_py = self.context.params.all_tools[task_data["tool"]]
         local_namespace: Dict[str, Any] = globals().copy()
         if "run" in local_namespace:
             del local_namespace["run"]
-        exec(tool_py, local_namespace)  # pylint: disable=W0122
+        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
         task_data["method"] = local_namespace["run"]
         task_data["api_keys"] = self.params.api_keys
         task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)
         self._async_result = self.context.task_manager.get_task_result(task_id)
         self._is_task_prepared = True
 
-    def _to_multisend(self, transactions: List[Dict]) -> Generator[None, None, Optional[str]]:
+    def _to_multisend(
+        self, transactions: List[Dict]
+    ) -> Generator[None, None, Optional[str]]:
         """Transform payload to MultiSend."""
         multi_send_txs = []
         for transaction in transactions:
