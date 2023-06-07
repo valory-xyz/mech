@@ -226,6 +226,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             # Should be an empty list if no transactions are needed.
             # example response: ("task_result", [{"to": "0x123", "value": 0, "data": "0x123"}])
             task_result: Tuple[str, List[Dict]] = self._async_result.get()
+            if task_result is None:
+                return None
             deliver_msg, transactions = task_result
             response_obj = {"requestId": self.request_id, "result": deliver_msg}
 

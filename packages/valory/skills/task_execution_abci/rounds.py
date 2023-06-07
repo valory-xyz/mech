@@ -26,7 +26,8 @@ from packages.valory.skills.abstract_round_abci.base import (
     AbciAppTransitionFunction,
     AppState,
     BaseSynchronizedData,
-    CollectDifferentUntilAllRound,
+    BaseTxPayload,
+    CollectionRound,
     DegenerateRound,
     EventToTimeout,
     get_name,
@@ -56,29 +57,45 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(str, self.db.get_strict("most_voted_tx_hash"))
 
 
-class TaskExecutionRound(CollectDifferentUntilAllRound):
+class TaskExecutionRound(CollectionRound):
     """TaskExecutionRound"""
 
     payload_class = TaskExecutionAbciPayload
     synchronized_data_class = SynchronizedData
 
+    move_forward_payload: Optional[TaskExecutionAbciPayload] = None
+
     ERROR_PAYLOAD = "ERROR"
+
+    @property
+    def collection_threshold_reached(
+        self,
+    ) -> bool:
+        """Check that the collection threshold has been reached."""
+        return len(self.collection) >= self.synchronized_data.max_participants
+
+    def process_payload(self, payload: BaseTxPayload) -> None:
+        """Process payload."""
+        super().process_payload(payload)
+        if cast(TaskExecutionAbciPayload, payload).content != self.ERROR_PAYLOAD:
+            self.move_forward_payload = cast(TaskExecutionAbciPayload, payload)
 
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
-        if self.collection_threshold_reached:
-            for payload in self.collection.values():
-                payload = cast(TaskExecutionAbciPayload, payload)
-                if payload.content == self.ERROR_PAYLOAD:
-                    continue
-                synchronized_data = self.synchronized_data.update(
-                    synchronized_data_class=SynchronizedData,
-                    **{
-                        get_name(SynchronizedData.most_voted_tx_hash): payload.content,
-                    }
-                )
-                return synchronized_data, Event.DONE
+        if self.collection_threshold_reached and self.move_forward_payload is None:
             return self.synchronized_data, Event.ERROR
+
+        if self.move_forward_payload is not None:
+            synchronized_data = self.synchronized_data.update(
+                synchronized_data_class=SynchronizedData,
+                **{
+                    get_name(
+                        SynchronizedData.most_voted_tx_hash
+                    ): self.move_forward_payload.content,
+                }
+            )
+            return synchronized_data, Event.DONE
+
         return None
 
 
