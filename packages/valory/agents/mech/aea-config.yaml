@@ -33,11 +33,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeiet34ju7typtkqyfn572sacef5krrsb6d4vpfnviqi6kzunje3xny
 - valory/abstract_round_abci:0.1.0:bafybeibdljcw2wchyderkonobpdpyb36yioagqcaoqldydw5bi6vvempma
 - valory/contract_subscription:0.1.0:bafybeihozkmtmfs3iqrreewvnixx6hod4rpcfdxqu4c6cfmubwwojc2dzu
-- valory/mech_abci:0.1.0:bafybeidqfwm34u7cy2lkakvksshlrhyksdw2s7jktkmizmon4isy6nhdju
+- valory/mech_abci:0.1.0:bafybeibmwqbtjbpkatgpxzpj6xftsljofb3r2fkjnemts5qeexgiby4gdm
 - valory/multiplexer_abci:0.1.0:bafybeidyydry6axhrqeibmfvnjvbvm2nuxlieginygijcu5nqa3672iwsu
 - valory/registration_abci:0.1.0:bafybeidqcszsitlmsofegmbprny22hqlent2o6luxng5a46gplytexrtbq
 - valory/reset_pause_abci:0.1.0:bafybeidprdrxzbloz5imufkbpvetvkhywdvq3fopbhdzztfnud4onsdsce
-- valory/task_execution_abci:0.1.0:bafybeiab2m6f7emk6hkwf7kwgfmje5tww6qx2fqmuciufdj2giluz2dk5u
+- valory/task_execution_abci:0.1.0:bafybeifgyp3jxqdgp7hbycnyiiebqjneycit466ughdbsfp2grpfjlg3wi
 - valory/termination_abci:0.1.0:bafybeif33wyu6w7yrrhyacpt627i5g6nec2kiepsm5xx2b44zq657dch3a
 - valory/transaction_settlement_abci:0.1.0:bafybeiaeu47qmeeqipn6jnz4ymbxwqb66axvx3ddzocnni4zehbhiupc54
 default_ledger: ethereum
@@ -125,6 +125,7 @@ models:
   params:
     args:
       sleep_time: 1
+      ipfs_fetch_timeout: ${float:15.0}
       tendermint_check_sleep_delay: 3
       tendermint_p2p_url: ${str:localhost:26656}
       tendermint_com_url: ${str:http://localhost:8080}
