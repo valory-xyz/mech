@@ -89,6 +89,23 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self._is_task_prepared = False
         self._invalid_request = False
 
+    def _AsyncBehaviour__handle_waiting_for_message(self) -> None:
+        """Handle an 'act' tick, when waiting for a message."""
+        # if there is no message coming, skip.
+        if self._AsyncBehaviour__notified:  # type: ignore
+            try:
+                self._AsyncBehaviour__get_generator_act().send(
+                    self._AsyncBehaviour__message  # type: ignore
+                )
+            except StopIteration:
+                self._AsyncBehaviour__handle_stop_iteration()
+            finally:
+                # wait for the next message
+                self._AsyncBehaviour__notified = False
+                self._AsyncBehaviour__message = None
+        else:
+            self._AsyncBehaviour__get_generator_act().send(None)
+
     def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
 
@@ -121,7 +138,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self.set_done()
 
     def get_payload_content(
-        self, task_result: Optional[Tuple[str, str, List[Dict]]]
+        self, task_result: Optional[Tuple[str, bytes, List[Dict]]]
     ) -> Generator[None, None, str]:
         """Get the payload content."""
         if task_result is None:
@@ -146,7 +163,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
     def get_task_result(  # pylint: disable=R0914,R1710
         self,
-    ) -> Generator[None, None, Optional[Tuple[str, str, List[Dict]]]]:
+    ) -> Generator[None, None, Optional[Tuple[str, bytes, List[Dict]]]]:
         """
         Execute a task in the background and wait for the result asynchronously.
 
@@ -174,6 +191,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 task_data = yield from self.get_from_ipfs(
                     ipfs_hash=file_hash,
                     filetype=SupportedFiletype.JSON,
+                    timeout=self.params.ipfs_fetch_timeout,
                 )
                 self.context.logger.info(f"Got data from IPFS: {task_data}")
 
@@ -207,7 +225,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             deliver_msg = "no_op"
             # respond with no_op and no multisend transactions
             request_id = cast(str, self.request_id)
-            return request_id, deliver_msg, []
+            return request_id, deliver_msg.encode(), []
 
         self._async_result = cast(AsyncResult, self._async_result)
 
