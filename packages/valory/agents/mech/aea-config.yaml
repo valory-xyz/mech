@@ -33,11 +33,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeiet34ju7typtkqyfn572sacef5krrsb6d4vpfnviqi6kzunje3xny
 - valory/abstract_round_abci:0.1.0:bafybeibdljcw2wchyderkonobpdpyb36yioagqcaoqldydw5bi6vvempma
 - valory/contract_subscription:0.1.0:bafybeihozkmtmfs3iqrreewvnixx6hod4rpcfdxqu4c6cfmubwwojc2dzu
-- valory/mech_abci:0.1.0:bafybeibmwqbtjbpkatgpxzpj6xftsljofb3r2fkjnemts5qeexgiby4gdm
+- valory/mech_abci:0.1.0:bafybeibapgg5a6pqw63nkm27yizelvdrcehd64iwff7dnmgpct4prn6kyq
 - valory/multiplexer_abci:0.1.0:bafybeidyydry6axhrqeibmfvnjvbvm2nuxlieginygijcu5nqa3672iwsu
 - valory/registration_abci:0.1.0:bafybeidqcszsitlmsofegmbprny22hqlent2o6luxng5a46gplytexrtbq
 - valory/reset_pause_abci:0.1.0:bafybeidprdrxzbloz5imufkbpvetvkhywdvq3fopbhdzztfnud4onsdsce
-- valory/task_execution_abci:0.1.0:bafybeifgyp3jxqdgp7hbycnyiiebqjneycit466ughdbsfp2grpfjlg3wi
+- valory/task_execution_abci:0.1.0:bafybeiac6hd3jritb5ieh3lno4nocrzszkvctgz4ix5flnoivcabtbbzae
 - valory/termination_abci:0.1.0:bafybeif33wyu6w7yrrhyacpt627i5g6nec2kiepsm5xx2b44zq657dch3a
 - valory/transaction_settlement_abci:0.1.0:bafybeiaeu47qmeeqipn6jnz4ymbxwqb66axvx3ddzocnni4zehbhiupc54
 default_ledger: ethereum
@@ -141,11 +141,7 @@ models:
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
-      file_hash_to_tools_json: ${list:[["bafybeiepacjq6yjukta4gfiq2fyvsj4b4r2g7swtkb2qfjugbbtsjt47ya",
-        ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo",
-        "openai-gpt-4"]], ["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",
-        ["stabilityai-stable-diffusion-v1-5", "stabilityai-stable-diffusion-xl-beta-v2-2-2",
-        "stabilityai-stable-diffusion-512-v2-1", "stabilityai-stable-diffusion-768-v2-1"]]]}
+      file_hash_to_tools_json: ${list:[["bafybeiepacjq6yjukta4gfiq2fyvsj4b4r2g7swtkb2qfjugbbtsjt47ya",["openai-text-davinci-002","openai-text-davinci-003","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]],["bafybeidpbnqbruzqlq424qt3i5dcvyqmcimshjilftabnrroujmjhdmteu",["transfer-native"]]]}
       api_keys_json: ${list:[["openai", "dummy_api_key"],["stabilityai", "dummy_api_key"]]}
       use_polling: ${bool:false}
       polling_interval: ${int:25}

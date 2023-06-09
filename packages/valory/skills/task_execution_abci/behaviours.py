@@ -138,14 +138,14 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self.set_done()
 
     def get_payload_content(
-        self, task_result: Optional[Tuple[str, bytes, List[Dict]]]
+        self, task_result: Optional[Tuple[str, bytes, Optional[Dict[str, Any]]]]
     ) -> Generator[None, None, str]:
         """Get the payload content."""
         if task_result is None:
             # something went wrong, respond with ERROR payload for now
             return TaskExecutionRound.ERROR_PAYLOAD
 
-        request_id, deliver_msg_hash, multisend_txs = task_result
+        request_id, deliver_msg_hash, response_tx = task_result
         deliver_tx = yield from self._get_deliver_tx(
             {"request_id": request_id, "task_result": deliver_msg_hash}
         )
@@ -153,7 +153,9 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             # something went wrong, respond with ERROR payload for now
             return TaskExecutionRound.ERROR_PAYLOAD
 
-        all_txs = multisend_txs + [deliver_tx]
+        all_txs = [deliver_tx]
+        if response_tx is not None:
+            all_txs.append(response_tx)
         multisend_tx_str = yield from self._to_multisend(all_txs)
         if multisend_tx_str is None:
             # something went wrong, respond with ERROR payload for now
@@ -163,7 +165,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
     def get_task_result(  # pylint: disable=R0914,R1710
         self,
-    ) -> Generator[None, None, Optional[Tuple[str, bytes, List[Dict]]]]:
+    ) -> Generator[None, None, Optional[Tuple[str, bytes, Optional[Dict[str, Any]]]]]:
         """
         Execute a task in the background and wait for the result asynchronously.
 
@@ -225,7 +227,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             deliver_msg = "no_op"
             # respond with no_op and no multisend transactions
             request_id = cast(str, self.request_id)
-            return request_id, deliver_msg.encode(), []
+            return request_id, deliver_msg.encode(), None
 
         self._async_result = cast(AsyncResult, self._async_result)
 
@@ -236,17 +238,17 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             return None
 
         # Handle finished task
-        transactions: List[Dict] = []
+        transaction: Optional[Dict[str, Any]] = None
         if not self._invalid_request and self._async_result.ready():
             # the expected response for the task is: Tuple[str, List[Dict]] = (deliver_msg, transactions)
             # deliver_msg: str = is the string containing the deliver message.
-            # transactions: List[Dict] = is the list of transactions to be multisent.
+            # transaction: List[Dict] = is the list of transactions to be multisent.
             # Should be an empty list if no transactions are needed.
-            # example response: ("task_result", [{"to": "0x123", "value": 0, "data": "0x123"}])
-            task_result: Tuple[str, List[Dict]] = self._async_result.get()
+            # example response: ("task_result", {"to": "0x123", "value": 0, "data": "0x123"})
+            task_result: Tuple[str, Dict[str, Any]] = self._async_result.get()
             if task_result is None:
                 return None
-            deliver_msg, transactions = task_result
+            deliver_msg, transaction = task_result
             response_obj = {"requestId": self.request_id, "result": deliver_msg}
 
         self.context.logger.info(f"Response object: {response_obj}")
@@ -275,7 +277,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
         hex_multihash = hex_multihash[6:]
         request_id = cast(str, self.request_id)
-        return request_id, hex_multihash, transactions
+        return request_id, hex_multihash, transaction
 
     def _get_ipfs_file_hash(self, data: bytes) -> str:
         """Get hash from bytes"""
