@@ -39,5 +39,4 @@ agent/
 mech/
 
 .mypy_cache
-
 /.tox/
