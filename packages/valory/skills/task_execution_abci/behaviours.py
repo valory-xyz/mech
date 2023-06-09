@@ -121,14 +121,14 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self.set_done()
 
     def get_payload_content(
-        self, task_result: Optional[Tuple[str, str, List[Dict]]]
+        self, task_result: Optional[Tuple[str, str, Optional[Dict[str, Any]]]]
     ) -> Generator[None, None, str]:
         """Get the payload content."""
         if task_result is None:
             # something went wrong, respond with ERROR payload for now
             return TaskExecutionRound.ERROR_PAYLOAD
 
-        request_id, deliver_msg_hash, multisend_txs = task_result
+        request_id, deliver_msg_hash, response_tx = task_result
         deliver_tx = yield from self._get_deliver_tx(
             {"request_id": request_id, "task_result": deliver_msg_hash}
         )
@@ -136,7 +136,9 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             # something went wrong, respond with ERROR payload for now
             return TaskExecutionRound.ERROR_PAYLOAD
 
-        all_txs = [deliver_tx, multisend_txs]
+        all_txs = [deliver_tx]
+        if response_tx is not None:
+            all_txs.append(response_tx)
         multisend_tx_str = yield from self._to_multisend(all_txs)
         if multisend_tx_str is None:
             # something went wrong, respond with ERROR payload for now
@@ -146,7 +148,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
     def get_task_result(  # pylint: disable=R0914,R1710
         self,
-    ) -> Generator[None, None, Optional[Tuple[str, str, Dict[str, Any]]]]:
+    ) -> Generator[None, None, Optional[Tuple[str, str, Optional[Dict[str, Any]]]]]:
         """
         Execute a task in the background and wait for the result asynchronously.
 
@@ -207,7 +209,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             deliver_msg = "no_op"
             # respond with no_op and no multisend transactions
             request_id = cast(str, self.request_id)
-            return request_id, deliver_msg, []
+            return request_id, deliver_msg, None
 
         self._async_result = cast(AsyncResult, self._async_result)
 
@@ -218,7 +220,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             return None
 
         # Handle finished task
-        transaction: Dict[str, Any] = []
+        transaction: Optional[Dict[str, Any]] = None
         if not self._invalid_request and self._async_result.ready():
             # the expected response for the task is: Tuple[str, List[Dict]] = (deliver_msg, transactions)
             # deliver_msg: str = is the string containing the deliver message.
