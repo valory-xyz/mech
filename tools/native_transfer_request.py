@@ -22,18 +22,26 @@ python native_transfer_request.py “transfer 0.0001 ETH to 0x4253cB6Fbf9Cb7CD6c
 """
 
 import ast
-from openai_request import run as openai_run
+from typing import Any, Dict, Optional, Tuple, cast
+
+import openai
+
+
+ENGINE = "gpt-3.5-turbo"
+MAX_TOKENS = 500
+TEMPERATURE = 0.7
+TOOL_PREFIX = "transfer-"
 
 """NOTE: In the case of native token transfers on evm chains we do not need any contract address or ABI. The only unknowns are the "recipient address" and the "value" to send for evm native transfers."""
-native_token_transfer_prompt = """
-You are an LLM inside a multi-agent system that takes in a prompt from a user requesting you to execute a native gas token (ETH) transfer to another public address on Ethereum. 
-The agent process you are sending your response to requires the unknown transaction parameters in the exact format below, written by you in your response as an input to sign/execute the transaction in the agent process. 
-The agent does not know the receiving address, “recipient_address", the value to send, “value”, or the denomination of the "value" given in wei "wei_value" which is converted by you without use of any functions, the user prompt indicates to send. The unknown 
-transaction parameters not known beforehand must be constructed by you from the user's prompt information. 
+
+NATIVE_TRANSFER_PROMPT = """You are an LLM inside a multi-agent system that takes in a prompt from a user requesting you to execute a native gas token (ETH) transfer to another public address on Ethereum. 
+The agent process you are sending your response to requires the unknown transaction parameters in the exact format below, written by you in your response as an input to sign/execute the transaction in the 
+agent process.The agent does not know the receiving address, “recipient_address", the value to send, “value”, or the denomination of the "value" given in wei "wei_value" which is converted by you without 
+use of any functions, the user prompt indicates to send. The unknown transaction parameters not known beforehand must be constructed by you from the user's prompt information. 
 
 User Prompt: {user_prompt}
 
-only respond with the format below using curly brackets to encapsulate the variables within a python dictionary object and no other text:
+only respond with the format below using curly brackets to encapsulate the variables within a json dictionary object and no other text:
 
 "to": recipient_address, 
 "value": value, 
@@ -43,25 +51,73 @@ Do not respond with anything else other than the transaction object you construc
 """
 
 
-def run(**kwargs):
-    """Run the task"""
+def make_request_openai_request(
+    prompt: str,
+    api_key: str,
+    engine: str = ENGINE,
+    max_tokens: Optional[int] = None,
+    temperature: Optional[float] = None,
+) -> str:
+    """Make openai request."""
+    openai.api_key = api_key
+    max_tokens = max_tokens or MAX_TOKENS
+    temperature = temperature or TEMPERATURE
+    moderation_result = openai.Moderation.create(prompt)
+    if moderation_result["results"][0]["flagged"]:
+        return "Moderation flagged the prompt as in violation of terms."
 
-    # format the tool prompt
-    tool_prompt = native_token_transfer_prompt.format(user_prompt=str(kwargs["prompt"]))
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": prompt},
+    ]
+    response = openai.ChatCompletion.create(
+        model=engine,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        n=1,
+        timeout=120,
+        stop=None,
+    )
+    return response.choices[0].message.content
 
-    # use openai_request tool
-    response = openai_run(api_keys={"openai": kwargs["api_keys"]["openai"]}, prompt=tool_prompt, tool=kwargs["tool"])
 
-    # parse the response to get the transaction object string itself
-    parsed_txs = ast.literal_eval(response)
+def native_transfer(
+    prompt: str,
+    api_key: str,
+) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """Perform native transfer."""
+    tool_prompt = NATIVE_TRANSFER_PROMPT.format(user_prompt=prompt)
+    response = make_request_openai_request(prompt=tool_prompt, api_key=api_key)
+
+    try:
+        # parse the response to get the transaction object string itself
+        parsed_txs = ast.literal_eval(response)
+    except SyntaxError:
+        return response, None
 
     # build the transaction object, unknowns are referenced from parsed_txs
     transaction = {
         "to": str(parsed_txs["to"]),
-        "value": str(parsed_txs["wei_value"]),
+        "value": int(parsed_txs["wei_value"]),
     }
 
-    # return the encoded transaction object(s) within a list
-    txs_list = [transaction]
+    return response, transaction
 
-    return txs_list
+
+AVAILABLE_TOOLS = {
+    "native": native_transfer,
+}
+
+
+def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+    """Run the task"""
+    prompt = kwargs["prompt"]
+    api_key = kwargs["api_keys"]["openai"]
+    tool = cast(str, kwargs["tool"]).replace(TOOL_PREFIX, "")
+
+    if tool not in AVAILABLE_TOOLS:
+        return f"Not tool named `{kwargs['tool']}`", None
+
+    transaction_builder = AVAILABLE_TOOLS[tool]
+    return transaction_builder(prompt, api_key)
