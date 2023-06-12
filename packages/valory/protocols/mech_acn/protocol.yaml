@@ -7,6 +7,7 @@ description: A protocol for adding ACN callbacks on AI mechs.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
+  README.md: bafybeicdant6w3hxprj27mdf2xs6r7er6qfq27zet7sgvkqlcvbg3vcxnm
   __init__.py: bafybeibuio5tirkbhe5vowct6a4qhkw75qotdxubzunr2on2tp5kg2feia
   custom_types.py: bafybeiedbhvtoybrhz7fdtzpjfyjm3yhdlix5kmkase5jlgxqc2mdplvra
   dialogues.py: bafybeiaewe3ejzy4zvkes24eg4d76wvtr6ek3o24tnqe7iuujz7p5b6ft4

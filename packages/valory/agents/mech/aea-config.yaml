@@ -29,16 +29,16 @@ protocols:
 - valory/ipfs:0.1.0:bafybeic72ncgqbzoz2guj4p4yjqulid7mv6yroeh65hxznloamoveeg7hq
 - valory/ledger_api:1.0.0:bafybeibo4bdtcrxi2suyzldwoetjar6pqfzm6vt5xal22ravkkcvdmtksi
 - valory/tendermint:0.1.0:bafybeicusvezoqlmyt6iqomcbwaz3xkhk2qf3d56q5zprmj3xdxfy64k54
-- valory/mech_acn:0.1.0:bafybeifdg57my55xwr3klgu72np3dcgrctalndpod2cm6xayfuqqvaocku
+- valory/mech_acn:0.1.0:bafybeieetkgxawula32rxhm2vk7ypwxlvhzbbqafohg4dxbgnahr7z76nq
 skills:
 - valory/abstract_abci:0.1.0:bafybeiet34ju7typtkqyfn572sacef5krrsb6d4vpfnviqi6kzunje3xny
 - valory/abstract_round_abci:0.1.0:bafybeibdljcw2wchyderkonobpdpyb36yioagqcaoqldydw5bi6vvempma
 - valory/contract_subscription:0.1.0:bafybeihozkmtmfs3iqrreewvnixx6hod4rpcfdxqu4c6cfmubwwojc2dzu
-- valory/mech_abci:0.1.0:bafybeicrysdumzgxawgksgq7yinijhzdby4m67yu6wb7pd7xo6ixw3lmxy
+- valory/mech_abci:0.1.0:bafybeifmdvbdvd3jc3qcjzauzxxlu7rosgj47jwbytvjxdlg54qzpo54pu
 - valory/multiplexer_abci:0.1.0:bafybeidyydry6axhrqeibmfvnjvbvm2nuxlieginygijcu5nqa3672iwsu
 - valory/registration_abci:0.1.0:bafybeidqcszsitlmsofegmbprny22hqlent2o6luxng5a46gplytexrtbq
 - valory/reset_pause_abci:0.1.0:bafybeidprdrxzbloz5imufkbpvetvkhywdvq3fopbhdzztfnud4onsdsce
-- valory/task_execution_abci:0.1.0:bafybeieeyjwpk2jyuy2nyjd53txzycztmusrq3rtuyz4c5tc2qh67bixn4
+- valory/task_execution_abci:0.1.0:bafybeidvbuvw362cpsrnhthm7xghtygn5w5e7qamzxraly7mwpb3ccps6e
 - valory/termination_abci:0.1.0:bafybeif33wyu6w7yrrhyacpt627i5g6nec2kiepsm5xx2b44zq657dch3a
 - valory/transaction_settlement_abci:0.1.0:bafybeiaeu47qmeeqipn6jnz4ymbxwqb66axvx3ddzocnni4zehbhiupc54
 default_ledger: ethereum
