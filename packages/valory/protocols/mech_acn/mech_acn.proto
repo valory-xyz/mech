@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+package aea.valory.mech_acn.v0_1_0;
+
+message MechAcnMessage{
+
+  // Custom Types
+  message Status{
+    enum Status {
+      REQUEST_NOT_FOUND = 0;
+      DATA_NOT_READY = 1;
+      READY = 2;
+      REQUEST_EXPIRED = 3;
+    }
+    Status status = 1;
+  }
+
+
+  // Performatives and contents
+  message Request_Performative{
+    string request_id = 1;
+  }
+
+  message Response_Performative{
+    string data = 1;
+    Status status = 2;
+  }
+
+
+  oneof performative{
+    Request_Performative request = 5;
+    Response_Performative response = 6;
+  }
+}

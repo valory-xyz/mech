@@ -1,0 +1,21 @@
+name: mech_acn
+author: valory
+version: 0.1.0
+protocol_specification_id: valory/mech_acn:0.1.0
+type: protocol
+description: A protocol for adding ACN callbacks on AI mechs.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeibuio5tirkbhe5vowct6a4qhkw75qotdxubzunr2on2tp5kg2feia
+  custom_types.py: bafybeiedbhvtoybrhz7fdtzpjfyjm3yhdlix5kmkase5jlgxqc2mdplvra
+  dialogues.py: bafybeiaewe3ejzy4zvkes24eg4d76wvtr6ek3o24tnqe7iuujz7p5b6ft4
+  mech_acn.proto: bafybeicx2rdeq7uytzoccwsnpnbhpilstf65x2xeidmbukptyua5uqwjvi
+  mech_acn_pb2.py: bafybeib4o2kh2lfrg7fv3attcehfj7vftxoc4tn5nz5elhmghrz5roxfe4
+  message.py: bafybeieoyelka6n6mvaxntif3m2kbrbkad3noitzv5oqdxjscacrqknrwm
+  serialization.py: bafybeibrudxa7nh4htl4ok3iec5gyjvlz53ecv5t2zzuhjrgodvgk3gm7a
+  tests/test_mech_acn_dialogues.py: bafybeih66wwlb67accjsvnncxiqffwzm2ugnf6d7pqa6i4grnj44krnmu4
+  tests/test_mech_acn_messages.py: bafybeifkzudfz7fyzgtiyej4jyyuphjfucw3cglv4a7lw4kbmfqx7paxge
+fingerprint_ignore_patterns: []
+dependencies:
+  protobuf: {}
