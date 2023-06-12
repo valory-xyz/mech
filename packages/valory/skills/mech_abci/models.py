@@ -32,6 +32,9 @@ from packages.valory.skills.multiplexer_abci.models import (
 from packages.valory.skills.multiplexer_abci.rounds import Event as MultiplexerEvent
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
 from packages.valory.skills.task_execution_abci.models import (
+    AcnDataRequests as BaseAcnDataRequests,
+)
+from packages.valory.skills.task_execution_abci.models import (
     Params as TaskExecutionAbciParams,
 )
 from packages.valory.skills.task_execution_abci.models import (
@@ -49,6 +52,7 @@ TaskExecutionParams = TaskExecutionAbciParams
 
 Requests = BaseRequests
 BenchmarkTool = BaseBenchmarkTool
+AcnDataRequests = BaseAcnDataRequests
 
 
 class RandomnessApi(ApiSpecs):

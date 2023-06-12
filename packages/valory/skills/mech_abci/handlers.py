@@ -40,6 +40,9 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
+from packages.valory.skills.task_execution_abci.handlers import (
+    MechAcnRequestsHandler as BaseMechAcnRequestsHandler,
+)
 
 
 ABCIRoundHandler = BaseABCIRoundHandler
@@ -49,3 +52,4 @@ LedgerApiHandler = BaseLedgerApiHandler
 ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
+MechAcnRequestsHandler = BaseMechAcnRequestsHandler

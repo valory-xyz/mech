@@ -9,10 +9,10 @@ fingerprint:
   __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
   behaviours.py: bafybeihgtg4l7qcu33ptyfn6cnohm3tcxlpkdqijyc5zjxmci6lqzxmogy
   composition.py: bafybeiektjao3czojlipbcj2oglrk4hsch76d7ft3zw3vpcerewvvi6idy
-  dialogues.py: bafybeigpwuzku3we7axmxeamg7vn656maww6emuztau5pg3ebsoquyfdqm
+  dialogues.py: bafybeifoalla4kyqhaxhdwrhepq3v7eo7gdwkzypgkfegq3qqrtywjmwh4
   fsm_specification.yaml: bafybeieeqdr76xgxqjdqalip7agguutwsn23n5xgop4ziach7l4hiqxvqm
-  handlers.py: bafybeiffuduhg433qsu6lbet5jsaub63bzv2l4x756aj2fbnu5bnfu4ble
-  models.py: bafybeic3miniq5lacarxspyxuvmlnwervwf2wmpnvw2gxpgk77fzyzcpvq
+  handlers.py: bafybeid3yhguelggettxx6kaunlwylis2e623z7xh2bhfziqjs6dkaor7y
+  models.py: bafybeiaiavjj3enj3lzo2ufknfab2ecoyieryyz6oakkcqqlxyfuio2rwu
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/multiplexer_abci:0.1.0:bafybeidyydry6axhrqeibmfvnjvbvm2nuxlieginygijcu5nqa3672iwsu
 - valory/registration_abci:0.1.0:bafybeidqcszsitlmsofegmbprny22hqlent2o6luxng5a46gplytexrtbq
 - valory/reset_pause_abci:0.1.0:bafybeidprdrxzbloz5imufkbpvetvkhywdvq3fopbhdzztfnud4onsdsce
-- valory/task_execution_abci:0.1.0:bafybeiac6hd3jritb5ieh3lno4nocrzszkvctgz4ix5flnoivcabtbbzae
+- valory/task_execution_abci:0.1.0:bafybeieeyjwpk2jyuy2nyjd53txzycztmusrq3rtuyz4c5tc2qh67bixn4
 - valory/termination_abci:0.1.0:bafybeif33wyu6w7yrrhyacpt627i5g6nec2kiepsm5xx2b44zq657dch3a
 - valory/transaction_settlement_abci:0.1.0:bafybeiaeu47qmeeqipn6jnz4ymbxwqb66axvx3ddzocnni4zehbhiupc54
 behaviours:
@@ -51,6 +51,9 @@ handlers:
   tendermint:
     args: {}
     class_name: TendermintHandler
+  mech_acn_callback:
+    args: {}
+    class_name: MechAcnRequestsHandler
 models:
   abci_dialogues:
     args: {}
@@ -71,6 +74,9 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
+  mech_acn_requests_dialogues:
+    args: {}
+    class_name: MechAcnDialogues
   params:
     args:
       agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
@@ -171,6 +177,9 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
+  acn_data_requests:
+    args: {}
+    class_name: AcnDataRequests
 dependencies:
   open-aea-cli-ipfs:
     version: ==1.34.0
