@@ -20,9 +20,10 @@
 """Contains the job definitions"""
 
 from enum import Enum
-from typing import Any, List, Dict, Union
+from typing import Any, Dict, Optional, Tuple
 
 import requests
+
 
 DEFAULT_STABILITYAI_SETTINGS = {
     "cfg_scale": 7,
@@ -54,7 +55,7 @@ class FinishReason(Enum):
     ERROR = 2
 
 
-def run(**kwargs: Any) -> Union[Dict, List]:
+def run(**kwargs: Any) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Run the task"""
 
     api_key = kwargs["api_keys"]["stabilityai"]
@@ -110,11 +111,10 @@ def run(**kwargs: Any) -> Union[Dict, List]:
         raise ValueError(f"Non-200 response ({response.status_code}): {response.text}")
 
     data = response.json()
-
     finish_reason = data.get("finishReason", FinishReason.SUCCESS.name)
     if finish_reason == FinishReason.SUCCESS.name:
         # return image data
-        return data
+        return data, None
     if finish_reason == FinishReason.CONTENT_FILTERED.name:
         raise ValueError(
             f"The result was affected by the content filter and may be blurred: {data}"
