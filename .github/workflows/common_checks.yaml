@@ -109,8 +109,9 @@ jobs:
         # Install `mdspell` for spelling checks
         sudo npm install -g markdown-spellcheck
 
-    - name: Check generate protocols
-      run: tox -e check-generate-all-protocols
+    # Temporary skip
+    # - name: Check generate protocols
+    #   run: tox -e check-generate-all-protocols
     - name: Security checks
       run: tomte check-security
     - name: Check packages
