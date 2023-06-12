@@ -38,13 +38,20 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendOperation,
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.mech_acn.custom_types import (
+    Status as AcnRequestStatusObj,
+)
+from packages.valory.protocols.mech_acn.custom_types import (
+    StatusEnum as AcnRequestStatus,
+)
+from packages.valory.protocols.mech_acn.message import MechAcnMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
-from packages.valory.skills.task_execution_abci.models import Params
+from packages.valory.skills.task_execution_abci.models import AcnDataRequests, Params
 from packages.valory.skills.task_execution_abci.rounds import (
     SynchronizedData,
     TaskExecutionAbciApp,
@@ -74,6 +81,11 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     def params(self) -> Params:
         """Return the params."""
         return cast(Params, super().params)
+
+    @property
+    def data_requests(self) -> AcnDataRequests:
+        """Return the params."""
+        return cast(AcnDataRequests, self.context.acn_data_requests)
 
 
 class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
@@ -184,6 +196,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             self.context.logger.info(f"Preparing task with data: {task_data}")
             self.request_id = task_data["requestId"]
             task_data_ = task_data["data"]
+            self.data_requests.add_request(request_id=str(self.request_id))
 
             # Verify the data hash and handle encoding
             try:
@@ -224,9 +237,13 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
         # Handle invalid requests
         if self._invalid_request:
-            deliver_msg = "no_op"
             # respond with no_op and no multisend transactions
+            deliver_msg = "no_op"
             request_id = cast(str, self.request_id)
+            self.data_requests.set_data(
+                request_id=str(self.request_id), data=deliver_msg
+            )
+            self.handle_callbacks(request_id=str(self.request_id), data=deliver_msg)
             return request_id, deliver_msg.encode(), None
 
         self._async_result = cast(AsyncResult, self._async_result)
@@ -250,6 +267,10 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 return None
             deliver_msg, transaction = task_result
             response_obj = {"requestId": self.request_id, "result": deliver_msg}
+            self.data_requests.set_data(
+                request_id=str(self.request_id), data=deliver_msg
+            )
+            self.handle_callbacks(request_id=str(self.request_id), data=deliver_msg)
 
         self.context.logger.info(f"Response object: {response_obj}")
 
@@ -278,6 +299,22 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         hex_multihash = hex_multihash[6:]
         request_id = cast(str, self.request_id)
         return request_id, hex_multihash, transaction
+
+    def handle_callbacks(self, request_id: str, data: Any) -> None:
+        """Handle callbacks."""
+        for dialogue in self.data_requests.get_callbacks(request_id=request_id):
+            response = dialogue.reply(
+                performative=MechAcnMessage.Performative.RESPONSE,
+                data=data,
+                status=AcnRequestStatusObj(AcnRequestStatus.READY),
+            )
+            self.context.logger.info(
+                f"Responding to callback with sender {response.to}"
+            )
+            self.context.outbox.put_message(message=response)
+            self.data_requests.remove_callback(
+                request_id=request_id, callback_dialogue=dialogue
+            )
 
     def _get_ipfs_file_hash(self, data: bytes) -> str:
         """Get hash from bytes"""

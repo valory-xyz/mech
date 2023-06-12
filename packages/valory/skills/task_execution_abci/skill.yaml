@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihrkpey6kxur2uoimrskq2wfpelqidxeapdxie6iuv2x7dk77ksvu
-  behaviours.py: bafybeifafuj3qdmrxp4nx4okm3oxvenulymucticnxy2kz7eh43424jh64
-  dialogues.py: bafybeibxhpre2cczhgs4weohyhdovh7n3qnreqech6zs7xzbpef7kizxsm
+  behaviours.py: bafybeic6cxb5sqjony7eg37pgfmeybqtln2k72y34foz4s7f3yqgufqthm
+  dialogues.py: bafybeidcnees5jaau5haflyvn2p52z7c4jc4kc457eruvwz65yas74pvbm
   fsm_specification.yaml: bafybeiggzywf6zpq2mb4ite6ptnb2zqcjjdhyu7jyb5npn7id4hcrm5tiy
-  handlers.py: bafybeigz4pfyn3i553ttxkqjerynyoud5obi366b3yregtgznupcnryjha
+  handlers.py: bafybeicpopnukhiobu7arci73xcc2pc6gub72gglduqpxq2bb3eedcmupi
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
   io_/naive_loader.py: bafybeihqrt34jso7dwfcedh7itmmovfv55tdjhw2tkqifsbiohetbonynu
-  models.py: bafybeihavofxq3nxt46x74idm2mjl5xxghoqzjtuxnx5i255k6mdwsyyaq
+  models.py: bafybeidi332w2wbd2gavkk35pxmfrdzuleon7lzwvxw7rmix4tzi6ggzsi
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
   rounds.py: bafybeig6gdswlwfpfvpnacpcy7vp7rt4y6cwxlmkl24wzyt4xhnd2z4zkq
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
@@ -25,6 +25,7 @@ contracts:
 - valory/multisend:0.1.0:bafybeigjywkl7hydjsrkogob3xebj2ifhqwmfhhxoeyrndzhhxi5u6amey
 protocols:
 - valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
+- valory/mech_acn:0.1.0:bafybeifdg57my55xwr3klgu72np3dcgrctalndpod2cm6xayfuqqvaocku
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeibdljcw2wchyderkonobpdpyb36yioagqcaoqldydw5bi6vvempma
 - valory/transaction_settlement_abci:0.1.0:bafybeiaeu47qmeeqipn6jnz4ymbxwqb66axvx3ddzocnni4zehbhiupc54
@@ -54,6 +55,9 @@ handlers:
   tendermint:
     args: {}
     class_name: TendermintHandler
+  mech_acn_callback:
+    args: {}
+    class_name: MechAcnRequestsHandler
 models:
   abci_dialogues:
     args: {}
@@ -74,6 +78,9 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
+  mech_acn_requests_dialogues:
+    args: {}
+    class_name: MechAcnDialogues
   params:
     args:
       api_keys_json:
@@ -158,6 +165,9 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
+  acn_data_requests:
+    args: {}
+    class_name: AcnDataRequests
 dependencies:
   openai:
     version: ==0.27.2
