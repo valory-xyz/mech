@@ -108,10 +108,10 @@ jobs:
 
         # Install `mdspell` for spelling checks
         sudo npm install -g markdown-spellcheck
+        make protolint_install
 
-    # Temporary skip
-    # - name: Check generate protocols
-    #   run: tox -e check-generate-all-protocols
+    - name: Check generate protocols
+      run: tox -e check-generate-all-protocols
     - name: Security checks
       run: tomte check-security
     - name: Check packages

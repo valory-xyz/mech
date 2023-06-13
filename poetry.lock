@@ -670,9 +670,6 @@ files = [
     {file = "coverage-7.2.7.tar.gz", hash = "sha256:924d94291ca674905fe9481f12294eb11f2d3d3fd1adb20314ba89e94f44ed59"},
 ]
 
-[package.dependencies]
-tomli = {version = "*", optional = true, markers = "python_full_version <= \"3.11.0a6\" and extra == \"toml\""}
-
 [package.extras]
 toml = ["tomli"]
 
@@ -2580,56 +2577,6 @@ docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1.0)"]
 testing = ["coverage (>=6.2)", "flaky (>=3.5.0)", "hypothesis (>=5.7.1)", "mypy (>=0.931)", "pytest-trio (>=0.7.0)"]
 
 [[package]]
-name = "pytest-cov"
-version = "4.0.0"
-description = "Pytest plugin for measuring coverage."
-category = "dev"
-optional = false
-python-versions = ">=3.6"
-files = [
-    {file = "pytest-cov-4.0.0.tar.gz", hash = "sha256:996b79efde6433cdbd0088872dbc5fb3ed7fe1578b68cdbba634f14bb8dd0470"},
-    {file = "pytest_cov-4.0.0-py3-none-any.whl", hash = "sha256:2feb1b751d66a8bd934e5edfa2e961d11309dc37b73b0eabe73b5945fee20f6b"},
-]
-
-[package.dependencies]
-coverage = {version = ">=5.2.1", extras = ["toml"]}
-pytest = ">=4.6"
-
-[package.extras]
-testing = ["fields", "hunter", "process-tests", "pytest-xdist", "six", "virtualenv"]
-
-[[package]]
-name = "pytest-randomly"
-version = "3.12.0"
-description = "Pytest plugin to randomly order tests and control random.seed."
-category = "dev"
-optional = false
-python-versions = ">=3.7"
-files = [
-    {file = "pytest-randomly-3.12.0.tar.gz", hash = "sha256:d60c2db71ac319aee0fc6c4110a7597d611a8b94a5590918bfa8583f00caccb2"},
-    {file = "pytest_randomly-3.12.0-py3-none-any.whl", hash = "sha256:f4f2e803daf5d1ba036cc22bf4fe9dbbf99389ec56b00e5cba732fb5c1d07fdd"},
-]
-
-[package.dependencies]
-pytest = "*"
-
-[[package]]
-name = "pytest-rerunfailures"
-version = "11.0"
-description = "pytest plugin to re-run tests to eliminate flaky failures"
-category = "dev"
-optional = false
-python-versions = ">=3.7"
-files = [
-    {file = "pytest-rerunfailures-11.0.tar.gz", hash = "sha256:cee59e4e6f0d73ae63fba099865314ba9b915b719349541110fa012ffb6efb13"},
-    {file = "pytest_rerunfailures-11.0-py3-none-any.whl", hash = "sha256:b8c535b6c353de8c4b39258216512c64f288e4d349e86877583a08b2f5ea5441"},
-]
-
-[package.dependencies]
-packaging = ">=17.1"
-pytest = ">=5.3"
-
-[[package]]
 name = "python-baseconv"
 version = "1.2.2"
 description = "Convert numbers from base 10 integers to base X strings and back again."
@@ -2932,13 +2879,6 @@ files = [
 ]
 
 [package.dependencies]
-click = {version = "8.0.2", optional = true, markers = "extra == \"black\" or extra == \"cli\" or extra == \"docs\""}
-pytest = {version = "7.2.1", optional = true, markers = "extra == \"tests\""}
-pytest-asyncio = {version = "0.20.3", optional = true, markers = "extra == \"tests\""}
-pytest-cov = {version = "4.0.0", optional = true, markers = "extra == \"tests\""}
-pytest-randomly = {version = "3.12.0", optional = true, markers = "extra == \"tests\""}
-pytest-rerunfailures = {version = "11.0", optional = true, markers = "extra == \"tests\""}
-requests = {version = "2.28.2", optional = true, markers = "extra == \"cli\""}
 tox = {version = "3.28.0", optional = true, markers = "extra == \"cli\" or extra == \"tox\""}
 
 [package.extras]
@@ -3354,4 +3294,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "df8b8ee841ab6be9ae4af2a7c52bb63b125565203a488335c04e6c9730ded3af"
+content-hash = "55a717214046dc883191dc677da51b7826a96345891b79326fc7474cdc1d4090"
