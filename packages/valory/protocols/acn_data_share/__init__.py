@@ -18,13 +18,15 @@
 # ------------------------------------------------------------------------------
 
 """
-This module contains the support resources for the mech_acn protocol.
+This module contains the support resources for the acn_data_share protocol.
 
 It was created with protocol buffer compiler version `libprotoc 3.19.4` and aea protocol generator version `1.0.0`.
 """
 
-from packages.valory.protocols.mech_acn.message import MechAcnMessage
-from packages.valory.protocols.mech_acn.serialization import MechAcnSerializer
+from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
+from packages.valory.protocols.acn_data_share.serialization import (
+    AcnDataShareSerializer,
+)
 
 
-MechAcnMessage.serializer = MechAcnSerializer
+AcnDataShareMessage.serializer = AcnDataShareSerializer

@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains mech_acn's message definition."""
+"""This module contains acn_data_share's message definition."""
 
 # pylint: disable=too-many-statements,too-many-locals,no-member,too-few-public-methods,too-many-branches,not-an-iterable,unidiomatic-typecheck,unsubscriptable-object
 import logging
@@ -28,19 +28,21 @@ from aea.exceptions import AEAEnforceError, enforce
 from aea.protocols.base import Message
 
 
-_default_logger = logging.getLogger("aea.packages.valory.protocols.mech_acn.message")
+_default_logger = logging.getLogger(
+    "aea.packages.valory.protocols.acn_data_share.message"
+)
 
 DEFAULT_BODY_SIZE = 4
 
 
-class MechAcnMessage(Message):
-    """A protocol for adding ACN callbacks on AI mechs."""
+class AcnDataShareMessage(Message):
+    """A protocol for sharing raw data using ACN."""
 
-    protocol_id = PublicId.from_str("valory/mech_acn:0.1.0")
-    protocol_specification_id = PublicId.from_str("valory/mech_acn:0.1.0")
+    protocol_id = PublicId.from_str("valory/acn_data_share:0.1.0")
+    protocol_specification_id = PublicId.from_str("valory/acn_data_share:0.1.0")
 
     class Performative(Message.Performative):
-        """Performatives for the mech_acn protocol."""
+        """Performatives for the acn_data_share protocol."""
 
         DATA = "data"
 
@@ -70,7 +72,7 @@ class MechAcnMessage(Message):
         **kwargs: Any,
     ):
         """
-        Initialise an instance of MechAcnMessage.
+        Initialise an instance of AcnDataShareMessage.
 
         :param message_id: the message id.
         :param dialogue_reference: the dialogue reference.
@@ -82,7 +84,7 @@ class MechAcnMessage(Message):
             dialogue_reference=dialogue_reference,
             message_id=message_id,
             target=target,
-            performative=MechAcnMessage.Performative(performative),
+            performative=AcnDataShareMessage.Performative(performative),
             **kwargs,
         )
 
@@ -107,7 +109,7 @@ class MechAcnMessage(Message):
     def performative(self) -> Performative:  # type: ignore # noqa: F821
         """Get the performative of the message."""
         enforce(self.is_set("performative"), "performative is not set.")
-        return cast(MechAcnMessage.Performative, self.get("performative"))
+        return cast(AcnDataShareMessage.Performative, self.get("performative"))
 
     @property
     def target(self) -> int:
@@ -128,7 +130,7 @@ class MechAcnMessage(Message):
         return cast(str, self.get("request_id"))
 
     def _is_consistent(self) -> bool:
-        """Check that the message follows the mech_acn protocol."""
+        """Check that the message follows the acn_data_share protocol."""
         try:
             enforce(
                 isinstance(self.dialogue_reference, tuple),
@@ -164,7 +166,7 @@ class MechAcnMessage(Message):
             # Light Protocol Rule 2
             # Check correct performative
             enforce(
-                isinstance(self.performative, MechAcnMessage.Performative),
+                isinstance(self.performative, AcnDataShareMessage.Performative),
                 "Invalid 'performative'. Expected either of '{}'. Found '{}'.".format(
                     self.valid_performatives, self.performative
                 ),
@@ -173,7 +175,7 @@ class MechAcnMessage(Message):
             # Check correct contents
             actual_nb_of_contents = len(self._body) - DEFAULT_BODY_SIZE
             expected_nb_of_contents = 0
-            if self.performative == MechAcnMessage.Performative.DATA:
+            if self.performative == AcnDataShareMessage.Performative.DATA:
                 expected_nb_of_contents = 2
                 enforce(
                     isinstance(self.request_id, str),

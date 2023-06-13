@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Serialization module for mech_acn protocol."""
+"""Serialization module for acn_data_share protocol."""
 
 # pylint: disable=too-many-statements,too-many-locals,no-member,too-few-public-methods,redefined-builtin
 from typing import Any, Dict, cast
@@ -26,25 +26,25 @@ from aea.mail.base_pb2 import DialogueMessage
 from aea.mail.base_pb2 import Message as ProtobufMessage
 from aea.protocols.base import Message, Serializer
 
-from packages.valory.protocols.mech_acn import mech_acn_pb2
-from packages.valory.protocols.mech_acn.message import MechAcnMessage
+from packages.valory.protocols.acn_data_share import acn_data_share_pb2
+from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
 
 
-class MechAcnSerializer(Serializer):
-    """Serialization for the 'mech_acn' protocol."""
+class AcnDataShareSerializer(Serializer):
+    """Serialization for the 'acn_data_share' protocol."""
 
     @staticmethod
     def encode(msg: Message) -> bytes:
         """
-        Encode a 'MechAcn' message into bytes.
+        Encode a 'AcnDataShare' message into bytes.
 
         :param msg: the message object.
         :return: the bytes.
         """
-        msg = cast(MechAcnMessage, msg)
+        msg = cast(AcnDataShareMessage, msg)
         message_pb = ProtobufMessage()
         dialogue_message_pb = DialogueMessage()
-        mech_acn_msg = mech_acn_pb2.MechAcnMessage()
+        acn_data_share_msg = acn_data_share_pb2.AcnDataShareMessage()
 
         dialogue_message_pb.message_id = msg.message_id
         dialogue_reference = msg.dialogue_reference
@@ -53,17 +53,17 @@ class MechAcnSerializer(Serializer):
         dialogue_message_pb.target = msg.target
 
         performative_id = msg.performative
-        if performative_id == MechAcnMessage.Performative.DATA:
-            performative = mech_acn_pb2.MechAcnMessage.Data_Performative()  # type: ignore
+        if performative_id == AcnDataShareMessage.Performative.DATA:
+            performative = acn_data_share_pb2.AcnDataShareMessage.Data_Performative()  # type: ignore
             request_id = msg.request_id
             performative.request_id = request_id
             content = msg.content
             performative.content = content
-            mech_acn_msg.data.CopyFrom(performative)
+            acn_data_share_msg.data.CopyFrom(performative)
         else:
             raise ValueError("Performative not valid: {}".format(performative_id))
 
-        dialogue_message_pb.content = mech_acn_msg.SerializeToString()
+        dialogue_message_pb.content = acn_data_share_msg.SerializeToString()
 
         message_pb.dialogue_message.CopyFrom(dialogue_message_pb)
         message_bytes = message_pb.SerializeToString()
@@ -72,13 +72,13 @@ class MechAcnSerializer(Serializer):
     @staticmethod
     def decode(obj: bytes) -> Message:
         """
-        Decode bytes into a 'MechAcn' message.
+        Decode bytes into a 'AcnDataShare' message.
 
         :param obj: the bytes object.
-        :return: the 'MechAcn' message.
+        :return: the 'AcnDataShare' message.
         """
         message_pb = ProtobufMessage()
-        mech_acn_pb = mech_acn_pb2.MechAcnMessage()
+        acn_data_share_pb = acn_data_share_pb2.AcnDataShareMessage()
         message_pb.ParseFromString(obj)
         message_id = message_pb.dialogue_message.message_id
         dialogue_reference = (
@@ -87,19 +87,19 @@ class MechAcnSerializer(Serializer):
         )
         target = message_pb.dialogue_message.target
 
-        mech_acn_pb.ParseFromString(message_pb.dialogue_message.content)
-        performative = mech_acn_pb.WhichOneof("performative")
-        performative_id = MechAcnMessage.Performative(str(performative))
+        acn_data_share_pb.ParseFromString(message_pb.dialogue_message.content)
+        performative = acn_data_share_pb.WhichOneof("performative")
+        performative_id = AcnDataShareMessage.Performative(str(performative))
         performative_content = dict()  # type: Dict[str, Any]
-        if performative_id == MechAcnMessage.Performative.DATA:
-            request_id = mech_acn_pb.data.request_id
+        if performative_id == AcnDataShareMessage.Performative.DATA:
+            request_id = acn_data_share_pb.data.request_id
             performative_content["request_id"] = request_id
-            content = mech_acn_pb.data.content
+            content = acn_data_share_pb.data.content
             performative_content["content"] = content
         else:
             raise ValueError("Performative not valid: {}.".format(performative_id))
 
-        return MechAcnMessage(
+        return AcnDataShareMessage(
             message_id=message_id,
             dialogue_reference=dialogue_reference,
             target=target,

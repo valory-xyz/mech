@@ -18,10 +18,10 @@
 # ------------------------------------------------------------------------------
 
 """
-This module contains the classes required for mech_acn dialogue management.
+This module contains the classes required for acn_data_share dialogue management.
 
-- MechAcnDialogue: The dialogue class maintains state of a dialogue and manages it.
-- MechAcnDialogues: The dialogues class keeps track of all dialogues.
+- AcnDataShareDialogue: The dialogue class maintains state of a dialogue and manages it.
+- AcnDataShareDialogues: The dialogues class keeps track of all dialogues.
 """
 
 from abc import ABC
@@ -31,30 +31,30 @@ from aea.common import Address
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue, DialogueLabel, Dialogues
 
-from packages.valory.protocols.mech_acn.message import MechAcnMessage
+from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
 
 
-class MechAcnDialogue(Dialogue):
-    """The mech_acn dialogue class maintains state of a dialogue and manages it."""
+class AcnDataShareDialogue(Dialogue):
+    """The acn_data_share dialogue class maintains state of a dialogue and manages it."""
 
     INITIAL_PERFORMATIVES: FrozenSet[Message.Performative] = frozenset(
-        {MechAcnMessage.Performative.DATA}
+        {AcnDataShareMessage.Performative.DATA}
     )
     TERMINAL_PERFORMATIVES: FrozenSet[Message.Performative] = frozenset(
-        {MechAcnMessage.Performative.DATA}
+        {AcnDataShareMessage.Performative.DATA}
     )
     VALID_REPLIES: Dict[Message.Performative, FrozenSet[Message.Performative]] = {
-        MechAcnMessage.Performative.DATA: frozenset(),
+        AcnDataShareMessage.Performative.DATA: frozenset(),
     }
 
     class Role(Dialogue.Role):
-        """This class defines the agent's role in a mech_acn dialogue."""
+        """This class defines the agent's role in a acn_data_share dialogue."""
 
         AGENT = "agent"
         SKILL = "skill"
 
     class EndState(Dialogue.EndState):
-        """This class defines the end states of a mech_acn dialogue."""
+        """This class defines the end states of a acn_data_share dialogue."""
 
         SUCCESSFUL = 0
         FAILED = 1
@@ -64,7 +64,7 @@ class MechAcnDialogue(Dialogue):
         dialogue_label: DialogueLabel,
         self_address: Address,
         role: Dialogue.Role,
-        message_class: Type[MechAcnMessage] = MechAcnMessage,
+        message_class: Type[AcnDataShareMessage] = AcnDataShareMessage,
     ) -> None:
         """
         Initialize a dialogue.
@@ -83,11 +83,11 @@ class MechAcnDialogue(Dialogue):
         )
 
 
-class MechAcnDialogues(Dialogues, ABC):
-    """This class keeps track of all mech_acn dialogues."""
+class AcnDataShareDialogues(Dialogues, ABC):
+    """This class keeps track of all acn_data_share dialogues."""
 
     END_STATES = frozenset(
-        {MechAcnDialogue.EndState.SUCCESSFUL, MechAcnDialogue.EndState.FAILED}
+        {AcnDataShareDialogue.EndState.SUCCESSFUL, AcnDataShareDialogue.EndState.FAILED}
     )
 
     _keep_terminal_state_dialogues = False
@@ -96,7 +96,7 @@ class MechAcnDialogues(Dialogues, ABC):
         self,
         self_address: Address,
         role_from_first_message: Callable[[Message, Address], Dialogue.Role],
-        dialogue_class: Type[MechAcnDialogue] = MechAcnDialogue,
+        dialogue_class: Type[AcnDataShareDialogue] = AcnDataShareDialogue,
     ) -> None:
         """
         Initialize dialogues.
@@ -109,7 +109,7 @@ class MechAcnDialogues(Dialogues, ABC):
             self,
             self_address=self_address,
             end_states=cast(FrozenSet[Dialogue.EndState], self.END_STATES),
-            message_class=MechAcnMessage,
+            message_class=AcnDataShareMessage,
             dialogue_class=dialogue_class,
             role_from_first_message=role_from_first_message,
         )

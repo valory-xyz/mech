@@ -17,33 +17,33 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Test dialogues module for mech_acn protocol."""
+"""Test dialogues module for acn_data_share protocol."""
 
 # pylint: disable=too-many-statements,too-many-locals,no-member,too-few-public-methods,redefined-builtin
 from aea.test_tools.test_protocol import BaseProtocolDialoguesTestCase
 
-from packages.valory.protocols.mech_acn.dialogues import (
-    MechAcnDialogue,
-    MechAcnDialogues,
+from packages.valory.protocols.acn_data_share.dialogues import (
+    AcnDataShareDialogue,
+    AcnDataShareDialogues,
 )
-from packages.valory.protocols.mech_acn.message import MechAcnMessage
+from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
 
 
-class TestDialoguesMechAcn(BaseProtocolDialoguesTestCase):
-    """Test for the 'mech_acn' protocol dialogues."""
+class TestDialoguesAcnDataShare(BaseProtocolDialoguesTestCase):
+    """Test for the 'acn_data_share' protocol dialogues."""
 
-    MESSAGE_CLASS = MechAcnMessage
+    MESSAGE_CLASS = AcnDataShareMessage
 
-    DIALOGUE_CLASS = MechAcnDialogue
+    DIALOGUE_CLASS = AcnDataShareDialogue
 
-    DIALOGUES_CLASS = MechAcnDialogues
+    DIALOGUES_CLASS = AcnDataShareDialogues
 
-    ROLE_FOR_THE_FIRST_MESSAGE = MechAcnDialogue.Role.AGENT  # CHECK
+    ROLE_FOR_THE_FIRST_MESSAGE = AcnDataShareDialogue.Role.AGENT  # CHECK
 
     def make_message_content(self) -> dict:
         """Make a dict with message contruction content for dialogues.create."""
         return dict(
-            performative=MechAcnMessage.Performative.DATA,
+            performative=AcnDataShareMessage.Performative.DATA,
             request_id="some str",
             content="some str",
         )

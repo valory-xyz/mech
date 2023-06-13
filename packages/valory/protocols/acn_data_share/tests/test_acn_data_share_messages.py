@@ -17,36 +17,36 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Test messages module for mech_acn protocol."""
+"""Test messages module for acn_data_share protocol."""
 
 # pylint: disable=too-many-statements,too-many-locals,no-member,too-few-public-methods,redefined-builtin
 from typing import List
 
 from aea.test_tools.test_protocol import BaseProtocolMessagesTestCase
 
-from packages.valory.protocols.mech_acn.message import MechAcnMessage
+from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
 
 
-class TestMessageMechAcn(BaseProtocolMessagesTestCase):
-    """Test for the 'mech_acn' protocol message."""
+class TestMessageAcnDataShare(BaseProtocolMessagesTestCase):
+    """Test for the 'acn_data_share' protocol message."""
 
-    MESSAGE_CLASS = MechAcnMessage
+    MESSAGE_CLASS = AcnDataShareMessage
 
-    def build_messages(self) -> List[MechAcnMessage]:  # type: ignore[override]
+    def build_messages(self) -> List[AcnDataShareMessage]:  # type: ignore[override]
         """Build the messages to be used for testing."""
         return [
-            MechAcnMessage(
-                performative=MechAcnMessage.Performative.DATA,
+            AcnDataShareMessage(
+                performative=AcnDataShareMessage.Performative.DATA,
                 request_id="some str",
                 content="some str",
             ),
         ]
 
-    def build_inconsistent(self) -> List[MechAcnMessage]:  # type: ignore[override]
+    def build_inconsistent(self) -> List[AcnDataShareMessage]:  # type: ignore[override]
         """Build inconsistent messages to be used for testing."""
         return [
-            MechAcnMessage(
-                performative=MechAcnMessage.Performative.DATA,
+            AcnDataShareMessage(
+                performative=AcnDataShareMessage.Performative.DATA,
                 # skip content: request_id
                 content="some str",
             ),
