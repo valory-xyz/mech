@@ -38,16 +38,13 @@ class MechAcnDialogue(Dialogue):
     """The mech_acn dialogue class maintains state of a dialogue and manages it."""
 
     INITIAL_PERFORMATIVES: FrozenSet[Message.Performative] = frozenset(
-        {MechAcnMessage.Performative.REQUEST}
+        {MechAcnMessage.Performative.DATA}
     )
     TERMINAL_PERFORMATIVES: FrozenSet[Message.Performative] = frozenset(
-        {MechAcnMessage.Performative.RESPONSE}
+        {MechAcnMessage.Performative.DATA}
     )
     VALID_REPLIES: Dict[Message.Performative, FrozenSet[Message.Performative]] = {
-        MechAcnMessage.Performative.REQUEST: frozenset(
-            {MechAcnMessage.Performative.RESPONSE}
-        ),
-        MechAcnMessage.Performative.RESPONSE: frozenset(),
+        MechAcnMessage.Performative.DATA: frozenset(),
     }
 
     class Role(Dialogue.Role):

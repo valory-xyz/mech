@@ -43,6 +43,7 @@ class TestDialoguesMechAcn(BaseProtocolDialoguesTestCase):
     def make_message_content(self) -> dict:
         """Make a dict with message contruction content for dialogues.create."""
         return dict(
-            performative=MechAcnMessage.Performative.REQUEST,
+            performative=MechAcnMessage.Performative.DATA,
             request_id="some str",
+            content="some str",
         )

@@ -11,8 +11,8 @@ fingerprint:
   composition.py: bafybeiektjao3czojlipbcj2oglrk4hsch76d7ft3zw3vpcerewvvi6idy
   dialogues.py: bafybeifoalla4kyqhaxhdwrhepq3v7eo7gdwkzypgkfegq3qqrtywjmwh4
   fsm_specification.yaml: bafybeieeqdr76xgxqjdqalip7agguutwsn23n5xgop4ziach7l4hiqxvqm
-  handlers.py: bafybeid3yhguelggettxx6kaunlwylis2e623z7xh2bhfziqjs6dkaor7y
-  models.py: bafybeiaiavjj3enj3lzo2ufknfab2ecoyieryyz6oakkcqqlxyfuio2rwu
+  handlers.py: bafybeiffuduhg433qsu6lbet5jsaub63bzv2l4x756aj2fbnu5bnfu4ble
+  models.py: bafybeic3miniq5lacarxspyxuvmlnwervwf2wmpnvw2gxpgk77fzyzcpvq
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/multiplexer_abci:0.1.0:bafybeidyydry6axhrqeibmfvnjvbvm2nuxlieginygijcu5nqa3672iwsu
 - valory/registration_abci:0.1.0:bafybeidqcszsitlmsofegmbprny22hqlent2o6luxng5a46gplytexrtbq
 - valory/reset_pause_abci:0.1.0:bafybeidprdrxzbloz5imufkbpvetvkhywdvq3fopbhdzztfnud4onsdsce
-- valory/task_execution_abci:0.1.0:bafybeidvbuvw362cpsrnhthm7xghtygn5w5e7qamzxraly7mwpb3ccps6e
+- valory/task_execution_abci:0.1.0:bafybeic5bqckuc5lefz3bcqthon3xftelehbcobv54fiprsziv6eyub2fy
 - valory/termination_abci:0.1.0:bafybeif33wyu6w7yrrhyacpt627i5g6nec2kiepsm5xx2b44zq657dch3a
 - valory/transaction_settlement_abci:0.1.0:bafybeiaeu47qmeeqipn6jnz4ymbxwqb66axvx3ddzocnni4zehbhiupc54
 behaviours:
@@ -51,9 +51,6 @@ handlers:
   tendermint:
     args: {}
     class_name: TendermintHandler
-  mech_acn_callback:
-    args: {}
-    class_name: MechAcnRequestsHandler
 models:
   abci_dialogues:
     args: {}
@@ -177,9 +174,6 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
-  acn_data_requests:
-    args: {}
-    class_name: AcnDataRequests
 dependencies:
   open-aea-cli-ipfs:
     version: ==1.34.0

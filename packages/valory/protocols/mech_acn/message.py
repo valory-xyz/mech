@@ -27,8 +27,6 @@ from aea.configurations.base import PublicId
 from aea.exceptions import AEAEnforceError, enforce
 from aea.protocols.base import Message
 
-from packages.valory.protocols.mech_acn.custom_types import Status as CustomStatus
-
 
 _default_logger = logging.getLogger("aea.packages.valory.protocols.mech_acn.message")
 
@@ -41,29 +39,25 @@ class MechAcnMessage(Message):
     protocol_id = PublicId.from_str("valory/mech_acn:0.1.0")
     protocol_specification_id = PublicId.from_str("valory/mech_acn:0.1.0")
 
-    Status = CustomStatus
-
     class Performative(Message.Performative):
         """Performatives for the mech_acn protocol."""
 
-        REQUEST = "request"
-        RESPONSE = "response"
+        DATA = "data"
 
         def __str__(self) -> str:
             """Get the string representation."""
             return str(self.value)
 
-    _performatives = {"request", "response"}
+    _performatives = {"data"}
     __slots__: Tuple[str, ...] = tuple()
 
     class _SlotsCls:
         __slots__ = (
-            "data",
+            "content",
             "dialogue_reference",
             "message_id",
             "performative",
             "request_id",
-            "status",
             "target",
         )
 
@@ -122,22 +116,16 @@ class MechAcnMessage(Message):
         return cast(int, self.get("target"))
 
     @property
-    def data(self) -> str:
-        """Get the 'data' content from the message."""
-        enforce(self.is_set("data"), "'data' content is not set.")
-        return cast(str, self.get("data"))
+    def content(self) -> str:
+        """Get the 'content' content from the message."""
+        enforce(self.is_set("content"), "'content' content is not set.")
+        return cast(str, self.get("content"))
 
     @property
     def request_id(self) -> str:
         """Get the 'request_id' content from the message."""
         enforce(self.is_set("request_id"), "'request_id' content is not set.")
         return cast(str, self.get("request_id"))
-
-    @property
-    def status(self) -> CustomStatus:
-        """Get the 'status' content from the message."""
-        enforce(self.is_set("status"), "'status' content is not set.")
-        return cast(CustomStatus, self.get("status"))
 
     def _is_consistent(self) -> bool:
         """Check that the message follows the mech_acn protocol."""
@@ -185,26 +173,18 @@ class MechAcnMessage(Message):
             # Check correct contents
             actual_nb_of_contents = len(self._body) - DEFAULT_BODY_SIZE
             expected_nb_of_contents = 0
-            if self.performative == MechAcnMessage.Performative.REQUEST:
-                expected_nb_of_contents = 1
+            if self.performative == MechAcnMessage.Performative.DATA:
+                expected_nb_of_contents = 2
                 enforce(
                     isinstance(self.request_id, str),
                     "Invalid type for content 'request_id'. Expected 'str'. Found '{}'.".format(
                         type(self.request_id)
                     ),
                 )
-            elif self.performative == MechAcnMessage.Performative.RESPONSE:
-                expected_nb_of_contents = 2
                 enforce(
-                    isinstance(self.data, str),
-                    "Invalid type for content 'data'. Expected 'str'. Found '{}'.".format(
-                        type(self.data)
-                    ),
-                )
-                enforce(
-                    isinstance(self.status, CustomStatus),
-                    "Invalid type for content 'status'. Expected 'Status'. Found '{}'.".format(
-                        type(self.status)
+                    isinstance(self.content, str),
+                    "Invalid type for content 'content'. Expected 'str'. Found '{}'.".format(
+                        type(self.content)
                     ),
                 )
 

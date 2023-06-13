@@ -27,7 +27,6 @@ from aea.mail.base_pb2 import Message as ProtobufMessage
 from aea.protocols.base import Message, Serializer
 
 from packages.valory.protocols.mech_acn import mech_acn_pb2
-from packages.valory.protocols.mech_acn.custom_types import Status
 from packages.valory.protocols.mech_acn.message import MechAcnMessage
 
 
@@ -54,18 +53,13 @@ class MechAcnSerializer(Serializer):
         dialogue_message_pb.target = msg.target
 
         performative_id = msg.performative
-        if performative_id == MechAcnMessage.Performative.REQUEST:
-            performative = mech_acn_pb2.MechAcnMessage.Request_Performative()  # type: ignore
+        if performative_id == MechAcnMessage.Performative.DATA:
+            performative = mech_acn_pb2.MechAcnMessage.Data_Performative()  # type: ignore
             request_id = msg.request_id
             performative.request_id = request_id
-            mech_acn_msg.request.CopyFrom(performative)
-        elif performative_id == MechAcnMessage.Performative.RESPONSE:
-            performative = mech_acn_pb2.MechAcnMessage.Response_Performative()  # type: ignore
-            data = msg.data
-            performative.data = data
-            status = msg.status
-            Status.encode(performative.status, status)
-            mech_acn_msg.response.CopyFrom(performative)
+            content = msg.content
+            performative.content = content
+            mech_acn_msg.data.CopyFrom(performative)
         else:
             raise ValueError("Performative not valid: {}".format(performative_id))
 
@@ -97,15 +91,11 @@ class MechAcnSerializer(Serializer):
         performative = mech_acn_pb.WhichOneof("performative")
         performative_id = MechAcnMessage.Performative(str(performative))
         performative_content = dict()  # type: Dict[str, Any]
-        if performative_id == MechAcnMessage.Performative.REQUEST:
-            request_id = mech_acn_pb.request.request_id
+        if performative_id == MechAcnMessage.Performative.DATA:
+            request_id = mech_acn_pb.data.request_id
             performative_content["request_id"] = request_id
-        elif performative_id == MechAcnMessage.Performative.RESPONSE:
-            data = mech_acn_pb.response.data
-            performative_content["data"] = data
-            pb2_status = mech_acn_pb.response.status
-            status = Status.decode(pb2_status)
-            performative_content["status"] = status
+            content = mech_acn_pb.data.content
+            performative_content["content"] = content
         else:
             raise ValueError("Performative not valid: {}.".format(performative_id))
 

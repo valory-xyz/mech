@@ -19,15 +19,8 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 
-from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Type, Union
+from typing import Any, Dict, List, Type, Union
 
-from aea.skills.base import Model
-
-from packages.valory.protocols.mech_acn.custom_types import (
-    StatusEnum as AcnRequestStatus,
-)
-from packages.valory.protocols.mech_acn.dialogues import MechAcnDialogue
 from packages.valory.skills.abstract_round_abci.base import AbciApp
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.abstract_round_abci.models import (
@@ -101,74 +94,6 @@ class Params(BaseParams):
         if len(values) == 0:
             raise ValueError(f"No {key} specified!")
         return {value[0]: value[1] for value in values}
-
-
-@dataclass
-class AcnDataRequest:
-    """ACN Data request."""
-
-    callback_dialogues: List[MechAcnDialogue]
-    data: Optional[Any] = None
-    status: AcnRequestStatus = AcnRequestStatus.DATA_NOT_READY
-
-    def set_data(self, data: Any) -> None:
-        """Set data value."""
-        self.data = data
-        self.status = AcnRequestStatus.READY
-
-    def add_callback(self, callback_dialogue: MechAcnDialogue) -> None:
-        """Add callback."""
-        self.callback_dialogues.append(callback_dialogue)
-
-    def remove_callback(self, callback_dialogue: MechAcnDialogue) -> None:
-        """Add callback."""
-        self.callback_dialogues.remove(callback_dialogue)
-
-
-class AcnDataRequests(Model):
-    """Data requests container."""
-
-    _requests: Dict[str, AcnDataRequest]
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the parameters object."""
-        super().__init__(*args, **kwargs)
-
-        self._requests = {}
-
-    def add_request(self, request_id: str) -> None:
-        """Add new request."""
-        self._requests[request_id] = AcnDataRequest(callback_dialogues=[])
-
-    def add_callback(self, request_id: str, callback_dialogue: MechAcnDialogue) -> None:
-        """Add callback."""
-        self._requests[request_id].add_callback(callback_dialogue=callback_dialogue)
-
-    def remove_callback(
-        self, request_id: str, callback_dialogue: MechAcnDialogue
-    ) -> None:
-        """Add callback."""
-        self._requests[request_id].remove_callback(callback_dialogue=callback_dialogue)
-
-    def get_callbacks(self, request_id: str) -> List[MechAcnDialogue]:
-        """Return the list of callbacks for provided request id."""
-        return self._requests[request_id].callback_dialogues
-
-    def set_data(self, request_id: str, data: Any) -> Any:
-        """Return the list of callbacks for provided request id."""
-        return self._requests[request_id].set_data(data=data)
-
-    def get_data(self, request_id: str) -> Any:
-        """Return the list of callbacks for provided request id."""
-        return self._requests[request_id].data
-
-    def request_exists(self, request_id: str) -> bool:
-        """Check if agent has started processing the request."""
-        return request_id in self._requests
-
-    def request_ready(self, request_id: str) -> bool:
-        """Check if agent has started processing the request."""
-        return self._requests[request_id].status == AcnRequestStatus.READY
 
 
 Requests = BaseRequests

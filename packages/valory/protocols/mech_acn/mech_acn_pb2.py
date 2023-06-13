@@ -14,48 +14,25 @@ _sym_db = _symbol_database.Default()
 
 
 DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x0emech_acn.proto\x12\x1a\x61\x65\x61.valory.mech_acn.v0_1_0"\x8a\x04\n\x0eMechAcnMessage\x12R\n\x07request\x18\x05 \x01(\x0b\x32?.aea.valory.mech_acn.v0_1_0.MechAcnMessage.Request_PerformativeH\x00\x12T\n\x08response\x18\x06 \x01(\x0b\x32@.aea.valory.mech_acn.v0_1_0.MechAcnMessage.Response_PerformativeH\x00\x1a\xa7\x01\n\x06Status\x12H\n\x06status\x18\x01 \x01(\x0e\x32\x38.aea.valory.mech_acn.v0_1_0.MechAcnMessage.Status.Status"S\n\x06Status\x12\x15\n\x11REQUEST_NOT_FOUND\x10\x00\x12\x12\n\x0e\x44\x41TA_NOT_READY\x10\x01\x12\t\n\x05READY\x10\x02\x12\x13\n\x0fREQUEST_EXPIRED\x10\x03\x1a*\n\x14Request_Performative\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x1ah\n\x15Response_Performative\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\t\x12\x41\n\x06status\x18\x02 \x01(\x0b\x32\x31.aea.valory.mech_acn.v0_1_0.MechAcnMessage.StatusB\x0e\n\x0cperformativeb\x06proto3'
+    b'\n\x0emech_acn.proto\x12\x1a\x61\x65\x61.valory.mech_acn.v0_1_0"\xa8\x01\n\x0eMechAcnMessage\x12L\n\x04\x64\x61ta\x18\x05 \x01(\x0b\x32<.aea.valory.mech_acn.v0_1_0.MechAcnMessage.Data_PerformativeH\x00\x1a\x38\n\x11\x44\x61ta_Performative\x12\x12\n\nrequest_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ontent\x18\x02 \x01(\tB\x0e\n\x0cperformativeb\x06proto3'
 )
 
 
 _MECHACNMESSAGE = DESCRIPTOR.message_types_by_name["MechAcnMessage"]
-_MECHACNMESSAGE_STATUS = _MECHACNMESSAGE.nested_types_by_name["Status"]
-_MECHACNMESSAGE_REQUEST_PERFORMATIVE = _MECHACNMESSAGE.nested_types_by_name[
-    "Request_Performative"
+_MECHACNMESSAGE_DATA_PERFORMATIVE = _MECHACNMESSAGE.nested_types_by_name[
+    "Data_Performative"
 ]
-_MECHACNMESSAGE_RESPONSE_PERFORMATIVE = _MECHACNMESSAGE.nested_types_by_name[
-    "Response_Performative"
-]
-_MECHACNMESSAGE_STATUS_STATUS = _MECHACNMESSAGE_STATUS.enum_types_by_name["Status"]
 MechAcnMessage = _reflection.GeneratedProtocolMessageType(
     "MechAcnMessage",
     (_message.Message,),
     {
-        "Status": _reflection.GeneratedProtocolMessageType(
-            "Status",
+        "Data_Performative": _reflection.GeneratedProtocolMessageType(
+            "Data_Performative",
             (_message.Message,),
             {
-                "DESCRIPTOR": _MECHACNMESSAGE_STATUS,
+                "DESCRIPTOR": _MECHACNMESSAGE_DATA_PERFORMATIVE,
                 "__module__": "mech_acn_pb2"
-                # @@protoc_insertion_point(class_scope:aea.valory.mech_acn.v0_1_0.MechAcnMessage.Status)
-            },
-        ),
-        "Request_Performative": _reflection.GeneratedProtocolMessageType(
-            "Request_Performative",
-            (_message.Message,),
-            {
-                "DESCRIPTOR": _MECHACNMESSAGE_REQUEST_PERFORMATIVE,
-                "__module__": "mech_acn_pb2"
-                # @@protoc_insertion_point(class_scope:aea.valory.mech_acn.v0_1_0.MechAcnMessage.Request_Performative)
-            },
-        ),
-        "Response_Performative": _reflection.GeneratedProtocolMessageType(
-            "Response_Performative",
-            (_message.Message,),
-            {
-                "DESCRIPTOR": _MECHACNMESSAGE_RESPONSE_PERFORMATIVE,
-                "__module__": "mech_acn_pb2"
-                # @@protoc_insertion_point(class_scope:aea.valory.mech_acn.v0_1_0.MechAcnMessage.Response_Performative)
+                # @@protoc_insertion_point(class_scope:aea.valory.mech_acn.v0_1_0.MechAcnMessage.Data_Performative)
             },
         ),
         "DESCRIPTOR": _MECHACNMESSAGE,
@@ -64,21 +41,13 @@ MechAcnMessage = _reflection.GeneratedProtocolMessageType(
     },
 )
 _sym_db.RegisterMessage(MechAcnMessage)
-_sym_db.RegisterMessage(MechAcnMessage.Status)
-_sym_db.RegisterMessage(MechAcnMessage.Request_Performative)
-_sym_db.RegisterMessage(MechAcnMessage.Response_Performative)
+_sym_db.RegisterMessage(MechAcnMessage.Data_Performative)
 
 if _descriptor._USE_C_DESCRIPTORS == False:
 
     DESCRIPTOR._options = None
     _MECHACNMESSAGE._serialized_start = 47
-    _MECHACNMESSAGE._serialized_end = 569
-    _MECHACNMESSAGE_STATUS._serialized_start = 236
-    _MECHACNMESSAGE_STATUS._serialized_end = 403
-    _MECHACNMESSAGE_STATUS_STATUS._serialized_start = 320
-    _MECHACNMESSAGE_STATUS_STATUS._serialized_end = 403
-    _MECHACNMESSAGE_REQUEST_PERFORMATIVE._serialized_start = 405
-    _MECHACNMESSAGE_REQUEST_PERFORMATIVE._serialized_end = 447
-    _MECHACNMESSAGE_RESPONSE_PERFORMATIVE._serialized_start = 449
-    _MECHACNMESSAGE_RESPONSE_PERFORMATIVE._serialized_end = 553
+    _MECHACNMESSAGE._serialized_end = 215
+    _MECHACNMESSAGE_DATA_PERFORMATIVE._serialized_start = 143
+    _MECHACNMESSAGE_DATA_PERFORMATIVE._serialized_end = 199
 # @@protoc_insertion_point(module_scope)

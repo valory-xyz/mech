@@ -7,16 +7,14 @@ description: A protocol for adding ACN callbacks on AI mechs.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  README.md: bafybeicdant6w3hxprj27mdf2xs6r7er6qfq27zet7sgvkqlcvbg3vcxnm
   __init__.py: bafybeibuio5tirkbhe5vowct6a4qhkw75qotdxubzunr2on2tp5kg2feia
-  custom_types.py: bafybeiedbhvtoybrhz7fdtzpjfyjm3yhdlix5kmkase5jlgxqc2mdplvra
-  dialogues.py: bafybeiaewe3ejzy4zvkes24eg4d76wvtr6ek3o24tnqe7iuujz7p5b6ft4
-  mech_acn.proto: bafybeicx2rdeq7uytzoccwsnpnbhpilstf65x2xeidmbukptyua5uqwjvi
-  mech_acn_pb2.py: bafybeib4o2kh2lfrg7fv3attcehfj7vftxoc4tn5nz5elhmghrz5roxfe4
-  message.py: bafybeieoyelka6n6mvaxntif3m2kbrbkad3noitzv5oqdxjscacrqknrwm
-  serialization.py: bafybeibrudxa7nh4htl4ok3iec5gyjvlz53ecv5t2zzuhjrgodvgk3gm7a
-  tests/test_mech_acn_dialogues.py: bafybeih66wwlb67accjsvnncxiqffwzm2ugnf6d7pqa6i4grnj44krnmu4
-  tests/test_mech_acn_messages.py: bafybeifkzudfz7fyzgtiyej4jyyuphjfucw3cglv4a7lw4kbmfqx7paxge
+  dialogues.py: bafybeie4dzadih6nc4msgpfzaukz4lhipdvmsqjksh6asvf52khkobejpi
+  mech_acn.proto: bafybeiad44yx7hyyzw6el3obsfuptvi4feuk75vkdwdcp6susog7ax2t2q
+  mech_acn_pb2.py: bafybeib2dwz3bofnxvu3bs74p47u4u43ud6bbjhhrda3aepqxaiq5aocwa
+  message.py: bafybeidnehskzsjosypgiwcqhemch4ct7jmnnkfdqcpf63pdkbjcy5dzrq
+  serialization.py: bafybeiainqaw6owq2mecwiuqhgljitjngfttsm6hwyx2dohscpjyjdl2g4
+  tests/test_mech_acn_dialogues.py: bafybeiaadk2pyh4eybshwm27bahmtc6rpebxrypoyu5pd73ph3viqe4mbi
+  tests/test_mech_acn_messages.py: bafybeif6wma6slharrisiwjkduov3cwbgo5tdid65auxddm2r2s5bw6b7i
 fingerprint_ignore_patterns: []
 dependencies:
   protobuf: {}

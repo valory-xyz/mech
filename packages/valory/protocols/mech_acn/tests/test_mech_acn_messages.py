@@ -24,7 +24,6 @@ from typing import List
 
 from aea.test_tools.test_protocol import BaseProtocolMessagesTestCase
 
-from packages.valory.protocols.mech_acn.custom_types import Status
 from packages.valory.protocols.mech_acn.message import MechAcnMessage
 
 
@@ -37,13 +36,9 @@ class TestMessageMechAcn(BaseProtocolMessagesTestCase):
         """Build the messages to be used for testing."""
         return [
             MechAcnMessage(
-                performative=MechAcnMessage.Performative.REQUEST,
+                performative=MechAcnMessage.Performative.DATA,
                 request_id="some str",
-            ),
-            MechAcnMessage(
-                performative=MechAcnMessage.Performative.RESPONSE,
-                data="some str",
-                status=Status(),  # check it please!
+                content="some str",
             ),
         ]
 
@@ -51,12 +46,8 @@ class TestMessageMechAcn(BaseProtocolMessagesTestCase):
         """Build inconsistent messages to be used for testing."""
         return [
             MechAcnMessage(
-                performative=MechAcnMessage.Performative.REQUEST,
+                performative=MechAcnMessage.Performative.DATA,
                 # skip content: request_id
-            ),
-            MechAcnMessage(
-                performative=MechAcnMessage.Performative.RESPONSE,
-                # skip content: data
-                status=Status(),  # check it please!
+                content="some str",
             ),
         ]
