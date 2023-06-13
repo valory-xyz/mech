@@ -62,10 +62,10 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
     TendermintDialogues as BaseTendermintDialogues,
 )
 from packages.valory.skills.task_execution_abci.dialogues import (
-    MechAcnDialogue as BaseMechAcnDialogue,
+    AcnDataShareDialogue as BaseAcnDataShareDialogue,
 )
 from packages.valory.skills.task_execution_abci.dialogues import (
-    MechAcnDialogues as BaseMechAcnDialogues,
+    AcnDataShareDialogues as BaseAcnDataShareDialogues,
 )
 
 
@@ -96,5 +96,5 @@ TendermintDialogues = BaseTendermintDialogues
 IpfsDialogue = BaseIpfsDialogue
 IpfsDialogues = BaseIpfsDialogues
 
-MechAcnDialogue = BaseMechAcnDialogue
-MechAcnDialogues = BaseMechAcnDialogues
+AcnDataShareDialogue = BaseAcnDataShareDialogue
+AcnDataShareDialogues = BaseAcnDataShareDialogues

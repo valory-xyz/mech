@@ -26,11 +26,11 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue as BaseDialogue
 from aea.skills.base import Model
 
-from packages.valory.protocols.mech_acn.dialogues import (
-    MechAcnDialogue as BaseMechAcnDialogue,
+from packages.valory.protocols.acn_data_share.dialogues import (
+    AcnDataShareDialogue as BaseAcnDataShareDialogue,
 )
-from packages.valory.protocols.mech_acn.dialogues import (
-    MechAcnDialogues as BaseMechAcnDialogues,
+from packages.valory.protocols.acn_data_share.dialogues import (
+    AcnDataShareDialogues as BaseAcnDataShareDialogues,
 )
 from packages.valory.skills.abstract_round_abci.dialogues import (
     AbciDialogue as BaseAbciDialogue,
@@ -104,10 +104,10 @@ IpfsDialogue = BaseIpfsDialogue
 IpfsDialogues = BaseIpfsDialogues
 
 
-MechAcnDialogue = BaseMechAcnDialogue
+AcnDataShareDialogue = BaseAcnDataShareDialogue
 
 
-class MechAcnDialogues(Model, BaseMechAcnDialogues):
+class AcnDataShareDialogues(Model, BaseAcnDataShareDialogues):
     """The dialogues class keeps track of all dialogues."""
 
     def __init__(self, **kwargs: Any) -> None:
@@ -127,9 +127,9 @@ class MechAcnDialogues(Model, BaseMechAcnDialogues):
             :param receiver_address: the address of the receiving agent
             :return: The role of the agent
             """
-            return MechAcnDialogue.Role.AGENT
+            return AcnDataShareDialogue.Role.AGENT
 
-        BaseMechAcnDialogues.__init__(
+        BaseAcnDataShareDialogues.__init__(
             self,
             self_address=str(self.context.agent_address),
             role_from_first_message=role_from_first_message,

@@ -41,9 +41,9 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
+from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
+from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
-from packages.valory.protocols.mech_acn.dialogues import MechAcnDialogues
-from packages.valory.protocols.mech_acn.message import MechAcnMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
@@ -234,9 +234,6 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             # respond with no_op and no multisend transactions
             deliver_msg = "no_op"
             request_id = cast(str, self.request_id)
-            self.data_requests.set_data(
-                request_id=str(self.request_id), data=deliver_msg
-            )
             self.send_data_to_acn(
                 sender_address=self.sender_address,
                 request_id=str(self.request_id),
@@ -306,12 +303,14 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         data: Any,
     ) -> None:
         """Handle callbacks."""
-        self.context.logger.info(f"Sending data to ACN for request ID {request_id}")
+        self.context.logger.info(
+            f"Sending data to {sender_address} via ACN for request ID {request_id}"
+        )
         response, _ = cast(
-            MechAcnDialogues, self.context.mech_acn_requests_dialogues
+            AcnDataShareDialogues, self.context.acn_data_share_dialogues
         ).create(
             counterparty=sender_address,
-            performative=MechAcnMessage.Performative.DATA,
+            performative=AcnDataShareMessage.Performative.DATA,
             request_id=request_id,
             content=data,
         )
