@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import openai
 import json
@@ -32,7 +32,7 @@ from selenium.webdriver.common.by import By
 from bs4 import BeautifulSoup
 
 
-NUM_URLS_EXTRACT = 5  # Number of URLs to extract
+NUM_URLS_EXTRACT = 5
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
@@ -109,6 +109,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     
     engine = TOOL_TO_ENGINE[tool]
 
+    additional_information=""
+
     if tool=="prediction_online":
         url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
 
@@ -138,9 +140,9 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         urls_from_queries = get_urls_from_queries(queries)
         urls.extend(urls_from_queries)
         url_texts = extract_texts(urls)
-        itemized_texts = '\n'.join(["- " + text for text in url_texts])
+        additional_information = '\n'.join(["- " + text for text in url_texts])
 
-    prediction_prompt = PREDICTION_PROMPT.format(user_prompt=prompt, additional_information=itemized_texts)
+    prediction_prompt = PREDICTION_PROMPT.format(user_prompt=prompt, additional_information=additional_information)
 
     moderation_result = openai.Moderation.create(prediction_prompt)
 
@@ -165,7 +167,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     return response.choices[0].message.content, None
     
 
-def get_urls_from_queries(queries):
+def get_urls_from_queries(queries: List[str]) -> List[str]:
+    """Get URLs from search engine queries"""
     results = []
 
     for query in queries:
@@ -177,7 +180,8 @@ def get_urls_from_queries(queries):
     return unique_results
 
 
-def extract_texts(urls, num_words=300):
+def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
+    """Extract texts from URLs"""
     selected_urls = random.sample(urls, NUM_URLS_EXTRACT)
     extracted_texts = []
 
@@ -185,12 +189,14 @@ def extract_texts(urls, num_words=300):
     options.add_argument('-headless')
     browser = webdriver.Firefox(options=options)
 
-    def get_html(url):
+    def get_html(url: str) -> str:
+        """Get HTML content of a given URL"""
         browser.get(url)
         html = browser.find_element(By.TAG_NAME, "body").get_attribute("innerHTML")
         return html
     
     def extract_text(html: str) -> str:
+        """Extract text from a single HTML document"""
         soup = BeautifulSoup(html, "html.parser")
         for script in soup(["script", "style"]):
             script.extract()
@@ -203,11 +209,8 @@ def extract_texts(urls, num_words=300):
     for url in selected_urls:
         html = get_html(url)
         text = extract_text(html)
-        # Extract the first num_words from the text
         words = text.split()[:num_words]
         extracted_texts.append(" ".join(words))
 
     browser.quit()
     return extracted_texts
-
-
