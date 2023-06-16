@@ -188,3 +188,24 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 5. **Run your service.** You can take a look at the `run_service.sh` script and execute your service locally as [above](#option-2-run-the-mech-as-an-agent-service).
 
     Once your service works locally, you have the option to run it on a hosted service like [Propel](https://propel.valory.xyz/).
+
+## Included tools
+
+- **OpenAI request** (`openai_request.py`). Executes requests to the OpenAI API through the engine associated to the specific tool. It receives as input an arbitrary prompt and outputs the returned output by the OpenAI API.
+    - `openai-gpt-3.5-turbo`
+    - `openai-gpt-4`
+    - `openai-text-davinci-002`
+    - `openai-text-davinci-003`
+
+- **Stability AI request** (`stabilityai_request.py`): Executes requests to the Stability AI through the engine associated to the specific tool. It receives as input an arbitrary prompt and outputs the image data corresponding to the output of Stability AI.
+    - `stabilityai-stable-diffusion-v1-5`
+    - `stabilityai-stable-diffusion-xl-beta-v2-2-2`
+    - `stabilityai-stable-diffusion-512-v2-1`
+    - `stabilityai-stable-diffusion-768-v2-1`
+
+- **Native transfer request** (`native_transfer_request.py`): Parses user prompt in natural language as input into an Ethereum transaction.
+    - `transfer_native`
+
+- **Prediction request** (`prediction_request.py`): Outputs the estimated probability of occurrence (`p_yes`) or no occurrence (`p_no`) of a certain event specified as the input prompt in natural language.
+    - `prediction-offline`: Uses only training data of the model to make the prediction.
+    - `prediction-online`: In addition to training data, it also uses online information to improve the prediction.
