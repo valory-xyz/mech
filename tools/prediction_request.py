@@ -17,19 +17,18 @@
 #
 # ------------------------------------------------------------------------------
 
+"""This module implements a Mech tool for binary predictions."""
 
+import json
+import random
 from typing import Any, Dict, List, Optional, Tuple
 
-import openai
-import json
-import sys
-import os
 import googlesearch
-import random
-from selenium import webdriver
-from selenium.webdriver.firefox.options import Options
-from selenium.webdriver.common.by import By
+import openai
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.firefox.options import Options
 
 
 NUM_URLS_EXTRACT = 5
@@ -46,7 +45,7 @@ TOOL_TO_ENGINE = {
     "prediction_online": "gpt-3.5-turbo",
 }
 
-PREDICTION_PROMPT="""
+PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
 for a specific event. You must follow these instructions:
 * The user will provide the event under the label "EVENT" delimited by three backticks.
@@ -62,7 +61,7 @@ for a specific event. You must follow these instructions:
      confidence value, and 1 maximum confidence value.
    - "info_utility": Utility of the information provided under ADITIONAL_INFORMATION to help you making the prediction.
      A value where 0 indicates lowest utility, and 1 maximum utility.
-* The probability distribution must be well defined: the sum of p_yes and p_no must equal 1. 
+* The probability distribution must be well defined: the sum of p_yes and p_no must equal 1.
 
 USER_PROMPT:
 ```
@@ -78,7 +77,7 @@ Do not answer anything else than the JSON containing the probability estimation.
 Your response must be a JSON object parseable by Python's json.loads().
 """
 
-URL_QUERY_PROMPT="""
+URL_QUERY_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
 for a specific event.
 The event is provided under the label "EVENT" quoted by three backticks.
@@ -106,12 +105,12 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
 
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
-    
+
     engine = TOOL_TO_ENGINE[tool]
 
-    additional_information=""
+    additional_information = ""
 
-    if tool=="prediction_online":
+    if tool == "prediction_online":
         url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
 
         moderation_result = openai.Moderation.create(url_query_prompt)
@@ -120,29 +119,31 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             return "Moderation flagged the prompt as in violation of terms."
 
         messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": url_query_prompt},
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": url_query_prompt},
         ]
         response = openai.ChatCompletion.create(
-             model=engine,
-             messages=messages,
-             temperature=temperature,
-             max_tokens=max_tokens,
-             n=1,
-             timeout=120,
-             stop=None,
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            n=1,
+            timeout=120,
+            stop=None,
         )
 
-        json_data = json.loads(response.choices[0].message.content) 
+        json_data = json.loads(response.choices[0].message.content)
 
-        queries = json_data['queries']
-        urls = json_data['urls']
+        queries = json_data["queries"]
+        urls = json_data["urls"]
         urls_from_queries = get_urls_from_queries(queries)
         urls.extend(urls_from_queries)
         url_texts = extract_texts(urls)
-        additional_information = '\n'.join(["- " + text for text in url_texts])
+        additional_information = "\n".join(["- " + text for text in url_texts])
 
-    prediction_prompt = PREDICTION_PROMPT.format(user_prompt=prompt, additional_information=additional_information)
+    prediction_prompt = PREDICTION_PROMPT.format(
+        user_prompt=prompt, additional_information=additional_information
+    )
 
     moderation_result = openai.Moderation.create(prediction_prompt)
 
@@ -150,22 +151,22 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         return "Moderation flagged the prompt as in violation of terms."
 
     messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prediction_prompt},
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": prediction_prompt},
     ]
 
     response = openai.ChatCompletion.create(
-          model=engine,
-          messages=messages,
-          temperature=temperature,
-          max_tokens=max_tokens,
-          n=1,
-          timeout=120,
-          stop=None,
+        model=engine,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        n=1,
+        timeout=120,
+        stop=None,
     )
 
     return response.choices[0].message.content, None
-    
+
 
 def get_urls_from_queries(queries: List[str]) -> List[str]:
     """Get URLs from search engine queries"""
@@ -186,7 +187,7 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
     extracted_texts = []
 
     options = Options()
-    options.add_argument('-headless')
+    options.add_argument("-headless")
     browser = webdriver.Firefox(options=options)
 
     def get_html(url: str) -> str:
@@ -194,7 +195,7 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
         browser.get(url)
         html = browser.find_element(By.TAG_NAME, "body").get_attribute("innerHTML")
         return html
-    
+
     def extract_text(html: str) -> str:
         """Extract text from a single HTML document"""
         soup = BeautifulSoup(html, "html.parser")
