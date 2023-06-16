@@ -38,11 +38,11 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0.7,
 }
 
-ALLOWED_TOOLS = ["prediction_offline", "prediction_online"]
+ALLOWED_TOOLS = ["prediction-offline", "prediction-online"]
 
 TOOL_TO_ENGINE = {
-    "prediction_offline": "gpt-3.5-turbo",
-    "prediction_online": "gpt-3.5-turbo",
+    "prediction-offline": "gpt-3.5-turbo",
+    "prediction-online": "gpt-3.5-turbo",
 }
 
 PREDICTION_PROMPT = """
@@ -110,7 +110,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
 
     additional_information = ""
 
-    if tool == "prediction_online":
+    if tool == "prediction-online":
         url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
 
         moderation_result = openai.Moderation.create(url_query_prompt)
@@ -173,7 +173,6 @@ def get_urls_from_queries(queries: List[str]) -> List[str]:
     results = []
 
     for query in queries:
-        print(f"query: {query}")
         for url in googlesearch.search(query, num_results=3):
             results.append(url)
 
