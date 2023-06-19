@@ -99,3 +99,6 @@ fix-abci-app-specs:
 	autonomy analyse fsm-specs --update --app-class MechAbciApp --package packages/valory/skills/mech_abci
 	autonomy analyse fsm-specs --update --app-class TaskExecutionAbciApp --package packages/valory/skills/task_execution_abci
 	echo "Successfully validated abcis!"
+
+protolint_install:
+	GO111MODULE=on GOPATH=~/go go get -u -v github.com/yoheimuta/protolint/cmd/protolint@v0.27.0

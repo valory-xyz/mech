@@ -9,7 +9,7 @@ fingerprint:
   __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
   behaviours.py: bafybeihgtg4l7qcu33ptyfn6cnohm3tcxlpkdqijyc5zjxmci6lqzxmogy
   composition.py: bafybeiektjao3czojlipbcj2oglrk4hsch76d7ft3zw3vpcerewvvi6idy
-  dialogues.py: bafybeigpwuzku3we7axmxeamg7vn656maww6emuztau5pg3ebsoquyfdqm
+  dialogues.py: bafybeidhmgdnhxcgv35vahz3ycoiduug23kfyqvttqnywjp3eiuqal4bzy
   fsm_specification.yaml: bafybeieeqdr76xgxqjdqalip7agguutwsn23n5xgop4ziach7l4hiqxvqm
   handlers.py: bafybeiffuduhg433qsu6lbet5jsaub63bzv2l4x756aj2fbnu5bnfu4ble
   models.py: bafybeic3miniq5lacarxspyxuvmlnwervwf2wmpnvw2gxpgk77fzyzcpvq
@@ -22,7 +22,7 @@ skills:
 - valory/multiplexer_abci:0.1.0:bafybeidyydry6axhrqeibmfvnjvbvm2nuxlieginygijcu5nqa3672iwsu
 - valory/registration_abci:0.1.0:bafybeidqcszsitlmsofegmbprny22hqlent2o6luxng5a46gplytexrtbq
 - valory/reset_pause_abci:0.1.0:bafybeidprdrxzbloz5imufkbpvetvkhywdvq3fopbhdzztfnud4onsdsce
-- valory/task_execution_abci:0.1.0:bafybeiac6hd3jritb5ieh3lno4nocrzszkvctgz4ix5flnoivcabtbbzae
+- valory/task_execution_abci:0.1.0:bafybeiaj3xad3xtlb45rbwprwkehm2ffpohadimkuwrx3agkuxfahpvc7u
 - valory/termination_abci:0.1.0:bafybeif33wyu6w7yrrhyacpt627i5g6nec2kiepsm5xx2b44zq657dch3a
 - valory/transaction_settlement_abci:0.1.0:bafybeiaeu47qmeeqipn6jnz4ymbxwqb66axvx3ddzocnni4zehbhiupc54
 behaviours:
@@ -71,6 +71,9 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
   params:
     args:
       agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'

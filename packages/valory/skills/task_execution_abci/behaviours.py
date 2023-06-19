@@ -27,7 +27,11 @@ import multibase
 import multicodec
 import openai  # noqa
 from aea.helpers.cid import CID, to_v1
+from aea.mail.base import EnvelopeContext
 
+from packages.valory.connections.p2p_libp2p_client.connection import (
+    PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
+)
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -37,6 +41,8 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
+from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
+from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
@@ -183,6 +189,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             task_data = self.context.shared_state.get("pending_tasks").pop(0)
             self.context.logger.info(f"Preparing task with data: {task_data}")
             self.request_id = task_data["requestId"]
+            self.sender_address = task_data["sender"]
             task_data_ = task_data["data"]
 
             # Verify the data hash and handle encoding
@@ -224,9 +231,14 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
         # Handle invalid requests
         if self._invalid_request:
-            deliver_msg = "no_op"
             # respond with no_op and no multisend transactions
+            deliver_msg = "no_op"
             request_id = cast(str, self.request_id)
+            self.send_data_via_acn(
+                sender_address=self.sender_address,
+                request_id=str(self.request_id),
+                data=deliver_msg,
+            )
             return request_id, deliver_msg.encode(), None
 
         self._async_result = cast(AsyncResult, self._async_result)
@@ -250,6 +262,11 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 return None
             deliver_msg, transaction = task_result
             response_obj = {"requestId": self.request_id, "result": deliver_msg}
+            self.send_data_via_acn(
+                sender_address=self.sender_address,
+                request_id=str(self.request_id),
+                data=deliver_msg,
+            )
 
         self.context.logger.info(f"Response object: {response_obj}")
 
@@ -278,6 +295,29 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         hex_multihash = hex_multihash[6:]
         request_id = cast(str, self.request_id)
         return request_id, hex_multihash, transaction
+
+    def send_data_via_acn(
+        self,
+        sender_address: str,
+        request_id: str,
+        data: Any,
+    ) -> None:
+        """Handle callbacks."""
+        self.context.logger.info(
+            f"Sending data to {sender_address} via ACN for request ID {request_id}"
+        )
+        response, _ = cast(
+            AcnDataShareDialogues, self.context.acn_data_share_dialogues
+        ).create(
+            counterparty=sender_address,
+            performative=AcnDataShareMessage.Performative.DATA,
+            request_id=request_id,
+            content=data,
+        )
+        self.context.outbox.put_message(
+            message=response,
+            context=EnvelopeContext(connection_id=P2P_CLIENT_PUBLIC_ID),
+        )
 
     def _get_ipfs_file_hash(self, data: bytes) -> str:
         """Get hash from bytes"""
