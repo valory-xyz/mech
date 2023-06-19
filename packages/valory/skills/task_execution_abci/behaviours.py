@@ -234,7 +234,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             # respond with no_op and no multisend transactions
             deliver_msg = "no_op"
             request_id = cast(str, self.request_id)
-            self.send_data_to_acn(
+            self.send_data_via_acn(
                 sender_address=self.sender_address,
                 request_id=str(self.request_id),
                 data=deliver_msg,
@@ -262,7 +262,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 return None
             deliver_msg, transaction = task_result
             response_obj = {"requestId": self.request_id, "result": deliver_msg}
-            self.send_data_to_acn(
+            self.send_data_via_acn(
                 sender_address=self.sender_address,
                 request_id=str(self.request_id),
                 data=deliver_msg,
@@ -296,7 +296,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         request_id = cast(str, self.request_id)
         return request_id, hex_multihash, transaction
 
-    def send_data_to_acn(
+    def send_data_via_acn(
         self,
         sender_address: str,
         request_id: str,
