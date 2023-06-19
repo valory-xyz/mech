@@ -5,7 +5,7 @@
 <h1 align="center" style="margin-bottom: 0;">
     Autonolas AI Mechs
     <br><a href="https://github.com/valory-xyz/mech/blob/main/LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/valory-xyz/mech"></a>
-    <a href="https://pypi.org/project/open-autonomy/0.10.5.post2/"><img alt="Framework: Open Autonomy 0.10.5.post2" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.10.5.post2-blueviolet"></a>
+    <a href="https://pypi.org/project/open-autonomy/0.10.6/"><img alt="Framework: Open Autonomy 0.10.6" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.10.6-blueviolet"></a>
     <!-- <a href="https://github.com/valory-xyz/mech/releases/latest">
     <img alt="Latest release" src="https://img.shields.io/github/v/release/valory-xyz/mech"> -->
     </a>
