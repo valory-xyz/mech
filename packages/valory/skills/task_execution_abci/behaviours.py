@@ -45,6 +45,9 @@ from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialo
 from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
+from packages.valory.skills.abstract_round_abci.behaviour_utils import (
+    SupportedObjectType,
+)
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
@@ -232,14 +235,15 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         # Handle invalid requests
         if self._invalid_request:
             # respond with no_op and no multisend transactions
-            deliver_msg = "no_op"
-            request_id = cast(str, self.request_id)
+            obj_hash = yield from self.write_response_to_ipfs(data="no_op")
             self.send_data_via_acn(
                 sender_address=self.sender_address,
                 request_id=str(self.request_id),
-                data=deliver_msg,
+                data=obj_hash,
             )
-            return request_id, deliver_msg.encode(), None
+            hex_multihash = self.to_multihash(hash_string=obj_hash)
+            request_id = cast(str, self.request_id)
+            return request_id, hex_multihash, None
 
         self._async_result = cast(AsyncResult, self._async_result)
 
@@ -262,39 +266,39 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 return None
             deliver_msg, transaction = task_result
             response_obj = {"requestId": self.request_id, "result": deliver_msg}
-            self.send_data_via_acn(
-                sender_address=self.sender_address,
-                request_id=str(self.request_id),
-                data=deliver_msg,
-            )
 
         self.context.logger.info(f"Response object: {response_obj}")
-
-        # Write to IPFS
-        file_path = os.path.join(self.context.data_dir, str(self.request_id))
-
-        obj_hash = yield from self.send_to_ipfs(
-            filename=file_path,
-            obj=response_obj,
-            filetype=SupportedFiletype.JSON,
+        obj_hash = yield from self.write_response_to_ipfs(data=response_obj)
+        self.send_data_via_acn(
+            sender_address=self.sender_address,
+            request_id=str(self.request_id),
+            data=obj_hash,
         )
-        obj_hash = to_v1(obj_hash)  # from 2 to 1: base32 encoded CID
-
-        # The original Base32 encoded CID
-        base32_cid = obj_hash
-
-        # Decode the Base32 CID to bytes
-        cid_bytes = multibase.decode(base32_cid)
-
-        # Remove the multicodec prefix (0x01) from the bytes
-        multihash_bytes = multicodec.remove_prefix(cid_bytes)
-
-        # Convert the multihash bytes to a hexadecimal string
-        hex_multihash = multihash_bytes.hex()
-
-        hex_multihash = hex_multihash[6:]
+        hex_multihash = self.to_multihash(hash_string=obj_hash)
         request_id = cast(str, self.request_id)
         return request_id, hex_multihash, transaction
+
+    def to_multihash(self, hash_string: str) -> bytes:
+        """To multihash string."""
+        # Decode the Base32 CID to bytes
+        cid_bytes = multibase.decode(hash_string)
+        # Remove the multicodec prefix (0x01) from the bytes
+        multihash_bytes = multicodec.remove_prefix(cid_bytes)
+        # Convert the multihash bytes to a hexadecimal string
+        hex_multihash = multihash_bytes.hex()
+        return hex_multihash[6:]
+
+    def write_response_to_ipfs(
+        self, data: SupportedObjectType
+    ) -> Generator[None, None, str]:
+        """Write response data to IPFS and return IPFS hash."""
+        file_path = os.path.join(self.context.data_dir, str(self.request_id))
+        obj_hash = yield from self.send_to_ipfs(
+            filename=file_path,
+            obj=data,
+            filetype=SupportedFiletype.JSON,
+        )
+        return to_v1(obj_hash)
 
     def send_data_via_acn(
         self,
