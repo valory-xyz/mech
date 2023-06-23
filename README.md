@@ -11,7 +11,10 @@
     </a>
 </h1>
 
-Executing AI tasks (e.g., generating an image on [Dall-e](https://openai.com/product/dall-e-2), running a prompt on [ChatGPT](https://chat.openai.com/), or more sophisticated composed versions, or tasks involving on-chain operations) requires access to proprietary APIs or expertise in using open-source technologies which might entail certain complexity.
+
+The execution of AI tasks, such as image generation using DALL-E, prompt processing with ChatGPT, or more intricate operations involving on-chain transactions, poses a number of challenges, including:
+- Access to proprietary APIs, which may come with associated fees/subscriptions.
+- Proficiency in the usage of the the related open-source technologies, which may entail facing their inherent complexities.
 
 AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to post *AI tasks requests* on-chain and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are **hassle-free**, **crypto-native**, and **infinitely composable**.
 
@@ -125,7 +128,7 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 You can create and mint your own AI Mech that handles requests for tasks that you can define.
 
-1. **Create a new tool.** Tools are the components that execute Requests for AI tasks. Add your tool to the folder `./tools` as a single Python file. The file must contain a `run` function that accepts `kwargs` and returns a `string`:
+1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools must be located in the folder `./tools` as a single Python file. Such file must contain a `run` function that accepts `kwargs` and must **always** return a string (`str`). That is, the `run` function must not raise any exception. If exceptions occur inside the function, they must be processed, and the return value must be set accordingly, for example, returning an error code.
 
     ```python
     def run(**kwargs) -> str:
@@ -168,7 +171,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
     API_KEYS=[[openai, dummy_api_key],[<your_api_key_id>, <your_api_key>]]
     ```
 
-4. **Mint your agent service** in the [Autonolas Protocol](https://protocol.autonolas.network/services/mint), and create a Mech for it in [Mech Hub](https://aimechs.autonolas.network/factory). This will allow you to set the `SAFE_CONTRACT_ADDRESS` and `AGENT_MECH_CONTRACT_ADDRESS` in the `.1env` file.
+4. **Mint your agent service** in the [Autonolas Protocol](https://protocol.olas.network/services/mint), and create a Mech for it in [Mech Hub](https://aimechs.autonolas.network/factory). This will allow you to set the `SAFE_CONTRACT_ADDRESS` and `AGENT_MECH_CONTRACT_ADDRESS` in the `.1env` file.
 
     > **Warning**
     > AI Mechs run on the [Gnosis chain](https://www.gnosis.io/). You must ensure that your wallet is connected to the [Gnosis chain](https://www.gnosis.io/) before using the [Autonolas Protocol](https://protocol.autonolas.network/services/mint) and [Mech Hub](https://aimechs.autonolas.network/factory).
