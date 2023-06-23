@@ -19,6 +19,7 @@
 
 """Contains the job definitions"""
 
+import json
 from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
@@ -43,6 +44,12 @@ ENGINES = {
         "stable-diffusion-768-v2-1",
     ]
 }
+ENGINE_SIZE_CHART = {
+    "stable-diffusion-v1-5": {"height": 512, "width": 512},
+    "stable-diffusion-xl-beta-v2-2-2": {"height": 512, "width": 512},
+    "stable-diffusion-512-v2-1": {"height": 512, "width": 512},
+    "stable-diffusion-768-v2-1": {"height": 768, "width": 768},
+}
 
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
 
@@ -62,19 +69,17 @@ def run(**kwargs: Any) -> Tuple[str, Optional[Dict[str, Any]]]:
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
     if tool not in ALLOWED_TOOLS:
-        raise ValueError(f"Tool {tool} is not supported.")
-    engine = tool.replace(PREFIX, "")
+        return f"Tool {tool} is not in the list of supported tools.", None
 
     # Place content moderation request here if needed
-
-    # default values or kwargs
+    engine = tool.replace(PREFIX, "")
     cfg_scale = kwargs.get("cfg_scale", DEFAULT_STABILITYAI_SETTINGS["cfg_scale"])
     weight = kwargs.get("weight", DEFAULT_STABILITYAI_SETTINGS["weight"])
     clip_guidance_preset = kwargs.get(
         "clip_guidance_preset", DEFAULT_STABILITYAI_SETTINGS["clip_guidance_preset"]
     )
-    height = kwargs.get("height", DEFAULT_STABILITYAI_SETTINGS["height"])
-    width = kwargs.get("width", DEFAULT_STABILITYAI_SETTINGS["width"])
+    height = kwargs.get("height", ENGINE_SIZE_CHART[engine]["height"])
+    width = kwargs.get("width", ENGINE_SIZE_CHART[engine]["width"])
     samples = kwargs.get("samples", DEFAULT_STABILITYAI_SETTINGS["samples"])
     steps = kwargs.get("steps", DEFAULT_STABILITYAI_SETTINGS["steps"])
 
@@ -106,18 +111,6 @@ def run(**kwargs: Any) -> Tuple[str, Optional[Dict[str, Any]]]:
         },
         json=json_params,
     )
-
-    if response.status_code != 200:
-        raise ValueError(f"Non-200 response ({response.status_code}): {response.text}")
-
-    data = response.json()
-    finish_reason = data.get("finishReason", FinishReason.SUCCESS.name)
-    if finish_reason == FinishReason.SUCCESS.name:
-        # return image data
-        return data, None
-    if finish_reason == FinishReason.CONTENT_FILTERED.name:
-        raise ValueError(
-            f"The result was affected by the content filter and may be blurred: {data}"
-        )
-    if finish_reason == FinishReason.ERROR.name:
-        raise ValueError(f"There was an error while generating the image: {data}")
+    if response.status_code == 200:
+        return json.dumps(response.json()), None
+    return (f"Error: Non-200 response ({response.status_code}): {response.text}",)
