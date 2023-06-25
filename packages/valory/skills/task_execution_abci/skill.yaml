@@ -6,23 +6,30 @@ description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeieflonnccu5vcro6f3aldbkxl5l2rueb6vu7ula5ytczszifrgbsq
-  behaviours.py: bafybeigvbtss3w4ynzjpk2gipiveijy6iyguc2bt4h2gpqovhnle4ezk4y
-  dialogues.py: bafybeift7ubqn3fculjpbkihmensbfu26f2ptuec2zvwqybdwlodbz6mpe
-  fsm_specification.yaml: bafybeieldx3rylsiyb6sfqxqzoogmtnda7jf4czgyjn3ddtzo4bze6sfza
-  handlers.py: bafybeidjovpcamecgdzqtpir44zp7jvhktnms33p3eueabsc2rtfbxm3wq
+  __init__.py: bafybeihrkpey6kxur2uoimrskq2wfpelqidxeapdxie6iuv2x7dk77ksvu
+  behaviours.py: bafybeiejpjkjvyvowefa32tuxzwtm2cazlgq33uiv6xzhjtkpo4rwumkde
+  dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
+  fsm_specification.yaml: bafybeiggzywf6zpq2mb4ite6ptnb2zqcjjdhyu7jyb5npn7id4hcrm5tiy
+  handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
   io_/__init__.py: bafybeifxgmmwjqzezzn3e6keh2bfo4cyo7y5dq2ept3stfmgglbrzfl5rq
-  io_/naive_loader.py: bafybeia2p4zqlhgeh2ygdhh6kewwg3pyva4kyvwunchpkairghjbkznhmq
-  models.py: bafybeih7i7cmxgz7ujtfiw6fi7r54anwhvtwuoupju6dtaswdz7ngfprm4
+  io_/naive_loader.py: bafybeihqrt34jso7dwfcedh7itmmovfv55tdjhw2tkqifsbiohetbonynu
+  models.py: bafybeihavofxq3nxt46x74idm2mjl5xxghoqzjtuxnx5i255k6mdwsyyaq
   payloads.py: bafybeigptsnusjowmqjcxnzc4ct7n2iczuiorlwqsg7dl6ipnwkjb6iqoe
-  rounds.py: bafybeicppvhtwtkp4a342l3wmcvawck64szyr7g6mdig2mppfqmvn4xzae
-  tasks.py: bafybeib7xk34qy7dssg5crtgcmcnoxagkhdz5xrc6xz2pw5h7uvs2aqgly
+  rounds.py: bafybeig6gdswlwfpfvpnacpcy7vp7rt4y6cwxlmkl24wzyt4xhnd2z4zkq
+  tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
 fingerprint_ignore_patterns: []
-connections: []
-contracts: []
-protocols: []
+connections:
+- valory/p2p_libp2p_client:0.1.0:bafybeidwcobzb7ut3efegoedad7jfckvt2n6prcmd4g7xnkm6hp6aafrva
+contracts:
+- valory/agent_mech:0.1.0:bafybeib7v5fujyrio64trg5vmkuxpz42mc6fwjrmdyg3dr6ifudkn5rhle
+- valory/gnosis_safe:0.1.0:bafybeigay6nfnmzddx3opzqdnl2lvlvabi73beffs2py3krlagwgzuesmu
+- valory/multisend:0.1.0:bafybeigjywkl7hydjsrkogob3xebj2ifhqwmfhhxoeyrndzhhxi5u6amey
+protocols:
+- valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
+- valory/acn_data_share:0.1.0:bafybeieyixetwvz767zekhvg7r6etumyanzys6xbalx2brrfswybinnlhi
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
+- valory/abstract_round_abci:0.1.0:bafybeiarzpxsy7ulitk5obs4zajhll2m77motjn5st7mi6qvjtkoirfikq
+- valory/transaction_settlement_abci:0.1.0:bafybeihuzoxkhnpep4zcekdq463hopohj3i7rkxvbc2ywmmcyppi3knbxy
 behaviours:
   main:
     args: {}
@@ -69,10 +76,15 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogue
   params:
     args:
       api_keys_json:
       - - openai
+        - dummy_api_key
+      - - stabilityai
         - dummy_api_key
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
@@ -83,6 +95,11 @@ models:
           - openai-text-davinci-003
           - openai-gpt-3.5-turbo
           - openai-gpt-4
+      - - bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i
+        - - stabilityai-stable-diffusion-v1-5
+          - stabilityai-stable-diffusion-xl-beta-v2-2-2
+          - stabilityai-stable-diffusion-512-v2-1
+          - stabilityai-stable-diffusion-768-v2-1
       finalize_timeout: 60.0
       genesis_config:
         chain_id: chain-c4daS1
@@ -103,6 +120,7 @@ models:
         voting_power: '10'
       history_check_timeout: 1205
       ipfs_domain_name: null
+      ipfs_fetch_timeout: 15.0
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
       max_attempts: 10
@@ -148,4 +166,8 @@ models:
 dependencies:
   openai:
     version: ==0.27.2
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
 is_abstract: true

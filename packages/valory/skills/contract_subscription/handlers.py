@@ -23,6 +23,7 @@
 import json
 import time
 from enum import Enum
+from typing import Any
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -31,13 +32,14 @@ from web3.types import TxReceipt
 
 from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
 from packages.valory.skills.websocket_client.handlers import (
-    WEBSOCKET_SUBSCRIPTION_STATUS,
-    WEBSOCKET_SUBSCRIPTIONS,
     SubscriptionStatus,
+    WEBSOCKET_SUBSCRIPTIONS,
+    WEBSOCKET_SUBSCRIPTION_STATUS,
 )
 from packages.valory.skills.websocket_client.handlers import (
     WebSocketHandler as BaseWebSocketHandler,
 )
+
 
 JOB_QUEUE = "pending_tasks"
 DISCONNECTION_POINT = "disconnection_point"
@@ -50,7 +52,8 @@ class WebSocketHandler(BaseWebSocketHandler):
     w3: Web3 = None
     contract = None
 
-    def __init__(self, **kwargs) -> None:
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the handler."""
         self.websocket_provider = kwargs.pop("websocket_provider")
         self.contract_to_monitor = kwargs.pop("contract_to_monitor")
         super().__init__(**kwargs)

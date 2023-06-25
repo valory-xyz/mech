@@ -23,14 +23,15 @@ import packages.valory.skills.multiplexer_abci.rounds as MultiplexerAbciApp
 import packages.valory.skills.registration_abci.rounds as RegistrationAbci
 import packages.valory.skills.reset_pause_abci.rounds as ResetAndPauseAbci
 import packages.valory.skills.task_execution_abci.rounds as TaskExecutionAbciApp
-import packages.valory.skills.transaction_preparation_abci.rounds as TransactionPreparationAbciApp
 import packages.valory.skills.transaction_settlement_abci.rounds as TransactionSubmissionAbciApp
 from packages.valory.skills.abstract_round_abci.abci_app_chain import (
-    AbciAppTransitionMapping, chain)
+    AbciAppTransitionMapping,
+    chain,
+)
 from packages.valory.skills.termination_abci.rounds import BackgroundRound
-from packages.valory.skills.termination_abci.rounds import \
-    Event as TerminationEvent
+from packages.valory.skills.termination_abci.rounds import Event as TerminationEvent
 from packages.valory.skills.termination_abci.rounds import TerminationAbciApp
+
 
 # Here we define how the transition between the FSMs should happen
 # more information here: https://docs.autonolas.network/fsm_app_introduction/#composition-of-fsm-apps
@@ -38,10 +39,10 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     RegistrationAbci.FinishedRegistrationRound: MultiplexerAbciApp.MultiplexerRound,
     MultiplexerAbciApp.FinishedMultiplexerResetRound: ResetAndPauseAbci.ResetAndPauseRound,
     MultiplexerAbciApp.FinishedMultiplexerExecuteRound: TaskExecutionAbciApp.TaskExecutionRound,
-    TaskExecutionAbciApp.FinishedTaskExecutionRound: TransactionPreparationAbciApp.TransactionPreparationRound,
-    TransactionPreparationAbciApp.FinishedTransactionPreparationRound: TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound,  # pylint: disable=C0301
+    TaskExecutionAbciApp.FinishedTaskExecutionRound: TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound,  # pylint: disable=C0301
+    TaskExecutionAbciApp.FinishedTaskExecutionWithErrorRound: MultiplexerAbciApp.MultiplexerRound,
     TransactionSubmissionAbciApp.FinishedTransactionSubmissionRound: MultiplexerAbciApp.MultiplexerRound,
-    TransactionSubmissionAbciApp.FailedRound: TransactionPreparationAbciApp.TransactionPreparationRound,
+    TransactionSubmissionAbciApp.FailedRound: TaskExecutionAbciApp.TaskExecutionRound,
     ResetAndPauseAbci.FinishedResetAndPauseRound: MultiplexerAbciApp.MultiplexerRound,
     ResetAndPauseAbci.FinishedResetAndPauseErrorRound: RegistrationAbci.RegistrationRound,
 }
@@ -51,7 +52,6 @@ MechAbciApp = chain(
         RegistrationAbci.AgentRegistrationAbciApp,
         MultiplexerAbciApp.MultiplexerAbciApp,
         TaskExecutionAbciApp.TaskExecutionAbciApp,
-        TransactionPreparationAbciApp.TransactionPreparationAbciApp,
         ResetAndPauseAbci.ResetPauseAbciApp,
         TransactionSubmissionAbciApp.TransactionSubmissionAbciApp,
     ),

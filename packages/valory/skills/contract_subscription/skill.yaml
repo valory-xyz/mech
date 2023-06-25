@@ -41,5 +41,7 @@ models:
       contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
       subscription_id: mech-contract-subscription
     class_name: Params
-dependencies: {}
+dependencies:
+  web3:
+    version: ==5.25.0
 is_abstract: false

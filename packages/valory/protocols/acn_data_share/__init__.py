@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023 valory
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -16,8 +16,17 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""This module contains the implementation of the default skill."""
 
-from aea.configurations.base import PublicId
+"""
+This module contains the support resources for the acn_data_share protocol.
 
-PUBLIC_ID = PublicId.from_str("valory/transaction_preparation_abci:0.1.0")
+It was created with protocol buffer compiler version `libprotoc 3.19.4` and aea protocol generator version `1.0.0`.
+"""
+
+from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
+from packages.valory.protocols.acn_data_share.serialization import (
+    AcnDataShareSerializer,
+)
+
+
+AcnDataShareMessage.serializer = AcnDataShareSerializer

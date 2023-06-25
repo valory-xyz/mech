@@ -23,8 +23,15 @@ from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
-    AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectSameUntilThresholdRound, DegenerateRound, EventToTimeout, get_name)
+    AbciApp,
+    AbciAppTransitionFunction,
+    AppState,
+    BaseSynchronizedData,
+    CollectSameUntilThresholdRound,
+    DegenerateRound,
+    EventToTimeout,
+    get_name,
+)
 from packages.valory.skills.multiplexer_abci.payloads import MultiplexerPayload
 
 
@@ -103,7 +110,27 @@ class FinishedMultiplexerExecuteRound(DegenerateRound):
 
 
 class MultiplexerAbciApp(AbciApp[Event]):
-    """MultiplexerAbciApp"""
+    """MultiplexerAbciApp
+
+    Initial round: MultiplexerRound
+
+    Initial states: {MultiplexerRound}
+
+    Transition states:
+        0. MultiplexerRound
+            - done post: 0.
+            - reset: 1.
+            - execute: 2.
+            - no majority: 0.
+            - round timeout: 0.
+        1. FinishedMultiplexerResetRound
+        2. FinishedMultiplexerExecuteRound
+
+    Final states: {FinishedMultiplexerExecuteRound, FinishedMultiplexerResetRound}
+
+    Timeouts:
+        round timeout: 30.0
+    """
 
     initial_round_cls: AppState = MultiplexerRound
     initial_states: Set[AppState] = {MultiplexerRound}

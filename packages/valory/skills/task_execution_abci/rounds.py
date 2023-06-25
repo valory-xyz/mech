@@ -18,16 +18,21 @@
 # ------------------------------------------------------------------------------
 
 """This package contains the rounds of TaskExecutionAbciApp."""
-
-import json
 from enum import Enum
 from typing import Dict, FrozenSet, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
-    AbciApp, AbciAppTransitionFunction, AppState, BaseSynchronizedData,
-    CollectDifferentUntilAllRound, DegenerateRound, EventToTimeout, get_name)
-from packages.valory.skills.task_execution_abci.payloads import \
-    TaskExecutionAbciPayload
+    AbciApp,
+    AbciAppTransitionFunction,
+    AppState,
+    BaseSynchronizedData,
+    BaseTxPayload,
+    CollectionRound,
+    DegenerateRound,
+    EventToTimeout,
+    get_name,
+)
+from packages.valory.skills.task_execution_abci.payloads import TaskExecutionAbciPayload
 
 
 class Event(Enum):
@@ -36,6 +41,7 @@ class Event(Enum):
     ROUND_TIMEOUT = "round_timeout"
     NO_MAJORITY = "no_majority"
     DONE = "done"
+    ERROR = "error"
 
 
 class SynchronizedData(BaseSynchronizedData):
@@ -46,44 +52,50 @@ class SynchronizedData(BaseSynchronizedData):
     """
 
     @property
-    def finished_task_data(self) -> int:
-        """Get the finished_task_data."""
-        return cast(int, self.db.get_strict("finished_task_data"))
+    def most_voted_tx_hash(self) -> str:
+        """Get the most_voted_tx_hash."""
+        return cast(str, self.db.get_strict("most_voted_tx_hash"))
 
 
-class TaskExecutionRound(CollectDifferentUntilAllRound):
+class TaskExecutionRound(CollectionRound):
     """TaskExecutionRound"""
 
     payload_class = TaskExecutionAbciPayload
     synchronized_data_class = SynchronizedData
 
+    move_forward_payload: Optional[TaskExecutionAbciPayload] = None
+
+    ERROR_PAYLOAD = "ERROR"
+
+    @property
+    def collection_threshold_reached(
+        self,
+    ) -> bool:
+        """Check that the collection threshold has been reached."""
+        return len(self.collection) >= self.synchronized_data.max_participants
+
+    def process_payload(self, payload: BaseTxPayload) -> None:
+        """Process payload."""
+        super().process_payload(payload)
+        if cast(TaskExecutionAbciPayload, payload).content != self.ERROR_PAYLOAD:
+            self.move_forward_payload = cast(TaskExecutionAbciPayload, payload)
+
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Event]]:
         """Process the end of the block."""
-        if self.collection_threshold_reached:
+        if self.collection_threshold_reached and self.move_forward_payload is None:
+            return self.synchronized_data, Event.ERROR
 
-            payloads_json = {
-                "request_id": json.loads(
-                    self.collection[list(self.collection.keys())[0]].content
-                )["request_id"],
-                "task_result": [
-                    json.loads(f.content)["task_result"]
-                    for f in self.collection.values()
-                ],
-            }
-
+        if self.move_forward_payload is not None:
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
-                    get_name(SynchronizedData.finished_task_data): payloads_json,
+                    get_name(
+                        SynchronizedData.most_voted_tx_hash
+                    ): self.move_forward_payload.content,
                 }
             )
-
             return synchronized_data, Event.DONE
 
-        if not self.is_majority_possible(
-            self.collection, self.synchronized_data.nb_participants
-        ):
-            return self.synchronized_data, Event.NO_MAJORITY
         return None
 
 
@@ -91,25 +103,54 @@ class FinishedTaskExecutionRound(DegenerateRound):
     """FinishedTaskExecutionRound"""
 
 
+class FinishedTaskExecutionWithErrorRound(DegenerateRound):
+    """FinishedTaskExecutionWithErrorRound"""
+
+
 class TaskExecutionAbciApp(AbciApp[Event]):
-    """TaskExecutionAbciApp"""
+    """TaskExecutionAbciApp
+
+    Initial round: TaskExecutionRound
+
+    Initial states: {TaskExecutionRound}
+
+    Transition states:
+        0. TaskExecutionRound
+            - done: 1.
+            - round timeout: 0.
+            - error: 2.
+        1. FinishedTaskExecutionRound
+        2. FinishedTaskExecutionWithErrorRound
+
+    Final states: {FinishedTaskExecutionRound, FinishedTaskExecutionWithErrorRound}
+
+    Timeouts:
+        round timeout: 30.0
+    """
 
     initial_round_cls: AppState = TaskExecutionRound
     initial_states: Set[AppState] = {TaskExecutionRound}
     transition_function: AbciAppTransitionFunction = {
         TaskExecutionRound: {
             Event.DONE: FinishedTaskExecutionRound,
-            Event.NO_MAJORITY: TaskExecutionRound,
             Event.ROUND_TIMEOUT: TaskExecutionRound,
+            Event.ERROR: FinishedTaskExecutionWithErrorRound,
         },
         FinishedTaskExecutionRound: {},
+        FinishedTaskExecutionWithErrorRound: {},
     }
-    final_states: Set[AppState] = {FinishedTaskExecutionRound}
-    event_to_timeout: EventToTimeout = {}
+    final_states: Set[AppState] = {
+        FinishedTaskExecutionRound,
+        FinishedTaskExecutionWithErrorRound,
+    }
+    event_to_timeout: EventToTimeout = {
+        Event.ROUND_TIMEOUT: 30.0,
+    }
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskExecutionRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
-        FinishedTaskExecutionRound: set(),
+        FinishedTaskExecutionRound: {"most_voted_tx_hash"},
+        FinishedTaskExecutionWithErrorRound: set(),
     }

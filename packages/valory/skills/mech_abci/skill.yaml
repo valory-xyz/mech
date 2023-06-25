@@ -6,13 +6,13 @@ description: The chained abci for the mech skill.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeia33nkx3vpttbjokbubh2ov7qa6fnjwbvyktwmwua4dxujaajnxze
-  behaviours.py: bafybeiencihxf3bqkn5f24rqfzyhrbfu5lo6i74fh7sl2hz4egjrb7t7mi
-  composition.py: bafybeifdqsb2xug7pcjvt6bwomvpzwjo67oujcgo2dgjkb6imfokrk6uba
-  dialogues.py: bafybeid6ntx5nmtkhuiml5pwt3drafvjejr7x4vu35gqekl4m6tgtxf6am
-  fsm_specification.yaml: bafybeihiynklron7mm3hsykwbhdbkosdtoimgkkxckuvvlwafevayjp7ia
-  handlers.py: bafybeihi6pbfapfmwxlom6bp7cclybswzejyrrv65gn3fpzwejekvjyxeu
-  models.py: bafybeifemtkfquz672h4c33nr7mn6dtqcauq75cawblcf5g4uf6va57jdi
+  __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
+  behaviours.py: bafybeihgtg4l7qcu33ptyfn6cnohm3tcxlpkdqijyc5zjxmci6lqzxmogy
+  composition.py: bafybeiektjao3czojlipbcj2oglrk4hsch76d7ft3zw3vpcerewvvi6idy
+  dialogues.py: bafybeidhmgdnhxcgv35vahz3ycoiduug23kfyqvttqnywjp3eiuqal4bzy
+  fsm_specification.yaml: bafybeieeqdr76xgxqjdqalip7agguutwsn23n5xgop4ziach7l4hiqxvqm
+  handlers.py: bafybeiffuduhg433qsu6lbet5jsaub63bzv2l4x756aj2fbnu5bnfu4ble
+  models.py: bafybeic3miniq5lacarxspyxuvmlnwervwf2wmpnvw2gxpgk77fzyzcpvq
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -72,11 +72,16 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
   params:
     args:
       agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
       api_keys_json:
       - - openai
+        - dummy_api_key
+      - - stabilityai
         - dummy_api_key
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
@@ -87,6 +92,11 @@ models:
           - openai-text-davinci-003
           - openai-gpt-3.5-turbo
           - openai-gpt-4
+      - - bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i
+        - - stabilityai-stable-diffusion-v1-5
+          - stabilityai-stable-diffusion-xl-beta-v2-2-2
+          - stabilityai-stable-diffusion-512-v2-1
+          - stabilityai-stable-diffusion-768-v2-1
       finalize_timeout: 60.0
       genesis_config:
         genesis_time: '2022-09-26T00:00:00.000000000Z'
@@ -122,6 +132,7 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
+      ipfs_fetch_timeout: 15.0
       service_id: mech
       service_registry_address: null
       setup:
@@ -166,5 +177,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: <2.0.0,>=1.27.0
+    version: ==1.34.0
 is_abstract: false

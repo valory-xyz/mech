@@ -27,7 +27,7 @@ from aea.skills.tasks import Task
 class AnyToolAsTask(Task):
     """AnyToolAsTask"""
 
-    def execute(self, *args: Any, **kwargs: Any):
+    def execute(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the task."""
         method = kwargs.pop("method")
         return method(*args, **kwargs)

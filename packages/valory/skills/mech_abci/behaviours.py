@@ -22,22 +22,28 @@
 from typing import Set, Type
 
 from packages.valory.skills.abstract_round_abci.behaviours import (
-    AbstractRoundBehaviour, BaseBehaviour)
+    AbstractRoundBehaviour,
+    BaseBehaviour,
+)
 from packages.valory.skills.mech_abci.composition import MechAbciApp
-from packages.valory.skills.multiplexer_abci.behaviours import \
-    MultiplexerRoundBehaviour
+from packages.valory.skills.multiplexer_abci.behaviours import MultiplexerRoundBehaviour
 from packages.valory.skills.registration_abci.behaviours import (
-    AgentRegistrationRoundBehaviour, RegistrationStartupBehaviour)
-from packages.valory.skills.reset_pause_abci.behaviours import \
-    ResetPauseABCIConsensusBehaviour
-from packages.valory.skills.task_execution_abci.behaviours import \
-    TaskExecutionRoundBehaviour
+    AgentRegistrationRoundBehaviour,
+    RegistrationStartupBehaviour,
+)
+from packages.valory.skills.reset_pause_abci.behaviours import (
+    ResetPauseABCIConsensusBehaviour,
+)
+from packages.valory.skills.task_execution_abci.behaviours import (
+    TaskExecutionRoundBehaviour,
+)
 from packages.valory.skills.termination_abci.behaviours import (
-    BackgroundBehaviour, TerminationAbciBehaviours)
-from packages.valory.skills.transaction_preparation_abci.behaviours import \
-    TransactionPreparationRoundBehaviour
-from packages.valory.skills.transaction_settlement_abci.behaviours import \
-    TransactionSettlementRoundBehaviour
+    BackgroundBehaviour,
+    TerminationAbciBehaviours,
+)
+from packages.valory.skills.transaction_settlement_abci.behaviours import (
+    TransactionSettlementRoundBehaviour,
+)
 
 
 class MechConsensusBehaviour(AbstractRoundBehaviour):
@@ -46,7 +52,6 @@ class MechConsensusBehaviour(AbstractRoundBehaviour):
     initial_behaviour_cls = RegistrationStartupBehaviour
     abci_app_cls = MechAbciApp
     behaviours: Set[Type[BaseBehaviour]] = {
-        *TransactionPreparationRoundBehaviour.behaviours,
         *MultiplexerRoundBehaviour.behaviours,
         *TaskExecutionRoundBehaviour.behaviours,
         *AgentRegistrationRoundBehaviour.behaviours,

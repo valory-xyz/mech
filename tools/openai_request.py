@@ -17,7 +17,11 @@
 #
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
+
+from typing import Any, Dict, Optional, Tuple
+
 import openai
+
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
@@ -26,32 +30,30 @@ DEFAULT_OPENAI_SETTINGS = {
 PREFIX = "openai-"
 ENGINES = {
     "chat": ["gpt-3.5-turbo", "gpt-4"],
-    "completion": ["text-davinci-002", "text-davinci-003"]
+    "completion": ["text-davinci-002", "text-davinci-003"],
 }
-ALLOWED_TOOLS = [PREFIX + value for value in values for values in ENGINES.values()]
+ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in values]
 
 
-def run(**kwargs) -> str:
+def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Run the task"""
-
     openai.api_key = kwargs["api_keys"]["openai"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-    temperature =  kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+    temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
     prompt = kwargs["prompt"]
     tool = kwargs["tool"]
     if tool not in ALLOWED_TOOLS:
-        raise ValueError(f"Tool {tool} is not supported.")
-    engine = tool.strip(PREFIX)
+        return f"Tool {tool} is not in the list of supported tools.", None
 
+    engine = tool.replace(PREFIX, "")
     moderation_result = openai.Moderation.create(prompt)
-
     if moderation_result["results"][0]["flagged"]:
         return "Moderation flagged the prompt as in violation of terms."
 
     if engine in ENGINES["chat"]:
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ]
         response = openai.ChatCompletion.create(
             model=engine,
@@ -59,9 +61,10 @@ def run(**kwargs) -> str:
             temperature=temperature,
             max_tokens=max_tokens,
             n=1,
+            timeout=120,
             stop=None,
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content, None
     response = openai.Completion.create(
         engine=engine,
         prompt=prompt,
@@ -69,6 +72,7 @@ def run(**kwargs) -> str:
         max_tokens=max_tokens,
         top_p=1,
         frequency_penalty=0,
+        timeout=120,
         presence_penalty=0,
     )
-    return response.choices[0].text
+    return response.choices[0].text, None
