@@ -1,14 +1,16 @@
 {
     "dev": {
-        "connection/valory/websocket_client/0.1.0": "bafybeibffszgha5w424ifiwovx5tsvccaylaj3vmfgpe44gettsqhlm6nu",
-        "skill/valory/contract_subscription/0.1.0": "bafybeihozkmtmfs3iqrreewvnixx6hod4rpcfdxqu4c6cfmubwwojc2dzu",
-        "agent/valory/mech/0.1.0": "bafybeibwfvwp2j57rrqq6ss27ybljdvejzlxcqt6cnzyf77dktn5m7uoh4",
-        "skill/valory/multiplexer_abci/0.1.0": "bafybeibgy5xojz6gbei2cob7jinceovndqzm7rbdmfxf4odmvqo5kjvmvu",
-        "skill/valory/task_execution_abci/0.1.0": "bafybeica2ga5n5dct6oac6ubuy7miipbodgifxyq5wfwp6j4tgc3uizhdq",
-        "skill/valory/mech_abci/0.1.0": "bafybeiatwlgn2xab4gcv65325r7tdkhwsb7osmhefuoq7hdcpgvirrvvb4",
-        "contract/valory/agent_mech/0.1.0": "bafybeib7v5fujyrio64trg5vmkuxpz42mc6fwjrmdyg3dr6ifudkn5rhle",
-        "service/valory/mech/0.1.0": "bafybeibhcanptuq6qf73w6tsrrdukblpjx2q4va6bkq3ztqym3w5dgxcou",
-        "protocol/valory/acn_data_share/0.1.0": "bafybeieyixetwvz767zekhvg7r6etumyanzys6xbalx2brrfswybinnlhi"
+        "protocol/valory/websocket_client/0.1.0": "bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4",
+        "connection/valory/websocket_client/0.1.0": "bafybeibgkxjivbw53qz5hnvnaf656pnubmsxr3v4yyye5xhryhn3hws6xe",
+        "skill/valory/contract_subscription/0.1.0": "bafybeick2yczww7gju4ca6hohdlntpinejdf2f66ququl2gzlwgon7z6ji",
+        "agent/valory/mech/0.1.0": "bafybeigqsud4c6qxq7v62pfjjch3z27tajxkobvv3uofvnsnifz5prcsle",
+        "skill/valory/multiplexer_abci/0.1.0": "bafybeifmct2xjtane2j423yy3yvelh7eprqbseii2v2v3l2gvluyqevikm",
+        "skill/valory/task_execution_abci/0.1.0": "bafybeicql4ntiwnpdu7hogj33gvmszf6q42fpx2y3nz4rr4pjhcwh3qpu4",
+        "skill/valory/mech_abci/0.1.0": "bafybeibmz6pr5rsm3cjomjhqqqfbqkcqenpaxqmxlklm3dty5ejhelktsm",
+        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeiazlqxkwcjr2nhpgbfav7nsmbgklmdpelqcnehqzs2qb4vfeyq24a",
+        "contract/valory/agent_mech/0.1.0": "bafybeicv54ejr2vie5vk65rzs3lxiwskjr3rhkyt47rqmiwrzfvhto6c4a",
+        "service/valory/mech/0.1.0": "bafybeihlvt4tfdbmhv6l7yartsbl42empkjvjt5bemgiynql6o4yy23nje",
+        "skill/valory/websocket_client/0.1.0": "bafybeidhpmutf6mjf4c3dwzpf4ymiyxasrcxggufgld7wn337omdvxujzi"
     },
     "third_party": {
         "protocol/fetchai/default/1.0.0": "bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4",

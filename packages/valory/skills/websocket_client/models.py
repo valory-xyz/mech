@@ -22,18 +22,18 @@ from typing import Any
 
 from aea.skills.base import Model
 
-from packages.valory.skills.websocket_client.models import Params as BaseParams
-
 DEFAULT_WEBSOCKET_PROVIDER = "ws://localhost:8001"
-DEFAULT_CONTRACT_ADDRESS = "0xFf82123dFB52ab75C417195c5fDB87630145ae81"
+DEFAULT_SUBSCRIPTION_ID = "websocket-subscription"
 
 
-class Params(BaseParams):
+class Params(Model):
     """A model to represent params for multiple abci apps."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
-        super().__init__(*args, **kwargs)
 
-        self.use_polling = kwargs.get("use_polling", False)
-        self.contract_address = kwargs.get("contract_address", DEFAULT_CONTRACT_ADDRESS)
+        self.websocket_provider = kwargs.get(
+            "websocket_provider", DEFAULT_WEBSOCKET_PROVIDER
+        )
+        self.subscription_id = kwargs.get("subscription_id", DEFAULT_SUBSCRIPTION_ID)
+        super().__init__(*args, **kwargs)
