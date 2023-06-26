@@ -3,7 +3,7 @@ author: valory
 version: 0.1.0
 license: Apache-2.0
 description: A mech agent
-aea_version: '>=1.34.0, <2.0.0'
+aea_version: '>=1.35.0, <2.0.0'
 fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
