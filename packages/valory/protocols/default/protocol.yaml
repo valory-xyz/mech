@@ -9,14 +9,14 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   README.md: bafybeignmf6cibowaii3h7vhdwctj67upzu3nhlsgc4zvqawf7zqyebt6m
   __init__.py: bafybeical6mif3pfnvpi2ifvec6qj622teodwyfwehjschvi7jyehnhm6u
-  custom_types.py: bafybeidtas5zzzb5ot2vumxtdcugttl6g7zigrxafdrvxbyyo2lhv4kv5u
+  custom_types.py: bafybeibrbholfmbipktfhl336v6xhaa3zypb4yoqlcfddjfka4qcodfwni
   default.proto: bafybeihjmlhvbffbh52o7ckt662bqwwyi2ztidrmnjp4zlihhfofyijxxa
-  default_pb2.py: bafybeibtjbioarf42hstkk4yqfslxnz3qnl2cbstugvemtppppb6h6rha4
+  default_pb2.py: bafybeif3sj3vsaeilesfw4bud3fymrwg6sh4kzkkxomraisqo5quwenih4
   dialogues.py: bafybeibpxuq6eqn53xwtbjnqjaeme5pbeuvteefpq54w7qbdhjvhick53q
   message.py: bafybeicmfdce6hlol6f6idxhjsfadmb6zg2i6vciaiehdz6fddsk2wmjxu
   serialization.py: bafybeiet2c74y2oyoprofvwxviersnc256aaxdskhtgfyqnpgtycb62iom
   tests/test_default_dialogues.py: bafybeib4u3jf724x3fozrinusj4oxwzhzzbqufsy2zwiiv2fjxzmjgq23q
-  tests/test_default_messages.py: bafybeieb6rn7xlgccrwwyr5qazbmqaay26k3ahgeldfz66jdy4kqmz3srq
+  tests/test_default_messages.py: bafybeif45s7gyfve4owf6de6n6j6fa7fdg6ysny3bjfgvyikcyedzucr4a
 fingerprint_ignore_patterns: []
 dependencies:
   protobuf: {}
