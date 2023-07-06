@@ -29,7 +29,7 @@ from aea.skills.base import Handler
 from web3 import Web3
 from web3.types import TxReceipt
 
-from packages.fetchai.protocols.default.message import DefaultMessage
+from packages.valory.protocols.default.message import DefaultMessage
 
 
 JOB_QUEUE = "pending_tasks"
