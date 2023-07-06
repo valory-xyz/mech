@@ -14,10 +14,10 @@ fingerprint:
   models.py: bafybeicxiv2m6whj37zffrqmb3zw6tzlouqvziocallca4gcghx3vigs6q
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeibslx5i6djop3zzr2s2f627zqexeeuuuaix7x7y4xbxahgrm4y724
+- valory/websocket_client:0.1.0:bafybeicz53kzs5uvyiod2azntl76zwgmpgr22ven4wl5fnwt2m546j3wsu
 contracts: []
 protocols:
-- valory/default:1.0.0:bafybeiczqi35fcqpk7pamy6dywp2eyt7lumirael6bosfco572jcjg7d7q
+- valory/default:1.0.0:bafybeiecmut3235aen7wxukllv424f3dysvvlgfmn562kzdunc5hdj3hxu
 skills: []
 behaviours:
   subscriptions:

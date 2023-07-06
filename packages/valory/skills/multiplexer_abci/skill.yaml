@@ -19,9 +19,9 @@ connections: []
 contracts:
 - valory/agent_mech:0.1.0:bafybeidrhnm7xfcbxaxyl26azjvd6ur7xkcr5pdvpbpk5tddpyma7c74xu
 protocols:
-- valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
+- valory/contract_api:1.0.0:bafybeihw4zobr2of2janct5psmrjg6hch5jbgvdfyp36y2du4z6deiky7q
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeiac62ennpw54gns2quk4g3yoaili2mb72nj6c52czobz5dcwj4mwi
+- valory/abstract_round_abci:0.1.0:bafybeie73gfrmtw3hzsr3ygnskydcyqnrbksli3dm5yzggrxj425zahyey
 behaviours:
   main:
     args: {}

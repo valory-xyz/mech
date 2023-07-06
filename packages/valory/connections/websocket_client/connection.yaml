@@ -13,7 +13,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 protocols:
-- valory/default:1.0.0:bafybeiczqi35fcqpk7pamy6dywp2eyt7lumirael6bosfco572jcjg7d7q
+- valory/default:1.0.0:bafybeiecmut3235aen7wxukllv424f3dysvvlgfmn562kzdunc5hdj3hxu
 class_name: WebSocketClient
 config:
   endpoint: null
