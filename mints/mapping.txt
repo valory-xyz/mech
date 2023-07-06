@@ -2,13 +2,10 @@ token_id-"component_id"
 X-"protocol/valory/default/1.0.0"
 X-"protocol/valory/acn_data_share/0.1.0"
 X-"connection/valory/websocket_client/0.1.0" -> "protocol/valory/default/1.0.0"
-WARNING: might we want to call the associated protocol websocket? For forward compatibility to when we change it
 X-"contract/valory/agent_mech/0.1.0"
 X-"skill/valory/contract_subscription/0.1.0" -> "protocol/valory/default/1.0.0", "connection/valory/websocket_client/0.1.0"
 X-"skill/valory/multiplexer_abci/0.1.0" -> 3, 14, "contract/valory/agent_mech/0.1.0"
 X-"skill/valory/task_execution_abci/0.1.0" -> 3, 11, 19, 20, "contract/valory/agent_mech/0.1.0", "protocol/valory/acn_data_share/0.1.0", 14, 22
-X-
-What happened to transaction preparation?
 X-"skill/valory/mech_abci/0.1.0" -> 14, "skill/valory/multiplexer_abci/0.1.0", 16, 17, 22, 33, "skill/valory/task_execution_abci/0.1.0"
 ---
 token_id-"agent_id"
