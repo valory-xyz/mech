@@ -2,7 +2,7 @@ name: mech_abci
 author: valory
 version: 0.1.0
 type: skill
-description: The chained abci for the mech skill.
+description: The chained abci skill for the mech.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
@@ -19,10 +19,10 @@ contracts: []
 protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiac62ennpw54gns2quk4g3yoaili2mb72nj6c52czobz5dcwj4mwi
-- valory/multiplexer_abci:0.1.0:bafybeihlrepwsajl5a6tajupznf7ereyxwtj4jd6kspnbujv7zh4xw4tie
+- valory/multiplexer_abci:0.1.0:bafybeiatryharf4xsxouas7dzofcjedxa3sx3ifm5wfzf5z5hgz3jps474
 - valory/registration_abci:0.1.0:bafybeib6fsfur5jnflcveidnaeylneybwazewufzwa5twnwovdqgwtwsxm
 - valory/reset_pause_abci:0.1.0:bafybeibqz7y3i4aepuprhijwdydkcsbqjtpeea6gdzpp5fgc6abrvjz25a
-- valory/task_execution_abci:0.1.0:bafybeieffogo4ibaeqms6gb4m3eyhktxrmwd2mzrn6t57yqmg3i35dldjq
+- valory/task_execution_abci:0.1.0:bafybeiagkhgyrm3lbdmiufbb6fe2iuad6yvuavk4ksiy2tiasocv445ala
 - valory/termination_abci:0.1.0:bafybeieb3gnvjxxsh73g67m7rivzknwb63xu4qeagpkv7f4mqz33ecikem
 - valory/transaction_settlement_abci:0.1.0:bafybeihdpac4ayfgop3ixflimlb3zzyeejlpqtljfptdak6tc7aq4u5fzi
 behaviours:

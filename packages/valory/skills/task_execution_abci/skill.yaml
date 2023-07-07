@@ -2,7 +2,8 @@ name: task_execution_abci
 author: valory
 version: 0.1.0
 type: skill
-description: The scaffold skill is a scaffold for your own skill implementation.
+description: An abci skill that implements task execution and transaction preparation
+  for the mech.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:

@@ -33,12 +33,12 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeiff2dqnkeorf343fmb3547fhiznvdw4ewbwl4rqluek2cv6ibl5hi
 - valory/abstract_round_abci:0.1.0:bafybeiac62ennpw54gns2quk4g3yoaili2mb72nj6c52czobz5dcwj4mwi
-- valory/contract_subscription:0.1.0:bafybeicdv7joccs7xjsuxcidt6o4c2sf6hw3x63kawajxnlk4wwzte7uqq
-- valory/mech_abci:0.1.0:bafybeiexcygyiu2tjmib5jqq3f6y3nmjmthepj2qqcq23fkwivvdmtt4ti
-- valory/multiplexer_abci:0.1.0:bafybeihlrepwsajl5a6tajupznf7ereyxwtj4jd6kspnbujv7zh4xw4tie
+- valory/contract_subscription:0.1.0:bafybeif3hkpgbzuoxsbqxnd752qkvk3onytltrufnyrphnqbi62si4mdhy
+- valory/mech_abci:0.1.0:bafybeifmlpw26kjfhpb36arpm242qtriuj63fd2pxvfpsrogytowxnarwa
+- valory/multiplexer_abci:0.1.0:bafybeiatryharf4xsxouas7dzofcjedxa3sx3ifm5wfzf5z5hgz3jps474
 - valory/registration_abci:0.1.0:bafybeib6fsfur5jnflcveidnaeylneybwazewufzwa5twnwovdqgwtwsxm
 - valory/reset_pause_abci:0.1.0:bafybeibqz7y3i4aepuprhijwdydkcsbqjtpeea6gdzpp5fgc6abrvjz25a
-- valory/task_execution_abci:0.1.0:bafybeieffogo4ibaeqms6gb4m3eyhktxrmwd2mzrn6t57yqmg3i35dldjq
+- valory/task_execution_abci:0.1.0:bafybeiagkhgyrm3lbdmiufbb6fe2iuad6yvuavk4ksiy2tiasocv445ala
 - valory/termination_abci:0.1.0:bafybeieb3gnvjxxsh73g67m7rivzknwb63xu4qeagpkv7f4mqz33ecikem
 - valory/transaction_settlement_abci:0.1.0:bafybeihdpac4ayfgop3ixflimlb3zzyeejlpqtljfptdak6tc7aq4u5fzi
 default_ledger: ethereum

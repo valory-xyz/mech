@@ -2,7 +2,7 @@ name: multiplexer_abci
 author: valory
 version: 0.1.0
 type: skill
-description: A skill that implements decision logic.
+description: An abci skill that implements decision logic for the mech.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
