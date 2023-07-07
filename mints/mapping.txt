@@ -10,3 +10,6 @@ X-"skill/valory/mech_abci/0.1.0" -> 14, "skill/valory/multiplexer_abci/0.1.0", 1
 ---
 token_id-"agent_id"
 X-"agent/valory/mech/0.1.0" -> 1-7, 39, "protocol/valory/default/1.0.0", "protocol/valory/acn_data_share/0.1.0", 8-11, 50, "connection/valory/websocket_client/0.1.0", 12, 18, 19, 20, "contract/valory/agent_mech/0.1.0", 13, 14, contract_subscription, multiplexer_abci, mech_abci, 16, 17, 22, 33, task_execution_abci
+---
+token_id-"service_id"
+X-"service/valory/mech/0.1.0" -> "agent/valory/mech/0.1.0"
