@@ -1,15 +1,15 @@
 token_id-"component_id"
-X-"protocol/valory/default/1.0.0"
-X-"protocol/valory/acn_data_share/0.1.0"
-X-"connection/valory/websocket_client/0.1.0" -> "protocol/valory/default/1.0.0"
-X-"contract/valory/agent_mech/0.1.0"
-X-"skill/valory/contract_subscription/0.1.0" -> "protocol/valory/default/1.0.0", "connection/valory/websocket_client/0.1.0"
-X-"skill/valory/multiplexer_abci/0.1.0" -> 3, 14, "contract/valory/agent_mech/0.1.0"
-X-"skill/valory/task_execution_abci/0.1.0" -> 3, 11, 19, 20, "contract/valory/agent_mech/0.1.0", "protocol/valory/acn_data_share/0.1.0", 14, 22
-X-"skill/valory/mech_abci/0.1.0" -> 14, "skill/valory/multiplexer_abci/0.1.0", 16, 17, 22, 33, "skill/valory/task_execution_abci/0.1.0"
+78-"protocol/valory/default/1.0.0"
+79-"protocol/valory/acn_data_share/0.1.0"
+80-"connection/valory/websocket_client/0.1.0"
+81-"contract/valory/agent_mech/0.1.0"
+82-"skill/valory/contract_subscription/0.1.0"
+83-"skill/valory/multiplexer_abci/0.1.0"
+84-"skill/valory/task_execution_abci/0.1.0"
+85-"skill/valory/mech_abci/0.1.0"
 ---
 token_id-"agent_id"
-X-"agent/valory/mech/0.1.0" -> 1-7, 39, "protocol/valory/default/1.0.0", "protocol/valory/acn_data_share/0.1.0", 8-11, 50, "connection/valory/websocket_client/0.1.0", 12, 18, 19, 20, "contract/valory/agent_mech/0.1.0", 13, 14, contract_subscription, multiplexer_abci, mech_abci, 16, 17, 22, 33, task_execution_abci
+9-"agent/valory/mech/0.1.0"
 ---
-token_id-"service_id"
-X-"service/valory/mech/0.1.0" -> "agent/valory/mech/0.1.0"
+token_id-"service_id" (Gnosis)
+1-3-"service/valory/mech/0.1.0"
