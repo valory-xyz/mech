@@ -164,7 +164,7 @@ def fetch_additional_information(
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
     moderation_result = openai.Moderation.create(url_query_prompt)
     if moderation_result["results"][0]["flagged"]:
-        return "Moderation flagged the prompt as in violation of terms.", None
+        return ""
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": url_query_prompt},
