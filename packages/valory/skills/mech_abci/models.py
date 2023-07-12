@@ -81,6 +81,10 @@ class SharedState(TaskExecSharedState):
         ] = self.context.params.round_timeout_seconds
 
         MechAbciApp.event_to_timeout[
+            TaskExecutionEvent.TASK_EXECUTION_ROUND_TIMEOUT
+        ] = self.context.params.round_timeout_seconds
+
+        MechAbciApp.event_to_timeout[
             ResetPauseEvent.ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
 
