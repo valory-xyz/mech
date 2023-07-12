@@ -235,7 +235,9 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         # Handle invalid requests
         if self._invalid_request:
             # respond with no_op and no multisend transactions
-            obj_hash = yield from self.write_response_to_ipfs(data="no_op")
+            obj_hash = yield from self.write_response_to_ipfs(
+                data={"requestId": self.request_id, "result": "invalid request"}
+            )
             self.send_data_via_acn(
                 sender_address=self.sender_address,
                 request_id=str(self.request_id),
