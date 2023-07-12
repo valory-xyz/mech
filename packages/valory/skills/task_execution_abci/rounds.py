@@ -38,6 +38,7 @@ from packages.valory.skills.task_execution_abci.payloads import TaskExecutionAbc
 class Event(Enum):
     """TaskExecutionAbciApp Events"""
 
+    TASK_EXECUTION_ROUND_TIMEOUT = "task_execution_round_timeout"
     ROUND_TIMEOUT = "round_timeout"
     NO_MAJORITY = "no_majority"
     DONE = "done"
@@ -117,7 +118,7 @@ class TaskExecutionAbciApp(AbciApp[Event]):
     Transition states:
         0. TaskExecutionRound
             - done: 1.
-            - round timeout: 0.
+            - task execution round timeout: 0.
             - error: 2.
         1. FinishedTaskExecutionRound
         2. FinishedTaskExecutionWithErrorRound
@@ -125,7 +126,7 @@ class TaskExecutionAbciApp(AbciApp[Event]):
     Final states: {FinishedTaskExecutionRound, FinishedTaskExecutionWithErrorRound}
 
     Timeouts:
-        round timeout: 30.0
+        task execution round timeout: 60.0
     """
 
     initial_round_cls: AppState = TaskExecutionRound
@@ -133,7 +134,7 @@ class TaskExecutionAbciApp(AbciApp[Event]):
     transition_function: AbciAppTransitionFunction = {
         TaskExecutionRound: {
             Event.DONE: FinishedTaskExecutionRound,
-            Event.ROUND_TIMEOUT: TaskExecutionRound,
+            Event.TASK_EXECUTION_ROUND_TIMEOUT: TaskExecutionRound,
             Event.ERROR: FinishedTaskExecutionWithErrorRound,
         },
         FinishedTaskExecutionRound: {},
@@ -144,7 +145,7 @@ class TaskExecutionAbciApp(AbciApp[Event]):
         FinishedTaskExecutionWithErrorRound,
     }
     event_to_timeout: EventToTimeout = {
-        Event.ROUND_TIMEOUT: 30.0,
+        Event.TASK_EXECUTION_ROUND_TIMEOUT: 60.0,
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset()
     db_pre_conditions: Dict[AppState, Set[str]] = {

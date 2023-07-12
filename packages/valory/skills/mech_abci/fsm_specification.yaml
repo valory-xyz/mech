@@ -16,6 +16,7 @@ alphabet_in:
 - RESET_AND_PAUSE_TIMEOUT
 - RESET_TIMEOUT
 - ROUND_TIMEOUT
+- TASK_EXECUTION_ROUND_TIMEOUT
 - SUSPICIOUS_ACTIVITY
 - VALIDATE_TIMEOUT
 - WAIT
@@ -101,7 +102,7 @@ transition_func:
     (SynchronizeLateMessagesRound, SUSPICIOUS_ACTIVITY): TaskExecutionRound
     (TaskExecutionRound, DONE): RandomnessTransactionSubmissionRound
     (TaskExecutionRound, ERROR): MultiplexerRound
-    (TaskExecutionRound, ROUND_TIMEOUT): TaskExecutionRound
+    (TaskExecutionRound, TASK_EXECUTION_ROUND_TIMEOUT): TaskExecutionRound
     (ValidateTransactionRound, DONE): MultiplexerRound
     (ValidateTransactionRound, NEGATIVE): CheckTransactionHistoryRound
     (ValidateTransactionRound, NONE): SelectKeeperTransactionSubmissionBRound
