@@ -47,7 +47,7 @@ typing_extensions = ">=3.10.0.2"
 websocket_client = "<1,>=0.32.0"
 toml = "^0.10.2"
 googlesearch-python = "^1.2.3"
-selenium = "^4.10.0"
+beautifulsoup4 = "4.12.2"
 
 [tool.poetry.group.dev.dependencies.tomte]
 version = "==0.2.12"

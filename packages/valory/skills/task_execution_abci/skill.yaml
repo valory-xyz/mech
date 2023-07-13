@@ -171,4 +171,8 @@ dependencies:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
+  googlesearch-python:
+    version: ==1.2.3
+  beautifulsoup4:
+    version: ==4.12.2
 is_abstract: true
