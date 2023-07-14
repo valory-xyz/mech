@@ -41,6 +41,9 @@ from packages.valory.skills.task_execution_abci.rounds import (
     Event as TaskExecutionEvent,
 )
 from packages.valory.skills.termination_abci.models import TerminationParams
+from packages.valory.skills.transaction_settlement_abci.rounds import (
+    Event as TransactionSettlementEvent,
+)
 
 
 MultiplexerParams = MultiplexerAbciParams
@@ -87,6 +90,18 @@ class SharedState(TaskExecSharedState):
         MechAbciApp.event_to_timeout[
             ResetPauseEvent.ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
+
+        MechAbciApp.event_to_timeout[
+            TransactionSettlementEvent.ROUND_TIMEOUT
+        ] = self.context.params.round_timeout_seconds
+
+        MechAbciApp.event_to_timeout[
+            TransactionSettlementEvent.VALIDATE_TIMEOUT
+        ] = self.context.params.validate_timeout_seconds
+
+        MechAbciApp.event_to_timeout[
+            TransactionSettlementEvent.FINALIZE_TIMEOUT
+        ] = self.context.params.finalize_timeout_seconds
 
         MechAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT] = (
             self.context.params.reset_pause_duration + MARGIN
