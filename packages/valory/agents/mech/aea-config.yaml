@@ -34,11 +34,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeiff2dqnkeorf343fmb3547fhiznvdw4ewbwl4rqluek2cv6ibl5hi
 - valory/abstract_round_abci:0.1.0:bafybeiac62ennpw54gns2quk4g3yoaili2mb72nj6c52czobz5dcwj4mwi
 - valory/contract_subscription:0.1.0:bafybeif3hkpgbzuoxsbqxnd752qkvk3onytltrufnyrphnqbi62si4mdhy
-- valory/mech_abci:0.1.0:bafybeic3pkb5khwfr7w6ua46rrkz7pgkzhxzdl4bvmlifxvev7yht2mfra
+- valory/mech_abci:0.1.0:bafybeict4gsvxy2qn25dvehoay2a5jpzegkci7326uob5wxjin56bu7hhi
 - valory/multiplexer_abci:0.1.0:bafybeiatryharf4xsxouas7dzofcjedxa3sx3ifm5wfzf5z5hgz3jps474
 - valory/registration_abci:0.1.0:bafybeib6fsfur5jnflcveidnaeylneybwazewufzwa5twnwovdqgwtwsxm
 - valory/reset_pause_abci:0.1.0:bafybeibqz7y3i4aepuprhijwdydkcsbqjtpeea6gdzpp5fgc6abrvjz25a
-- valory/task_execution_abci:0.1.0:bafybeib3azd7yn4de6q37zna4riuwd2eg5hmibrxblnkaetsjlptnxfwfa
+- valory/task_execution_abci:0.1.0:bafybeid4d6fokakcvdbtz7a2szkug7d3s5vko4nb3qes7imcxtcqvcjcra
 - valory/termination_abci:0.1.0:bafybeieb3gnvjxxsh73g67m7rivzknwb63xu4qeagpkv7f4mqz33ecikem
 - valory/transaction_settlement_abci:0.1.0:bafybeihdpac4ayfgop3ixflimlb3zzyeejlpqtljfptdak6tc7aq4u5fzi
 default_ledger: ethereum
@@ -72,6 +72,8 @@ logging_config:
       propagate: true
 dependencies:
   open-aea-ledger-ethereum: {}
+  googlesearch-python:
+    version: ==1.2.3
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
