@@ -10,9 +10,9 @@ fingerprint:
   behaviours.py: bafybeihgtg4l7qcu33ptyfn6cnohm3tcxlpkdqijyc5zjxmci6lqzxmogy
   composition.py: bafybeiektjao3czojlipbcj2oglrk4hsch76d7ft3zw3vpcerewvvi6idy
   dialogues.py: bafybeidhmgdnhxcgv35vahz3ycoiduug23kfyqvttqnywjp3eiuqal4bzy
-  fsm_specification.yaml: bafybeic4fbqrftemdseokvfiwwo7cyajloz2aapvzmqbubulc7r34wcpzm
+  fsm_specification.yaml: bafybeid6lveecd7oaudgasv36yta7pfajhgx6qsxl5cxmc7pcb23s5a4se
   handlers.py: bafybeiffuduhg433qsu6lbet5jsaub63bzv2l4x756aj2fbnu5bnfu4ble
-  models.py: bafybeic3miniq5lacarxspyxuvmlnwervwf2wmpnvw2gxpgk77fzyzcpvq
+  models.py: bafybeihdti6xgdtbd5usjwwgpl2mhop7mdsdsj3hm2325b2iscpka7jxlq
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
@@ -22,7 +22,7 @@ skills:
 - valory/multiplexer_abci:0.1.0:bafybeiatryharf4xsxouas7dzofcjedxa3sx3ifm5wfzf5z5hgz3jps474
 - valory/registration_abci:0.1.0:bafybeib6fsfur5jnflcveidnaeylneybwazewufzwa5twnwovdqgwtwsxm
 - valory/reset_pause_abci:0.1.0:bafybeibqz7y3i4aepuprhijwdydkcsbqjtpeea6gdzpp5fgc6abrvjz25a
-- valory/task_execution_abci:0.1.0:bafybeibzlwifrh5uya3bpoun6dfrz2kbikgqmxktvumqzqghnjamrm6mde
+- valory/task_execution_abci:0.1.0:bafybeib3azd7yn4de6q37zna4riuwd2eg5hmibrxblnkaetsjlptnxfwfa
 - valory/termination_abci:0.1.0:bafybeieb3gnvjxxsh73g67m7rivzknwb63xu4qeagpkv7f4mqz33ecikem
 - valory/transaction_settlement_abci:0.1.0:bafybeihdpac4ayfgop3ixflimlb3zzyeejlpqtljfptdak6tc7aq4u5fzi
 behaviours:
@@ -86,12 +86,12 @@ models:
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       file_hash_to_tools_json:
-      - - bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e
+      - - bafybeif3izkobmvaoen23ine6tiqx55eaf4g3r56hdalnig656xivzpf3m
         - - openai-text-davinci-002
           - openai-text-davinci-003
           - openai-gpt-3.5-turbo
           - openai-gpt-4
-      - - bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i
+      - - bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua
         - - stabilityai-stable-diffusion-v1-5
           - stabilityai-stable-diffusion-xl-beta-v2-2-2
           - stabilityai-stable-diffusion-512-v2-1

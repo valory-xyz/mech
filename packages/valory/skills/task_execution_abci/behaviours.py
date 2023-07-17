@@ -226,8 +226,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                 else:
                     self.context.logger.warning("Data is not valid.")
                     self._invalid_request = True
-            except Exception:  # pylint: disable=W0718
-                self.context.logger.warning("Exception when handling data.")
+            except Exception as e:  # pylint: disable=W0718
+                self.context.logger.warning(f"Exception when handling data:\n{e}")
                 self._invalid_request = True
 
         response_obj = None
