@@ -74,6 +74,8 @@ dependencies:
   open-aea-ledger-ethereum: {}
   googlesearch-python:
     version: ==1.2.3
+  beautifulsoup4:
+    version: ==4.12.2
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
