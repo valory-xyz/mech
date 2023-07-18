@@ -265,6 +265,11 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             # example response: ("task_result", {"to": "0x123", "value": 0, "data": "0x123"})
             task_result: Tuple[str, Dict[str, Any]] = self._async_result.get()
             if task_result is None:
+                self.context.logger.warning(
+                    "Task result is None. Something went wrong while processing the task. "
+                    "An error should have been raised before."
+                )
+                self._invalid_request = True
                 return None
             deliver_msg, transaction = task_result
             response_obj = {"requestId": self.request_id, "result": deliver_msg}
