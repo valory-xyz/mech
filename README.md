@@ -56,8 +56,10 @@ Follow these instructions to have your local environment prepared to run the dem
 1. Create a Poetry virtual environment and install the dependencies:
 
     ```bash
-    poetry shell
-    poetry install
+    poetry run pip install "cython<3"
+    poetry run pip install wheel==0.40.0
+    poetry run pip install --no-build-isolation pyyaml==5.4.1
+    poetry install && poetry shell
     ```
 
 2. Fetch the software packages using the [Open Autonomy](https://docs.autonolas.network/open-autonomy/) CLI 
