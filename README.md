@@ -212,3 +212,11 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 - **Prediction request** (`prediction_request.py`): Outputs the estimated probability of occurrence (`p_yes`) or no occurrence (`p_no`) of a certain event specified as the input prompt in natural language.
   - `prediction-offline`: Uses only training data of the model to make the prediction.
   - `prediction-online`: In addition to training data, it also uses online information to improve the prediction.
+
+## How key files look
+A keyfile is just a file with your ethereum private key as a hex-string, example:
+```
+0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd
+```
+
+Make sure you don't have any extra characters in the file, like newlines or spaces.
