@@ -2,6 +2,7 @@
 
 This is the official list of authors for copyright purposes.
 
+* 8baller <8ball030@gmail.com> [8ball030](https://github.com/8ball030)
 * David Vilela <dvilelaf@gmail.com> [dvilelaf](https://github.com/dvilelaf)
 * David Minarsch <david.minarsch@googlemail.com> [DavidMinarsch](https://github.com/DavidMinarsch)
 * Justice Mace <justice.mace@valory.xyz> [N0xMare](https://github.com/N0xMare)
