@@ -20,13 +20,13 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
-import requests
 from concurrent.futures import ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple, Generator
+from typing import Any, Dict, Generator, List, Optional, Tuple
 
-import googlesearch
 import openai
+import requests
 from bs4 import BeautifulSoup
+from googleapiclient.discovery import build
 
 
 NUM_URLS_EXTRACT = 5
@@ -112,11 +112,30 @@ OUTPUT_FORMAT
 """
 
 
-def get_urls_from_queries(queries: List[str]) -> List[str]:
+def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
+    service = build("customsearch", "v1", developerKey=api_key)
+    search = (
+        service.cse()
+        .list(
+            q=query,
+            cx=engine,
+            num=num,
+        )
+        .execute()
+    )
+    return [result["link"] for result in search["items"]]
+
+
+def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List[str]:
     """Get URLs from search engine queries"""
     results = []
     for query in queries:
-        for url in googlesearch.search(query, num_results=3):
+        for url in search_google(
+            query=query,
+            api_key=api_key,
+            engine=engine,
+            num=3, # Number of returned results
+        ):
             results.append(url)
     unique_results = list(set(results))
     return unique_results
@@ -168,6 +187,8 @@ def fetch_additional_information(
     engine: str,
     temperature: float,
     max_tokens: int,
+    google_api_key: str,
+    google_engine: str,
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
@@ -188,7 +209,11 @@ def fetch_additional_information(
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
-    urls = get_urls_from_queries(json_data["queries"])
+    urls = get_urls_from_queries(
+        json_data["queries"],
+        api_key=google_api_key,
+        engine=google_engine,
+    )
     texts = extract_texts(urls)
     return "\n".join(["- " + text for text in texts])
 
@@ -207,7 +232,12 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     engine = TOOL_TO_ENGINE[tool]
     additional_information = (
         fetch_additional_information(
-            prompt=prompt, engine=engine, temperature=temperature, max_tokens=max_tokens
+            prompt=prompt,
+            engine=engine,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            google_api_key=kwargs["api_keys"]["google_api_key"],
+            google_engine=kwargs["api_keys"]["google_engine_id"],
         )
         if tool == "prediction-online"
         else ""

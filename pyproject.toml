@@ -48,6 +48,7 @@ websocket_client = "<1,>=0.32.0"
 toml = "^0.10.2"
 googlesearch-python = "==1.2.3"
 beautifulsoup4 = "==4.12.2"
+google-api-python-client = "==2.95.0"
 
 [tool.poetry.group.dev.dependencies.tomte]
 version = "==0.2.12"
