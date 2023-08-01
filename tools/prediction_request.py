@@ -134,7 +134,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
             query=query,
             api_key=api_key,
             engine=engine,
-            num=3,
+            num=3, # Number of returned results
         ):
             results.append(url)
     unique_results = list(set(results))
