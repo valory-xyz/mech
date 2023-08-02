@@ -205,7 +205,7 @@ def fetch_additional_information(
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
-        timeout=30,
+        timeout=90,
         request_timeout=90,
         stop=None,
     )
@@ -259,7 +259,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
-        timeout=30,
+        timeout=150,
         request_timeout=150,
         stop=None,
     )
