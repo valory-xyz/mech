@@ -134,7 +134,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
             query=query,
             api_key=api_key,
             engine=engine,
-            num=3, # Number of returned results
+            num=3,  # Number of returned results
         ):
             results.append(url)
     unique_results = list(set(results))
@@ -205,7 +205,8 @@ def fetch_additional_information(
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
-        timeout=120,
+        timeout=90,
+        request_timeout=90,
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
@@ -258,7 +259,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
-        timeout=120,
+        timeout=150,
+        request_timeout=150,
         stop=None,
     )
     return response.choices[0].message.content, None
