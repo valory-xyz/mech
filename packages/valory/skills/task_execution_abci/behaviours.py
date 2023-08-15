@@ -19,6 +19,7 @@
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
 import os
+import time
 from abc import ABC
 from multiprocessing.pool import AsyncResult
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
@@ -97,6 +98,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self.request_id = None
         self._is_task_prepared = False
         self._invalid_request = False
+        self._task_deadline: Optional[float] = None
+        self._processing_task: Optional[Dict[str, Any]] = None
 
     def _AsyncBehaviour__handle_waiting_for_message(self) -> None:
         """Handle an 'act' tick, when waiting for a message."""
@@ -134,9 +137,14 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             self.context.params.__dict__["_frozen"] = True
 
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            task_result = yield from self.get_task_result()
-            if task_result is None:
-                # the task is not ready yet, check in the next iteration
+            try:
+                task_result = yield from self.get_task_result()
+                if task_result is None:
+                    # the task is not ready yet, check in the next iteration
+                    return
+            except TimeoutError:
+                # the task was not ready in time
+                self._handle_timeout()
                 return
             payload_content = yield from self.get_payload_content(task_result)
             sender = self.context.agent_address
@@ -193,6 +201,12 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             self.context.logger.info(f"Preparing task with data: {task_data}")
             self.request_id = task_data["requestId"]
             self.sender_address = task_data["sender"]
+            # store the task data so that we can
+            # add it to the end of the queue if needed
+            self._processing_task = task_data
+            # Set the deadline for the task
+            # it's okay to use time.time() here
+            self._task_deadline = time.time() + self.params.task_deadline
             task_data_ = task_data["data"]
 
             # Verify the data hash and handle encoding
@@ -252,6 +266,8 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         # Handle unfinished task
         if not self._invalid_request and not self._async_result.ready():
             self.context.logger.debug("The task is not finished yet.")
+            if time.time() > self._task_deadline:
+                raise TimeoutError("The task is not finished in the deadline.")
             yield from self.sleep(self.params.sleep_time)
             return None
 
@@ -462,6 +478,24 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             "value": ZERO_ETHER_VALUE,
             "data": data,
         }
+
+    def _handle_timeout(self) -> None:
+        """Handle a timeout."""
+        # append to the end of the queue
+        self.context.shared_state.get("pending_tasks").append(self._processing_task)
+        # reset the state
+        self._async_result: Optional[AsyncResult] = None
+        self.request_id = None
+        self._is_task_prepared = False
+        self._invalid_request = False
+        self._task_deadline: Optional[float] = None
+        self._processing_task: Optional[Dict[str, Any]] = None
+        self._task_deadline: Optional[float] = None
+        self._processing_task: Optional[Dict[str, Any]] = None
+        # wait for the round timeout s.t. the next task
+        # has a full round to be executed
+        yield from self.wait_until_round_end()
+        self.set_done()
 
 
 class TaskExecutionRoundBehaviour(AbstractRoundBehaviour):

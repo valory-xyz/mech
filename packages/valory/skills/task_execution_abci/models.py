@@ -75,6 +75,7 @@ class Params(BaseParams):
         self.ipfs_fetch_timeout = self._ensure(
             "ipfs_fetch_timeout", kwargs=kwargs, type_=float
         )
+        self.task_deadline = self._ensure("task_deadline", kwargs=kwargs, type_=float)
         super().__init__(*args, **kwargs)
 
     def _nested_list_todict_workaround(
