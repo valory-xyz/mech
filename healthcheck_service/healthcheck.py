@@ -78,8 +78,9 @@ class MechContract:
             if earliest_request is None or request["blockNumber"] < earliest_request["blockNumber"]:
                 earliest_request = request
         if earliest_request is not None:
-            earliest_request["timestamp"] = self.get_block_timestamp(earliest_request["blockNumber"])
-        return earliest_request
+            timestamp = self.get_block_timestamp(earliest_request["blockNumber"])
+            return timestamp
+        return None
 
 
 class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
