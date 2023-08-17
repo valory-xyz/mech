@@ -41,6 +41,21 @@ from packages.valory.skills.multiplexer_abci.rounds import (
 class MultiplexerBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the multiplexer_abci skill."""
 
+    def _AsyncBehaviour__handle_waiting_for_message(self) -> None:
+        """Handle an 'act' tick, when waiting for a message."""
+        # if there is no message coming, skip.
+        if self._AsyncBehaviour__notified:  # type: ignore
+            try:
+                self._AsyncBehaviour__get_generator_act().send(
+                    self._AsyncBehaviour__message  # type: ignore
+                )
+            except StopIteration:
+                self._AsyncBehaviour__handle_stop_iteration()
+            finally:
+                # wait for the next message
+                self._AsyncBehaviour__notified = False
+                self._AsyncBehaviour__message = None
+
     @property
     def synchronized_data(self) -> SynchronizedData:
         """Return the synchronized data."""

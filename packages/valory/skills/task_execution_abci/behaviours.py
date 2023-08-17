@@ -75,6 +75,21 @@ SAFE_GAS = 0
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the task_execution_abci skill."""
 
+    def _AsyncBehaviour__handle_waiting_for_message(self) -> None:
+        """Handle an 'act' tick, when waiting for a message."""
+        # if there is no message coming, skip.
+        if self._AsyncBehaviour__notified:  # type: ignore
+            try:
+                self._AsyncBehaviour__get_generator_act().send(
+                    self._AsyncBehaviour__message  # type: ignore
+                )
+            except StopIteration:
+                self._AsyncBehaviour__handle_stop_iteration()
+            finally:
+                # wait for the next message
+                self._AsyncBehaviour__notified = False
+                self._AsyncBehaviour__message = None
+
     @property
     def synchronized_data(self) -> SynchronizedData:
         """Return the synchronized data."""
@@ -100,23 +115,6 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         self._invalid_request = False
         self._task_deadline: Optional[float] = None
         self._processing_task: Optional[Dict[str, Any]] = None
-
-    def _AsyncBehaviour__handle_waiting_for_message(self) -> None:
-        """Handle an 'act' tick, when waiting for a message."""
-        # if there is no message coming, skip.
-        if self._AsyncBehaviour__notified:  # type: ignore
-            try:
-                self._AsyncBehaviour__get_generator_act().send(
-                    self._AsyncBehaviour__message  # type: ignore
-                )
-            except StopIteration:
-                self._AsyncBehaviour__handle_stop_iteration()
-            finally:
-                # wait for the next message
-                self._AsyncBehaviour__notified = False
-                self._AsyncBehaviour__message = None
-        else:
-            self._AsyncBehaviour__get_generator_act().send(None)
 
     def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
@@ -144,7 +142,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
                     return
             except TimeoutError:
                 # the task was not ready in time
-                self._handle_timeout()
+                yield from self._handle_timeout()
                 return
             payload_content = yield from self.get_payload_content(task_result)
             sender = self.context.agent_address
@@ -265,8 +263,11 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
 
         # Handle unfinished task
         if not self._invalid_request and not self._async_result.ready():
-            self.context.logger.debug("The task is not finished yet.")
-            if time.time() > self._task_deadline:
+            time_to_timeout = cast(float, self._task_deadline) - time.time()
+            self.context.logger.info(
+                f"Waiting for the task to finish. " f"Timeout in: {time_to_timeout}s."
+            )
+            if time_to_timeout <= 0:
                 raise TimeoutError("The task is not finished in the deadline.")
             yield from self.sleep(self.params.sleep_time)
             return None
@@ -479,19 +480,20 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
             "data": data,
         }
 
-    def _handle_timeout(self) -> None:
+    def _handle_timeout(self) -> Generator[None, None, None]:
         """Handle a timeout."""
         # append to the end of the queue
+        self.context.logger.info("Task timed out. Re-adding to the queue.")
         self.context.shared_state.get("pending_tasks").append(self._processing_task)
         # reset the state
-        self._async_result: Optional[AsyncResult] = None
-        self.request_id = None
-        self._is_task_prepared = False
-        self._invalid_request = False
-        self._task_deadline: Optional[float] = None
-        self._processing_task: Optional[Dict[str, Any]] = None
-        self._task_deadline: Optional[float] = None
-        self._processing_task: Optional[Dict[str, Any]] = None
+        self._async_result: Optional[AsyncResult] = None  # type: ignore
+        self.request_id = None  # type: ignore
+        self._is_task_prepared = False  # type: ignore
+        self._invalid_request = False  # type: ignore
+        self._task_deadline: Optional[float] = None  # type: ignore
+        self._processing_task: Optional[Dict[str, Any]] = None  # type: ignore
+        self._task_deadline: Optional[float] = None  # type: ignore
+        self._processing_task: Optional[Dict[str, Any]] = None  # type: ignore
         # wait for the round timeout s.t. the next task
         # has a full round to be executed
         yield from self.wait_until_round_end()

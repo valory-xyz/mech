@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeidqhanaygnuv437dvo27xnsx46seqmwbcnsvbnbhdcvrcyxghxdiu
+agent: valory/mech:0.1.0:bafybeihfvjudvxtexjiesqr7qji5jpnsj3yidmj4xnu2qyz3ckcmomtgvq
 number_of_agents: 4
 deployment:
   agent:
@@ -87,7 +87,7 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        task_deadline: ${TASK_DEADLINE:int:240.0}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
         file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
         api_keys_json: ${API_KEYS:list:[]}
 1:
@@ -125,7 +125,7 @@ type: skill
         polling_interval: ${POLLING_INTERVAL:int:25}
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
         tendermint_max_retries: 5
-        task_deadline: ${TASK_DEADLINE:int:240.0}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
         tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
         tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_1:str:node0:26656}
         termination_sleep: ${TERMINATION_SLEEP:int:900}
@@ -159,7 +159,7 @@ type: skill
         retry_timeout: 3
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         request_retry_delay: 1.0
-        task_deadline: ${TASK_DEADLINE:int:240.0}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
         request_timeout: 10.0
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         service_id: mech
@@ -197,7 +197,7 @@ type: skill
         keeper_allowed_retries: 3
         keeper_timeout: 30.0
         max_attempts: 10
-        task_deadline: ${TASK_DEADLINE:int:240.0}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
         max_healthcheck: 120
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
