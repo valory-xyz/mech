@@ -133,7 +133,7 @@ class MultiplexerBaseBehaviour(BaseBehaviour, ABC):
             ]:
                 # store each requests in the pending_tasks list, make sure each req is stored once
                 pending_tasks.append(request)
-        pending_tasks.sort(key=lambda x: x["block_number"])
+        pending_tasks.sort(key=lambda x: x["block_number"], reverse=True)
         return pending_tasks
 
 

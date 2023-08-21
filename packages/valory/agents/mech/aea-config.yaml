@@ -34,8 +34,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeih3bwx5apteinnoxts7sqmjlskntdbo7vvnmdbs5noo2pv76by7fu
 - valory/abstract_round_abci:0.1.0:bafybeibqpzbklnljvtc67yon4ciijxj75d7vazm7rurcvbbfnk6jtudukm
 - valory/contract_subscription:0.1.0:bafybeif3hkpgbzuoxsbqxnd752qkvk3onytltrufnyrphnqbi62si4mdhy
-- valory/mech_abci:0.1.0:bafybeieycyiex6nnef3cd4g7kvaadbu3iduu5djqoydmsdiaovtrngmw7i
-- valory/multiplexer_abci:0.1.0:bafybeieyjeaej6isimm2mh4bmn3q3hjnwpcksus7dhxxif73de5ltspxmi
+- valory/mech_abci:0.1.0:bafybeic5rgwnmeq34x3kqvxe7tdof3pq3tqg2lzodarcnoinbghsj3nzj4
+- valory/multiplexer_abci:0.1.0:bafybeidbvy33qcgrnyyfj323lgzpzx3uvowwaxcynt333hf2viebmcu2fe
 - valory/registration_abci:0.1.0:bafybeia25gpusnkakb2dp4heqkwtuftbc2apppq3i4bds6sphltsovgzvi
 - valory/reset_pause_abci:0.1.0:bafybeigzvwbzktclahjbsyiwqnj6poree4iveon5pric6s5ixb6wrhkdhq
 - valory/task_execution_abci:0.1.0:bafybeicgkksijhoffbsot5wbvyskzr3djqocvaewkpqqvch6tgsfhn2b74
