@@ -1025,14 +1025,14 @@ files = [
 
 [[package]]
 name = "eth-abi"
-version = "4.1.0"
+version = "4.0.0"
 description = "eth_abi: Python utilities for working with Ethereum ABI definitions, especially encoding and decoding"
 category = "main"
 optional = false
-python-versions = ">=3.7.2, <4"
+python-versions = ">=3.7, <4"
 files = [
-    {file = "eth_abi-4.1.0-py3-none-any.whl", hash = "sha256:15f9870ca054c09a8e474d2d7e81aff0c32421aebdac896193183fc143e31b50"},
-    {file = "eth_abi-4.1.0.tar.gz", hash = "sha256:fe738cdb24983adfe89abf727c723c288f8d0029e97fb08160b20bb5290ab475"},
+    {file = "eth_abi-4.0.0-py3-none-any.whl", hash = "sha256:79d258669f3505319e53638d644a75e1c816db552a1ab1927c3063763cc41031"},
+    {file = "eth_abi-4.0.0.tar.gz", hash = "sha256:6949baba61a2c453f0719309ca145e8876a1cbae7ba377c991e67240c13ec7fc"},
 ]
 
 [package.dependencies]
@@ -1041,10 +1041,10 @@ eth-utils = ">=2.0.0"
 parsimonious = ">=0.9.0,<0.10.0"
 
 [package.extras]
-dev = ["black (>=23)", "build (>=0.9.0)", "bumpversion (>=0.5.3)", "eth-hash[pycryptodome]", "flake8 (==6.0.0)", "flake8-bugbear (==23.3.23)", "hypothesis (>=4.18.2,<5.0.0)", "ipython", "isort (>=5.10.1)", "mypy (==0.971)", "pydocstyle (>=6.0.0)", "pytest (>=7.0.0)", "pytest-pythonpath (>=0.7.1)", "pytest-watch (>=4.1.0)", "pytest-xdist (>=2.4.0)", "sphinx (>=5.0.0)", "sphinx-rtd-theme (>=1.0.0)", "towncrier (>=21,<22)", "tox (>=4.0.0)", "twine", "wheel"]
-doc = ["sphinx (>=5.0.0)", "sphinx-rtd-theme (>=1.0.0)", "towncrier (>=21,<22)"]
-lint = ["black (>=23)", "flake8 (==6.0.0)", "flake8-bugbear (==23.3.23)", "isort (>=5.10.1)", "mypy (==0.971)", "pydocstyle (>=6.0.0)"]
-test = ["eth-hash[pycryptodome]", "hypothesis (>=4.18.2,<5.0.0)", "pytest (>=7.0.0)", "pytest-pythonpath (>=0.7.1)", "pytest-xdist (>=2.4.0)"]
+dev = ["black", "bumpversion (>=0.5.3,<1)", "eth-hash[pycryptodome]", "flake8", "hypothesis (>=4.18.2,<5.0.0)", "ipython", "isort (>=4.2.15,<5)", "jinja2 (>=3.0.0,<3.1.0)", "mypy (==0.910)", "pydocstyle (>=6.0.0,<7)", "pytest (>=6.2.5,<7)", "pytest-pythonpath (>=0.7.1)", "pytest-watch (>=4.1.0,<5)", "pytest-xdist (>=2.5.0,<3)", "sphinx (>=4.5.0,<5)", "sphinx-rtd-theme (>=1.0.0)", "towncrier (==18.5.0)", "tox (>=2.9.1,<3)", "twine", "wheel"]
+doc = ["jinja2 (>=3.0.0,<3.1.0)", "sphinx (>=4.5.0,<5)", "sphinx-rtd-theme (>=1.0.0)", "towncrier (==18.5.0)"]
+lint = ["black", "flake8", "isort (>=4.2.15,<5)", "mypy (==0.910)", "pydocstyle (>=6.0.0,<7)"]
+test = ["eth-hash[pycryptodome]", "hypothesis (>=4.18.2,<5.0.0)", "pytest (>=6.2.5,<7)", "pytest-pythonpath (>=0.7.1)", "pytest-xdist (>=2.5.0,<3)", "tox (>=2.9.1,<3)"]
 tools = ["hypothesis (>=4.18.2,<5.0.0)"]
 
 [[package]]
@@ -2140,14 +2140,14 @@ open-aea-web3 = "6.0.1"
 
 [[package]]
 name = "open-aea-test-autonomy"
-version = "0.11.0"
+version = "0.11.1"
 description = "Plugin containing test tools for open-autonomy packages."
 category = "main"
 optional = false
 python-versions = "*"
 files = [
-    {file = "open-aea-test-autonomy-0.11.0.tar.gz", hash = "sha256:5364997ff7564cfe661b452bc3617e40fa4e700d481a05fd68f01028ca35788b"},
-    {file = "open_aea_test_autonomy-0.11.0-py3-none-any.whl", hash = "sha256:6ff5174b950e25b3e8f4b063c934541a02d037ae39fcf611464eb9a659bbe1b0"},
+    {file = "open-aea-test-autonomy-0.11.1.tar.gz", hash = "sha256:316f5236e4057364493cd5b24e626f90ea4cb1c97eb0384b8f4060067f1b47d6"},
+    {file = "open_aea_test_autonomy-0.11.1-py3-none-any.whl", hash = "sha256:5b44e1e2d965b28fd2f8977023dc59efa2f2112adeaa91ca9a57fdc21d586aee"},
 ]
 
 [package.dependencies]
@@ -2193,14 +2193,14 @@ tester = ["eth-tester[py-evm] (==v0.8.0-b.3)", "py-geth (>=3.11.0)"]
 
 [[package]]
 name = "open-autonomy"
-version = "0.11.0"
+version = "0.11.1"
 description = "A framework for the creation of autonomous agent services."
 category = "main"
 optional = false
 python-versions = ">=3.8"
 files = [
-    {file = "open-autonomy-0.11.0.tar.gz", hash = "sha256:2be6e76d79226054e3c4ce9c0ad0270afafe61b80e566edf5ace91209ca639f1"},
-    {file = "open_autonomy-0.11.0-py3-none-any.whl", hash = "sha256:6be4cad69169ab632ee23129c4a359f01b9f0a93013a11c21715d10b5314c881"},
+    {file = "open-autonomy-0.11.1.tar.gz", hash = "sha256:fc54483dc13c0343cf84cb1be388edbec7ebd2565a33a264178ec0d192ab83c8"},
+    {file = "open_autonomy-0.11.1-py3-none-any.whl", hash = "sha256:b360df6aeb41a13520f2a451b63d882f63ab414fad0c5d70701728be24fe11c7"},
 ]
 
 [package.dependencies]
@@ -2460,24 +2460,6 @@ mypy-extensions = ">=0.4.1"
 dev = ["bumpversion (>=0.5.3,<1)", "flake8 (==3.5.0)", "mypy (==0.641)", "mypy-extensions (>=0.4.1)", "pytest (==6.2.5)", "pytest-xdist (==1.26.0)", "twine"]
 lint = ["flake8 (==3.5.0)", "mypy (==0.641)", "mypy-extensions (>=0.4.1)"]
 test = ["pytest (==6.2.5)", "pytest-xdist (==1.26.0)"]
-
-[[package]]
-name = "py-eth-sig-utils"
-version = "0.4.0"
-description = "Python Ethereum Signing Utils"
-category = "main"
-optional = false
-python-versions = "*"
-files = [
-    {file = "py_eth_sig_utils-0.4.0-py3-none-any.whl", hash = "sha256:8f2fe9b8d3c475bfca3b3bb901f6ef79e42b7b4abcd00ad5de5d483fff8359e9"},
-    {file = "py_eth_sig_utils-0.4.0.tar.gz", hash = "sha256:bdf76b06677a43eba42e29ddebe6832bfbdda4c09a6b171d0de318e5a06992ad"},
-]
-
-[package.dependencies]
-eth-abi = ">=1.1.1"
-py-ecc = ">=1.7.1"
-pycryptodome = ">=3.4.7"
-rlp = ">=1.1.0"
 
 [[package]]
 name = "py-multibase"
@@ -3776,4 +3758,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "9ea9fc7c35975a7affbdb15cb1a9bda29fc97ac08d250c08754641cebe107a2f"
+content-hash = "4da57c89b4cf0bba70998a9d19ce0e5f9daa4854f7141a5ebba42f21ed73fef9"
