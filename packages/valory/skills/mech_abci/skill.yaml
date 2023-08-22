@@ -19,10 +19,10 @@ contracts: []
 protocols: []
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeibqpzbklnljvtc67yon4ciijxj75d7vazm7rurcvbbfnk6jtudukm
-- valory/multiplexer_abci:0.1.0:bafybeidbvy33qcgrnyyfj323lgzpzx3uvowwaxcynt333hf2viebmcu2fe
+- valory/multiplexer_abci:0.1.0:bafybeiagcipcsnjtbxl4hfs6ulydrtxsa4nm4iarek3i5l6x55o6vcsiue
 - valory/registration_abci:0.1.0:bafybeia25gpusnkakb2dp4heqkwtuftbc2apppq3i4bds6sphltsovgzvi
 - valory/reset_pause_abci:0.1.0:bafybeigzvwbzktclahjbsyiwqnj6poree4iveon5pric6s5ixb6wrhkdhq
-- valory/task_execution_abci:0.1.0:bafybeicgkksijhoffbsot5wbvyskzr3djqocvaewkpqqvch6tgsfhn2b74
+- valory/task_execution_abci:0.1.0:bafybeihs7dkagcqzudpjz65wt3bonrisutttteozknhalyyopxop6uegsu
 - valory/termination_abci:0.1.0:bafybeibcdgnarxyyqexncpfewcemraryywtwueuv7qthsjuean5l77lp2e
 - valory/transaction_settlement_abci:0.1.0:bafybeiepus7qsa47gt7dyk32gaqsoae6whjoxfnplttulxrvmcauyerrdm
 behaviours:

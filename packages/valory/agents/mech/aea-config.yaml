@@ -34,11 +34,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeih3bwx5apteinnoxts7sqmjlskntdbo7vvnmdbs5noo2pv76by7fu
 - valory/abstract_round_abci:0.1.0:bafybeibqpzbklnljvtc67yon4ciijxj75d7vazm7rurcvbbfnk6jtudukm
 - valory/contract_subscription:0.1.0:bafybeif3hkpgbzuoxsbqxnd752qkvk3onytltrufnyrphnqbi62si4mdhy
-- valory/mech_abci:0.1.0:bafybeic5rgwnmeq34x3kqvxe7tdof3pq3tqg2lzodarcnoinbghsj3nzj4
-- valory/multiplexer_abci:0.1.0:bafybeidbvy33qcgrnyyfj323lgzpzx3uvowwaxcynt333hf2viebmcu2fe
+- valory/mech_abci:0.1.0:bafybeiej45vz5xp5zl6pii3eg6xv46ddshirqkald62f6cmwwumutgcnpy
+- valory/multiplexer_abci:0.1.0:bafybeiagcipcsnjtbxl4hfs6ulydrtxsa4nm4iarek3i5l6x55o6vcsiue
 - valory/registration_abci:0.1.0:bafybeia25gpusnkakb2dp4heqkwtuftbc2apppq3i4bds6sphltsovgzvi
 - valory/reset_pause_abci:0.1.0:bafybeigzvwbzktclahjbsyiwqnj6poree4iveon5pric6s5ixb6wrhkdhq
-- valory/task_execution_abci:0.1.0:bafybeicgkksijhoffbsot5wbvyskzr3djqocvaewkpqqvch6tgsfhn2b74
+- valory/task_execution_abci:0.1.0:bafybeihs7dkagcqzudpjz65wt3bonrisutttteozknhalyyopxop6uegsu
 - valory/termination_abci:0.1.0:bafybeibcdgnarxyyqexncpfewcemraryywtwueuv7qthsjuean5l77lp2e
 - valory/transaction_settlement_abci:0.1.0:bafybeiepus7qsa47gt7dyk32gaqsoae6whjoxfnplttulxrvmcauyerrdm
 default_ledger: ethereum
@@ -85,6 +85,7 @@ type: connection
 config:
   endpoint: ${str:wss://rpc.gnosischain.com/wss}
   target_skill_id: valory/contract_subscription:0.1.0
+is_abstract: true
 ---
 public_id: valory/contract_subscription:0.1.0:bafybeiby5ajjc7a3m2uq73d2pprx6enqt4ghfcq2gkmrtsr75e4d4napi4
 type: skill
@@ -101,6 +102,7 @@ models:
   params:
     args:
       use_polling: ${bool:false}
+is_abstract: true
 ---
 public_id: valory/abci:0.1.0
 type: connection

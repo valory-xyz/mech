@@ -79,7 +79,6 @@ class MultiplexerRound(CollectSameUntilThresholdRound):
             event = Event.WAIT
 
             if self.most_voted_payload == self.RESET_PAYLOAD:
-                period_counter = -1
                 event = Event.RESET
 
             if self.most_voted_payload == self.EXECUTE_PAYLOAD:
@@ -152,7 +151,7 @@ class MultiplexerAbciApp(AbciApp[Event]):
     event_to_timeout: EventToTimeout = {
         Event.ROUND_TIMEOUT: 30.0,
     }
-    cross_period_persisted_keys: FrozenSet[str] = frozenset()
+    cross_period_persisted_keys: FrozenSet[str] = frozenset([get_name(SynchronizedData.period_counter)])
     db_pre_conditions: Dict[AppState, Set[str]] = {
         MultiplexerRound: set(),
     }

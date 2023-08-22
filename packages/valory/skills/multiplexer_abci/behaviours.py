@@ -164,10 +164,10 @@ class MultiplexerBehaviour(MultiplexerBaseBehaviour):
                 pending_tasks = yield from self.extend_pending_tasks()
                 self.context.shared_state["pending_tasks"] = pending_tasks
 
-            if self.context.shared_state.get("pending_tasks", []):
-                payload_content = MultiplexerRound.EXECUTE_PAYLOAD
-            elif do_reset:
+            if do_reset:
                 payload_content = MultiplexerRound.RESET_PAYLOAD
+            elif self.context.shared_state.get("pending_tasks", []):
+                payload_content = MultiplexerRound.EXECUTE_PAYLOAD
 
             sender = self.context.agent_address
             payload = MultiplexerPayload(sender=sender, content=payload_content)

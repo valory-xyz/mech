@@ -20,6 +20,7 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+import logging
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
@@ -223,6 +224,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
+    logger: logging.Logger = kwargs["logger"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
@@ -231,6 +233,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         raise ValueError(f"Tool {tool} is not supported.")
 
     engine = TOOL_TO_ENGINE[tool]
+    logger.info(f"Fetching additional information")
     additional_information = (
         fetch_additional_information(
             prompt=prompt,
@@ -243,9 +246,11 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         if tool == "prediction-online"
         else ""
     )
+    logger.info(f"Fetched additional information")
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information
     )
+    logger.info(f"Prediction prompt: {prediction_prompt}")
     moderation_result = openai.Moderation.create(prediction_prompt)
     if moderation_result["results"][0]["flagged"]:
         return "Moderation flagged the prompt as in violation of terms.", None
@@ -253,6 +258,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prediction_prompt},
     ]
+    logger.info(f"Messages: {messages}")
     response = openai.ChatCompletion.create(
         model=engine,
         messages=messages,
@@ -263,4 +269,5 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         request_timeout=150,
         stop=None,
     )
+    logger.info(f"OpenAI response: {response.choices[0].message.content}")
     return response.choices[0].message.content, None

@@ -368,6 +368,7 @@ class TaskExecutionAbciBehaviour(TaskExecutionBaseBehaviour):
         exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
         task_data["method"] = local_namespace["run"]
         task_data["api_keys"] = self.params.api_keys
+        task_data["logger"] = self.context.logger
         task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)
         self._async_result = self.context.task_manager.get_task_result(task_id)
         self._is_task_prepared = True
