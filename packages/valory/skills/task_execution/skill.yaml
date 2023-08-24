@@ -1,0 +1,54 @@
+name: order_monitoring
+author: valory
+version: 0.1.0
+type: skill
+description: A skill used for monitoring ComposableCow orders.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiglilmcvbbxt6oczjbyayv6w6cr5j6wh4dkhgupej4jkjsedjwaiu
+  behaviours.py: bafybeigsh2yblkhjmo7k6jufd2lazyaqkqxdtbrhhqew4oecbpp3ujv6j4
+  dialogues.py: bafybeictu4rgb7uxyaoyxtlh2hi6g6ity2gfjeorjchpiabemv6tr2d72q
+  handlers.py: bafybeih6irtfqsjjl5jmp3e5totjmmsyytoee6m3p3gjdglrk6invrbnvi
+  models.py: bafybeibp2p2afluv7n6cfeofbglcrbduimhk43vbsezomslk4hfpvuujgq
+  order_utils.py: bafybeihaqmc2tcsyuf3gdqboqf3qhlaydy5b325zohkcd5vqqremmv6xdu
+  tests/__init__.py: bafybeib2dgq23y4dvdpvftmnfcruocssbjoec3zrcdpugs6sxoxeh5lce4
+  tests/test_behaviours.py: bafybeicsxep75tq4fheoljaugywvkpvzzvhxkslpe7bc4tbujauthvr5le
+  tests/test_dialogues.py: bafybeiftjdqbjhsvuqgcxdlht5dj4gimro4v7f4ya2ohk5qmkvur3egtwa
+  tests/test_handlers.py: bafybeietywtth6enkwi6rzbvnoetpvx3hodjrb6yowdf52n7ax3lyvtv6q
+  tests/test_order_utils.py: bafybeiekwcpqalwngvidmkvjtw7v7jfzqoqatap43n3s3gv3c4tg76tpqm
+fingerprint_ignore_patterns: []
+connections:
+- valory/ledger:0.19.0:bafybeicgfupeudtmvehbwziqfxiz6ztsxr5rxzvalzvsdsspzz73o5fzfi
+- valory/websocket_client:0.1.0:bafybeicz53kzs5uvyiod2azntl76zwgmpgr22ven4wl5fnwt2m546j3wsu
+contracts:
+- valory/composable_cow:0.1.0:bafybeifxpmwd5nko6bcuzmvnnsudsuig5ntilfhqliwlnesginmmfjedyy
+protocols:
+- valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
+- valory/default:1.0.0:bafybeiecmut3235aen7wxukllv424f3dysvvlgfmn562kzdunc5hdj3hxu
+skills: []
+behaviours:
+  subscriptions:
+    args: {}
+    class_name: MonitoringBehaviour
+handlers:
+  contract_handler:
+    args: {}
+    class_name: ContractHandler
+models:
+  contract_api_dialogues:
+    args: {}
+    class_name: ContractDialogues
+  default_dialogues:
+    args: {}
+    class_name: DefaultDialogues
+  params:
+    args:
+      agent_mech_contract_address: '0x9A676e781A523b5d0C0e43731313A708CB607508'
+      task_deadline: 240.0
+    class_name: Params
+dependencies:
+  eth_abi: {}
+  py_eth_sig_utils: {}
+  web3: {}
+is_abstract: false
