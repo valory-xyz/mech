@@ -34,7 +34,7 @@ skills:
 behaviours:
   main:
     args: {}
-    class_name: TaskExecutionRoundBehaviour
+    class_name: TaskSubmissionRoundBehaviour
 handlers:
   abci:
     args: {}
@@ -149,6 +149,7 @@ models:
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
       tx_timeout: 10.0
+      task_wait_timeout: 15
       use_termination: false
       validate_timeout: 1205
     class_name: Params

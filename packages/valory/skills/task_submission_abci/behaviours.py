@@ -1,0 +1,287 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2023 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+"""This package contains round behaviours of TaskExecutionAbciApp."""
+import abc
+import json
+import time
+from copy import deepcopy
+from multiprocessing.pool import AsyncResult
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
+
+import openai  # noqa
+
+from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.gnosis_safe.contract import (
+    GnosisSafeContract,
+    SafeOperation,
+)
+from packages.valory.contracts.multisend.contract import (
+    MultiSendContract,
+    MultiSendOperation,
+)
+from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.skills.abstract_round_abci.base import AbstractRound
+from packages.valory.skills.abstract_round_abci.behaviours import (
+    AbstractRoundBehaviour,
+    BaseBehaviour,
+)
+from packages.valory.skills.task_submission_abci.models import Params
+from packages.valory.skills.task_submission_abci.payloads import TransactionPayload
+from packages.valory.skills.task_submission_abci.rounds import (
+    SynchronizedData,
+    TaskExecutionAbciApp,
+    TaskPoolingPayload,
+    TaskExecutionRound, TransactionPreparationRound, TaskSubmissionAbciApp,
+)
+from packages.valory.skills.transaction_settlement_abci.payload_tools import (
+    hash_payload_to_hex,
+)
+
+ZERO_ETHER_VALUE = 0
+SAFE_GAS = 0
+DONE_TASKS = "ready_tasks"
+
+
+class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
+    """Base behaviour for the task_execution_abci skill."""
+
+    @property
+    def synchronized_data(self) -> SynchronizedData:
+        """Return the synchronized data."""
+        return cast(SynchronizedData, super().synchronized_data)
+
+    @property
+    def params(self) -> Params:
+        """Return the params."""
+        return cast(Params, super().params)
+
+    @property
+    def done_tasks(self) -> List[Dict[str, Any]]:
+        """
+        Return the done (ready) tasks from shared state.
+
+        Use with care, the returned data here is NOT synchronized with the rest of the agents.
+
+        :returns: the tasks
+        """
+        done_tasks = deepcopy(self.context.shared_state.get(DONE_TASKS, []))
+        return cast(List[Dict[str, Any]], done_tasks)
+
+
+    def remove_tasks(self, tasks: List[Dict[str, Any]]) -> None:
+        """
+        Pop the tasks from shared state.
+
+        :param tasks: the done tasks
+        """
+        done_tasks = self.done_tasks
+        for task in tasks:
+            done_tasks.remove(task)
+        self.context.shared_state[DONE_TASKS] = done_tasks
+
+
+class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
+    """TaskPoolingBehaviour"""
+
+    matching_round: Type[AbstractRound] = TaskExecutionRound
+
+    def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
+        """Do the act, supporting asynchronous execution."""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            payload_content = yield from self.get_payload_content()
+            sender = self.context.agent_address
+            payload = TaskPoolingPayload(sender=sender, content=payload_content)
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+        self.set_done()
+
+    def get_payload_content(self) -> Generator[None, None, str]:
+        """Get the payload content."""
+        done_tasks = yield from self.get_done_tasks(self.params.task_wait_timeout)
+        return json.dumps(done_tasks)
+
+    def get_done_tasks(self, timeout: float) -> Generator[None, None, List[Dict]]:
+        """Wait for tasks to get done in the specified timeout."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if len(self.done_tasks) == 0:
+                one_second = 1.0
+                yield from self.sleep(one_second)
+                continue
+            # there are done tasks, return all of them
+            return self.done_tasks
+
+        # no tasks are ready for this agent
+        self.context.logger.info(f"No tasks were ready within the timeout")
+        return []
+
+
+class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
+    """TransactionPreparationBehaviour"""
+
+    matching_round: Type[AbstractRound] = TransactionPreparationRound
+
+    def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
+        """Do the act, supporting asynchronous execution."""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            payload_content = yield from self.get_payload_content()
+            sender = self.context.agent_address
+            payload = TransactionPayload(sender=sender, content=payload_content)
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+        self.set_done()
+
+    def get_payload_content(self) -> Generator[None, None, str]:
+        """Prepare the transaction"""
+        all_txs = []
+        for task in self.synchronized_data.done_tasks:
+            deliver_tx = yield from self._get_deliver_tx(task)
+            if deliver_tx is None:
+                # something went wrong, respond with ERROR payload for now
+                return TransactionPreparationRound.ERROR_PAYLOAD
+            all_txs.append(deliver_tx)
+            response_tx = task.get("transaction", None)
+            if response_tx is not None:
+                all_txs.append(response_tx)
+
+        multisend_tx_str = yield from self._to_multisend(all_txs)
+        if multisend_tx_str is None:
+            # something went wrong, respond with ERROR payload for now
+            return TransactionPreparationRound.ERROR_PAYLOAD
+
+        return multisend_tx_str
+
+    def _to_multisend(
+        self, transactions: List[Dict]
+    ) -> Generator[None, None, Optional[str]]:
+        """Transform payload to MultiSend."""
+        multi_send_txs = []
+        for transaction in transactions:
+            transaction = {
+                "operation": transaction.get("operation", MultiSendOperation.CALL),
+                "to": transaction["to"],
+                "value": transaction["value"],
+                "data": transaction.get("data", b""),
+            }
+            multi_send_txs.append(transaction)
+
+        response = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_RAW_TRANSACTION,  # type: ignore
+            contract_address=self.params.multisend_address,
+            contract_id=str(MultiSendContract.contract_id),
+            contract_callable="get_tx_data",
+            multi_send_txs=multi_send_txs,
+        )
+        if response.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
+            self.context.logger.error(
+                f"Couldn't compile the multisend tx. "
+                f"Expected performative {ContractApiMessage.Performative.RAW_TRANSACTION.value}, "  # type: ignore
+                f"received {response.performative.value}."
+            )
+            return None
+
+        # strip "0x" from the response
+        multisend_data_str = cast(str, response.raw_transaction.body["data"])[2:]
+        tx_data = bytes.fromhex(multisend_data_str)
+        tx_hash = yield from self._get_safe_tx_hash(tx_data)
+        if tx_hash is None:
+            # something went wrong
+            return None
+
+        payload_data = hash_payload_to_hex(
+            safe_tx_hash=tx_hash,
+            ether_value=ZERO_ETHER_VALUE,
+            safe_tx_gas=SAFE_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value,
+            to_address=self.params.multisend_address,
+            data=tx_data,
+        )
+        return payload_data
+
+    def _get_safe_tx_hash(self, data: bytes) -> Generator[None, None, Optional[str]]:
+        """
+        Prepares and returns the safe tx hash.
+
+        This hash will be signed later by the agents, and submitted to the safe contract.
+        Note that this is the transaction that the safe will execute, with the provided data.
+
+        :param data: the safe tx data.
+        :return: the tx hash
+        """
+        response = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.synchronized_data.safe_contract_address,
+            contract_id=str(GnosisSafeContract.contract_id),
+            contract_callable="get_raw_safe_transaction_hash",
+            to_address=self.params.multisend_address,  # we send the tx to the multisend address
+            value=ZERO_ETHER_VALUE,
+            data=data,
+            safe_tx_gas=SAFE_GAS,
+            operation=SafeOperation.DELEGATE_CALL.value,
+        )
+
+        if response.performative != ContractApiMessage.Performative.STATE:
+            self.context.logger.error(
+                f"Couldn't get safe hash. "
+                f"Expected response performative {ContractApiMessage.Performative.STATE.value}, "  # type: ignore
+                f"received {response.performative.value}."
+            )
+            return None
+
+        # strip "0x" from the response hash
+        tx_hash = cast(str, response.state.body["tx_hash"])[2:]
+        return tx_hash
+
+    def _get_deliver_tx(
+        self, task_data: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get the deliver tx."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_mech_contract_address,
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_deliver_data",
+            request_id=task_data["request_id"],
+            data=task_data["task_result"],
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_deliver_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": self.params.agent_mech_contract_address,
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
+
+
+class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
+    """TaskSubmissionRoundBehaviour"""
+
+    initial_behaviour_cls = TaskPoolingBehaviour
+    abci_app_cls = TaskSubmissionAbciApp
+    behaviours: Set[Type[BaseBehaviour]] = {TaskPoolingBehaviour, TransactionPreparationBehaviour}
