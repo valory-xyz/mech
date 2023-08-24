@@ -16,4 +16,4 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""This module contains helper classes for IPFS interaction."""
+"""This module contains helper classes."""

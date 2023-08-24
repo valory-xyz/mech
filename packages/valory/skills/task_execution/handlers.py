@@ -38,7 +38,6 @@ DONE_TASKS = "ready_tasks"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
-
 class AcnHandler(Handler):
     """ACN API message handler."""
 
@@ -52,6 +51,7 @@ class AcnHandler(Handler):
         """Handle the message."""
         # we don't respond to ACN messages at this point
         self.context.logger.info(f"Received message: {message}")
+        self.context.acn_data_share_dialogues.update(cast(AcnDataShareMessage, message))
 
 
 class IpfsHandler(Handler):

@@ -22,17 +22,18 @@ import json
 import time
 from typing import Any, Dict, List, cast, Optional, Tuple, Callable
 
-from aea.helpers.cid import CID
 from aea.mail.base import EnvelopeContext
+from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
-from packages.valory.connections.p2p_libp2p_client.connection import (
-    PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
-)
+from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
+)
+from packages.valory.connections.p2p_libp2p_client.connection import (
+    PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
@@ -41,14 +42,11 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.skills.task_execution.models import Params
-from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
-from aea.protocols.base import Message
-
-from packages.valory.skills.task_execution_abci.tasks import AnyToolAsTask
+from packages.valory.skills.task_execution.utils.ipfs import to_multihash, get_ipfs_file_hash
+from packages.valory.skills.task_submission_abci.tasks import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
-CID_PREFIX = "f01701220"
 
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
@@ -184,7 +182,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(f"Preparing task with data: {task_data}")
         self.params.executing_task = task_data
         task_data_ = task_data["data"]
-        ipfs_hash = self._get_ipfs_file_hash(task_data_)
+        ipfs_hash = get_ipfs_file_hash(task_data_)
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
         self.send_message(ipfs_msg, message, self._handle_get_task)
@@ -211,7 +209,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
         msg, dialogue = self._build_ipfs_store_file_req({req_id: json.dumps(response)})
         self.send_message(msg, dialogue, self._handle_store_response)
-
 
     def _handle_timeout_task(self) -> None:
         """Handle timeout tasks"""
@@ -307,17 +304,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         return message, dialogue
 
-    def _get_ipfs_file_hash(self, data: bytes) -> str:
-        """Get hash from bytes"""
-        try:
-            return str(CID.from_string(data.decode()))
-        except Exception:  # noqa
-            # if something goes wrong, fallback to sha256
-            file_hash = data.hex()
-            file_hash = CID_PREFIX + file_hash
-            file_hash = str(CID.from_string(file_hash))
-            return file_hash
-
     def _handle_store_response(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a store response request."""
         req_id, sender = self._executing_task["requestId"], self._executing_task["sender"]
@@ -327,7 +313,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id=req_id,
             data=message.ipfs_hash,
         )
-        self._done_task["task_result"] = message.ipfs_hash
+        self._done_task["task_result"] = to_multihash(message.ipfs_hash)
         self.done_tasks.append(self._done_task)
         # reset tasks
         self._executing_task = None
@@ -355,4 +341,3 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             message=response,
             context=EnvelopeContext(connection_id=P2P_CLIENT_PUBLIC_ID),
         )
-

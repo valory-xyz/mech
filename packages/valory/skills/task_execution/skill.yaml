@@ -40,8 +40,14 @@ models:
     args: {}
     class_name: ContractDialogues
   default_dialogues:
-    args: {}
+    args: { }
     class_name: DefaultDialogues
+  ipfs_dialogues:
+    args: { }
+    class_name: IpfsDialogues
+  acn_data_share_dialogues:
+    args: { }
+    class_name: AcnDataShareDialogues
   params:
     args:
       agent_mech_contract_address: '0x9A676e781A523b5d0C0e43731313A708CB607508'
