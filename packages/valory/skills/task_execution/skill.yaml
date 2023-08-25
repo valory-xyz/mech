@@ -52,6 +52,25 @@ models:
     args:
       agent_mech_contract_address: '0x9A676e781A523b5d0C0e43731313A708CB607508'
       task_deadline: 240.0
+      file_hash_to_tools_json:
+        - - bafybeif3izkobmvaoen23ine6tiqx55eaf4g3r56hdalnig656xivzpf3m
+          - - openai-text-davinci-002
+            - openai-text-davinci-003
+            - openai-gpt-3.5-turbo
+            - openai-gpt-4
+        - - bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua
+          - - stabilityai-stable-diffusion-v1-5
+            - stabilityai-stable-diffusion-xl-beta-v2-2-2
+            - stabilityai-stable-diffusion-512-v2-1
+            - stabilityai-stable-diffusion-768-v2-1
+      api_keys_json:
+        - - openai
+          - dummy_api_key
+        - - stabilityai
+          - dummy_api_key
+      polling_interval: 30.0
+      agent_index: 0
+      num_agents: 4
     class_name: Params
 dependencies:
   eth_abi: {}

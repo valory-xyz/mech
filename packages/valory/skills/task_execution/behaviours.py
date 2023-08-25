@@ -63,6 +63,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._all_tools: Dict[str, str] = {}
         self._inflight_tool_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
+        self._last_polling: Optional[float] = None
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -93,6 +94,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def done_tasks(self) -> List[Dict[str, Any]]:
         """Get done_tasks."""
         return self.context.shared_state[DONE_TASKS]
+
+    def _should_poll(self) -> bool:
+        """If we should poll the contract."""
+        if self._last_polling is None:
+            return True
+        return self._last_polling + self.params.polling_interval <= time.time()
 
     def _is_executing_task_ready(self) -> bool:
         """Check if the executing task is ready."""
@@ -147,9 +154,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _check_for_new_reqs(self) -> None:
         """Check for new reqs."""
-        if self.params.in_flight_req:
+        if self.params.in_flight_req or not self._should_poll():
             # do nothing if there is an in flight request
+            # or if we should not poll yet
             return
+
         contract_api_msg, _ = self.context.contract_api_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.agent_mech_contract_address,

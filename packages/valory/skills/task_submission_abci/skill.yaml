@@ -82,25 +82,8 @@ models:
     class_name: AcnDataShareDialogue
   params:
     args:
-      api_keys_json:
-      - - openai
-        - dummy_api_key
-      - - stabilityai
-        - dummy_api_key
-      cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-      file_hash_to_tools_json:
-      - - bafybeif3izkobmvaoen23ine6tiqx55eaf4g3r56hdalnig656xivzpf3m
-        - - openai-text-davinci-002
-          - openai-text-davinci-003
-          - openai-gpt-3.5-turbo
-          - openai-gpt-4
-      - - bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua
-        - - stabilityai-stable-diffusion-v1-5
-          - stabilityai-stable-diffusion-xl-beta-v2-2-2
-          - stabilityai-stable-diffusion-512-v2-1
-          - stabilityai-stable-diffusion-768-v2-1
       finalize_timeout: 60.0
       genesis_config:
         chain_id: chain-c4daS1

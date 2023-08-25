@@ -30,7 +30,6 @@ class Params(Model):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
-        self.use_polling = kwargs.get("use_polling", False)
         self.agent_mech_contract_address = kwargs.get("agent_mech_contract_address", None)
         enforce(self.agent_mech_contract_address is not None, "agent_mech_contract_address must be set!")
 
@@ -43,7 +42,12 @@ class Params(Model):
         ] = self._nested_list_todict_workaround(
             kwargs, "file_hash_to_tools_json",
         )
-        self.task_deadline = kwargs.get("task_deadline", 240)
+        self.polling_interval = kwargs.get("polling_interval", 30.0)
+        self.task_deadline = kwargs.get("task_deadline", 240.0)
+        self.num_agents = kwargs.get("num_agents", None)
+        enforce(self.num_agents is not None, "num_agents must be set!")
+        self.agent_index = kwargs.get("agent_index", None)
+        enforce(self.agent_index is not None, "agent_index must be set!")
         super().__init__(*args, **kwargs)
 
 

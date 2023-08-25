@@ -140,7 +140,9 @@ class ContractHandler(Handler):
         if len(reqs) == 0:
             return
 
-        self.context.logger.info(f"Received {len(reqs)} new requests.")
-        self.pending_tasks.extend(reqs)
         self.from_block = max([req["block_number"] for req in reqs]) + 1
+        self.context.logger.info(f"Received {len(reqs)} new requests.")
+        reqs = [req for req in reqs if req["block_number"] % self.params.num_agents == self.params.agent_index]
+        self.context.logger.info(f"Processing only {len(reqs)} of the new requests.")
+        self.pending_tasks.extend(reqs)
         self.context.logger.info(f"Monitoring new reqs from block {self.from_block}")
