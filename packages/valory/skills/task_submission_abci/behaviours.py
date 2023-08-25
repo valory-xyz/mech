@@ -105,6 +105,9 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
     def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            # clean up the queue based on the outcome of the previous period
+            self.handle_submitted_tasks()
+            # sync new tasks
             payload_content = yield from self.get_payload_content()
             sender = self.context.agent_address
             payload = TaskPoolingPayload(sender=sender, content=payload_content)
@@ -132,6 +135,16 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
         # no tasks are ready for this agent
         self.context.logger.info(f"No tasks were ready within the timeout")
         return []
+
+    def handle_submitted_tasks(self) -> None:
+        """Handle tasks that have been already submitted before (in a prev. period)."""
+        submitted_tasks = cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
+        self.context.logger.info(
+            f"Tasks {submitted_tasks} has already been submitted. "
+            f"Removing them from the list of tasks to be processed."
+        )
+        self.remove_tasks(submitted_tasks)
+
 
 
 class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
