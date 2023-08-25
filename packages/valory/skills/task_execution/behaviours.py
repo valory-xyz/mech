@@ -27,6 +27,7 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
 
+from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
 from packages.valory.connections.ledger.connection import (
@@ -43,7 +44,6 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash, get_ipfs_file_hash
-from packages.valory.skills.task_submission_abci.tasks import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
@@ -124,6 +124,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Get the executing task result."""
         if self._executing_task is None:
             raise ValueError("Executing task is None")
+        if self._invalid_request:
+            return None
         task_id = self._executing_task.get("async_task_id", None)
         if task_id is None:
             raise ValueError("Executing task has no async_task_id")
@@ -210,7 +212,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         response = {"requestId": req_id, "result": "Invalid response"}
         self._done_task = {"request_id": req_id}
         if task_result is not None:
-            # task failed
+            # task succeeded
             deliver_msg, transaction = task_result
             response = {**response, "result": deliver_msg}
             self._done_task["transaction"] = transaction
@@ -247,6 +249,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._invalid_request = True
         else:
             self.context.logger.warning("Data for task is not valid.")
+            self._invalid_request = True
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""

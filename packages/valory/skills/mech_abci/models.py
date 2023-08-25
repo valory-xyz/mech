@@ -26,10 +26,6 @@ from packages.valory.skills.abstract_round_abci.models import (
 )
 from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
 from packages.valory.skills.mech_abci.composition import MechAbciApp
-from packages.valory.skills.multiplexer_abci.models import (
-    Params as MultiplexerAbciParams,
-)
-from packages.valory.skills.multiplexer_abci.rounds import Event as MultiplexerEvent
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
 from packages.valory.skills.task_submission_abci.models import (
     Params as TaskExecutionAbciParams,
@@ -46,7 +42,6 @@ from packages.valory.skills.transaction_settlement_abci.rounds import (
 )
 
 
-MultiplexerParams = MultiplexerAbciParams
 TaskExecutionParams = TaskExecutionAbciParams
 
 
@@ -74,10 +69,6 @@ class SharedState(TaskExecSharedState):
     def setup(self) -> None:
         """Set up."""
         super().setup()
-
-        MechAbciApp.event_to_timeout[
-            MultiplexerEvent.ROUND_TIMEOUT
-        ] = self.context.params.round_timeout_seconds
 
         MechAbciApp.event_to_timeout[
             TaskExecutionEvent.ROUND_TIMEOUT
@@ -108,5 +99,5 @@ class SharedState(TaskExecSharedState):
         )
 
 
-class Params(MultiplexerParams, TaskExecutionParams, TerminationParams):  # type: ignore
+class Params(TaskExecutionParams, TerminationParams):  # type: ignore
     """A model to represent params for multiple abci apps."""

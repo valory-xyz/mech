@@ -26,7 +26,6 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.mech_abci.composition import MechAbciApp
-from packages.valory.skills.multiplexer_abci.behaviours import MultiplexerRoundBehaviour
 from packages.valory.skills.registration_abci.behaviours import (
     AgentRegistrationRoundBehaviour,
     RegistrationStartupBehaviour,
@@ -52,7 +51,6 @@ class MechConsensusBehaviour(AbstractRoundBehaviour):
     initial_behaviour_cls = RegistrationStartupBehaviour
     abci_app_cls = MechAbciApp
     behaviours: Set[Type[BaseBehaviour]] = {
-        *MultiplexerRoundBehaviour.behaviours,
         *TaskSubmissionRoundBehaviour.behaviours,
         *AgentRegistrationRoundBehaviour.behaviours,
         *ResetPauseABCIConsensusBehaviour.behaviours,

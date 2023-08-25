@@ -53,6 +53,10 @@ class AcnHandler(Handler):
         self.context.logger.info(f"Received message: {message}")
         self.context.acn_data_share_dialogues.update(cast(AcnDataShareMessage, message))
 
+    def teardown(self) -> None:
+        """Teardown the handler."""
+        self.context.logger.info("AcnHandler: teardown called.")
+
 
 class IpfsHandler(Handler):
     """IPFS API message handler."""
@@ -62,6 +66,10 @@ class IpfsHandler(Handler):
     def setup(self) -> None:
         """Setup the IPFS handler."""
         self.context.logger.info("IPFSHandler: setup method called.")
+
+    def teardown(self) -> None:
+        """Teardown the handler."""
+        self.context.logger.info("IpfsHandler: teardown called.")
 
     @property
     def params(self) -> Params:

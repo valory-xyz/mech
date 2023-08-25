@@ -180,7 +180,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     initial_states: Set[AppState] = {TaskPoolingRound}
     transition_function: AbciAppTransitionFunction = {
         TaskPoolingRound: {
-            Event.DONE: FinishedTaskPoolingRound,
+            Event.DONE: TransactionPreparationRound,
             Event.NO_TASKS: FinishedWithoutTasksRound,
         },
         TransactionPreparationRound: {
