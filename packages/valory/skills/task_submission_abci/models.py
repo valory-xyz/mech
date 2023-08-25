@@ -19,7 +19,7 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 
-from typing import Any, Dict, List, Type, Union
+from typing import Any, Type
 
 from packages.valory.skills.abstract_round_abci.base import AbciApp
 from packages.valory.skills.abstract_round_abci.models import BaseParams
@@ -30,13 +30,13 @@ from packages.valory.skills.abstract_round_abci.models import Requests as BaseRe
 from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
-from packages.valory.skills.task_submission_abci.rounds import TaskExecutionAbciApp
+from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
 
 
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
-    abci_app_cls: Type[AbciApp] = TaskExecutionAbciApp
+    abci_app_cls: Type[AbciApp] = TaskSubmissionAbciApp
 
 
 class Params(BaseParams):

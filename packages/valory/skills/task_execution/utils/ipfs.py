@@ -20,6 +20,7 @@ from aea.helpers.cid import CID
 from multibase import multibase
 from multicodec import multicodec
 
+
 CID_PREFIX = "f01701220"
 
 

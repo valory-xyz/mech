@@ -41,4 +41,4 @@ keys.json
 leak_report
 
 agent/
-mech/
+backup_mech/

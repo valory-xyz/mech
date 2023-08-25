@@ -24,19 +24,20 @@ from typing import Any, Dict, List, cast
 from aea.protocols.base import Message
 from aea.skills.base import Handler
 
-
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
 )
-from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
+from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.skills.task_execution.models import Params
+
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
+
 
 class AcnHandler(Handler):
     """ACN API message handler."""
@@ -140,9 +141,7 @@ class ContractHandler(Handler):
         self._handle_get_undelivered_reqs(body)
         self.params.in_flight_req = False
 
-    def _handle_get_undelivered_reqs(
-        self, body: Dict[str, Any]
-    ) -> None:
+    def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""
         reqs = body.get("data", [])
         if len(reqs) == 0:
@@ -150,7 +149,11 @@ class ContractHandler(Handler):
 
         self.from_block = max([req["block_number"] for req in reqs]) + 1
         self.context.logger.info(f"Received {len(reqs)} new requests.")
-        reqs = [req for req in reqs if req["block_number"] % self.params.num_agents == self.params.agent_index]
+        reqs = [
+            req
+            for req in reqs
+            if req["block_number"] % self.params.num_agents == self.params.agent_index
+        ]
         self.context.logger.info(f"Processing only {len(reqs)} of the new requests.")
         self.pending_tasks.extend(reqs)
         self.context.logger.info(f"Monitoring new reqs from block {self.from_block}")

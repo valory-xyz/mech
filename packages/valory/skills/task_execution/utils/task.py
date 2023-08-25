@@ -19,12 +19,9 @@
 
 """This package contains a custom Loader for the ipfs connection."""
 
-from typing import Dict, Any
+from typing import Any
 
 from aea.skills.tasks import Task
-
-from packages.valory.skills.abstract_round_abci.io_.load import Loader
-from packages.valory.skills.abstract_round_abci.io_.store import SupportedObjectType
 
 
 class AnyToolAsTask(Task):
@@ -34,4 +31,3 @@ class AnyToolAsTask(Task):
         """Execute the task."""
         method = kwargs.pop("method")
         return method(*args, **kwargs)
-

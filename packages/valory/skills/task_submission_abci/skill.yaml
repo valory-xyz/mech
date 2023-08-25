@@ -17,8 +17,7 @@ fingerprint:
   rounds.py: bafybeiglotwldeboxfysb7ohpku57lvgs5olfx2a3xs52nrrms6agfsdyu
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
 fingerprint_ignore_patterns: []
-connections:
-- valory/p2p_libp2p_client:0.1.0:bafybeihdnfdth3qgltefgrem7xyi4b3ejzaz67xglm2hbma2rfvpl2annq
+connections: []
 contracts:
 - valory/agent_mech:0.1.0:bafybeids7xq75hszk2ovpn5svcx7tjrf44eviuebuvj4hk54ox5vpwoqle
 - valory/gnosis_safe:0.1.0:bafybeibhezhwgi5ustv675gfohsq5l5xjijp36gqueuicyl2ofrtkrortm

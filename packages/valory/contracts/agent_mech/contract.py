@@ -19,7 +19,7 @@
 
 """This module contains the dynamic_contribution contract definition."""
 
-from typing import Any, cast, List, Dict
+from typing import Any, Dict, List, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -166,8 +166,12 @@ class AgentMechContract(Contract):
         to_block: BlockIdentifier = "latest",
     ) -> JSONLike:
         """Get the requests that are not delivered."""
-        requests: List[Dict[str, Any]] = cls.get_request_events(ledger_api, contract_address, from_block, to_block)["data"]
-        delivers: List[Dict[str, Any]] = cls.get_deliver_events(ledger_api, contract_address, from_block, to_block)["data"]
+        requests: List[Dict[str, Any]] = cls.get_request_events(
+            ledger_api, contract_address, from_block, to_block
+        )["data"]
+        delivers: List[Dict[str, Any]] = cls.get_deliver_events(
+            ledger_api, contract_address, from_block, to_block
+        )["data"]
         pending_tasks: List[Dict[str, Any]] = []
         for request in requests:
             if request["requestId"] not in [

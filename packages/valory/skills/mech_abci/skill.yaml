@@ -126,7 +126,7 @@ models:
       request_timeout: 10.0
       reset_pause_duration: 10
       reset_period_count: 100
-      reset_tendermint_after: 2
+      reset_tendermint_after: 10
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0

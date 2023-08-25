@@ -20,19 +20,23 @@
 """This package contains the rounds of TaskSubmissionAbciApp."""
 import json
 from enum import Enum
-from typing import Dict, FrozenSet, Optional, Set, Tuple, cast, List, Any
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp,
     AbciAppTransitionFunction,
     AppState,
     BaseSynchronizedData,
+    CollectSameUntilThresholdRound,
     CollectionRound,
     DegenerateRound,
     EventToTimeout,
-    get_name, CollectSameUntilThresholdRound,
+    get_name,
 )
-from packages.valory.skills.task_submission_abci.payloads import TaskPoolingPayload, TransactionPayload
+from packages.valory.skills.task_submission_abci.payloads import (
+    TaskPoolingPayload,
+    TransactionPayload,
+)
 
 
 class Event(Enum):
@@ -62,7 +66,7 @@ class SynchronizedData(BaseSynchronizedData):
     def done_tasks(self) -> List[Dict[str, Any]]:
         """Done tasks."""
         return cast(List[Dict[str, Any]], self.db.get("done_tasks", []))
-    
+
 
 class TaskPoolingRound(CollectionRound):
     """TaskPoolingRound"""
@@ -85,7 +89,7 @@ class TaskPoolingRound(CollectionRound):
         """Process the end of the block."""
         if self.collection_threshold_reached:
             all_done_tasks = []
-            for payload in self.collection:
+            for payload in self.collection.values():
                 done_tasks_str = cast(TaskPoolingPayload, payload).content
                 done_tasks = json.loads(done_tasks_str)
                 all_done_tasks.extend(done_tasks)
@@ -93,9 +97,7 @@ class TaskPoolingRound(CollectionRound):
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
-                    get_name(
-                        SynchronizedData.done_tasks
-                    ): all_done_tasks,
+                    get_name(SynchronizedData.done_tasks): all_done_tasks,
                 }
             )
             if len(all_done_tasks) > 0:
@@ -113,20 +115,26 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
     synchronized_data_class = SynchronizedData
 
     ERROR_PAYLOAD = "error"
+
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
         if self.threshold_reached:
             if self.most_voted_payload == self.ERROR_PAYLOAD:
-                return self.synchronized_data.update(
-                    **{
-                        get_name(SynchronizedData.done_tasks): [],
-                    }
-                ), Event.ERROR
+                return (
+                    self.synchronized_data.update(
+                        **{
+                            get_name(SynchronizedData.done_tasks): [],
+                        }
+                    ),
+                    Event.ERROR,
+                )
 
             state = self.synchronized_data.update(
                 synchronized_data_class=self.synchronized_data_class,
                 **{
-                    get_name(SynchronizedData.most_voted_tx_hash): self.most_voted_payload,
+                    get_name(
+                        SynchronizedData.most_voted_tx_hash
+                    ): self.most_voted_payload,
                 }
             )
             return state, Event.DONE
@@ -134,11 +142,14 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
             self.collection, self.synchronized_data.nb_participants
         ):
             # in case we cant submit this tx, we need to make sure we don't account the tasks as done
-            return self.synchronized_data.update(
-                **{
-                    get_name(SynchronizedData.done_tasks): [],
-                }
-            ), Event.NO_MAJORITY
+            return (
+                self.synchronized_data.update(
+                    **{
+                        get_name(SynchronizedData.done_tasks): [],
+                    }
+                ),
+                Event.NO_MAJORITY,
+            )
 
         return None
 

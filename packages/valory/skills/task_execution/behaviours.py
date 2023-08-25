@@ -20,14 +20,14 @@
 """This package contains a scaffold of a behaviour."""
 import json
 import time
-from typing import Any, Dict, List, cast, Optional, Tuple, Callable
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
+from aea.helpers.cid import to_v1
 from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
 
-from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
 from packages.valory.connections.ledger.connection import (
@@ -43,7 +43,12 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.skills.task_execution.models import Params
-from packages.valory.skills.task_execution.utils.ipfs import to_multihash, get_ipfs_file_hash
+from packages.valory.skills.task_execution.utils.ipfs import (
+    get_ipfs_file_hash,
+    to_multihash,
+)
+from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
+
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
@@ -64,6 +69,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._inflight_tool_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_polling: Optional[float] = None
+        self._invalid_request = False
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -107,7 +113,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return False
         task_id = self._executing_task.get("async_task_id", None)
         if task_id is None:
-            raise ValueError("Executing task has no async_task_id")
+            return False
 
         return self.context.task_manager.get_task_result(task_id).ready()
 
@@ -117,8 +123,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return False
         timeout_deadline = self._executing_task.get("timeout_deadline", None)
         if timeout_deadline is None:
-            raise ValueError("Executing task has no timeout")
-        return timeout_deadline >= time.time()
+            return False
+        return timeout_deadline <= time.time()
 
     def _get_executing_task_result(self) -> Any:
         """Get the executing task result."""
@@ -140,7 +146,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # we already have all the tools
             return
         for tool, file_hash in self._tools_to_file_hash.items():
-            if file_hash in self._all_tools:
+            if tool in self._all_tools:
                 continue
             # read one at a time
             ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
@@ -172,33 +178,39 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self.context.outbox.put_message(message=contract_api_msg)
         self.params.in_flight_req = True
+        self._last_polling = time.time()
 
     def _execute_task(self) -> None:
         """Execute tasks."""
+        # check if there is a task already executing
+        if self.params.in_flight_req:
+            # there is an in flight request
+            return
+
+        if self._executing_task is not None:
+            if self._is_executing_task_ready() or self._invalid_request:
+                self._handle_done_task()
+            elif self._has_executing_task_timed_out():
+                self._handle_timeout_task()
+            return
+
         if len(self.pending_tasks) == 0:
             # not tasks (requests) to execute
             return
 
-        # check if there is a task already executing
-        if self._executing_task is not None:
-            if self._is_executing_task_ready():
-                self._handle_done_task()
-                return
-            elif self._has_executing_task_timed_out():
-                self._handle_timeout_task()
-                return
-
         # create new task
         task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
-        self.params.executing_task = task_data
+        self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
         self.send_message(ipfs_msg, message, self._handle_get_task)
 
-    def send_message(self, msg: Message, dialogue: Dialogue, callback: Callable) -> None:
+    def send_message(
+        self, msg: Message, dialogue: Dialogue, callback: Callable
+    ) -> None:
         """Send message."""
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
@@ -231,17 +243,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a task request."""
-        task_data = {name: json.loads(content) for name, content in message.files.items()}
+        task_data = [json.loads(content) for content in message.files.values()][0]
         is_data_valid = (
             task_data
             and isinstance(task_data, dict)
             and "prompt" in task_data
             and "tool" in task_data
         )  # pylint: disable=C0301
-        if (
-            is_data_valid
-            and task_data["tool"] in self._tools_to_file_hash
-        ):
+        if is_data_valid and task_data["tool"] in self._tools_to_file_hash:
             self._prepare_task(task_data)
         elif is_data_valid:
             tool = task_data["tool"]
@@ -263,7 +272,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_data["api_keys"] = self.params.api_keys
         task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)
         self._executing_task["async_task_id"] = task_id
-        self._executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
+        self._executing_task["timeout_deadline"] = (
+            time.time() + self.params.task_deadline
+        )
         self._async_result = self.context.task_manager.get_task_result(task_id)
 
     def _build_ipfs_message(
@@ -318,18 +329,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_store_response(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a store response request."""
-        req_id, sender = self._executing_task["requestId"], self._executing_task["sender"]
+        req_id, sender = (
+            self._executing_task["requestId"],
+            self._executing_task["sender"],
+        )
         self.context.logger.info(f"Response for request {req_id} stored on IPFS.")
+        ipfs_hash = to_v1(message.ipfs_hash)
         self.send_data_via_acn(
             sender_address=sender,
-            request_id=req_id,
-            data=message.ipfs_hash,
+            request_id=str(req_id),
+            data=ipfs_hash,
         )
-        self._done_task["task_result"] = to_multihash(message.ipfs_hash)
+        self._done_task["task_result"] = to_multihash(ipfs_hash)
         self.done_tasks.append(self._done_task)
         # reset tasks
         self._executing_task = None
         self._done_task = None
+        self._invalid_request = False
 
     def send_data_via_acn(
         self,

@@ -25,11 +25,11 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue as BaseDialogue
 from aea.skills.base import Model
 
-from packages.valory.protocols.default.dialogues import (
-    DefaultDialogue as BaseDefaultDialogue,
+from packages.valory.protocols.acn_data_share.dialogues import (
+    AcnDataShareDialogue as BaseAcnDataShareDialogue,
 )
-from packages.valory.protocols.default.dialogues import (
-    DefaultDialogues as BaseDefaultDialogues,
+from packages.valory.protocols.acn_data_share.dialogues import (
+    AcnDataShareDialogues as BaseAcnDataShareDialogues,
 )
 from packages.valory.protocols.contract_api.dialogues import (
     ContractApiDialogue as BaseContractApiDialogue,
@@ -37,15 +37,15 @@ from packages.valory.protocols.contract_api.dialogues import (
 from packages.valory.protocols.contract_api.dialogues import (
     ContractApiDialogues as BaseContractApiDialogues,
 )
-from packages.valory.protocols.acn_data_share.dialogues import (
-    AcnDataShareDialogues as BaseAcnDataShareDialogues,
+from packages.valory.protocols.default.dialogues import (
+    DefaultDialogue as BaseDefaultDialogue,
+)
+from packages.valory.protocols.default.dialogues import (
+    DefaultDialogues as BaseDefaultDialogues,
 )
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue as BaseIpfsDialogue
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogues as BaseIpfsDialogues
-from packages.valory.protocols.acn_data_share.dialogues import (
-    AcnDataShareDialogues as BaseAcnDataShareDialogues,
-    AcnDataShareDialogue as BaseAcnDataShareDialogue,
-)
+
 
 ContractApiDialogue = BaseContractApiDialogue
 DefaultDialogue = BaseDefaultDialogue

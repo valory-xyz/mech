@@ -22,8 +22,7 @@ import abc
 import json
 import time
 from copy import deepcopy
-from multiprocessing.pool import AsyncResult
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
+from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
 import openai  # noqa
 
@@ -46,13 +45,15 @@ from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import TransactionPayload
 from packages.valory.skills.task_submission_abci.rounds import (
     SynchronizedData,
-    TaskExecutionAbciApp,
     TaskPoolingPayload,
-    TaskExecutionRound, TransactionPreparationRound, TaskSubmissionAbciApp,
+    TaskPoolingRound,
+    TaskSubmissionAbciApp,
+    TransactionPreparationRound,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
+
 
 ZERO_ETHER_VALUE = 0
 SAFE_GAS = 0
@@ -84,7 +85,6 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
         done_tasks = deepcopy(self.context.shared_state.get(DONE_TASKS, []))
         return cast(List[Dict[str, Any]], done_tasks)
 
-
     def remove_tasks(self, tasks: List[Dict[str, Any]]) -> None:
         """
         Pop the tasks from shared state.
@@ -100,7 +100,7 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
     """TaskPoolingBehaviour"""
 
-    matching_round: Type[AbstractRound] = TaskExecutionRound
+    matching_round: Type[AbstractRound] = TaskPoolingRound
 
     def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
@@ -133,7 +133,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
             return self.done_tasks
 
         # no tasks are ready for this agent
-        self.context.logger.info(f"No tasks were ready within the timeout")
+        self.context.logger.info("No tasks were ready within the timeout")
         return []
 
     def handle_submitted_tasks(self) -> None:
@@ -144,7 +144,6 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
             f"Removing them from the list of tasks to be processed."
         )
         self.remove_tasks(submitted_tasks)
-
 
 
 class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
@@ -297,4 +296,7 @@ class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
 
     initial_behaviour_cls = TaskPoolingBehaviour
     abci_app_cls = TaskSubmissionAbciApp
-    behaviours: Set[Type[BaseBehaviour]] = {TaskPoolingBehaviour, TransactionPreparationBehaviour}
+    behaviours: Set[Type[BaseBehaviour]] = {
+        TaskPoolingBehaviour,
+        TransactionPreparationBehaviour,
+    }
