@@ -20,7 +20,7 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 import openai
@@ -157,29 +157,39 @@ def extract_text(
 
 
 def process_in_batches(
-    urls: List[str], window: int = 5
+    urls: List[str], window: int = 5, timeout: int = 10
 ) -> Generator[None, None, List[requests.Response]]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
             batch = urls[i : i + window]
-            yield executor.map(requests.get, batch)
-
+            futures = [executor.submit(requests.get, url, timeout=timeout) for url in batch]
+            yield futures
 
 def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
     """Extract texts from URLs"""
     max_allowed = 5
     extracted_texts = []
     count = 0
+    stop = False
     for batch in process_in_batches(urls=urls):
-        for result in batch:
-            if result.status_code != 200:
-                continue
-            extracted_texts.append(extract_text(html=result.text, num_words=num_words))
-            count += 1
-            if count >= max_allowed:
-                break
-        return extracted_texts
+        for future in batch:
+            try:
+                result = future.result()
+                if result.status_code != 200:
+                    continue
+                extracted_texts.append(extract_text(html=result.text, num_words=num_words))
+                count += 1
+                if count >= max_allowed:
+                    stop = True
+                    break
+            except requests.exceptions.ReadTimeout:
+                print(f"Request timed out.")
+            except Exception as e:
+                    print(f"An error occurred: {e}")
+        if stop:
+            break
+    return extracted_texts
 
 
 def fetch_additional_information(
