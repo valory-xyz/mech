@@ -158,12 +158,12 @@ def extract_text(
 
 def process_in_batches(
     urls: List[str], window: int = 5, timeout: int = 10
-) -> Generator[None, None, List[requests.Response]]:
+) -> Generator[None, None, List[Tuple[Future, str]]]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
             batch = urls[i : i + window]
-            futures = [executor.submit(requests.get, url, timeout=timeout) for url in batch]
+            futures = [(executor.submit(requests.get, url, timeout=timeout), url) for url in batch]
             yield futures
 
 def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
@@ -173,7 +173,7 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
     count = 0
     stop = False
     for batch in process_in_batches(urls=urls):
-        for future in batch:
+        for future, url in batch:
             try:
                 result = future.result()
                 if result.status_code != 200:
@@ -184,7 +184,7 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                     stop = True
                     break
             except requests.exceptions.ReadTimeout:
-                print(f"Request timed out.")
+                print(f"Request timed out: {url}.")
             except Exception as e:
                     print(f"An error occurred: {e}")
         if stop:
