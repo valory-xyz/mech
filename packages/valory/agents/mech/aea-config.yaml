@@ -34,11 +34,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeicg7dv7cff34nv2k2z47c4yp4kddsxp3wozonzow6tnvfvwndz3cy
 - valory/abstract_round_abci:0.1.0:bafybeigxjcci53vwytymzlhr37436yvenh7jup4astrn7dgyixo24aq2pq
 - valory/contract_subscription:0.1.0:bafybeifbgzfrhtdtendqzwmh3o436nyexwkif6mbvsouvk2ktdfk5lhe7y
-- valory/mech_abci:0.1.0:bafybeifmwddxenn4s6jnagnvrlp5pqujdux3kywfvzntihzq4hdhrwwwgq
-- valory/task_execution:0.1.0:bafybeigiy77gcojv77krmmah6xq46m4tb6ytz47omrrqsoydab5xsm36wa
+- valory/mech_abci:0.1.0:bafybeie2qjdu2fr5wssiksnp22tcsdxoffvdixmccoknug6wrj4nwb6arm
+- valory/task_execution:0.1.0:bafybeicvt4pjpqltvs7mvkbggm2cdxvr2xrgx7zjjbmhj2daho45nhuz7i
 - valory/registration_abci:0.1.0:bafybeibc4kczqbh23sc6tufrzn3axmhp3vjav7fa3u6cnpvolrbbc2fd7i
 - valory/reset_pause_abci:0.1.0:bafybeid445uy6wwvugf3byzl7r73c7teu6xr5ezxb4h7cxbenghg3copvy
-- valory/task_submission_abci:0.1.0:bafybeicbbnxxjigu5ktore6v5hja3z5tgwlbsbittsdonfyvizxv4us524
+- valory/task_submission_abci:0.1.0:bafybeif3c3cyfjbvwgr35qv7sq5sg7bddggwna5i37q7eljre5hrdylk3u
 - valory/termination_abci:0.1.0:bafybeiguy7pkrcptg6c754ioig4mlkr7truccym3fpv6jwpjx2tmpdbzhi
 - valory/transaction_settlement_abci:0.1.0:bafybeidpsnguxizkpihtkqzojr3em7yy7c6qc7gxpbh5vglmwws5wke7bi
 default_ledger: ethereum
@@ -133,23 +133,25 @@ type: skill
 models:
   params:
     args:
-      sleep_time: 1
+      sleep_time: ${int:1}
       ipfs_fetch_timeout: ${float:15.0}
-      tendermint_check_sleep_delay: 3
+      tendermint_check_sleep_delay: ${int:3}
       tendermint_p2p_url: ${str:localhost:26656}
       tendermint_com_url: ${str:http://localhost:8080}
-      tendermint_max_retries: 5
+      tendermint_max_retries: ${int:5}
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
       agent_mech_contract_address: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
       round_timeout_seconds: ${float:30.0}
       reset_period_count: ${int:1000}
       on_chain_service_id: ${int:1}
+      share_tm_config_on_startup: ${bool:false}
       multisend_address: ${str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
       service_registry_address: ${str:0x9338b5153AE39BB89f50468E608eD9d764B755fD}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
+        consensus_threshold: ${int:null}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
@@ -171,6 +173,6 @@ config:
   ledger_apis:
     ethereum:
       address: ${str:https://rpc.gnosischain.com/}
-      chain_id: 100
-      poa_chain: false
-      default_gas_price_strategy: eip1559
+      chain_id: ${int:100}
+      poa_chain: ${bool:false}
+      default_gas_price_strategy: ${str:eip1559}

@@ -178,12 +178,16 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     Transition states:
         0. TaskPoolingRound
             - done: 1.
-            - task execution round timeout: 0.
-            - error: 2.
-        1. FinishedTaskPoolingRound
-        2. FinishedWithoutTasksRound
+            - no tasks: 4.
+        1. TransactionPreparationRound
+            - done: 2.
+            - error: 3.
+            - no majority: 3.
+        2. FinishedTaskPoolingRound
+        3. FinishedTaskExecutionWithErrorRound
+        4. FinishedWithoutTasksRound
 
-    Final states: {FinishedTaskPoolingRound, FinishedTaskExecutionWithErrorRound, FinishedWithoutTasksRound}
+    Final states: {FinishedTaskExecutionWithErrorRound, FinishedTaskPoolingRound, FinishedWithoutTasksRound}
 
     Timeouts:
         task execution round timeout: 60.0

@@ -78,5 +78,15 @@ models:
       agent_index: 0
       num_agents: 4
     class_name: Params
-dependencies: {}
+dependencies:
+  openai:
+    version: ==0.27.2
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
+  googlesearch-python:
+    version: ==1.2.3
+  beautifulsoup4:
+    version: ==4.12.2
 is_abstract: false
