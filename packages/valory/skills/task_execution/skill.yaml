@@ -12,7 +12,7 @@ fingerprint:
   handlers.py: bafybeihygmge4rhk645lkhecczmx7432uqvjdcelpt7kg3ag7qodrsnsmi
   models.py: bafybeicmhvc3rwihtasaa43qtsvt67nvilwuey6brcmxdkczayrfw4hkta
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
-  utils/ipfs.py: bafybeic5mn5zm4eph5rlg644cgxnkh4q3koec2mmvydticos5ubc2fjvdq
+  utils/ipfs.py: bafybeicuaj23qrcdv6ly4j7yo6il2r5plozhd6mwvcp5acwqbjxb2t3u2i
   utils/task.py: bafybeiayyt22ysncqmxf3bowbsxqgym4xvx6ukap5csmuofkaozydu3oxi
 fingerprint_ignore_patterns: []
 connections:
