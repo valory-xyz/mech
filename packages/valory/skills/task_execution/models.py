@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of Mech."""
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, cast
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
@@ -63,7 +63,7 @@ class Params(Model):
         key: str,
     ) -> Dict:
         """Get a nested list from the kwargs and convert it to a dictionary."""
-        values = kwargs.get(key)
+        values = cast(List, kwargs.get(key))
         if len(values) == 0:
             raise ValueError(f"No {key} specified!")
         return {value[0]: value[1] for value in values}

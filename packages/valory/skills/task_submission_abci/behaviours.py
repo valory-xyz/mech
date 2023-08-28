@@ -20,6 +20,7 @@
 """This package contains round behaviours of TaskExecutionAbciApp."""
 import abc
 import json
+import threading
 import time
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
@@ -58,6 +59,7 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
 ZERO_ETHER_VALUE = 0
 SAFE_GAS = 0
 DONE_TASKS = "ready_tasks"
+DONE_TASKS_LOCK = "lock"
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
@@ -85,16 +87,31 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
         done_tasks = deepcopy(self.context.shared_state.get(DONE_TASKS, []))
         return cast(List[Dict[str, Any]], done_tasks)
 
+    def done_tasks_lock(self) -> threading.Lock:
+        """Get done_tasks_lock."""
+        return self.context.shared_state[DONE_TASKS_LOCK]
+
     def remove_tasks(self, tasks: List[Dict[str, Any]]) -> None:
         """
         Pop the tasks from shared state.
 
         :param tasks: the done tasks
         """
-        done_tasks = self.done_tasks
-        for task in tasks:
-            done_tasks.remove(task)
-        self.context.shared_state[DONE_TASKS] = done_tasks
+        # run this in a lock
+        # the amount of done tasks will always be relatively low (<<20)
+        # we can afford to do this in a lock
+        with self.done_tasks_lock():
+            done_tasks = self.done_tasks
+            not_done_tasks = []
+            for task in tasks:
+                is_done = False
+                for done_task in done_tasks:
+                    if task["request_id"] == done_task["request_id"]:
+                        is_done = True
+                        break
+                if not is_done:
+                    not_done_tasks.append(task)
+            self.context.shared_state[DONE_TASKS] = not_done_tasks
 
 
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
@@ -297,6 +314,6 @@ class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
     initial_behaviour_cls = TaskPoolingBehaviour
     abci_app_cls = TaskSubmissionAbciApp
     behaviours: Set[Type[BaseBehaviour]] = {
-        TaskPoolingBehaviour,
-        TransactionPreparationBehaviour,
+        TaskPoolingBehaviour,  # type: ignore
+        TransactionPreparationBehaviour,  # type: ignore
     }

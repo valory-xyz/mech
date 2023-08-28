@@ -17,8 +17,9 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains a scaffold of a behaviour."""
+"""This package contains the implementation of ."""
 import json
+import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
@@ -52,6 +53,7 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
+DONE_TASKS_LOCK = "lock"
 
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
@@ -85,6 +87,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._download_tools()
         self._execute_task()
         self._check_for_new_reqs()
+
+    @property
+    def done_tasks_lock(self) -> threading.Lock:
+        """Get done_tasks_lock."""
+        return self.context.shared_state[DONE_TASKS_LOCK]
 
     @property
     def params(self) -> Params:
@@ -157,7 +164,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _handle_get_tool(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle get tool response"""
         tool_py = list(message.files.values())[0]
-        self._all_tools[self._inflight_tool_req] = tool_py
+        tool_req = cast(str, self._inflight_tool_req)
+        self._all_tools[tool_req] = tool_py
         self._inflight_tool_req = None
 
     def _check_for_new_reqs(self) -> None:
@@ -219,7 +227,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_done_task(self) -> None:
         """Handle done tasks"""
-        req_id = self._executing_task.get("requestId", None)
+        executing_task = cast(Dict[str, Any], self._executing_task)
+        req_id = executing_task.get("requestId", None)
         task_result = self._get_executing_task_result()
         response = {"requestId": req_id, "result": "Invalid response"}
         self._done_task = {"request_id": req_id}
@@ -230,15 +239,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._done_task["transaction"] = transaction
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
-        msg, dialogue = self._build_ipfs_store_file_req({req_id: json.dumps(response)})
+        msg, dialogue = self._build_ipfs_store_file_req(
+            {str(req_id): json.dumps(response)}
+        )
         self.send_message(msg, dialogue, self._handle_store_response)
 
     def _handle_timeout_task(self) -> None:
         """Handle timeout tasks"""
-        req_id = self._executing_task.get("requestId", None)
+        executing_task = cast(Dict[str, Any], self._executing_task)
+        req_id = executing_task.get("requestId", None)
         self.context.logger.info(f"Task timed out for request {req_id}")
         # added to end of queue
-        self.pending_tasks.append(self._executing_task)
+        self.pending_tasks.append(executing_task)
         self._executing_task = None
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
@@ -271,10 +283,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_data["method"] = local_namespace["run"]
         task_data["api_keys"] = self.params.api_keys
         task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)
-        self._executing_task["async_task_id"] = task_id
-        self._executing_task["timeout_deadline"] = (
-            time.time() + self.params.task_deadline
-        )
+        executing_task = cast(Dict[str, Any], self._executing_task)
+        executing_task["async_task_id"] = task_id
+        executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
         self._async_result = self.context.task_manager.get_task_result(task_id)
 
     def _build_ipfs_message(
@@ -329,9 +340,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_store_response(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a store response request."""
+        executing_task = cast(Dict[str, Any], self._executing_task)
         req_id, sender = (
-            self._executing_task["requestId"],
-            self._executing_task["sender"],
+            executing_task["requestId"],
+            executing_task["sender"],
         )
         self.context.logger.info(f"Response for request {req_id} stored on IPFS.")
         ipfs_hash = to_v1(message.ipfs_hash)
@@ -340,8 +352,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id=str(req_id),
             data=ipfs_hash,
         )
-        self._done_task["task_result"] = to_multihash(ipfs_hash)
-        self.done_tasks.append(self._done_task)
+        done_task = cast(Dict[str, Any], self._done_task)
+        done_task["task_result"] = to_multihash(ipfs_hash)
+        # add to done tasks, in thread safe way
+        with self.done_tasks_lock:
+            self.done_tasks.append(done_task)
         # reset tasks
         self._executing_task = None
         self._done_task = None

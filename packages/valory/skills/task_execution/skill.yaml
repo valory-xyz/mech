@@ -6,24 +6,23 @@ description: A skill used for monitoring and executing tasks.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiglilmcvbbxt6oczjbyayv6w6cr5j6wh4dkhgupej4jkjsedjwaiu
-  behaviours.py: bafybeiex3k4jfhhnrhsjbccm3ttswpc6hjinoybfforuq55muf7kvo2ubq
-  dialogues.py: bafybeicmfpvsl65wha7a6brb6oyphqwacx7n3fwyc4zqm454cxn3nsgx6i
-  handlers.py: bafybeiccy653diovejxffxu4jbsnxzmbulawfmvgvbl2nmnhncl6k7eyya
-  models.py: bafybeigfo7ibieut4et4zoonaenxgkpemsrmhwigbi2hophqpwzvrxhul4
+  __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
+  behaviours.py: bafybeig6igi7iyhvpa46g7ajbampqtlvmsbtzgrwl3otargxvkaw6k5v7u
+  dialogues.py: bafybeihw3nvl2xqxgfgtbhskzxd2awvhiujoi5o7mefokn4ew3o3vo2t4u
+  handlers.py: bafybeihygmge4rhk645lkhecczmx7432uqvjdcelpt7kg3ag7qodrsnsmi
+  models.py: bafybeicmhvc3rwihtasaa43qtsvt67nvilwuey6brcmxdkczayrfw4hkta
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
-  utils/ipfs.py: bafybeihmu6foxjpr7rcegzpztfnzuixekeb35xulmovvn3jrn5iu3ezzhu
-  utils/task.py: bafybeiakd3fxw4fo2neeq4ckqov4sh5uifjrtzufikub5hmh7u6przptei
+  utils/ipfs.py: bafybeiaddxykq2g7nhylshv27wcc6ipfyfkpigme6yjpvekxoqmscf4e6y
+  utils/task.py: bafybeiayyt22ysncqmxf3bowbsxqgym4xvx6ukap5csmuofkaozydu3oxi
 fingerprint_ignore_patterns: []
 connections:
-- valory/ledger:0.19.0:bafybeiejc7g7ebv3cleiqb4f4h4pspcu6vtr54332szwlqiabfs3sfdh44
+- valory/ledger:0.19.0:bafybeigfoz7d7si7s4jehvloq2zmiiocpbxcaathl3bxkyarxoerxq7g3a
 - valory/ipfs:0.1.0:bafybeiau32pzy55ta6ugl2bebevlxudal6pnlfomhplfm5mph6reaw3krq
 - valory/p2p_libp2p_client:0.1.0:bafybeihdnfdth3qgltefgrem7xyi4b3ejzaz67xglm2hbma2rfvpl2annq
-- valory/ledger:0.19.0:bafybeigfoz7d7si7s4jehvloq2zmiiocpbxcaathl3bxkyarxoerxq7g3a
 contracts:
-- valory/agent_mech:0.1.0:bafybeids7xq75hszk2ovpn5svcx7tjrf44eviuebuvj4hk54ox5vpwoqle
+- valory/agent_mech:0.1.0:bafybeidl6kwc3sgcxiphgb3osjqlqwylhqetv2nyv2fu6zxcgn5qctv2ju
 protocols:
-- valory/contract_api:1.0.0:bafybeiejc7g7ebv3cleiqb4f4h4pspcu6vtr54332szwlqiabfs3sfdh44
+- valory/contract_api:1.0.0:bafybeiasywsvax45qmugus5kxogejj66c5taen27h4voriodz7rgushtqa
 - valory/default:1.0.0:bafybeiecmut3235aen7wxukllv424f3dysvvlgfmn562kzdunc5hdj3hxu
 - valory/acn_data_share:0.1.0:bafybeieyixetwvz767zekhvg7r6etumyanzys6xbalx2brrfswybinnlhi
 - valory/ipfs:0.1.0:bafybeibjzhsengtxfofqpxy6syamplevp35obemwfp4c5lhag3v2bvgysa

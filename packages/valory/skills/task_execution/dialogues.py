@@ -112,11 +112,7 @@ class DefaultDialogues(Model, BaseDefaultDialogues):
     """The dialogues class keeps track of all dialogues."""
 
     def __init__(self, **kwargs: Any) -> None:
-        """
-        Initialize dialogues.
-
-        :return: None
-        """
+        """Initialize dialogues."""
         Model.__init__(self, **kwargs)
 
         def role_from_first_message(

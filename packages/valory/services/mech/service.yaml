@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeibf3j3blgtueqjmnrg4mfn6k2wm6r6hmkv6hlplrwzrnr5ahe53a4
+agent: valory/mech:0.1.0:bafybeicb5oyeoavhv7akhy3h3najtwrjgl7y5db6nm7jvwytmtpmm6f3ta
 number_of_agents: 4
 deployment:
   agent:
@@ -68,7 +68,6 @@ type: skill
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         service_id: mech
         use_polling: ${USE_POLLING:bool:false}
-        polling_interval: ${POLLING_INTERVAL:int:25}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
         setup: &id003
           all_participants: ${ALL_PARTICIPANTS:list:[]}
@@ -87,8 +86,6 @@ type: skill
         validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
-        api_keys_json: ${API_KEYS:list:[]}
 1:
   models:
     benchmark_tool: *id001
@@ -224,6 +221,53 @@ type: skill
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
         file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:str:null}
         api_keys_json: ${API_KEYS:list:[]}
+---
+public_id: valory/task_execution:0.1.0
+type: skill
+0:
+  models:
+    params:
+      args:
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
+        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
+        api_keys_json: ${API_KEYS:list:[]}
+        polling_interval: ${POLLING_INTERVAL:float:30.0}
+        agent_index: ${AGENT_INDEX_0:int:0}
+        num_agents: ${NUM_AGENTS:int:4}
+1:
+  models:
+    params:
+      args:
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
+        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
+        api_keys_json: ${API_KEYS:list:[]}
+        polling_interval: ${POLLING_INTERVAL:float:30.0}
+        agent_index: ${AGENT_INDEX_1:int:1}
+        num_agents: ${NUM_AGENTS:int:4}
+2:
+  models:
+    params:
+      args:
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
+        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
+        api_keys_json: ${API_KEYS:list:[]}
+        polling_interval: ${POLLING_INTERVAL:float:30.0}
+        agent_index: ${AGENT_INDEX_2:int:2}
+        num_agents: ${NUM_AGENTS:int:4}
+3:
+  models:
+    params:
+      args:
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
+        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
+        api_keys_json: ${API_KEYS:list:[]}
+        polling_interval: ${POLLING_INTERVAL:float:30.0}
+        agent_index: ${AGENT_INDEX_3:int:3}
+        num_agents: ${NUM_AGENTS:int:4}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

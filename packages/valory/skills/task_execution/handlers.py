@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This package contains a scaffold of a handler."""
-
+import threading
 from typing import Any, Dict, List, cast
 
 from aea.protocols.base import Message
@@ -35,6 +35,7 @@ from packages.valory.skills.task_execution.models import Params
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
+DONE_TASKS_LOCK = "lock"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -107,6 +108,7 @@ class ContractHandler(Handler):
         """Setup the contract handler."""
         self.context.shared_state[PENDING_TASKS] = []
         self.context.shared_state[DONE_TASKS] = []
+        self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
 
     def teardown(self) -> None:
         """Teardown the handler."""

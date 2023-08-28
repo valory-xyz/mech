@@ -87,7 +87,7 @@ class AgentMechContract(Contract):
 
     @classmethod
     def get_deliver_data(
-        cls, ledger_api: LedgerApi, contract_address: str, request_id: int, data: bytes
+        cls, ledger_api: LedgerApi, contract_address: str, request_id: int, data: str
     ) -> JSONLike:
         """
         Deliver a response to a request.
@@ -104,7 +104,9 @@ class AgentMechContract(Contract):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(fn_name="deliver", args=[request_id, data])
+        data = contract_instance.encodeABI(
+            fn_name="deliver", args=[request_id, bytes.fromhex(data)]
+        )
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
 
     @classmethod
@@ -118,7 +120,7 @@ class AgentMechContract(Contract):
         """Get the Request events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        entries = contract_instance.events.Request.createFilter(
+        entries = contract_instance.events.Request.create_filter(
             fromBlock=from_block,
             toBlock=to_block,
         ).get_all_entries()
@@ -143,7 +145,7 @@ class AgentMechContract(Contract):
         """Get the Deliver events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        entries = contract_instance.events.Deliver.createFilter(
+        entries = contract_instance.events.Deliver.create_filter(
             fromBlock=from_block,
             toBlock=to_block,
         ).get_all_entries()

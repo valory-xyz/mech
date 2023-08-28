@@ -122,6 +122,7 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
             if self.most_voted_payload == self.ERROR_PAYLOAD:
                 return (
                     self.synchronized_data.update(
+                        synchronized_data_class=SynchronizedData,
                         **{
                             get_name(SynchronizedData.done_tasks): [],
                         }
@@ -144,6 +145,7 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
             # in case we cant submit this tx, we need to make sure we don't account the tasks as done
             return (
                 self.synchronized_data.update(
+                    synchronized_data_class=SynchronizedData,
                     **{
                         get_name(SynchronizedData.done_tasks): [],
                     }
