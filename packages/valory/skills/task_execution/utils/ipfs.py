@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
 #   Copyright 2023 Valory AG
@@ -14,7 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
-# ------------------------------------------------------------------------------
+# -------------------------------------------------------------------
 """This module contains helpers for IPFS interaction."""
 from aea.helpers.cid import CID
 from multibase import multibase

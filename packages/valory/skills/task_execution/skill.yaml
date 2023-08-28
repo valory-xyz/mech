@@ -12,7 +12,7 @@ fingerprint:
   handlers.py: bafybeihygmge4rhk645lkhecczmx7432uqvjdcelpt7kg3ag7qodrsnsmi
   models.py: bafybeicmhvc3rwihtasaa43qtsvt67nvilwuey6brcmxdkczayrfw4hkta
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
-  utils/ipfs.py: bafybeiaddxykq2g7nhylshv27wcc6ipfyfkpigme6yjpvekxoqmscf4e6y
+  utils/ipfs.py: bafybeicemirfowqo7r64a7gfev6ver4vletptjqculrlojdhifyd4z5hni
   utils/task.py: bafybeiayyt22ysncqmxf3bowbsxqgym4xvx6ukap5csmuofkaozydu3oxi
 fingerprint_ignore_patterns: []
 connections:
@@ -78,8 +78,5 @@ models:
       agent_index: 0
       num_agents: 4
     class_name: Params
-dependencies:
-  eth_abi: {}
-  py_eth_sig_utils: {}
-  web3: {}
+dependencies: {}
 is_abstract: false
