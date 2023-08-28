@@ -16,6 +16,7 @@
 #   limitations under the License.
 #
 # -------------------------------------------------------------------
+
 """This module contains helpers for IPFS interaction."""
 from aea.helpers.cid import CID
 from multibase import multibase
