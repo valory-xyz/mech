@@ -94,7 +94,7 @@ class IpfsHandler(Handler):
 
         dialogue = self.context.ipfs_dialogues.update(ipfs_msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
-        callback = self.params.req_to_callback[nonce]
+        callback = self.params.req_to_callback.pop(nonce)
         callback(ipfs_msg, dialogue)
         self.params.in_flight_req = False
 
