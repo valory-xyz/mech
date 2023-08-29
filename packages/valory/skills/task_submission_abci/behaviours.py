@@ -91,27 +91,27 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
         """Get done_tasks_lock."""
         return self.context.shared_state[DONE_TASKS_LOCK]
 
-    def remove_tasks(self, tasks: List[Dict[str, Any]]) -> None:
+    def remove_tasks(self, submitted_tasks: List[Dict[str, Any]]) -> None:
         """
         Pop the tasks from shared state.
 
-        :param tasks: the done tasks
+        :param submitted_tasks: the done tasks that have already been submitted
         """
         # run this in a lock
         # the amount of done tasks will always be relatively low (<<20)
         # we can afford to do this in a lock
         with self.done_tasks_lock():
             done_tasks = self.done_tasks
-            not_done_tasks = []
-            for task in tasks:
-                is_done = False
-                for done_task in done_tasks:
-                    if task["request_id"] == done_task["request_id"]:
-                        is_done = True
+            not_submitted = []
+            for done_task in done_tasks:
+                is_submitted = False
+                for submitted_task in submitted_tasks:
+                    if submitted_task["request_id"] == done_task["request_id"]:
+                        is_submitted = True
                         break
-                if not is_done:
-                    not_done_tasks.append(task)
-            self.context.shared_state[DONE_TASKS] = not_done_tasks
+                if not is_submitted:
+                    not_submitted.append(done_task)
+            self.context.shared_state[DONE_TASKS] = not_submitted
 
 
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):

@@ -217,7 +217,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     event_to_timeout: EventToTimeout = {
         Event.TASK_EXECUTION_ROUND_TIMEOUT: 60.0,
     }
-    cross_period_persisted_keys: FrozenSet[str] = frozenset()
+    cross_period_persisted_keys: FrozenSet[str] = frozenset([get_name(SynchronizedData.done_tasks)])
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskPoolingRound: set(),
     }

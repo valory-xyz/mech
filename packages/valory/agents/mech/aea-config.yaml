@@ -34,11 +34,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeicg7dv7cff34nv2k2z47c4yp4kddsxp3wozonzow6tnvfvwndz3cy
 - valory/abstract_round_abci:0.1.0:bafybeigxjcci53vwytymzlhr37436yvenh7jup4astrn7dgyixo24aq2pq
 - valory/contract_subscription:0.1.0:bafybeifbgzfrhtdtendqzwmh3o436nyexwkif6mbvsouvk2ktdfk5lhe7y
-- valory/mech_abci:0.1.0:bafybeie2qjdu2fr5wssiksnp22tcsdxoffvdixmccoknug6wrj4nwb6arm
+- valory/mech_abci:0.1.0:bafybeigztvqk5kehiduy6eseiu6pijjtf3vxy7njmpfb25gd6lvbn3ol74
 - valory/task_execution:0.1.0:bafybeicvt4pjpqltvs7mvkbggm2cdxvr2xrgx7zjjbmhj2daho45nhuz7i
 - valory/registration_abci:0.1.0:bafybeibc4kczqbh23sc6tufrzn3axmhp3vjav7fa3u6cnpvolrbbc2fd7i
 - valory/reset_pause_abci:0.1.0:bafybeid445uy6wwvugf3byzl7r73c7teu6xr5ezxb4h7cxbenghg3copvy
-- valory/task_submission_abci:0.1.0:bafybeif3c3cyfjbvwgr35qv7sq5sg7bddggwna5i37q7eljre5hrdylk3u
+- valory/task_submission_abci:0.1.0:bafybeigv4jzmuuckjs4vsnc5oflwri2asqouinisg3wweaivnk7copxgse
 - valory/termination_abci:0.1.0:bafybeiguy7pkrcptg6c754ioig4mlkr7truccym3fpv6jwpjx2tmpdbzhi
 - valory/transaction_settlement_abci:0.1.0:bafybeidpsnguxizkpihtkqzojr3em7yy7c6qc7gxpbh5vglmwws5wke7bi
 default_ledger: ethereum
