@@ -52,6 +52,8 @@ class Params(Model):
         self.polling_interval = kwargs.get("polling_interval", 30.0)
         self.task_deadline = kwargs.get("task_deadline", 240.0)
         self.num_agents = kwargs.get("num_agents", None)
+        self.request_count: int = 0
+        self.cleanup_freq = kwargs.get("cleanup_freq", 50)
         enforce(self.num_agents is not None, "num_agents must be set!")
         self.agent_index = kwargs.get("agent_index", None)
         enforce(self.agent_index is not None, "agent_index must be set!")

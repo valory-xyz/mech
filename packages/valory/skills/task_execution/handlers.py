@@ -40,43 +40,56 @@ DONE_TASKS_LOCK = "lock"
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
 
-class AcnHandler(Handler):
-    """ACN API message handler."""
-
-    SUPPORTED_PROTOCOL = AcnDataShareMessage.protocol_id
+class BaseHandler(Handler):
+    """Base Handler"""
 
     def setup(self) -> None:
         """Set up the handler."""
-        self.context.logger.info("AcnHandler: setup method called.")
+        self.context.logger.info(f"{self.__class__.__name__}: setup method called.")
+
+    def cleanup_dialogues(self) -> None:
+        """Clean up all dialogues."""
+        for handler_name in self.context.handlers.__dict__.keys():
+            dialogues_name = handler_name.replace("_handler", "_dialogues")
+            dialogues = getattr(self.context, dialogues_name)
+            dialogues.cleanup()
+
+    @property
+    def params(self) -> Params:
+        """Get the parameters."""
+        return cast(Params, self.context.params)
+
+    def teardown(self) -> None:
+        """Teardown the handler."""
+        self.context.logger.info(f"{self.__class__.__name__}: teardown called.")
+
+    def on_message_handled(self, _message: Message) -> None:
+        """Callback after a message has been handled."""
+        self.params.request_count += 1
+        if self.params.request_count % self.params.cleanup_freq == 0:
+            self.context.logger.info(
+                f"{self.params.request_count} requests processed. Cleaning up dialogues."
+            )
+            self.cleanup_dialogues()
+
+
+class AcnHandler(BaseHandler):
+    """ACN API message handler."""
+
+    SUPPORTED_PROTOCOL = AcnDataShareMessage.protocol_id
 
     def handle(self, message: Message) -> None:
         """Handle the message."""
         # we don't respond to ACN messages at this point
         self.context.logger.info(f"Received message: {message}")
         self.context.acn_data_share_dialogues.update(cast(AcnDataShareMessage, message))
-
-    def teardown(self) -> None:
-        """Teardown the handler."""
-        self.context.logger.info("AcnHandler: teardown called.")
+        self.on_message_handled(message)
 
 
-class IpfsHandler(Handler):
+class IpfsHandler(BaseHandler):
     """IPFS API message handler."""
 
     SUPPORTED_PROTOCOL = IpfsMessage.protocol_id
-
-    def setup(self) -> None:
-        """Setup the IPFS handler."""
-        self.context.logger.info("IPFSHandler: setup method called.")
-
-    def teardown(self) -> None:
-        """Teardown the handler."""
-        self.context.logger.info("IpfsHandler: teardown called.")
-
-    @property
-    def params(self) -> Params:
-        """Get the parameters."""
-        return cast(Params, self.context.params)
 
     def handle(self, message: Message) -> None:
         """
@@ -97,9 +110,10 @@ class IpfsHandler(Handler):
         callback = self.params.req_to_callback.pop(nonce)
         callback(ipfs_msg, dialogue)
         self.params.in_flight_req = False
+        self.on_message_handled(message)
 
 
-class ContractHandler(Handler):
+class ContractHandler(BaseHandler):
     """Contract API message handler."""
 
     SUPPORTED_PROTOCOL = ContractApiMessage.protocol_id
@@ -109,20 +123,12 @@ class ContractHandler(Handler):
         self.context.shared_state[PENDING_TASKS] = []
         self.context.shared_state[DONE_TASKS] = []
         self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
-
-    def teardown(self) -> None:
-        """Teardown the handler."""
-        self.context.logger.info("ContractHandler: teardown called.")
+        super().setup()
 
     @property
     def pending_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks."""
         return self.context.shared_state[PENDING_TASKS]
-
-    @property
-    def params(self) -> Params:
-        """Get the parameters."""
-        return cast(Params, self.context.params)
 
     def handle(self, message: Message) -> None:
         """
@@ -142,6 +148,7 @@ class ContractHandler(Handler):
         body = contract_api_msg.state.body
         self._handle_get_undelivered_reqs(body)
         self.params.in_flight_req = False
+        self.on_message_handled(message)
 
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""

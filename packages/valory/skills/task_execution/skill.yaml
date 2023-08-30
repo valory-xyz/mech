@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeig6igi7iyhvpa46g7ajbampqtlvmsbtzgrwl3otargxvkaw6k5v7u
+  behaviours.py: bafybeiax4katqyothjapb5gz2f5bzx2zictwacqh3x5bgmdkaxk5zz5w4i
   dialogues.py: bafybeihw3nvl2xqxgfgtbhskzxd2awvhiujoi5o7mefokn4ew3o3vo2t4u
-  handlers.py: bafybeibo5ewcgebo32xto2zo7wwtxw2jyyagwhczruqlohregihmjumn54
-  models.py: bafybeicmhvc3rwihtasaa43qtsvt67nvilwuey6brcmxdkczayrfw4hkta
+  handlers.py: bafybeigw4vsssun2m7awm6qn27dkfqr3jpfny2qlkj2e5gyypebcs2njmq
+  models.py: bafybeiauvac5fxeiqxujfl6ocd4u2l2otb2xntygmn2b3k5v7tcj7ptaju
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/ipfs.py: bafybeicuaj23qrcdv6ly4j7yo6il2r5plozhd6mwvcp5acwqbjxb2t3u2i
   utils/task.py: bafybeiayyt22ysncqmxf3bowbsxqgym4xvx6ukap5csmuofkaozydu3oxi
@@ -38,11 +38,11 @@ handlers:
   ipfs_handler:
     args: {}
     class_name: IpfsHandler
-  acn_handler:
+  acn_data_share_handler:
     args: {}
     class_name: AcnHandler
 models:
-  contract_api_dialogues:
+  contract_dialogues:
     args: {}
     class_name: ContractDialogues
   default_dialogues:
