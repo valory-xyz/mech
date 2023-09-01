@@ -165,7 +165,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle get tool response"""
         tool_py = list(message.files.values())[0]
         tool_req = cast(str, self._inflight_tool_req)
-        self._all_tools[tool_req] = tool_py
+        local_namespace: Dict[str, Any] = globals().copy()
+        if "run" in local_namespace:
+            del local_namespace["run"]
+        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
+        self._all_tools[tool_req] = local_namespace["run"]
         self._inflight_tool_req = None
 
     def _check_for_new_reqs(self) -> None:
@@ -275,12 +279,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         tool_task = AnyToolAsTask()
-        tool_py = self._all_tools[task_data["tool"]]
-        local_namespace: Dict[str, Any] = globals().copy()
-        if "run" in local_namespace:
-            del local_namespace["run"]
-        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
-        task_data["method"] = local_namespace["run"]
+        task_data["method"] = self._all_tools[task_data["tool"]]
         task_data["api_keys"] = self.params.api_keys
         task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
