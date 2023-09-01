@@ -17,15 +17,9 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the transaction payloads of the TaskExecutionAbciApp."""
+"""This module contains the implementation of the task execution skill."""
 
-from dataclasses import dataclass
-
-from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
+from aea.configurations.base import PublicId
 
 
-@dataclass(frozen=True)
-class TaskExecutionAbciPayload(BaseTxPayload):
-    """Represent a transaction payload for the TaskExecutionRound."""
-
-    content: str
+PUBLIC_ID = PublicId.from_str("valory/task_execution:0.1.0")

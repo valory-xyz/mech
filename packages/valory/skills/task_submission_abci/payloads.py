@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the transaction payloads of the MultiplexerAbciApp."""
+"""This module contains the transaction payloads of the TaskExecutionAbciApp."""
 
 from dataclasses import dataclass
 
@@ -25,7 +25,14 @@ from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 
 
 @dataclass(frozen=True)
-class MultiplexerPayload(BaseTxPayload):
-    """Represent a transaction payload for the MultiplexerRound."""
+class TaskPoolingPayload(BaseTxPayload):
+    """Represent a transaction payload for the TaskPoolingRound."""
+
+    content: str
+
+
+@dataclass(frozen=True)
+class TransactionPayload(BaseTxPayload):
+    """Represent a transaction payload for the TransactionPreparationRound."""
 
     content: str

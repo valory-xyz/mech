@@ -1,0 +1,92 @@
+name: task_execution
+author: valory
+version: 0.1.0
+type: skill
+description: A skill used for monitoring and executing tasks.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
+  behaviours.py: bafybeig6igi7iyhvpa46g7ajbampqtlvmsbtzgrwl3otargxvkaw6k5v7u
+  dialogues.py: bafybeihw3nvl2xqxgfgtbhskzxd2awvhiujoi5o7mefokn4ew3o3vo2t4u
+  handlers.py: bafybeibo5ewcgebo32xto2zo7wwtxw2jyyagwhczruqlohregihmjumn54
+  models.py: bafybeicmhvc3rwihtasaa43qtsvt67nvilwuey6brcmxdkczayrfw4hkta
+  utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
+  utils/ipfs.py: bafybeicuaj23qrcdv6ly4j7yo6il2r5plozhd6mwvcp5acwqbjxb2t3u2i
+  utils/task.py: bafybeiayyt22ysncqmxf3bowbsxqgym4xvx6ukap5csmuofkaozydu3oxi
+fingerprint_ignore_patterns: []
+connections:
+- valory/ledger:0.19.0:bafybeigfoz7d7si7s4jehvloq2zmiiocpbxcaathl3bxkyarxoerxq7g3a
+- valory/ipfs:0.1.0:bafybeiau32pzy55ta6ugl2bebevlxudal6pnlfomhplfm5mph6reaw3krq
+- valory/p2p_libp2p_client:0.1.0:bafybeihdnfdth3qgltefgrem7xyi4b3ejzaz67xglm2hbma2rfvpl2annq
+contracts:
+- valory/agent_mech:0.1.0:bafybeidl6kwc3sgcxiphgb3osjqlqwylhqetv2nyv2fu6zxcgn5qctv2ju
+protocols:
+- valory/contract_api:1.0.0:bafybeiasywsvax45qmugus5kxogejj66c5taen27h4voriodz7rgushtqa
+- valory/default:1.0.0:bafybeiecmut3235aen7wxukllv424f3dysvvlgfmn562kzdunc5hdj3hxu
+- valory/acn_data_share:0.1.0:bafybeieyixetwvz767zekhvg7r6etumyanzys6xbalx2brrfswybinnlhi
+- valory/ipfs:0.1.0:bafybeibjzhsengtxfofqpxy6syamplevp35obemwfp4c5lhag3v2bvgysa
+skills: []
+behaviours:
+  task_execution:
+    args: {}
+    class_name: TaskExecutionBehaviour
+handlers:
+  contract_handler:
+    args: {}
+    class_name: ContractHandler
+  ipfs_handler:
+    args: {}
+    class_name: IpfsHandler
+  acn_handler:
+    args: {}
+    class_name: AcnHandler
+models:
+  contract_api_dialogues:
+    args: {}
+    class_name: ContractDialogues
+  default_dialogues:
+    args: {}
+    class_name: DefaultDialogues
+  ipfs_dialogues:
+    args: {}
+    class_name: IpfsDialogues
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
+  params:
+    args:
+      agent_mech_contract_address: '0x9A676e781A523b5d0C0e43731313A708CB607508'
+      task_deadline: 240.0
+      file_hash_to_tools_json:
+      - - bafybeif3izkobmvaoen23ine6tiqx55eaf4g3r56hdalnig656xivzpf3m
+        - - openai-text-davinci-002
+          - openai-text-davinci-003
+          - openai-gpt-3.5-turbo
+          - openai-gpt-4
+      - - bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua
+        - - stabilityai-stable-diffusion-v1-5
+          - stabilityai-stable-diffusion-xl-beta-v2-2-2
+          - stabilityai-stable-diffusion-512-v2-1
+          - stabilityai-stable-diffusion-768-v2-1
+      api_keys_json:
+      - - openai
+        - dummy_api_key
+      - - stabilityai
+        - dummy_api_key
+      polling_interval: 30.0
+      agent_index: 0
+      num_agents: 4
+    class_name: Params
+dependencies:
+  openai:
+    version: ==0.27.2
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
+  googlesearch-python:
+    version: ==1.2.3
+  beautifulsoup4:
+    version: ==4.12.2
+is_abstract: false

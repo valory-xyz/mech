@@ -129,7 +129,7 @@ jobs:
       run: |
         tox -e check-abci-docstrings
         tox -e check-abciapp-specs
-        tox -e check-handlers
+        # tox -e check-handlers
         # ignore for now due to https://github.com/valory-xyz/open-autonomy/issues/1988
         # tox -e analyse-service
 

@@ -17,9 +17,17 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the default skill."""
+"""This package contains a custom Loader for the ipfs connection."""
 
-from aea.configurations.base import PublicId
+from typing import Any
+
+from aea.skills.tasks import Task
 
 
-PUBLIC_ID = PublicId.from_str("valory/multiplexer_abci:0.1.0")
+class AnyToolAsTask(Task):
+    """AnyToolAsTask"""
+
+    def execute(self, *args: Any, **kwargs: Any) -> Any:
+        """Execute the task."""
+        method = kwargs.pop("method")
+        return method(*args, **kwargs)

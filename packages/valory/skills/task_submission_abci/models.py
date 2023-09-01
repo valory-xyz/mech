@@ -19,7 +19,7 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 
-from typing import Any, Dict, List, Type, Union
+from typing import Any, Type
 
 from packages.valory.skills.abstract_round_abci.base import AbciApp
 from packages.valory.skills.abstract_round_abci.models import BaseParams
@@ -30,18 +30,13 @@ from packages.valory.skills.abstract_round_abci.models import Requests as BaseRe
 from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
-from packages.valory.skills.task_execution_abci.rounds import TaskExecutionAbciApp
+from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
 
 
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
-    abci_app_cls: Type[AbciApp] = TaskExecutionAbciApp
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the shared state object."""
-        self.all_tools: Dict[str, str] = {}
-        super().__init__(*args, **kwargs)
+    abci_app_cls: Type[AbciApp] = TaskSubmissionAbciApp
 
 
 class Params(BaseParams):
@@ -50,20 +45,7 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.api_keys: Dict[str, str] = self._nested_list_todict_workaround(
-            kwargs, "api_keys_json", List[List[str]]
-        )
-        self.file_hash_to_tools: Dict[
-            str, List[str]
-        ] = self._nested_list_todict_workaround(
-            kwargs, "file_hash_to_tools_json", List[List[Union[str, List[str]]]]
-        )
-        self.tools_to_file_hash = {
-            value: key
-            for key, values in self.file_hash_to_tools.items()
-            for value in values
-        }
-        self.all_tools: Dict[str, str] = {}
+        self.task_wait_timeout = self._ensure("task_wait_timeout", kwargs, float)
         self.multisend_address = kwargs.get("multisend_address", None)
         if self.multisend_address is None:
             raise ValueError("No multisend_address specified!")
@@ -72,28 +54,7 @@ class Params(BaseParams):
         )
         if self.agent_mech_contract_address is None:
             raise ValueError("agent_mech_contract_address is required")
-        self.ipfs_fetch_timeout = self._ensure(
-            "ipfs_fetch_timeout", kwargs=kwargs, type_=float
-        )
         super().__init__(*args, **kwargs)
-
-    def _nested_list_todict_workaround(
-        self, kwargs: Dict, key: str, type_: Any
-    ) -> Dict:
-        """
-        Get a nested list from the kwargs and convert it to a dictionary.
-
-        This is a workaround because we currently cannot input a json string on Propel.
-
-        :param kwargs: the keyword arguments parsed from the yaml configuration.
-        :param key: the key for which we want to try to retrieve its value from the kwargs.
-        :param type_: the expected type of the retrieved value.
-        :return: the nested list converted to a dictionary.
-        """
-        values = self._ensure(key, kwargs, type_)
-        if len(values) == 0:
-            raise ValueError(f"No {key} specified!")
-        return {value[0]: value[1] for value in values}
 
 
 Requests = BaseRequests
