@@ -82,7 +82,6 @@ class AcnHandler(BaseHandler):
         """Handle the message."""
         # we don't respond to ACN messages at this point
         self.context.logger.info(f"Received message: {message}")
-        self.context.acn_data_share_dialogues.update(cast(AcnDataShareMessage, message))
         self.on_message_handled(message)
 
 

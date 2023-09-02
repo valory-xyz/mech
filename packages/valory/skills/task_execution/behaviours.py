@@ -179,7 +179,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # or if we should not poll yet
             return
 
-        contract_api_msg, _ = self.context.contract_dialogues.create(
+        contract_api_msg, _ = self.context.contract_api_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.agent_mech_contract_address,
             contract_id=str(AgentMechContract.contract_id),
