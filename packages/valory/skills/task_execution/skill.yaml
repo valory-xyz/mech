@@ -38,11 +38,11 @@ handlers:
   ipfs_handler:
     args: {}
     class_name: IpfsHandler
-  acn_handler:
+  acn_data_share_handler:
     args: {}
     class_name: AcnHandler
 models:
-  contract_api_dialogues:
+  contract_dialogues:
     args: {}
     class_name: ContractDialogues
   default_dialogues:
