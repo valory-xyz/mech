@@ -103,6 +103,7 @@ class IpfsHandler(BaseHandler):
             self.context.logger.warning(
                 f"IPFS Message performative not recognized: {ipfs_msg.performative}"
             )
+            self.params.in_flight_req = False
             return
 
         dialogue = self.context.ipfs_dialogues.update(ipfs_msg)
@@ -156,7 +157,7 @@ class ContractHandler(BaseHandler):
         if len(reqs) == 0:
             return
 
-        self.from_block = max([req["block_number"] for req in reqs]) + 1
+        self.params.from_block = max([req["block_number"] for req in reqs]) + 1
         self.context.logger.info(f"Received {len(reqs)} new requests.")
         reqs = [
             req
@@ -165,4 +166,6 @@ class ContractHandler(BaseHandler):
         ]
         self.context.logger.info(f"Processing only {len(reqs)} of the new requests.")
         self.pending_tasks.extend(reqs)
-        self.context.logger.info(f"Monitoring new reqs from block {self.from_block}")
+        self.context.logger.info(
+            f"Monitoring new reqs from block {self.params.from_block}"
+        )
