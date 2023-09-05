@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeiafuo66iikppev3f5u4veky5ouytrzwjtc3bjupdmbvlnamu7fjnu
+agent: valory/mech:0.1.0:bafybeigfkzy7beir3tasc7ndcgfj3vcg6vrsjptojerum3ajccwuglczg4
 number_of_agents: 4
 deployment:
   agent:
@@ -25,205 +25,130 @@ public_id: valory/mech_abci:0.1.0
 type: skill
 0:
   models:
-    benchmark_tool: &id001
-      args:
-        log_dir: /logs
     params:
       args:
-        cleanup_history_depth: 1
-        cleanup_history_depth_current: null
-        drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-        finalize_timeout: 60.0
-        genesis_config: &id002
-          genesis_time: '2022-09-26T00:00:00.000000000Z'
-          chain_id: chain-c4daS1
-          consensus_params:
-            block:
-              max_bytes: '22020096'
-              max_gas: '-1'
-              time_iota_ms: '1000'
-            evidence:
-              max_age_num_blocks: '100000'
-              max_age_duration: '172800000000000'
-              max_bytes: '1048576'
-            validator:
-              pub_key_types:
-              - ed25519
-            version: {}
-          voting_power: '10'
-        history_check_timeout: 1205
-        init_fallback_gas: 0
-        keeper_allowed_retries: 3
-        keeper_timeout: 30.0
-        max_attempts: 10
-        max_healthcheck: 120
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
-        reset_tendermint_after: 2
-        retry_attempts: 400
-        retry_timeout: 3
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
-        request_retry_delay: 1.0
-        request_timeout: 10.0
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
-        service_id: mech
         use_polling: ${USE_POLLING:bool:false}
-        polling_interval: ${POLLING_INTERVAL:int:25}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: &id003
+        setup: &id001
           all_participants: ${ALL_PARTICIPANTS:list:[]}
           safe_contract_address: ${SAFE_CONTRACT_ADDRESS:str:0x0000000000000000000000000000000000000000}
-          consensus_threshold: null
+          consensus_threshold: ${CONSENSUS_THRESHOLD:int:null}
         share_tm_config_on_startup: ${USE_ACN:bool:false}
-        sleep_time: 1
-        tendermint_check_sleep_delay: 3
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
-        tendermint_max_retries: 5
         tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
         tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
         termination_sleep: ${TERMINATION_SLEEP:int:900}
-        tx_timeout: 10.0
         use_termination: ${USE_TERMINATION:bool:false}
-        validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
-        api_keys_json: ${API_KEYS:list:[]}
 1:
   models:
-    benchmark_tool: *id001
     params:
       args:
-        cleanup_history_depth: 1
-        cleanup_history_depth_current: null
-        drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-        finalize_timeout: 60.0
-        genesis_config: *id002
-        history_check_timeout: 1205
-        init_fallback_gas: 0
-        keeper_allowed_retries: 3
-        keeper_timeout: 30.0
-        max_attempts: 10
-        max_healthcheck: 120
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
-        reset_tendermint_after: 2
-        retry_attempts: 400
-        retry_timeout: 3
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
-        request_retry_delay: 1.0
-        request_timeout: 10.0
-        round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
-        service_id: mech
-        service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: *id003
-        share_tm_config_on_startup: ${USE_ACN:bool:false}
-        sleep_time: 1
-        tendermint_check_sleep_delay: 3
-        use_polling: ${USE_POLLING:str:false}
-        polling_interval: ${POLLING_INTERVAL:int:25}
-        tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
-        tendermint_max_retries: 5
-        tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
-        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_1:str:node0:26656}
-        termination_sleep: ${TERMINATION_SLEEP:int:900}
-        tx_timeout: 10.0
-        use_termination: ${USE_TERMINATION:bool:false}
-        validate_timeout: 1205
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
-        reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:str:null}
-        api_keys_json: ${API_KEYS:list:[]}
-2:
-  models:
-    benchmark_tool: *id001
-    params:
-      args:
-        cleanup_history_depth: 1
-        cleanup_history_depth_current: null
-        drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-        finalize_timeout: 60.0
-        genesis_config: *id002
-        history_check_timeout: 1205
-        init_fallback_gas: 0
-        keeper_allowed_retries: 3
-        keeper_timeout: 30.0
-        max_attempts: 10
-        max_healthcheck: 120
-        multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
-        on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
-        reset_tendermint_after: 2
-        retry_attempts: 400
-        retry_timeout: 3
-        reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
-        request_retry_delay: 1.0
-        request_timeout: 10.0
-        round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
-        service_id: mech
-        service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: *id003
-        share_tm_config_on_startup: ${USE_ACN:bool:false}
-        use_polling: ${USE_POLLING:str:false}
-        sleep_time: 1
-        tendermint_check_sleep_delay: 3
-        tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
-        tendermint_max_retries: 5
-        tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
-        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_2:str:node0:26656}
-        termination_sleep: ${TERMINATION_SLEEP:int:900}
-        polling_interval: ${POLLING_INTERVAL:int:25}
-        tx_timeout: 10.0
-        use_termination: ${USE_TERMINATION:bool:false}
-        validate_timeout: 1205
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
-        reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:str:null}
-        api_keys_json: ${API_KEYS:list:[]}
-3:
-  models:
-    benchmark_tool: *id001
-    params:
-      args:
-        cleanup_history_depth: 1
-        cleanup_history_depth_current: null
-        drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-        finalize_timeout: 60.0
-        genesis_config: *id002
-        history_check_timeout: 1205
-        init_fallback_gas: 0
-        keeper_allowed_retries: 3
-        keeper_timeout: 30.0
-        max_attempts: 10
-        max_healthcheck: 120
-        multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
-        on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
-        reset_tendermint_after: 2
-        retry_attempts: 400
-        retry_timeout: 3
-        reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
-        request_retry_delay: 1.0
-        request_timeout: 10.0
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
-        polling_interval: ${POLLING_INTERVAL:int:25}
-        service_id: mech
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: *id003
+        setup: *id001
         share_tm_config_on_startup: ${USE_ACN:bool:false}
-        sleep_time: 1
-        tendermint_check_sleep_delay: 3
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
-        tendermint_max_retries: 5
         tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
-        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_3:str:node0:26656}
+        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
         termination_sleep: ${TERMINATION_SLEEP:int:900}
-        tx_timeout: 10.0
         use_termination: ${USE_TERMINATION:bool:false}
-        validate_timeout: 1205
         agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
-        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:str:null}
+2:
+  models:
+    params:
+      args:
+        multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
+        on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
+        reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
+        use_polling: ${USE_POLLING:bool:false}
+        service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
+        setup: *id001
+        share_tm_config_on_startup: ${USE_ACN:bool:false}
+        tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
+        tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
+        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
+        termination_sleep: ${TERMINATION_SLEEP:int:900}
+        use_termination: ${USE_TERMINATION:bool:false}
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
+3:
+  models:
+    params:
+      args:
+        multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
+        on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
+        reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
+        use_polling: ${USE_POLLING:bool:false}
+        service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
+        setup: *id001
+        share_tm_config_on_startup: ${USE_ACN:bool:false}
+        tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
+        tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
+        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
+        termination_sleep: ${TERMINATION_SLEEP:int:900}
+        use_termination: ${USE_TERMINATION:bool:false}
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
+---
+public_id: valory/task_execution:0.1.0
+type: skill
+0:
+  models:
+    params:
+      args:
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
+        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
         api_keys_json: ${API_KEYS:list:[]}
+        polling_interval: ${POLLING_INTERVAL:float:30.0}
+        agent_index: ${AGENT_INDEX_0:int:0}
+        num_agents: ${NUM_AGENTS:int:4}
+1:
+  models:
+    params:
+      args:
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
+        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
+        api_keys_json: ${API_KEYS:list:[]}
+        polling_interval: ${POLLING_INTERVAL:float:30.0}
+        agent_index: ${AGENT_INDEX_1:int:1}
+        num_agents: ${NUM_AGENTS:int:4}
+2:
+  models:
+    params:
+      args:
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
+        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
+        api_keys_json: ${API_KEYS:list:[]}
+        polling_interval: ${POLLING_INTERVAL:float:30.0}
+        agent_index: ${AGENT_INDEX_2:int:2}
+        num_agents: ${NUM_AGENTS:int:4}
+3:
+  models:
+    params:
+      args:
+        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESS:str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+        task_deadline: ${TASK_DEADLINE:float:240.0}
+        file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
+        api_keys_json: ${API_KEYS:list:[]}
+        polling_interval: ${POLLING_INTERVAL:float:30.0}
+        agent_index: ${AGENT_INDEX_3:int:3}
+        num_agents: ${NUM_AGENTS:int:4}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

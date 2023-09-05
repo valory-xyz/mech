@@ -1,31 +1,37 @@
-name: multiplexer_abci
+name: task_submission_abci
 author: valory
 version: 0.1.0
 type: skill
-description: An abci skill that implements decision logic for the mech.
+description: An abci skill that implements task execution and transaction preparation
+  for the mech.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeifx5c6xdzvj5v6old2ek56fek6zapsfuxgdiokpacjp57td3wbalm
-  behaviours.py: bafybeibevecu5s3ewnq2btswcsnwqfslw5hz5spkkjtnkggclqa23h222a
-  dialogues.py: bafybeie777tjh4xvxo5rrig4kq66vxg5vvmyie576ptot43olwrzfrc64a
-  fsm_specification.yaml: bafybeibmbpdgq7h6sgaxtdb2aawha5xdwd6oszbn3nwr2tolaijoswkfly
-  handlers.py: bafybeic77bbhvm7yqhimzosdjnmocy4gm677t3f4gp73c5dll5qhn7xeqy
-  models.py: bafybeiets4yg4p7g7mclpdmpekfmbgd6z3dy4x2kvd6rhqhjqr3njdxlcy
-  payloads.py: bafybeibhg7q5ejfhjkjvcfeqjyzp32msn4alu5btnywimh2zd5arr2f2mm
-  rounds.py: bafybeibsi2tm4sovnaevbc6dw3ljxlc6jkta33k4aqest4q423kb5okrui
+  __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
+  behaviours.py: bafybeiekpqtkafxmxwd4cktoguz2fwdwohhmwginznvsnzawrurofx2d3a
+  dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
+  fsm_specification.yaml: bafybeig6bhn554qyou7kef5bstnlv54zke32avyti63uu4hvsol3lzqkoi
+  handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
+  models.py: bafybeigtexvivmi5egiglmg2s6qc3eceb6z7kklgxk3mvybyqu5okx7eni
+  payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
+  rounds.py: bafybeicstmau4vlzpxz3kjgiwwsetwmotdk4un4iucmdddzvot5dgdkg2a
+  tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeigzl5sjks2tqszum6axrkwjlmybsgp54om5auybbdp3uyfx3zef7q
+- valory/agent_mech:0.1.0:bafybeidl6kwc3sgcxiphgb3osjqlqwylhqetv2nyv2fu6zxcgn5qctv2ju
+- valory/gnosis_safe:0.1.0:bafybeigvqg4lapdaa23dpc3pv67rdptdhey6e435mxqsw2gb2u74yw4yei
+- valory/multisend:0.1.0:bafybeie7m7pjbnw7cccpbvmbgkut24dtlt4cgvug3tbac7gej37xvwbv3a
 protocols:
 - valory/contract_api:1.0.0:bafybeiasywsvax45qmugus5kxogejj66c5taen27h4voriodz7rgushtqa
+- valory/acn_data_share:0.1.0:bafybeieyixetwvz767zekhvg7r6etumyanzys6xbalx2brrfswybinnlhi
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeigxjcci53vwytymzlhr37436yvenh7jup4astrn7dgyixo24aq2pq
+- valory/transaction_settlement_abci:0.1.0:bafybeidpsnguxizkpihtkqzojr3em7yy7c6qc7gxpbh5vglmwws5wke7bi
 behaviours:
   main:
     args: {}
-    class_name: MultiplexerRoundBehaviour
+    class_name: TaskSubmissionRoundBehaviour
 handlers:
   abci:
     args: {}
@@ -68,9 +74,11 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogue
   params:
     args:
-      cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0
@@ -93,26 +101,26 @@ models:
         voting_power: '10'
       history_check_timeout: 1205
       ipfs_domain_name: null
+      ipfs_fetch_timeout: 15.0
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
       max_attempts: 10
       max_healthcheck: 120
       on_chain_service_id: null
-      polling_interval: 25
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
-      reset_period_count: 100
       reset_tendermint_after: 2
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
-      service_id: multiplexer
+      service_id: task_execution
       service_registry_address: null
       setup:
-        all_participants: []
-        safe_contract_address: '0x0000000000000000000000000000000000000000'
+        all_participants:
+        - '0x0000000000000000000000000000000000000000'
         consensus_threshold: null
+        safe_contract_address: '0x0000000000000000000000000000000000000000'
       share_tm_config_on_startup: false
       sleep_time: 1
       tendermint_check_sleep_delay: 3
@@ -121,7 +129,7 @@ models:
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
       tx_timeout: 10.0
-      use_polling: false
+      task_wait_timeout: 15
       use_termination: false
       validate_timeout: 1205
     class_name: Params
@@ -137,5 +145,15 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
-dependencies: {}
+dependencies:
+  openai:
+    version: ==0.27.2
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
+  googlesearch-python:
+    version: ==1.2.3
+  beautifulsoup4:
+    version: ==4.12.2
 is_abstract: true
