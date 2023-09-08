@@ -21,6 +21,7 @@
 import json
 import threading
 import time
+from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
@@ -75,6 +76,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_polling: Optional[float] = None
         self._invalid_request = False
+        self._async_result: Optional[Future] = None
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -119,7 +121,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _is_executing_task_ready(self) -> bool:
         """Check if the executing task is ready."""
-        if self._executing_task is None:
+        if self._executing_task is None or self._async_result is None:
             return False
         return self._async_result.done()
 
@@ -139,7 +141,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if self._invalid_request:
             return None
         try:
-            return self._async_result.result()
+            async_result = cast(Future, self._async_result)
+            return async_result.result()
         except Exception as e:  # pylint: disable=broad-except
             self.context.logger.error(
                 "Exception raised while executing task: {}".format(str(e))
@@ -167,11 +170,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle get tool response"""
         tool_py = list(message.files.values())[0]
         tool_req = cast(str, self._inflight_tool_req)
-        local_namespace: Dict[str, Any] = globals().copy()
-        if "run" in local_namespace:
-            del local_namespace["run"]
-        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
-        self._all_tools[tool_req] = local_namespace["run"]
+        self._all_tools[tool_req] = tool_py
         self._inflight_tool_req = None
 
     def _check_for_new_reqs(self) -> None:
@@ -257,7 +256,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(f"Task timed out for request {req_id}")
         # added to end of queue
         self.pending_tasks.append(executing_task)
-        self._async_result.cancel()
+        async_result = cast(Future, self._async_result)
+        async_result.result()
         self._executing_task = None
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
@@ -282,12 +282,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         tool_task = AnyToolAsTask()
-        task_data["method"] = self._all_tools[task_data["tool"]]
+        tool_py = self._all_tools[task_data["tool"]]
+        task_data["tool"] = tool_py
         task_data["api_keys"] = self.params.api_keys
         future = self._executor.submit(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
-        self._async_result = future
+        self._async_result = cast(Optional[Future], future)
 
     def _build_ipfs_message(
         self,
