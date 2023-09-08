@@ -21,6 +21,7 @@
 import json
 import threading
 import time
+from concurrent.futures import ProcessPoolExecutor
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from aea.helpers.cid import to_v1
@@ -65,6 +66,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def __init__(self, **kwargs: Any):
         """Initialise the agent."""
         super().__init__(**kwargs)
+        # we only want to execute one task at a time, for the time being
+        self._executor = ProcessPoolExecutor(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
         self._tools_to_file_hash: Dict[str, str] = {}
         self._all_tools: Dict[str, str] = {}
@@ -118,11 +121,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Check if the executing task is ready."""
         if self._executing_task is None:
             return False
-        task_id = self._executing_task.get("async_task_id", None)
-        if task_id is None:
-            return False
-
-        return self.context.task_manager.get_task_result(task_id).ready()
+        return self._async_result.done()
 
     def _has_executing_task_timed_out(self) -> bool:
         """Check if the executing task timed out."""
@@ -139,10 +138,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             raise ValueError("Executing task is None")
         if self._invalid_request:
             return None
-        task_id = self._executing_task.get("async_task_id", None)
-        if task_id is None:
-            raise ValueError("Executing task has no async_task_id")
-        return self.context.task_manager.get_task_result(task_id).get()
+        try:
+            return self._async_result.result()
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                "Exception raised while executing task: {}".format(str(e))
+            )
+            return None
 
     def _download_tools(self) -> None:
         """Download tools."""
@@ -255,6 +257,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(f"Task timed out for request {req_id}")
         # added to end of queue
         self.pending_tasks.append(executing_task)
+        self._async_result.cancel()
         self._executing_task = None
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
@@ -281,11 +284,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         tool_task = AnyToolAsTask()
         task_data["method"] = self._all_tools[task_data["tool"]]
         task_data["api_keys"] = self.params.api_keys
-        task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)
+        future = self._executor.submit(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
-        executing_task["async_task_id"] = task_id
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
-        self._async_result = self.context.task_manager.get_task_result(task_id)
+        self._async_result = future
 
     def _build_ipfs_message(
         self,
