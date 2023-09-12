@@ -35,12 +35,12 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0.7,
 }
 ALLOWED_TOOLS = [
-    "prediction-offline",
-    "prediction-online",
+    "prediction-offline-sme",
+    "prediction-online-sme",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-offline": "gpt-3.5-turbo",
-    "prediction-online": "gpt-3.5-turbo",
+    "prediction-offline-sme": "gpt-3.5-turbo",
+    "prediction-online-sme": "gpt-3.5-turbo",
 }
 
 PREDICTION_PROMPT = """
