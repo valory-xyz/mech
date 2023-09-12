@@ -101,4 +101,9 @@ fix-abci-app-specs:
 	echo "Successfully validated abcis!"
 
 protolint_install:
-	GO111MODULE=on GOPATH=~/go go get -u -v github.com/yoheimuta/protolint/cmd/protolint@v0.27.0
+	mkdir protolint_install
+	cd protolint_install && \
+		wget https://github.com/yoheimuta/protolint/releases/download/v0.27.0/protolint_0.27.0_Linux_x86_64.tar.gz && \
+		tar -xvf protolint_0.27.0_Linux_x86_64.tar.gz && \
+		sudo mv protolint /usr/local/bin/protolint
+	sudo rm -rf protolint_install
