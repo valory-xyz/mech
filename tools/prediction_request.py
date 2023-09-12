@@ -22,7 +22,6 @@
 import json
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple
-from dataclasses import dataclass
 
 import openai
 import requests
@@ -112,10 +111,6 @@ OUTPUT_FORMAT
 * Output only the JSON object. Do not include any other contents in your response.
 """
 
-@dataclass
-class SMERolePrompt:
-    sme: str
-    sme_introduction: str
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
@@ -238,9 +233,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
-    # this is optional
-    if kwargs.get("sme_role_system_prompt"):
-        sme_role_system_prompt: SMERolePrompt = SMERolePrompt(**kwargs["sme_role_system_prompt"])
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
@@ -267,17 +259,10 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     moderation_result = openai.Moderation.create(prediction_prompt)
     if moderation_result["results"][0]["flagged"]:
         return "Moderation flagged the prompt as in violation of terms.", None
-    if sme_role_system_prompt:
-        print(f"You are using SME: {sme_role_system_prompt.sme}")
-        messages = [
-            {"role": "system", "content": sme_role_system_prompt.sme_introduction},
-            {"role": "user", "content": prediction_prompt},
-        ]
-    else:
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prediction_prompt},
-        ]
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": prediction_prompt},
+    ]
     response = openai.ChatCompletion.create(
         model=engine,
         messages=messages,
