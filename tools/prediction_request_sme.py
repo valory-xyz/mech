@@ -327,7 +327,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             google_api_key=kwargs["api_keys"]["google_api_key"],
             google_engine=kwargs["api_keys"]["google_engine_id"],
         )
-        if tool == "prediction-online"
+        if tool == "prediction-online-sme"
         else ""
     )
     prediction_prompt = PREDICTION_PROMPT.format(
@@ -351,3 +351,5 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         stop=None,
     )
     return response.choices[0].message.content, None
+
+
