@@ -27,7 +27,7 @@ class AnyToolAsTask:
 
     def execute(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the task."""
-        tool_py = kwargs.pop("tool")
+        tool_py = kwargs.pop("tool_py")
         if "run" in globals():
             del globals()["run"]
         exec(tool_py, globals())  # pylint: disable=W0122  # nosec

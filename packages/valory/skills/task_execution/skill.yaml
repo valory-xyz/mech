@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeibg4xdqg62sxcuedg3xmo5uiy5syr5xztn3p3t5wuqt72cvtawpim
+  behaviours.py: bafybeigcu6afhhaquhod5dba7ris3hnkd4tic3igczb3mvaq3omijnkkce
   dialogues.py: bafybeihw3nvl2xqxgfgtbhskzxd2awvhiujoi5o7mefokn4ew3o3vo2t4u
   handlers.py: bafybeiatb4zd3pg577leguyiqi3cjceu7ibp7fafctm4pte4jckbddmfby
   models.py: bafybeiauvac5fxeiqxujfl6ocd4u2l2otb2xntygmn2b3k5v7tcj7ptaju
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/ipfs.py: bafybeicuaj23qrcdv6ly4j7yo6il2r5plozhd6mwvcp5acwqbjxb2t3u2i
-  utils/task.py: bafybeifvgtvjvjaogjemaeo6sj52vpeh6idncfowdf5rkvl4fjwf3yt4w4
+  utils/task.py: bafybeiakokty64m5cqp72drrpvfckhruldlwcge5hcc2bsy2ujk6nnrazq
 fingerprint_ignore_patterns: []
 connections:
 - valory/ledger:0.19.0:bafybeigfoz7d7si7s4jehvloq2zmiiocpbxcaathl3bxkyarxoerxq7g3a

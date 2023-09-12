@@ -283,7 +283,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Prepare the task."""
         tool_task = AnyToolAsTask()
         tool_py = self._all_tools[task_data["tool"]]
-        task_data["tool"] = tool_py
+        task_data["tool_py"] = tool_py
         task_data["api_keys"] = self.params.api_keys
         future = self._executor.submit(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
