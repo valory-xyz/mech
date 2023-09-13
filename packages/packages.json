@@ -2,13 +2,13 @@
     "dev": {
         "connection/valory/websocket_client/0.1.0": "bafybeicz53kzs5uvyiod2azntl76zwgmpgr22ven4wl5fnwt2m546j3wsu",
         "skill/valory/contract_subscription/0.1.0": "bafybeifbgzfrhtdtendqzwmh3o436nyexwkif6mbvsouvk2ktdfk5lhe7y",
-        "agent/valory/mech/0.1.0": "bafybeigfkzy7beir3tasc7ndcgfj3vcg6vrsjptojerum3ajccwuglczg4",
-        "skill/valory/mech_abci/0.1.0": "bafybeigzfa5pr647fg4nflzgie3xla4araotperomibfp2totzpaxwgmje",
+        "agent/valory/mech/0.1.0": "bafybeief7fdupx3jsdcvpzm7mv4nuenhxrst45xzi73i4qinmyiglkzbny",
+        "skill/valory/mech_abci/0.1.0": "bafybeigj5baxh3wlra5rywpos6klrzqbq4flic22bu2v33cbikha2hn5xq",
         "contract/valory/agent_mech/0.1.0": "bafybeidl6kwc3sgcxiphgb3osjqlqwylhqetv2nyv2fu6zxcgn5qctv2ju",
-        "service/valory/mech/0.1.0": "bafybeibulanqkh6hvo4cofquwtyvveala2bh7xtmembuq5zdzhgxdeet7a",
+        "service/valory/mech/0.1.0": "bafybeifuhze4scehkjaavnyzw4okx2ty4biy2rbsh6xzpkhuedjv7rs4hu",
         "protocol/valory/acn_data_share/0.1.0": "bafybeieyixetwvz767zekhvg7r6etumyanzys6xbalx2brrfswybinnlhi",
         "protocol/valory/default/1.0.0": "bafybeiecmut3235aen7wxukllv424f3dysvvlgfmn562kzdunc5hdj3hxu",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeidcjfmhtgwh24sgf3gmk6soiyr2fmaebjvphhz6xob6d5m6aeguce",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeiba6umuwagcpmvsxybufhnborr7ecrmzt422mafbigiuq3vibjh7a",
         "skill/valory/task_execution/0.1.0": "bafybeih6caazog2vq34dupe4cbkv2v3zrffsmfztuvvshtku7tnhmvxcrq"
     },
     "third_party": {
@@ -34,6 +34,7 @@
         "contract/valory/gnosis_safe/0.1.0": "bafybeigvqg4lapdaa23dpc3pv67rdptdhey6e435mxqsw2gb2u74yw4yei",
         "skill/valory/transaction_settlement_abci/0.1.0": "bafybeidpsnguxizkpihtkqzojr3em7yy7c6qc7gxpbh5vglmwws5wke7bi",
         "contract/valory/multisend/0.1.0": "bafybeie7m7pjbnw7cccpbvmbgkut24dtlt4cgvug3tbac7gej37xvwbv3a",
-        "skill/valory/termination_abci/0.1.0": "bafybeiguy7pkrcptg6c754ioig4mlkr7truccym3fpv6jwpjx2tmpdbzhi"
+        "skill/valory/termination_abci/0.1.0": "bafybeiguy7pkrcptg6c754ioig4mlkr7truccym3fpv6jwpjx2tmpdbzhi",
+        "connection/fetchai/http_server/0.22.0": "bafybeihp5umafxzx45aad5pj7s3343se2wjkgnbirt4pybrape22swm6de"
     }
 }

@@ -46,6 +46,7 @@ class Params(BaseParams):
         """Initialize the parameters object."""
 
         self.task_wait_timeout = self._ensure("task_wait_timeout", kwargs, float)
+        self.service_endpoint_base = self._ensure("service_endpoint_base", kwargs, str)
         self.multisend_address = kwargs.get("multisend_address", None)
         if self.multisend_address is None:
             raise ValueError("No multisend_address specified!")
