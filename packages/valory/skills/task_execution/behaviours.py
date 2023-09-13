@@ -257,7 +257,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # added to end of queue
         self.pending_tasks.append(executing_task)
         async_result = cast(Future, self._async_result)
-        async_result.result()
+        async_result.cancel()
         self._executing_task = None
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
