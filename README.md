@@ -56,9 +56,8 @@ Follow these instructions to have your local environment prepared to run the dem
 1. Create a Poetry virtual environment and install the dependencies:
 
     ```bash
-    poetry run pip install "cython<3"
-    poetry run pip install wheel==0.40.0
-    poetry run pip install --no-build-isolation pyyaml==5.4.1
+    poetry run pip install openapi-core==0.13.2
+    poetry run pip install openapi-spec-validator==0.2.8
     poetry install && poetry shell
     ```
 
