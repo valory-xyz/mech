@@ -165,8 +165,13 @@ if __name__ == "__main__":
     listed_package_dependencies = load_pyproject_toml()
     original_listed_package_dependencies = deepcopy(listed_package_dependencies)
     listed_package_dependencies.update(package_dependencies)
-    update_toml(listed_package_dependencies)
-    update_tox_ini(listed_package_dependencies)
+    # skipped to avoid issues with openapi-core==0.13.2 with poetry
+    # InvalidRequirement
+    #
+    #   The requirement is invalid: invalid version constraint ">="3.0""
+    #
+    # update_toml(listed_package_dependencies)
+    # update_tox_ini(listed_package_dependencies)
     if not update and not check_for_no_changes():
         print(
             "There are mismatching package dependencies in the pyproject.toml file and the packages."
