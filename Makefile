@@ -95,9 +95,7 @@ all-checks: clean format code-checks security generators common-checks-1 common-
 
 .PHONY: fix-abci-app-specs
 fix-abci-app-specs:
-	autonomy analyse fsm-specs --update --app-class MultiplexerAbciApp --package packages/valory/skills/multiplexer_abci
 	autonomy analyse fsm-specs --update --app-class MechAbciApp --package packages/valory/skills/mech_abci
-	autonomy analyse fsm-specs --update --app-class TaskExecutionAbciApp --package packages/valory/skills/task_execution_abci
 	echo "Successfully validated abcis!"
 
 protolint_install:
