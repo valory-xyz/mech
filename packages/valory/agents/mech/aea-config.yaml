@@ -78,6 +78,8 @@ dependencies:
     version: ==4.12.2
   google-api-python-client:
     version: ==2.95.0
+  anthropic:
+    version: ==0.3.11
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
