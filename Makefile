@@ -95,10 +95,13 @@ all-checks: clean format code-checks security generators common-checks-1 common-
 
 .PHONY: fix-abci-app-specs
 fix-abci-app-specs:
-	autonomy analyse fsm-specs --update --app-class MultiplexerAbciApp --package packages/valory/skills/multiplexer_abci
 	autonomy analyse fsm-specs --update --app-class MechAbciApp --package packages/valory/skills/mech_abci
-	autonomy analyse fsm-specs --update --app-class TaskExecutionAbciApp --package packages/valory/skills/task_execution_abci
 	echo "Successfully validated abcis!"
 
 protolint_install:
-	GO111MODULE=on GOPATH=~/go go get -u -v github.com/yoheimuta/protolint/cmd/protolint@v0.27.0
+	mkdir protolint_install
+	cd protolint_install && \
+		wget https://github.com/yoheimuta/protolint/releases/download/v0.27.0/protolint_0.27.0_Linux_x86_64.tar.gz && \
+		tar -xvf protolint_0.27.0_Linux_x86_64.tar.gz && \
+		sudo mv protolint /usr/local/bin/protolint
+	sudo rm -rf protolint_install
