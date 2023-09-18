@@ -23,6 +23,7 @@ import threading
 import time
 from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from aea.helpers.cid import to_v1
@@ -279,13 +280,26 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.warning("Data for task is not valid.")
             self._invalid_request = True
 
+    def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
+        """Submit a task."""
+        try:
+            return self._executor.submit(fn, *args, **kwargs)
+        except BrokenProcessPool:
+            self.context.logger.warning("Executor is broken. Restarting...")
+            # stop the current executor
+            self._executor.shutdown(wait=False)
+            # create a new executor
+            self._executor = ProcessPoolExecutor(max_workers=1)
+            # try to run the task again
+            return self._executor.submit(fn, *args, **kwargs)
+
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         tool_task = AnyToolAsTask()
         tool_py = self._all_tools[task_data["tool"]]
         task_data["tool_py"] = tool_py
         task_data["api_keys"] = self.params.api_keys
-        future = self._executor.submit(tool_task.execute, **task_data)
+        future = self._submit_task(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
         self._async_result = cast(Optional[Future], future)
