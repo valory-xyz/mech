@@ -32,7 +32,7 @@ from googleapiclient.discovery import build
 NUM_URLS_EXTRACT = 5
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
-    "temperature": 0,
+    "temperature": 0.2,
 }
 ALLOWED_TOOLS = [
     "prediction-offline-sum-url-content",
@@ -108,9 +108,38 @@ OUTPUT_FORMAT
    - "queries": An array of strings of size between 1 and 5. Each string must be a search engine query that can help obtain relevant information to estimate
      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
      or lead to obtain the same set of results.
-* Output only the JSON object. Do not include any other contents in your response.
+* Output only the JSON object. Do not include any other contents in your response. 
 """
 
+SUMMARY_SYSTEM_PROMPT = """
+You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
+for a given event. You are provided with input under the label "USER_PROMPT" and "WEBSITE_TEXT". You must follow the instructions
+under the label "INSTRUCTIONS". You must provide your response in the format specified under "OUTPUT_FORMAT".
+
+INSTRUCTIONS
+* Read the input under the label "USER_PROMPT" and "WEBSITE_TEXT", each delimited by three backticks.
+* You must extract the content inside "WEBSITE_TEXT" that can be used to estimate the outcome of the event described inside "USER_PROMPT".
+* You must provide your response in the format specified under "OUTPUT_FORMAT".
+* Do not include any other contents in your response except for those extracted from "WEBSITE_TEXT".
+
+USER_PROMPT:
+```
+{user_prompt}
+```
+
+WEBSITE_TEXT:
+```
+{website_text}
+```
+
+OUTPUT_FORMAT
+* Your output response must be only one string containing the most relevant statements, separated by a ".".
+* Provide only the extracted, relevant information for estimating the outcome of the event. 
+* Do not include any headers or introductory phrases.
+* Your response must not exceed 100 words.
+* If the content in "WEBSITE_TEXT" is not relevant for estimating the outcome of the event described in "USER_PROMPT", your response must be an empty string.
+
+"""
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
@@ -141,9 +170,39 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
     return unique_results
 
 
+def get_website_summary(
+    text: str,
+    prompt: str,
+    engine: str,
+    temperature: float,
+    max_tokens: int,
+) -> str:
+    """Get text summary from a website"""
+    user_prompt_summary = SUMMARY_SYSTEM_PROMPT.format(user_prompt=prompt, website_text=text)
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": user_prompt_summary},
+    ]
+    response = openai.ChatCompletion.create(
+        model=engine,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        n=1,
+        timeout=150,
+        request_timeout=150,
+        stop=None,
+    )
+    return response.choices[0].message.content
+
+
 def extract_text(
     html: str,
-    num_words: int = 300,  # TODO: summerise using GPT instead of limit
+    prompt: str,
+    engine: str,
+    temperature: float,
+    max_tokens: int,
 ) -> str:
     """Extract text from a single HTML document"""
     soup = BeautifulSoup(html, "html.parser")
@@ -153,7 +212,14 @@ def extract_text(
     lines = (line.strip() for line in text.splitlines())
     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
     text = "\n".join(chunk for chunk in chunks if chunk)
-    return text[:num_words]
+    text_summary = get_website_summary(
+        text=text,
+        prompt=prompt,
+        engine=engine,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    return text_summary
 
 
 def process_in_batches(
@@ -166,7 +232,13 @@ def process_in_batches(
             futures = [(executor.submit(requests.get, url, timeout=timeout), url) for url in batch]
             yield futures
 
-def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
+def extract_texts(
+    urls: List[str],
+    prompt: str,
+    engine: str,
+    temperature: float,
+    max_tokens: int,
+) -> List[str]:
     """Extract texts from URLs"""
     max_allowed = 5
     extracted_texts = []
@@ -178,7 +250,14 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(extract_text(html=result.text, num_words=num_words))
+                extracted_text = extract_text(
+                    html=result.text,
+                    prompt=prompt,
+                    engine=engine,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                extracted_texts.append(extracted_text)
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -227,34 +306,16 @@ def fetch_additional_information(
         engine=google_engine,
     )
     print(f"urls: {urls}\n")
-    texts = extract_texts(urls)
+    texts = extract_texts(
+        urls=urls,
+        prompt=prompt,
+        engine=engine,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
     additional_informations = "\n".join(["- " + text for text in texts])
     print(f"additional_informations: {additional_informations}\n")
     return additional_informations
-
-# # To be adjusted
-# def get_website_summary(engine, temperature, max_tokens, prompt) -> Tuple[str, str]:
-#     """Get SME title and introduction"""
-#     market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
-#     system_prompt = SME_GENERATION_SYSTEM_PROMPT
-
-#     messages = [
-#         {"role": "system", "content": system_prompt},
-#         {"role": "user", "content": market_question},
-#     ]
-#     response = openai.ChatCompletion.create(
-#         model=engine,
-#         messages=messages,
-#         temperature=temperature,
-#         max_tokens=max_tokens,
-#         n=1,
-#         timeout=150,
-#         request_timeout=150,
-#         stop=None,
-#     )
-#     generated_sme_roles = response.choices[0].message.content
-#     sme = json.loads(generated_sme_roles)[0]
-#     return sme["sme"], sme["sme_introduction"]
 
 
 def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
