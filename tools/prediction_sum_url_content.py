@@ -32,7 +32,7 @@ from googleapiclient.discovery import build
 NUM_URLS_EXTRACT = 5
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
-    "temperature": 0.7,
+    "temperature": 0,
 }
 ALLOWED_TOOLS = [
     "prediction-offline-sum-url-content",
@@ -220,28 +220,64 @@ def fetch_additional_information(
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
-    print(f">>>>>>>>>>>>>>>>>>>>>>> json_data: {json_data}")
+    print(f"json_data: {json_data}")
     urls = get_urls_from_queries(
         json_data["queries"],
         api_key=google_api_key,
         engine=google_engine,
     )
+    print(f"urls: {urls}\n")
     texts = extract_texts(urls)
-    return "\n".join(["- " + text for text in texts])
+    additional_informations = "\n".join(["- " + text for text in texts])
+    print(f"additional_informations: {additional_informations}\n")
+    return additional_informations
+
+# # To be adjusted
+# def get_website_summary(engine, temperature, max_tokens, prompt) -> Tuple[str, str]:
+#     """Get SME title and introduction"""
+#     market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
+#     system_prompt = SME_GENERATION_SYSTEM_PROMPT
+
+#     messages = [
+#         {"role": "system", "content": system_prompt},
+#         {"role": "user", "content": market_question},
+#     ]
+#     response = openai.ChatCompletion.create(
+#         model=engine,
+#         messages=messages,
+#         temperature=temperature,
+#         max_tokens=max_tokens,
+#         n=1,
+#         timeout=150,
+#         request_timeout=150,
+#         stop=None,
+#     )
+#     generated_sme_roles = response.choices[0].message.content
+#     sme = json.loads(generated_sme_roles)[0]
+#     return sme["sme"], sme["sme_introduction"]
 
 
 def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Run the task"""
+    print("Starting...")
+    
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+    
+    print(f"Tool: {tool}")
+    print(f"Prompt: {prompt}")
+    print(f"Max tokens: {max_tokens}")
+    print(f"Temperature: {temperature}")
 
     openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
 
     engine = TOOL_TO_ENGINE[tool]
+    print(f"Engine: {engine}")
+
     additional_information = (
         fetch_additional_information(
             prompt=prompt,
@@ -251,19 +287,25 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             google_api_key=kwargs["api_keys"]["google_api_key"],
             google_engine=kwargs["api_keys"]["google_engine_id"],
         )
-        if tool == "prediction-online"
+        if tool == "prediction-online-sum-url-content"
         else ""
     )
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information
     )
+    print(f"prediction_prompt: {prediction_prompt}\n")
+
     moderation_result = openai.Moderation.create(prediction_prompt)
+    print(f"moderation_result: {moderation_result}\n")
+
     if moderation_result["results"][0]["flagged"]:
         return "Moderation flagged the prompt as in violation of terms.", None
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prediction_prompt},
     ]
+    print(f"messages: {messages}")
+
     response = openai.ChatCompletion.create(
         model=engine,
         messages=messages,
@@ -274,4 +316,5 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         request_timeout=150,
         stop=None,
     )
+    print(f"response: {response}")
     return response.choices[0].message.content, None

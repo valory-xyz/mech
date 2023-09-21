@@ -28,6 +28,8 @@ packages/valory/protocols/ipfs
 packages/valory/protocols/ledger_api
 packages/valory/protocols/tendermint
 
+*test_mech.py
+
 .idea
 **/__pycache__/
 *.DS_Store
