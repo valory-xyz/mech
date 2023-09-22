@@ -20,14 +20,22 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+import re
+from datetime import datetime
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple
+from tqdm import tqdm
 
 import openai
 import requests
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 
+from sentence_transformers import SentenceTransformer, util
+from transformers import AutoTokenizer, AutoModel, BertForPreTraining, BertForMaskedLM
+
+import spacy
+import torch
 
 NUM_URLS_EXTRACT = 5
 DEFAULT_OPENAI_SETTINGS = {
@@ -41,6 +49,7 @@ ALLOWED_TOOLS = [
 TOOL_TO_ENGINE = {
     "prediction-offline-sum-url-content": "gpt-3.5-turbo",
     "prediction-online-sum-url-content": "gpt-3.5-turbo",
+    # "prediction-online-sum-url-content": "gpt-4",
 }
 
 PREDICTION_PROMPT = """
@@ -56,7 +65,10 @@ INSTRUCTIONS
 * You must provide a probability estimation of the event happening, based on your training data.
 * You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION" delimited by three backticks.
 * You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data.
-* If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
+* Given today's date {today_date} you should use predominantly the more recent information in "ADDITIONAL_INFORMATION" to make your probability estimation.
+* You must pay very close attention to the specific wording of the question in "USER_PROMPT" 
+* If a date is provided in the USER_PROMPT for the event to have occured, you must also consider in your estimation, given today's date {today_date}, how likely it is that the event will occur before or on that provided date.
+* If an item in "ADDITIONAL_INFORMATION" is not relevant for the estimation, you must ignore that item.
 * You must provide your response in the format specified under "OUTPUT_FORMAT".
 * Do not include any other contents in your response.
 
@@ -81,7 +93,7 @@ OUTPUT_FORMAT
    - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction.
      0 indicates lowest utility; 1 maximum utility.
 * The sum of "p_yes" and "p_no" must equal 1.
-* Output only the JSON object. Do not include any other contents in your response.
+* Output only the JSON object first and a short explanation (max. 3 sentences) what led you to the estimation after that. Do not include any other contents in your response.
 """
 
 URL_QUERY_PROMPT = """
@@ -90,7 +102,7 @@ for a given event. You are provided with an input under the label "USER_PROMPT".
 under the label "INSTRUCTIONS". You must provide your response in the format specified under "OUTPUT_FORMAT".
 
 INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" delimited by three backticks.
+* Read the input under the label "USER_PROMPT", delimited by three backticks, carefully.
 * The "USER_PROMPT" specifies an event.
 * The event will only have two possible outcomes: either the event will happen or the event will not happen.
 * If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
@@ -105,40 +117,10 @@ USER_PROMPT:
 OUTPUT_FORMAT
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
 * The JSON must contain two fields: "queries", and "urls".
-   - "queries": An array of strings of size between 1 and 5. Each string must be a search engine query that can help obtain relevant information to estimate
-     the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
-     or lead to obtain the same set of results.
+   - "queries": An array of strings of size between 1 and 5. Each string must be a search engine query that has a high chance to yield search engine results that
+     help obtain relevant information to estimate the probability that the event specified in "USER_PROMPT" occurs. You must provide original information in each query, 
+     and the queries should not overlap or lead to obtain the same set of results. 
 * Output only the JSON object. Do not include any other contents in your response. 
-"""
-
-SUMMARY_SYSTEM_PROMPT = """
-You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
-for a given event. You are provided with input under the label "USER_PROMPT" and "WEBSITE_TEXT". You must follow the instructions
-under the label "INSTRUCTIONS". You must provide your response in the format specified under "OUTPUT_FORMAT".
-
-INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" and "WEBSITE_TEXT", each delimited by three backticks.
-* You must extract the content inside "WEBSITE_TEXT" that can be used to estimate the outcome of the event described inside "USER_PROMPT".
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response except for those extracted from "WEBSITE_TEXT".
-
-USER_PROMPT:
-```
-{user_prompt}
-```
-
-WEBSITE_TEXT:
-```
-{website_text}
-```
-
-OUTPUT_FORMAT
-* Your output response must be only one string containing the most relevant statements, separated by a ".".
-* Provide only the extracted, relevant information for estimating the outcome of the event. 
-* Do not include any headers or introductory phrases.
-* Your response must not exceed 100 words.
-* If the content in "WEBSITE_TEXT" is not relevant for estimating the outcome of the event described in "USER_PROMPT", your response must be an empty string.
-
 """
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
@@ -163,63 +145,171 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
             query=query,
             api_key=api_key,
             engine=engine,
-            num=3,  # Number of returned results
+            num=3,  # Number of returned urls per query
         ):
             results.append(url)
     unique_results = list(set(results))
+    
+    # Remove urls that are pdfs
+    unique_results = [url for url in unique_results if not url.endswith(".pdf")]
     return unique_results
 
 
-def get_website_summary(
-    text: str,
-    prompt: str,
-    engine: str,
-    temperature: float,
-    max_tokens: int,
-) -> str:
-    """Get text summary from a website"""
-    user_prompt_summary = SUMMARY_SYSTEM_PROMPT.format(user_prompt=prompt, website_text=text)
+def get_website_summary(text: str, prompt: str, model, tokenizer, nlp, max_words: int = 150) -> str:
+    """Get text summary from a website"""    
+    # Check for empty inputs
+    if not prompt or not text:
+        return ""
 
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": user_prompt_summary},
+    # Calculate the BERT embedding for the prompt
+    with torch.no_grad():
+        question_tokens = tokenizer(prompt, return_tensors="pt", padding=True, truncation=True)
+        question_embedding = model(**question_tokens).last_hidden_state.mean(dim=1)
+        
+    # Sentence splitting and NER
+    doc = nlp(text)
+    sentences = [sent.text for sent in doc.sents if len(sent.text.split()) >= 5]
+    entities = [ent.text for ent in doc.ents]
+    
+    # Crop the sentences list to the first 300 sentences to reduce the time taken for the similarity calculations.
+    sentences = sentences[:300]
+
+
+
+    # Similarity calculations and sentence ranking
+    similarities = []
+    for sentence in tqdm(sentences, desc="Calculating Similarities for Sentences"):
+        with torch.no_grad():
+            sentence_tokens = tokenizer(sentence, return_tensors="pt", padding=True, truncation=True)
+            sentence_embedding = model(**sentence_tokens).last_hidden_state.mean(dim=1)
+            similarity = torch.cosine_similarity(question_embedding, sentence_embedding).item()
+        if any(entity in sentence for entity in entities):
+            similarity += 0.05  # Give a slight boost for sentences with entities
+        similarities.append(similarity)
+
+    # Extract the top relevant sentences
+    relevant_sentences = [sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.7]
+
+    # Print each sentence in relevant_sentences in a new line along with its similarity score > 0.7
+    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
+        if sim > 0.7:
+            print(f"{sim} : {sent}")
+
+    # Join the top 4 relevant sentences
+    output = ' '.join(relevant_sentences[:4])
+    output_words = output.split(' ')
+    if len(output_words) > max_words:
+        output = ' '.join(output_words[:max_words])
+
+    return output
+
+
+def get_date(soup):    
+    # Get the updated or release date of the website.
+    # The following are some of the possible values for the "name" attribute:
+    release_date_names = [
+        'date', 'pubdate', 'publishdate', 'OriginalPublicationDate',
+        'article:published_time', 'sailthru.date', 'article.published',
+        'published-date', 'og:published_time', 'publication_date',
+        'publishedDate', 'dc.date', 'DC.date', 'article:published',
+        'article_date_original', 'cXenseParse:recs:publishtime', 'DATE_PUBLISHED',
+        'pub-date', 'pub_date', 'datePublished', 'date_published',
+        'time_published', 'article:published_date', 'parsely-pub-date',
+        'publish-date', 'pubdatetime', 'published_time', 'publishedtime',
+        'article_date', 'created_date', 'published_at',
+        'og:published_time', 'og:release_date', 'article:published_time',
+        'og:publication_date', 'og:pubdate', 'article:publication_date',
+        'product:availability_starts', 'product:release_date', 'event:start_date',
+        'event:release_date', 'og:time_published', 'og:start_date', 'og:created',
+        'og:creation_date', 'og:launch_date', 'og:first_published',
+        'og:original_publication_date', 'article:published', 'article:pub_date',
+        'news:published_time', 'news:publication_date', 'blog:published_time',
+        'blog:publication_date', 'report:published_time', 'report:publication_date',
+        'webpage:published_time', 'webpage:publication_date', 'post:published_time',
+        'post:publication_date', 'item:published_time', 'item:publication_date'
     ]
-    response = openai.ChatCompletion.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=150,
-        request_timeout=150,
-        stop=None,
-    )
-    return response.choices[0].message.content
+
+    update_date_names = [
+        'lastmod', 'lastmodified', 'last-modified', 'updated',
+        'dateModified', 'article:modified_time', 'modified_date',
+        'article:modified', 'og:updated_time', 'mod_date',
+        'modifiedDate', 'lastModifiedDate', 'lastUpdate', 'last_updated',
+        'LastUpdated', 'UpdateDate', 'updated_date', 'revision_date',
+        'sentry:revision', 'article:modified_date', 'date_updated',
+        'time_updated', 'lastUpdatedDate', 'last-update-date', 'lastupdate',
+        'dateLastModified', 'article:update_time', 'modified_time',
+        'last_modified_date', 'date_last_modified',
+        'og:updated_time', 'og:modified_time', 'article:modified_time',
+        'og:modification_date', 'og:mod_time', 'article:modification_date',
+        'product:availability_ends', 'product:modified_date', 'event:end_date',
+        'event:updated_date', 'og:time_modified', 'og:end_date', 'og:last_modified',
+        'og:modification_date', 'og:revision_date', 'og:last_updated',
+        'og:most_recent_update', 'article:updated', 'article:mod_date',
+        'news:updated_time', 'news:modification_date', 'blog:updated_time',
+        'blog:modification_date', 'report:updated_time', 'report:modification_date',
+        'webpage:updated_time', 'webpage:modification_date', 'post:updated_time',
+        'post:modification_date', 'item:updated_time', 'item:modification_date'
+    ]
+
+    release_date = "unknown"
+    modified_date = "unknown"
+
+    # First, try to find an update or modified date
+    for name in update_date_names:
+        meta_tag = soup.find("meta", {"name": name}) or soup.find("meta", {"property": name})
+        if meta_tag:
+            modified_date = meta_tag.get("content", "")
+    
+    # If not found, then look for release or publication date
+    for name in release_date_names:
+        meta_tag = soup.find("meta", {"name": name}) or soup.find("meta", {"property": name})
+        if meta_tag:
+            release_date = meta_tag.get("content", "")
+    
+    if release_date == "unknown" and modified_date == "unknown":
+        time_tag = soup.find("time")
+        if time_tag:
+            release_date = time_tag.get("datetime", "")
+
+    return f"Release date {release_date}, Modified date {modified_date}"
 
 
 def extract_text(
     html: str,
     prompt: str,
-    engine: str,
-    temperature: float,
-    max_tokens: int,
+    model,
+    tokenizer,
+    nlp,
 ) -> str:
     """Extract text from a single HTML document"""
+    # Remove HTML tags and extract text
     soup = BeautifulSoup(html, "html.parser")
-    for script in soup(["script", "style"]):
+    
+    # Get the date of the website
+    date = get_date(soup)
+
+    # Get the main element of the website
+    main_element = soup.find("main")
+    if main_element:
+        soup = main_element
+
+    for script in soup(["script", "style", "header", "footer", "aside", "nav", "form", "button", "iframe"]):
         script.extract()
     text = soup.get_text()
     lines = (line.strip() for line in text.splitlines())
     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-    text = "\n".join(chunk for chunk in chunks if chunk)
+    text = ". ".join(chunk for chunk in chunks if chunk)
+    text = re.sub(r"\.{2,}", ".", text) # Use regex to replace multiple "."s with a single ".".
+    print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>< TEXT: \n{text}")
+
     text_summary = get_website_summary(
         text=text,
         prompt=prompt,
-        engine=engine,
-        temperature=temperature,
-        max_tokens=max_tokens,
+        model=model,
+        tokenizer=tokenizer,
+        nlp=nlp,
     )
-    return text_summary
+    return f"{date}:\n{text_summary}"
 
 
 def process_in_batches(
@@ -232,20 +322,26 @@ def process_in_batches(
             futures = [(executor.submit(requests.get, url, timeout=timeout), url) for url in batch]
             yield futures
 
+
 def extract_texts(
     urls: List[str],
     prompt: str,
-    engine: str,
-    temperature: float,
-    max_tokens: int,
 ) -> List[str]:
     """Extract texts from URLs"""
-    max_allowed = 5
+    max_allowed = 45
     extracted_texts = []
     count = 0
     stop = False
-    for batch in process_in_batches(urls=urls):
-        for future, url in batch:
+    
+    # BERT Initialization
+    model = AutoModel.from_pretrained("bert-base-uncased")
+    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+
+    # Spacy Initialization for NER and sentence splitting
+    nlp = spacy.load("en_core_web_sm")
+    
+    for batch in tqdm(process_in_batches(urls=urls), desc="Processing Batches"):
+        for future, url in tqdm(batch, desc="Processing URLs"):
             try:
                 result = future.result()
                 if result.status_code != 200:
@@ -253,11 +349,11 @@ def extract_texts(
                 extracted_text = extract_text(
                     html=result.text,
                     prompt=prompt,
-                    engine=engine,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
+                    model=model,
+                    tokenizer=tokenizer,
+                    nlp=nlp,
                 )
-                extracted_texts.append(extracted_text)
+                extracted_texts.append(f"{url}\n{extracted_text}")
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -265,7 +361,7 @@ def extract_texts(
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
-                    print(f"An error occurred: {e}")
+                print(f"An error occurred: {e}")
         if stop:
             break
     return extracted_texts
@@ -289,15 +385,16 @@ def fetch_additional_information(
         {"role": "user", "content": url_query_prompt},
     ]
     response = openai.ChatCompletion.create(
-        model=engine,
+        model="gpt-3.5-turbo",
         messages=messages,
-        temperature=temperature,
+        temperature=0.7,
         max_tokens=max_tokens,
         n=1,
         timeout=90,
         request_timeout=90,
         stop=None,
     )
+    
     json_data = json.loads(response.choices[0].message.content)
     print(f"json_data: {json_data}")
     urls = get_urls_from_queries(
@@ -305,16 +402,13 @@ def fetch_additional_information(
         api_key=google_api_key,
         engine=google_engine,
     )
-    print(f"urls: {urls}\n")
+    print(f"urls: {urls}")
     texts = extract_texts(
         urls=urls,
         prompt=prompt,
-        engine=engine,
-        temperature=temperature,
-        max_tokens=max_tokens,
     )
-    additional_informations = "\n".join(["- " + text for text in texts])
-    print(f"additional_informations: {additional_informations}\n")
+    additional_informations = "\n\n".join(["- " + text for text in texts])
+    # print(f"additional_informations: {additional_informations}")
     return additional_informations
 
 
@@ -351,21 +445,21 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         if tool == "prediction-online-sum-url-content"
         else ""
     )
+
+    # Get today's date and generate the prediction prompt
+    today_date = datetime.today().strftime('%Y-%m-%d')
     prediction_prompt = PREDICTION_PROMPT.format(
-        user_prompt=prompt, additional_information=additional_information
+        user_prompt=prompt, additional_information=additional_information, today_date=today_date,
     )
     print(f"prediction_prompt: {prediction_prompt}\n")
 
     moderation_result = openai.Moderation.create(prediction_prompt)
-    print(f"moderation_result: {moderation_result}\n")
-
     if moderation_result["results"][0]["flagged"]:
         return "Moderation flagged the prompt as in violation of terms.", None
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prediction_prompt},
     ]
-    print(f"messages: {messages}")
 
     response = openai.ChatCompletion.create(
         model=engine,
