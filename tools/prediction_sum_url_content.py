@@ -93,7 +93,7 @@ OUTPUT_FORMAT
    - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction.
      0 indicates lowest utility; 1 maximum utility.
 * The sum of "p_yes" and "p_no" must equal 1.
-* Output only the JSON object first and a short explanation (max. 3 sentences) what led you to the estimation after that. Do not include any other contents in your response.
+* Output only the JSON object first and a short explanation (max. 3 sentences) what specificly were the most relevant information that led to your estimation. Do not include any other contents in your response.
 """
 
 URL_QUERY_PROMPT = """
@@ -118,7 +118,7 @@ OUTPUT_FORMAT
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
 * The JSON must contain two fields: "queries", and "urls".
    - "queries": An array of strings of size between 1 and 5. Each string must be a search engine query that has a high chance to yield search engine results that
-     help obtain relevant information to estimate the probability that the event specified in "USER_PROMPT" occurs. You must provide original information in each query, 
+     help obtain contemporary and relevant information for you to estimate the probability that the event specified in "USER_PROMPT" occurs. You must provide original information in each query, 
      and the queries should not overlap or lead to obtain the same set of results. 
 * Output only the JSON object. Do not include any other contents in your response. 
 """
@@ -174,29 +174,40 @@ def get_website_summary(text: str, prompt: str, model, tokenizer, nlp, max_words
     # Crop the sentences list to the first 300 sentences to reduce the time taken for the similarity calculations.
     sentences = sentences[:300]
 
-
-
     # Similarity calculations and sentence ranking
     similarities = []
-    for sentence in tqdm(sentences, desc="Calculating Similarities for Sentences"):
-        with torch.no_grad():
-            sentence_tokens = tokenizer(sentence, return_tensors="pt", padding=True, truncation=True)
-            sentence_embedding = model(**sentence_tokens).last_hidden_state.mean(dim=1)
-            similarity = torch.cosine_similarity(question_embedding, sentence_embedding).item()
-        if any(entity in sentence for entity in entities):
-            similarity += 0.05  # Give a slight boost for sentences with entities
-        similarities.append(similarity)
 
+    # Batch the sentences to reduce the time taken for the similarity calculations
+    batch_size = 32
+    for i in range(0, len(sentences), batch_size):
+        batch = sentences[i:i+batch_size]
+        with torch.no_grad():
+            sentence_tokens = tokenizer(batch, return_tensors="pt", padding=True, truncation=True)
+            sentence_embedding = model(**sentence_tokens).last_hidden_state.mean(dim=1)
+            similarity = torch.cosine_similarity(question_embedding.repeat(len(batch), 1), sentence_embedding).tolist()
+        
+        for j, sent in enumerate(batch):
+            if any(entity in sent for entity in entities):
+                similarity[j] += 0.05
+        similarities.extend(similarity)
+    
+    # Free up GPU memory
+    del question_embedding, sentence_embedding
+    torch.cuda.empty_cache()
+        
     # Extract the top relevant sentences
-    relevant_sentences = [sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.7]
+    relevant_sentences = [sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.9]
 
     # Print each sentence in relevant_sentences in a new line along with its similarity score > 0.7
     for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
         if sim > 0.7:
-            print(f"{sim} : {sent}")
+            print(f"{sim} : {sent}\n")
 
+    if len(relevant_sentences) == 0:
+        return ""
+    
     # Join the top 4 relevant sentences
-    output = ' '.join(relevant_sentences[:4])
+    output = ' '.join(relevant_sentences[:4]) 
     output_words = output.split(' ')
     if len(output_words) > max_words:
         output = ' '.join(output_words[:max_words])
@@ -284,23 +295,35 @@ def extract_text(
     """Extract text from a single HTML document"""
     # Remove HTML tags and extract text
     soup = BeautifulSoup(html, "html.parser")
-    
+
     # Get the date of the website
     date = get_date(soup)
 
     # Get the main element of the website
-    main_element = soup.find("main")
-    if main_element:
-        soup = main_element
+    # main_element = soup.find("main")
+    # if main_element:
+    #     soup = main_element
 
-    for script in soup(["script", "style", "header", "footer", "aside", "nav", "form", "button", "iframe"]):
+    for script in soup(["script", "style", "header", "footer", "aside", "nav", "form", "button", "iframe", "input", "textarea", "select", "option", "label", "fieldset", "legend", "img", "audio", "video", "source", "track", "canvas", "svg", "object", "param", "embed"]):
         script.extract()
+    
+    # print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>< SOUP 1: \n{soup}")
+    
+    # for tag in soup.find_all():
+    #     if tag.name not in ['p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'article', 'main', 'blockquote', 'ul', 'ol', 'li', 'strong', 'b', 'em', 'i', 'q', 'a', 'span', 'pre', 'code', 'time', 'abbr', 'section', 'div', 'figure', 'figcaption', 'mark']:
+    #         tag.extract()
+
+    # print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>< SOUP 2: \n{soup}")
+    
+
+
+
     text = soup.get_text()
     lines = (line.strip() for line in text.splitlines())
     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
     text = ". ".join(chunk for chunk in chunks if chunk)
     text = re.sub(r"\.{2,}", ".", text) # Use regex to replace multiple "."s with a single ".".
-    print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>< TEXT: \n{text}")
+    # print(f">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>< TEXT: \n{text}")
 
     text_summary = get_website_summary(
         text=text,
@@ -309,7 +332,7 @@ def extract_text(
         tokenizer=tokenizer,
         nlp=nlp,
     )
-    return f"{date}:\n{text_summary}"
+    return f"{date}:\n{text_summary}" if text_summary else ""
 
 
 def process_in_batches(
@@ -353,7 +376,8 @@ def extract_texts(
                     tokenizer=tokenizer,
                     nlp=nlp,
                 )
-                extracted_texts.append(f"{url}\n{extracted_text}")
+                if extracted_text:
+                    extracted_texts.append(f"{url}\n{extracted_text}")
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -432,6 +456,13 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
 
     engine = TOOL_TO_ENGINE[tool]
     print(f"Engine: {engine}")
+
+    # Event question is the text between the first pair of double quotes in the prompt
+    event_question = re.search(r"\"(.+?)\"", prompt).group(1)
+    print(f"event_question: {event_question}")
+
+    # Make an openai request to get similar formulations of the event question and store them in a list
+    similar_formulations = []
 
     additional_information = (
         fetch_additional_information(
