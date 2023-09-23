@@ -53,12 +53,16 @@ TOOL_TO_ENGINE = {
     "prediction-online-sum-url-content": "gpt-4",
 }
 
+# * If the 'event question' is formulated in a way that an event must have happend before a specific date, consider the deadline of the event being 23:59:59 of the day before that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
+# * If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have access to up-to-date information. / that you have been provided with the most up-to-date information that can be found on the internet.
+
+
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system. Your task is to estimate the probability of a user's 'event question', 
 which specifies an event in the physical world and any accompanying conditions to be met for the 'event question' to be true. The 'event question' allows only two outcomes: the event 
 will either occur or not, given the conditions. Find the 'event question' enclosed in double quotes as a part of 
 the user's prompt under 'USER_PROMPT'. The user's prompt also contains a more elaborate description of the task. 
-You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", delimited by three backticks. 
+You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", delimited by three backticks. This information results from a search engine query that has been done a few seconds ago with the aim to get up-to-date information that could be relevant estimating the 'event question'.
 You must adhere to the 'INSTRUCTIONS'.  
 
 
@@ -71,9 +75,11 @@ INSTRUCTIONS:
 * You must pay very close attention to the specific wording of the 'event question' in "USER_PROMPT".
 * If a date is provided in the 'event question' specifying when the event has to have occured, you must consider in your estimation, given the current time {timestamp}, how likely it is that the event will occur within the remaining timespan to that provided date.
 * If an item in "ADDITIONAL_INFORMATION" is not relevant for the estimation, you must ignore that item.
-* If there is insufficient information in "ADDITIONAL_INFORMATION", be aware of the limitations of your training data especially when relying on it for predicting events that require up-to-date information. So make a prediction that takes into account that you don't have up-to-date information.
-* Your pobability estimation must not only take into account if the specified event happens or not, but also if the event is likely to happen before or on the date specified in the 'event question'.
-* If the 'event question' is formulated in a way that an event must have happend by a specific date, consider the deadline of the event being 23:59:59 of that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the remaining time is 0, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
+* If there is insufficient information in "ADDITIONAL_INFORMATION", be aware of the limitations of your training data especially when relying on it for predicting events that require up-to-date information. In this case make a prediction that takes into account that you don't have up-to-date information.
+* Your pobability estimation must not only take into account if the specified event happens or not, but also if the event is likely to happen before, by or on the date specified in the 'event question'.
+* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most up-to-date information that can be found on the internet.
+* If the 'event question' is formulated in a way that an event must have happend BY a specific date, consider the deadline of the event being 23:59:59 of that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
+* If the 'event question' is formulated in a way that an event must have happend BEFORE a specific date, consider the deadline of the event being 23:59:59 of the day before. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
 * You must provide your response in the format specified under "OUTPUT_FORMAT".
 * Do not include any other contents in your response.
 
@@ -479,7 +485,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     )
 
     # Get today's date and generate the prediction prompt
-    timestamp = datetime.now().strftime('%Y-%m-%d')
+    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information, timestamp=timestamp,
     )
