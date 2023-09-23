@@ -73,7 +73,7 @@ INSTRUCTIONS:
 * If an item in "ADDITIONAL_INFORMATION" is not relevant for the estimation, you must ignore that item.
 * If there is insufficient information in "ADDITIONAL_INFORMATION", be aware of the limitations of your training data especially when relying on it for predicting events that require up-to-date information. So make a prediction that takes into account that you don't have up-to-date information.
 * Your pobability estimation must not only take into account if the specified event happens or not, but also if the event is likely to happen before or on the date specified in the 'event question'.
-* If the 'event question' is formulated in a way that an event must have happend by or before a specific date, consider the deadline of the event being 23:59:59 of that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the remaining time is 0, decrease the probability to 0.
+* If the 'event question' is formulated in a way that an event must have happend by a specific date, consider the deadline of the event being 23:59:59 of that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the remaining time is 0, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
 * You must provide your response in the format specified under "OUTPUT_FORMAT".
 * Do not include any other contents in your response.
 
@@ -197,7 +197,7 @@ def get_website_summary(text: str, event_question: str, model, tokenizer, nlp, m
     torch.cuda.empty_cache()
         
     # Extract the top relevant sentences
-    relevant_sentences = [sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.9]
+    relevant_sentences = [sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.7]
 
     # Print each sentence in relevant_sentences in a new line along with its similarity score > 0.7
     for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
