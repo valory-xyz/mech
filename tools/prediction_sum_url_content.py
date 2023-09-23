@@ -21,6 +21,7 @@
 
 import json
 import re
+from collections import Counter
 from datetime import datetime
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple
@@ -48,9 +49,9 @@ ALLOWED_TOOLS = [
 ]
 TOOL_TO_ENGINE = {
     "prediction-offline-sum-url-content": "gpt-3.5-turbo",
-    # "prediction-online-sum-url-content": "gpt-3.5-turbo",
+    "prediction-online-sum-url-content": "gpt-3.5-turbo",
     # "prediction-online-sum-url-content": "gpt-3.5-turbo-16k",
-    "prediction-online-sum-url-content": "gpt-4",
+    # "prediction-online-sum-url-content": "gpt-4",
 }
 
 # * If the 'event question' is formulated in a way that an event must have happend before a specific date, consider the deadline of the event being 23:59:59 of the day before that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
@@ -78,7 +79,7 @@ INSTRUCTIONS:
 * If there is insufficient information in "ADDITIONAL_INFORMATION", be aware of the limitations of your training data especially when relying on it for predicting events that require up-to-date information. In this case make a prediction that takes into account that you don't have up-to-date information.
 * Your pobability estimation must not only take into account if the specified event happens or not, but also if the event is likely to happen before, by or on the date specified in the 'event question'.
 * If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most up-to-date information that can be found on the internet.
-* If the 'event question' is formulated in a way that an event must have happend BY a specific date, consider the deadline of the event being 23:59:59 of that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
+* If the 'event question' is formulated in a way that an event must have happend BY or ON a specific date, consider the deadline of the event being 23:59:59 of that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
 * If the 'event question' is formulated in a way that an event must have happend BEFORE a specific date, consider the deadline of the event being 23:59:59 of the day before. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
 * You must provide your response in the format specified under "OUTPUT_FORMAT".
 * Do not include any other contents in your response.
@@ -168,14 +169,26 @@ def get_website_summary(text: str, event_question: str, model, tokenizer, nlp, m
     if not event_question or not text:
         return ""
 
-    # Calculate the BERT embedding for the prompt
+    # Calculate the BERT embedding for the event_question to use in similarity computation
     with torch.no_grad():
         question_tokens = tokenizer(event_question, return_tensors="pt", padding=True, truncation=True)
         question_embedding = model(**question_tokens).last_hidden_state.mean(dim=1)
         
-    # Sentence splitting and NER
+    # Apply spaCy's NLP pipeline to the text to prepare for sentence extraction
     doc = nlp(text)
-    sentences = [sent.text for sent in doc.sents if len(sent.text.split()) >= 5]
+    
+    # Extract sentences in text that have more than 5 words and are not duplicates.
+    seen = set()
+    sentences = [sent.text for sent in doc.sents if len(sent.text.split()) >= 5 and not (sent.text in seen or seen.add(sent.text))]
+
+    counter = Counter(sentences)
+
+    duplicates = {k: v for k, v in counter.items() if v > 1}
+    num_duplicates = sum(duplicates.values()) - len(duplicates)
+
+    print(f"Number of duplicate sentences: {num_duplicates}")
+
+    # Named entity recognition (NER)
     entities = [ent.text for ent in doc.ents]
     
     # Crop the sentences list to the first 300 sentences to reduce the time taken for the similarity calculations.
@@ -375,6 +388,7 @@ def extract_texts(
             try:
                 result = future.result()
                 if result.status_code != 200:
+                    del result
                     continue
                 extracted_text = extract_text(
                     html=result.text,
@@ -383,6 +397,7 @@ def extract_texts(
                     tokenizer=tokenizer,
                     nlp=nlp,
                 )
+                del result
                 if extracted_text:
                     extracted_texts.append(f"{url}\n{extracted_text}")
                 count += 1
