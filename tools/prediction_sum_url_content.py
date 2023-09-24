@@ -23,6 +23,7 @@ import json
 import re
 from collections import Counter
 from datetime import datetime
+from dateutil import parser
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple
 from tqdm import tqdm
@@ -49,9 +50,9 @@ ALLOWED_TOOLS = [
 ]
 TOOL_TO_ENGINE = {
     "prediction-offline-sum-url-content": "gpt-3.5-turbo",
-    "prediction-online-sum-url-content": "gpt-3.5-turbo",
+    # "prediction-online-sum-url-content": "gpt-3.5-turbo",
     # "prediction-online-sum-url-content": "gpt-3.5-turbo-16k",
-    # "prediction-online-sum-url-content": "gpt-4",
+    "prediction-online-sum-url-content": "gpt-4",
 }
 
 # * If the 'event question' is formulated in a way that an event must have happend before a specific date, consider the deadline of the event being 23:59:59 of the day before that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
@@ -163,8 +164,99 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
     return unique_results
 
 
+def standardize_date(date_text):
+    try:
+        standardize_date = None
+        # Create regex to check if month or day appears in date_text
+        month_re = re.compile(r'\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b', re.IGNORECASE)
+        day_re = re.compile(r'\b\d{1,2}\b')
+        
+        # Forcing parser.parse to use dayfirst=True for European date format
+        parsed_date = parser.parse(date_text)
+        
+        # Check if year, month, and day are in the original date_text as paser.parse() will fill in the current day, month or year if either is not provided
+        month_exists = month_re.search(date_text) is not None
+        day_exists = day_re.search(date_text) is not None
+        year_exists = str(parsed_date.year) in date_text
+        
+        if year_exists and month_exists and day_exists:
+            return parsed_date.strftime("%Y-%m-%d")
+        elif month_exists and day_exists:
+            return parsed_date.strftime("%m-%d")
+        else:
+            return None
+    except Exception as e:
+        return None
+
+
+def get_context_around_isolated_dates(doc_text, target_date_ydm, len_sentence_threshold, max_words=50):
+    """Get context around a target date with a maximum word limit.
+    
+    Parameters:
+    - doc_text: spaCy doc_text object
+    - target_date_ydm: The target date as a string
+    - len_sentence_threshold: Minimum number of words in a sentence to be considered as contextful
+    - max_words: Maximum number of words in the context
+    
+    Returns:
+    - context: Sentences surrounding the target date
+    """   
+    contexts_list = []
+    target_date_dm = target_date_ydm[5:] # Get the day and month of the target date
+
+    for ent in doc_text.ents:
+        if ent.label_ == 'DATE':
+            standardized_date = standardize_date(ent.text)
+            if standardized_date is None:
+                continue
+            # print(f"Comparing standardized date {standardized_date} with target date {target_date_ydm}")
+            if standardized_date == target_date_ydm or standardized_date == target_date_dm:
+                sentence = next(sent for sent in doc_text.sents if sent.start <= ent.start and sent.end >= ent.end)
+                context_words = len(sentence.text.split())
+                if context_words < len_sentence_threshold:
+                    start_token = sentence.start
+                    end_token = sentence.end         
+                    while context_words < max_words:
+                        # Adding context to the start
+                        new_start = start_token - 1
+                        while new_start >= 0 and doc_text[new_start].is_sent_start is None:
+                            new_start -= 1
+                        if new_start >= 0:
+                            context_words += len(doc_text[new_start:start_token].text.split())
+                            start_token = new_start
+
+                        if context_words >= max_words:
+                            break
+
+                        # Adding context to the end
+                        new_end = end_token + 1
+                        while new_end < len(doc_text) and doc_text[new_end].sent == sentence.sent:
+                            new_end += 1
+
+                        if new_end < len(doc_text):
+                            context_words += len(doc_text[end_token:new_end].text.split())
+                            end_token = new_end
+
+                        if context_words >= max_words:
+                            break
+
+                        # Conditions to break if max_words is not reached
+                        if new_end == len(doc_text) and start_token <= 0:
+                            break
+                    
+                    context = doc_text[max(0, start_token):min(len(doc_text), end_token)].text
+                    print(f"Successfully extracted context for isolated date {target_date_ydm}: {context}\n")
+                    contexts_list.append(context)
+
+    return contexts_list
+
 def get_website_summary(text: str, event_question: str, model, tokenizer, nlp, max_words: int = 150) -> str:
-    """Get text summary from a website"""    
+    """Get text summary from a website"""        
+    len_sentence_threshold = 5
+    num_sentences_threshold = 300
+    event_question_date = None
+    event_date_sentences = []
+    
     # Check for empty inputs
     if not event_question or not text:
         return ""
@@ -173,54 +265,65 @@ def get_website_summary(text: str, event_question: str, model, tokenizer, nlp, m
     with torch.no_grad():
         question_tokens = tokenizer(event_question, return_tensors="pt", padding=True, truncation=True)
         question_embedding = model(**question_tokens).last_hidden_state.mean(dim=1)
-        
+    
     # Apply spaCy's NLP pipeline to the text to prepare for sentence extraction
-    doc = nlp(text)
+    doc_text = nlp(text)
+    doc_question = nlp(event_question)
+
+    # Extract the date from the event question
+    for ent in doc_question.ents:
+        if ent.label_ == 'DATE':
+            print(f"Found date {ent.text} in text.")
+            event_date_ydm = standardize_date(ent.text)
+
     
-    # Extract sentences in text that have more than 5 words and are not duplicates.
+    # Find sentences in the text that contain the event date but are too short to contain relevant information and get the context around them.
+    if event_date_ydm is not None:
+        event_date_sentences.extend(get_context_around_isolated_dates(doc_text, event_date_ydm, len_sentence_threshold, max_words=50))
+    
+
+    print(f"Event date sentences: {event_date_sentences}")
+    
+   
+    # Extract sentences in text that have more or equal number of words than the sentence threshold and are not duplicates.
     seen = set()
-    sentences = [sent.text for sent in doc.sents if len(sent.text.split()) >= 5 and not (sent.text in seen or seen.add(sent.text))]
-
-    counter = Counter(sentences)
-
-    duplicates = {k: v for k, v in counter.items() if v > 1}
-    num_duplicates = sum(duplicates.values()) - len(duplicates)
-
-    print(f"Number of duplicate sentences: {num_duplicates}")
-
-    # Named entity recognition (NER)
-    entities = [ent.text for ent in doc.ents]
+    sentences = [sent.text for sent in doc_text.sents if len(sent.text.split()) >= len_sentence_threshold and not (sent.text in seen or seen.add(sent.text))]
+    sentences.extend(event_date_sentences)
     
-    # Crop the sentences list to the first 300 sentences to reduce the time taken for the similarity calculations.
-    sentences = sentences[:300]
+
+    # Crop the sentences list to reduce the time taken for the similarity calculations.
+    sentences = sentences[:num_sentences_threshold]
 
     # Similarity calculations and sentence ranking
     similarities = []
 
     # Batch the sentences to reduce the time taken for the similarity calculations
+    start_time = datetime.now()
     batch_size = 32
-    for i in range(0, len(sentences), batch_size):
+    for i in tqdm(range(0, len(sentences), batch_size), desc="Calculating sentence similarities"):
         batch = sentences[i:i+batch_size]
         with torch.no_grad():
             sentence_tokens = tokenizer(batch, return_tensors="pt", padding=True, truncation=True)
             sentence_embedding = model(**sentence_tokens).last_hidden_state.mean(dim=1)
             similarity = torch.cosine_similarity(question_embedding.repeat(len(batch), 1), sentence_embedding).tolist()
         
-        for j, sent in enumerate(batch):
-            if any(entity in sent for entity in entities):
-                similarity[j] += 0.05
+        # for j, sent in enumerate(batch):
+        #     if any(entity in sent for entity in entities):
+        #         similarity[j] += 0.05
         similarities.extend(similarity)
+    end_time = datetime.now()
+    print(f"Batch size: {batch_size}:\nTime taken to calculate sentence similarities: {end_time - start_time}\n")
     
     # Free up GPU memory
     del question_embedding, sentence_embedding
     torch.cuda.empty_cache()
         
     # Extract the top relevant sentences
-    relevant_sentences = [sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.7]
+    relevant_sentences = [sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.8]
 
     # Print each sentence in relevant_sentences in a new line along with its similarity score > 0.7
     for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-        if sim > 0.7:
+        if sim < 0.5:
             print(f"{sim} : {sent}\n")
 
     if len(relevant_sentences) == 0:
@@ -312,7 +415,7 @@ def extract_text(
     tokenizer,
     nlp,
 ) -> str:
-    """Extract text from a single HTML document"""
+    """Extract text from a single HTML doc_textument"""
     # Remove HTML tags and extract text
     soup = BeautifulSoup(html, "html.parser")
 
@@ -377,8 +480,8 @@ def extract_texts(
     stop = False
     
     # BERT Initialization
-    model = AutoModel.from_pretrained("bert-base-uncased")
-    tokenizer = AutoTokenizer.from_pretrained("bert-base-uncased")
+    model = AutoModel.from_pretrained("dbmdz/bert-large-cased-finetuned-conll03-english")
+    tokenizer = AutoTokenizer.from_pretrained("dbmdz/bert-large-cased-finetuned-conll03-english")
 
     # Spacy Initialization for NER and sentence splitting
     nlp = spacy.load("en_core_web_sm")
