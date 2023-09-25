@@ -56,6 +56,7 @@ gensim = "^4.3.2"
 sentence-transformers = "^2.2.2"
 spacy = "^3.6.1"
 tqdm = "^4.66.1"
+tiktoken = "^0.5.1"
 
 [tool.poetry.group.dev.dependencies.tomte]
 version = "==0.2.12"

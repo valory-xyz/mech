@@ -23,19 +23,24 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 from datetime import datetime
 import json
 import re
-from concurrent.futures import Future, ThreadPoolExecutor
+import traceback
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 import openai
 import requests
+from requests import Session
+from requests.adapters import HTTPAdapter
 import spacy
 import torch
 
 from dateutil import parser
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer, util
+# from tiktoken import Tokenizer, encoding_for_model
 from transformers import AutoTokenizer, AutoModel, BertForPreTraining, BertForMaskedLM
+from urllib3.util.retry import Retry
 
 NUM_URLS_EXTRACT = 5
 DEFAULT_OPENAI_SETTINGS = {
@@ -181,7 +186,6 @@ HTML_TAGS_TO_REMOVE = [
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     """Search Google using a custom search engine."""
-
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
         service.cse()
@@ -193,6 +197,27 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
         .execute()
     )
     return [result["link"] for result in search["items"]]
+
+
+# def truncate_text_to_tokens(text, max_tokens):
+#     """Get the token encoding that corresponds to the GPT-4 model"""
+#     enc = encoding_for_model("cl100k_base")
+
+#     # Initialize tokenizer and token list
+#     tokenizer = Tokenizer(encoders=[enc])
+#     token_list = []
+    
+#     # Tokenize the text and add tokens to the token list
+#     for token, _ in tokenizer.count_tokens(text):
+#         token_list.append(token)
+
+#     # Truncate the token list to 'max_tokens'
+#     truncated_tokens = token_list[:max_tokens]
+    
+#     # Reconstruct the truncated text
+#     truncated_text = ''.join(truncated_tokens)
+    
+#     return truncated_text
 
 
 def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: int = 3) -> List[str]:
@@ -209,7 +234,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
         ValueError: If the number of URLs per query exceeds the maximum allowed.
     
     Returns:
-        List[str]: Unique list of URLs, omitting PDF URLs.
+        List[str]: Unique list of URLs, omitting PDF and download-related URLs.
     """
 
     results = set()
@@ -225,16 +250,15 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
             engine=engine,
             num=max_num  # Limit the number of returned URLs per query
         )
-        
-        # Add only unique URLs up to 'num' per query
+
+        # Add only unique URLs up to 'num' per query, omitting PDF and 'download' URLs
         count = 0
         for url in fetched_urls:
-            if url not in results and not url.endswith(".pdf"):
+            if "download" not in url.lower() and url not in results and not url.endswith(".pdf"):
                 results.add(url)
                 count += 1
                 if count >= num:
                     break
-
     return list(results)
 
 
@@ -395,8 +419,20 @@ def get_sentence_embeddings_and_similarities(
     # Repeat the question embedding tensor to match the batch size
     question_embedding_repeated = question_embedding.repeat(batch_size, 1)
 
+    # Print the number of sentences
+    # print(f"Number of sentences: {len(sentences)}")
+
+    # Print the number of batches
+    # print(f"Number of batches to create: {len(sentences) // batch_size + 1}")
+
     # Batch the sentences for efficient processing
     sentence_batches = [sentences[i:i + batch_size] for i in range(0, len(sentences), batch_size)]
+    
+    # print(f"Number of batches created: {len(sentence_batches)}")
+    # Number of sentences in each batch
+    # print(f"Number of sentences in all batches except the last: {len(sentence_batches[:-1])}")
+    
+    # print(f"Number of sentences in the last batch: {len(sentence_batches[-1])}")
     
     for batch in tqdm(sentence_batches, desc="Calculating sentence similarities"):
         # Adjust the repeated question embedding if the batch size changes
@@ -426,7 +462,7 @@ def get_website_summary(
     model,
     tokenizer,
     nlp,
-    max_words: int = 130
+    max_words: int = 120
 ) -> str:
     """
     Generate a summary of a website's text based on a given event question.
@@ -437,7 +473,7 @@ def get_website_summary(
         model: The BERT model for text embeddings.
         tokenizer: The tokenizer for the BERT model.
         nlp: The spaCy NLP model.
-        max_words (int, optional): Maximum number of words for the output summary. Defaults to 130.
+        max_words (int, optional): Maximum number of words for the output summary. Defaults to 120.
 
     Raises:
         ValueError: If max_words is less than 1 or greater than 300.
@@ -468,6 +504,9 @@ def get_website_summary(
         question_tokens = tokenizer(event_question, return_tensors="pt", padding=True, truncation=True)
         question_embedding = model(**question_tokens).last_hidden_state.mean(dim=1)
     
+    # Truncate text to stay within nlp character limit of 1,000,000
+    text = text[:1000000]
+    
     # Apply NLP pipeline to text and event question
     doc_text = nlp(text)
     doc_question = nlp(event_question)
@@ -475,10 +514,8 @@ def get_website_summary(
     # Extract the date from the event question if present
     for ent in doc_question.ents:
         if ent.label_ == 'DATE':
-            print(f"Found date {ent.text} in text.")
             event_date_ydm = standardize_date(ent.text)
 
-    
     # Extract contextual sentences around isolated dates
     if event_date_ydm is not None:
         event_date_sentences.extend(
@@ -501,13 +538,19 @@ def get_website_summary(
 
     # Calculate sentence similarities
     similarities = get_sentence_embeddings_and_similarities(
-        sentences, question_embedding, model, tokenizer, batch_size=32
+        sentences, question_embedding, model, tokenizer, batch_size=16
     )
 
     # Extract  top relevant sentences
     relevant_sentences = [
         sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.9
     ]
+
+    # Print sentences and similarities if similarity is greater than 0.9
+    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
+        if sim > 0.9:
+            print(f"Sentence: {sent}\nSimilarity: {sim}\n")
+            print()
 
     if not relevant_sentences:
         return ""
@@ -619,7 +662,7 @@ def extract_text(
 
 
 def process_in_batches(
-    urls: List[str], batch_size: int = 15, timeout: int = 10
+    urls: List[str], batch_size: int = 5, timeout: int = 10
 ) -> Generator[None, None, List[Tuple[Future, str]]]:
     """
     Process URLs in batches using a generator and thread pool executor.
@@ -643,15 +686,32 @@ def process_in_batches(
     if timeout <= 0:
         raise ValueError("The 'timeout' must be greater than zero.")
 
+    session = Session()
+
+    # Set up retry logic
+    retries = Retry(
+        total=5,
+        backoff_factor=0.1,
+        status_forcelist=[500, 502, 503, 504]
+    )
+    session.mount('http://', HTTPAdapter(max_retries=retries))
+    session.mount('https://', HTTPAdapter(max_retries=retries))
+
+    # User-Agent headers
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/117.0'
+    }
+    session.headers.update(headers)
+
     # Using ThreadPoolExecutor to execute requests in parallel
     with ThreadPoolExecutor() as executor:
-        # Loop through the URLs in windows of size 'window'
+        # Loop through the URLs in batch_size of size 'batch_size'
         for i in range(0, len(urls), batch_size):
             batch = urls[i : i + batch_size]
             
             # Submit the batch of URLs for processing
             futures = [
-                (executor.submit(requests.get, url, timeout=timeout), url) for url in batch
+                (executor.submit(session.get, url, headers=headers, timeout=timeout), url) for url in batch
             ]
             yield futures
 
@@ -691,7 +751,9 @@ def extract_texts(
         for future, url in tqdm(batch, desc="Processing URLs"):
             try:
                 result = future.result()
+                print(f"\n{result.status_code}: status code for {url}\n")
                 if result.status_code != 200:
+                    # print(f"result.status_code: {result.status_code}")
                     del result
                     continue
                 
@@ -703,6 +765,7 @@ def extract_texts(
                     tokenizer=tokenizer,
                     nlp=nlp,
                 )
+                # print(f"extracted_text: {extracted_text}")
                 
                 # Delete the result object to free memory
                 del result
@@ -711,21 +774,31 @@ def extract_texts(
                 if extracted_text:
                     extracted_texts.append(f"{url}\n{extracted_text}")
                 count += 1
+                # print(f"extracted_texts: {extracted_texts}\n")
+                print(f"count: {count}\n")
 
                 # Break if the maximum number of extractions is reached
                 if count >= max_allowed:
                     stop = True
+                    print(f"Maximum number of extractions reached: {max_allowed}.")
                     break
 
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             
+            except requests.exceptions.Timeout:
+                print(f"Request for {url} timed out.")
+            
             except Exception as e:
                 print(f"An error occurred: {e}")
+                traceback.print_exc()  # Print stack trace for debugging
         
         # Break if the maximum number of extractions is reached
         if stop:
+            print(f"Maximum number of extractions reached: {max_allowed}.")
             break
+
+        # print(f"\nbatch: {batch}\n")
 
     return extracted_texts
 
@@ -772,7 +845,7 @@ def fetch_additional_information(
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=messages,
-        temperature=0.7,
+        temperature=0,
         max_tokens=max_tokens,
         n=1,
         timeout=90,
@@ -820,7 +893,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     """
 
     print("Starting...")
-    
+    print()
+
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
@@ -849,6 +923,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     if not event_question:
         raise ValueError("No event question found in prompt.")
     print(f"EVENT_QUESTION: {event_question}")
+    print()
 
     # Fetch additional information
     additional_information = (
