@@ -21,10 +21,8 @@
 
 from typing import Any, Dict, Generator, List, Optional, Tuple
 from datetime import datetime
-import time
 import json
 import re
-import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
 
 from bs4 import BeautifulSoup
@@ -257,24 +255,28 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
     """
 
     results = set()
-    max_num = 10
+    max_num_fetch = 10
 
-    if num > max_num:
-        raise ValueError(f"The maximum number of URLs per query is {max_num}.")
+    if num > max_num_fetch:
+        raise ValueError(f"The maximum number of URLs per query is {max_num_fetch}.")
 
     for query in queries:
         fetched_urls = search_google(
             query=query,
             api_key=api_key,
             engine=engine,
-            num=max_num  # Limit the number of returned URLs per query
+            num=max_num_fetch  # Limit the number of returned URLs per query
         )
 
         # Add only unique URLs up to 'num' per query, omitting PDF and 'download' URLs
         count = 0
+        
+
         for url in fetched_urls:
+            # print(f"URL: {url}")
             results.add(url)
             count += 1
+            # print(f"Count: {count}")
             if count >= num:
                 break
             
@@ -283,6 +285,9 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
             #     count += 1
             #     if count >= num:
             #         break
+    print("get_urls_from_queries result:")
+    for url in results:
+        print(url)
     return list(results)
 
 
@@ -483,7 +488,7 @@ def get_website_summary(
         model: The BERT model for text embeddings.
         tokenizer: The tokenizer for the BERT model.
         nlp: The spaCy NLP model.
-        max_words (int, optional): Maximum number of words for the output summary. Defaults to 200.
+        max_words (int): Maximum number of words for the output summary.
 
     Raises:
         ValueError: If max_words is less than 1 or greater than 300.
@@ -549,9 +554,9 @@ def get_website_summary(
     ]
     
     # Print similarity scores along with the sentences
-    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-        print(f"{sim:.4f}: {sent}")
-        print()
+    # for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
+    #     print(f"{sim:.4f}: {sent}")
+    #     print()
 
     if not relevant_sentences:
         return ""
@@ -690,7 +695,7 @@ def process_in_batches(
         raise ValueError("The 'timeout' must be greater than zero.")
 
     session = Session()
-    session.max_redirects = 3
+    session.max_redirects = 5
 
     # User-Agent headers
     headers = {
@@ -706,20 +711,22 @@ def process_in_batches(
             
             # Submit the batch of URLs for processing
             futures = []
-
             for url in batch:
-                # Submit a HEAD request to the url to check the Content-Type
-                head_future = executor.submit(session.head, url, headers=headers, timeout=timeout, allow_redirects=True)
-                head_response = head_future.result()
+                try:
+                    # Submit a HEAD request to the url to check the Content-Type
+                    head_future = executor.submit(session.head, url, headers=headers, timeout=timeout, allow_redirects=True)
+                    head_response = head_future.result()
 
-                print(f"Content-Type: {head_response.headers.get('Content-Type')}")
-                if 'text/html' not in head_response.headers.get('Content-Type', ''):
-                    print(f"\nAborting, {url} is not an HTML page.")
-                    print(head_response.headers)
-                    continue
-                else:
-                    # Submit a GET request to the url
-                    futures.append((executor.submit(session.get, url, headers=headers, timeout=timeout), url))
+                    print(f"Content-Type: {head_response.headers.get('Content-Type')}")
+                    if 'text/html' not in head_response.headers.get('Content-Type', ''):
+                        print(f"\nAborting, {url} is not an HTML page.")
+                        print(head_response.headers)
+                        continue
+                    else:
+                        # Submit a GET request to the url
+                        futures.append((executor.submit(session.get, url, headers=headers, timeout=timeout), url))
+                except Exception as e:
+                    print(f"An error occurred: {e}")
 
             yield futures
 
@@ -746,6 +753,11 @@ def extract_texts(
     # ~ 2642 tokens free for additional information ~ 1981 words
     # split by number of URLs
     max_words = 1981 // len(urls)
+    # print(f"Max allowed extractions: {max_allowed}")
+    # print(f"Max words per extraction: {max_words}")
+    # print("URLS:")
+    # for url in urls:
+    #     print(f"url: {url}")
     
     # Initialize empty list for storing extracted texts
     extracted_texts = []
@@ -783,11 +795,12 @@ def extract_texts(
                 
                 # Append the extracted text if available and increment the count
                 if extracted_text:
-                    extracted_texts.append(f"{url}\n{extracted_text}")
+                    extracted_texts.append(extracted_text)
                 count += 1
 
                 # Break if the maximum number of extractions is reached
                 if count >= max_allowed:
+                    print(f"Maximum number of extractions reached: {max_allowed}.")
                     stop = True
                     break
 
@@ -799,10 +812,10 @@ def extract_texts(
             
             except Exception as e:
                 print(f"An error occurred: {e}")
-                traceback.print_exc()  # Print stack trace for debugging
         
         # Break if the maximum number of extractions is reached
         if stop:
+            print(f"Maximum number of extractions reached: {max_allowed}.")
             break
 
     return extracted_texts
@@ -850,7 +863,7 @@ def fetch_additional_information(
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=messages,
-        temperature=0, # Override the default temperature parameter set for the engine
+        temperature=0.7, # Override the default temperature parameter set for the engine
         max_tokens=500, # Override the default max_tokens parameter set for the engine
         n=1,
         timeout=90,
@@ -872,9 +885,9 @@ def fetch_additional_information(
         api_key=google_api_key,
         engine=google_engine,
     )
-    print("\nURLS:")
-    for url in urls:
-        print(f"url: {url}")
+    # print("\nFetch additional information URLS:")
+    # for url in urls:
+    #     print(f"url: {url}")
 
     # Extract texts from URLs
     texts = extract_texts(
