@@ -25,22 +25,20 @@ import time
 import json
 import re
 import traceback
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor
 
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 import openai
 import requests
 from requests import Session
-from requests.adapters import HTTPAdapter
 import spacy
 import tiktoken
 import torch
 
 from dateutil import parser
 from tqdm import tqdm
-from sentence_transformers import SentenceTransformer, util
-from transformers import AutoTokenizer, AutoModel, BertForPreTraining, BertForMaskedLM
+from transformers import AutoTokenizer, AutoModel
 
 NUM_URLS_EXTRACT = 5
 MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096
@@ -407,7 +405,6 @@ def get_context_around_isolated_dates(
                             break
                     
                     context = doc_text[max(0, start_token):min(len_doc_text, end_token)].text
-                    print(f"Successfully extracted context for isolated date {target_date_ydm}: {context}\n")
                     contexts_list.append(context)
 
     return contexts_list
@@ -445,20 +442,8 @@ def get_sentence_embeddings_and_similarities(
     # Repeat the question embedding tensor to match the batch size
     question_embedding_repeated = question_embedding.repeat(batch_size, 1)
 
-    # Print the number of sentences
-    # print(f"Number of sentences: {len(sentences)}")
-
-    # Print the number of batches
-    # print(f"Number of batches to create: {len(sentences) // batch_size + 1}")
-
     # Batch the sentences for efficient processing
     sentence_batches = [sentences[i:i + batch_size] for i in range(0, len(sentences), batch_size)]
-    
-    # print(f"Number of batches created: {len(sentence_batches)}")
-    # Number of sentences in each batch
-    # print(f"Number of sentences in all batches except the last: {len(sentence_batches[:-1])}")
-    
-    # print(f"Number of sentences in the last batch: {len(sentence_batches[-1])}")
     
     for batch in tqdm(sentence_batches, desc="Calculating sentence similarities"):
         # Adjust the repeated question embedding if the batch size changes
@@ -562,12 +547,11 @@ def get_website_summary(
     relevant_sentences = [
         sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.9
     ]
-
-    # # Print sentences and similarities if similarity is greater than 0.9
-    # for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-    #     if sim > 0.9:
-    #         print(f"Similarity: {sim}\nSentence: {sent}\n")
-    #         print()
+    
+    # Print similarity scores along with the sentences
+    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
+        print(f"{sim:.4f}: {sent}")
+        print()
 
     if not relevant_sentences:
         return ""
@@ -706,6 +690,7 @@ def process_in_batches(
         raise ValueError("The 'timeout' must be greater than zero.")
 
     session = Session()
+    session.max_redirects = 3
 
     # User-Agent headers
     headers = {
@@ -721,12 +706,16 @@ def process_in_batches(
             
             # Submit the batch of URLs for processing
             futures = []
+
             for url in batch:
                 # Submit a HEAD request to the url to check the Content-Type
-                head_future = executor.submit(session.head, url, headers=headers, timeout=timeout)
+                head_future = executor.submit(session.head, url, headers=headers, timeout=timeout, allow_redirects=True)
                 head_response = head_future.result()
+
+                print(f"Content-Type: {head_response.headers.get('Content-Type')}")
                 if 'text/html' not in head_response.headers.get('Content-Type', ''):
-                    print(f"Aborting, {url} is not an HTML page.")
+                    print(f"\nAborting, {url} is not an HTML page.")
+                    print(head_response.headers)
                     continue
                 else:
                     # Submit a GET request to the url
@@ -788,7 +777,6 @@ def extract_texts(
                     nlp=nlp,
                     max_words=max_words,
                 )
-                # print(f"extracted_text: {extracted_text}")
                 
                 # Delete the result object to free memory
                 del result
@@ -797,13 +785,10 @@ def extract_texts(
                 if extracted_text:
                     extracted_texts.append(f"{url}\n{extracted_text}")
                 count += 1
-                # print(f"extracted_texts: {extracted_texts}\n")
-                print(f"count: {count}\n")
 
                 # Break if the maximum number of extractions is reached
                 if count >= max_allowed:
                     stop = True
-                    print(f"Maximum number of extractions reached: {max_allowed}.")
                     break
 
             except requests.exceptions.ReadTimeout:
@@ -818,7 +803,6 @@ def extract_texts(
         
         # Break if the maximum number of extractions is reached
         if stop:
-            print(f"Maximum number of extractions reached: {max_allowed}.")
             break
 
     return extracted_texts
@@ -876,7 +860,11 @@ def fetch_additional_information(
     
     # Parse the response content
     json_data = json.loads(response.choices[0].message.content)
-    print(f"json_data: {json_data}")
+    # Print queries each on a new line
+    print("QUERIES:\n")
+    for query in json_data["queries"]:
+        print(f"query: {query}\n")
+
 
     # Get URLs from queries
     urls = get_urls_from_queries(
@@ -884,6 +872,7 @@ def fetch_additional_information(
         api_key=google_api_key,
         engine=google_engine,
     )
+    print("\nURLS:")
     for url in urls:
         print(f"url: {url}")
 
@@ -976,7 +965,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information, timestamp=timestamp,
     )
-    print(f"PREDICTION PROMPT: {prediction_prompt}\n")
+    print(f"\nPREDICTION PROMPT: {prediction_prompt}\n")
 
     # Perform moderation
     moderation_result = openai.Moderation.create(prediction_prompt)
