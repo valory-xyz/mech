@@ -33,10 +33,12 @@ from requests import Session
 import spacy
 import tiktoken
 import torch
+import traceback
 
 from dateutil import parser
 from tqdm import tqdm
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, AutoModelForQuestionAnswering, pipeline
+from sentence_transformers import SentenceTransformer, util
 
 NUM_URLS_EXTRACT = 5
 MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096
@@ -509,14 +511,15 @@ def get_website_summary(
     # Calculate the BERT embedding for the event question
     with torch.no_grad():
         question_tokens = tokenizer(event_question, return_tensors="pt", padding=True, truncation=True)
-        question_embedding = model(**question_tokens).last_hidden_state.mean(dim=1)
-    
+        #question_embedding = model(**question_tokens).last_hidden_state.mean(dim=1)
     # Truncate text to stay within nlp character limit of 1,000,000
     text = text[:1000000]
     
     # Apply NLP pipeline to text and event question
     doc_text = nlp(text)
     doc_question = nlp(event_question)
+
+    query_emb = model.encode(event_question)
 
     # Extract the date from the event question if present
     for ent in doc_question.ents:
@@ -543,10 +546,31 @@ def get_website_summary(
     # Limit the number of sentences for performance
     sentences = sentences[:num_sentences_threshold]
 
-    # Calculate sentence similarities
-    similarities = get_sentence_embeddings_and_similarities(
-        sentences, question_embedding, model, tokenizer, batch_size=16
-    )
+    # # Calculate sentence similarities
+    # similarities = get_sentence_embeddings_and_similarities(
+    #     sentences, question_embedding, model, tokenizer, batch_size=16
+    # )
+
+
+    sent_emb = model.encode(sentences)
+    similarities = util.dot_score(query_emb, sent_emb)[0].cpu().tolist()
+
+
+    
+    # similarities = []
+    # print("Now initialize pipeline()")
+    # nlp_pipeline = pipeline("question-answering", model=model, tokenizer=tokenizer)
+    
+    # for sent in sentences:
+    #     QA_input = {
+    #         "question": event_question,
+    #         "context": text
+    #     }
+    #     result = nlp_pipeline(QA_input, padding=True, truncation=True)
+    #     print(f"Score: {result['score']}")
+    #     print(f"Sentence: {sent}\n")
+    #     similarities.append(result['score'])
+
 
     # Extract top relevant sentences
     relevant_sentences = [
@@ -554,9 +578,11 @@ def get_website_summary(
     ]
     
     # Print similarity scores along with the sentences
-    # for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-    #     print(f"{sim:.4f}: {sent}")
-    #     print()
+    
+    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
+        if sim > 0.6:
+            print(f"{sim:.4f}: {sent}")
+            print()
 
     if not relevant_sentences:
         return ""
@@ -632,6 +658,7 @@ def extract_text(
         str: Summarized text with the date.
     """
 
+    print(f"Started extract_text function")
     if not html:
         raise ValueError("HTML is empty.")
 
@@ -767,8 +794,8 @@ def extract_texts(
     stop = False
 
     # Initialize BERT and Spacy models
-    model = AutoModel.from_pretrained("dbmdz/bert-large-cased-finetuned-conll03-english")
-    tokenizer = AutoTokenizer.from_pretrained("dbmdz/bert-large-cased-finetuned-conll03-english")
+    model = SentenceTransformer('sentence-transformers/msmarco-distilbert-base-tas-b')    
+    tokenizer = AutoTokenizer.from_pretrained("csarron/bert-base-uncased-squad-v1")
     nlp = spacy.load("en_core_web_sm")
     
     # Process URLs in batches
@@ -779,7 +806,7 @@ def extract_texts(
                 if result.status_code != 200:
                     del result
                     continue
-                
+                print("Request successful.")
                 # Extract relevant information for the event question
                 extracted_text = extract_text(
                     html=result.text,
@@ -812,6 +839,7 @@ def extract_texts(
             
             except Exception as e:
                 print(f"An error occurred: {e}")
+                traceback.print_exc()  # Print stack trace for debugging
         
         # Break if the maximum number of extractions is reached
         if stop:
@@ -863,7 +891,7 @@ def fetch_additional_information(
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=messages,
-        temperature=0.7, # Override the default temperature parameter set for the engine
+        temperature=1, # Override the default temperature parameter set for the engine
         max_tokens=500, # Override the default max_tokens parameter set for the engine
         n=1,
         timeout=90,
@@ -872,6 +900,7 @@ def fetch_additional_information(
     )
     
     # Parse the response content
+    print(f"RESPONSE: {response}")
     json_data = json.loads(response.choices[0].message.content)
     # Print queries each on a new line
     print("QUERIES:\n")
