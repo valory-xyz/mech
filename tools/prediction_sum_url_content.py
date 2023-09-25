@@ -41,7 +41,6 @@ from dateutil import parser
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer, util
 from transformers import AutoTokenizer, AutoModel, BertForPreTraining, BertForMaskedLM
-from urllib3.util.retry import Retry
 
 NUM_URLS_EXTRACT = 5
 MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096
@@ -228,27 +227,14 @@ def truncate_additional_information(
     user_prompt_tokens_token_enc = enc.encode(prompt)
     prediction_prompt_tokens_token_enc = enc.encode(PREDICTION_PROMPT)
 
-    print("Max Total Tokens:", MAX_TOTAL_TOKENS_CHAT_COMPLETION)
-    print("Number of tokens in additional informations:", len(additional_information_token_enc))
-    print("Number of tokens in user prompt:", len(user_prompt_tokens_token_enc))
-    print("Number of tokens in prediction prompt:", len(prediction_prompt_tokens_token_enc))
-    print("Number of tokens reserved for chat completion output:", max_tokens)
-
     # Calculate the rough token sum of final prediction prompt
     prompt_token_sum = len(additional_information_token_enc) + len(user_prompt_tokens_token_enc) + len(prediction_prompt_tokens_token_enc) + max_tokens
-    print(f"Total number of tokens in prompt: {prompt_token_sum}")
     prompt_token_sum_safety_factor = prompt_token_sum * safety_factor
-    print(f"Total number of tokens in prompt with safety factor: {prompt_token_sum_safety_factor}")
 
+    # Truncate the additional information string if the token sum exceeds the maximum allowed
     if prompt_token_sum_safety_factor > MAX_TOTAL_TOKENS_CHAT_COMPLETION:
         num_tokens_to_truncate = prompt_token_sum_safety_factor - MAX_TOTAL_TOKENS_CHAT_COMPLETION
-        print(f"Truncating additional information by {num_tokens_to_truncate} tokens.")
-
-        # Truncate the additional informations tokens
         truncated_additional_informations_token = additional_information_token_enc[:-int(num_tokens_to_truncate)]
-        print(f"Number of tokens in truncated additional informations: {len(truncated_additional_informations_token)}")
-
-        # Decode the truncated tokens back into text
         truncated_additional_informations_string = enc.decode(truncated_additional_informations_token)
         return truncated_additional_informations_string
     else:
@@ -721,15 +707,6 @@ def process_in_batches(
 
     session = Session()
 
-    # Set up retry logic
-    retries = Retry(
-        total=2,
-        backoff_factor=0.1,
-        status_forcelist=[500, 502, 503, 504]
-    )
-    session.mount('http://', HTTPAdapter(max_retries=retries))
-    session.mount('https://', HTTPAdapter(max_retries=retries))
-
     # User-Agent headers
     headers = {
         'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/117.0'
@@ -743,9 +720,18 @@ def process_in_batches(
             batch = urls[i : i + batch_size]
             
             # Submit the batch of URLs for processing
-            futures = [
-                (executor.submit(session.get, url, headers=headers, timeout=timeout), url) for url in batch
-            ]
+            futures = []
+            for url in batch:
+                # Submit a HEAD request to the url to check the Content-Type
+                head_future = executor.submit(session.head, url, headers=headers, timeout=timeout)
+                head_response = head_future.result()
+                if 'text/html' not in head_response.headers.get('Content-Type', ''):
+                    print(f"Aborting, {url} is not an HTML page.")
+                    continue
+                else:
+                    # Submit a GET request to the url
+                    futures.append((executor.submit(session.get, url, headers=headers, timeout=timeout), url))
+
             yield futures
 
 
@@ -789,9 +775,6 @@ def extract_texts(
         for future, url in tqdm(batch, desc="Processing URLs"):
             try:
                 result = future.result()
-                print(f"\nURL: {url}")
-                print(f"Status code: {result.status_code}")
-                print(f"Content type: {result.headers.get('content-type')}\n")
                 if result.status_code != 200:
                     del result
                     continue
@@ -979,8 +962,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         else ""
     )
 
-    start_time = time.time()
-    # # Truncate additional information to stay within the chat completion token limit of 4096
+    # Truncate additional information to stay within the chat completion token limit of 4096
     enc = tiktoken.get_encoding("cl100k_base") # Get the tiktoken base encoding
     additional_information = truncate_additional_information(
         additional_information, 
@@ -988,8 +970,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         prompt=prompt,
         enc=enc,
     )
-    end_time = time.time()
-    print(f"Time taken to truncate additional information: {end_time - start_time} seconds.")
 
     # Generate the prediction prompt
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
