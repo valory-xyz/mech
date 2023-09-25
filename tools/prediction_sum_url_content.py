@@ -21,6 +21,7 @@
 
 from typing import Any, Dict, Generator, List, Optional, Tuple
 from datetime import datetime
+import time
 import json
 import re
 import traceback
@@ -33,20 +34,22 @@ import requests
 from requests import Session
 from requests.adapters import HTTPAdapter
 import spacy
+import tiktoken
 import torch
 
 from dateutil import parser
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer, util
-# from tiktoken import Tokenizer, encoding_for_model
 from transformers import AutoTokenizer, AutoModel, BertForPreTraining, BertForMaskedLM
 from urllib3.util.retry import Retry
 
 NUM_URLS_EXTRACT = 5
+MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096
 DEFAULT_OPENAI_SETTINGS = {
-    "max_tokens": 500,
+    "max_tokens": 200,
     "temperature": 0.2,
 }
+
 ALLOWED_TOOLS = [
     "prediction-offline-sum-url-content",
     "prediction-online-sum-url-content",
@@ -199,25 +202,57 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     return [result["link"] for result in search["items"]]
 
 
-# def truncate_text_to_tokens(text, max_tokens):
-#     """Get the token encoding that corresponds to the GPT-4 model"""
-#     enc = encoding_for_model("cl100k_base")
+def truncate_additional_information(
+    additional_informations: str,
+    max_tokens: int,
+    prompt: str,
+    enc: tiktoken.Encoding,
+    safety_factor: float = 1.05,
+) -> str:
+    """
+    Truncates additional information string to a specified number of tokens using tiktoken encoding.
 
-#     # Initialize tokenizer and token list
-#     tokenizer = Tokenizer(encoders=[enc])
-#     token_list = []
-    
-#     # Tokenize the text and add tokens to the token list
-#     for token, _ in tokenizer.count_tokens(text):
-#         token_list.append(token)
+    Parameters:
+        additional_informations (str): The additional information string to be truncated.
+        max_tokens (int): The maximum number of chat completion output tokens.
+        prompt (str): The user prompt containing the event question.
+        enc (tiktoken.Encoding): The tiktoken encoding to be used.
+        safety_factor (float, optional): The safety factor to be used for truncation. Defaults to 1.05.
 
-#     # Truncate the token list to 'max_tokens'
-#     truncated_tokens = token_list[:max_tokens]
-    
-#     # Reconstruct the truncated text
-#     truncated_text = ''.join(truncated_tokens)
-    
-#     return truncated_text
+    Returns:
+    - str: The truncated additional information string.
+    """
+
+    # Encode the strings into tokens
+    additional_information_token_enc = enc.encode(additional_informations)
+    user_prompt_tokens_token_enc = enc.encode(prompt)
+    prediction_prompt_tokens_token_enc = enc.encode(PREDICTION_PROMPT)
+
+    print("Max Total Tokens:", MAX_TOTAL_TOKENS_CHAT_COMPLETION)
+    print("Number of tokens in additional informations:", len(additional_information_token_enc))
+    print("Number of tokens in user prompt:", len(user_prompt_tokens_token_enc))
+    print("Number of tokens in prediction prompt:", len(prediction_prompt_tokens_token_enc))
+    print("Number of tokens reserved for chat completion output:", max_tokens)
+
+    # Calculate the rough token sum of final prediction prompt
+    prompt_token_sum = len(additional_information_token_enc) + len(user_prompt_tokens_token_enc) + len(prediction_prompt_tokens_token_enc) + max_tokens
+    print(f"Total number of tokens in prompt: {prompt_token_sum}")
+    prompt_token_sum_safety_factor = prompt_token_sum * safety_factor
+    print(f"Total number of tokens in prompt with safety factor: {prompt_token_sum_safety_factor}")
+
+    if prompt_token_sum_safety_factor > MAX_TOTAL_TOKENS_CHAT_COMPLETION:
+        num_tokens_to_truncate = prompt_token_sum_safety_factor - MAX_TOTAL_TOKENS_CHAT_COMPLETION
+        print(f"Truncating additional information by {num_tokens_to_truncate} tokens.")
+
+        # Truncate the additional informations tokens
+        truncated_additional_informations_token = additional_information_token_enc[:-int(num_tokens_to_truncate)]
+        print(f"Number of tokens in truncated additional informations: {len(truncated_additional_informations_token)}")
+
+        # Decode the truncated tokens back into text
+        truncated_additional_informations_string = enc.decode(truncated_additional_informations_token)
+        return truncated_additional_informations_string
+    else:
+        return additional_informations
 
 
 def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: int = 3) -> List[str]:
@@ -254,11 +289,16 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
         # Add only unique URLs up to 'num' per query, omitting PDF and 'download' URLs
         count = 0
         for url in fetched_urls:
-            if "download" not in url.lower() and url not in results and not url.endswith(".pdf"):
-                results.add(url)
-                count += 1
-                if count >= num:
-                    break
+            results.add(url)
+            count += 1
+            if count >= num:
+                break
+            
+            # if "download" not in url.lower() and url not in results and not url.endswith(".pdf"):
+            #     results.add(url)
+            #     count += 1
+            #     if count >= num:
+            #         break
     return list(results)
 
 
@@ -301,7 +341,7 @@ def standardize_date(date_text):
 
 
 def get_context_around_isolated_dates(
-    doc_text, target_date_ydm, len_sentence_threshold, max_words=50
+    doc_text, target_date_ydm, len_sentence_threshold, max_context=50
 ):
     """
     Extract context around isolated dates within the text.
@@ -310,21 +350,21 @@ def get_context_around_isolated_dates(
         doc_text (spaCy Doc): Document text as a spaCy Doc object.
         target_date_ydm (str): Target date in year-day-month format.
         len_sentence_threshold (int): Minimum number of words required for a sentence to be considered contextful.
-        max_words (int, optional): Maximum number of words to include in the context. Defaults to 50.
+        max_context (int, optional): Maximum number of words to include in the context. Defaults to 50.
 
     Raises:
-        ValueError: If max_words is less than len_sentence_threshold or greater than 300.
+        ValueError: If max_context is less than len_sentence_threshold or greater than 300.
 
     Returns:
         list: List of sentences surrounding the target date.
     """
 
-    # Check max_words value constraints
-    if max_words < len_sentence_threshold:
+    # Check max_context value constraints
+    if max_context < len_sentence_threshold:
         raise ValueError(
             f"The maximum number of words must be greater than or equal to the minimum number of words ({len_sentence_threshold}) required for a sentence to be considered contextful."
         )
-    if max_words > 300:
+    if max_context > 300:
         raise ValueError(
             f"The maximum number of words must be less than or equal to 300."
         )
@@ -351,7 +391,7 @@ def get_context_around_isolated_dates(
                 # Extend the context if the sentence is too short
                 if context_words < len_sentence_threshold:
                     start_token, end_token = sentence.start, sentence.end
-                    while context_words < max_words:
+                    while context_words < max_context:
                         # Extend the context from the start of the sentence
                         new_start = start_token - 1
                         while new_start >= 0 and doc_text[new_start].is_sent_start is None:
@@ -360,8 +400,8 @@ def get_context_around_isolated_dates(
                             context_words += len(doc_text[new_start:start_token].text.split())
                             start_token = new_start
 
-                        # Break if max_words is reached
-                        if context_words >= max_words:
+                        # Break if max_context is reached
+                        if context_words >= max_context:
                             break
 
                         # Extend the context from the end of the sentence
@@ -372,11 +412,11 @@ def get_context_around_isolated_dates(
                             context_words += len(doc_text[end_token:new_end].text.split())
                             end_token = new_end
 
-                        # Break if max_words is reached
-                        if context_words >= max_words:
+                        # Break if max_context is reached
+                        if context_words >= max_context:
                             break
 
-                        # Break if max_words cannot be reached
+                        # Break if max_context cannot be reached
                         if new_end == len_doc_text and start_token <= 0:
                             break
                     
@@ -439,19 +479,18 @@ def get_sentence_embeddings_and_similarities(
         actual_batch_size = len(batch)
         if actual_batch_size != batch_size:
             question_embedding_repeated = question_embedding.repeat(actual_batch_size, 1)
-        
-        with torch.no_grad():
-            # Tokenize and preprocess sentence batch
-            sentence_tokens = tokenizer(batch, return_tensors="pt", padding=True, truncation=True)
-            # Compute sentence embeddings
-            sentence_embedding = model(**sentence_tokens).last_hidden_state.mean(dim=1)
-            # Compute cosine similarities
-            similarity = torch.cosine_similarity(question_embedding_repeated, sentence_embedding).tolist()
-
-        similarities.extend(similarity)
-    
-    # Free up GPU memory
-    del question_embedding, sentence_embedding
+        try:
+            with torch.no_grad():
+                # Tokenize and preprocess sentence batch
+                sentence_tokens = tokenizer(batch, return_tensors="pt", padding=True, truncation=True)
+                # Compute sentence embeddings
+                sentence_embedding = model(**sentence_tokens).last_hidden_state.mean(dim=1)
+                # Compute cosine similarities
+                similarity = torch.cosine_similarity(question_embedding_repeated, sentence_embedding).tolist()
+            similarities.extend(similarity)
+        finally:
+            # Free up GPU memory
+            del sentence_tokens, sentence_embedding, similarity
 
     return similarities
 
@@ -462,7 +501,7 @@ def get_website_summary(
     model,
     tokenizer,
     nlp,
-    max_words: int = 120
+    max_words: int
 ) -> str:
     """
     Generate a summary of a website's text based on a given event question.
@@ -473,7 +512,7 @@ def get_website_summary(
         model: The BERT model for text embeddings.
         tokenizer: The tokenizer for the BERT model.
         nlp: The spaCy NLP model.
-        max_words (int, optional): Maximum number of words for the output summary. Defaults to 120.
+        max_words (int, optional): Maximum number of words for the output summary. Defaults to 200.
 
     Raises:
         ValueError: If max_words is less than 1 or greater than 300.
@@ -482,17 +521,9 @@ def get_website_summary(
         str: The generated summary.
     """        
     
-    if max_words < 1:
-        raise ValueError("The maximum number of words must be at least 1.")
-    if max_words > 300:
-        raise ValueError("The maximum number of words must be less than or equal to 300.")
-    
     # Constants for sentence length and number thresholds
     len_sentence_threshold = 5
     num_sentences_threshold = 100
-    
-    # Initialize variables
-    event_question_date = None
     event_date_sentences = []
     
     # Validate inputs
@@ -519,7 +550,7 @@ def get_website_summary(
     # Extract contextual sentences around isolated dates
     if event_date_ydm is not None:
         event_date_sentences.extend(
-            get_context_around_isolated_dates(doc_text, event_date_ydm, len_sentence_threshold, max_words=50)
+            get_context_around_isolated_dates(doc_text, event_date_ydm, len_sentence_threshold, max_context=50)
         )
 
     seen = set()
@@ -541,16 +572,16 @@ def get_website_summary(
         sentences, question_embedding, model, tokenizer, batch_size=16
     )
 
-    # Extract  top relevant sentences
+    # Extract top relevant sentences
     relevant_sentences = [
         sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.9
     ]
 
-    # Print sentences and similarities if similarity is greater than 0.9
-    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-        if sim > 0.9:
-            print(f"Sentence: {sent}\nSimilarity: {sim}\n")
-            print()
+    # # Print sentences and similarities if similarity is greater than 0.9
+    # for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
+    #     if sim > 0.9:
+    #         print(f"Similarity: {sim}\nSentence: {sent}\n")
+    #         print()
 
     if not relevant_sentences:
         return ""
@@ -607,6 +638,7 @@ def extract_text(
     model,
     tokenizer,
     nlp,
+    max_words: int,
 ) -> str:
     """
     Extract relevant information from HTML string.
@@ -626,7 +658,7 @@ def extract_text(
     """
 
     if not html:
-        raise ValueError("HTML content cannot be empty")
+        raise ValueError("HTML is empty.")
 
     soup = BeautifulSoup(html, "html.parser")
 
@@ -653,6 +685,7 @@ def extract_text(
         model=model,
         tokenizer=tokenizer,
         nlp=nlp,
+        max_words=max_words,
     )
 
     if not text_summary:
@@ -690,7 +723,7 @@ def process_in_batches(
 
     # Set up retry logic
     retries = Retry(
-        total=5,
+        total=2,
         backoff_factor=0.1,
         status_forcelist=[500, 502, 503, 504]
     )
@@ -732,7 +765,12 @@ def extract_texts(
     """
 
     # Maximum number of allowed extractions
-    max_allowed = 45
+    max_allowed = 25
+
+    # Maximum number of words for each extraction
+    # ~ 2642 tokens free for additional information ~ 1981 words
+    # split by number of URLs
+    max_words = 1981 // len(urls)
     
     # Initialize empty list for storing extracted texts
     extracted_texts = []
@@ -751,9 +789,10 @@ def extract_texts(
         for future, url in tqdm(batch, desc="Processing URLs"):
             try:
                 result = future.result()
-                print(f"\n{result.status_code}: status code for {url}\n")
+                print(f"\nURL: {url}")
+                print(f"Status code: {result.status_code}")
+                print(f"Content type: {result.headers.get('content-type')}\n")
                 if result.status_code != 200:
-                    # print(f"result.status_code: {result.status_code}")
                     del result
                     continue
                 
@@ -764,6 +803,7 @@ def extract_texts(
                     model=model,
                     tokenizer=tokenizer,
                     nlp=nlp,
+                    max_words=max_words,
                 )
                 # print(f"extracted_text: {extracted_text}")
                 
@@ -797,8 +837,6 @@ def extract_texts(
         if stop:
             print(f"Maximum number of extractions reached: {max_allowed}.")
             break
-
-        # print(f"\nbatch: {batch}\n")
 
     return extracted_texts
 
@@ -845,8 +883,8 @@ def fetch_additional_information(
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=messages,
-        temperature=0,
-        max_tokens=max_tokens,
+        temperature=0, # Override the default temperature parameter set for the engine
+        max_tokens=500, # Override the default max_tokens parameter set for the engine
         n=1,
         timeout=90,
         request_timeout=90,
@@ -863,6 +901,8 @@ def fetch_additional_information(
         api_key=google_api_key,
         engine=google_engine,
     )
+    for url in urls:
+        print(f"url: {url}")
 
     # Extract texts from URLs
     texts = extract_texts(
@@ -938,6 +978,18 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         if tool == "prediction-online-sum-url-content"
         else ""
     )
+
+    start_time = time.time()
+    # # Truncate additional information to stay within the chat completion token limit of 4096
+    enc = tiktoken.get_encoding("cl100k_base") # Get the tiktoken base encoding
+    additional_information = truncate_additional_information(
+        additional_information, 
+        max_tokens,
+        prompt=prompt,
+        enc=enc,
+    )
+    end_time = time.time()
+    print(f"Time taken to truncate additional information: {end_time - start_time} seconds.")
 
     # Generate the prediction prompt
     timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
