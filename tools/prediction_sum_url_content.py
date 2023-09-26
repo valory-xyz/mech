@@ -21,12 +21,12 @@
 
 import time
 from typing import Any, Dict, Generator, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 from googleapiclient.discovery import build
 import openai
 import requests
@@ -54,35 +54,67 @@ ALLOWED_TOOLS = [
 ]
 TOOL_TO_ENGINE = {
     "prediction-offline-sum-url-content": "gpt-3.5-turbo",
-    "prediction-online-sum-url-content": "gpt-3.5-turbo",
+    # "prediction-online-sum-url-content": "gpt-3.5-turbo",
     # "prediction-online-sum-url-content": "gpt-3.5-turbo-16k",
-    # "prediction-online-sum-url-content": "gpt-4",
+    "prediction-online-sum-url-content": "gpt-4",
 }
 
-PREDICTION_PROMPT = """
-You are an LLM inside a multi-agent system. Your task is to estimate the probability of a user's 'event question', 
-which specifies an event in the physical world and any accompanying conditions to be met for the 'event question' to be true. The 'event question' allows only two outcomes: the event 
-will either occur or not, given the conditions. Find the 'event question' enclosed in double quotes as a part of 
-the user's prompt under 'USER_PROMPT'. The user's prompt also contains a more elaborate description of the task. 
-You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", delimited by three backticks. This information results from a search engine query that has been done a few seconds ago with the aim to get up-to-date information that could be relevant estimating the 'event question'.
-You must adhere to the 'INSTRUCTIONS'.  
 
+# You are an LLM inside a multi-agent system. Your task is to estimate the probability of a user's 'event question', 
+# which specifies an event in the physical world and any accompanying conditions to be met for the 'event question' to be true. The 'event question' allows only two outcomes: the event 
+# will either occur or not, given the conditions. Find the 'event question' enclosed in double quotes as a part of 
+# the user's prompt under 'USER_PROMPT'. The user's prompt also contains a more elaborate description of the task. 
+# You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", delimited by three backticks. This information results from a search engine query that has been done a few seconds ago with the aim to get up-to-date information that could be relevant estimating the 'event question'.
+# You must adhere to the 'INSTRUCTIONS'.  
+
+# * Carefully read the user's prompt under 'USER_PROMPT', enclosed by triple backticks.
+# * If the 'event question' has more than two outcomes, respond with "Error" and ignore further instructions.
+# * Based on your training data, provide a probability estimation of the event specified in the 'event question' occuring, considering all conditions provided.
+# * You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation.
+# * Prioritize recent information in "ADDITIONAL_INFORMATION" based on the current time {timestamp}.
+# * You must pay very close attention to the specific wording of the 'event question' in "USER_PROMPT".
+# * If a date is provided in the 'event question' specifying when the event has to have occured, you must consider in your estimation, given the current time {timestamp}, how likely it is that the event will occur within the remaining timespan to that provided date.
+# * If an item in "ADDITIONAL_INFORMATION" is not relevant for the estimation, you must ignore that item.
+# * If there is insufficient information in "ADDITIONAL_INFORMATION", be aware of the limitations of your training data especially when relying on it for predicting events that require up-to-date information. In this case make a prediction that takes into account that you don't have up-to-date information.
+# * Your pobability estimation must not only take into account if the specified event happens or not, but also if the event is likely to happen before, by or on the date specified in the 'event question'.
+# * If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with up-to-date information that can be found on the internet.
+# * If the 'event question' is formulated in a way that an event must have happend BY or ON a specific date, consider the deadline of the event being 23:59:59 of that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
+# * You must provide your response in the format specified under "OUTPUT_FORMAT".
+# * Do not include any other contents in your response.
+
+
+# * If a deadline date is specified in the 'event question', factor it into your probability estimate, assessing the likelihood of the event occurring within the timespan from the current time {timestamp} leading up to that date.
+# * For events with a deadline specified as BY or ON a particular date, treat 23:59:59 of that date as the cutoff. If no supporting information is found as the deadline nears, lower the probability estimate accordingly. For reference, the current time is {timestamp}.
+
+
+PREDICTION_PROMPT = """
+You are a Large Language Model (LLM) operating within a multi-agent system. Your primary task is to precisely estimate the probability of 
+an event occurring by or on a specific date, as specified in the 'event question' within 'USER_PROMPT'. The 'event question' has only two outcomes: the event either 
+occurs or it does not. Conditions for the event, often in the form of a specific deadline date, are crucial for your probability assessment.
+
+You receive a list of information in the "ADDITIONAL_INFORMATION" section. Each entry in this list comes with timestamps in parenthesis, showing its initial 
+release and last modification date. This information was obtained from a search engine query conducted a few seconds prior to your task, intended 
+to be as current as possible for aiding in your evaluation.
+
+Note: Take extra care when interpreting dates. If a date is specified in the 'event question', it usually serves as a deadline for the event to occur. 
+Do not mix this up with the timestamps in "ADDITIONAL_INFORMATION," as those are meant to indicate the recency of that specific information. 
+Mistaking these could lead to inaccurate probability assessments with significant financial consequences.
+
+Strictly adhere to the 'INSTRUCTIONS' for a trustworthy and accurate probability estimation.
 
 INSTRUCTIONS:
-* Carefully read the user's prompt under 'USER_PROMPT', enclosed by triple backticks.
-* If the 'event question' has more than two outcomes, respond with "Error" and ignore further instructions.
-* Based on your training data, provide a probability estimation of the event specified in the 'event question' occuring, considering all conditions provided.
-* You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation.
-* Prioritize recent information in "ADDITIONAL_INFORMATION" based on the current time {timestamp}.
-* You must pay very close attention to the specific wording of the 'event question' in "USER_PROMPT".
-* If a date is provided in the 'event question' specifying when the event has to have occured, you must consider in your estimation, given the current time {timestamp}, how likely it is that the event will occur within the remaining timespan to that provided date.
-* If an item in "ADDITIONAL_INFORMATION" is not relevant for the estimation, you must ignore that item.
-* If there is insufficient information in "ADDITIONAL_INFORMATION", be aware of the limitations of your training data especially when relying on it for predicting events that require up-to-date information. In this case make a prediction that takes into account that you don't have up-to-date information.
-* Your pobability estimation must not only take into account if the specified event happens or not, but also if the event is likely to happen before, by or on the date specified in the 'event question'.
-* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with up-to-date information that can be found on the internet.
-* If the 'event question' is formulated in a way that an event must have happend BY or ON a specific date, consider the deadline of the event being 23:59:59 of that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the deadline, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the deadline, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response.
+* Thoroughly scrutinize the 'event question' contained within 'USER_PROMPT'.
+* If the 'event question' permits more than two outcomes, return "Error" and discontinue further processing.
+* Utilize your training data to formulate a probability estimate for the event specified in the 'event question', incorporating all stipulated conditions.
+* Supplement your estimate with information from "ADDITIONAL_INFORMATION", paying special attention to the timestamps to gauge recency.
+* Prioritize the specific phrasing in the 'event question' as it holds crucial information, especially when a deadline date is involved.
+
+* Disregard any irrelevant items in "ADDITIONAL_INFORMATION".
+* In case of information gaps in "ADDITIONAL_INFORMATION". be cognizant of your training data's limitations. Make an estimate acknowledging the absence of current data.
+* Your probability estimate should consider not only the event's occurrence but also its likelihood of happening before, on, or by the date in the 'event question'.
+* If "ADDITIONAL_INFORMATION" contains relevant data, assume it is current and factor it into your estimate.
+* For events with a deadline specified as BY or ON a particular date, treat 23:59:59 of that date as the cutoff. If this is the case and no or only vague supporting information for the event occurring within the deadline is found as the deadline nears, lower the probability estimate exponentially. For reference, the current time is {timestamp}.
+* Adhere to the "OUTPUT_FORMAT" for your response, and refrain from including extraneous content.
 
 USER_PROMPT:
 ```
@@ -95,15 +127,16 @@ ADDITIONAL_INFORMATION:
 ```
 
 OUTPUT_FORMAT:
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
-* The JSON must contain four fields: "p_yes", "p_no", "confidence", and "info_utility", each ranging from 0 to 1.
-   - "p_yes": Estimated probability that the event specified in the 'event question' occurs, considering all conditions provided.
-   - "p_no": Estimated probability that the 'event question' does not occur, considering all conditions provided.
-   - "confidence": Indicating the confidence in the estimated probabilities you provided ranging from 0 (lowest confidence) to 1 (maximum confidence).
-   - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction ranging from 0 (lowest utility) to 1 (maximum utility).
-* The sum of "p_yes" and "p_no" must equal 1.
-* Output only the JSON object in your response.
+* Your response should consist solely of a single JSON object, compatible with Python's "json.loads()" function.
+* The JSON object must include four numerical fields: "p_yes," "p_no," "confidence," and "info_utility," each with values between 0 and 1.
+   - "p_yes": The estimated likelihood of the event in the 'event question' taking place, given all specified conditions.
+   - "p_no": The estimated likelihood of the event in the 'event question' not occurring, considering all conditions.
+   - "confidence": A measure of your assurance in the provided estimates, ranging from 0 for lowest to 1 for highest confidence.
+   - "info_utility": A value indicating the usefulness of "ADDITIONAL_INFORMATION" in informing your estimate, ranging from 0 for no utility to 1 for maximum utility.
+* Ensure that the sum of "p_yes" and "p_no" equals 1.
+* Exclude any content other than this JSON object in your output, except for max three sentences explaining your reasoning.
 """
+# , except for max three sentences explaining your reasoning.
 
 URL_QUERY_PROMPT = """
 You are a Large Language Model in a multi-agent system. Your task is to formulate search engine queries based on 
@@ -579,7 +612,7 @@ def get_date(soup):
         if time_tag:
             release_date = time_tag.get("datetime", "")
            
-    return f"Release date {release_date}, Modified date {modified_date}"
+    return f"({release_date}, {modified_date})"
 
 
 def extract_text(
@@ -612,9 +645,6 @@ def extract_text(
     if not html:
         raise ValueError("HTML is empty.")
     
-    # print(f"HTML:\n{html}")
-    print()
-
     soup = BeautifulSoup(html, "html.parser")
 
     # Get the date of the website
@@ -623,8 +653,8 @@ def extract_text(
         raise ValueError("Could not extract release or update date from HTML.")
 
     # Remove unnecessary tags to clean up text
-    for script in soup(HTML_TAGS_TO_REMOVE):
-        script.extract()
+    for element in soup(HTML_TAGS_TO_REMOVE):
+        element.replace_with(NavigableString(' '))
     
     # Extract and clean text
     text = soup.get_text()
@@ -646,11 +676,11 @@ def extract_text(
     if not relevant_text:
         return ""
 
-    return f"{date}:\n{relevant_text}"
+    return f"{date}: {relevant_text}"
 
 
 def process_in_batches(
-    urls: List[str], batch_size: int = 5, timeout: int = 10
+    urls: List[str], batch_size: int = 15, timeout: int = 10
 ) -> Generator[None, None, List[Tuple[Future, str]]]:
     """
     Process URLs in batches using a generator and thread pool executor.
@@ -697,8 +727,6 @@ def process_in_batches(
                     head_future = executor.submit(session.head, url, headers=headers, timeout=timeout, allow_redirects=True)
                     head_response = head_future.result()
                     if 'text/html' not in head_response.headers.get('Content-Type', ''):
-                        print(f"\nAborting, {url} is not an HTML page.")
-                        print(head_response.headers)
                         continue
                     else:
                         # Submit a GET request to the url
@@ -758,6 +786,7 @@ def extract_texts(
     # Process URLs in batches
     for batch in process_in_batches(urls=urls):
         for future, url in tqdm(batch, desc="Processing URLs"):
+            print(f"Processing {url}")
             try:
                 result = future.result()
                 if result.status_code != 200:
@@ -967,10 +996,14 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         additional_information, max_add_tokens, enc=enc,
     )
 
+    # Get the current utc timestamp
+    current_time_utc = datetime.now(timezone.utc)
+    formatted_time_utc = current_time_utc.strftime('%Y-%m-%d %H:%M:%S %Z%z')
+ 
     # Generate the prediction prompt
-    timestamp = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    
     prediction_prompt = PREDICTION_PROMPT.format(
-        user_prompt=prompt, additional_information=additional_information, timestamp=timestamp,
+        user_prompt=prompt, additional_information=additional_information, timestamp=formatted_time_utc,
     )
     print(f"\nPREDICTION PROMPT: {prediction_prompt}\n")
 
