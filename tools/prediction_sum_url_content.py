@@ -37,7 +37,6 @@ import traceback
 
 from dateutil import parser
 from tqdm import tqdm
-from transformers import AutoTokenizer, AutoModel, AutoModelForQuestionAnswering, pipeline
 from sentence_transformers import SentenceTransformer, util
 
 NUM_URLS_EXTRACT = 5
@@ -417,67 +416,10 @@ def get_context_around_isolated_dates(
     return contexts_list
 
 
-def get_sentence_embeddings_and_similarities(
-    sentences: List[str],
-    question_embedding: torch.Tensor,
-    model,
-    tokenizer,
-    batch_size: int = 32
-) -> Tuple[List[torch.Tensor], List[float]]:
-    """
-    Calculate the sentence embeddings and similarities.
-
-    Args:
-        sentences (List[str]): List of sentences to compare.
-        question_embedding (torch.Tensor): Tensor of the question embedding.
-        model: The BERT model for text embeddings.
-        tokenizer: The tokenizer for the BERT model.
-        batch_size (int, optional): Number of sentences to process in each batch. Defaults to 32.
-
-    Raises:
-        ValueError: If batch_size is less than 1.
-
-    Returns:
-        Tuple[List[torch.Tensor], List[float]]: List of sentence embeddings and their similarities.    
-    """
-
-    if batch_size < 1:
-        raise ValueError("Batch size must be at least 1.")
-
-    similarities = []
- 
-    # Repeat the question embedding tensor to match the batch size
-    question_embedding_repeated = question_embedding.repeat(batch_size, 1)
-
-    # Batch the sentences for efficient processing
-    sentence_batches = [sentences[i:i + batch_size] for i in range(0, len(sentences), batch_size)]
-    
-    for batch in tqdm(sentence_batches, desc="Calculating sentence similarities"):
-        # Adjust the repeated question embedding if the batch size changes
-        actual_batch_size = len(batch)
-        if actual_batch_size != batch_size:
-            question_embedding_repeated = question_embedding.repeat(actual_batch_size, 1)
-        try:
-            with torch.no_grad():
-                # Tokenize and preprocess sentence batch
-                sentence_tokens = tokenizer(batch, return_tensors="pt", padding=True, truncation=True)
-                # Compute sentence embeddings
-                sentence_embedding = model(**sentence_tokens).last_hidden_state.mean(dim=1)
-                # Compute cosine similarities
-                similarity = torch.cosine_similarity(question_embedding_repeated, sentence_embedding).tolist()
-            similarities.extend(similarity)
-        finally:
-            # Free up GPU memory
-            del sentence_tokens, sentence_embedding, similarity
-
-    return similarities
-
-
 def get_website_summary(
     text: str,
     event_question: str,
     model,
-    tokenizer,
     nlp,
     max_words: int
 ) -> str:
@@ -501,25 +443,19 @@ def get_website_summary(
     
     # Constants for sentence length and number thresholds
     len_sentence_threshold = 5
-    num_sentences_threshold = 100
+    num_sentences_threshold = 1000
     event_date_sentences = []
     
     # Validate inputs
     if not event_question or not text:
         return ""
 
-    # Calculate the BERT embedding for the event question
-    with torch.no_grad():
-        question_tokens = tokenizer(event_question, return_tensors="pt", padding=True, truncation=True)
-        #question_embedding = model(**question_tokens).last_hidden_state.mean(dim=1)
     # Truncate text to stay within nlp character limit of 1,000,000
     text = text[:1000000]
     
     # Apply NLP pipeline to text and event question
     doc_text = nlp(text)
     doc_question = nlp(event_question)
-
-    query_emb = model.encode(event_question)
 
     # Extract the date from the event question if present
     for ent in doc_question.ents:
@@ -533,9 +469,9 @@ def get_website_summary(
         )
 
     seen = set()
-    sentences = []
+    sentences = []     
 
-    # Extract unique and sufficiently long sentences
+    # Extract unique sentences
     for sent in doc_text.sents:
         sentence_text = sent.text
         if len(sentence_text.split()) >= len_sentence_threshold and sentence_text not in seen:
@@ -543,44 +479,36 @@ def get_website_summary(
             seen.add(sentence_text)       
     sentences.extend(event_date_sentences)
 
-    # Limit the number of sentences for performance
+    if not sentences:
+        return ""
+    
+    # Limit the number of sentences for performance optimization
     sentences = sentences[:num_sentences_threshold]
-
-    # # Calculate sentence similarities
-    # similarities = get_sentence_embeddings_and_similarities(
-    #     sentences, question_embedding, model, tokenizer, batch_size=16
-    # )
-
-
+  
+    print(f"Number of sentences: {len(sentences)}")
+    
+    # Encode event question and sentences
+    query_emb = model.encode(event_question)
     sent_emb = model.encode(sentences)
+    print(f"Query embedding shape: {query_emb.shape}")
+    print(f"Sentence embedding shape: {sent_emb.shape}")
+
+    # Check for empty embeddings
+    if not query_emb.size or not sent_emb.size:
+        print(f"Sentences: {sentences}")
+        print(f"Query embedding: {query_emb}")
+        print(f"Sentence embedding: {sent_emb}")
+
     similarities = util.dot_score(query_emb, sent_emb)[0].cpu().tolist()
-
-
-    
-    # similarities = []
-    # print("Now initialize pipeline()")
-    # nlp_pipeline = pipeline("question-answering", model=model, tokenizer=tokenizer)
-    
-    # for sent in sentences:
-    #     QA_input = {
-    #         "question": event_question,
-    #         "context": text
-    #     }
-    #     result = nlp_pipeline(QA_input, padding=True, truncation=True)
-    #     print(f"Score: {result['score']}")
-    #     print(f"Sentence: {sent}\n")
-    #     similarities.append(result['score'])
-
 
     # Extract top relevant sentences
     relevant_sentences = [
-        sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.9
+        sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.4
     ]
     
     # Print similarity scores along with the sentences
-    
     for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-        if sim > 0.6:
+        if sim > 0.4:
             print(f"{sim:.4f}: {sent}")
             print()
 
@@ -588,7 +516,7 @@ def get_website_summary(
         return ""
     
     # Truncate summary to fit max_words limit
-    output = ' '.join(relevant_sentences[:10]) 
+    output = ' '.join(relevant_sentences[:20]) 
     output_words = output.split(' ')
     if len(output_words) > max_words:
         output = ' '.join(output_words[:max_words])
@@ -637,7 +565,6 @@ def extract_text(
     html: str,
     event_question: str,
     model,
-    tokenizer,
     nlp,
     max_words: int,
 ) -> str:
@@ -685,7 +612,6 @@ def extract_text(
         text=text,
         event_question=event_question,
         model=model,
-        tokenizer=tokenizer,
         nlp=nlp,
         max_words=max_words,
     )
@@ -780,11 +706,6 @@ def extract_texts(
     # ~ 2642 tokens free for additional information ~ 1981 words
     # split by number of URLs
     max_words = 1981 // len(urls)
-    # print(f"Max allowed extractions: {max_allowed}")
-    # print(f"Max words per extraction: {max_words}")
-    # print("URLS:")
-    # for url in urls:
-    #     print(f"url: {url}")
     
     # Initialize empty list for storing extracted texts
     extracted_texts = []
@@ -794,8 +715,7 @@ def extract_texts(
     stop = False
 
     # Initialize BERT and Spacy models
-    model = SentenceTransformer('sentence-transformers/msmarco-distilbert-base-tas-b')    
-    tokenizer = AutoTokenizer.from_pretrained("csarron/bert-base-uncased-squad-v1")
+    model = SentenceTransformer('sentence-transformers/multi-qa-distilbert-cos-v1')    
     nlp = spacy.load("en_core_web_sm")
     
     # Process URLs in batches
@@ -812,7 +732,6 @@ def extract_texts(
                     html=result.text,
                     event_question=event_question,
                     model=model,
-                    tokenizer=tokenizer,
                     nlp=nlp,
                     max_words=max_words,
                 )
@@ -822,7 +741,7 @@ def extract_texts(
                 
                 # Append the extracted text if available and increment the count
                 if extracted_text:
-                    extracted_texts.append(extracted_text)
+                    extracted_texts.append(f"{url}\n{extracted_text}")
                 count += 1
 
                 # Break if the maximum number of extractions is reached
