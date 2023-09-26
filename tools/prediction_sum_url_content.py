@@ -19,6 +19,7 @@
 
 """This module implements a Mech tool for binary predictions."""
 
+import time
 from typing import Any, Dict, Generator, List, Optional, Tuple
 from datetime import datetime
 import json
@@ -41,8 +42,9 @@ from sentence_transformers import SentenceTransformer, util
 
 NUM_URLS_EXTRACT = 5
 MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096
+WORDS_PER_TOKEN_FACTOR = 0.75
 DEFAULT_OPENAI_SETTINGS = {
-    "max_tokens": 200,
+    "max_compl_tokens": 200,
     "temperature": 0.2,
 }
 
@@ -179,7 +181,7 @@ HTML_TAGS_TO_REMOVE = [
     "script", "style", "header", "footer", "aside", "nav", "form", "button",
     "iframe", "input", "textarea", "select", "option", "label", "fieldset",
     "legend", "img", "audio", "video", "source", "track", "canvas", "svg",
-    "object", "param", "embed"
+    "object", "param", "embed", "link"
 ]
 
 
@@ -198,44 +200,89 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     return [result["link"] for result in search["items"]]
 
 
-def truncate_additional_information(
-    additional_informations: str,
-    max_tokens: int,
+def extract_event_date(doc_question) -> str:
+    '''
+    Extracts the event date from the event question if present.
+    
+    Args:
+        doc_question (spaCy Doc): Document text as a spaCy Doc object.
+        
+    Returns:
+        str: The event date in year-month-day format if present, otherwise None.
+    '''
+    
+    event_date_ymd = None
+
+    # Extract the date from the event question if present
+    for ent in doc_question.ents:
+        if ent.label_ == 'DATE':
+            event_date_ymd = standardize_date(ent.text)
+
+    # If event date not formatted as YMD or not found, return None
+    if not datetime.strptime(event_date_ymd, '%Y-%m-%d') or event_date_ymd is None:
+        return None
+    else:
+        return event_date_ymd
+    
+
+
+def get_max_tokens_for_additional_information(
+    max_compl_tokens: int,
     prompt: str,
     enc: tiktoken.Encoding,
     safety_factor: float = 1.05,
+) -> int:
+    """
+    Calculates the estimated maximum number of tokens that can be consumed by the additional information string.
+
+    Args:
+        max_compl_tokens (int): The maximum number of chat completion output tokens.
+        prompt (str): The user prompt containing the event question.
+        enc (tiktoken.Encoding): The tiktoken encoding to be used.
+        safety_factor (float, optional): The safety factor to be used for prompt variations and message headers. Defaults to 1.05.
+
+    Returns:
+        int: The estimated number of tokens that can be consumed by the additional information string.
+    """
+
+    # Encode the strings into tokens
+    user_prompt_enc = enc.encode(prompt)
+    prediction_prompt_enc = enc.encode(PREDICTION_PROMPT)
+
+    # Calculate token sum of thus far allocated tokens for the final prediction prompt
+    token_sum = len(user_prompt_enc) + len(prediction_prompt_enc) + max_compl_tokens
+    token_sum_safety = token_sum * safety_factor
+
+    return int(MAX_TOTAL_TOKENS_CHAT_COMPLETION - token_sum_safety)
+
+
+def truncate_additional_information(
+    additional_informations: str,
+    max_add_tokens: int,
+    enc: tiktoken.Encoding,
 ) -> str:
     """
     Truncates additional information string to a specified number of tokens using tiktoken encoding.
 
-    Parameters:
+    Args:
         additional_informations (str): The additional information string to be truncated.
-        max_tokens (int): The maximum number of chat completion output tokens.
-        prompt (str): The user prompt containing the event question.
+        max_add_tokens (int): The maximum number of tokens allowed for the additional information string.
         enc (tiktoken.Encoding): The tiktoken encoding to be used.
-        safety_factor (float, optional): The safety factor to be used for truncation. Defaults to 1.05.
 
     Returns:
     - str: The truncated additional information string.
     """
 
-    # Encode the strings into tokens
-    additional_information_token_enc = enc.encode(additional_informations)
-    user_prompt_tokens_token_enc = enc.encode(prompt)
-    prediction_prompt_tokens_token_enc = enc.encode(PREDICTION_PROMPT)
-
-    # Calculate the rough token sum of final prediction prompt
-    prompt_token_sum = len(additional_information_token_enc) + len(user_prompt_tokens_token_enc) + len(prediction_prompt_tokens_token_enc) + max_tokens
-    prompt_token_sum_safety_factor = prompt_token_sum * safety_factor
-
-    # Truncate the additional information string if the token sum exceeds the maximum allowed
-    if prompt_token_sum_safety_factor > MAX_TOTAL_TOKENS_CHAT_COMPLETION:
-        num_tokens_to_truncate = prompt_token_sum_safety_factor - MAX_TOTAL_TOKENS_CHAT_COMPLETION
-        truncated_additional_informations_token = additional_information_token_enc[:-int(num_tokens_to_truncate)]
-        truncated_additional_informations_string = enc.decode(truncated_additional_informations_token)
-        return truncated_additional_informations_string
-    else:
+    # Encode the string into tokens
+    add_enc = enc.encode(additional_informations)
+    len_add_enc = len(add_enc)
+    
+    # Truncate additional information string if token sum exceeds maximum allowed
+    if len_add_enc <= max_add_tokens:
         return additional_informations
+    else:
+        add_trunc_enc = add_enc[:-int(len_add_enc - max_add_tokens)]
+        return enc.decode(add_trunc_enc)
 
 
 def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: int = 3) -> List[str]:
@@ -245,7 +292,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
     Args:
         queries (List[str]): List of search engine queries.
         api_key (str): API key for the search engine.
-        engine (str): Search engine to be used.
+        engine (str): Custom google search engine ID.
         num (int, optional): Number of returned URLs per query. Defaults to 3.
 
     Raises:
@@ -271,24 +318,17 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
 
         # Add only unique URLs up to 'num' per query, omitting PDF and 'download' URLs
         count = 0
-        
-
         for url in fetched_urls:
-            # print(f"URL: {url}")
-            results.add(url)
-            count += 1
-            # print(f"Count: {count}")
-            if count >= num:
-                break
-            
-            # if "download" not in url.lower() and url not in results and not url.endswith(".pdf"):
-            #     results.add(url)
-            #     count += 1
-            #     if count >= num:
-            #         break
+            if url not in results and not url.endswith(".pdf"):
+                results.add(url)
+                count += 1
+                if count >= num:
+                    break
+
     print("get_urls_from_queries result:")
     for url in results:
         print(url)
+
     return list(results)
 
 
@@ -298,6 +338,9 @@ def standardize_date(date_text):
     
     Args:
         date_text (str): The date string to be standardized.
+
+    Raises:
+        ValueError: If the date string cannot be parsed.
     
     Returns:
         str: The standardized date string if possible, otherwise None.
@@ -330,20 +373,20 @@ def standardize_date(date_text):
         return None
 
 
-def get_context_around_isolated_dates(
-    doc_text, target_date_ydm, len_sentence_threshold, max_context=50
+def get_context_around_isolated_event_date(
+    doc_text, event_date_ymd, len_sentence_threshold, max_context=50
 ):
     """
-    Extract context around isolated dates within the text.
+    Extract sentences around isolated dates within the text.
 
     Args:
         doc_text (spaCy Doc): Document text as a spaCy Doc object.
-        target_date_ydm (str): Target date in year-day-month format.
+        event_date_ymd (str): Event date in year-day-month format.
         len_sentence_threshold (int): Minimum number of words required for a sentence to be considered contextful.
         max_context (int, optional): Maximum number of words to include in the context. Defaults to 50.
 
     Raises:
-        ValueError: If max_context is less than len_sentence_threshold or greater than 300.
+        ValueError: If maximum context is less than threshold or greater than 100.
 
     Returns:
         list: List of sentences surrounding the target date.
@@ -354,23 +397,25 @@ def get_context_around_isolated_dates(
         raise ValueError(
             f"The maximum number of words must be greater than or equal to the minimum number of words ({len_sentence_threshold}) required for a sentence to be considered contextful."
         )
-    if max_context > 300:
+    if max_context > 100:
         raise ValueError(
             f"The maximum number of words must be less than or equal to 300."
         )
-
+    
     contexts_list = []
-    target_date_dm = target_date_ydm[5:]
     len_doc_text = len(doc_text)
-
+        
+    # Extract the month and day from the event date
+    event_date_md = event_date_ymd[5:]
+    
     for ent in doc_text.ents:
         if ent.label_ == 'DATE':
             standardized_date = standardize_date(ent.text)
             if standardized_date is None:
                 continue
-
+            
             # Check if the entity matches the target date
-            if standardized_date == target_date_ydm or standardized_date == target_date_dm:
+            if standardized_date == event_date_ymd or standardized_date == event_date_md:
                 sentence = next(
                     sent for sent in doc_text.sents 
                     if sent.start <= ent.start and sent.end >= ent.end
@@ -416,60 +461,41 @@ def get_context_around_isolated_dates(
     return contexts_list
 
 
-def get_website_summary(
+def extract_relevant_information(
     text: str,
-    event_question: str,
+    query_emb,
+    event_date: str,
     model,
     nlp,
     max_words: int
 ) -> str:
     """
-    Generate a summary of a website's text based on a given event question.
+    Extract relevant information from website text based on a given event question.
 
     Args:
-        text (str): The website text to summarize.
-        event_question (str): The question to focus the summary on.
+        text (str): The website text to extract information from.
+        event_question (str): The question to find relevant information to.
+        event_date (str): Event date in year-day-month format.
         model: The BERT model for text embeddings.
-        tokenizer: The tokenizer for the BERT model.
         nlp: The spaCy NLP model.
-        max_words (int): Maximum number of words for the output summary.
-
-    Raises:
-        ValueError: If max_words is less than 1 or greater than 300.
+        max_words (int): Maximum number of words allowed for output.
 
     Returns:
-        str: The generated summary.
+        str: The relevant sentences extracted from the website text.
     """        
     
     # Constants for sentence length and number thresholds
     len_sentence_threshold = 5
     num_sentences_threshold = 1000
-    event_date_sentences = []
-    
-    # Validate inputs
-    if not event_question or not text:
-        return ""
-
-    # Truncate text to stay within nlp character limit of 1,000,000
-    text = text[:1000000]
-    
-    # Apply NLP pipeline to text and event question
-    doc_text = nlp(text)
-    doc_question = nlp(event_question)
-
-    # Extract the date from the event question if present
-    for ent in doc_question.ents:
-        if ent.label_ == 'DATE':
-            event_date_ydm = standardize_date(ent.text)
-
-    # Extract contextual sentences around isolated dates
-    if event_date_ydm is not None:
-        event_date_sentences.extend(
-            get_context_around_isolated_dates(doc_text, event_date_ydm, len_sentence_threshold, max_context=50)
-        )
-
-    seen = set()
     sentences = []     
+    event_date_sentences = []
+    seen = set()
+
+    # Truncate text for performance optimization
+    text = text[:50000]
+    
+    # Apply NLP pipeline to text
+    doc_text = nlp(text)
 
     # Extract unique sentences
     for sent in doc_text.sents:
@@ -479,26 +505,21 @@ def get_website_summary(
             seen.add(sentence_text)       
     sentences.extend(event_date_sentences)
 
+    # Extract contextual sentences around event date occurences within too short sentences
+    event_date_sentences.extend(
+        get_context_around_isolated_event_date(
+            doc_text, event_date, len_sentence_threshold, max_context=50
+        )
+    )
+
     if not sentences:
         return ""
     
     # Limit the number of sentences for performance optimization
     sentences = sentences[:num_sentences_threshold]
-  
-    print(f"Number of sentences: {len(sentences)}")
-    
-    # Encode event question and sentences
-    query_emb = model.encode(event_question)
+     
+    # Encode event question calculate similarity scores
     sent_emb = model.encode(sentences)
-    print(f"Query embedding shape: {query_emb.shape}")
-    print(f"Sentence embedding shape: {sent_emb.shape}")
-
-    # Check for empty embeddings
-    if not query_emb.size or not sent_emb.size:
-        print(f"Sentences: {sentences}")
-        print(f"Query embedding: {query_emb}")
-        print(f"Sentence embedding: {sent_emb}")
-
     similarities = util.dot_score(query_emb, sent_emb)[0].cpu().tolist()
 
     # Extract top relevant sentences
@@ -506,16 +527,16 @@ def get_website_summary(
         sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.4
     ]
     
-    # Print similarity scores along with the sentences
-    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-        if sim > 0.4:
-            print(f"{sim:.4f}: {sent}")
-            print()
+    # # Print similarity scores along with the sentences
+    # for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
+    #     if sim > 0.4:
+    #         print(f"{sim:.4f}: {sent}")
+    #         print()
 
     if not relevant_sentences:
         return ""
     
-    # Truncate summary to fit max_words limit
+    # Truncate text to fit max_words limit
     output = ' '.join(relevant_sentences[:20]) 
     output_words = output.split(' ')
     if len(output_words) > max_words:
@@ -526,7 +547,7 @@ def get_website_summary(
 
 def get_date(soup):    
     """
-    Retrieves the release and modification dates from the soup object containing the text of the website.
+    Retrieves the release and modification dates from the soup object containing the HTML tree.
     
     Args:
         soup (BeautifulSoup): The BeautifulSoup object for the webpage.
@@ -563,7 +584,8 @@ def get_date(soup):
 
 def extract_text(
     html: str,
-    event_question: str,
+    query_emb,
+    event_date: str,
     model,
     nlp,
     max_words: int,
@@ -574,27 +596,31 @@ def extract_text(
     Args:
         html (str): The HTML content to extract text from.
         event_question (str): Event question for context.
-        model: Pre-trained model for text summarization.
-        tokenizer: Tokenizer for the pre-trained model.
+        event_date (str): Event date in year-month-day format.
+        model: Pre-trained model for sentence transformer.
         nlp: NLP object for additional text processing.
+        max_words (int): Maximum number of words for the output summary.
 
     Raises:
         ValueError: If the HTML content is empty.
+        ValueError: If the release or update date could not be extracted from the HTML.
 
     Returns:
-        str: Summarized text with the date.
+        str: Relevant website information with release date.
     """
 
-    print(f"Started extract_text function")
     if not html:
         raise ValueError("HTML is empty.")
+    
+    # print(f"HTML:\n{html}")
+    print()
 
     soup = BeautifulSoup(html, "html.parser")
 
     # Get the date of the website
     date = get_date(soup)
     if date is None:
-        raise ValueError("Could not extract date from the HTML")
+        raise ValueError("Could not extract release or update date from HTML.")
 
     # Remove unnecessary tags to clean up text
     for script in soup(HTML_TAGS_TO_REMOVE):
@@ -608,18 +634,19 @@ def extract_text(
     text = re.sub(r"\.{2,}", ".", text)
 
     # Get summarized text
-    text_summary = get_website_summary(
+    relevant_text = extract_relevant_information(
         text=text,
-        event_question=event_question,
+        query_emb=query_emb,
+        event_date=event_date,
         model=model,
         nlp=nlp,
         max_words=max_words,
     )
 
-    if not text_summary:
+    if not relevant_text:
         return ""
 
-    return f"{date}:\n{text_summary}"
+    return f"{date}:\n{relevant_text}"
 
 
 def process_in_batches(
@@ -666,11 +693,9 @@ def process_in_batches(
             futures = []
             for url in batch:
                 try:
-                    # Submit a HEAD request to the url to check the Content-Type
+                    # Submit a HEAD request to the url and check Content-Type
                     head_future = executor.submit(session.head, url, headers=headers, timeout=timeout, allow_redirects=True)
                     head_response = head_future.result()
-
-                    print(f"Content-Type: {head_response.headers.get('Content-Type')}")
                     if 'text/html' not in head_response.headers.get('Content-Type', ''):
                         print(f"\nAborting, {url} is not an HTML page.")
                         print(head_response.headers)
@@ -687,25 +712,26 @@ def process_in_batches(
 def extract_texts(
     urls: List[str],
     event_question: str,
+    max_words_per_url: int,
 ) -> List[str]:
     """
     Extract texts from a list of URLs using BERT and Spacy.
     
-    Parameters:
-    urls (List[str]): List of URLs to extract text from.
-    event_question (str): Event-related question for text extraction.
+    Args:
+        urls (List[str]): List of URLs to extract text from.
+        event_question (str): Event-related question for text extraction.
+        max_words_per_url (int): Maximum number of words allowed to extract for each URL.
+
+    Raises:
+        ValueError: If the event date could not be extracted from the event question.
+        Timeout: If the request timed out.
     
     Returns:
-    List[str]: List of extracted texts.
+        List[str]: List of extracted texts.
     """
 
     # Maximum number of allowed extractions
     max_allowed = 25
-
-    # Maximum number of words for each extraction
-    # ~ 2642 tokens free for additional information ~ 1981 words
-    # split by number of URLs
-    max_words = 1981 // len(urls)
     
     # Initialize empty list for storing extracted texts
     extracted_texts = []
@@ -714,10 +740,21 @@ def extract_texts(
     count = 0
     stop = False
 
-    # Initialize BERT and Spacy models
+    # Initialize Sentence Transformer and Spacy models
     model = SentenceTransformer('sentence-transformers/multi-qa-distilbert-cos-v1')    
     nlp = spacy.load("en_core_web_sm")
+
+    # Process the event question with spacy
+    doc_question = nlp(event_question)
+    event_date = extract_event_date(doc_question)
+
+    # Create sentence embeddings for the event question with Sentence Transformer
+    query_emb = model.encode(event_question)
+
+    if event_date is None:
+        raise ValueError(f"Could not extract precise event date from event question: {event_question}")
     
+    start_time = time.time()
     # Process URLs in batches
     for batch in process_in_batches(urls=urls):
         for future, url in tqdm(batch, desc="Processing URLs"):
@@ -726,14 +763,14 @@ def extract_texts(
                 if result.status_code != 200:
                     del result
                     continue
-                print("Request successful.")
                 # Extract relevant information for the event question
                 extracted_text = extract_text(
                     html=result.text,
-                    event_question=event_question,
+                    query_emb=query_emb,
+                    event_date=event_date,
                     model=model,
                     nlp=nlp,
-                    max_words=max_words,
+                    max_words=max_words_per_url,
                 )
                 
                 # Delete the result object to free memory
@@ -741,17 +778,14 @@ def extract_texts(
                 
                 # Append the extracted text if available and increment the count
                 if extracted_text:
-                    extracted_texts.append(f"{url}\n{extracted_text}")
+                    # extracted_texts.append(f"{url}\n{extracted_text}")
+                    extracted_texts.append(extracted_text)
                 count += 1
 
                 # Break if the maximum number of extractions is reached
                 if count >= max_allowed:
-                    print(f"Maximum number of extractions reached: {max_allowed}.")
                     stop = True
                     break
-
-            except requests.exceptions.ReadTimeout:
-                print(f"Request timed out: {url}.")
             
             except requests.exceptions.Timeout:
                 print(f"Request for {url} timed out.")
@@ -762,34 +796,40 @@ def extract_texts(
         
         # Break if the maximum number of extractions is reached
         if stop:
-            print(f"Maximum number of extractions reached: {max_allowed}.")
             break
+    
+    end_time = time.time()
+    print(f"Time elapsed: {end_time - start_time:.4f} seconds")
+
 
     return extracted_texts
 
 
 def fetch_additional_information(
     event_question: str,
-    engine: str,
-    temperature: float,
-    max_tokens: int,
+    max_add_words: int,
     google_api_key: str,
     google_engine: str,
+    engine: str = "gpt-3.5-turbo",
+    temperature: float = 1.0,
+    max_compl_tokens: int = 500,
 ) -> str:
 
     """
-    Fetch additional information based on an event question.
+    Get urls from a web search and extract relevant information based on an event question.
     
     Args:
         event_question (str): The question related to the event.
-        engine (str): The engine to be used for fetching information.
-        temperature (float): The temperature parameter for the engine.
-        max_tokens (int): The maximum number of tokens for the engine's response.
+        max_add_words (int): The maximum number of words allowed for the additional information.
         google_api_key (str): The API key for the Google service.
         google_engine (str): The Google engine to be used.
+        temperature (float): The temperature parameter for the engine.
+        engine (str): The openai engine. Defaults to "gpt-3.5-turbo".
+        temperature (float): The temperature parameter for the engine. Defaults to 1.0.
+        max_compl_tokens (int): The maximum number of tokens for the engine's response.
         
     Returns:
-        str: The additional information fetched.
+        str: The relevant information fetched from all the URLs concatenated.
     """
 
     # Create URL query prompt
@@ -808,10 +848,10 @@ def fetch_additional_information(
 
     # Fetch queries from the OpenAI engine
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model=engine,
         messages=messages,
-        temperature=1, # Override the default temperature parameter set for the engine
-        max_tokens=500, # Override the default max_tokens parameter set for the engine
+        temperature=temperature, # Override the default temperature parameter set for the engine
+        max_tokens=max_compl_tokens, # Override the default max_compl_tokens parameter set for the engine
         n=1,
         timeout=90,
         request_timeout=90,
@@ -833,14 +873,15 @@ def fetch_additional_information(
         api_key=google_api_key,
         engine=google_engine,
     )
-    # print("\nFetch additional information URLS:")
-    # for url in urls:
-    #     print(f"url: {url}")
+ 
+    # Get max number of words per URL
+    max_words_per_url = max_add_words // len(urls) if len(urls) > 0 else 0
 
     # Extract texts from URLs
     texts = extract_texts(
         urls=urls,
         event_question=event_question,
+        max_words_per_url=max_words_per_url,
     )
 
     # Join the texts and return
@@ -851,7 +892,7 @@ def fetch_additional_information(
 
 def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     """
-    Run the task with the given parameters.
+    Run the task with the given arguments.
 
     Args:
         kwargs (Dict): Keyword arguments that specify settings and API keys.
@@ -865,12 +906,9 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         Tuple[str, Optional[Dict[str, Any]]]: The generated content and any additional data.
     """
 
-    print("Starting...")
-    print()
-
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
-    max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+    max_compl_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_compl_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
     
     if not tool or not prompt:
@@ -879,7 +917,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     # Print the settings
     print(f"MECH TOOL: {tool}")
     print(f"PROMPT: {prompt}")
-    print(f"MAX OPENAI RETURN TOKENS: {max_tokens}")
+    print(f"MAX OPENAI RETURN TOKENS: {max_compl_tokens}")
     print(f"LLM TEMPERATURE: {temperature}")
 
     openai.api_key = kwargs["api_keys"]["openai"]
@@ -898,13 +936,25 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     print(f"EVENT_QUESTION: {event_question}")
     print()
 
+    # Get the tiktoken base encoding
+    enc = tiktoken.get_encoding("cl100k_base") 
+
+    # Calculate the maximum number of tokens and words that can be consumed by the additional information string
+    max_add_tokens = get_max_tokens_for_additional_information(
+        max_compl_tokens=max_compl_tokens,
+        prompt=prompt,
+        enc=enc,
+    )
+    max_add_words = int(max_add_tokens * 0.75)
+
     # Fetch additional information
     additional_information = (
         fetch_additional_information(
             event_question=event_question,
             engine=engine,
             temperature=temperature,
-            max_tokens=max_tokens,
+            max_compl_tokens=max_compl_tokens,
+            max_add_words=max_add_words,
             google_api_key=kwargs["api_keys"]["google_api_key"],
             google_engine=kwargs["api_keys"]["google_engine_id"],
         )
@@ -913,12 +963,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     )
 
     # Truncate additional information to stay within the chat completion token limit of 4096
-    enc = tiktoken.get_encoding("cl100k_base") # Get the tiktoken base encoding
     additional_information = truncate_additional_information(
-        additional_information, 
-        max_tokens,
-        prompt=prompt,
-        enc=enc,
+        additional_information, max_add_tokens, enc=enc,
     )
 
     # Generate the prediction prompt
@@ -944,7 +990,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         model=engine,
         messages=messages,
         temperature=temperature,
-        max_tokens=max_tokens,
+        max_tokens=max_compl_tokens,
         n=1,
         timeout=150,
         request_timeout=150,
