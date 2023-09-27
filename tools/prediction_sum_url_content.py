@@ -45,7 +45,7 @@ MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096
 WORDS_PER_TOKEN_FACTOR = 0.75
 DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 200,
-    "temperature": 0.2,
+    "temperature": 0,
 }
 
 ALLOWED_TOOLS = [
@@ -73,6 +73,7 @@ TOOL_TO_ENGINE = {
 # * You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation.
 # * Prioritize recent information in "ADDITIONAL_INFORMATION" based on the current time {timestamp}.
 # * You must pay very close attention to the specific wording of the 'event question' in "USER_PROMPT".
+
 # * If a date is provided in the 'event question' specifying when the event has to have occured, you must consider in your estimation, given the current time {timestamp}, how likely it is that the event will occur within the remaining timespan to that provided date.
 # * If an item in "ADDITIONAL_INFORMATION" is not relevant for the estimation, you must ignore that item.
 # * If there is insufficient information in "ADDITIONAL_INFORMATION", be aware of the limitations of your training data especially when relying on it for predicting events that require up-to-date information. In this case make a prediction that takes into account that you don't have up-to-date information.
@@ -81,6 +82,13 @@ TOOL_TO_ENGINE = {
 # * If the 'event question' is formulated in a way that an event must have happend BY or ON a specific date, consider the timepoint of the event being 23:59:59 of that date. Decrease the probability of the event specified in the 'event question' happening the closer the current time {timestamp} is to the timepoint, if you could not find information that the event could happen within the remaining time. If the current time has exceeded the timepoint, decrease the probability to 0. Do this only if you have been provided with input under ADDITIONAL_INFORMATION that indicates that you have access to information that is up-to-date. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
 # * You must provide your response in the format specified under "OUTPUT_FORMAT".
 # * Do not include any other contents in your response.
+# * If the current time has exceeded the deadline, decrease the probability to 0. Do this only, if there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question'. If you have not been provided with such information, do not decrease the probability, but rather make a prediction that takes into account that you don't have up-to-date information.
+
+
+
+# * If both the "ADDITIONAL_INFORMATION" and your training data are not sufficient, produce an estimate and adjust the "confidence" field accordingly.
+# * If the current time is about to exceed the deadline or has already exceeded the deadline, lower the probability estimate exponentially. For reference, the current time is {timestamp}.
+
 
 # _______________________________________________________
 
@@ -94,51 +102,48 @@ TOOL_TO_ENGINE = {
 
 
 PREDICTION_PROMPT = """
-You are a Large Language Model (LLM) operating within a multi-agent system. Your primary task is to precisely estimate the probability of the event occurring \
-given the timepoint `{timepoint}`as specified in the following event question: "{event_question}". The event question has only two outcomes: the event either \
-occurs before the timepoint or it does not occur before the timepoint.
+INTRODUCTION:
+You are a Large Language Model (LLM) within a multi-agent system. Your primary task is to accurately estimate the probability of a specified event occurring by a specified deadline, \
+detailed in the 'event question' found in 'USER_PROMPT'. This 'event question' should ideally have only two possible outcomes: the event will either occur or not \
+by the deadline specified in the question, which is 23:59:59 of the date provided. It is critical that you incorporate this deadline date in your \
+probability estimation. You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", which is \
+sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your estimation. You must adhere to the following 'INSTRUCTIONS'.  
 
-You receive a list of information in the "ADDITIONAL_INFORMATION" section. Each entry in this list comes with timestamps in parenthesis, showing its initial \
-release and last modification date. This information was obtained from a search engine query conducted a few seconds prior to your task, intended \
-to be as current as possible for aiding in your probability estimation.
-
-Note: Take extra care when interpreting dates. The date in the event question serves as the timepoint for the event to occur and is crucial for your probability assessment. \
-Do not mix this up with the timestamps in "ADDITIONAL_INFORMATION," as those are meant to indicate the recency of that specific information. \
-Mistaking these could lead to inaccurate probability assessments with significant financial consequences.
-
-Strictly adhere to the 'INSTRUCTIONS' for a trustworthy and accurate probability estimation.
 
 INSTRUCTIONS:
-* Thoroughly scrutinize the event question: "{event_question}".
-* If the event question permits more than two outcomes, return "Error" and discontinue further processing.
-* Utilize your training data to formulate a probability estimate for the event occuring by or on the timepoint specified in the event question.
-* Supplement your estimate with information from "ADDITIONAL_INFORMATION", paying special attention to the timestamps to gauge recency.
-* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the event question you can assume that you have been provided with most of the relevant information that can currently `{timestamp}` be found on the internet about that topic.
-* Disregard any irrelevant items in "ADDITIONAL_INFORMATION".
-* In case of information gaps in "ADDITIONAL_INFORMATION". be cognizant of your training data's limitations. Make an estimate acknowledging the absence of current data.
-* It could be the case that there exist lots of supporting information for the event occurring some time but without specifying a date. Be aware that your task is to estimate the probability of the event occurring BY OR ON the timepoint `{timepoint}`. Always be aware of the current time `{timestamp}` and the remaining time until the timepoint.
-* For the timepoint, treat 23:59:59 of the date within the event question as the cutoff. 
-* Be neutral and unbiased in your probability estimation and ____________________________________________________-??????
-* Adhere to the "OUTPUT_FORMAT" for your response, and refrain from including extraneous content.
+* Examine the user's input labeled 'USER_PROMPT'. Focus on the part enclosed in double quotes, which contains the 'event question'.
+* If the 'event question' implies more than two outcomes, output the response "Error" and halt further processing.
+* Utilize your training data to generate a probability estimation for the event specified in the 'event question' occurring by the given deadline of 23:59:59 on the specified date.
+* Examine the itemized list under "ADDITIONAL_INFORMATION". This data is sourced from a Google search engine query done a few seconds ago. 
+* You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation.
+* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most current and relevant information available on the internet, regardless of its age. Still pay close attention on the release and modification timestamps for each information item provided in parentheses right before it as well as the current time {timestamp}. Even if "ADDITIONAL_INFORMATION" contains the most recent and relevant information about the topic in the event question, it does not imply that it is relevant to make a prediction about the event question. 
+* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question', but does not clearly state that the event has already happened, you can assume that the event has not happened by now `{timestamp}`.
+* Given the importance of the deadline for the 'event question,' recent information generally holds more weight for your probability estimation. However, do not disregard older information that provides foundational or contextual relevance to the event in question. Use your judgment to weigh the importance of recency against the relevance of older data.
+* Factor the deadline into your probability estimation. It determines the timeframe by which the event must occur for the 'event question' to be answered affirmatively. For reference, the current time is `{timestamp}`.
+* Decrease the probability estimation of the event occurring drastically the closer the current time `{timestamp}` is to the deadline, if you have not found information clearly indicating that the event will happen within the remaining time.
+* You must provide your response in the format specified under "OUTPUT_FORMAT".
+* Do not include any other contents in your response.
+
+
+USER_PROMPT:
+```
+{user_prompt}
+```
 
 ADDITIONAL_INFORMATION:
 ```
 {additional_information}
 ```
 
-USER_PROMPT:
-{user_prompt}
-
-
 OUTPUT_FORMAT:
-* Your response should consist solely of a single JSON object, compatible with Python's "json.loads()" function.
-* The JSON object must include four numerical fields: "p_yes," "p_no," "confidence," and "info_utility," each with values between 0 and 1.
-   - "p_yes": The estimated probability of the event in the 'event question' taking place by or on the given date.
-   - "p_no": The estimated likelihood of the event in the 'event question' not occurring by or on the given date.
-   - "confidence": A measure of your assurance in the provided estimates, ranging from 0 for lowest to 1 for highest confidence.
-   - "info_utility": A value indicating the usefulness of "ADDITIONAL_INFORMATION" in informing your estimate, ranging from 0 for no utility to 1 for maximum utility.
-* Ensure that the sum of "p_yes" and "p_no" equals 1.
-* Exclude any content other than this JSON object in your output.
+* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
+* The JSON must contain four fields: "p_yes", "p_no", "confidence", and "info_utility", each ranging from 0 to 1.
+   - "p_yes": Estimated probability that the event occurs within the deadline.
+   - "p_no": Estimated probability that the 'event question' does not occur within the deadline.
+   - "confidence": Indicating the confidence in the estimated probabilities you provided ranging from 0 (lowest confidence) to 1 (maximum confidence). Confidence can be calculated based on the quality and quantity of data used for the estimation.
+   - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction ranging from 0 (lowest utility) to 1 (maximum utility).
+* The sum of "p_yes" and "p_no" must equal 1.
+* Output only the JSON object in your response.
 """
 # , except for max three sentences explaining your reasoning.
 
@@ -1013,6 +1018,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     # Generate the prediction prompt
     prediction_prompt = PREDICTION_PROMPT.format(
         event_question=event_question,
+        user_prompt=prompt,
         timepoint=formatted_event_date,
         additional_information=additional_information,
         timestamp=formatted_time_utc,
