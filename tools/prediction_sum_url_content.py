@@ -19,9 +19,8 @@
 
 """This module implements a Mech tool for binary predictions."""
 
-import time
 from typing import Any, Dict, Generator, List, Optional, Tuple
-from datetime import datetime, time, timezone
+from datetime import datetime, timezone
 import json
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -33,7 +32,6 @@ import requests
 from requests import Session
 import spacy
 import tiktoken
-import torch
 import traceback
 
 from dateutil import parser
@@ -53,9 +51,7 @@ ALLOWED_TOOLS = [
     "prediction-online-sum-url-content",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-offline-sum-url-content": "gpt-3.5-turbo",
-    # "prediction-online-sum-url-content": "gpt-3.5-turbo",
-    # "prediction-online-sum-url-content": "gpt-3.5-turbo-16k",
+    "prediction-offline-sum-url-content": "gpt-4",
     "prediction-online-sum-url-content": "gpt-4",
 }
 
@@ -82,7 +78,7 @@ INSTRUCTIONS:
 * Factor the deadline into your probability estimation. It determines the timeframe by which the event must occur for the 'event question' to be answered affirmatively. For reference, the current time is `{timestamp}`.
 * Decrease the probability estimation of the event occurring drastically the closer the current time `{timestamp}` is to the deadline, if you have not found information clearly indicating that the event will happen within the remaining time.
 * If the event question is formulated too vaguely or if the information under "ADDITIONAL_INFORMATION" contradict each other, decrease the confidence value in your probability estimation accordingly.
-* If the information in "ADDITIONAL_INFORMATION" indicate that the event has already happened, set the probability estimation to a very high score. If not, make a probability estimation based on the information provided as well as your training data for context and background information.
+* If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, set the probability estimation to a very high score. If not, make a probability estimation based on the information provided as well as your training data for context and background information.
 * You must provide your response in the format specified under "OUTPUT_FORMAT".
 * Do not include any other contents in your response.
 
@@ -105,9 +101,8 @@ OUTPUT_FORMAT:
    - "confidence": Indicating the confidence in the estimated probabilities you provided ranging from 0 (lowest confidence) to 1 (maximum confidence). Confidence can be calculated based on the quality and quantity of data used for the estimation.
    - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction ranging from 0 (lowest utility) to 1 (maximum utility).
 * The sum of "p_yes" and "p_no" must equal 1.
-* Output only the JSON object in your response.
+* Output only the JSON object in your response. Do not include any other contents in your response.
 """
-# , except for max three sentences explaining your reasoning.
 
 URL_QUERY_PROMPT = """
 You are a Large Language Model in a multi-agent system. Your task is to formulate search engine queries based on \
@@ -531,12 +526,6 @@ def extract_relevant_information(
         sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.4
     ]
     
-    # # Print similarity scores along with the sentences
-    # for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-    #     if sim > 0.4:
-    #         print(f"{sim:.4f}: {sent}")
-    #         print()
-
     if not relevant_sentences:
         return ""
     
