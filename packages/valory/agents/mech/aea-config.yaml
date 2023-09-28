@@ -152,6 +152,11 @@ models:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
         consensus_threshold: ${int:null}
+      use_slashing: ${bool:false}
+      slash_cooldown_hours: ${int:3}
+      slash_threshold_amount: ${int:10000000000000000}
+      light_slash_unit_amount: ${int:5000000000000000}
+      serious_slash_unit_amount: ${int:8000000000000000}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill

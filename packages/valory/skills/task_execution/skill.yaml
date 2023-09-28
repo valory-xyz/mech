@@ -77,6 +77,11 @@ models:
       polling_interval: 30.0
       agent_index: 0
       num_agents: 4
+      use_slashing: false
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
+      light_slash_unit_amount: 5000000000000000
+      serious_slash_unit_amount: 8000000000000000
     class_name: Params
 dependencies:
   openai:
