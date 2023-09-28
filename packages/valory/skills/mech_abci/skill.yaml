@@ -176,5 +176,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.38.0
+    version: ==1.39.0.post1
 is_abstract: false
