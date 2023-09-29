@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
-  behaviours.py: bafybeigpumxxutdrrgot44mqhqddfms3exrtsscvxfyl45pxufogjskweu
-  composition.py: bafybeiga6prq6yftjkh2bol6vym4iarvo4i4senk3avmukneap2drtjjz4
+  behaviours.py: bafybeidjvn4xr2k525r4emsm6yen3nnet7kqasrjm7chbuodhbywzw5nb4
+  composition.py: bafybeihmtr4ddrs4eu5wkk4xmcfnytvw2lt4udcfo7cf6a46fhe6gjdn3q
   dialogues.py: bafybeifhydd6xmstbh2jx5igj33upip5a3hhlcaxttfsc77heszqmru7ri
-  fsm_specification.yaml: bafybeib6j6etn6jd2cvggiswag2jrvlsxlnxb6sfgaf7oibhsd2mk65vw4
+  fsm_specification.yaml: bafybeiefcun637n44sw4htjg7qgvhkalfhsdlszbu3fg7vn6mu73eqbssq
   handlers.py: bafybeiffuduhg433qsu6lbet5jsaub63bzv2l4x756aj2fbnu5bnfu4ble
   models.py: bafybeic3pjxw7py6jpiaaxjtcufzcjmyldj2fdhpkik5qnj4hpruuxcu4q
 fingerprint_ignore_patterns: []
@@ -18,12 +18,12 @@ connections: []
 contracts: []
 protocols: []
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeigxjcci53vwytymzlhr37436yvenh7jup4astrn7dgyixo24aq2pq
-- valory/registration_abci:0.1.0:bafybeibc4kczqbh23sc6tufrzn3axmhp3vjav7fa3u6cnpvolrbbc2fd7i
-- valory/reset_pause_abci:0.1.0:bafybeid445uy6wwvugf3byzl7r73c7teu6xr5ezxb4h7cxbenghg3copvy
-- valory/task_submission_abci:0.1.0:bafybeidcjfmhtgwh24sgf3gmk6soiyr2fmaebjvphhz6xob6d5m6aeguce
-- valory/termination_abci:0.1.0:bafybeiguy7pkrcptg6c754ioig4mlkr7truccym3fpv6jwpjx2tmpdbzhi
-- valory/transaction_settlement_abci:0.1.0:bafybeidpsnguxizkpihtkqzojr3em7yy7c6qc7gxpbh5vglmwws5wke7bi
+- valory/abstract_round_abci:0.1.0:bafybeih2fyfb6kkf7r45pvdk7pyyebr5xloia4xiqxtb3qsrasnstqmepq
+- valory/registration_abci:0.1.0:bafybeibndt6vxiwc2edgtaxpjbhwto3eyu33ujz3zmvtygvo2qz7xme5li
+- valory/reset_pause_abci:0.1.0:bafybeigeoc363gv3wp2rrmk6p2fdxney33nxd3owtpfugzapgruwe4klyu
+- valory/task_submission_abci:0.1.0:bafybeihvyzkhhikrhwzf55uu77gbvz6rgld6gipnrh32f2arneqgej2zea
+- valory/termination_abci:0.1.0:bafybeigqpij2sgrpnilqjljfciixop4fldq5qceixc7534q6af4potdmdm
+- valory/transaction_settlement_abci:0.1.0:bafybeia7rzsbea3ch4gcafyp3z6uvqh4npws2xpdwbkkdbrqqpjops7nui
 behaviours:
   main:
     args: {}
@@ -150,6 +150,11 @@ models:
       use_termination: false
       validate_timeout: 1205
       task_wait_timeout: 15.0
+      use_slashing: false
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
+      light_slash_unit_amount: 5000000000000000
+      serious_slash_unit_amount: 8000000000000000
     class_name: Params
   randomness_api:
     args:
@@ -176,5 +181,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.38.0
+    version: ==1.39.0.post1
 is_abstract: false

@@ -7,18 +7,18 @@ aea_version: '>=1.37.0, <2.0.0'
 fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
-- valory/abci:0.1.0:bafybeicasheudousm2unmh5qmy5n3qdq5hmkg2j42fxfm2crxmgq3nzjkq
+- valory/abci:0.1.0:bafybeib3exj2vkz4u76rc2amtwz6veeozipr6zdgzlaqsovu3dorppcina
 - valory/http_client:0.23.0:bafybeieoeuy4brzimtnubmokwirhrx27ezls6cdnl5qik4rkykfle3nn2y
-- valory/ipfs:0.1.0:bafybeiau32pzy55ta6ugl2bebevlxudal6pnlfomhplfm5mph6reaw3krq
+- valory/ipfs:0.1.0:bafybeidu3xd6rd5zysv2due2cnrc3sxx5vss2usxwaxxtxxuyha2kuhd3e
 - valory/ledger:0.19.0:bafybeigfoz7d7si7s4jehvloq2zmiiocpbxcaathl3bxkyarxoerxq7g3a
 - valory/p2p_libp2p_client:0.1.0:bafybeihdnfdth3qgltefgrem7xyi4b3ejzaz67xglm2hbma2rfvpl2annq
 - valory/websocket_client:0.1.0:bafybeicz53kzs5uvyiod2azntl76zwgmpgr22ven4wl5fnwt2m546j3wsu
 contracts:
-- valory/agent_mech:0.1.0:bafybeidl6kwc3sgcxiphgb3osjqlqwylhqetv2nyv2fu6zxcgn5qctv2ju
-- valory/gnosis_safe:0.1.0:bafybeigvqg4lapdaa23dpc3pv67rdptdhey6e435mxqsw2gb2u74yw4yei
-- valory/gnosis_safe_proxy_factory:0.1.0:bafybeie4iivrxcd5dcwzj3y2t66mc5mdvtsuqu426gk2kcdc6fxbki6neu
-- valory/multisend:0.1.0:bafybeie7m7pjbnw7cccpbvmbgkut24dtlt4cgvug3tbac7gej37xvwbv3a
-- valory/service_registry:0.1.0:bafybeif6x4zvsokwcetbrjdb4uyv4l3pqx756cg2ohv2zgcky5yuiwuqvi
+- valory/agent_mech:0.1.0:bafybeiccjt6322pee3als6v3ale75wxgrv4hy532dlfaugndpq6swahyba
+- valory/gnosis_safe:0.1.0:bafybeih6d3vxz3jlgodxm5b2qcwsmansqj4xobuyd6hjnhzremuvd65yrm
+- valory/gnosis_safe_proxy_factory:0.1.0:bafybeid6glyjikjxmefwmhn62cxiofophegjmg2z5vqqsvk6tmyunwc274
+- valory/multisend:0.1.0:bafybeieg4tywd5lww2vygvpkilg3hcepa4rmhehjuamyvdf6vazt554v6u
+- valory/service_registry:0.1.0:bafybeige6pubafkiqmaiyuql6pcojm6fvh5thvhrsapi53au2rhuumqymu
 protocols:
 - open_aea/signing:1.0.0:bafybeifuxs7gdg2okbn7uofymenjlmnih2wxwkym44lsgwmklgwuckxm2m
 - valory/abci:0.1.0:bafybeigootsvqpk6th5xpdtzanxum3earifrrezfyhylfrit7yvqdrtgpe
@@ -31,16 +31,16 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeigsvceac33asd6ecbqev34meyyjwu3rangenv6xp5rkxyz4krvcby
 - valory/tendermint:0.1.0:bafybeidjqmwvgi4rqgp65tbkhmi45fwn2odr5ecezw6q47hwitsgyw4jpa
 skills:
-- valory/abstract_abci:0.1.0:bafybeicg7dv7cff34nv2k2z47c4yp4kddsxp3wozonzow6tnvfvwndz3cy
-- valory/abstract_round_abci:0.1.0:bafybeigxjcci53vwytymzlhr37436yvenh7jup4astrn7dgyixo24aq2pq
-- valory/contract_subscription:0.1.0:bafybeifbgzfrhtdtendqzwmh3o436nyexwkif6mbvsouvk2ktdfk5lhe7y
-- valory/mech_abci:0.1.0:bafybeigzfa5pr647fg4nflzgie3xla4araotperomibfp2totzpaxwgmje
-- valory/task_execution:0.1.0:bafybeih6caazog2vq34dupe4cbkv2v3zrffsmfztuvvshtku7tnhmvxcrq
-- valory/registration_abci:0.1.0:bafybeibc4kczqbh23sc6tufrzn3axmhp3vjav7fa3u6cnpvolrbbc2fd7i
-- valory/reset_pause_abci:0.1.0:bafybeid445uy6wwvugf3byzl7r73c7teu6xr5ezxb4h7cxbenghg3copvy
-- valory/task_submission_abci:0.1.0:bafybeidcjfmhtgwh24sgf3gmk6soiyr2fmaebjvphhz6xob6d5m6aeguce
-- valory/termination_abci:0.1.0:bafybeiguy7pkrcptg6c754ioig4mlkr7truccym3fpv6jwpjx2tmpdbzhi
-- valory/transaction_settlement_abci:0.1.0:bafybeidpsnguxizkpihtkqzojr3em7yy7c6qc7gxpbh5vglmwws5wke7bi
+- valory/abstract_abci:0.1.0:bafybeigafjci7m7ezwzasav5xqo7v2mbxxn7qb4y7vnuc2wr2irzvn7wsy
+- valory/abstract_round_abci:0.1.0:bafybeih2fyfb6kkf7r45pvdk7pyyebr5xloia4xiqxtb3qsrasnstqmepq
+- valory/contract_subscription:0.1.0:bafybeialscmefsroacttr5um4667yjnceu4hqdmiwvo3e7pg7ld5mhbo5q
+- valory/mech_abci:0.1.0:bafybeieyt5isib2uxdhfdcv46ajcw5q3wslxcuassmd4l5akl46cg6vfri
+- valory/task_execution:0.1.0:bafybeig5ceg4rpgyocqb4scfxf5i5oxcvwtifypa2ubqufvquyez6sfxre
+- valory/registration_abci:0.1.0:bafybeibndt6vxiwc2edgtaxpjbhwto3eyu33ujz3zmvtygvo2qz7xme5li
+- valory/reset_pause_abci:0.1.0:bafybeigeoc363gv3wp2rrmk6p2fdxney33nxd3owtpfugzapgruwe4klyu
+- valory/task_submission_abci:0.1.0:bafybeihvyzkhhikrhwzf55uu77gbvz6rgld6gipnrh32f2arneqgej2zea
+- valory/termination_abci:0.1.0:bafybeigqpij2sgrpnilqjljfciixop4fldq5qceixc7534q6af4potdmdm
+- valory/transaction_settlement_abci:0.1.0:bafybeia7rzsbea3ch4gcafyp3z6uvqh4npws2xpdwbkkdbrqqpjops7nui
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -152,6 +152,11 @@ models:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
         consensus_threshold: ${int:null}
+      use_slashing: ${bool:false}
+      slash_cooldown_hours: ${int:3}
+      slash_threshold_amount: ${int:10000000000000000}
+      light_slash_unit_amount: ${int:5000000000000000}
+      serious_slash_unit_amount: ${int:8000000000000000}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
