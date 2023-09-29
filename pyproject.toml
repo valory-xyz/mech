@@ -53,11 +53,11 @@ eth-abi = "==4.0.0"
 pycryptodome = "==3.18.0"
 anthropic = "==0.3.11"
 pytest = "==7.2.1"
-gensim = "^4.3.2"
-sentence-transformers = "^2.2.2"
-spacy = "^3.6.1"
 tqdm = "^4.66.1"
 tiktoken = "^0.5.1"
+python-dateutil = "^2.8.2"
+spacy = "^3.6.1"
+sentence-transformers = "^2.2.2"
 
 
 
