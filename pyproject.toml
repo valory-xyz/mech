@@ -57,8 +57,11 @@ tqdm = "^4.66.1"
 tiktoken = "^0.5.1"
 python-dateutil = "^2.8.2"
 spacy = "^3.6.1"
+# torch = [
+#     { version = "^2.0.1", markers = "sys_platform == 'darwin'" },
+#     { url = "https://download.pytorch.org/whl/cpu", markers = "sys_platform == 'linux'" }
+# ]
 sentence-transformers = "^2.2.2"
-
 
 
 [tool.poetry.group.dev.dependencies.tomte]

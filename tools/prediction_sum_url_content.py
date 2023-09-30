@@ -52,7 +52,7 @@ ALLOWED_TOOLS = [
 ]
 TOOL_TO_ENGINE = {
     "prediction-offline-sum-url-content": "gpt-4",
-    "prediction-online-sum-url-content": "gpt-4",
+    "prediction-online-sum-url-content": "gpt-3.5-turbo",
 }
 
 
