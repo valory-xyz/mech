@@ -39,7 +39,7 @@ from tqdm import tqdm
 from sentence_transformers import SentenceTransformer, util
 
 NUM_URLS_EXTRACT = 5
-MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096
+MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096 # Set the limit for cost efficiency
 WORDS_PER_TOKEN_FACTOR = 0.75
 DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 200,
@@ -52,7 +52,7 @@ ALLOWED_TOOLS = [
 ]
 TOOL_TO_ENGINE = {
     "prediction-offline-sum-url-content": "gpt-4",
-    "prediction-online-sum-url-content": "gpt-3.5-turbo",
+    "prediction-online-sum-url-content": "gpt-4",
 }
 
 
