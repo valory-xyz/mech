@@ -57,16 +57,22 @@ tqdm = "^4.66.1"
 tiktoken = "^0.5.1"
 python-dateutil = "^2.8.2"
 spacy = "^3.6.1"
-torch = [
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.0.1%2Bcpu-cp310-cp310-linux_x86_64.whl", markers = "sys_platform == 'linux'" },
-    { url = "https://download.pytorch.org/whl/cpu/torch-2.0.1-cp311-none-macosx_11_0_arm64.whl", markers = "sys_platform == 'darwin'" }
-]
-torchvision = [
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.15.2%2Bcpu-cp310-cp310-linux_x86_64.whl", markers = "sys_platform == 'linux'" },
-    { url = "https://download.pytorch.org/whl/cpu/torchvision-0.15.2-cp311-cp311-macosx_11_0_arm64.whl", markers = "sys_platform == 'darwin'"}
-]
 sentence-transformers = "^2.2.2"
+[[tool.poetry.dependencies.torch]]
+url = "https://download.pytorch.org/whl/cpu/torch-2.0.1%2Bcpu-cp310-cp310-linux_x86_64.whl"
+markers = "sys_platform == 'linux'"
 
+[[tool.poetry.dependencies.torch]]
+url = "https://download.pytorch.org/whl/cpu/torch-2.0.1-cp311-none-macosx_11_0_arm64.whl"
+markers = "sys_platform == 'darwin'"
+
+[[tool.poetry.dependencies.torchvision]]
+url = "https://download.pytorch.org/whl/cpu/torchvision-0.15.2%2Bcpu-cp310-cp310-linux_x86_64.whl"
+markers = "sys_platform == 'linux'"
+
+[[tool.poetry.dependencies.torchvision]]
+url = "https://download.pytorch.org/whl/cpu/torchvision-0.15.2-cp311-cp311-macosx_11_0_arm64.whl"
+markers = "sys_platform == 'darwin'"
 
 [tool.poetry.group.dev.dependencies.tomte]
 version = "==0.2.12"
