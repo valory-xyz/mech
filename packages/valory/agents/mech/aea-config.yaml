@@ -12,7 +12,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeiau32pzy55ta6ugl2bebevlxudal6pnlfomhplfm5mph6reaw3krq
 - valory/ledger:0.19.0:bafybeigfoz7d7si7s4jehvloq2zmiiocpbxcaathl3bxkyarxoerxq7g3a
 - valory/p2p_libp2p_client:0.1.0:bafybeihdnfdth3qgltefgrem7xyi4b3ejzaz67xglm2hbma2rfvpl2annq
-- valory/websocket_client:0.1.0:bafybeicz53kzs5uvyiod2azntl76zwgmpgr22ven4wl5fnwt2m546j3wsu
+- valory/websocket_client:0.1.0:bafybeidxgkpajanybyjrmdnor4au4ttghzyp2ulgm7rttjgopxrjoaszzi
 contracts:
 - valory/agent_mech:0.1.0:bafybeidl6kwc3sgcxiphgb3osjqlqwylhqetv2nyv2fu6zxcgn5qctv2ju
 - valory/gnosis_safe:0.1.0:bafybeigvqg4lapdaa23dpc3pv67rdptdhey6e435mxqsw2gb2u74yw4yei
@@ -33,12 +33,12 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeicg7dv7cff34nv2k2z47c4yp4kddsxp3wozonzow6tnvfvwndz3cy
 - valory/abstract_round_abci:0.1.0:bafybeigxjcci53vwytymzlhr37436yvenh7jup4astrn7dgyixo24aq2pq
-- valory/contract_subscription:0.1.0:bafybeifbgzfrhtdtendqzwmh3o436nyexwkif6mbvsouvk2ktdfk5lhe7y
-- valory/mech_abci:0.1.0:bafybeigzfa5pr647fg4nflzgie3xla4araotperomibfp2totzpaxwgmje
-- valory/task_execution:0.1.0:bafybeiaof5y53x47chcpn3cw3r2kynvdn3grd3tcniyzpgznlldhetcws4
+- valory/contract_subscription:0.1.0:bafybeifpk54dowx3725vb4t4ixhssvy3hgtzzfqepevzlydh5a6g5ymb5e
+- valory/mech_abci:0.1.0:bafybeidr3mm3rroe4w76fg3licisflqlenm5wkb3bk2eqfji4bmeot7gya
 - valory/registration_abci:0.1.0:bafybeibc4kczqbh23sc6tufrzn3axmhp3vjav7fa3u6cnpvolrbbc2fd7i
 - valory/reset_pause_abci:0.1.0:bafybeid445uy6wwvugf3byzl7r73c7teu6xr5ezxb4h7cxbenghg3copvy
-- valory/task_submission_abci:0.1.0:bafybeidcjfmhtgwh24sgf3gmk6soiyr2fmaebjvphhz6xob6d5m6aeguce
+- valory/task_execution:0.1.0:bafybeia6us6ru7yy6tiktwhu66bfz4n6pd2zfl2srlwjblhmxkxyc26kr4
+- valory/task_submission_abci:0.1.0:bafybeicvfavjhjppylrmao6iunjcm4mle4verxi25ge4vcjuqseg5elonu
 - valory/termination_abci:0.1.0:bafybeiguy7pkrcptg6c754ioig4mlkr7truccym3fpv6jwpjx2tmpdbzhi
 - valory/transaction_settlement_abci:0.1.0:bafybeidpsnguxizkpihtkqzojr3em7yy7c6qc7gxpbh5vglmwws5wke7bi
 default_ledger: ethereum
@@ -71,15 +71,15 @@ logging_config:
       - console
       propagate: true
 dependencies:
-  open-aea-ledger-ethereum: {}
-  googlesearch-python:
-    version: ==1.2.3
+  anthropic:
+    version: ==0.3.11
   beautifulsoup4:
     version: ==4.12.2
   google-api-python-client:
     version: ==2.95.0
-  anthropic:
-    version: ==0.3.11
+  googlesearch-python:
+    version: ==1.2.3
+  open-aea-ledger-ethereum: {}
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
@@ -168,6 +168,7 @@ models:
       polling_interval: ${float:30.0}
       agent_index: ${int:0}
       num_agents: ${int:4}
+      from_block_range: ${int:50000}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

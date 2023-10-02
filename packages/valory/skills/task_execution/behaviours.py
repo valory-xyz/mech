@@ -46,6 +46,7 @@ from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialo
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
+from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils.ipfs import (
     get_ipfs_file_hash,
@@ -174,11 +175,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._all_tools[tool_req] = tool_py
         self._inflight_tool_req = None
 
+    def _populate_from_block(self) -> None:
+        """Populate from_block"""
+        ledger_api_msg, _ = self.context.ledger_dialogues.create(
+            performative=LedgerApiMessage.Performative.GET_STATE,
+            callable="get_block",
+            kwargs=LedgerApiMessage.Kwargs(dict(block_identifier="latest")),
+            counterparty=LEDGER_API_ADDRESS,
+            ledger_id=self.context.default_ledger_id,
+            args=(),
+        )
+        self.context.outbox.put_message(message=ledger_api_msg)
+        self.params.in_flight_req = True
+
     def _check_for_new_reqs(self) -> None:
         """Check for new reqs."""
         if self.params.in_flight_req or not self._should_poll():
             # do nothing if there is an in flight request
             # or if we should not poll yet
+            return
+
+        if self.params.from_block is None:
+            # set the initial from block
+            self._populate_from_block()
             return
 
         contract_api_msg, _ = self.context.contract_dialogues.create(
@@ -283,7 +302,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
         """Submit a task."""
         try:
-            return self._executor.submit(fn, *args, **kwargs)
+            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
         except BrokenProcessPool:
             self.context.logger.warning("Executor is broken. Restarting...")
             # stop the current executor
@@ -291,7 +310,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # create a new executor
             self._executor = ProcessPoolExecutor(max_workers=1)
             # try to run the task again
-            return self._executor.submit(fn, *args, **kwargs)
+            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""

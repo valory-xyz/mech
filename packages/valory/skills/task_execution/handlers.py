@@ -30,6 +30,7 @@ from packages.valory.connections.ledger.connection import (
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
+from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
 
 
@@ -168,3 +169,29 @@ class ContractHandler(BaseHandler):
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.from_block}"
         )
+
+
+class LedgerHandler(BaseHandler):
+    """Ledger API message handler."""
+
+    SUPPORTED_PROTOCOL = LedgerApiMessage.protocol_id
+
+    def handle(self, message: Message) -> None:
+        """
+        Implement the reaction to a ledger message.
+
+        :param message: the message
+        """
+        self.context.logger.info(f"Received message: {message}")
+        ledger_api_msg = cast(LedgerApiMessage, message)
+        if ledger_api_msg.performative != LedgerApiMessage.Performative.STATE:
+            self.context.logger.warning(
+                f"Ledger API Message performative not recognized: {ledger_api_msg.performative}"
+            )
+            self.params.in_flight_req = False
+            return
+
+        block_number = ledger_api_msg.state.body["number"]
+        self.params.from_block = block_number - self.params.from_block_range
+        self.params.in_flight_req = False
+        self.on_message_handled(message)
