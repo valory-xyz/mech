@@ -19,3 +19,4 @@ a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/abstract_round_a
 a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/registration_abci/skill.yaml:generic-api-key:86
 a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/termination_abci/skill.yaml:generic-api-key:84
 a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/transaction_settlement_abci/skill.yaml:generic-api-key:92
+ed97b16cdd270e228ecd3d837da4484c09357108:packages/valory/skills/reset_pause_abci/skill.yaml:generic-api-key:80
