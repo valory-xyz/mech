@@ -14,3 +14,8 @@ ab4630c49b5fc7fe9cdc7b48c9f4d7018abbe2c5:packages/eightballer/services/mech/serv
 67cd348064f2579db198c930c4dfbd4fba398094:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:17
 bcaf3802a6d7f1ae37003d94f8f26b77de530dad:tools/univ2_trade_request.py:generic-api-key:62
 bcaf3802a6d7f1ae37003d94f8f26b77de530dad:tools/univ2_trade_request.py:generic-api-key:63
+a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/connections/http_client/connection.yaml:generic-api-key:14
+a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/abstract_round_abci/tests/data/dummy_abci/skill.yaml:generic-api-key:73
+a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/registration_abci/skill.yaml:generic-api-key:86
+a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/termination_abci/skill.yaml:generic-api-key:84
+a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/transaction_settlement_abci/skill.yaml:generic-api-key:92
