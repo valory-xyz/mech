@@ -386,18 +386,3 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         stop=None,
     )
     return response.choices[0].message.content, None
-
-
-if __name__ == "__main__":
-    os.environ['OPENAI_API_KEY'] = "your_openai_api_key"
-    api_keys = {"openai": "your_openai_api_key"}
-
-    func_args = {
-        "api_keys": api_keys,
-        "tool": "deepmind-optimization",
-        "prompt": "Will AI take over the world in the next year?",
-        "improve_instructions": True,
-    }
-
-    response = run(**func_args)
-    print(response)
