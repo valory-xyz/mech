@@ -8,7 +8,7 @@ fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
 - valory/abci:0.1.0:bafybeib3exj2vkz4u76rc2amtwz6veeozipr6zdgzlaqsovu3dorppcina
-- valory/http_client:0.23.0:bafybeieoeuy4brzimtnubmokwirhrx27ezls6cdnl5qik4rkykfle3nn2y
+- valory/http_client:0.23.0:bafybeibewxkzsjia44wqeixwtpefnuewndl4csgxm4jlk77iqmtbya72gu
 - valory/ipfs:0.1.0:bafybeidu3xd6rd5zysv2due2cnrc3sxx5vss2usxwaxxtxxuyha2kuhd3e
 - valory/ledger:0.19.0:bafybeigfoz7d7si7s4jehvloq2zmiiocpbxcaathl3bxkyarxoerxq7g3a
 - valory/p2p_libp2p_client:0.1.0:bafybeihdnfdth3qgltefgrem7xyi4b3ejzaz67xglm2hbma2rfvpl2annq
@@ -32,15 +32,15 @@ protocols:
 - valory/tendermint:0.1.0:bafybeidjqmwvgi4rqgp65tbkhmi45fwn2odr5ecezw6q47hwitsgyw4jpa
 skills:
 - valory/abstract_abci:0.1.0:bafybeigafjci7m7ezwzasav5xqo7v2mbxxn7qb4y7vnuc2wr2irzvn7wsy
-- valory/abstract_round_abci:0.1.0:bafybeih2fyfb6kkf7r45pvdk7pyyebr5xloia4xiqxtb3qsrasnstqmepq
+- valory/abstract_round_abci:0.1.0:bafybeif75fef5csbnc6xthpgtnwvd4ojj5zmbeadt4jxmkgap2eo24qixa
 - valory/contract_subscription:0.1.0:bafybeialscmefsroacttr5um4667yjnceu4hqdmiwvo3e7pg7ld5mhbo5q
-- valory/mech_abci:0.1.0:bafybeieyt5isib2uxdhfdcv46ajcw5q3wslxcuassmd4l5akl46cg6vfri
+- valory/mech_abci:0.1.0:bafybeigr3vvpaabqh2t5bu7aq2dtzzwv6a65bemo4qvioacmm6fvzwil4q
+- valory/registration_abci:0.1.0:bafybeidoobofynxvzu4n32q6it7vy6socjefjq43nvf3dlgeden3bahloq
+- valory/reset_pause_abci:0.1.0:bafybeiemeltzzunroxbxvtjxznssomt6jcs32nt6mnflpzbcfdl7uf32ny
 - valory/task_execution:0.1.0:bafybeig5ceg4rpgyocqb4scfxf5i5oxcvwtifypa2ubqufvquyez6sfxre
-- valory/registration_abci:0.1.0:bafybeibndt6vxiwc2edgtaxpjbhwto3eyu33ujz3zmvtygvo2qz7xme5li
-- valory/reset_pause_abci:0.1.0:bafybeigeoc363gv3wp2rrmk6p2fdxney33nxd3owtpfugzapgruwe4klyu
-- valory/task_submission_abci:0.1.0:bafybeihvyzkhhikrhwzf55uu77gbvz6rgld6gipnrh32f2arneqgej2zea
-- valory/termination_abci:0.1.0:bafybeigqpij2sgrpnilqjljfciixop4fldq5qceixc7534q6af4potdmdm
-- valory/transaction_settlement_abci:0.1.0:bafybeia7rzsbea3ch4gcafyp3z6uvqh4npws2xpdwbkkdbrqqpjops7nui
+- valory/task_submission_abci:0.1.0:bafybeie6tq6peb35z6vhflutjdqfobuj6xo7p2rzf6nxizs22cino2w2oe
+- valory/termination_abci:0.1.0:bafybeig4mrkjhycwa7ursnnchnjcui6yxn4cz6htbqw3k4kya3u3xs6vwq
+- valory/transaction_settlement_abci:0.1.0:bafybeih54msklfwn62iblftogjmzzoaiu7twmliv4bktwtkyy63dhtjija
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -71,13 +71,22 @@ logging_config:
       - console
       propagate: true
 dependencies:
-  open-aea-ledger-ethereum: {}
-  googlesearch-python:
-    version: ==1.2.3
+  anthropic:
+    version: ==0.3.11
   beautifulsoup4:
     version: ==4.12.2
   google-api-python-client:
     version: ==2.95.0
+  googlesearch-python:
+    version: ==1.2.3
+  open-aea-ledger-ethereum:
+    version: ==1.39.0.post1
+  aiohttp:
+    version: <3.9,>=3.7.4
+  langchain:
+    version: ==0.0.303
+  scikit-learn:
+    version: ==1.3.1
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
@@ -152,11 +161,6 @@ models:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
         consensus_threshold: ${int:null}
-      use_slashing: ${bool:false}
-      slash_cooldown_hours: ${int:3}
-      slash_threshold_amount: ${int:10000000000000000}
-      light_slash_unit_amount: ${int:5000000000000000}
-      serious_slash_unit_amount: ${int:8000000000000000}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
