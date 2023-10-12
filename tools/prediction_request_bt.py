@@ -268,8 +268,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
           "content": prediction_prompt
         }
       ],
-      "pool_id": 4,
-      "count": 3,
       "return_all": True
     })
     headers = {
@@ -279,4 +277,17 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     conn.request("POST", "/text", payload, headers)
     res = conn.getresponse()
     data = res.read()
-    return data, None
+    data = json.loads(data) # contains: uids, count, return_all, exclude_unavailable, messages, choices
+    responses = data["choices"]
+    valid_response = None
+    # naive filtering. The problem is that most responses don't adhere to the prompt requirements. Frequently, None is returned as a result.
+    for response in responses:
+        answer = response["message"]["content"]
+        try:
+            answer = json.loads(answer)
+            if ("p_yes" in answer and "p_no" in answer and "confidence" in answer and "info_utility" in answer):
+                valid_response = answer
+                break
+        except json.decoder.JSONDecodeError:
+            pass
+    return valid_response, None
