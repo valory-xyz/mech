@@ -26,8 +26,11 @@ from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
 import openai  # noqa
+from multibase import multibase
+from multicodec import multicodec
 
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.agent_registry.contract import AgentRegistryContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
@@ -182,6 +185,14 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
     def get_payload_content(self) -> Generator[None, None, str]:
         """Prepare the transaction"""
         all_txs = []
+        should_update_hash = yield from self._should_update_hash()
+        if should_update_hash:
+            update_hash_tx = yield from self._get_mech_update_hash_tx()
+            if update_hash_tx is None:
+                # something went wrong, respond with ERROR payload for now
+                return TransactionPreparationRound.ERROR_PAYLOAD
+            all_txs.append(update_hash_tx)
+
         for task in self.synchronized_data.done_tasks:
             deliver_tx = yield from self._get_deliver_tx(task)
             if deliver_tx is None:
@@ -303,6 +314,79 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
         data = cast(bytes, contract_api_msg.state.body["data"])
         return {
             "to": self.params.agent_mech_contract_address,
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
+
+    def _get_latest_hash(self) -> Generator[None, None, Optional[bytes]]:
+        """Get latest update hash."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(AgentRegistryContract.contract_id),
+            contract_callable="get_token_hash",
+            token_id=self.params.agent_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_token_hash unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        latest_hash = cast(bytes, contract_api_msg.state.body["data"])
+        return latest_hash
+
+    def _should_update_hash(self) -> Generator:
+        """Check if the agent should update the hash."""
+        if self.params.task_mutable_params.latest_metadata_hash is None:
+            latest_hash = yield from self._get_latest_hash()
+            if latest_hash is None:
+                self.context.logger.warning(
+                    "Could not get latest hash. Don't update the metadata."
+                )
+                return False
+            self.params.task_mutable_params.latest_metadata_hash = latest_hash
+
+        configured_hash = self.to_multihash(self.params.metadata_hash)
+        latest_hash = self.params.task_mutable_params.latest_metadata_hash
+        return configured_hash != latest_hash
+
+    @staticmethod
+    def to_multihash(hash_string: str) -> str:
+        """To multihash string."""
+        # Decode the Base32 CID to bytes
+        cid_bytes = multibase.decode(hash_string)
+        # Remove the multicodec prefix (0x01) from the bytes
+        multihash_bytes = multicodec.remove_prefix(cid_bytes)
+        # Convert the multihash bytes to a hexadecimal string
+        hex_multihash = multihash_bytes.hex()
+        return hex_multihash[6:]
+
+    def _get_mech_update_hash_tx(self) -> Generator:
+        """Get the mech update hash tx."""
+        metadata_str = self.to_multihash(self.params.metadata_hash)
+        metadata = bytes.fromhex(metadata_str)
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(AgentRegistryContract.contract_id),
+            contract_callable="get_update_hash_tx_data",
+            token_id=self.params.agent_id,
+            metadata_hash=metadata,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_mech_update_hash unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": self.params.agent_registry_address,
             "value": ZERO_ETHER_VALUE,
             "data": data,
         }
