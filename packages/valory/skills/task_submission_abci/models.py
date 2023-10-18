@@ -18,8 +18,8 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
-
-from typing import Any, Type
+from dataclasses import dataclass
+from typing import Any, Optional, Type
 
 from packages.valory.skills.abstract_round_abci.base import AbciApp
 from packages.valory.skills.abstract_round_abci.models import BaseParams
@@ -30,6 +30,7 @@ from packages.valory.skills.abstract_round_abci.models import Requests as BaseRe
 from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
+from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
 
 
@@ -37,6 +38,13 @@ class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
     abci_app_cls: Type[AbciApp] = TaskSubmissionAbciApp
+
+
+@dataclass
+class MutableParams(TypeCheckMixin):
+    """Collection for the mutable parameters."""
+
+    latest_metadata_hash: Optional[bytes] = None
 
 
 class Params(BaseParams):
@@ -54,6 +62,12 @@ class Params(BaseParams):
         )
         if self.agent_mech_contract_address is None:
             raise ValueError("agent_mech_contract_address is required")
+        self.agent_registry_address = self._ensure(
+            "agent_registry_address", kwargs, str
+        )
+        self.agent_id: int = self._ensure("agent_id", kwargs, int)
+        self.metadata_hash: str = self._ensure("metadata_hash", kwargs, str)
+        self.task_mutable_params = MutableParams()
         super().__init__(*args, **kwargs)
 
 
