@@ -178,9 +178,9 @@ def create_new_instructions(llm, instructions, score):
     return evaluations
 
 
-def prompt_engineer(init_instructions, instructions_format, iterations=3, model_name="gpt-3.5-turbo"):
+def prompt_engineer(openai_api_key, init_instructions, instructions_format, iterations=3, model_name="gpt-3.5-turbo"):
 
-    llm = OpenAI(model_name=model_name)
+    llm = OpenAI(model_name=model_name, openai_api_key=openai_api_key)
     score_template = {"template": init_instructions, "score": 0.0}
 
     df = pd.read_csv(StringIO(EXAMPLES), sep=";")
@@ -334,17 +334,16 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
-    improve_instructions = kwargs["improve_instructions"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
-    openai.api_key = kwargs["api_keys"]["openai"]
+    openai_key = kwargs["api_keys"]["openai"]
+    openai.api_key = openai_key
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
 
     engine = TOOL_TO_ENGINE[tool]
-    additional_information = (
-        fetch_additional_information(
+    additional_information = fetch_additional_information(
             prompt=prompt,
             engine=engine,
             temperature=temperature,
@@ -352,17 +351,9 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             google_api_key=kwargs["api_keys"]["google_api_key"],
             google_engine=kwargs["api_keys"]["google_engine_id"],
         )
-        if tool == "prediction-online-sme"
-        else ""
-    )
 
-    instructions = (
-        prompt_engineer(PREDICTION_PROMPT_INSTRUCTIONS, PREDICTION_PROMPT_FORMAT)
-        if improve_instructions
-        else PREDICTION_PROMPT_INSTRUCTIONS
-    )
+    instructions = prompt_engineer(openai_key, PREDICTION_PROMPT_INSTRUCTIONS, PREDICTION_PROMPT_FORMAT)
     instructions += PREDICTION_PROMPT_FORMAT
-
     prediction_prompt = instructions.format(
         user_prompt=prompt, additional_information=additional_information
     )
@@ -386,18 +377,3 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         stop=None,
     )
     return response.choices[0].message.content, None
-
-
-if __name__ == "__main__":
-    os.environ['OPENAI_API_KEY'] = "your_openai_api_key"
-    api_keys = {"openai": "your_openai_api_key"}
-
-    func_args = {
-        "api_keys": api_keys,
-        "tool": "deepmind-optimization",
-        "prompt": "Will AI take over the world in the next year?",
-        "improve_instructions": True,
-    }
-
-    response = run(**func_args)
-    print(response)
