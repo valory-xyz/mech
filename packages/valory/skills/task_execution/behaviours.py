@@ -58,7 +58,7 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 DONE_TASKS_LOCK = "lock"
-
+GNOSIS_CHAIN = "gnosis"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -205,7 +205,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             contract_address=self.params.agent_mech_contract_address,
             contract_id=str(AgentMechContract.contract_id),
             callable="get_undelivered_reqs",
-            kwargs=ContractApiMessage.Kwargs(dict(from_block=self.params.from_block)),
+            kwargs=ContractApiMessage.Kwargs(
+                dict(from_block=self.params.from_block, chain_id=GNOSIS_CHAIN)
+            ),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
@@ -259,8 +261,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._done_task = {"request_id": req_id}
         if task_result is not None:
             # task succeeded
-            deliver_msg, transaction = task_result
-            response = {**response, "result": deliver_msg}
+            deliver_msg, prompt, transaction = task_result
+            response = {**response, "result": deliver_msg, "prompt": prompt}
             self._done_task["transaction"] = transaction
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
