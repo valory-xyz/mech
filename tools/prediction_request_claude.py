@@ -225,7 +225,7 @@ def fetch_additional_information(
     return "\n".join(["- " + text for text in texts])
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
@@ -256,4 +256,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         max_tokens_to_sample=300,
         prompt=prediction_prompt,
     )
-    return completion.completion, None
+    return completion.completion, prediction_prompt, None
