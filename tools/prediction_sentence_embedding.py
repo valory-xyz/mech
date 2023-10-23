@@ -861,7 +861,7 @@ def fetch_additional_information(
 
     # Fetch queries from the OpenAI engine
     response = openai.ChatCompletion.create(
-        model=engine,
+        model="gpt-3.5-turbo",
         messages=messages,
         temperature=temperature, # Override the default temperature parameter set for the engine
         max_tokens=max_compl_tokens, # Override the default max_compl_tokens parameter set for the engine
