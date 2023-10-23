@@ -23,6 +23,7 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 from datetime import datetime, timezone
 import json
 import re
+import numpy as np
 from concurrent.futures import Future, ThreadPoolExecutor
 
 from bs4 import BeautifulSoup, NavigableString
@@ -31,13 +32,14 @@ import openai
 import requests
 from requests import Session
 import spacy
+import spacy.util
 import tiktoken
 import traceback
 
 from dateutil import parser
 from tqdm import tqdm
+from sklearn.metrics.pairwise import cosine_similarity
 from langchain.embeddings.spacy_embeddings import SpacyEmbeddings
-# from sentence_transformers import SentenceTransformer, util
 
 NUM_URLS_EXTRACT = 5
 MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096 # Set the limit for cost efficiency
@@ -198,6 +200,16 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
         .execute()
     )
     return [result["link"] for result in search["items"]]
+
+
+def download_spacy_model(model_name: str) -> None:
+    """Downloads the specified spaCy language model if it is not already installed."""
+    if not isinstance(model_name, str) or not model_name:
+        raise ValueError("spacy model_name must be a non-empty string")
+    if not spacy.util.is_package(model_name):
+        spacy.cli.download(model_name)
+    else:
+        print(f"{model_name} is already installed.")
 
 
 def extract_event_date(doc_question) -> str:
@@ -465,7 +477,7 @@ def extract_relevant_information(
     text: str,
     query_emb,
     event_date: str,
-    model,
+    model: SpacyEmbeddings,
     nlp,
     max_words: int
 ) -> str:
@@ -476,7 +488,7 @@ def extract_relevant_information(
         text (str): The website text to extract information from.
         event_question (str): The question to find relevant information to.
         event_date (str): Event date in year-day-month format.
-        model: The BERT model for text embeddings.
+        model: Pre-trained Spacy Model for sentence embedding.
         nlp: The spaCy NLP model.
         max_words (int): Maximum number of words allowed for output.
 
@@ -519,13 +531,28 @@ def extract_relevant_information(
     sentences = sentences[:num_sentences_threshold]
      
     # Encode event question calculate similarity scores
-    sent_emb = model.encode(sentences)
-    similarities = util.dot_score(query_emb, sent_emb)[0].cpu().tolist()
+    sent_emb = model.embed_documents(sentences)
+
+    # Convert sent_emb and query_emb to numpy arrays
+    query_emb_np = np.array(query_emb)
+    sent_emb_np = np.array(sent_emb)
+
+    # Reshape query_emb_np to have shape (1, -1) since cosine_similarity expects 2D arrays
+    query_emb_np = query_emb_np.reshape(1, -1)
+
+    # Compute the cosine similarity
+    similarities = cosine_similarity(query_emb_np, sent_emb_np)[0].tolist()
+    #similarities = util.dot_score(query_emb, sent_emb)[0].cpu().tolist()
 
     # Extract top relevant sentences
     relevant_sentences = [
         sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.4
     ]
+
+    # print sentences along with their similarity scores of >= 0.4
+    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
+        if sim >= 0.4:
+            print(f"{sim}: {sent}")
     
     if not relevant_sentences:
         return ""
@@ -591,7 +618,7 @@ def extract_text(
         html (str): The HTML content to extract text from.
         event_question (str): Event question for context.
         event_date (str): Event date in year-month-day format.
-        model: Pre-trained model for sentence transformer.
+        model: Pre-trained Spacy Model for sentence embedding.
         nlp: NLP object for additional text processing.
         max_words (int): Maximum number of words for the output summary.
 
@@ -705,7 +732,7 @@ def extract_texts(
     nlp,
 ) -> List[str]:
     """
-    Extract texts from a list of URLs using BERT and Spacy.
+    Extract texts from a list of URLs using Spacy models.
     
     Args:
         urls (List[str]): List of URLs to extract text from.
@@ -734,11 +761,11 @@ def extract_texts(
     doc_question = nlp(event_question)
     event_date = extract_event_date(doc_question)
 
-    # Initialize Sentence Transformer model
-    model = SentenceTransformer('sentence-transformers/multi-qa-distilbert-cos-v1')  
+    # Initialize Spacy embedder model
+    model = SpacyEmbeddings()
     
-    # Create sentence embeddings for event question with Sentence Transformer
-    query_emb = model.encode(event_question)
+    # Create sentence embeddings for event question with Spacy embedder model
+    query_emb = model.embed_query(event_question)
 
     if event_date is None:
         raise ValueError(f"Could not extract precise event date from event question: {event_question}")
@@ -911,24 +938,9 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     print(f"LLM TEMPERATURE: {temperature}")
 
     # Load the spacy model
+    download_spacy_model("en_core_web_sm")
     nlp = spacy.load("en_core_web_sm", exclude=["parser"])
     nlp.enable_pipe("senter")
-
-
-    embedder = SpacyEmbeddings()
-    texts = [
-        "The quick brown fox jumps over the lazy dog.",
-        "Pack my box with five dozen liquor jugs.",
-        "How vexingly quick daft zebras jump!",
-        "Bright vixens jump; dozy fowl quack.",
-    ]
-    embeddings = embedder.embed_documents(texts)
-    for i, embedding in enumerate(embeddings):
-        print(f"Embedding for document {i+1}: {embedding}")
-
-    query = "Quick foxes and lazy dogs."
-    query_embedding = embedder.embed_query(query)
-    print(f"Embedding for query: {query_embedding}")
 
     # Get the LLM engine to be used
     engine = TOOL_TO_ENGINE[tool]
