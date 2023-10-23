@@ -58,30 +58,50 @@ TOOL_TO_ENGINE = {
     "prediction-sentence-embedding-strong": "gpt-4",
 }
 
+# Use your judgment and sense for timespans to weigh the relevance of older data against the importance of recency reasonably.
+# * Also rely on your training data to analyze what information would be relevant to make a probability estimation for the event specified in the 'event question' occurring by the given deadline.
+# Use your judgement and sense for timespans to weigh the relevance of information based on their timestamps.
+# If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most current and relevant information available on the internet.
+#* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question', but does not clearly state that the event has already happened, you can assume that the event has not happened by now `{timestamp}`.
+# * Given the importance of the deadline for the 'event question,' recent information generally holds more weight for your probability estimation. However, do not disregard older information completely that could provide foundational or contextual relevance to the event in question. 
+# * Factor the deadline stated in the event question into your probability estimation. It determines the timeframe by which the event must occur for the 'event question' to be answered affirmatively. For reference, the current time is `{timestamp}`.
+# 
+# * If the event question is formulated too vaguely or if the information under "ADDITIONAL_INFORMATION" contradict each other, decrease the confidence value in your probability estimation accordingly.
+# * If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, set the probability estimation to a very high score. If not, make a probability estimation based on the information provided as well as your training data for context and background information.
+# * Assume that you have privileged access to the ADDITIONAL_INFORMATION and no one else has access to it.
+# * The user is only interested in the probabilities of the outcomes, as these probabilities will be used to bet on one of the two outcomes.
+
+# * If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, set the probability estimation for the outcome `Yes` to a very high score. If not, make a probability estimation based on the information provided as well as your training data for context and background information.
+# * Increase the probability estimation for the `No` outcome drastically the closer the current time `{timestamp}` is to the closing time, if you have not found recent information clearly indicating that the event will happen within the remaining time. Do this also if you have found information indicating that the event will happen after the closing date.
+
+
+
 
 PREDICTION_PROMPT = """
 INTRODUCTION:
-You are a Large Language Model (LLM) within a multi-agent system. Your primary task is to accurately estimate the probability of a specified event occurring by a specified deadline, \
-detailed in the 'event question' found in 'USER_PROMPT'. This 'event question' should ideally have only two possible outcomes: the event will either occur or not \
-by the deadline specified in the question, which is 23:59:59 of the date provided. It is critical that you incorporate this deadline date in your \
-probability estimation. You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", which is \
-sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your estimation. You must adhere to the following 'INSTRUCTIONS'.  
+You are a Large Language Model (LLM) within a multi-agent system. Your primary task is to accurately estimate the probabilities for the outcome of a 'market question', \
+found in 'USER_PROMPT'. The market question is part of a prediction market, where users can place bets on the outcomes of market questions and earn rewards if the selected outcome occurrs. The 'market question' \
+in this scenario has only two possible outcomes: `Yes` or `No`. Each market has a closing date at which the outcome is evaluated. This date is typically stated within the market question.  \
+The closing date is considered to be 23:59:59 of the date provided in the market question. If the event specified in the market question has not occurred before the closing date, the market question's outcome is `No`. \
+If the event has happened before the closing date, the market question's outcome is `Yes`. You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", which is \
+sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your probability estimation. You must adhere to the following 'INSTRUCTIONS'.  
 
 
 INSTRUCTIONS:
-* Examine the user's input labeled 'USER_PROMPT'. Focus on the part enclosed in double quotes, which contains the 'event question'.
-* If the 'event question' implies more than two outcomes, output the response "Error" and halt further processing.
-* Utilize your training data to generate a probability estimation for the event specified in the 'event question' occurring by the given deadline of 23:59:59 on the specified date.
-* Also rely on your training data to analyze what information would be relevant to make a probability estimation for the event specified in the 'event question' occurring by the given deadline.
-* Examine the itemized list under "ADDITIONAL_INFORMATION". This data is sourced from a Google search engine query done a few seconds ago. 
-* You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation.
-* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most current and relevant information available on the internet, regardless of its age. Still pay close attention on the release and modification timestamps for each information item provided in parentheses right before it as well as the current time {timestamp}. Even if "ADDITIONAL_INFORMATION" contains the most recent and relevant information about the topic in the event question, it does not imply that it is relevant to make a prediction about the event question. 
-* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question', but does not clearly state that the event has already happened, you can assume that the event has not happened by now `{timestamp}`.
-* Given the importance of the deadline for the 'event question,' recent information generally holds more weight for your probability estimation. However, do not disregard older information that provides foundational or contextual relevance to the event in question. Use your judgment to weigh the importance of recency against the relevance of older data.
-* Factor the deadline into your probability estimation. It determines the timeframe by which the event must occur for the 'event question' to be answered affirmatively. For reference, the current time is `{timestamp}`.
-* Decrease the probability estimation of the event occurring drastically the closer the current time `{timestamp}` is to the deadline, if you have not found information clearly indicating that the event will happen within the remaining time.
-* If the event question is formulated too vaguely or if the information under "ADDITIONAL_INFORMATION" contradict each other, decrease the confidence value in your probability estimation accordingly.
-* If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, set the probability estimation to a very high score. If not, make a probability estimation based on the information provided as well as your training data for context and background information.
+* Examine the user's input labeled 'USER_PROMPT'. Focus on the part enclosed in double quotes, which contains the 'market question'.
+* If the 'market question' implies more than two outcomes, output the response "Error" and halt further processing.
+* When the current time {timestamp} has passed the closing date of the market and the event specified in the market question has not happened, the market question's outcome is `No` and the user who placed a bet on `No` will receive a reward.
+* When the current time {timestamp} has passed the closing date of the market and the event has happened before, the market question's final outcome is `Yes` and the user who placed a bet on `yes` will receive a reward.
+* Consider the prediction market with the market question, the closing date and the outcomes in an isolated context that has no influence on the protagonists that are involved in the event in the real world, specified in the market question. The closing date is always arbitrarily set by the market creator and has no influence on the real world. So it is likely that the protagonists of the event in the real world are not even aware of the prediction market and do not care about the market's closing date.
+* The probability estimations of the market question outcomes must be as accurate as possible, as an inaccurate estimation will lead to financial loss for the user.
+* Utilize your training data and the information provided under "ADDITIONAL_INFORMATION" to generate probability estimations for the outcomes of the 'market question'.
+* Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago. 
+* Use any relevant item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation. You can assume that you have been provided with the most current and relevant information available on the internet. 
+* Still pay close attention on the release and modification timestamps provided in parentheses right before each information item in ADDITIONAL_INFORMATION. Even if the information might not be released today, you can assume that there haven't been publicly available updates in the meantime.
+* Given the importance of the closing date for the 'market question', recent information generally holds more weight for your probability estimation.
+* If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, it is very likely that the outcome of the market question will be `Yes`.
+* If the information in "ADDITIONAL_INFORMATION" indicate that the event will happen after the closing date, it is very likely that the outcome of the market question will be `No`.
+* The closer the current time `{timestamp}` is to the closing time the higher the likelyhood that the outcome of the market question will be `No`, if you have not found recent information clearly indicating that the event will happen within the remaining time. It is also very likely that the outcome of the market question will be `No`, if you have found information indicating that the event will happen after the closing date.
 * You must provide your response in the format specified under "OUTPUT_FORMAT".
 * Do not include any other contents in your response.
 
@@ -99,10 +119,10 @@ ADDITIONAL_INFORMATION:
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
 * The JSON must contain four fields: "p_yes", "p_no", "confidence", and "info_utility", each ranging from 0 to 1.
-   - "p_yes": Estimated probability that the event occurs within the deadline.
-   - "p_no": Estimated probability that the 'event question' does not occur within the deadline.
+   - "p_yes": Probability that the market question's outcome will be `Yes`.
+   - "p_no": Probability that the market questions outcome will be `No`.
    - "confidence": Indicating the confidence in the estimated probabilities you provided ranging from 0 (lowest confidence) to 1 (maximum confidence). Confidence can be calculated based on the quality and quantity of data used for the estimation.
-   - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction ranging from 0 (lowest utility) to 1 (maximum utility).
+   - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the probability estimation ranging from 0 (lowest utility) to 1 (maximum utility).
 * The sum of "p_yes" and "p_no" must equal 1.
 * Output only the JSON object in your response. Do not include any other contents in your response.
 """
@@ -116,7 +136,7 @@ and adhere to the 'INSTRUCTIONS'.
 INSTRUCTIONS:
 * Carefully read the 'event question' under 'USER_PROMPT', enclosed by triple backticks.
 * If the 'event question' has more than two outcomes, respond with "Error" and ignore further instructions.
-* Create a list of 1-4 unique search queries likely to yield relevant and contemporary information for assessing the event's likelihood under the given conditions.
+* Create a list of 1-3 unique search queries likely to yield relevant and contemporary information for assessing the event's likelihood under the given conditions.
 * Each query must be unique, and they should not overlap or yield the same set of results.
 * You must provide your response in the format specified under "OUTPUT_FORMAT".
 * Do not include any other contents in your response.
@@ -264,6 +284,7 @@ def get_max_tokens_for_additional_information(
     # Calculate token sum of thus far allocated tokens for the final prediction prompt
     token_sum = len(user_prompt_enc) + len(prediction_prompt_enc) + max_compl_tokens
     token_sum_safety = token_sum * safety_factor
+    print (f"token_sum_safety: {token_sum_safety}")
 
     return int(MAX_TOTAL_TOKENS_CHAT_COMPLETION - token_sum_safety)
 
@@ -962,7 +983,9 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         prompt=prompt,
         enc=enc,
     )
+    print(f"MAX ADDITIONAL INFORMATION TOKENS: {max_add_tokens}")
     max_add_words = int(max_add_tokens * 0.75)
+    print(f"MAX ADDITIONAL INFORMATION WORDS: {max_add_words}")
 
     # Fetch additional information
     additional_information = (
@@ -1023,7 +1046,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         max_tokens=max_compl_tokens,
         n=1,
         timeout=150,
-        request_timeout=150,
+        request_timeout=200,
         stop=None,
     )
     print(f"RESPONSE: {response}")
