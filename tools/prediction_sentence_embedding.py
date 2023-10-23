@@ -97,11 +97,12 @@ INSTRUCTIONS:
 * Utilize your training data and the information provided under "ADDITIONAL_INFORMATION" to generate probability estimations for the outcomes of the 'market question'.
 * Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago. 
 * Use any relevant item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation. You can assume that you have been provided with the most current and relevant information available on the internet. 
-* Still pay close attention on the release and modification timestamps provided in parentheses right before each information item in ADDITIONAL_INFORMATION. Even if the information might not be released today, you can assume that there haven't been publicly available updates in the meantime.
-* Given the importance of the closing date for the 'market question', recent information generally holds more weight for your probability estimation.
+* Still pay close attention on the release and modification timestamps provided in parentheses right before each information item in ADDITIONAL_INFORMATION. Even if not all information might not be released today, you can assume that there haven't been publicly available updates in the meantime.
+* More recent information indicated by the timestamps provided in parentheses right before each information item overrides older information within ADDITIONAL_INFORMATION and holds more weight for your probability estimation.
 * If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, it is very likely that the outcome of the market question will be `Yes`.
 * If the information in "ADDITIONAL_INFORMATION" indicate that the event will happen after the closing date, it is very likely that the outcome of the market question will be `No`.
-* The closer the current time `{timestamp}` is to the closing time the higher the likelyhood that the outcome of the market question will be `No`, if you have not found recent information clearly indicating that the event will happen within the remaining time. It is also very likely that the outcome of the market question will be `No`, if you have found information indicating that the event will happen after the closing date.
+* The closer the current time `{timestamp}` is to the closing time the higher the likelyhood that the outcome of the market question will be `No`, if recent information do not clearly indicate that the event will occur before the closing date.
+* If there exist recent information indicating that the event will happen after the closing date, it is very likely that the outcome of the market question will be `No`.
 * You must provide your response in the format specified under "OUTPUT_FORMAT".
 * Do not include any other contents in your response.
 
@@ -251,7 +252,7 @@ def extract_event_date(doc_question) -> str:
             event_date_ymd = standardize_date(ent.text)
 
     # If event date not formatted as YMD or not found, return None
-    if not datetime.strptime(event_date_ymd, '%Y-%m-%d') or event_date_ymd is None:
+    if event_date_ymd is None or not datetime.strptime(event_date_ymd, '%Y-%m-%d'):
         return None
     else:
         return event_date_ymd
@@ -539,11 +540,12 @@ def extract_relevant_information(
     sentences.extend(event_date_sentences)
 
     # Extract contextual sentences around event date occurences within too short sentences
-    event_date_sentences.extend(
-        get_context_around_isolated_event_date(
-            doc_text, event_date, len_sentence_threshold, max_context=50
+    if event_date is not None:
+        event_date_sentences.extend(
+            get_context_around_isolated_event_date(
+                doc_text, event_date, len_sentence_threshold, max_context=50
+            )
         )
-    )
 
     if not sentences:
         return ""
@@ -577,7 +579,7 @@ def extract_relevant_information(
     
     if not relevant_sentences:
         return ""
-    
+
     # Truncate text to fit max_words limit
     output = ' '.join(relevant_sentences[:20]) 
     output_words = output.split(' ')
@@ -789,7 +791,7 @@ def extract_texts(
     query_emb = model.embed_query(event_question)
 
     if event_date is None:
-        raise ValueError(f"Could not extract precise event date from event question: {event_question}")
+        print(f"Could not extract precise event date from event question: {event_question}")
     
     # Process URLs in batches
     for batch in process_in_batches(urls=urls):
@@ -1000,7 +1002,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             google_engine=kwargs["api_keys"]["google_engine_id"],
         )
     )
-
+    
     # Truncate additional information to stay within the chat completion token limit of 4096
     additional_information = truncate_additional_information(
         additional_information, max_add_tokens, enc=enc,
@@ -1009,19 +1011,11 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     # Get the current utc timestamp
     current_time_utc = datetime.now(timezone.utc)
     formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
- 
-    # Extract event date and format it to ISO 8601 with UTC timezone and 23:59:59 time
-    doc_question = nlp(event_question)
-    raw_event_date = extract_event_date(doc_question)
-    parsed_event_date = datetime.strptime(raw_event_date, "%Y-%m-%d")
-    final_event_date = parsed_event_date.replace(hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc)
-    formatted_event_date = final_event_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
     
     # Generate the prediction prompt
     prediction_prompt = PREDICTION_PROMPT.format(
         event_question=event_question,
         user_prompt=prompt,
-        timepoint=formatted_event_date,
         additional_information=additional_information,
         timestamp=formatted_time_utc,
     )
