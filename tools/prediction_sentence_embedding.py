@@ -549,11 +549,6 @@ def extract_relevant_information(
     relevant_sentences = [
         sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.4
     ]
-
-    # print similarities along with sentences for similarity scores > 0.4
-    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-        if sim > 0.4:
-            print(f"{sim}: {sent}")
     
     if not relevant_sentences:
         return ""
