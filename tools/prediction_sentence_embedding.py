@@ -552,7 +552,7 @@ def extract_relevant_information(
         return ""
 
     # Truncate text to fit max_words limit
-    output = ' '.join(relevant_sentences[:20]) 
+    output = ' '.join(relevant_sentences)
     output_words = output.split(' ')
     if len(output_words) > max_words:
         output = ' '.join(output_words[:max_words])
@@ -852,7 +852,7 @@ def fetch_additional_information(
 
     # Fetch queries from the OpenAI engine
     response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
+        model=engine,
         messages=messages,
         temperature=temperature, # Override the default temperature parameter set for the engine
         max_tokens=max_compl_tokens, # Override the default max_compl_tokens parameter set for the engine
@@ -942,8 +942,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     additional_information = (
         fetch_additional_information(
             event_question=event_question,
-            engine=engine,
-            temperature=temperature,
+            engine="gpt-3.5-turbo",
+            temperature=1.0,
             max_compl_tokens=max_compl_tokens,
             nlp=nlp,
             max_add_words=max_add_words,
@@ -988,7 +988,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         max_tokens=max_compl_tokens,
         n=1,
         timeout=150,
-        request_timeout=200,
+        request_timeout=150,
         stop=None,
     )
 
