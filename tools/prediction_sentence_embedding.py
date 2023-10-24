@@ -50,12 +50,12 @@ DEFAULT_OPENAI_SETTINGS = {
 }
 
 ALLOWED_TOOLS = [
-    "prediction-sentence-embedding",
-    "prediction-sentence-embedding-strong",
+    "prediction-sentence-embedding-conservative",
+    "prediction-sentence-embedding-bold",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-sentence-embedding": "gpt-3.5-turbo",
-    "prediction-sentence-embedding-strong": "gpt-4",
+    "prediction-sentence-embedding-conservative": "gpt-3.5-turbo",
+    "prediction-sentence-embedding-bold": "gpt-4",
 }
 
 # Use your judgment and sense for timespans to weigh the relevance of older data against the importance of recency reasonably.
