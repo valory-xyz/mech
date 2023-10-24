@@ -96,9 +96,10 @@ INSTRUCTIONS:
 * The probability estimations of the market question outcomes must be as accurate as possible, as an inaccurate estimation will lead to financial loss for the user.
 * Utilize your training data and the information provided under "ADDITIONAL_INFORMATION" to generate probability estimations for the outcomes of the 'market question'.
 * Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago. 
-* Use any relevant item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation. You can assume that you have been provided with the most current and relevant information available on the internet. 
-* Still pay close attention on the release and modification timestamps provided in parentheses right before each information item in ADDITIONAL_INFORMATION. Even if not all information might not be released today, you can assume that there haven't been publicly available updates in the meantime.
+* Use any relevant item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation. You can assume that you have been provided with the most current and relevant information available on the internet. Still pay close attention on the release and modification timestamps provided in parentheses right before each information item. Some information might be outdated and not relevant anymore.
 * More recent information indicated by the timestamps provided in parentheses right before each information item overrides older information within ADDITIONAL_INFORMATION and holds more weight for your probability estimation.
+* If there exist contradicting information, evaluate the release and modification dates of those information and prioritize the information that is more recent and adjust your confidence in the probability estimation accordingly.
+* Even if not all information might not be released today, you can assume that there haven't been publicly available updates in the meantime except for those inside ADDITIONAL_INFORMATION.
 * If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, it is very likely that the outcome of the market question will be `Yes`.
 * If the information in "ADDITIONAL_INFORMATION" indicate that the event will happen after the closing date, it is very likely that the outcome of the market question will be `No`.
 * The closer the current time `{timestamp}` is to the closing time the higher the likelyhood that the outcome of the market question will be `No`, if recent information do not clearly indicate that the event will occur before the closing date.
@@ -252,13 +253,13 @@ def extract_event_date(doc_question) -> str:
             event_date_ymd = standardize_date(ent.text)
 
     # If event date not formatted as YMD or not found, return None
-    if event_date_ymd is None or not datetime.strptime(event_date_ymd, '%Y-%m-%d'):
+    try:
+        datetime.strptime(event_date_ymd, '%Y-%m-%d')
+    except (ValueError, TypeError):
         return None
     else:
         return event_date_ymd
     
-
-
 def get_max_tokens_for_additional_information(
     max_compl_tokens: int,
     prompt: str,
@@ -565,17 +566,11 @@ def extract_relevant_information(
 
     # Compute the cosine similarity
     similarities = cosine_similarity(query_emb_np, sent_emb_np)[0].tolist()
-    #similarities = util.dot_score(query_emb, sent_emb)[0].cpu().tolist()
 
     # Extract top relevant sentences
     relevant_sentences = [
         sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.4
     ]
-
-    # print sentences along with their similarity scores of >= 0.4
-    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
-        if sim >= 0.4:
-            print(f"{sim}: {sent}")
     
     if not relevant_sentences:
         return ""
