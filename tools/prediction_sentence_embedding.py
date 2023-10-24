@@ -549,6 +549,11 @@ def extract_relevant_information(
     relevant_sentences = [
         sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.4
     ]
+
+    # print similarities along with sentences for similarity scores > 0.4
+    for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True):
+        if sim > 0.4:
+            print(f"{sim}: {sent}")
     
     if not relevant_sentences:
         return ""
@@ -919,8 +924,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
 
     # Load the spacy model
     download_spacy_model("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm", exclude=["parser"])
-    nlp.enable_pipe("senter")
+    nlp = spacy.load("en_core_web_sm")
 
     # Get the LLM engine to be used
     engine = TOOL_TO_ENGINE[tool]
