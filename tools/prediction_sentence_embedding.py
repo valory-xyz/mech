@@ -34,10 +34,8 @@ from requests import Session
 import spacy
 import spacy.util
 import tiktoken
-import traceback
 
 from dateutil import parser
-from tqdm import tqdm
 from sklearn.metrics.pairwise import cosine_similarity
 from langchain.embeddings.spacy_embeddings import SpacyEmbeddings
 
