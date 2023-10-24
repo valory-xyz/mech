@@ -58,24 +58,6 @@ TOOL_TO_ENGINE = {
     "prediction-sentence-embedding-bold": "gpt-4",
 }
 
-# Use your judgment and sense for timespans to weigh the relevance of older data against the importance of recency reasonably.
-# * Also rely on your training data to analyze what information would be relevant to make a probability estimation for the event specified in the 'event question' occurring by the given deadline.
-# Use your judgement and sense for timespans to weigh the relevance of information based on their timestamps.
-# If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most current and relevant information available on the internet.
-#* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question', but does not clearly state that the event has already happened, you can assume that the event has not happened by now `{timestamp}`.
-# * Given the importance of the deadline for the 'event question,' recent information generally holds more weight for your probability estimation. However, do not disregard older information completely that could provide foundational or contextual relevance to the event in question. 
-# * Factor the deadline stated in the event question into your probability estimation. It determines the timeframe by which the event must occur for the 'event question' to be answered affirmatively. For reference, the current time is `{timestamp}`.
-# 
-# * If the event question is formulated too vaguely or if the information under "ADDITIONAL_INFORMATION" contradict each other, decrease the confidence value in your probability estimation accordingly.
-# * If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, set the probability estimation to a very high score. If not, make a probability estimation based on the information provided as well as your training data for context and background information.
-# * Assume that you have privileged access to the ADDITIONAL_INFORMATION and no one else has access to it.
-# * The user is only interested in the probabilities of the outcomes, as these probabilities will be used to bet on one of the two outcomes.
-
-# * If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, set the probability estimation for the outcome `Yes` to a very high score. If not, make a probability estimation based on the information provided as well as your training data for context and background information.
-# * Increase the probability estimation for the `No` outcome drastically the closer the current time `{timestamp}` is to the closing time, if you have not found recent information clearly indicating that the event will happen within the remaining time. Do this also if you have found information indicating that the event will happen after the closing date.
-
-
-
 
 PREDICTION_PROMPT = """
 INTRODUCTION:
@@ -259,7 +241,8 @@ def extract_event_date(doc_question) -> str:
         return None
     else:
         return event_date_ymd
-    
+
+
 def get_max_tokens_for_additional_information(
     max_compl_tokens: int,
     prompt: str,
@@ -286,7 +269,6 @@ def get_max_tokens_for_additional_information(
     # Calculate token sum of thus far allocated tokens for the final prediction prompt
     token_sum = len(user_prompt_enc) + len(prediction_prompt_enc) + max_compl_tokens
     token_sum_safety = token_sum * safety_factor
-    print (f"token_sum_safety: {token_sum_safety}")
 
     return int(MAX_TOTAL_TOKENS_CHAT_COMPLETION - token_sum_safety)
 
@@ -359,10 +341,6 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
                 count += 1
                 if count >= num:
                     break
-
-    print("get_urls_from_queries result:")
-    for url in results:
-        print(url)
 
     return list(results)
 
@@ -790,8 +768,7 @@ def extract_texts(
     
     # Process URLs in batches
     for batch in process_in_batches(urls=urls):
-        for future, url in tqdm(batch, desc="Processing URLs"):
-            print(f"Processing {url}")
+        for future, url in batch:
             try:
                 result = future.result()
                 if result.status_code != 200:
@@ -812,7 +789,6 @@ def extract_texts(
                 
                 # Append the extracted text if available and increment the count
                 if extracted_text:
-                    # extracted_texts.append(f"{url}\n{extracted_text}")
                     extracted_texts.append(extracted_text)
                 count += 1
 
@@ -826,7 +802,6 @@ def extract_texts(
             
             except Exception as e:
                 print(f"An error occurred: {e}")
-                traceback.print_exc()  # Print stack trace for debugging
         
         # Break if the maximum number of extractions is reached
         if stop:
@@ -890,13 +865,7 @@ def fetch_additional_information(
     )
     
     # Parse the response content
-    print(f"RESPONSE: {response}")
     json_data = json.loads(response.choices[0].message.content)
-    # Print queries each on a new line
-    print("QUERIES:\n")
-    for query in json_data["queries"]:
-        print(f"query: {query}\n")
-
 
     # Get URLs from queries
     urls = get_urls_from_queries(
@@ -947,13 +916,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"TOOL {tool} is not supported.")
-    
-
-    # Print the settings
-    print(f"MECH TOOL: {tool}")
-    print(f"PROMPT: {prompt}")
-    print(f"MAX OPENAI RETURN TOKENS: {max_compl_tokens}")
-    print(f"LLM TEMPERATURE: {temperature}")
 
     # Load the spacy model
     download_spacy_model("en_core_web_sm")
@@ -962,14 +924,11 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
 
     # Get the LLM engine to be used
     engine = TOOL_TO_ENGINE[tool]
-    print(f"ENGINE: {engine}")
 
     # Extract the event question from the prompt
     event_question = re.search(r"\"(.+?)\"", prompt).group(1)
     if not event_question:
         raise ValueError("No event question found in prompt.")
-    print(f"EVENT_QUESTION: {event_question}")
-    print()
 
     # Get the tiktoken base encoding
     enc = tiktoken.get_encoding("cl100k_base") 
@@ -980,9 +939,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         prompt=prompt,
         enc=enc,
     )
-    print(f"MAX ADDITIONAL INFORMATION TOKENS: {max_add_tokens}")
     max_add_words = int(max_add_tokens * 0.75)
-    print(f"MAX ADDITIONAL INFORMATION WORDS: {max_add_words}")
 
     # Fetch additional information
     additional_information = (
@@ -1014,7 +971,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         additional_information=additional_information,
         timestamp=formatted_time_utc,
     )
-    print(f"\nPREDICTION PROMPT: {prediction_prompt}\n")
 
     # Perform moderation
     moderation_result = openai.Moderation.create(prediction_prompt)
@@ -1038,6 +994,5 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         request_timeout=200,
         stop=None,
     )
-    print(f"RESPONSE: {response}")
 
     return response.choices[0].message.content, None
