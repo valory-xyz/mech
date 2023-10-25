@@ -23,7 +23,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 from datetime import datetime, timezone
 import json
 import re
-from tqdm import tqdm
 import numpy as np
 from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import groupby
@@ -396,6 +395,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
     print("get_urls_from_queries result:")
     for url in results:
         print(url)
+
     return list(results)
 
 
@@ -528,6 +528,30 @@ def get_context_around_isolated_event_date(
     return contexts_list
 
 
+
+def concatenate_short_sentences(sentences, len_sentence_threshold):
+    modified_sentences = []
+    i = 0
+    while i < len(sentences):
+        sentence = sentences[i]
+        word_count = len(sentence.split())
+        
+        # Check if the sentence is shorter than the threshold
+        while word_count < len_sentence_threshold:
+            i += 1
+            # Break the loop if we reach the end of the list
+            if i >= len(sentences):
+                break
+            next_sentence = sentences[i]
+            sentence += " " + next_sentence
+            word_count += len(next_sentence.split())
+        
+        modified_sentences.append(sentence)
+        i += 1
+
+    return modified_sentences
+
+
 def extract_similarity_scores(
     text: str,
     query_emb,
@@ -552,7 +576,7 @@ def extract_similarity_scores(
     """        
     
     # Constants for sentence length and number thresholds
-    len_sentence_threshold = 5
+    len_sentence_threshold = 10
     num_sentences_threshold = 1000
     sentences = []     
     event_date_sentences = []
@@ -570,8 +594,7 @@ def extract_similarity_scores(
         if len(sentence_text.split()) >= len_sentence_threshold and sentence_text not in seen:
             sentences.append(sentence_text)
             seen.add(sentence_text)       
-    sentences.extend(event_date_sentences)
-
+    
     ## Temporarily deactivated: News sites with a lot of date occurrences lead to false positives
     ## The embedding model is not advanced enough
     # Extract contextual sentences around event date occurences within too short sentences
@@ -581,10 +604,14 @@ def extract_similarity_scores(
     #             doc_text, event_date, len_sentence_threshold, max_context=50
     #         )
     #     )
+    # sentences.extend(event_date_sentences)
 
     if not sentences:
         return ""
     
+    # Concatenate short sentences
+    sentences = concatenate_short_sentences(sentences, len_sentence_threshold)
+
     # Limit the number of sentences for performance optimization
     sentences = sentences[:num_sentences_threshold]
      
@@ -803,8 +830,7 @@ def extract_and_sort_sentences(
     
     # Process URLs in batches
     for batch in process_in_batches(urls=urls):
-        for future, url in tqdm(batch, desc="Processing URLs"):
-            print(f"Processing {url}")
+        for future, url in batch:
             try:
                 result = future.result()
                 if result.status_code != 200:
@@ -833,6 +859,10 @@ def extract_and_sort_sentences(
                 print(f"An error occurred: {e}")
 
     all_sentences.sort(key=lambda x: x[1], reverse=True)  # Assuming the second element is the similarity score
+
+    # print sentences along with their similarity scores and release dates each on a new line
+    for sentence, similarity, date in all_sentences:
+        print(f"{similarity} | {date} | {sentence}\n") if similarity > 0.4 else None
 
     return all_sentences
 
@@ -992,7 +1022,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
 
     # Load the spacy model
     download_spacy_model("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+    download_spacy_model("en_core_web_lg")
+    nlp = spacy.load("en_core_web_lg")
 
     # Get the LLM engine to be used
     engine = TOOL_TO_ENGINE[tool]
@@ -1043,7 +1074,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         additional_information=additional_information,
         timestamp=formatted_time_utc,
     )
-
+        
     # Perform moderation
     moderation_result = openai.Moderation.create(prediction_prompt)
     if moderation_result["results"][0]["flagged"]:
@@ -1068,5 +1099,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         stop=None,
     )
 
-    print(response)
     return response.choices[0].message.content, None
