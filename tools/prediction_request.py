@@ -299,8 +299,7 @@ def calc_sentence_scores(
     sentence_scores = defaultdict(lambda: 0)
     for sentence in sentence_tokens:
         for token in sentence:
-            lower = token.text.lower()
-            sentence_scores[sentence] += word_frequencies[lower]
+            sentence_scores[sentence] += word_frequencies[token.text.lower()]
 
     return sentence_scores
 
