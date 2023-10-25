@@ -37,11 +37,9 @@ DEFAULT_OPENAI_SETTINGS = {
 ALLOWED_TOOLS = [
     "prediction-offline",
     "prediction-online",
+    "prediction-online-summarized-info",
 ]
-TOOL_TO_ENGINE = {
-    "prediction-offline": "gpt-3.5-turbo",
-    "prediction-online": "gpt-3.5-turbo",
-}
+TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
 
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
