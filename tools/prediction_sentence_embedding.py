@@ -392,10 +392,6 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
                 if count >= num:
                     break
 
-    print("get_urls_from_queries result:")
-    for url in results:
-        print(url)
-
     return list(results)
 
 
@@ -860,10 +856,6 @@ def extract_and_sort_sentences(
 
     all_sentences.sort(key=lambda x: x[1], reverse=True)  # Assuming the second element is the similarity score
 
-    # print sentences along with their similarity scores and release dates each on a new line
-    for sentence, similarity, date in all_sentences:
-        print(f"{similarity} | {date} | {sentence}\n") if similarity > 0.4 else None
-
     return all_sentences
 
 
@@ -970,11 +962,6 @@ def fetch_additional_information(
     # Parse the response content
     json_data = json.loads(response.choices[0].message.content)
 
-
-    print("QUERIES:\n")
-    for query in json_data["queries"]:
-        print(f"query: {query}\n")
-
     # Get URLs from queries
     urls = get_urls_from_queries(
         json_data["queries"],
@@ -1022,8 +1009,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
 
     # Load the spacy model
     download_spacy_model("en_core_web_sm")
-    download_spacy_model("en_core_web_lg")
-    nlp = spacy.load("en_core_web_lg")
+    nlp = spacy.load("en_core_web_sm")
 
     # Get the LLM engine to be used
     engine = TOOL_TO_ENGINE[tool]
@@ -1085,7 +1071,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prediction_prompt},
     ]
-    print(prediction_prompt)
 
     # Generate the response
     response = openai.ChatCompletion.create(
