@@ -23,7 +23,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple
 from datetime import datetime, timezone
 import json
 import re
-import numpy as np
 from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import groupby
 from operator import itemgetter
@@ -38,11 +37,9 @@ import spacy.util
 import tiktoken
 
 from dateutil import parser
-from sklearn.metrics.pairwise import cosine_similarity
-from langchain.embeddings.spacy_embeddings import SpacyEmbeddings
 
 NUM_URLS_EXTRACT = 5
-MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096 # Set the limit for cost efficiency
+MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4000 # Set the limit for cost efficiency
 WORDS_PER_TOKEN_FACTOR = 0.75
 DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 500,
@@ -63,8 +60,10 @@ TOOL_TO_ENGINE = {
 # * If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, it is very likely that the outcome of the market question will be `Yes`.
 # * If the information in "ADDITIONAL_INFORMATION" indicate that the event will happen after the closing date, it is very likely that the outcome of the market question will be `No`.
 # * If there exist contradicting information, evaluate the release and modification dates of those information and prioritize the information that is more recent and adjust your confidence in the probability estimation accordingly.
-# 
+# * If recent information indicates a status change in the future, pay close attention to the date of the status change and if it is before or after the closing date of the 'market question' and adjust your probability estimation accordingly, keeping the examples under "EXAMPLES" and their outcomes given the point in time of the status change in mind.
 # * If there exist recent information indicating that the event will happen after the closing date, it is very likely that the outcome of the market question will be `No`.
+# * Note that the sentences within the information items provided under "ADDITIONAL_INFORMATION" are a concatenation of the sentences from web pages that have the highest vector similarity to the 'market question'. Thus, the paragraphs do not represent the original context of the sentences and you should evaluate each sentence individually.
+
 
 PREDICTION_PROMPT = """
 INTRODUCTION:
@@ -552,7 +551,6 @@ def extract_similarity_scores(
     text: str,
     query_emb,
     event_date: str,
-    model: SpacyEmbeddings,
     nlp,
     date: str,
 ) -> List[Tuple[str, float, str]]:
@@ -563,7 +561,6 @@ def extract_similarity_scores(
         text (str): The website text to extract information from.
         event_question (str): The question to find relevant information to.
         event_date (str): Event date in year-day-month format.
-        model: Pre-trained Spacy Model for sentence embedding.
         nlp: The spaCy NLP model.
         date (str): The release and modification dates of the website.
 
@@ -610,19 +607,14 @@ def extract_similarity_scores(
 
     # Limit the number of sentences for performance optimization
     sentences = sentences[:num_sentences_threshold]
-     
-    # Encode event question calculate similarity scores
-    sent_emb = model.embed_documents(sentences)
+    
+    similarities = []
 
-    # Convert sent_emb and query_emb to numpy arrays
-    query_emb_np = np.array(query_emb)
-    sent_emb_np = np.array(sent_emb)
-
-    # Reshape query_emb_np to have shape (1, -1) since cosine_similarity expects 2D arrays
-    query_emb_np = query_emb_np.reshape(1, -1)
-
-    # Compute the cosine similarity
-    similarities = cosine_similarity(query_emb_np, sent_emb_np)[0].tolist()
+    # Encode sentences using spaCy model
+    for i, sentence in enumerate(sentences):
+        doc_sentence = nlp(sentence)
+        similarity_score = query_emb.similarity(doc_sentence)
+        similarities.append(similarity_score)
 
     # Create tuples and store them in a list
     sentence_similarity_date_tuples = [(sentence, similarity, date) for sentence, similarity in zip(sentences, similarities) if similarity > 0.4]
@@ -672,7 +664,6 @@ def extract_sentences(
     html: str,
     query_emb,
     event_date: str,
-    model,
     nlp,
 ) -> List[Tuple[str, float, str]]:
     """
@@ -682,7 +673,6 @@ def extract_sentences(
         html (str): The HTML content to extract text from.
         event_question (str): Event question for context.
         event_date (str): Event date in year-month-day format.
-        model: Pre-trained Spacy Model for sentence embedding.
         nlp: NLP object for additional text processing.
 
     Raises:
@@ -719,7 +709,6 @@ def extract_sentences(
         text=text,
         query_emb=query_emb,
         event_date=event_date,
-        model=model,
         nlp=nlp,
         date=date,
     )
@@ -814,12 +803,9 @@ def extract_and_sort_sentences(
     # Process the event question with spacy
     doc_question = nlp(event_question)
     event_date = extract_event_date(doc_question)
-
-    # Initialize Spacy embedder model
-    model = SpacyEmbeddings()
     
     # Create embedding for event question with Spacy embedder model
-    query_emb = model.embed_query(event_question)
+    query_emb = nlp(event_question)
 
     if event_date is None:
         print(f"Could not extract precise event date from event question: {event_question}")
@@ -837,7 +823,6 @@ def extract_and_sort_sentences(
                     html=result.text,
                     query_emb=query_emb,
                     event_date=event_date,
-                    model=model,
                     nlp=nlp,
                 )
                 
@@ -892,7 +877,7 @@ def join_and_group_sentences(sentences: List[Tuple[str, float, str]], max_words:
     # Group by date and iterate
     for date, group in groupby(filtered_sentences, key=itemgetter(1)):
         sentences_group = [sentence for sentence, _ in group]
-        concatenated_sentences = " ".join(sentences_group)
+        concatenated_sentences = " | ".join(sentences_group)
 
         # Formatting the string as per your requirement
         formatted_string = f"- {date}:{concatenated_sentences}\n\n"
@@ -1008,8 +993,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         raise ValueError(f"TOOL {tool} is not supported.")
 
     # Load the spacy model
-    download_spacy_model("en_core_web_sm")
-    nlp = spacy.load("en_core_web_sm")
+    download_spacy_model("en_core_web_lg")
+    nlp = spacy.load("en_core_web_lg")
 
     # Get the LLM engine to be used
     engine = TOOL_TO_ENGINE[tool]
@@ -1060,7 +1045,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         additional_information=additional_information,
         timestamp=formatted_time_utc,
     )
-        
+    
     # Perform moderation
     moderation_result = openai.Moderation.create(prediction_prompt)
     if moderation_result["results"][0]["flagged"]:
