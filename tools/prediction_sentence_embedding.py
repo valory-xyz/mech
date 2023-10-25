@@ -572,13 +572,15 @@ def extract_similarity_scores(
             seen.add(sentence_text)       
     sentences.extend(event_date_sentences)
 
+    ## Temporarily deactivated: News sites with a lot of date occurrences lead to false positives
+    ## The embedding model is not advanced enough
     # Extract contextual sentences around event date occurences within too short sentences
-    if event_date is not None:
-        event_date_sentences.extend(
-            get_context_around_isolated_event_date(
-                doc_text, event_date, len_sentence_threshold, max_context=50
-            )
-        )
+    # if event_date is not None:
+    #     event_date_sentences.extend(
+    #         get_context_around_isolated_event_date(
+    #             doc_text, event_date, len_sentence_threshold, max_context=50
+    #         )
+    #     )
 
     if not sentences:
         return ""
@@ -633,11 +635,12 @@ def get_date(soup):
             release_date = meta_tag.get("content", "")
             break
     
-    # Fallback to using the first time tag if neither release nor modified dates are found
-    if release_date == "unknown" and modified_date == "unknown":
-        time_tag = soup.find("time")
-        if time_tag:
-            release_date = time_tag.get("datetime", "")
+    ## Temporarily deactivated
+    # # Fallback to using the first time tag if neither release nor modified dates are found
+    # if release_date == "unknown" and modified_date == "unknown":
+    #     time_tag = soup.find("time")
+    #     if time_tag:
+    #         release_date = time_tag.get("datetime", "")
            
     return f"({release_date}, {modified_date})"
 
