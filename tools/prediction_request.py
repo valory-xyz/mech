@@ -20,6 +20,7 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
@@ -29,7 +30,6 @@ from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 
 
-NUM_URLS_EXTRACT = 5
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
@@ -40,6 +40,9 @@ ALLOWED_TOOLS = [
     "prediction-online-summarized-info",
 ]
 TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
+# the default number of URLs to fetch online information for
+DEFAULT_NUM_URLS = defaultdict(lambda: 3)
+DEFAULT_NUM_URLS["prediction-online-summarized-info"] = 7
 
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -110,7 +113,7 @@ OUTPUT_FORMAT
 """
 
 
-def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
+def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
         service.cse()
@@ -124,7 +127,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     return [result["link"] for result in search["items"]]
 
 
-def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List[str]:
+def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: int) -> List[str]:
     """Get URLs from search engine queries"""
     results = []
     for query in queries:
@@ -132,7 +135,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
             query=query,
             api_key=api_key,
             engine=engine,
-            num=3,  # Number of returned results
+            num=num,
         ):
             results.append(url)
     unique_results = list(set(results))
@@ -163,6 +166,7 @@ def process_in_batches(
             batch = urls[i : i + window]
             futures = [(executor.submit(requests.get, url, timeout=timeout), url) for url in batch]
             yield futures
+
 
 def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
     """Extract texts from URLs"""
@@ -197,6 +201,7 @@ def fetch_additional_information(
     max_tokens: int,
     google_api_key: str,
     google_engine: str,
+    num_urls: int,
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
@@ -220,8 +225,9 @@ def fetch_additional_information(
     json_data = json.loads(response.choices[0].message.content)
     urls = get_urls_from_queries(
         json_data["queries"],
-        api_key=google_api_key,
-        engine=google_engine,
+        google_api_key,
+        google_engine,
+        num_urls,
     )
     texts = extract_texts(urls)
     return "\n".join(["- " + text for text in texts])
@@ -233,6 +239,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     prompt = kwargs["prompt"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+    num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
 
     openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
@@ -241,12 +248,13 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     engine = TOOL_TO_ENGINE[tool]
     additional_information = (
         fetch_additional_information(
-            prompt=prompt,
-            engine=engine,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            google_api_key=kwargs["api_keys"]["google_api_key"],
-            google_engine=kwargs["api_keys"]["google_engine_id"],
+            prompt,
+            engine,
+            temperature,
+            max_tokens,
+            kwargs["api_keys"]["google_api_key"],
+            kwargs["api_keys"]["google_engine_id"],
+            num_urls,
         )
         if tool == "prediction-online"
         else ""
