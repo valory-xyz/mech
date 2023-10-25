@@ -145,7 +145,9 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     return [result["link"] for result in search["items"]]
 
 
-def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: int) -> List[str]:
+def get_urls_from_queries(
+    queries: List[str], api_key: str, engine: str, num: int
+) -> List[str]:
     """Get URLs from search engine queries"""
     results = []
     for query in queries:
@@ -185,7 +187,10 @@ def process_in_batches(
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
             batch = urls[i : i + window]
-            futures = [(executor.submit(requests.get, url, timeout=timeout), url) for url in batch]
+            futures = [
+                (executor.submit(requests.get, url, timeout=timeout), url)
+                for url in batch
+            ]
             yield futures
 
 
@@ -201,7 +206,9 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(extract_text(html=result.text, num_words=num_words))
+                extracted_texts.append(
+                    extract_text(html=result.text, num_words=num_words)
+                )
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -209,7 +216,7 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
-                    print(f"An error occurred: {e}")
+                print(f"An error occurred: {e}")
         if stop:
             break
     return extracted_texts
@@ -275,11 +282,19 @@ def calc_word_frequencies(doc: Doc) -> FrequenciesType:
             word_frequencies[lower] += 1
 
     max_frequency = max(word_frequencies.values())
-    normalized_frequencies = defaultdict(lambda: 0, {word: frequency / max_frequency for word, frequency in word_frequencies.items()})
+    normalized_frequencies = defaultdict(
+        lambda: 0,
+        {
+            word: frequency / max_frequency
+            for word, frequency in word_frequencies.items()
+        },
+    )
     return normalized_frequencies
 
 
-def calc_sentence_scores(sentence_tokens: List[Span], word_frequencies: FrequenciesType) -> ScoresType:
+def calc_sentence_scores(
+    sentence_tokens: List[Span], word_frequencies: FrequenciesType
+) -> ScoresType:
     """Calculate the sentence scores."""
     sentence_scores = defaultdict(lambda: 0)
     for sentence in sentence_tokens:
