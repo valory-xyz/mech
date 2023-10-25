@@ -54,6 +54,9 @@ TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_URLS["prediction-online-summarized-info"] = 7
+# the default number of words to fetch online information for
+DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
+DEFAULT_NUM_WORDS["prediction-online-summarized-info"] = None
 # how much of the initial content will be kept during summarization
 DEFAULT_COMPRESSION_FACTOR = 0.05
 # the vocabulary to use for the summarization
@@ -159,7 +162,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
 
 def extract_text(
     html: str,
-    num_words: int = 300,  # TODO: summerise using GPT instead of limit
+    num_words: Optional[int],
 ) -> str:
     """Extract text from a single HTML document"""
     soup = BeautifulSoup(html, "html.parser")
@@ -169,6 +172,9 @@ def extract_text(
     lines = (line.strip() for line in text.splitlines())
     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
     text = "\n".join(chunk for chunk in chunks if chunk)
+
+    if num_words is None:
+        return text
     return text[:num_words]
 
 
@@ -183,7 +189,7 @@ def process_in_batches(
             yield futures
 
 
-def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
+def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
     """Extract texts from URLs"""
     max_allowed = 5
     extracted_texts = []
@@ -217,6 +223,7 @@ def fetch_additional_information(
     google_api_key: str,
     google_engine: str,
     num_urls: int,
+    num_words: Optional[int],
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
@@ -244,7 +251,7 @@ def fetch_additional_information(
         google_engine,
         num_urls,
     )
-    texts = extract_texts(urls)
+    texts = extract_texts(urls, num_words)
     return "\n".join(["- " + text for text in texts])
 
 
@@ -307,6 +314,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
     num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
+    num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
     compression_factor = kwargs.get("compression_factor", DEFAULT_COMPRESSION_FACTOR)
 
     openai.api_key = kwargs["api_keys"]["openai"]
@@ -323,6 +331,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             kwargs["api_keys"]["google_api_key"],
             kwargs["api_keys"]["google_engine_id"],
             num_urls,
+            num_words,
         )
         if tool.startswith("prediction-online")
         else ""
