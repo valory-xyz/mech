@@ -26,6 +26,8 @@ import re
 from tqdm import tqdm
 import numpy as np
 from concurrent.futures import Future, ThreadPoolExecutor
+from itertools import groupby
+from operator import itemgetter
 
 from bs4 import BeautifulSoup, NavigableString
 from googleapiclient.discovery import build
@@ -526,14 +528,14 @@ def get_context_around_isolated_event_date(
     return contexts_list
 
 
-def extract_relevant_information(
+def extract_similarity_scores(
     text: str,
     query_emb,
     event_date: str,
     model: SpacyEmbeddings,
     nlp,
-    max_words: int
-) -> str:
+    date: str,
+) -> List[Tuple[str, float, str]]:
     """
     Extract relevant information from website text based on a given event question.
 
@@ -543,10 +545,10 @@ def extract_relevant_information(
         event_date (str): Event date in year-day-month format.
         model: Pre-trained Spacy Model for sentence embedding.
         nlp: The spaCy NLP model.
-        max_words (int): Maximum number of words allowed for output.
+        date (str): The release and modification dates of the website.
 
     Returns:
-        str: The relevant sentences extracted from the website text.
+        List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
     """        
     
     # Constants for sentence length and number thresholds
@@ -597,21 +599,10 @@ def extract_relevant_information(
     # Compute the cosine similarity
     similarities = cosine_similarity(query_emb_np, sent_emb_np)[0].tolist()
 
-    # Extract top relevant sentences
-    relevant_sentences = [
-        sent for sent, sim in sorted(zip(sentences, similarities), key=lambda x: x[1], reverse=True) if sim > 0.4
-    ]
-    
-    if not relevant_sentences:
-        return ""
+    # Create tuples and store them in a list
+    sentence_similarity_date_tuples = [(sentence, similarity, date) for sentence, similarity in zip(sentences, similarities) if similarity > 0.4]
 
-    # Truncate text to fit max_words limit
-    output = ' '.join(relevant_sentences)
-    output_words = output.split(' ')
-    if len(output_words) > max_words:
-        output = ' '.join(output_words[:max_words])
-
-    return output
+    return sentence_similarity_date_tuples
 
 
 def get_date(soup):    
@@ -651,14 +642,13 @@ def get_date(soup):
     return f"({release_date}, {modified_date})"
 
 
-def extract_text(
+def extract_sentences(
     html: str,
     query_emb,
     event_date: str,
     model,
     nlp,
-    max_words: int,
-) -> str:
+) -> List[Tuple[str, float, str]]:
     """
     Extract relevant information from HTML string.
 
@@ -668,14 +658,13 @@ def extract_text(
         event_date (str): Event date in year-month-day format.
         model: Pre-trained Spacy Model for sentence embedding.
         nlp: NLP object for additional text processing.
-        max_words (int): Maximum number of words for the output summary.
 
     Raises:
         ValueError: If the HTML content is empty.
         ValueError: If the release or update date could not be extracted from the HTML.
 
     Returns:
-        str: Relevant website information with release date.
+        List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
     """
 
     if not html:
@@ -699,20 +688,20 @@ def extract_text(
     text = ". ".join(chunk for chunk in chunks if chunk)
     text = re.sub(r"\.{2,}", ".", text)
 
-    # Get summarized text
-    relevant_text = extract_relevant_information(
+    # Get List of (sentence, similarity, date) tuples
+    similarity_scores = extract_similarity_scores(
         text=text,
         query_emb=query_emb,
         event_date=event_date,
         model=model,
         nlp=nlp,
-        max_words=max_words,
+        date=date,
     )
 
-    if not relevant_text:
-        return ""
+    if not similarity_scores:
+        return []
 
-    return f"{date}: {relevant_text}"
+    return similarity_scores
 
 
 def process_in_batches(
@@ -773,37 +762,28 @@ def process_in_batches(
             yield futures
 
 
-def extract_texts(
+def extract_and_sort_sentences(
     urls: List[str],
     event_question: str,
-    max_words_per_url: int,
     nlp,
-) -> List[str]:
+) -> List[Tuple[str, float, str]]:
     """
     Extract texts from a list of URLs using Spacy models.
     
     Args:
         urls (List[str]): List of URLs to extract text from.
         event_question (str): Event-related question for text extraction.
-        max_words_per_url (int): Maximum number of words allowed to extract for each URL.
 
     Raises:
         ValueError: If the event date could not be extracted from the event question.
         Timeout: If the request timed out.
     
     Returns:
-        List[str]: List of extracted texts.
+        List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
     """
-
-    # Maximum number of allowed extractions
-    max_allowed = 25
     
-    # Initialize empty list for storing extracted texts
-    extracted_texts = []
-    
-    # Initialize count and stop flag
-    count = 0
-    stop = False
+    # Initialize empty list for storing extracted sentences along with their similarity scores and release dates
+    all_sentences = []
 
     # Process the event question with spacy
     doc_question = nlp(event_question)
@@ -812,7 +792,7 @@ def extract_texts(
     # Initialize Spacy embedder model
     model = SpacyEmbeddings()
     
-    # Create sentence embeddings for event question with Spacy embedder model
+    # Create embedding for event question with Spacy embedder model
     query_emb = model.embed_query(event_question)
 
     if event_date is None:
@@ -828,39 +808,75 @@ def extract_texts(
                     del result
                     continue
                 # Extract relevant information for the event question
-                extracted_text = extract_text(
+                extracted_sentences = extract_sentences(
                     html=result.text,
                     query_emb=query_emb,
                     event_date=event_date,
                     model=model,
                     nlp=nlp,
-                    max_words=max_words_per_url,
                 )
                 
                 # Delete the result object to free memory
                 del result
                 
                 # Append the extracted text if available and increment the count
-                if extracted_text:
-                    extracted_texts.append(extracted_text)
-                count += 1
-
-                # Break if the maximum number of extractions is reached
-                if count >= max_allowed:
-                    stop = True
-                    break
+                if extracted_sentences:
+                    all_sentences.extend(extracted_sentences)
             
             except requests.exceptions.Timeout:
                 print(f"Request for {url} timed out.")
             
             except Exception as e:
                 print(f"An error occurred: {e}")
-        
-        # Break if the maximum number of extractions is reached
-        if stop:
+
+    all_sentences.sort(key=lambda x: x[1], reverse=True)  # Assuming the second element is the similarity score
+
+    return all_sentences
+
+
+def join_and_group_sentences(sentences: List[Tuple[str, float, str]], max_words: int) -> str:
+    """
+    Join the sentences and group them by date.
+    
+    Args:
+        sentences (List[Tuple[str, float, str]]): List of tuples containing the extracted sentences, their similarity scores, and release dates.
+        max_words (int): Maximum number of words allowed for the output summary.
+    
+    Returns:
+        str: The joined sentences grouped by date.
+    """
+    # Initialize final output string and word count
+    final_output = ""
+    current_word_count = 0
+
+    # Initialize a list to hold the sentences that will be included in the final output
+    filtered_sentences = []
+
+    # Filter sentences based on word count
+    for sentence, _, date in sentences:
+        additional_word_count = len(sentence.split())
+        if current_word_count + additional_word_count <= max_words:
+            filtered_sentences.append((sentence, date))
+            current_word_count += additional_word_count
+        else:
             break
     
-    return extracted_texts
+    # Sort filtered_sentences by date for grouping
+    filtered_sentences.sort(key=itemgetter(1))
+
+    # Group by date and iterate
+    for date, group in groupby(filtered_sentences, key=itemgetter(1)):
+        sentences_group = [sentence for sentence, _ in group]
+        concatenated_sentences = " ".join(sentences_group)
+
+        # Formatting the string as per your requirement
+        formatted_string = f"- {date}:{concatenated_sentences}\n\n"
+
+        # Add this formatted string to the final output
+        final_output += formatted_string
+        
+    return final_output
+
 
 
 def fetch_additional_information(
@@ -879,7 +895,7 @@ def fetch_additional_information(
     
     Args:
         event_question (str): The question related to the event.
-        max_add_words (int): The maximum number of words allowed for the additional information.
+        max_add_words (int): The maximum number of words allowed for additional information.
         google_api_key (str): The API key for the Google service.
         google_engine (str): The Google engine to be used.
         temperature (float): The temperature parameter for the engine.
@@ -932,20 +948,16 @@ def fetch_additional_information(
         api_key=google_api_key,
         engine=google_engine,
     )
- 
-    # Get max number of words per URL
-    max_words_per_url = max_add_words // len(urls) if len(urls) > 0 else 0
 
-    # Extract texts from URLs
-    texts = extract_texts(
+    # Extract relevant sentences from URLs
+    relevant_sentences_sorted = extract_and_sort_sentences(
         urls=urls,
         event_question=event_question,
-        max_words_per_url=max_words_per_url,
         nlp=nlp,
     )
 
-    # Join the texts and return
-    additional_informations = "\n\n".join(["- " + text for text in texts])
+    # Join the sorted sentences and group them by date
+    additional_informations = join_and_group_sentences(relevant_sentences_sorted, max_add_words)
 
     return additional_informations
 
@@ -958,7 +970,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         kwargs (Dict): Keyword arguments that specify settings and API keys.
 
     Raises:
-        ValueError: If the tool or prompt is not provided.
         ValueError: If the tool is not supported.
         ValueError: If the event question is not found in the prompt.
 
