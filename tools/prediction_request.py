@@ -273,7 +273,7 @@ def load_model(vocab: str) -> Language:
 
 
 def calc_word_frequencies(doc: Doc) -> FrequenciesType:
-    """Get the frequency of each work in the given text, excluding stop words and punctuations."""
+    """Get the frequency of each word in the given text, excluding stop words and punctuations."""
     word_frequencies = defaultdict(lambda: 0)
     for token in doc:
         word = token.text
