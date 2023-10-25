@@ -60,7 +60,7 @@ DEFAULT_NUM_WORDS["prediction-online-summarized-info"] = None
 # how much of the initial content will be kept during summarization
 DEFAULT_COMPRESSION_FACTOR = 0.05
 # the vocabulary to use for the summarization
-VOCAB = "en_core_web_sm"
+DEFAULT_VOCAB = "en_core_web_sm"
 
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -262,14 +262,14 @@ def fetch_additional_information(
     return "\n".join(["- " + text for text in texts])
 
 
-def load_model() -> Language:
+def load_model(vocab: str) -> Language:
     """Utilize spaCy to load the model and download it if it is not already available."""
     try:
-        return spacy.load(VOCAB)
+        return spacy.load(vocab)
     except OSError:
         print("Downloading language model...")
-        download(VOCAB)
-        return spacy.load(VOCAB)
+        download(vocab)
+        return spacy.load(vocab)
 
 
 def calc_word_frequencies(doc: Doc) -> FrequenciesType:
@@ -305,12 +305,12 @@ def calc_sentence_scores(
     return sentence_scores
 
 
-def summarize(text: str, compression_factor: float) -> str:
+def summarize(text: str, compression_factor: float, vocab: str) -> str:
     """Summarize the given text, retaining the given compression factor."""
     if not text:
         raise ValueError("Cannot summarize empty text!")
 
-    nlp = load_model()
+    nlp = load_model(vocab)
     doc = nlp(text)
     word_frequencies = calc_word_frequencies(doc)
     sentence_tokens = list(doc.sents)
@@ -331,6 +331,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
     num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
     compression_factor = kwargs.get("compression_factor", DEFAULT_COMPRESSION_FACTOR)
+    vocab = kwargs.get("vocab", DEFAULT_VOCAB)
 
     openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
@@ -353,7 +354,9 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     )
 
     if additional_information and tool == "prediction-online-summarized-info":
-        additional_information = summarize(additional_information, compression_factor)
+        additional_information = summarize(
+            additional_information, compression_factor, vocab
+        )
 
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information
