@@ -951,8 +951,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         raise ValueError(f"TOOL {tool} is not supported.")
 
     # Load the spacy model
-    download_spacy_model("en_core_web_lg")
-    nlp = spacy.load("en_core_web_lg")
+    download_spacy_model("en_core_web_md")
+    nlp = spacy.load("en_core_web_md")
 
     # Get the LLM engine to be used
     engine = TOOL_TO_ENGINE[tool]
