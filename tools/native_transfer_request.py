@@ -85,7 +85,7 @@ def make_request_openai_request(
 def native_transfer(
     prompt: str,
     api_key: str,
-) -> Tuple[str, Optional[Dict[str, Any]]]:
+) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Perform native transfer."""
     tool_prompt = NATIVE_TRANSFER_PROMPT.format(user_prompt=prompt)
     response = make_request_openai_request(prompt=tool_prompt, api_key=api_key)
@@ -102,7 +102,7 @@ def native_transfer(
         "value": int(parsed_txs["wei_value"]),
     }
 
-    return response, transaction
+    return response, prompt, transaction
 
 
 AVAILABLE_TOOLS = {
@@ -110,7 +110,7 @@ AVAILABLE_TOOLS = {
 }
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
     prompt = kwargs["prompt"]
     api_key = kwargs["api_keys"]["openai"]

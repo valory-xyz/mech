@@ -35,7 +35,7 @@ ENGINES = {
 ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in values]
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
     openai.api_key = kwargs["api_keys"]["openai"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
@@ -75,4 +75,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         timeout=120,
         presence_penalty=0,
     )
-    return response.choices[0].text, None
+    return response.choices[0].text, prompt, None

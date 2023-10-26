@@ -62,7 +62,7 @@ class FinishReason(Enum):
     ERROR = 2
 
 
-def run(**kwargs: Any) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
 
     api_key = kwargs["api_keys"]["stabilityai"]
@@ -112,5 +112,5 @@ def run(**kwargs: Any) -> Tuple[str, Optional[Dict[str, Any]]]:
         json=json_params,
     )
     if response.status_code == 200:
-        return json.dumps(response.json()), None
-    return (f"Error: Non-200 response ({response.status_code}): {response.text}",)
+        return json.dumps(response.json()), None, None
+    return (f"Error: Non-200 response ({response.status_code}): {response.text}", None, None)

@@ -330,7 +330,7 @@ def fetch_additional_information(
     return "\n".join(["- " + text for text in texts])
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
@@ -385,4 +385,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         request_timeout=150,
         stop=None,
     )
-    return response.choices[0].message.content, None
+    return response.choices[0].message.content, prediction_prompt, None
