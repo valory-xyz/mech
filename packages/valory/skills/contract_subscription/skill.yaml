@@ -45,6 +45,6 @@ models:
       serious_slash_unit_amount: 8000000000000000
     class_name: Params
 dependencies:
-  open-aea-web3:
-    version: ==6.0.1
+  web3:
+    version: <7,>=6.0.0
 is_abstract: false

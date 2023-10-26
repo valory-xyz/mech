@@ -290,7 +290,7 @@ def get_sme_role(engine, temperature, max_tokens, prompt) -> Tuple[str, str]:
     return sme["sme"], sme["sme_introduction"]
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
@@ -347,4 +347,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         request_timeout=150,
         stop=None,
     )
-    return response.choices[0].message.content, None
+    return response.choices[0].message.content, prediction_prompt, None

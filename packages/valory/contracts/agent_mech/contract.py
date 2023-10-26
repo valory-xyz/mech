@@ -166,6 +166,7 @@ class AgentMechContract(Contract):
         contract_address: str,
         from_block: BlockIdentifier = "earliest",
         to_block: BlockIdentifier = "latest",
+        **kwargs: Any,
     ) -> JSONLike:
         """Get the requests that are not delivered."""
         requests: List[Dict[str, Any]] = cls.get_request_events(

@@ -8,14 +8,14 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigpq5lxfj2aza6ok3fjuywtdafelkbvoqwaits7regfbgu4oynmku
   build/AgentMech.json: bafybeidrlu7vpusp2tzovyf5rbnqy2jicuq3e6czizfkzswjq4rjusu72i
-  contract.py: bafybeidyh53cztzwsjndfgepmx57fc6swjk5qjzed24qavppjmruteny7q
+  contract.py: bafybeia4e7nbxuqoqbtxolapvn5z35ryfjnoldrd4zr2cbv5ewa44tohme
 fingerprint_ignore_patterns: []
 class_name: AgentMechContract
 contract_interface_paths:
   ethereum: build/AgentMech.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.39.0.post1
-  open-aea-web3:
-    version: ==6.0.1
+    version: ==1.41.0
+  web3:
+    version: <7,>=6.0.0
 contracts: []
