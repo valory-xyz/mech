@@ -557,8 +557,8 @@ def extract_similarity_scores(
     # sentences.extend(event_date_sentences)
 
     if not sentences:
-        return ""
-    
+        return []
+
     # Concatenate short sentences
     sentences = concatenate_short_sentences(sentences, len_sentence_threshold)
 
@@ -880,8 +880,9 @@ def fetch_additional_information(
     # Perform moderation check
     moderation_result = openai.Moderation.create(url_query_prompt)
     if moderation_result["results"][0]["flagged"]:
-        return "Moderation flagged the prompt as in violation of terms.", None
-    
+        # return empty additional information if the prompt is flagged
+        return ""
+
     # Create messages for the OpenAI engine
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
