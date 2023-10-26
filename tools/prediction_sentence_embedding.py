@@ -153,7 +153,7 @@ RELEASE_DATE_NAMES = [
     'pub-date', 'pub_date', 'datePublished', 'date_published',
     'time_published', 'article:published_date', 'parsely-pub-date',
     'publish-date', 'pubdatetime', 'published_time', 'publishedtime',
-    'article_date', 'created_date', 'published_at', 'lastPublishedDate'
+    'article_date', 'created_date', 'published_at', 'lastPublishedDate',
     'og:published_time', 'og:release_date', 'article:published_time',
     'og:publication_date', 'og:pubdate', 'article:publication_date',
     'product:availability_starts', 'product:release_date', 'event:start_date',
