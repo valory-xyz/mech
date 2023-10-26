@@ -222,8 +222,8 @@ def download_spacy_model(model_name: str) -> None:
         print(f"{model_name} is already installed.")
 
 
-def extract_event_date(doc_question) -> str:
-    '''
+def extract_event_date(doc_question) -> Optional[str]:
+    """
     Extracts the event date from the event question if present.
     
     Args:
@@ -231,8 +231,8 @@ def extract_event_date(doc_question) -> str:
         
     Returns:
         str: The event date in year-month-day format if present, otherwise None.
-    '''
-    
+    """
+
     event_date_ymd = None
 
     # Extract the date from the event question if present
