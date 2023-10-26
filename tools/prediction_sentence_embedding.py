@@ -39,7 +39,7 @@ import tiktoken
 from dateutil import parser
 
 NUM_URLS_EXTRACT = 5
-MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4000 # Set the limit for cost efficiency
+MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4000  # Set the limit for cost efficiency
 WORDS_PER_TOKEN_FACTOR = 0.75
 DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 500,
@@ -145,55 +145,164 @@ OUTPUT_FORMAT:
 
 # Global constants for possible attribute names for release and update dates
 RELEASE_DATE_NAMES = [
-    'date', 'pubdate', 'publishdate', 'OriginalPublicationDate',
-    'article:published_time', 'sailthru.date', 'article.published',
-    'published-date', 'og:published_time', 'publication_date',
-    'publishedDate', 'dc.date', 'DC.date', 'article:published',
-    'article_date_original', 'cXenseParse:recs:publishtime', 'DATE_PUBLISHED',
-    'pub-date', 'pub_date', 'datePublished', 'date_published',
-    'time_published', 'article:published_date', 'parsely-pub-date',
-    'publish-date', 'pubdatetime', 'published_time', 'publishedtime',
-    'article_date', 'created_date', 'published_at', 'lastPublishedDate',
-    'og:published_time', 'og:release_date', 'article:published_time',
-    'og:publication_date', 'og:pubdate', 'article:publication_date',
-    'product:availability_starts', 'product:release_date', 'event:start_date',
-    'event:release_date', 'og:time_published', 'og:start_date', 'og:created',
-    'og:creation_date', 'og:launch_date', 'og:first_published',
-    'og:original_publication_date', 'article:published', 'article:pub_date',
-    'news:published_time', 'news:publication_date', 'blog:published_time',
-    'blog:publication_date', 'report:published_time', 'report:publication_date',
-    'webpage:published_time', 'webpage:publication_date', 'post:published_time',
-    'post:publication_date', 'item:published_time', 'item:publication_date'
+    "date",
+    "pubdate",
+    "publishdate",
+    "OriginalPublicationDate",
+    "article:published_time",
+    "sailthru.date",
+    "article.published",
+    "published-date",
+    "og:published_time",
+    "publication_date",
+    "publishedDate",
+    "dc.date",
+    "DC.date",
+    "article:published",
+    "article_date_original",
+    "cXenseParse:recs:publishtime",
+    "DATE_PUBLISHED",
+    "pub-date",
+    "pub_date",
+    "datePublished",
+    "date_published",
+    "time_published",
+    "article:published_date",
+    "parsely-pub-date",
+    "publish-date",
+    "pubdatetime",
+    "published_time",
+    "publishedtime",
+    "article_date",
+    "created_date",
+    "published_at",
+    "lastPublishedDate",
+    "og:published_time",
+    "og:release_date",
+    "article:published_time",
+    "og:publication_date",
+    "og:pubdate",
+    "article:publication_date",
+    "product:availability_starts",
+    "product:release_date",
+    "event:start_date",
+    "event:release_date",
+    "og:time_published",
+    "og:start_date",
+    "og:created",
+    "og:creation_date",
+    "og:launch_date",
+    "og:first_published",
+    "og:original_publication_date",
+    "article:published",
+    "article:pub_date",
+    "news:published_time",
+    "news:publication_date",
+    "blog:published_time",
+    "blog:publication_date",
+    "report:published_time",
+    "report:publication_date",
+    "webpage:published_time",
+    "webpage:publication_date",
+    "post:published_time",
+    "post:publication_date",
+    "item:published_time",
+    "item:publication_date",
 ]
 
 UPDATE_DATE_NAMES = [
-    'lastmod', 'lastmodified', 'last-modified', 'updated',
-    'dateModified', 'article:modified_time', 'modified_date',
-    'article:modified', 'og:updated_time', 'mod_date',
-    'modifiedDate', 'lastModifiedDate', 'lastUpdate', 'last_updated',
-    'LastUpdated', 'UpdateDate', 'updated_date', 'revision_date',
-    'sentry:revision', 'article:modified_date', 'date_updated',
-    'time_updated', 'lastUpdatedDate', 'last-update-date', 'lastupdate',
-    'dateLastModified', 'article:update_time', 'modified_time',
-    'last_modified_date', 'date_last_modified',
-    'og:updated_time', 'og:modified_time', 'article:modified_time',
-    'og:modification_date', 'og:mod_time', 'article:modification_date',
-    'product:availability_ends', 'product:modified_date', 'event:end_date',
-    'event:updated_date', 'og:time_modified', 'og:end_date', 'og:last_modified',
-    'og:modification_date', 'og:revision_date', 'og:last_updated',
-    'og:most_recent_update', 'article:updated', 'article:mod_date',
-    'news:updated_time', 'news:modification_date', 'blog:updated_time',
-    'blog:modification_date', 'report:updated_time', 'report:modification_date',
-    'webpage:updated_time', 'webpage:modification_date', 'post:updated_time',
-    'post:modification_date', 'item:updated_time', 'item:modification_date'
+    "lastmod",
+    "lastmodified",
+    "last-modified",
+    "updated",
+    "dateModified",
+    "article:modified_time",
+    "modified_date",
+    "article:modified",
+    "og:updated_time",
+    "mod_date",
+    "modifiedDate",
+    "lastModifiedDate",
+    "lastUpdate",
+    "last_updated",
+    "LastUpdated",
+    "UpdateDate",
+    "updated_date",
+    "revision_date",
+    "sentry:revision",
+    "article:modified_date",
+    "date_updated",
+    "time_updated",
+    "lastUpdatedDate",
+    "last-update-date",
+    "lastupdate",
+    "dateLastModified",
+    "article:update_time",
+    "modified_time",
+    "last_modified_date",
+    "date_last_modified",
+    "og:updated_time",
+    "og:modified_time",
+    "article:modified_time",
+    "og:modification_date",
+    "og:mod_time",
+    "article:modification_date",
+    "product:availability_ends",
+    "product:modified_date",
+    "event:end_date",
+    "event:updated_date",
+    "og:time_modified",
+    "og:end_date",
+    "og:last_modified",
+    "og:modification_date",
+    "og:revision_date",
+    "og:last_updated",
+    "og:most_recent_update",
+    "article:updated",
+    "article:mod_date",
+    "news:updated_time",
+    "news:modification_date",
+    "blog:updated_time",
+    "blog:modification_date",
+    "report:updated_time",
+    "report:modification_date",
+    "webpage:updated_time",
+    "webpage:modification_date",
+    "post:updated_time",
+    "post:modification_date",
+    "item:updated_time",
+    "item:modification_date",
 ]
 
 # Global constant for HTML tags to remove
 HTML_TAGS_TO_REMOVE = [
-    "script", "style", "header", "footer", "aside", "nav", "form", "button",
-    "iframe", "input", "textarea", "select", "option", "label", "fieldset",
-    "legend", "img", "audio", "video", "source", "track", "canvas", "svg",
-    "object", "param", "embed", "link"
+    "script",
+    "style",
+    "header",
+    "footer",
+    "aside",
+    "nav",
+    "form",
+    "button",
+    "iframe",
+    "input",
+    "textarea",
+    "select",
+    "option",
+    "label",
+    "fieldset",
+    "legend",
+    "img",
+    "audio",
+    "video",
+    "source",
+    "track",
+    "canvas",
+    "svg",
+    "object",
+    "param",
+    "embed",
+    "link",
 ]
 
 
@@ -225,10 +334,10 @@ def download_spacy_model(model_name: str) -> None:
 def extract_event_date(doc_question) -> Optional[str]:
     """
     Extracts the event date from the event question if present.
-    
+
     Args:
         doc_question (spaCy Doc): Document text as a spaCy Doc object.
-        
+
     Returns:
         str: The event date in year-month-day format if present, otherwise None.
     """
@@ -237,12 +346,12 @@ def extract_event_date(doc_question) -> Optional[str]:
 
     # Extract the date from the event question if present
     for ent in doc_question.ents:
-        if ent.label_ == 'DATE':
+        if ent.label_ == "DATE":
             event_date_ymd = standardize_date(ent.text)
 
     # If event date not formatted as YMD or not found, return None
     try:
-        datetime.strptime(event_date_ymd, '%Y-%m-%d')
+        datetime.strptime(event_date_ymd, "%Y-%m-%d")
     except (ValueError, TypeError):
         return None
     else:
@@ -299,19 +408,21 @@ def truncate_additional_information(
     # Encode the string into tokens
     add_enc = enc.encode(additional_informations)
     len_add_enc = len(add_enc)
-    
+
     # Truncate additional information string if token sum exceeds maximum allowed
     if len_add_enc <= max_add_tokens:
         return additional_informations
     else:
-        add_trunc_enc = add_enc[:-int(len_add_enc - max_add_tokens)]
+        add_trunc_enc = add_enc[: -int(len_add_enc - max_add_tokens)]
         return enc.decode(add_trunc_enc)
 
 
-def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: int = 3) -> List[str]:
+def get_urls_from_queries(
+    queries: List[str], api_key: str, engine: str, num: int = 3
+) -> List[str]:
     """
     Fetch unique URLs from search engine queries, limiting the number of URLs per query.
-    
+
     Args:
         queries (List[str]): List of search engine queries.
         api_key (str): API key for the search engine.
@@ -320,7 +431,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
 
     Raises:
         ValueError: If the number of URLs per query exceeds the maximum allowed.
-    
+
     Returns:
         List[str]: Unique list of URLs, omitting PDF and download-related URLs.
     """
@@ -336,7 +447,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
             query=query,
             api_key=api_key,
             engine=engine,
-            num=max_num_fetch  # Limit the number of returned URLs per query
+            num=max_num_fetch,  # Limit the number of returned URLs per query
         )
 
         # Add only unique URLs up to 'num' per query, omitting PDF and 'download' URLs
@@ -354,13 +465,13 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str, num: in
 def standardize_date(date_text):
     """
     Standardizes a given date string to the format 'YYYY-MM-DD' or 'MM-DD' if possible.
-    
+
     Args:
         date_text (str): The date string to be standardized.
 
     Raises:
         ValueError: If the date string cannot be parsed.
-    
+
     Returns:
         str: The standardized date string if possible, otherwise None.
     """
@@ -368,19 +479,19 @@ def standardize_date(date_text):
     try:
         # Compile regex patterns for month and day
         month_regex = re.compile(
-            r'\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b',
-            re.IGNORECASE
+            r"\b(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\b",
+            re.IGNORECASE,
         )
-        day_regex = re.compile(r'\b\d{1,2}\b')
-        
+        day_regex = re.compile(r"\b\d{1,2}\b")
+
         # Parse date_text using dateutil parser
         parsed_date = parser.parse(date_text)
-        
+
         # Check if year, month, and day are in the original date_text
         month_exists = month_regex.search(date_text) is not None
         day_exists = day_regex.search(date_text) is not None
         year_exists = str(parsed_date.year) in date_text
-        
+
         # Format the parsed date accordingly
         if year_exists and month_exists and day_exists:
             return parsed_date.strftime("%Y-%m-%d")
@@ -388,7 +499,7 @@ def standardize_date(date_text):
             return parsed_date.strftime("%m-%d")
         else:
             return None
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -420,23 +531,27 @@ def get_context_around_isolated_event_date(
         raise ValueError(
             f"The maximum number of words must be less than or equal to 300."
         )
-    
+
     contexts_list = []
     len_doc_text = len(doc_text)
-        
+
     # Extract the month and day from the event date
     event_date_md = event_date_ymd[5:]
-    
+
     for ent in doc_text.ents:
-        if ent.label_ == 'DATE':
+        if ent.label_ == "DATE":
             standardized_date = standardize_date(ent.text)
             if standardized_date is None:
                 continue
-            
+
             # Check if the entity matches the target date
-            if standardized_date == event_date_ymd or standardized_date == event_date_md:
+            if (
+                standardized_date == event_date_ymd
+                or standardized_date == event_date_md
+            ):
                 sentence = next(
-                    sent for sent in doc_text.sents 
+                    sent
+                    for sent in doc_text.sents
                     if sent.start <= ent.start and sent.end >= ent.end
                 )
 
@@ -448,10 +563,14 @@ def get_context_around_isolated_event_date(
                     while context_words < max_context:
                         # Extend the context from the start of the sentence
                         new_start = start_token - 1
-                        while new_start >= 0 and doc_text[new_start].is_sent_start is None:
+                        while (
+                            new_start >= 0 and doc_text[new_start].is_sent_start is None
+                        ):
                             new_start -= 1
                         if new_start >= 0:
-                            context_words += len(doc_text[new_start:start_token].text.split())
+                            context_words += len(
+                                doc_text[new_start:start_token].text.split()
+                            )
                             start_token = new_start
 
                         # Break if max_context is reached
@@ -460,10 +579,15 @@ def get_context_around_isolated_event_date(
 
                         # Extend the context from the end of the sentence
                         new_end = end_token + 1
-                        while new_end < len_doc_text and doc_text[new_end].sent == sentence.sent:
+                        while (
+                            new_end < len_doc_text
+                            and doc_text[new_end].sent == sentence.sent
+                        ):
                             new_end += 1
                         if new_end < len_doc_text:
-                            context_words += len(doc_text[end_token:new_end].text.split())
+                            context_words += len(
+                                doc_text[end_token:new_end].text.split()
+                            )
                             end_token = new_end
 
                         # Break if max_context is reached
@@ -473,12 +597,13 @@ def get_context_around_isolated_event_date(
                         # Break if max_context cannot be reached
                         if new_end == len_doc_text and start_token <= 0:
                             break
-                    
-                    context = doc_text[max(0, start_token):min(len_doc_text, end_token)].text
+
+                    context = doc_text[
+                        max(0, start_token) : min(len_doc_text, end_token)
+                    ].text
                     contexts_list.append(context)
 
     return contexts_list
-
 
 
 def concatenate_short_sentences(sentences, len_sentence_threshold):
@@ -487,7 +612,7 @@ def concatenate_short_sentences(sentences, len_sentence_threshold):
     while i < len(sentences):
         sentence = sentences[i]
         word_count = len(sentence.split())
-        
+
         # Check if the sentence is shorter than the threshold
         while word_count < len_sentence_threshold:
             i += 1
@@ -497,7 +622,7 @@ def concatenate_short_sentences(sentences, len_sentence_threshold):
             next_sentence = sentences[i]
             sentence += " " + next_sentence
             word_count += len(next_sentence.split())
-        
+
         modified_sentences.append(sentence)
         i += 1
 
@@ -516,38 +641,40 @@ def extract_similarity_scores(
 
     Args:
         text (str): The website text to extract information from.
-        event_question (str): The question to find relevant information to.
         event_date (str): Event date in year-day-month format.
         nlp: The spaCy NLP model.
         date (str): The release and modification dates of the website.
 
     Returns:
         List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
-    """        
-    
+    """
+
     # Constants for sentence length and number thresholds
     len_sentence_threshold = 10
     num_sentences_threshold = 1000
-    sentences = []     
+    sentences = []
     event_date_sentences = []
     seen = set()
 
     # Truncate text for performance optimization
     text = text[:50000]
-    
+
     # Apply NLP pipeline to text
     doc_text = nlp(text)
 
     # Extract unique sentences
     for sent in doc_text.sents:
         sentence_text = sent.text
-        if len(sentence_text.split()) >= len_sentence_threshold and sentence_text not in seen:
+        if (
+            len(sentence_text.split()) >= len_sentence_threshold
+            and sentence_text not in seen
+        ):
             sentences.append(sentence_text)
-            seen.add(sentence_text)       
-    
+            seen.add(sentence_text)
+
     ## Temporarily deactivated: News sites with a lot of date occurrences lead to false positives
     ## The embedding model is not advanced enough
-    # Extract contextual sentences around event date occurences within too short sentences
+    # Extract contextual sentences around event date occurrences within too short sentences
     # if event_date is not None:
     #     event_date_sentences.extend(
     #         get_context_around_isolated_event_date(
@@ -564,7 +691,7 @@ def extract_similarity_scores(
 
     # Limit the number of sentences for performance optimization
     sentences = sentences[:num_sentences_threshold]
-    
+
     similarities = []
 
     # Encode sentences using spaCy model
@@ -574,46 +701,54 @@ def extract_similarity_scores(
         similarities.append(similarity_score)
 
     # Create tuples and store them in a list
-    sentence_similarity_date_tuples = [(sentence, similarity, date) for sentence, similarity in zip(sentences, similarities) if similarity > 0.4]
+    sentence_similarity_date_tuples = [
+        (sentence, similarity, date)
+        for sentence, similarity in zip(sentences, similarities)
+        if similarity > 0.4
+    ]
 
     return sentence_similarity_date_tuples
 
 
-def get_date(soup):    
+def get_date(soup):
     """
     Retrieves the release and modification dates from the soup object containing the HTML tree.
-    
+
     Args:
         soup (BeautifulSoup): The BeautifulSoup object for the webpage.
-        
+
     Returns:
         str: A string representing the release and modification dates.
     """
-    
+
     release_date = "unknown"
     modified_date = "unknown"
 
     # Search for an update or modified date in the meta tags
     for name in UPDATE_DATE_NAMES:
-        meta_tag = soup.find("meta", {"name": name}) or soup.find("meta", {"property": name})
+        meta_tag = soup.find("meta", {"name": name}) or soup.find(
+            "meta", {"property": name}
+        )
         if meta_tag:
             modified_date = meta_tag.get("content", "")
             break
-    
+
     # If not found, then look for release or publication date
     for name in RELEASE_DATE_NAMES:
-        meta_tag = soup.find("meta", {"name": name}) or soup.find("meta", {"property": name})
+        meta_tag = soup.find("meta", {"name": name}) or soup.find(
+            "meta", {"property": name}
+        )
         if meta_tag:
             release_date = meta_tag.get("content", "")
             break
-    
+
     ## Temporarily deactivated
     # # Fallback to using the first time tag if neither release nor modified dates are found
     # if release_date == "unknown" and modified_date == "unknown":
     #     time_tag = soup.find("time")
     #     if time_tag:
     #         release_date = time_tag.get("datetime", "")
-           
+
     return f"({release_date}, {modified_date})"
 
 
@@ -628,7 +763,6 @@ def extract_sentences(
 
     Args:
         html (str): The HTML content to extract text from.
-        event_question (str): Event question for context.
         event_date (str): Event date in year-month-day format.
         nlp: NLP object for additional text processing.
 
@@ -642,7 +776,7 @@ def extract_sentences(
 
     if not html:
         raise ValueError("HTML is empty.")
-    
+
     soup = BeautifulSoup(html, "html.parser")
 
     # Get the date of the website
@@ -652,8 +786,8 @@ def extract_sentences(
 
     # Remove unnecessary tags to clean up text
     for element in soup(HTML_TAGS_TO_REMOVE):
-        element.replace_with(NavigableString(' '))
-    
+        element.replace_with(NavigableString(" "))
+
     # Extract and clean text
     text = soup.get_text()
     lines = (line.strip() for line in text.splitlines())
@@ -681,7 +815,7 @@ def process_in_batches(
 ) -> Generator[None, None, List[Tuple[Future, str]]]:
     """
     Process URLs in batches using a generator and thread pool executor.
-    
+
     Args:
         urls (List[str]): List of URLs to process.
         batch_size (int, optional): Size of the processing batch_size. Default is 5.
@@ -697,7 +831,7 @@ def process_in_batches(
 
     if batch_size <= 0:
         raise ValueError("The 'batch_size' size must be greater than zero.")
-    
+
     if timeout <= 0:
         raise ValueError("The 'timeout' must be greater than zero.")
 
@@ -706,7 +840,7 @@ def process_in_batches(
 
     # User-Agent headers
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/117.0'
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/117.0"
     }
     session.headers.update(headers)
 
@@ -715,19 +849,32 @@ def process_in_batches(
         # Loop through the URLs in batch_size of size 'batch_size'
         for i in range(0, len(urls), batch_size):
             batch = urls[i : i + batch_size]
-            
+
             # Submit the batch of URLs for processing
             futures = []
             for url in batch:
                 try:
                     # Submit a HEAD request to the url and check Content-Type
-                    head_future = executor.submit(session.head, url, headers=headers, timeout=timeout, allow_redirects=True)
+                    head_future = executor.submit(
+                        session.head,
+                        url,
+                        headers=headers,
+                        timeout=timeout,
+                        allow_redirects=True,
+                    )
                     head_response = head_future.result()
-                    if 'text/html' not in head_response.headers.get('Content-Type', ''):
+                    if "text/html" not in head_response.headers.get("Content-Type", ""):
                         continue
                     else:
                         # Submit a GET request to the url
-                        futures.append((executor.submit(session.get, url, headers=headers, timeout=timeout), url))
+                        futures.append(
+                            (
+                                executor.submit(
+                                    session.get, url, headers=headers, timeout=timeout
+                                ),
+                                url,
+                            )
+                        )
                 except Exception as e:
                     print(f"An error occurred: {e}")
 
@@ -741,7 +888,7 @@ def extract_and_sort_sentences(
 ) -> List[Tuple[str, float, str]]:
     """
     Extract texts from a list of URLs using Spacy models.
-    
+
     Args:
         urls (List[str]): List of URLs to extract text from.
         event_question (str): Event-related question for text extraction.
@@ -749,24 +896,26 @@ def extract_and_sort_sentences(
     Raises:
         ValueError: If the event date could not be extracted from the event question.
         Timeout: If the request timed out.
-    
+
     Returns:
         List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
     """
-    
+
     # Initialize empty list for storing extracted sentences along with their similarity scores and release dates
     all_sentences = []
 
     # Process the event question with spacy
     doc_question = nlp(event_question)
     event_date = extract_event_date(doc_question)
-    
+
     # Create embedding for event question with Spacy embedder model
     query_emb = nlp(event_question)
 
     if event_date is None:
-        print(f"Could not extract precise event date from event question: {event_question}")
-    
+        print(
+            f"Could not extract precise event date from event question: {event_question}"
+        )
+
     # Process URLs in batches
     for batch in process_in_batches(urls=urls):
         for future, url in batch:
@@ -782,33 +931,37 @@ def extract_and_sort_sentences(
                     event_date=event_date,
                     nlp=nlp,
                 )
-                
+
                 # Delete the result object to free memory
                 del result
-                
+
                 # Append the extracted text if available and increment the count
                 if extracted_sentences:
                     all_sentences.extend(extracted_sentences)
-            
+
             except requests.exceptions.Timeout:
                 print(f"Request for {url} timed out.")
-            
+
             except Exception as e:
                 print(f"An error occurred: {e}")
 
-    all_sentences.sort(key=lambda x: x[1], reverse=True)  # Assuming the second element is the similarity score
+    all_sentences.sort(
+        key=lambda x: x[1], reverse=True
+    )  # Assuming the second element is the similarity score
 
     return all_sentences
 
 
-def join_and_group_sentences(sentences: List[Tuple[str, float, str]], max_words: int) -> str:
+def join_and_group_sentences(
+    sentences: List[Tuple[str, float, str]], max_words: int
+) -> str:
     """
     Join the sentences and group them by date.
-    
+
     Args:
         sentences (List[Tuple[str, float, str]]): List of tuples containing the extracted sentences, their similarity scores, and release dates.
         max_words (int): Maximum number of words allowed for the output summary.
-    
+
     Returns:
         str: The joined sentences grouped by date.
     """
@@ -827,7 +980,7 @@ def join_and_group_sentences(sentences: List[Tuple[str, float, str]], max_words:
             current_word_count += additional_word_count
         else:
             break
-    
+
     # Sort filtered_sentences by date for grouping
     filtered_sentences.sort(key=itemgetter(1))
 
@@ -841,9 +994,8 @@ def join_and_group_sentences(sentences: List[Tuple[str, float, str]], max_words:
 
         # Add this formatted string to the final output
         final_output += formatted_string
-        
-    return final_output
 
+    return final_output
 
 
 def fetch_additional_information(
@@ -856,10 +1008,9 @@ def fetch_additional_information(
     temperature: float = 0.5,
     max_compl_tokens: int = 500,
 ) -> str:
-
     """
     Get urls from a web search and extract relevant information based on an event question.
-    
+
     Args:
         event_question (str): The question related to the event.
         max_add_words (int): The maximum number of words allowed for additional information.
@@ -869,14 +1020,14 @@ def fetch_additional_information(
         engine (str): The openai engine. Defaults to "gpt-3.5-turbo".
         temperature (float): The temperature parameter for the engine. Defaults to 1.0.
         max_compl_tokens (int): The maximum number of tokens for the engine's response.
-        
+
     Returns:
         str: The relevant information fetched from all the URLs concatenated.
     """
 
     # Create URL query prompt
     url_query_prompt = URL_QUERY_PROMPT.format(event_question=event_question)
-    
+
     # Perform moderation check
     moderation_result = openai.Moderation.create(url_query_prompt)
     if moderation_result["results"][0]["flagged"]:
@@ -893,15 +1044,14 @@ def fetch_additional_information(
     response = openai.ChatCompletion.create(
         model=engine,
         messages=messages,
-        temperature=temperature, # Override the default temperature parameter set for the engine
-        max_tokens=max_compl_tokens, # Override the default max_compl_tokens parameter set for the engine
+        temperature=temperature,  # Override the default temperature parameter set for the engine
+        max_tokens=max_compl_tokens,  # Override the default max_compl_tokens parameter set for the engine
         n=1,
         timeout=90,
         request_timeout=90,
         stop=None,
     )
 
-    
     # Parse the response content
     json_data = json.loads(response.choices[0].message.content)
 
@@ -920,7 +1070,9 @@ def fetch_additional_information(
     )
 
     # Join the sorted sentences and group them by date
-    additional_informations = join_and_group_sentences(relevant_sentences_sorted, max_add_words)
+    additional_informations = join_and_group_sentences(
+        relevant_sentences_sorted, max_add_words
+    )
 
     return additional_informations
 
@@ -942,10 +1094,11 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
 
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
-    max_compl_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_compl_tokens"])
+    max_compl_tokens = kwargs.get(
+        "max_tokens", DEFAULT_OPENAI_SETTINGS["max_compl_tokens"]
+    )
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
-    
-    
+
     openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"TOOL {tool} is not supported.")
@@ -963,7 +1116,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         raise ValueError("No event question found in prompt.")
 
     # Get the tiktoken base encoding
-    enc = tiktoken.get_encoding("cl100k_base") 
+    enc = tiktoken.get_encoding("cl100k_base")
 
     # Calculate the maximum number of tokens and words that can be consumed by the additional information string
     max_add_tokens = get_max_tokens_for_additional_information(
@@ -974,28 +1127,28 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     max_add_words = int(max_add_tokens * 0.75)
 
     # Fetch additional information
-    additional_information = (
-        fetch_additional_information(
-            event_question=event_question,
-            engine="gpt-3.5-turbo",
-            temperature=0.5,
-            max_compl_tokens=max_compl_tokens,
-            nlp=nlp,
-            max_add_words=max_add_words,
-            google_api_key=kwargs["api_keys"]["google_api_key"],
-            google_engine=kwargs["api_keys"]["google_engine_id"],
-        )
+    additional_information = fetch_additional_information(
+        event_question=event_question,
+        engine="gpt-3.5-turbo",
+        temperature=0.5,
+        max_compl_tokens=max_compl_tokens,
+        nlp=nlp,
+        max_add_words=max_add_words,
+        google_api_key=kwargs["api_keys"]["google_api_key"],
+        google_engine=kwargs["api_keys"]["google_engine_id"],
     )
-    
+
     # Truncate additional information to stay within the chat completion token limit of 4096
     additional_information = truncate_additional_information(
-        additional_information, max_add_tokens, enc=enc,
+        additional_information,
+        max_add_tokens,
+        enc=enc,
     )
 
     # Get the current utc timestamp
     current_time_utc = datetime.now(timezone.utc)
     formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
-    
+
     # Generate the prediction prompt
     prediction_prompt = PREDICTION_PROMPT.format(
         event_question=event_question,
@@ -1003,12 +1156,12 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         additional_information=additional_information,
         timestamp=formatted_time_utc,
     )
-    
+
     # Perform moderation
     moderation_result = openai.Moderation.create(prediction_prompt)
     if moderation_result["results"][0]["flagged"]:
         return "Moderation flagged the prompt as in violation of terms.", None
-    
+
     # Create messages for the OpenAI engine
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
