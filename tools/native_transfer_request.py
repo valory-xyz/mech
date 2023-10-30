@@ -117,7 +117,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     tool = cast(str, kwargs["tool"]).replace(TOOL_PREFIX, "")
 
     if tool not in AVAILABLE_TOOLS:
-        return f"Not tool named `{kwargs['tool']}`", None, None
+        return f"No tool named `{kwargs['tool']}`", None, None
 
     transaction_builder = AVAILABLE_TOOLS[tool]
     return transaction_builder(prompt, api_key)
