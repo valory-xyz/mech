@@ -199,14 +199,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # set the initial from block
             self._populate_from_block()
             return
-
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.agent_mech_contract_address,
+            contract_address=self.params.agent_mech_contract_addresses[0],
             contract_id=str(AgentMechContract.contract_id),
-            callable="get_undelivered_reqs",
+            callable="get_multiple_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
-                dict(from_block=self.params.from_block, chain_id=GNOSIS_CHAIN)
+                dict(
+                    from_block=self.params.from_block,
+                    chain_id=GNOSIS_CHAIN,
+                    contract_addresses=self.params.agent_mech_contract_addresses,
+                )
             ),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
@@ -256,9 +259,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle done tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+        mech_address = executing_task.get("contract_address", None)
         task_result = self._get_executing_task_result()
         response = {"requestId": req_id, "result": "Invalid response"}
-        self._done_task = {"request_id": req_id}
+        self._done_task = {"request_id": req_id, "mech_address": mech_address}
         if task_result is not None:
             # task succeeded
             deliver_msg, prompt, transaction = task_result

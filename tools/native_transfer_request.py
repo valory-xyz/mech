@@ -94,7 +94,7 @@ def native_transfer(
         # parse the response to get the transaction object string itself
         parsed_txs = ast.literal_eval(response)
     except SyntaxError:
-        return response, None
+        return response, None, None
 
     # build the transaction object, unknowns are referenced from parsed_txs
     transaction = {
@@ -117,7 +117,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     tool = cast(str, kwargs["tool"]).replace(TOOL_PREFIX, "")
 
     if tool not in AVAILABLE_TOOLS:
-        return f"Not tool named `{kwargs['tool']}`", None
+        return f"Not tool named `{kwargs['tool']}`", None, None
 
     transaction_builder = AVAILABLE_TOOLS[tool]
     return transaction_builder(prompt, api_key)
