@@ -43,12 +43,12 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     prompt = kwargs["prompt"]
     tool = kwargs["tool"]
     if tool not in ALLOWED_TOOLS:
-        return f"Tool {tool} is not in the list of supported tools.", None
+        return f"Tool {tool} is not in the list of supported tools.", None, None
 
     engine = tool.replace(PREFIX, "")
     moderation_result = openai.Moderation.create(prompt)
     if moderation_result["results"][0]["flagged"]:
-        return "Moderation flagged the prompt as in violation of terms."
+        return "Moderation flagged the prompt as in violation of terms.", None, None
 
     if engine in ENGINES["chat"]:
         messages = [
@@ -64,7 +64,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
             timeout=120,
             stop=None,
         )
-        return response.choices[0].message.content, None
+        return response.choices[0].message.content, prompt, None
     response = openai.Completion.create(
         engine=engine,
         prompt=prompt,
