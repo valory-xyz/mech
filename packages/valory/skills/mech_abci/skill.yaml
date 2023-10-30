@@ -21,7 +21,7 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeic3xbxh74qaufevlmuwj64hhzyvp6ne24ffmbdauset52z7app2cu
 - valory/registration_abci:0.1.0:bafybeigqxnmblvehj4cbhywmjbvivf44ru23xyizf7gx4wfkygkubwex24
 - valory/reset_pause_abci:0.1.0:bafybeifdul36ucwer665cljtb4233fzedxkxfgi7fwflhmlsr2efhu4eiq
-- valory/task_submission_abci:0.1.0:bafybeia7mbsfyupjioyyn3zsarlp337ln463jhhozowagdbugaytk77u2y
+- valory/task_submission_abci:0.1.0:bafybeif3iq7a424o4uldemtlfzsbohewlktb65mllwxgg5t4q5mieuew34
 - valory/termination_abci:0.1.0:bafybeihnp324qgyypecaol4tqt7bugbvpbut4hw5brbckbhpovenfiw3zu
 - valory/transaction_settlement_abci:0.1.0:bafybeidbodazeikfo24pug3ir44ub265ltmepm752mzkuic4qfhkdcckmm
 behaviours:
@@ -75,7 +75,8 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      agent_mech_contract_addresses:
+      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
       api_keys_json:
       - - openai
         - dummy_api_key

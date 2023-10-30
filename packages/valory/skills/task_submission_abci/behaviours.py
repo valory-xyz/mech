@@ -297,7 +297,7 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
         """Get the deliver tx."""
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_mech_contract_address,
+            contract_address=task_data["mech_address"],
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_data",
             request_id=task_data["request_id"],
@@ -313,7 +313,7 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
 
         data = cast(bytes, contract_api_msg.state.body["data"])
         return {
-            "to": self.params.agent_mech_contract_address,
+            "to": task_data["mech_address"],
             "value": ZERO_ETHER_VALUE,
             "data": data,
         }

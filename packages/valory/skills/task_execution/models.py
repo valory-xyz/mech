@@ -29,12 +29,12 @@ class Params(Model):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
-        self.agent_mech_contract_address = kwargs.get(
-            "agent_mech_contract_address", None
+        self.agent_mech_contract_addresses = kwargs.get(
+            "agent_mech_contract_addresses", None
         )
         enforce(
-            self.agent_mech_contract_address is not None,
-            "agent_mech_contract_address must be set!",
+            self.agent_mech_contract_addresses is not None,
+            "agent_mech_contract_addresses must be set!",
         )
 
         self.in_flight_req: bool = False
