@@ -58,6 +58,7 @@ pytest = "==7.2.1"
 jsonschema = ">=4.16.0,<=4.19.0"
 pandas = "==2.1.1"
 spacy = "==3.7.2"
+tiktoken = "==0.5.1"
 
 [tool.poetry.group.dev.dependencies.tomte]
 version = "==0.2.12"
