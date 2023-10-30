@@ -128,6 +128,7 @@ class AgentMechContract(Contract):
             {
                 "tx_hash": entry.transactionHash.hex(),
                 "block_number": entry.blockNumber,
+                "contract_address": contract_address,
                 **entry["args"],
             }
             for entry in entries
@@ -182,4 +183,24 @@ class AgentMechContract(Contract):
             ]:
                 # store each requests in the pending_tasks list, make sure each req is stored once
                 pending_tasks.append(request)
+        return {"data": pending_tasks}
+
+    @classmethod
+    def get_multiple_undelivered_reqs(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        contract_addresses: List[str],
+        from_block: BlockIdentifier = "earliest",
+        **kwargs: Any,
+    ) -> JSONLike:
+        """Get the requests that are not delivered."""
+        pending_tasks: List[Dict[str, Any]] = []
+        # ensure we get the same range on all contracts
+        to_block = ledger_api.api.eth.block_number
+        for contract_address in contract_addresses:
+            pending_tasks_batch = cls.get_undelivered_reqs(
+                ledger_api, contract_address, from_block, to_block
+            ).get("data")
+            pending_tasks.extend(pending_tasks_batch)
         return {"data": pending_tasks}

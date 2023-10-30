@@ -57,11 +57,6 @@ class Params(BaseParams):
         self.multisend_address = kwargs.get("multisend_address", None)
         if self.multisend_address is None:
             raise ValueError("No multisend_address specified!")
-        self.agent_mech_contract_address = kwargs.get(
-            "agent_mech_contract_address", None
-        )
-        if self.agent_mech_contract_address is None:
-            raise ValueError("agent_mech_contract_address is required")
         self.agent_registry_address = self._ensure(
             "agent_registry_address", kwargs, str
         )
