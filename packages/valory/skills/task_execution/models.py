@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of Mech."""
-from typing import Any, Callable, Dict, List, cast
+from typing import Any, Callable, Dict, List, Optional, cast
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
@@ -29,16 +29,16 @@ class Params(Model):
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
-        self.agent_mech_contract_address = kwargs.get(
-            "agent_mech_contract_address", None
+        self.agent_mech_contract_addresses = kwargs.get(
+            "agent_mech_contract_addresses", None
         )
         enforce(
-            self.agent_mech_contract_address is not None,
-            "agent_mech_contract_address must be set!",
+            self.agent_mech_contract_addresses is not None,
+            "agent_mech_contract_addresses must be set!",
         )
 
         self.in_flight_req: bool = False
-        self.from_block: int = 0
+        self.from_block: Optional[int] = None
         self.req_to_callback: Dict[str, Callable] = {}
         self.api_keys: Dict = self._nested_list_todict_workaround(
             kwargs, "api_keys_json"
@@ -57,6 +57,8 @@ class Params(Model):
         enforce(self.num_agents is not None, "num_agents must be set!")
         self.agent_index = kwargs.get("agent_index", None)
         enforce(self.agent_index is not None, "agent_index must be set!")
+        self.from_block_range = kwargs.get("from_block_range", None)
+        enforce(self.from_block_range is not None, "from_block_range must be set!")
         super().__init__(*args, **kwargs)
 
     def _nested_list_todict_workaround(
