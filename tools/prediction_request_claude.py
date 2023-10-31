@@ -110,7 +110,7 @@ OUTPUT_FORMAT
    - "queries": An array of strings of size between 1 and 5. Each string must be a search engine query that can help obtain relevant information to estimate
      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
      or lead to obtain the same set of results.
-* Output only the JSON object. Do not include any other contents in your response.
+* Output only the JSON object to be parsed by Python's "json.loads()". Do not include any other contents in your response.
 """
 
 
@@ -225,7 +225,7 @@ def fetch_additional_information(
     return "\n".join(["- " + text for text in texts])
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
@@ -256,4 +256,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         max_tokens_to_sample=300,
         prompt=prediction_prompt,
     )
-    return completion.completion, None
+    return completion.completion, prediction_prompt, None

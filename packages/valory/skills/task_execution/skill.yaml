@@ -7,41 +7,48 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeifcdxzmpj7m642xn27wyogtgmfa4o5pwy6db2bcowh24gs5u3vsxe
-  dialogues.py: bafybeihw3nvl2xqxgfgtbhskzxd2awvhiujoi5o7mefokn4ew3o3vo2t4u
-  handlers.py: bafybeiatb4zd3pg577leguyiqi3cjceu7ibp7fafctm4pte4jckbddmfby
-  models.py: bafybeiauvac5fxeiqxujfl6ocd4u2l2otb2xntygmn2b3k5v7tcj7ptaju
+  behaviours.py: bafybeibrvfpdvcdtel3juuxjcbtvrwazgdg3na5h4fzh2akfldk2eipudq
+  dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
+  handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
+  models.py: bafybeiavbz7un34qpxbmi3bmvk7yogc4w7d5wd3eymonelsqep5li222y4
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/ipfs.py: bafybeicuaj23qrcdv6ly4j7yo6il2r5plozhd6mwvcp5acwqbjxb2t3u2i
-  utils/task.py: bafybeiayyt22ysncqmxf3bowbsxqgym4xvx6ukap5csmuofkaozydu3oxi
+  utils/task.py: bafybeiakokty64m5cqp72drrpvfckhruldlwcge5hcc2bsy2ujk6nnrazq
 fingerprint_ignore_patterns: []
 connections:
-- valory/ledger:0.19.0:bafybeigfoz7d7si7s4jehvloq2zmiiocpbxcaathl3bxkyarxoerxq7g3a
-- valory/ipfs:0.1.0:bafybeidu3xd6rd5zysv2due2cnrc3sxx5vss2usxwaxxtxxuyha2kuhd3e
-- valory/p2p_libp2p_client:0.1.0:bafybeihdnfdth3qgltefgrem7xyi4b3ejzaz67xglm2hbma2rfvpl2annq
+- valory/ledger:0.19.0:bafybeigo5vst3zlltkouenwxuzn6c47yr2fbbml6dl2o32rfnsezmalgnu
+- valory/ipfs:0.1.0:bafybeigkn27u7m5atju6a724clycyfshbgcbwheztil2bky7krfa46ub2a
+- valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
 contracts:
-- valory/agent_mech:0.1.0:bafybeiccjt6322pee3als6v3ale75wxgrv4hy532dlfaugndpq6swahyba
+- valory/agent_mech:0.1.0:bafybeic7l75wn3nrjf24lddqngpolalbhjh7su6mttmuebqxgh4veqegia
 protocols:
-- valory/contract_api:1.0.0:bafybeiasywsvax45qmugus5kxogejj66c5taen27h4voriodz7rgushtqa
-- valory/default:1.0.0:bafybeiecmut3235aen7wxukllv424f3dysvvlgfmn562kzdunc5hdj3hxu
 - valory/acn_data_share:0.1.0:bafybeieyixetwvz767zekhvg7r6etumyanzys6xbalx2brrfswybinnlhi
-- valory/ipfs:0.1.0:bafybeibjzhsengtxfofqpxy6syamplevp35obemwfp4c5lhag3v2bvgysa
+- valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
+- valory/ledger_api:1.0.0:bafybeige5agrztgzfevyglf7mb4o7pzfttmq4f6zi765y4g2zvftbyowru
+- valory/default:1.0.0:bafybeiecmut3235aen7wxukllv424f3dysvvlgfmn562kzdunc5hdj3hxu
+- valory/ipfs:0.1.0:bafybeiedxeismnx3k5ty4mvvhlqideixlhqmi5mtcki4lxqfa7uqh7p33u
 skills: []
 behaviours:
   task_execution:
     args: {}
     class_name: TaskExecutionBehaviour
 handlers:
+  acn_data_share_handler:
+    args: {}
+    class_name: AcnHandler
   contract_handler:
     args: {}
     class_name: ContractHandler
   ipfs_handler:
     args: {}
     class_name: IpfsHandler
-  acn_data_share_handler:
+  ledger_handler:
     args: {}
-    class_name: AcnHandler
+    class_name: LedgerHandler
 models:
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
   contract_dialogues:
     args: {}
     class_name: ContractDialogues
@@ -51,13 +58,19 @@ models:
   ipfs_dialogues:
     args: {}
     class_name: IpfsDialogues
-  acn_data_share_dialogues:
+  ledger_dialogues:
     args: {}
-    class_name: AcnDataShareDialogues
+    class_name: LedgerDialogues
   params:
     args:
-      agent_mech_contract_address: '0x9A676e781A523b5d0C0e43731313A708CB607508'
-      task_deadline: 240.0
+      agent_index: 0
+      agent_mech_contract_addresses:
+      - '0x9A676e781A523b5d0C0e43731313A708CB607508'
+      api_keys_json:
+      - - openai
+        - dummy_api_key
+      - - stabilityai
+        - dummy_api_key
       file_hash_to_tools_json:
       - - bafybeif3izkobmvaoen23ine6tiqx55eaf4g3r56hdalnig656xivzpf3m
         - - openai-text-davinci-002
@@ -69,14 +82,10 @@ models:
           - stabilityai-stable-diffusion-xl-beta-v2-2-2
           - stabilityai-stable-diffusion-512-v2-1
           - stabilityai-stable-diffusion-768-v2-1
-      api_keys_json:
-      - - openai
-        - dummy_api_key
-      - - stabilityai
-        - dummy_api_key
-      polling_interval: 30.0
-      agent_index: 0
+      from_block_range: 50000
       num_agents: 4
+      polling_interval: 30.0
+      task_deadline: 240.0
       use_slashing: false
       slash_cooldown_hours: 3
       slash_threshold_amount: 10000000000000000
@@ -84,14 +93,14 @@ models:
       serious_slash_unit_amount: 8000000000000000
     class_name: Params
 dependencies:
+  beautifulsoup4:
+    version: ==4.12.2
+  googlesearch-python:
+    version: ==1.2.3
   openai:
     version: ==0.27.2
   py-multibase:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
-  googlesearch-python:
-    version: ==1.2.3
-  beautifulsoup4:
-    version: ==4.12.2
 is_abstract: false

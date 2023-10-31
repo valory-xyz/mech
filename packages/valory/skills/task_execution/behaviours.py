@@ -21,6 +21,9 @@
 import json
 import threading
 import time
+from asyncio import Future
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from aea.helpers.cid import to_v1
@@ -43,6 +46,7 @@ from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialo
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
+from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils.ipfs import (
     get_ipfs_file_hash,
@@ -54,7 +58,7 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 DONE_TASKS_LOCK = "lock"
-
+GNOSIS_CHAIN = "gnosis"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -65,6 +69,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def __init__(self, **kwargs: Any):
         """Initialise the agent."""
         super().__init__(**kwargs)
+        # we only want to execute one task at a time, for the time being
+        self._executor = ProcessPoolExecutor(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
         self._tools_to_file_hash: Dict[str, str] = {}
         self._all_tools: Dict[str, str] = {}
@@ -72,6 +78,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_polling: Optional[float] = None
         self._invalid_request = False
+        self._async_result: Optional[Future] = None
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -116,13 +123,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _is_executing_task_ready(self) -> bool:
         """Check if the executing task is ready."""
-        if self._executing_task is None:
+        if self._executing_task is None or self._async_result is None:
             return False
-        task_id = self._executing_task.get("async_task_id", None)
-        if task_id is None:
-            return False
-
-        return self.context.task_manager.get_task_result(task_id).ready()
+        return self._async_result.done()
 
     def _has_executing_task_timed_out(self) -> bool:
         """Check if the executing task timed out."""
@@ -139,10 +142,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             raise ValueError("Executing task is None")
         if self._invalid_request:
             return None
-        task_id = self._executing_task.get("async_task_id", None)
-        if task_id is None:
-            raise ValueError("Executing task has no async_task_id")
-        return self.context.task_manager.get_task_result(task_id).get()
+        try:
+            async_result = cast(Future, self._async_result)
+            return async_result.result()
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                "Exception raised while executing task: {}".format(str(e))
+            )
+            return None
 
     def _download_tools(self) -> None:
         """Download tools."""
@@ -165,12 +172,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle get tool response"""
         tool_py = list(message.files.values())[0]
         tool_req = cast(str, self._inflight_tool_req)
-        local_namespace: Dict[str, Any] = globals().copy()
-        if "run" in local_namespace:
-            del local_namespace["run"]
-        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
-        self._all_tools[tool_req] = local_namespace["run"]
+        self._all_tools[tool_req] = tool_py
         self._inflight_tool_req = None
+
+    def _populate_from_block(self) -> None:
+        """Populate from_block"""
+        ledger_api_msg, _ = self.context.ledger_dialogues.create(
+            performative=LedgerApiMessage.Performative.GET_STATE,
+            callable="get_block",
+            kwargs=LedgerApiMessage.Kwargs(dict(block_identifier="latest")),
+            counterparty=LEDGER_API_ADDRESS,
+            ledger_id=self.context.default_ledger_id,
+            args=(),
+        )
+        self.context.outbox.put_message(message=ledger_api_msg)
+        self.params.in_flight_req = True
 
     def _check_for_new_reqs(self) -> None:
         """Check for new reqs."""
@@ -179,12 +195,22 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # or if we should not poll yet
             return
 
+        if self.params.from_block is None:
+            # set the initial from block
+            self._populate_from_block()
+            return
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.agent_mech_contract_address,
+            contract_address=self.params.agent_mech_contract_addresses[0],
             contract_id=str(AgentMechContract.contract_id),
-            callable="get_undelivered_reqs",
-            kwargs=ContractApiMessage.Kwargs(dict(from_block=self.params.from_block)),
+            callable="get_multiple_undelivered_reqs",
+            kwargs=ContractApiMessage.Kwargs(
+                dict(
+                    from_block=self.params.from_block,
+                    chain_id=GNOSIS_CHAIN,
+                    contract_addresses=self.params.agent_mech_contract_addresses,
+                )
+            ),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
@@ -233,13 +259,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle done tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+        mech_address = executing_task.get("contract_address", None)
         task_result = self._get_executing_task_result()
         response = {"requestId": req_id, "result": "Invalid response"}
-        self._done_task = {"request_id": req_id}
+        self._done_task = {"request_id": req_id, "mech_address": mech_address}
         if task_result is not None:
             # task succeeded
-            deliver_msg, transaction = task_result
-            response = {**response, "result": deliver_msg}
+            deliver_msg, prompt, transaction = task_result
+            response = {**response, "result": deliver_msg, "prompt": prompt}
             self._done_task["transaction"] = transaction
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
@@ -255,6 +282,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(f"Task timed out for request {req_id}")
         # added to end of queue
         self.pending_tasks.append(executing_task)
+        async_result = cast(Future, self._async_result)
+        async_result.cancel()
         self._executing_task = None
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
@@ -276,16 +305,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.warning("Data for task is not valid.")
             self._invalid_request = True
 
+    def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
+        """Submit a task."""
+        try:
+            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
+        except BrokenProcessPool:
+            self.context.logger.warning("Executor is broken. Restarting...")
+            # stop the current executor
+            self._executor.shutdown(wait=False)
+            # create a new executor
+            self._executor = ProcessPoolExecutor(max_workers=1)
+            # try to run the task again
+            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
+
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         tool_task = AnyToolAsTask()
-        task_data["method"] = self._all_tools[task_data["tool"]]
+        tool_py = self._all_tools[task_data["tool"]]
+        task_data["tool_py"] = tool_py
         task_data["api_keys"] = self.params.api_keys
-        task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)
+        future = self._submit_task(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
-        executing_task["async_task_id"] = task_id
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
-        self._async_result = self.context.task_manager.get_task_result(task_id)
+        self._async_result = cast(Optional[Future], future)
 
     def _build_ipfs_message(
         self,

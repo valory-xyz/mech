@@ -56,7 +56,7 @@ SME_GENERATION_MARKET_PROMPT = """
 task question: "{question}"
 """
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Generate SME roles for a given market question
 
     Raises:
@@ -101,5 +101,5 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     try:
         generated_sme_roles = json.loads(generated_sme_roles)
     except json.decoder.JSONDecodeError as e:
-        return f"Failed to generate SME roles due to {e}", None
-    return response.choices[0].message.content, None
+        return f"Failed to generate SME roles due to {e}", json.dumps(messages), None
+    return response.choices[0].message.content, json.dumps(messages), None

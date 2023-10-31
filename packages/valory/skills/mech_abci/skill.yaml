@@ -18,12 +18,12 @@ connections: []
 contracts: []
 protocols: []
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeif75fef5csbnc6xthpgtnwvd4ojj5zmbeadt4jxmkgap2eo24qixa
-- valory/registration_abci:0.1.0:bafybeidoobofynxvzu4n32q6it7vy6socjefjq43nvf3dlgeden3bahloq
-- valory/reset_pause_abci:0.1.0:bafybeiemeltzzunroxbxvtjxznssomt6jcs32nt6mnflpzbcfdl7uf32ny
-- valory/task_submission_abci:0.1.0:bafybeie6tq6peb35z6vhflutjdqfobuj6xo7p2rzf6nxizs22cino2w2oe
-- valory/termination_abci:0.1.0:bafybeig4mrkjhycwa7ursnnchnjcui6yxn4cz6htbqw3k4kya3u3xs6vwq
-- valory/transaction_settlement_abci:0.1.0:bafybeih54msklfwn62iblftogjmzzoaiu7twmliv4bktwtkyy63dhtjija
+- valory/abstract_round_abci:0.1.0:bafybeic3xbxh74qaufevlmuwj64hhzyvp6ne24ffmbdauset52z7app2cu
+- valory/registration_abci:0.1.0:bafybeigqxnmblvehj4cbhywmjbvivf44ru23xyizf7gx4wfkygkubwex24
+- valory/reset_pause_abci:0.1.0:bafybeifdul36ucwer665cljtb4233fzedxkxfgi7fwflhmlsr2efhu4eiq
+- valory/task_submission_abci:0.1.0:bafybeif3iq7a424o4uldemtlfzsbohewlktb65mllwxgg5t4q5mieuew34
+- valory/termination_abci:0.1.0:bafybeihnp324qgyypecaol4tqt7bugbvpbut4hw5brbckbhpovenfiw3zu
+- valory/transaction_settlement_abci:0.1.0:bafybeidbodazeikfo24pug3ir44ub265ltmepm752mzkuic4qfhkdcckmm
 behaviours:
   main:
     args: {}
@@ -54,6 +54,9 @@ models:
   abci_dialogues:
     args: {}
     class_name: AbciDialogues
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
   benchmark_tool:
     args:
       log_dir: /logs
@@ -70,12 +73,10 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
-  acn_data_share_dialogues:
-    args: {}
-    class_name: AcnDataShareDialogues
   params:
     args:
-      agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      agent_mech_contract_addresses:
+      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
       api_keys_json:
       - - openai
         - dummy_api_key
@@ -130,7 +131,6 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
-      ipfs_fetch_timeout: 15.0
       service_id: mech
       service_registry_address: null
       setup:
@@ -151,6 +151,9 @@ models:
       validate_timeout: 1205
       task_wait_timeout: 15.0
       use_slashing: false
+      agent_registry_address: '0x0000000000000000000000000000000000000000'
+      agent_id: 3
+      metadata_hash: '00000000000000000000000000000000000000000000000000'
       slash_cooldown_hours: 3
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
@@ -181,5 +184,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.39.0.post1
+    version: ==1.41.0
 is_abstract: false

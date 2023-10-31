@@ -362,7 +362,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     )
     moderation_result = openai.Moderation.create(prediction_prompt)
     if moderation_result["results"][0]["flagged"]:
-        return "Moderation flagged the prompt as in violation of terms.", None
+        return "Moderation flagged the prompt as in violation of terms.", None, None
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prediction_prompt},
@@ -377,4 +377,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         request_timeout=150,
         stop=None,
     )
-    return response.choices[0].message.content, None
+    return response.choices[0].message.content, prediction_prompt, None

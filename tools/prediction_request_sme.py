@@ -290,7 +290,7 @@ def get_sme_role(engine, temperature, max_tokens, prompt) -> Tuple[str, str]:
     return sme["sme"], sme["sme_introduction"]
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
@@ -332,7 +332,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     )
     moderation_result = openai.Moderation.create(prediction_prompt)
     if moderation_result["results"][0]["flagged"]:
-        return "Moderation flagged the prompt as in violation of terms.", None
+        return "Moderation flagged the prompt as in violation of terms.", prediction_prompt, None
     messages = [
         {"role": "system", "content": sme_introduction},
         {"role": "user", "content": prediction_prompt},
@@ -347,4 +347,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         request_timeout=150,
         stop=None,
     )
-    return response.choices[0].message.content, None
+    return response.choices[0].message.content, prediction_prompt, None
