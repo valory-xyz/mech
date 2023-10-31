@@ -8,13 +8,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   README.md: bafybeignmf6cibowaii3h7vhdwctj67upzu3nhlsgc4zvqawf7zqyebt6m
-  __init__.py: bafybeical6mif3pfnvpi2ifvec6qj622teodwyfwehjschvi7jyehnhm6u
+  __init__.py: bafybeieg6vsjgnfshtsn77qe6j5t7q5uofpp4xgtnktp7ktkd5aaet6ybu
   custom_types.py: bafybeibrbholfmbipktfhl336v6xhaa3zypb4yoqlcfddjfka4qcodfwni
-  default.proto: bafybeihjmlhvbffbh52o7ckt662bqwwyi2ztidrmnjp4zlihhfofyijxxa
-  default_pb2.py: bafybeif3sj3vsaeilesfw4bud3fymrwg6sh4kzkkxomraisqo5quwenih4
+  default.proto: bafybeibrzpusdjc5gvinf2iok7xm7mexre4ucxjqjvvt5tmxi5o3f3p5c4
+  default_pb2.py: bafybeigpidaesu5wflqfy7xoqqhct7nauqucsb3ta5o2e755b2l6oxrsoi
   dialogues.py: bafybeibpxuq6eqn53xwtbjnqjaeme5pbeuvteefpq54w7qbdhjvhick53q
-  message.py: bafybeicmfdce6hlol6f6idxhjsfadmb6zg2i6vciaiehdz6fddsk2wmjxu
-  serialization.py: bafybeiet2c74y2oyoprofvwxviersnc256aaxdskhtgfyqnpgtycb62iom
+  message.py: bafybeihupv2fba722psun4xvjbk4gvmilnmc74kxobkz2kpcb7rodeyuzm
+  serialization.py: bafybeidvybyzhuhwl3o5l4hc7w6ekmyco4jgh6qcp2cvcpvsl36iks3fva
   tests/test_default_dialogues.py: bafybeib4u3jf724x3fozrinusj4oxwzhzzbqufsy2zwiiv2fjxzmjgq23q
   tests/test_default_messages.py: bafybeif45s7gyfve4owf6de6n6j6fa7fdg6ysny3bjfgvyikcyedzucr4a
 fingerprint_ignore_patterns: []

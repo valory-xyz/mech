@@ -19,16 +19,15 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeic7l75wn3nrjf24lddqngpolalbhjh7su6mttmuebqxgh4veqegia
-- valory/agent_registry:0.1.0:bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu
-- valory/gnosis_safe:0.1.0:bafybeibt7arvjzz4ah24omst74f4sfjpzrdef76yti6ml7dopsauhdzeci
+- valory/agent_mech:0.1.0:bafybeiektlfcs66jmprajmfg45rvyxbq7wqwj2yzpohyvlux4447talgsa
+- valory/gnosis_safe:0.1.0:bafybeifyempvhciy6evbf2epqhry3qgqj3rh4x3ovuru6jtuibuyttjd5e
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 protocols:
-- valory/acn_data_share:0.1.0:bafybeieyixetwvz767zekhvg7r6etumyanzys6xbalx2brrfswybinnlhi
 - valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
+- valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeic3xbxh74qaufevlmuwj64hhzyvp6ne24ffmbdauset52z7app2cu
-- valory/transaction_settlement_abci:0.1.0:bafybeidbodazeikfo24pug3ir44ub265ltmepm752mzkuic4qfhkdcckmm
+- valory/abstract_round_abci:0.1.0:bafybeih7nivpffgvqvribkxxejuhnkrhypadoqrfd2ca5xhc2ujhyuualu
+- valory/transaction_settlement_abci:0.1.0:bafybeid6xssgfvhlopif6wm2wh6nci3nfastzo7iowefsvko4lg6oynapu
 behaviours:
   main:
     args: {}
@@ -59,9 +58,6 @@ models:
   abci_dialogues:
     args: {}
     class_name: AbciDialogues
-  acn_data_share_dialogues:
-    args: {}
-    class_name: AcnDataShareDialogue
   benchmark_tool:
     args:
       log_dir: /logs
@@ -78,6 +74,9 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogue
   params:
     args:
       cleanup_history_depth_current: null
@@ -102,9 +101,6 @@ models:
         voting_power: '10'
       history_check_timeout: 1205
       ipfs_domain_name: null
-      agent_registry_address: '0x0000000000000000000000000000000000000000'
-      agent_id: 3
-      metadata_hash: '00000000000000000000000000000000000000000000000000'
       ipfs_fetch_timeout: 15.0
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
@@ -127,13 +123,13 @@ models:
         safe_contract_address: '0x0000000000000000000000000000000000000000'
       share_tm_config_on_startup: false
       sleep_time: 1
-      task_wait_timeout: 15
       tendermint_check_sleep_delay: 3
       tendermint_com_url: http://localhost:8080
       tendermint_max_retries: 5
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
       tx_timeout: 10.0
+      task_wait_timeout: 15
       use_termination: false
       validate_timeout: 1205
       use_slashing: false
@@ -155,14 +151,14 @@ models:
     args: {}
     class_name: TendermintDialogues
 dependencies:
-  beautifulsoup4:
-    version: ==4.12.2
-  googlesearch-python:
-    version: ==1.2.3
   openai:
     version: ==0.27.2
   py-multibase:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
+  googlesearch-python:
+    version: ==1.2.3
+  beautifulsoup4:
+    version: ==4.12.2
 is_abstract: true
