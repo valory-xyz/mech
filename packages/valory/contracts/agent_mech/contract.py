@@ -253,7 +253,9 @@ class AgentMechContract(Contract):
         """Get the requests that are not delivered."""
         pending_tasks: List[Dict[str, Any]] = []
         # ensure we get the same range on all contracts
-        to_block = ledger_api.api.eth.block_number
+        # look 5 blocks back to avoid any issue with event
+        # indexing on rpc's side
+        to_block = ledger_api.api.eth.block_number - 5
         for contract_address in contract_addresses:
             pending_tasks_batch = cls.get_undelivered_reqs(
                 ledger_api, contract_address, from_block, to_block

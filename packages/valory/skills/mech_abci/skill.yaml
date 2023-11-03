@@ -168,7 +168,7 @@ models:
       response_key: null
       response_type: dict
       retries: 5
-      url: https://drand.cloudflare.com/public/latest
+      url: https://api.drand.sh/public/latest
     class_name: RandomnessApi
   requests:
     args: {}
