@@ -14,7 +14,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
 - valory/websocket_client:0.1.0:bafybeidxgkpajanybyjrmdnor4au4ttghzyp2ulgm7rttjgopxrjoaszzi
 contracts:
-- valory/agent_mech:0.1.0:bafybeic7l75wn3nrjf24lddqngpolalbhjh7su6mttmuebqxgh4veqegia
+- valory/agent_mech:0.1.0:bafybeigvra2jg5moz4vht2ankxo5ztgqduuzvpjtxuabi5nfxnszsp3num
 - valory/gnosis_safe:0.1.0:bafybeibt7arvjzz4ah24omst74f4sfjpzrdef76yti6ml7dopsauhdzeci
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeigxqwbd6wds57ecsfkl2hf4z4vbz5gokex6nutu5zcdpw6irh573y
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
@@ -35,11 +35,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihgemn2gwjc2wyxuh7rttg5pk5gec7dxhet3ih2tmg75vsdbgad7a
 - valory/abstract_round_abci:0.1.0:bafybeic3xbxh74qaufevlmuwj64hhzyvp6ne24ffmbdauset52z7app2cu
 - valory/contract_subscription:0.1.0:bafybeiedubkfhzjrg2wpuseham25ml54dmpcfc3vuaha6cl3fvar4b3qai
-- valory/mech_abci:0.1.0:bafybeifyj7mpoupexuw5ozwucstooznwzjqei5xh3x6aqbahmhsfxock2y
-- valory/task_execution:0.1.0:bafybeiaomsbxkugiplv76cjwbkqnbsoq4nw2pmq5ywgxmsxy7o52zz3rzq
+- valory/mech_abci:0.1.0:bafybeif3g3wvoh5dx6oias5cdi5r5dmzxcym6uvkpytib3su5g2cbybqr4
+- valory/task_execution:0.1.0:bafybeiaotos7g77er7mhfzbdvt6k7eww5qq554rdahcylhk2rqdh74afla
 - valory/registration_abci:0.1.0:bafybeigqxnmblvehj4cbhywmjbvivf44ru23xyizf7gx4wfkygkubwex24
 - valory/reset_pause_abci:0.1.0:bafybeifdul36ucwer665cljtb4233fzedxkxfgi7fwflhmlsr2efhu4eiq
-- valory/task_submission_abci:0.1.0:bafybeif3iq7a424o4uldemtlfzsbohewlktb65mllwxgg5t4q5mieuew34
+- valory/task_submission_abci:0.1.0:bafybeidxhsp2fvwejdxilo4ogygdbckgigt4uk7qxtiiybj5myj6aev2ey
 - valory/termination_abci:0.1.0:bafybeihnp324qgyypecaol4tqt7bugbvpbut4hw5brbckbhpovenfiw3zu
 - valory/transaction_settlement_abci:0.1.0:bafybeidbodazeikfo24pug3ir44ub265ltmepm752mzkuic4qfhkdcckmm
 default_ledger: ethereum
@@ -170,6 +170,7 @@ models:
       share_tm_config_on_startup: ${bool:false}
       multisend_address: ${str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
       service_registry_address: ${str:0x9338b5153AE39BB89f50468E608eD9d764B755fD}
+      init_fallback_gas: ${int:500000}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}

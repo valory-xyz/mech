@@ -29,6 +29,58 @@ from aea_ledger_ethereum import EthereumApi
 from web3.types import BlockIdentifier
 
 
+partial_abis = [
+    [
+        {
+            "anonymous": False,
+            "inputs": [
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestId",
+                    "type": "uint256",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "bytes",
+                    "name": "data",
+                    "type": "bytes",
+                },
+            ],
+            "name": "Deliver",
+            "type": "event",
+        }
+    ],
+    [
+        {
+            "anonymous": False,
+            "inputs": [
+                {
+                    "indexed": True,
+                    "internalType": "address",
+                    "name": "sender",
+                    "type": "address",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestId",
+                    "type": "uint256",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "bytes",
+                    "name": "data",
+                    "type": "bytes",
+                },
+            ],
+            "name": "Deliver",
+            "type": "event",
+        }
+    ],
+]
+
+
 class AgentMechContract(Contract):
     """The scaffold contract class for a smart contract."""
 
@@ -145,18 +197,22 @@ class AgentMechContract(Contract):
     ) -> JSONLike:
         """Get the Deliver events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        entries = contract_instance.events.Deliver.create_filter(
-            fromBlock=from_block,
-            toBlock=to_block,
-        ).get_all_entries()
+        all_entries = []
+        for abi in partial_abis:
+            contract_instance = ledger_api.api.eth.contract(contract_address, abi=abi)
+            entries = contract_instance.events.Deliver.create_filter(
+                fromBlock=from_block,
+                toBlock=to_block,
+            ).get_all_entries()
+            all_entries.extend(entries)
+
         deliver_events = list(
             {
                 "tx_hash": entry.transactionHash.hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
             }
-            for entry in entries
+            for entry in all_entries
         )
         return {"data": deliver_events}
 
