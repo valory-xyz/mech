@@ -49,9 +49,65 @@ partial_abis = [
             ],
             "name": "Deliver",
             "type": "event",
-        }
+        },
+        {
+            "anonymous": False,
+            "inputs": [
+                {
+                    "indexed": True,
+                    "internalType": "address",
+                    "name": "sender",
+                    "type": "address"
+                },
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestId",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": False,
+                    "internalType": "bytes",
+                    "name": "data",
+                    "type": "bytes"
+                }
+            ],
+            "name": "Request",
+            "type": "event"
+        },
     ],
     [
+        {
+            "anonymous": False,
+            "inputs": [
+                {
+                    "indexed": True,
+                    "internalType": "address",
+                    "name": "sender",
+                    "type": "address"
+                },
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestId",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestIdWithNonce",
+                    "type": "uint256"
+                },
+                {
+                    "indexed": False,
+                    "internalType": "bytes",
+                    "name": "data",
+                    "type": "bytes"
+                }
+            ],
+            "name": "Request",
+            "type": "event"
+        },
         {
             "anonymous": False,
             "inputs": [
