@@ -12,7 +12,7 @@
 #   Unless required by applicable law or agreed to in writing, software
 #   distributed under the License is distributed on an "AS IS" BASIS,
 #   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#   See the License for the specific language governing permissions and
+#   See the License for the specific languadge governing permissions and
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
@@ -217,7 +217,7 @@ class AgentMechContract(Contract):
         if not isinstance(ledger_api, EthereumApi):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
-        deliver_with_nonce = {
+        deliver_with_nonce = [{
             "inputs": [
                 {"internalType": "uint256", "name": "requestId", "type": "uint256"},
                 {
@@ -231,7 +231,7 @@ class AgentMechContract(Contract):
             "outputs": [],
             "stateMutability": "nonpayable",
             "type": "function",
-        }
+        }]
         if request_id_nonce is not None:
             contract_instance = ledger_api.api.eth.contract(
                 contract_address, abi=deliver_with_nonce

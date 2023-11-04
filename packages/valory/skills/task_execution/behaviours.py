@@ -260,6 +260,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
         request_id_nonce = executing_task.get("requestIdWithNonce", None)
+        self.context.logger.warning(f"executing task: {executing_task}")
         mech_address = executing_task.get("contract_address", None)
         task_result = self._get_executing_task_result()
         response = {"requestId": req_id, "result": "Invalid response"}
