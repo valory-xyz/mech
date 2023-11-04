@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeicjggfurn2wenw2d365aktpcqx23ipms6sbv7jtnocwyccvl6l7ua
+agent: valory/mech:0.1.0:bafybeig23wynkrigqg4jbxzpgejotrcbbj6obfzpzqqs6zpcewcml5dxn4
 number_of_agents: 4
 deployment:
   agent:
@@ -43,7 +43,7 @@ type: skill
         tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
         termination_sleep: ${TERMINATION_SLEEP:int:900}
         use_termination: ${USE_TERMINATION:bool:false}
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
+        agent_mech_contract_addresses: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
         use_slashing: ${USE_SLASHING:bool:false}
         slash_cooldown_hours: ${SLASH_COOLDOWN_HOURS:int:3}
@@ -70,7 +70,7 @@ type: skill
         tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
         termination_sleep: ${TERMINATION_SLEEP:int:900}
         use_termination: ${USE_TERMINATION:bool:false}
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
+        agent_mech_contract_addresses: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
         use_slashing: ${USE_SLASHING:bool:false}
         slash_cooldown_hours: ${SLASH_COOLDOWN_HOURS:int:3}
@@ -124,7 +124,7 @@ type: skill
         tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
         termination_sleep: ${TERMINATION_SLEEP:int:900}
         use_termination: ${USE_TERMINATION:bool:false}
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
+        agent_mech_contract_addresses: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
         use_slashing: ${USE_SLASHING:bool:false}
         slash_cooldown_hours: ${SLASH_COOLDOWN_HOURS:int:3}
@@ -141,7 +141,7 @@ type: skill
   models:
     params:
       args:
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
+        agent_mech_contract_addresses: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
         task_deadline: ${TASK_DEADLINE:float:240.0}
         file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
         api_keys_json: ${API_KEYS:list:[]}
@@ -152,7 +152,7 @@ type: skill
   models:
     params:
       args:
-        agent_mech_contract_address: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
+        agent_mech_contract_addresses: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
         task_deadline: ${TASK_DEADLINE:float:240.0}
         file_hash_to_tools_json: ${FILE_HASH_TO_TOOLS:list:[]}
         api_keys_json: ${API_KEYS:list:[]}
