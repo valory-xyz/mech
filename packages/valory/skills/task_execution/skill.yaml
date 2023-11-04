@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeihyw37i2dlarnoiuwl3ca5zph3n4ee6yj7ew7yg3lufjrmjoy3u2i
+  behaviours.py: bafybeiagnyliqrzo4jfjre2vblj3f7dnkeqaiz5mjvfcgoxlgptmvlwjy4
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
   models.py: bafybeiavbz7un34qpxbmi3bmvk7yogc4w7d5wd3eymonelsqep5li222y4
@@ -20,7 +20,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeigfmqvlzbp67fttccpl4hsu3zaztbxv6vd7ikzra2hfppfkalgpji
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
 contracts:
-- valory/agent_mech:0.1.0:bafybeicq3m2tbrduna7wjefwwzpgbk5wizazztytgms6lgokqra64lxofi
+- valory/agent_mech:0.1.0:bafybeicvwlt4b2ckdh6ywt4ejqe3357cvl5xvuxdh5us5kppd4sq7rraja
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
