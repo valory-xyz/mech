@@ -196,6 +196,7 @@ class TransactionSettlementBaseBehaviour(BaseBehaviour, ABC):
             )
             return tx_data
 
+        message.raw_transaction.body["gas"] = 1_000_000
         # Send transaction
         tx_digest, rpc_status = yield from self.send_raw_transaction(
             message.raw_transaction, use_flashbots
