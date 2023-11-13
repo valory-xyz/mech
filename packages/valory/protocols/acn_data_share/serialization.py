@@ -22,12 +22,15 @@
 # pylint: disable=too-many-statements,too-many-locals,no-member,too-few-public-methods,redefined-builtin
 from typing import Any, Dict, cast
 
-from aea.mail.base_pb2 import DialogueMessage
-from aea.mail.base_pb2 import Message as ProtobufMessage
-from aea.protocols.base import Message, Serializer
+from aea.mail.base_pb2 import DialogueMessage  # type: ignore
+from aea.mail.base_pb2 import Message as ProtobufMessage  # type: ignore
+from aea.protocols.base import Message  # type: ignore
+from aea.protocols.base import Serializer  # type: ignore
 
-from packages.valory.protocols.acn_data_share import acn_data_share_pb2
-from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage
+from packages.valory.protocols.acn_data_share import acn_data_share_pb2  # type: ignore
+from packages.valory.protocols.acn_data_share.message import (  # type: ignore
+    AcnDataShareMessage,
+)
 
 
 class AcnDataShareSerializer(Serializer):
@@ -44,7 +47,7 @@ class AcnDataShareSerializer(Serializer):
         msg = cast(AcnDataShareMessage, msg)
         message_pb = ProtobufMessage()
         dialogue_message_pb = DialogueMessage()
-        acn_data_share_msg = acn_data_share_pb2.AcnDataShareMessage()
+        acn_data_share_msg = acn_data_share_pb2.AcnDataShareMessage()  # type: ignore
 
         dialogue_message_pb.message_id = msg.message_id
         dialogue_reference = msg.dialogue_reference
@@ -78,7 +81,7 @@ class AcnDataShareSerializer(Serializer):
         :return: the 'AcnDataShare' message.
         """
         message_pb = ProtobufMessage()
-        acn_data_share_pb = acn_data_share_pb2.AcnDataShareMessage()
+        acn_data_share_pb = acn_data_share_pb2.AcnDataShareMessage()  # type: ignore
         message_pb.ParseFromString(obj)
         message_id = message_pb.dialogue_message.message_id
         dialogue_reference = (

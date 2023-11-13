@@ -14,7 +14,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
 - valory/websocket_client:0.1.0:bafybeidxgkpajanybyjrmdnor4au4ttghzyp2ulgm7rttjgopxrjoaszzi
 contracts:
-- valory/agent_mech:0.1.0:bafybeig4u5a7m45anibeyxjkr5flerbys46lhejgw343legcu7klcruhoy
+- valory/agent_mech:0.1.0:bafybeic7l75wn3nrjf24lddqngpolalbhjh7su6mttmuebqxgh4veqegia
 - valory/gnosis_safe:0.1.0:bafybeibt7arvjzz4ah24omst74f4sfjpzrdef76yti6ml7dopsauhdzeci
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeigxqwbd6wds57ecsfkl2hf4z4vbz5gokex6nutu5zcdpw6irh573y
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
@@ -35,13 +35,13 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihgemn2gwjc2wyxuh7rttg5pk5gec7dxhet3ih2tmg75vsdbgad7a
 - valory/abstract_round_abci:0.1.0:bafybeic3xbxh74qaufevlmuwj64hhzyvp6ne24ffmbdauset52z7app2cu
 - valory/contract_subscription:0.1.0:bafybeiedubkfhzjrg2wpuseham25ml54dmpcfc3vuaha6cl3fvar4b3qai
-- valory/mech_abci:0.1.0:bafybeihuglrcxhe3prvhab7txfcaf3pseqrxi5krggfc4lvaipe3g3wly4
-- valory/task_execution:0.1.0:bafybeifpcfnk7p5dykai2yqcz3gdmr7x3xsqndaqdo4wijqcelc2pqan74
+- valory/mech_abci:0.1.0:bafybeifyj7mpoupexuw5ozwucstooznwzjqei5xh3x6aqbahmhsfxock2y
+- valory/task_execution:0.1.0:bafybeiaomsbxkugiplv76cjwbkqnbsoq4nw2pmq5ywgxmsxy7o52zz3rzq
 - valory/registration_abci:0.1.0:bafybeigqxnmblvehj4cbhywmjbvivf44ru23xyizf7gx4wfkygkubwex24
 - valory/reset_pause_abci:0.1.0:bafybeifdul36ucwer665cljtb4233fzedxkxfgi7fwflhmlsr2efhu4eiq
-- valory/task_submission_abci:0.1.0:bafybeiexdygnfmgyns6kvcp5bqkwe4uper75qhvdnk6bkq4ct3s3fmadq4
-- valory/termination_abci:0.1.0:bafybeifnocui4dhesofqc25lomdhq5r2xwqx7w32vg2rot6vxnggtbo4vq
-- valory/transaction_settlement_abci:0.1.0:bafybeifdypr2a3ojm2dc2fp4yp62kndt4yilulqznbownnufzhzbc236dy
+- valory/task_submission_abci:0.1.0:bafybeif3iq7a424o4uldemtlfzsbohewlktb65mllwxgg5t4q5mieuew34
+- valory/termination_abci:0.1.0:bafybeihnp324qgyypecaol4tqt7bugbvpbut4hw5brbckbhpovenfiw3zu
+- valory/transaction_settlement_abci:0.1.0:bafybeidbodazeikfo24pug3ir44ub265ltmepm752mzkuic4qfhkdcckmm
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -81,7 +81,7 @@ dependencies:
   googlesearch-python:
     version: ==1.2.3
   open-aea-ledger-ethereum:
-    version: ==1.41.0
+    version: ==1.41.0.post1
   aiohttp:
     version: <3.9,>=3.7.4
   langchain:
@@ -154,6 +154,7 @@ models:
   params:
     args:
       sleep_time: ${int:1}
+      ipfs_fetch_timeout: ${float:15.0}
       tendermint_check_sleep_delay: ${int:3}
       tendermint_p2p_url: ${str:localhost:26656}
       tendermint_com_url: ${str:http://localhost:8080}

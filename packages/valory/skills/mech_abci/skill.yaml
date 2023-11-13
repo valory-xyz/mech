@@ -21,9 +21,9 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeic3xbxh74qaufevlmuwj64hhzyvp6ne24ffmbdauset52z7app2cu
 - valory/registration_abci:0.1.0:bafybeigqxnmblvehj4cbhywmjbvivf44ru23xyizf7gx4wfkygkubwex24
 - valory/reset_pause_abci:0.1.0:bafybeifdul36ucwer665cljtb4233fzedxkxfgi7fwflhmlsr2efhu4eiq
-- valory/task_submission_abci:0.1.0:bafybeiexdygnfmgyns6kvcp5bqkwe4uper75qhvdnk6bkq4ct3s3fmadq4
-- valory/termination_abci:0.1.0:bafybeifnocui4dhesofqc25lomdhq5r2xwqx7w32vg2rot6vxnggtbo4vq
-- valory/transaction_settlement_abci:0.1.0:bafybeifdypr2a3ojm2dc2fp4yp62kndt4yilulqznbownnufzhzbc236dy
+- valory/task_submission_abci:0.1.0:bafybeif3iq7a424o4uldemtlfzsbohewlktb65mllwxgg5t4q5mieuew34
+- valory/termination_abci:0.1.0:bafybeihnp324qgyypecaol4tqt7bugbvpbut4hw5brbckbhpovenfiw3zu
+- valory/transaction_settlement_abci:0.1.0:bafybeidbodazeikfo24pug3ir44ub265ltmepm752mzkuic4qfhkdcckmm
 behaviours:
   main:
     args: {}
@@ -131,6 +131,7 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
+      ipfs_fetch_timeout: 15.0
       service_id: mech
       service_registry_address: null
       setup:
@@ -184,5 +185,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.41.0
+    version: ==1.41.0.post1
 is_abstract: false
