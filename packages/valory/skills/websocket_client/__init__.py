@@ -22,4 +22,4 @@
 
 from aea.configurations.base import PublicId
 
-PUBLIC_ID = PublicId.from_str("valory/contract_subscription:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/websocket_client:0.1.0")

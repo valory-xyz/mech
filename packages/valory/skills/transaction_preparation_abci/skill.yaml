@@ -5,25 +5,17 @@ type: skill
 description: The scaffold skill is a scaffold for your own skill implementation.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
-fingerprint:
-  __init__.py: bafybeicffbkqynejxmx6kqcdbhhaopn7phg2yfpcufp4d774jfwqsm7gx4
-  behaviours.py: bafybeihzxxzg3lhe6tl2mlds5mykcopsvycq64iwdkelyzgos36bx5xmwe
-  dialogues.py: bafybeidwzysmmicss6myr36mqja6annr72nyuc5vmvp2zifcza54zayjye
-  fsm_specification.yaml: bafybeickup5aqc3ejxbjxc5d6seax5kn5l5apgvvayxq7pxu2qmknkd7di
-  handlers.py: bafybeihp7c6cvr5ui7qkwfuv463tnwpn2p3kxandm5fntilugdaxgr66ei
-  models.py: bafybeifz45fdcdwp4vudfjobphrlahnglyrysiqjpoik6qim3t7znzplfe
-  payloads.py: bafybeifzn5lav6fcbt4pqrytsrm72hf3662qmcylf6efwrc2qhssg7apq4
-  rounds.py: bafybeiaqyxephk6lgeomkirbboa6dvjvcay76gnmgwkamo4pwjty4yazrm
+fingerprint: {}
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeicv54ejr2vie5vk65rzs3lxiwskjr3rhkyt47rqmiwrzfvhto6c4a
-- valory/gnosis_safe:0.1.0:bafybeigfnb6hdixmdwoxingxrevx7beawm2voudgtexo6vazzfa4vhyx5m
+- valory/agent_mech:0.1.0:bafybeihpvdox72yogv5axf3sgk2y57hgyppdilpes2dlrmixx7ffq47sna
+- valory/gnosis_safe:0.1.0:bafybeifyempvhciy6evbf2epqhry3qgqj3rh4x3ovuru6jtuibuyttjd5e
 protocols:
-- valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
+- valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
+- valory/abstract_round_abci:0.1.0:bafybeih7nivpffgvqvribkxxejuhnkrhypadoqrfd2ca5xhc2ujhyuualu
+- valory/transaction_settlement_abci:0.1.0:bafybeid4i3txzrgiyvu73u2mxvzjgnedspokku74zbzqo46wk5eccbgkaa
 behaviours:
   main:
     args: {}
