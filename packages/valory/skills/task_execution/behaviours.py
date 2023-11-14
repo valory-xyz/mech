@@ -106,6 +106,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         return cast(Params, self.context.params)
 
     @property
+    def request_id_to_num_timeouts(self) -> Dict[int, int]:
+        """Maps the request id to the number of times it has timed out."""
+        return self.params.request_id_to_num_timeouts
+
+    def count_timeout(self, request_id: int) -> None:
+        """Increase the timeout for a request."""
+        self.request_id_to_num_timeouts[request_id] += 1
+
+    def timeout_limit_reached(self, request_id: int) -> bool:
+        """Check if the timeout limit has been reached."""
+        return self.params.timeout_limit <= self.request_id_to_num_timeouts[request_id]
+
+    @property
     def pending_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks."""
         return self.context.shared_state[PENDING_TASKS]
@@ -227,7 +240,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         if self._executing_task is not None:
             if self._is_executing_task_ready() or self._invalid_request:
-                self._handle_done_task()
+                task_result = self._get_executing_task_result()
+                self._handle_done_task(task_result)
             elif self._has_executing_task_timed_out():
                 self._handle_timeout_task()
             return
@@ -255,12 +269,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.req_to_callback[nonce] = callback
         self.params.in_flight_req = True
 
-    def _handle_done_task(self) -> None:
+    def _handle_done_task(self, task_result: Any) -> None:
         """Handle done tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
         mech_address = executing_task.get("contract_address", None)
-        task_result = self._get_executing_task_result()
         response = {"requestId": req_id, "result": "Invalid response"}
         self._done_task = {"request_id": req_id, "mech_address": mech_address}
         if task_result is not None:
@@ -279,12 +292,30 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle timeout tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+        self.count_timeout(req_id)
         self.context.logger.info(f"Task timed out for request {req_id}")
-        # added to end of queue
-        self.pending_tasks.append(executing_task)
+        self.context.logger.info(
+            f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times"
+        )
         async_result = cast(Future, self._async_result)
         async_result.cancel()
-        self._executing_task = None
+        if not self.timeout_limit_reached(req_id):
+            # added to end of queue
+            self.context.logger.info(f"Adding task {req_id} to the end of the queue")
+            self.pending_tasks.append(executing_task)
+            self._executing_task = None
+            return None
+
+        self.context.logger.info(
+            f"Task {req_id} has reached the timeout limit of{self.params.timeout_limit}. "
+            f"It won't be added to the end of the queue again."
+        )
+        task_result = (
+            f"Task timed out {self.params.timeout_limit} times during execution. ",
+            "",
+            None,
+        )
+        self._handle_done_task(task_result)
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a task request."""
@@ -386,8 +417,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             executing_task["requestId"],
             executing_task["sender"],
         )
-        self.context.logger.info(f"Response for request {req_id} stored on IPFS.")
         ipfs_hash = to_v1(message.ipfs_hash)
+        self.context.logger.info(f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}.")
         self.send_data_via_acn(
             sender_address=sender,
             request_id=str(req_id),
