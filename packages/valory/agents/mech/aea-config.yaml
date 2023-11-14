@@ -3,7 +3,7 @@ author: valory
 version: 0.1.0
 license: Apache-2.0
 description: A mech agent
-aea_version: '>=1.34.0, <2.0.0'
+aea_version: '>=1.37.0, <2.0.0'
 fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
@@ -12,37 +12,35 @@ connections:
 - valory/ipfs:0.1.0:bafybeigr2cipad23aebjpnqtzpgymiwrwgmnior2fk4inbscdnqyl5epla
 - valory/ledger:0.19.0:bafybeicgfupeudtmvehbwziqfxiz6ztsxr5rxzvalzvsdsspzz73o5fzfi
 - valory/p2p_libp2p_client:0.1.0:bafybeidwcobzb7ut3efegoedad7jfckvt2n6prcmd4g7xnkm6hp6aafrva
-- valory/websocket_client:0.1.0:bafybeibgkxjivbw53qz5hnvnaf656pnubmsxr3v4yyye5xhryhn3hws6xe
+- valory/websocket_client:0.1.0:bafybeibffszgha5w424ifiwovx5tsvccaylaj3vmfgpe44gettsqhlm6nu
 contracts:
-- valory/agent_mech:0.1.0:bafybeicv54ejr2vie5vk65rzs3lxiwskjr3rhkyt47rqmiwrzfvhto6c4a
-- valory/gnosis_safe:0.1.0:bafybeigfnb6hdixmdwoxingxrevx7beawm2voudgtexo6vazzfa4vhyx5m
-- valory/gnosis_safe_proxy_factory:0.1.0:bafybeib2rat7ht33l6r6ix45x5yifotq7l6oqczmqe5edxh2ackv4i72jq
+- valory/agent_mech:0.1.0:bafybeib7v5fujyrio64trg5vmkuxpz42mc6fwjrmdyg3dr6ifudkn5rhle
+- valory/gnosis_safe:0.1.0:bafybeigay6nfnmzddx3opzqdnl2lvlvabi73beffs2py3krlagwgzuesmu
+- valory/gnosis_safe_proxy_factory:0.1.0:bafybeiaqg2ovb3r6iskkp6iyawsw42u7h4hhci6r4cowmazrlosjcq3vxq
 - valory/multisend:0.1.0:bafybeigjywkl7hydjsrkogob3xebj2ifhqwmfhhxoeyrndzhhxi5u6amey
 - valory/service_registry:0.1.0:bafybeiatcuw6zeqok4spkkonui6likgdfwtp2dichzrlbjxnf76eg42sdq
 protocols:
-- fetchai/default:1.0.0:bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4
-- open_aea/signing:1.0.0:bafybeibqlfmikg5hk4phzak6gqzhpkt6akckx7xppbp53mvwt6r73h7tk4
-- valory/abci:0.1.0:bafybeig3dj5jhsowlvg3t73kgobf6xn4nka7rkttakdb2gwsg5bp7rt7q4
-- valory/acn:1.1.0:bafybeignmc5uh3vgpuckljcj2tgg7hdqyytkm6m5b6v6mxtazdcvubibva
-- valory/contract_api:1.0.0:bafybeidv6wxpjyb2sdyibnmmum45et4zcla6tl63bnol6ztyoqvpl4spmy
-- valory/http:1.0.0:bafybeifyoio7nlh5zzyn5yz7krkou56l22to3cwg7gw5v5o3vxwklibhty
-- valory/ipfs:0.1.0:bafybeic72ncgqbzoz2guj4p4yjqulid7mv6yroeh65hxznloamoveeg7hq
-- valory/ledger_api:1.0.0:bafybeibo4bdtcrxi2suyzldwoetjar6pqfzm6vt5xal22ravkkcvdmtksi
-- valory/tendermint:0.1.0:bafybeicusvezoqlmyt6iqomcbwaz3xkhk2qf3d56q5zprmj3xdxfy64k54
-- valory/acn_data_share:0.1.0:bafybeieyixetwvz767zekhvg7r6etumyanzys6xbalx2brrfswybinnlhi
+- open_aea/signing:1.0.0:bafybeie7xyems76v5b4wc2lmaidcujizpxfzjnnwdeokmhje53g7ym25ii
+- valory/abci:0.1.0:bafybeihmzlmmb4pdo3zkhg6ehuyaa4lhw7bfpclln2o2z7v3o6fcep26iu
+- valory/acn:1.1.0:bafybeic2pxzfc3voxl2ejhcqyf2ehm4wm5gxvgx7bliloiqi2uppmq6weu
+- valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
+- valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
+- valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq
+- valory/http:1.0.0:bafybeiejoqgv7finfxo3rcvvovrlj5ccrbgxodjq43uo26ylpowsa3llfe
+- valory/ipfs:0.1.0:bafybeiedxeismnx3k5ty4mvvhlqideixlhqmi5mtcki4lxqfa7uqh7p33u
+- valory/ledger_api:1.0.0:bafybeige5agrztgzfevyglf7mb4o7pzfttmq4f6zi765y4g2zvftbyowru
+- valory/tendermint:0.1.0:bafybeig6g6twajlwssfbfp5rlnu5mwzuu5kgak5cs4fich7rlkx6whesnu
 skills:
-- valory/abstract_abci:0.1.0:bafybeihgerjeq4u4apuue7zzhpb3wmntuju34dbdijbbvl4wclww2gy7di
-- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/contract_subscription:0.1.0:bafybeick2yczww7gju4ca6hohdlntpinejdf2f66ququl2gzlwgon7z6ji
-- valory/websocket_client:0.1.0:bafybeidhpmutf6mjf4c3dwzpf4ymiyxasrcxggufgld7wn337omdvxujzi
-- valory/mech_abci:0.1.0:bafybeibmz6pr5rsm3cjomjhqqqfbqkcqenpaxqmxlklm3dty5ejhelktsm
-- valory/multiplexer_abci:0.1.0:bafybeifmct2xjtane2j423yy3yvelh7eprqbseii2v2v3l2gvluyqevikm
-- valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
-- valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeicql4ntiwnpdu7hogj33gvmszf6q42fpx2y3nz4rr4pjhcwh3qpu4
-- valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeiazlqxkwcjr2nhpgbfav7nsmbgklmdpelqcnehqzs2qb4vfeyq24a
-- valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
+- valory/abstract_abci:0.1.0:bafybeifeqstiynx2n37k7lpdbcclylgg7tsmym7vtj4tanrukkvw4pp5nu
+- valory/abstract_round_abci:0.1.0:bafybeiarzpxsy7ulitk5obs4zajhll2m77motjn5st7mi6qvjtkoirfikq
+- valory/contract_subscription:0.1.0:bafybeihozkmtmfs3iqrreewvnixx6hod4rpcfdxqu4c6cfmubwwojc2dzu
+- valory/mech_abci:0.1.0:bafybeiatwlgn2xab4gcv65325r7tdkhwsb7osmhefuoq7hdcpgvirrvvb4
+- valory/multiplexer_abci:0.1.0:bafybeibgy5xojz6gbei2cob7jinceovndqzm7rbdmfxf4odmvqo5kjvmvu
+- valory/registration_abci:0.1.0:bafybeie4suynydmpq2myqkdzhiqoro2hr4zexd5a2o4rvch7yefw65kjvq
+- valory/reset_pause_abci:0.1.0:bafybeiaickab63rqbu3kywnwyrfaa4362ai7rbvhghehxnvqk54eiaaegm
+- valory/task_execution_abci:0.1.0:bafybeica2ga5n5dct6oac6ubuy7miipbodgifxyq5wfwp6j4tgc3uizhdq
+- valory/termination_abci:0.1.0:bafybeieqpy3nu7qoy6ztfxetgiuevmgcpylufou3ngh5nw2vsgsvghid54
+- valory/transaction_settlement_abci:0.1.0:bafybeihuzoxkhnpep4zcekdq463hopohj3i7rkxvbc2ywmmcyppi3knbxy
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -73,7 +71,32 @@ logging_config:
       - console
       propagate: true
 dependencies:
-  open-aea-ledger-ethereum: {}
+  anthropic:
+    version: ==0.3.11
+  beautifulsoup4:
+    version: ==4.12.2
+  google-api-python-client:
+    version: ==2.95.0
+  googlesearch-python:
+    version: ==1.2.3
+  open-aea-ledger-ethereum:
+    version: ==1.41.0.post1
+  aiohttp:
+    version: <3.9,>=3.7.4
+  langchain:
+    version: ==0.0.303
+  scikit-learn:
+    version: ==1.3.1
+  pandas:
+    version: ==2.1.1
+  hypothesis:
+    version: ==6.21.6
+  spacy:
+    version: ==3.7.2
+  tiktoken:
+    version: ==0.5.1
+  python-dateutil:
+    version: ==2.8.2
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
@@ -81,6 +104,7 @@ type: connection
 config:
   endpoint: ${str:wss://rpc.gnosischain.com/wss}
   target_skill_id: valory/contract_subscription:0.1.0
+is_abstract: true
 ---
 public_id: valory/contract_subscription:0.1.0:bafybeiby5ajjc7a3m2uq73d2pprx6enqt4ghfcq2gkmrtsr75e4d4napi4
 type: skill
@@ -96,6 +120,7 @@ models:
   params:
     args:
       use_polling: ${bool:false}
+is_abstract: true
 ---
 public_id: valory/abci:0.1.0
 type: connection
@@ -126,27 +151,45 @@ type: skill
 models:
   params:
     args:
-      sleep_time: 1
+      sleep_time: ${int:1}
       ipfs_fetch_timeout: ${float:15.0}
-      tendermint_check_sleep_delay: 3
+      tendermint_check_sleep_delay: ${int:3}
       tendermint_p2p_url: ${str:localhost:26656}
       tendermint_com_url: ${str:http://localhost:8080}
-      tendermint_max_retries: 5
+      tendermint_max_retries: ${int:5}
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
-      agent_mech_contract_address: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+      agent_mech_contract_addresses: ${list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
       round_timeout_seconds: ${float:30.0}
       reset_period_count: ${int:1000}
       on_chain_service_id: ${int:1}
+      agent_registry_address: ${str:0x0000000000000000000000000000000000000000}
+      agent_id: ${int:3}
+      metadata_hash: ${str:null}
+      share_tm_config_on_startup: ${bool:false}
       multisend_address: ${str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
       service_registry_address: ${str:0x9338b5153AE39BB89f50468E608eD9d764B755fD}
+      init_fallback_gas: ${int:500000}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
-      file_hash_to_tools_json: ${list:[["bafybeibi34bhbvesmvd6o24jxvuldrwen4wj62na3lhva7k4afkg2shinu",["openai-text-davinci-002","openai-text-davinci-003","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]],["bafybeidpbnqbruzqlq424qt3i5dcvyqmcimshjilftabnrroujmjhdmteu",["transfer-native"]]]}
-      api_keys_json: ${list:[["openai", "dummy_api_key"],["stabilityai", "dummy_api_key"]]}
-      use_polling: ${bool:false}
-      polling_interval: ${int:25}
+        consensus_threshold: ${int:null}
+---
+public_id: valory/task_execution:0.1.0
+type: skill
+models:
+  params:
+    args:
+      agent_mech_contract_addresses: ${list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
+      task_deadline: ${float:240.0}
+      file_hash_to_tools_json: ${list:[["bafybeibi34bhbvesmvd6o24jxvuldrwen4wj62na3lhva7k4afkg2shinu",["openai-text-davinci-002","openai-text-davinci-003","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]],["bafybeidpbnqbruzqlq424qt3i5dcvyqmcimshjilftabnrroujmjhdmteu",["transfer-native"]],["bafybeiglhy5epaytvt5qqdx77ld23ekouli53qrf2hjyebd5xghlunidfi",["prediction-online","prediction-offline"]]]}
+      api_keys_json: ${list:[["openai", "dummy_api_key"],["stabilityai", "dummy_api_key"],["google_api_key",
+        "dummy_api_key"],["google_engine_id", "dummy_api_key"]]}
+      polling_interval: ${float:30.0}
+      agent_index: ${int:0}
+      num_agents: ${int:4}
+      from_block_range: ${int:50000}
+      timeout_limit: ${int:3}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
@@ -154,6 +197,11 @@ config:
   ledger_apis:
     ethereum:
       address: ${str:https://rpc.gnosischain.com/}
-      chain_id: 100
-      poa_chain: false
-      default_gas_price_strategy: eip1559
+      chain_id: ${int:100}
+      poa_chain: ${bool:false}
+      default_gas_price_strategy: ${str:eip1559}
+    gnosis:
+      address: ${str:https://rpc.gnosischain.com/}
+      chain_id: ${int:100}
+      poa_chain: ${bool:false}
+      default_gas_price_strategy: ${str:eip1559}

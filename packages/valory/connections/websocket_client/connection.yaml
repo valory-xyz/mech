@@ -13,7 +13,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 protocols:
-- valory/websocket_client:0.1.0:bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4
+- fetchai/default:1.0.0:bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4
 class_name: WebSocketClient
 config:
   endpoint: null
@@ -22,6 +22,6 @@ excluded_protocols: []
 restricted_to_protocols: []
 dependencies:
   websocket_client:
-    version: '>=0.32.0,<1'
+    version: <1,>=0.32.0
 is_abstract: false
 cert_requests: []

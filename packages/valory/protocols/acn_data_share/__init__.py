@@ -20,7 +20,7 @@
 """
 This module contains the support resources for the acn_data_share protocol.
 
-It was created with protocol buffer compiler version `libprotoc 3.19.4` and aea protocol generator version `1.0.0`.
+It was created with protocol buffer compiler version `libprotoc 24.3` and aea protocol generator version `1.0.0`.
 """
 
 from packages.valory.protocols.acn_data_share.message import AcnDataShareMessage

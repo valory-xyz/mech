@@ -38,6 +38,7 @@ from packages.valory.skills.contract_subscription.dialogues import (
     WebsocketClientDialogue,
     WebsocketClientDialogues,
 )
+from packages.valory.protocols.default.message import DefaultMessage
 from packages.valory.skills.contract_subscription.handlers import DISCONNECTION_POINT
 from packages.valory.skills.contract_subscription.models import Params
 from packages.valory.skills.websocket_client.behaviours import (

@@ -19,7 +19,7 @@
 
 """This module contains the dynamic_contribution contract definition."""
 
-from typing import Any, cast
+from typing import Any, Dict, List, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -27,6 +27,58 @@ from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
 from web3.types import BlockIdentifier, TxReceipt
+
+
+partial_abis = [
+    [
+        {
+            "anonymous": False,
+            "inputs": [
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestId",
+                    "type": "uint256",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "bytes",
+                    "name": "data",
+                    "type": "bytes",
+                },
+            ],
+            "name": "Deliver",
+            "type": "event",
+        }
+    ],
+    [
+        {
+            "anonymous": False,
+            "inputs": [
+                {
+                    "indexed": True,
+                    "internalType": "address",
+                    "name": "sender",
+                    "type": "address",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestId",
+                    "type": "uint256",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "bytes",
+                    "name": "data",
+                    "type": "bytes",
+                },
+            ],
+            "name": "Deliver",
+            "type": "event",
+        }
+    ],
+]
 
 
 class AgentMechContract(Contract):
@@ -87,7 +139,7 @@ class AgentMechContract(Contract):
 
     @classmethod
     def get_deliver_data(
-        cls, ledger_api: LedgerApi, contract_address: str, request_id: int, data: bytes
+        cls, ledger_api: LedgerApi, contract_address: str, request_id: int, data: str
     ) -> JSONLike:
         """
         Deliver a response to a request.
@@ -104,7 +156,9 @@ class AgentMechContract(Contract):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(fn_name="deliver", args=[request_id, data])
+        data = contract_instance.encodeABI(
+            fn_name="deliver", args=[request_id, bytes.fromhex(data)]
+        )
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
 
     @classmethod
@@ -118,7 +172,7 @@ class AgentMechContract(Contract):
         """Get the Request events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        entries = contract_instance.events.Request.createFilter(
+        entries = contract_instance.events.Request.create_filter(
             fromBlock=from_block,
             toBlock=to_block,
         ).get_all_entries()
@@ -126,6 +180,7 @@ class AgentMechContract(Contract):
             {
                 "tx_hash": entry.transactionHash.hex(),
                 "block_number": entry.blockNumber,
+                "contract_address": contract_address,
                 **entry["args"],
             }
             for entry in entries
@@ -142,18 +197,22 @@ class AgentMechContract(Contract):
     ) -> JSONLike:
         """Get the Deliver events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        entries = contract_instance.events.Deliver.createFilter(
-            fromBlock=from_block,
-            toBlock=to_block,
-        ).get_all_entries()
+        all_entries = []
+        for abi in partial_abis:
+            contract_instance = ledger_api.api.eth.contract(contract_address, abi=abi)
+            entries = contract_instance.events.Deliver.create_filter(
+                fromBlock=from_block,
+                toBlock=to_block,
+            ).get_all_entries()
+            all_entries.extend(entries)
+
         deliver_events = list(
             {
                 "tx_hash": entry.transactionHash.hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
             }
-            for entry in entries
+            for entry in all_entries
         )
         return {"data": deliver_events}
 
@@ -174,3 +233,46 @@ class AgentMechContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         event, *_ = contract_instance.events.Request().processReceipt(tx_receipt)
         return dict(event["args"])
+
+    @classmethod
+    def get_undelivered_reqs(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
+        **kwargs: Any,
+    ) -> JSONLike:
+        """Get the requests that are not delivered."""
+        requests: List[Dict[str, Any]] = cls.get_request_events(
+            ledger_api, contract_address, from_block, to_block
+        )["data"]
+        delivers: List[Dict[str, Any]] = cls.get_deliver_events(
+            ledger_api, contract_address, from_block, to_block
+        )["data"]
+        pending_tasks: List[Dict[str, Any]] = []
+        for request in requests:
+            if request["requestId"] not in [
+                deliver["requestId"] for deliver in delivers
+            ]:
+                # store each requests in the pending_tasks list, make sure each req is stored once
+                pending_tasks.append(request)
+        return {"data": pending_tasks}
+
+    @classmethod
+    def get_multiple_undelivered_reqs(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        contract_addresses: List[str],
+        from_block: BlockIdentifier = "earliest",
+        **kwargs: Any,
+    ) -> JSONLike:
+        """Get the requests that are not delivered."""
+        pending_tasks: List[Dict[str, Any]] = []
+        for contract_address in contract_addresses:
+            pending_tasks_batch = cls.get_undelivered_reqs(
+                ledger_api, contract_address, from_block
+            ).get("data")
+            pending_tasks.extend(pending_tasks_batch)
+        return {"data": pending_tasks}

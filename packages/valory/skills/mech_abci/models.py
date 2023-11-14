@@ -26,24 +26,22 @@ from packages.valory.skills.abstract_round_abci.models import (
 )
 from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
 from packages.valory.skills.mech_abci.composition import MechAbciApp
-from packages.valory.skills.multiplexer_abci.models import (
-    Params as MultiplexerAbciParams,
-)
-from packages.valory.skills.multiplexer_abci.rounds import Event as MultiplexerEvent
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
-from packages.valory.skills.task_execution_abci.models import (
+from packages.valory.skills.task_submission_abci.models import (
     Params as TaskExecutionAbciParams,
 )
-from packages.valory.skills.task_execution_abci.models import (
+from packages.valory.skills.task_submission_abci.models import (
     SharedState as TaskExecSharedState,
 )
-from packages.valory.skills.task_execution_abci.rounds import (
+from packages.valory.skills.task_submission_abci.rounds import (
     Event as TaskExecutionEvent,
 )
 from packages.valory.skills.termination_abci.models import TerminationParams
+from packages.valory.skills.transaction_settlement_abci.rounds import (
+    Event as TransactionSettlementEvent,
+)
 
 
-MultiplexerParams = MultiplexerAbciParams
 TaskExecutionParams = TaskExecutionAbciParams
 
 
@@ -73,21 +71,33 @@ class SharedState(TaskExecSharedState):
         super().setup()
 
         MechAbciApp.event_to_timeout[
-            MultiplexerEvent.ROUND_TIMEOUT
+            TaskExecutionEvent.ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
 
         MechAbciApp.event_to_timeout[
-            TaskExecutionEvent.ROUND_TIMEOUT
+            TaskExecutionEvent.TASK_EXECUTION_ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
 
         MechAbciApp.event_to_timeout[
             ResetPauseEvent.ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
 
+        MechAbciApp.event_to_timeout[
+            TransactionSettlementEvent.ROUND_TIMEOUT
+        ] = self.context.params.round_timeout_seconds
+
+        MechAbciApp.event_to_timeout[
+            TransactionSettlementEvent.VALIDATE_TIMEOUT
+        ] = self.context.params.validate_timeout
+
+        MechAbciApp.event_to_timeout[
+            TransactionSettlementEvent.FINALIZE_TIMEOUT
+        ] = self.context.params.finalize_timeout
+
         MechAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT] = (
             self.context.params.reset_pause_duration + MARGIN
         )
 
 
-class Params(MultiplexerParams, TaskExecutionParams, TerminationParams):  # type: ignore
+class Params(TaskExecutionParams, TerminationParams):  # type: ignore
     """A model to represent params for multiple abci apps."""

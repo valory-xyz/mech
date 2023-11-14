@@ -3,16 +3,10 @@
 packages/fetchai/
 packages/open_aea/
 packages/valory/connections/abci/
-packages/valory/connections/http_client/
 packages/valory/connections/ipfs/
 packages/valory/connections/ledger/
 packages/valory/connections/p2p_libp2p_client/
 packages/valory/skills/abstract_abci/
-packages/valory/skills/abstract_round_abci/
-packages/valory/skills/registration_abci/
-packages/valory/skills/reset_pause_abci/
-packages/valory/skills/transaction_settlement_abci/
-packages/valory/skills/termination_abci/
 
 packages/valory/contracts/gnosis_safe_proxy_factory/
 packages/valory/contracts/multisend/
@@ -26,6 +20,8 @@ packages/valory/protocols/http
 packages/valory/protocols/ipfs
 packages/valory/protocols/ledger_api
 packages/valory/protocols/tendermint
+
+*test_mech.py
 
 .idea
 **/__pycache__/
@@ -49,4 +45,4 @@ keys.json
 leak_report
 
 agent/
-mech/
+backup_mech/

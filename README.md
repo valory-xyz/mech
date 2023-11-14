@@ -5,7 +5,7 @@
 <h1 align="center" style="margin-bottom: 0;">
     Autonolas AI Mechs
     <br><a href="https://github.com/valory-xyz/mech/blob/main/LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/valory-xyz/mech"></a>
-    <a href="https://pypi.org/project/open-autonomy/0.10.6/"><img alt="Framework: Open Autonomy 0.10.6" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.10.6-blueviolet"></a>
+    <a href="https://pypi.org/project/open-autonomy/0.10.7/"><img alt="Framework: Open Autonomy 0.10.7" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.10.7-blueviolet"></a>
     <!-- <a href="https://github.com/valory-xyz/mech/releases/latest">
     <img alt="Latest release" src="https://img.shields.io/github/v/release/valory-xyz/mech"> -->
     </a>
@@ -56,8 +56,10 @@ Follow these instructions to have your local environment prepared to run the dem
 1. Create a Poetry virtual environment and install the dependencies:
 
     ```bash
-    poetry shell
-    poetry install
+    poetry run pip install "cython<3"
+    poetry run pip install wheel==0.40.0
+    poetry run pip install --no-build-isolation pyyaml==5.4.1
+    poetry install && poetry shell
     ```
 
 2. Fetch the software packages using the [Open Autonomy](https://docs.autonolas.network/open-autonomy/) CLI 
@@ -212,3 +214,11 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 - **Prediction request** (`prediction_request.py`): Outputs the estimated probability of occurrence (`p_yes`) or no occurrence (`p_no`) of a certain event specified as the input prompt in natural language.
   - `prediction-offline`: Uses only training data of the model to make the prediction.
   - `prediction-online`: In addition to training data, it also uses online information to improve the prediction.
+
+## How key files look
+A keyfile is just a file with your ethereum private key as a hex-string, example:
+```
+0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd
+```
+
+Make sure you don't have any extra characters in the file, like newlines or spaces.

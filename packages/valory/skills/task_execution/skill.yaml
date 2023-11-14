@@ -1,0 +1,107 @@
+name: task_execution
+author: valory
+version: 0.1.0
+type: skill
+description: A skill used for monitoring and executing tasks.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
+  behaviours.py: bafybeie4h4m4py7u3ah4mcotiah32umi7lb5xnxmzpvvhikushaedcglkq
+  dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
+  handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
+  models.py: bafybeihc2kmymmh5oousjddbc7xujqbk5niermuqak2dhtgryukzq5wxeq
+  utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
+  utils/ipfs.py: bafybeicuaj23qrcdv6ly4j7yo6il2r5plozhd6mwvcp5acwqbjxb2t3u2i
+  utils/task.py: bafybeiakokty64m5cqp72drrpvfckhruldlwcge5hcc2bsy2ujk6nnrazq
+fingerprint_ignore_patterns: []
+connections:
+- valory/ledger:0.19.0:bafybeigdckv3e6bz6kfloz4ucqrsufft6k4jp6bwkbbcvh4fxvgbmzq3dm
+- valory/ipfs:0.1.0:bafybeigfmqvlzbp67fttccpl4hsu3zaztbxv6vd7ikzra2hfppfkalgpji
+- valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
+contracts:
+- valory/agent_mech:0.1.0:bafybeidaavljfscd5s6lp3d3e7ulsshp6gayo6b56sl5h4leclujc7spui
+protocols:
+- valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
+- valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
+- valory/ledger_api:1.0.0:bafybeige5agrztgzfevyglf7mb4o7pzfttmq4f6zi765y4g2zvftbyowru
+- valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq
+- valory/ipfs:0.1.0:bafybeiedxeismnx3k5ty4mvvhlqideixlhqmi5mtcki4lxqfa7uqh7p33u
+skills: []
+behaviours:
+  task_execution:
+    args: {}
+    class_name: TaskExecutionBehaviour
+handlers:
+  acn_data_share_handler:
+    args: {}
+    class_name: AcnHandler
+  contract_handler:
+    args: {}
+    class_name: ContractHandler
+  ipfs_handler:
+    args: {}
+    class_name: IpfsHandler
+  ledger_handler:
+    args: {}
+    class_name: LedgerHandler
+models:
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
+  contract_dialogues:
+    args: {}
+    class_name: ContractDialogues
+  default_dialogues:
+    args: {}
+    class_name: DefaultDialogues
+  ipfs_dialogues:
+    args: {}
+    class_name: IpfsDialogues
+  ledger_dialogues:
+    args: {}
+    class_name: LedgerDialogues
+  params:
+    args:
+      agent_index: 0
+      agent_mech_contract_addresses:
+      - '0x9A676e781A523b5d0C0e43731313A708CB607508'
+      api_keys_json:
+      - - openai
+        - dummy_api_key
+      - - stabilityai
+        - dummy_api_key
+      file_hash_to_tools_json:
+      - - bafybeif3izkobmvaoen23ine6tiqx55eaf4g3r56hdalnig656xivzpf3m
+        - - openai-text-davinci-002
+          - openai-text-davinci-003
+          - openai-gpt-3.5-turbo
+          - openai-gpt-4
+      - - bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua
+        - - stabilityai-stable-diffusion-v1-5
+          - stabilityai-stable-diffusion-xl-beta-v2-2-2
+          - stabilityai-stable-diffusion-512-v2-1
+          - stabilityai-stable-diffusion-768-v2-1
+      from_block_range: 50000
+      num_agents: 4
+      polling_interval: 30.0
+      task_deadline: 240.0
+      use_slashing: false
+      timeout_limit: 3
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
+      light_slash_unit_amount: 5000000000000000
+      serious_slash_unit_amount: 8000000000000000
+    class_name: Params
+dependencies:
+  beautifulsoup4:
+    version: ==4.12.2
+  googlesearch-python:
+    version: ==1.2.3
+  openai:
+    version: ==0.27.2
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
+is_abstract: false

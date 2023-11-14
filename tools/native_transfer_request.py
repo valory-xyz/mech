@@ -85,7 +85,7 @@ def make_request_openai_request(
 def native_transfer(
     prompt: str,
     api_key: str,
-) -> Tuple[str, Optional[Dict[str, Any]]]:
+) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Perform native transfer."""
     tool_prompt = NATIVE_TRANSFER_PROMPT.format(user_prompt=prompt)
     response = make_request_openai_request(prompt=tool_prompt, api_key=api_key)
@@ -94,7 +94,7 @@ def native_transfer(
         # parse the response to get the transaction object string itself
         parsed_txs = ast.literal_eval(response)
     except SyntaxError:
-        return response, None
+        return response, None, None
 
     # build the transaction object, unknowns are referenced from parsed_txs
     transaction = {
@@ -102,7 +102,7 @@ def native_transfer(
         "value": int(parsed_txs["wei_value"]),
     }
 
-    return response, transaction
+    return response, prompt, transaction
 
 
 AVAILABLE_TOOLS = {
@@ -110,14 +110,14 @@ AVAILABLE_TOOLS = {
 }
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
     prompt = kwargs["prompt"]
     api_key = kwargs["api_keys"]["openai"]
     tool = cast(str, kwargs["tool"]).replace(TOOL_PREFIX, "")
 
     if tool not in AVAILABLE_TOOLS:
-        return f"Not tool named `{kwargs['tool']}`", None
+        return f"No tool named `{kwargs['tool']}`", None, None
 
     transaction_builder = AVAILABLE_TOOLS[tool]
     return transaction_builder(prompt, api_key)

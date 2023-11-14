@@ -2,30 +2,28 @@ name: mech_abci
 author: valory
 version: 0.1.0
 type: skill
-description: The chained abci for the mech skill.
+description: The chained abci skill for the mech.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
-  behaviours.py: bafybeihgtg4l7qcu33ptyfn6cnohm3tcxlpkdqijyc5zjxmci6lqzxmogy
-  composition.py: bafybeiektjao3czojlipbcj2oglrk4hsch76d7ft3zw3vpcerewvvi6idy
-  dialogues.py: bafybeidhmgdnhxcgv35vahz3ycoiduug23kfyqvttqnywjp3eiuqal4bzy
-  fsm_specification.yaml: bafybeieeqdr76xgxqjdqalip7agguutwsn23n5xgop4ziach7l4hiqxvqm
+  behaviours.py: bafybeidjvn4xr2k525r4emsm6yen3nnet7kqasrjm7chbuodhbywzw5nb4
+  composition.py: bafybeihmtr4ddrs4eu5wkk4xmcfnytvw2lt4udcfo7cf6a46fhe6gjdn3q
+  dialogues.py: bafybeifhydd6xmstbh2jx5igj33upip5a3hhlcaxttfsc77heszqmru7ri
+  fsm_specification.yaml: bafybeiefcun637n44sw4htjg7qgvhkalfhsdlszbu3fg7vn6mu73eqbssq
   handlers.py: bafybeiffuduhg433qsu6lbet5jsaub63bzv2l4x756aj2fbnu5bnfu4ble
-  models.py: bafybeic3miniq5lacarxspyxuvmlnwervwf2wmpnvw2gxpgk77fzyzcpvq
+  models.py: bafybeic3pjxw7py6jpiaaxjtcufzcjmyldj2fdhpkik5qnj4hpruuxcu4q
 fingerprint_ignore_patterns: []
 connections: []
 contracts: []
 protocols: []
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeicensk7a2vpqj52iyhf6yhc6z2iwulb2txbym546qvwgsxm3skvcm
-- valory/multiplexer_abci:0.1.0:bafybeifmct2xjtane2j423yy3yvelh7eprqbseii2v2v3l2gvluyqevikm
-- valory/registration_abci:0.1.0:bafybeicsqhakfliwauyqow62yopcjhejknmfcjzh7ilbjt32ozydbhxleq
-- valory/reset_pause_abci:0.1.0:bafybeigwsp2crzvqan7xnap6dh4f4lxdut5il6naj7r4jwaslopstufgl4
-- valory/task_execution_abci:0.1.0:bafybeicql4ntiwnpdu7hogj33gvmszf6q42fpx2y3nz4rr4pjhcwh3qpu4
-- valory/termination_abci:0.1.0:bafybeiglkntthppslj5p64n35aoqer4fcalezhqvpndo6eb2vaoynm6qxe
-- valory/transaction_preparation_abci:0.1.0:bafybeiazlqxkwcjr2nhpgbfav7nsmbgklmdpelqcnehqzs2qb4vfeyq24a
-- valory/transaction_settlement_abci:0.1.0:bafybeibor5qxitvgvgm47vzor4u7p53tcpw3fzez7hbd6qv4rglxladxye
+- valory/abstract_round_abci:0.1.0:bafybeih7nivpffgvqvribkxxejuhnkrhypadoqrfd2ca5xhc2ujhyuualu
+- valory/registration_abci:0.1.0:bafybeiafeoigktmz6u4g2btrlp5ssutclaek6no4sz2zzc67fbfotsnn3a
+- valory/reset_pause_abci:0.1.0:bafybeify27qvpxb2pkr7fmgf3vvxnolorunl7losg55mmxgrobxp5ny5te
+- valory/task_submission_abci:0.1.0:bafybeifo5acrwmojpepocaphucesn4w5poxdzcjfovmcyij2ptcaozbgbe
+- valory/termination_abci:0.1.0:bafybeiftc7aylpcy5buuvyxyqq7wse6ldg67exrty7a5vuw65u35huhcvi
+- valory/transaction_settlement_abci:0.1.0:bafybeid4i3txzrgiyvu73u2mxvzjgnedspokku74zbzqo46wk5eccbgkaa
 behaviours:
   main:
     args: {}
@@ -56,6 +54,9 @@ models:
   abci_dialogues:
     args: {}
     class_name: AbciDialogues
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
   benchmark_tool:
     args:
       log_dir: /logs
@@ -72,12 +73,10 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
-  acn_data_share_dialogues:
-    args: {}
-    class_name: AcnDataShareDialogues
   params:
     args:
-      agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      agent_mech_contract_addresses:
+      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
       api_keys_json:
       - - openai
         - dummy_api_key
@@ -87,12 +86,12 @@ models:
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       file_hash_to_tools_json:
-      - - bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e
+      - - bafybeif3izkobmvaoen23ine6tiqx55eaf4g3r56hdalnig656xivzpf3m
         - - openai-text-davinci-002
           - openai-text-davinci-003
           - openai-gpt-3.5-turbo
           - openai-gpt-4
-      - - bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i
+      - - bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua
         - - stabilityai-stable-diffusion-v1-5
           - stabilityai-stable-diffusion-xl-beta-v2-2-2
           - stabilityai-stable-diffusion-512-v2-1
@@ -128,7 +127,7 @@ models:
       request_timeout: 10.0
       reset_pause_duration: 10
       reset_period_count: 100
-      reset_tendermint_after: 2
+      reset_tendermint_after: 10
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
@@ -151,6 +150,15 @@ models:
       use_polling: false
       use_termination: false
       validate_timeout: 1205
+      task_wait_timeout: 15.0
+      use_slashing: false
+      agent_registry_address: '0x0000000000000000000000000000000000000000'
+      agent_id: 3
+      metadata_hash: '00000000000000000000000000000000000000000000000000'
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
+      light_slash_unit_amount: 5000000000000000
+      serious_slash_unit_amount: 8000000000000000
     class_name: Params
   randomness_api:
     args:
@@ -161,7 +169,7 @@ models:
       response_key: null
       response_type: dict
       retries: 5
-      url: https://drand.cloudflare.com/public/latest
+      url: https://api.drand.sh/public/latest
     class_name: RandomnessApi
   requests:
     args: {}
@@ -177,5 +185,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.34.0
+    version: ==1.41.0.post1
 is_abstract: false
