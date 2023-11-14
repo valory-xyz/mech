@@ -1,11 +1,11 @@
 {
     "dev": {
-        "connection/valory/websocket_client/0.1.0": "bafybeibceepduadwhvnqwvfuicoozq7zywrrxch34kjtaehqjy3yvi77yq",
-        "skill/valory/contract_subscription/0.1.0": "bafybeid3hvg3wcbmqwqjeyk4772djaa7awaytnnxznn72rbye6dcjrh4oa",
-        "agent/valory/mech/0.1.0": "bafybeici5bigt7zq7xmwdlojlpyzwh7o4isix6pw3oqatea4fa7sjrtujm",
+        "connection/valory/websocket_client/0.1.0": "bafybeicmfaxqwqunhvcdine64uz2utmfdy4mcxowxhkxvaih76f6gjzhnq",
+        "skill/valory/contract_subscription/0.1.0": "bafybeih4shc4wprfgs2kiznvmxlcebewgol5fvbptu45wih62oy3zshuxy",
+        "agent/valory/mech/0.1.0": "bafybeihex3b3l2v5bu5jnhyurnb5byvys4bhhpn5w42a2qb26g37psjdby",
         "skill/valory/mech_abci/0.1.0": "bafybeiahccl6zyalu2b5pa4umly7whfu66uuy4vxj7xwdpn55vmwgoosry",
         "contract/valory/agent_mech/0.1.0": "bafybeihpvdox72yogv5axf3sgk2y57hgyppdilpes2dlrmixx7ffq47sna",
-        "service/valory/mech/0.1.0": "bafybeibm526gzug7pzotrdo3ria4a47aaslhlirlwiv5ovaarzefoz5pru",
+        "service/valory/mech/0.1.0": "bafybeih5ailpkxyqgi7hvutx65me6cmbge2oldik3owqa245uoyqmwiqse",
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
         "protocol/valory/default/1.0.0": "bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq",
         "skill/valory/task_submission_abci/0.1.0": "bafybeib4swfdhfrwy3vigkh6z27rud4zmwqjmajkuxff53oimqjomijvmm",
@@ -18,11 +18,9 @@
         "skill/valory/transaction_settlement_abci/0.1.0": "bafybeid4i3txzrgiyvu73u2mxvzjgnedspokku74zbzqo46wk5eccbgkaa",
         "contract/valory/agent_registry/0.1.0": "bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu",
         "protocol/valory/websocket_client/0.1.0": "bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4",
-        "skill/valory/websocket_client/0.1.0": "bafybeihab4hfrjvndou7jtbbw7icvavykwhj3kz6ygb3x2k25szljeudvq",
-        "skill/valory/transaction_preparation_abci/0.1.0": "bafybeiema6jofwqtjcaxxrnimggziwzv32zkew4gooikt6lviekqimmane"
+        "skill/valory/websocket_client/0.1.0": "bafybeigwpexvzw3xty2ter7hy362arusywqwhzxcjpybtzscpkhadkqkrm"
     },
     "third_party": {
-        "protocol/fetchai/default/1.0.0": "bafybeieqqzgzuappi2ped42upgzad5gt3mxiyjhojwibxm4o367ffsian4",
         "protocol/open_aea/signing/1.0.0": "bafybeie7xyems76v5b4wc2lmaidcujizpxfzjnnwdeokmhje53g7ym25ii",
         "protocol/valory/abci/0.1.0": "bafybeihmzlmmb4pdo3zkhg6ehuyaa4lhw7bfpclln2o2z7v3o6fcep26iu",
         "protocol/valory/contract_api/1.0.0": "bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka",
