@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeiga6prq6yftjkh2bol6vym4iarvo4i4senk3avmukneap2drtjjz4
   dialogues.py: bafybeifhydd6xmstbh2jx5igj33upip5a3hhlcaxttfsc77heszqmru7ri
   fsm_specification.yaml: bafybeib6j6etn6jd2cvggiswag2jrvlsxlnxb6sfgaf7oibhsd2mk65vw4
-  handlers.py: bafybeiff3ery4ex5opbkt2ehpmdyzb2noizahhzwveyuwn56muhaqh4wju
+  handlers.py: bafybeiffuduhg433qsu6lbet5jsaub63bzv2l4x756aj2fbnu5bnfu4ble
   models.py: bafybeic3pjxw7py6jpiaaxjtcufzcjmyldj2fdhpkik5qnj4hpruuxcu4q
 fingerprint_ignore_patterns: []
 connections:
@@ -23,7 +23,7 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeigxjcci53vwytymzlhr37436yvenh7jup4astrn7dgyixo24aq2pq
 - valory/registration_abci:0.1.0:bafybeibc4kczqbh23sc6tufrzn3axmhp3vjav7fa3u6cnpvolrbbc2fd7i
 - valory/reset_pause_abci:0.1.0:bafybeid445uy6wwvugf3byzl7r73c7teu6xr5ezxb4h7cxbenghg3copvy
-- valory/task_submission_abci:0.1.0:bafybeiba6umuwagcpmvsxybufhnborr7ecrmzt422mafbigiuq3vibjh7a
+- valory/task_submission_abci:0.1.0:bafybeidcjfmhtgwh24sgf3gmk6soiyr2fmaebjvphhz6xob6d5m6aeguce
 - valory/termination_abci:0.1.0:bafybeiguy7pkrcptg6c754ioig4mlkr7truccym3fpv6jwpjx2tmpdbzhi
 - valory/transaction_settlement_abci:0.1.0:bafybeidpsnguxizkpihtkqzojr3em7yy7c6qc7gxpbh5vglmwws5wke7bi
 behaviours:
@@ -152,6 +152,11 @@ models:
       use_termination: false
       validate_timeout: 1205
       task_wait_timeout: 15.0
+      use_slashing: false
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
+      light_slash_unit_amount: 5000000000000000
+      serious_slash_unit_amount: 8000000000000000
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   randomness_api:
@@ -179,5 +184,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.38.0
+    version: ==1.41.0.post1
 is_abstract: false

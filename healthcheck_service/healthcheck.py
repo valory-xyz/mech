@@ -26,6 +26,8 @@ from pathlib import Path
 from time import time
 from typing import Dict, Any, List, Optional
 
+from web3.types import BlockIdentifier
+
 from web3 import Web3
 
 
@@ -46,18 +48,19 @@ class MechContract:
             abi = json.load(f)
         return abi
 
-    def get_deliver_events(self) -> List[Dict[str, Any]]:
+    def get_deliver_events(self, from_block: BlockIdentifier) -> List[Dict[str, Any]]:
         """Get the deliver events."""
-        return self.contract.events.Deliver.createFilter(fromBlock='earliest').get_all_entries()
+        return self.contract.events.Deliver.create_filter(fromBlock=from_block).get_all_entries()
 
-    def get_request_events(self) -> List[Dict[str, Any]]:
+    def get_request_events(self,  from_block: BlockIdentifier) -> List[Dict[str, Any]]:
         """Get the request events."""
-        return self.contract.events.Request.createFilter(fromBlock='earliest').get_all_entries()
+        return self.contract.events.Request.create_filter(fromBlock=from_block).get_all_entries()
 
     def get_unfulfilled_request(self) -> List[Dict[str, Any]]:
         """Get the unfulfilled events."""
-        delivers = self.get_deliver_events()
-        requests = self.get_request_events()
+        from_block = self.web3.eth.block_number - 50_000  # ~ 3.5 days back
+        delivers = self.get_deliver_events(from_block)
+        requests = self.get_request_events(from_block)
         undeleted_requests = []
         deliver_req_ids = [deliver["args"]["requestId"] for deliver in delivers]
 
@@ -68,7 +71,7 @@ class MechContract:
 
     def get_block_timestamp(self, block_number: int) -> int:
         """Get the block timestamp."""
-        return self.web3.eth.getBlock(block_number)["timestamp"]
+        return self.web3.eth.get_block(block_number)["timestamp"]
 
     def earliest_unfulfilled_request_timestamp(self) -> Optional[int]:
         """Get the earliest unfulfilled request."""
@@ -100,7 +103,7 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
         req_timestamp = self.mech_contract.earliest_unfulfilled_request_timestamp()
         if req_timestamp is None:
             return True
-        return req_timestamp + self.grace_period < time()
+        return req_timestamp + self.grace_period > time()
 
     def do_GET(self) -> None:
         """

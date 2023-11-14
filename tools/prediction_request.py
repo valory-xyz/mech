@@ -20,16 +20,27 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
+from heapq import nlargest
+from string import punctuation
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 import openai
 import requests
+import spacy
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
+from spacy import Language
+from spacy.cli import download
+from spacy.lang.en import STOP_WORDS
+from spacy.tokens import Doc, Span
 
 
-NUM_URLS_EXTRACT = 5
+FrequenciesType = Dict[str, float]
+ScoresType = Dict[Span, float]
+
+
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
@@ -37,11 +48,19 @@ DEFAULT_OPENAI_SETTINGS = {
 ALLOWED_TOOLS = [
     "prediction-offline",
     "prediction-online",
+    "prediction-online-summarized-info",
 ]
-TOOL_TO_ENGINE = {
-    "prediction-offline": "gpt-3.5-turbo",
-    "prediction-online": "gpt-3.5-turbo",
-}
+TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
+# the default number of URLs to fetch online information for
+DEFAULT_NUM_URLS = defaultdict(lambda: 3)
+DEFAULT_NUM_URLS["prediction-online-summarized-info"] = 7
+# the default number of words to fetch online information for
+DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
+DEFAULT_NUM_WORDS["prediction-online-summarized-info"] = None
+# how much of the initial content will be kept during summarization
+DEFAULT_COMPRESSION_FACTOR = 0.05
+# the vocabulary to use for the summarization
+DEFAULT_VOCAB = "en_core_web_sm"
 
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -112,7 +131,7 @@ OUTPUT_FORMAT
 """
 
 
-def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
+def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
         service.cse()
@@ -126,7 +145,9 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     return [result["link"] for result in search["items"]]
 
 
-def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List[str]:
+def get_urls_from_queries(
+    queries: List[str], api_key: str, engine: str, num: int
+) -> List[str]:
     """Get URLs from search engine queries"""
     results = []
     for query in queries:
@@ -134,7 +155,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
             query=query,
             api_key=api_key,
             engine=engine,
-            num=3,  # Number of returned results
+            num=num,
         ):
             results.append(url)
     unique_results = list(set(results))
@@ -143,7 +164,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
 
 def extract_text(
     html: str,
-    num_words: int = 300,  # TODO: summerise using GPT instead of limit
+    num_words: Optional[int],
 ) -> str:
     """Extract text from a single HTML document"""
     soup = BeautifulSoup(html, "html.parser")
@@ -153,6 +174,9 @@ def extract_text(
     lines = (line.strip() for line in text.splitlines())
     chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
     text = "\n".join(chunk for chunk in chunks if chunk)
+
+    if num_words is None:
+        return text
     return text[:num_words]
 
 
@@ -163,10 +187,14 @@ def process_in_batches(
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
             batch = urls[i : i + window]
-            futures = [(executor.submit(requests.get, url, timeout=timeout), url) for url in batch]
+            futures = [
+                (executor.submit(requests.get, url, timeout=timeout), url)
+                for url in batch
+            ]
             yield futures
 
-def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
+
+def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
     """Extract texts from URLs"""
     max_allowed = 5
     extracted_texts = []
@@ -178,7 +206,9 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(extract_text(html=result.text, num_words=num_words))
+                extracted_texts.append(
+                    extract_text(html=result.text, num_words=num_words)
+                )
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -186,7 +216,7 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
-                    print(f"An error occurred: {e}")
+                print(f"An error occurred: {e}")
         if stop:
             break
     return extracted_texts
@@ -199,6 +229,8 @@ def fetch_additional_information(
     max_tokens: int,
     google_api_key: str,
     google_engine: str,
+    num_urls: int,
+    num_words: Optional[int],
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
@@ -222,11 +254,71 @@ def fetch_additional_information(
     json_data = json.loads(response.choices[0].message.content)
     urls = get_urls_from_queries(
         json_data["queries"],
-        api_key=google_api_key,
-        engine=google_engine,
+        google_api_key,
+        google_engine,
+        num_urls,
     )
-    texts = extract_texts(urls)
+    texts = extract_texts(urls, num_words)
     return "\n".join(["- " + text for text in texts])
+
+
+def load_model(vocab: str) -> Language:
+    """Utilize spaCy to load the model and download it if it is not already available."""
+    try:
+        return spacy.load(vocab)
+    except OSError:
+        print("Downloading language model...")
+        download(vocab)
+        return spacy.load(vocab)
+
+
+def calc_word_frequencies(doc: Doc) -> FrequenciesType:
+    """Get the frequency of each word in the given text, excluding stop words and punctuations."""
+    word_frequencies = defaultdict(lambda: 0)
+    for token in doc:
+        word = token.text
+        lower = word.lower()
+        if lower not in STOP_WORDS.union(punctuation):
+            word_frequencies[lower] += 1
+
+    max_frequency = max(word_frequencies.values())
+    normalized_frequencies = defaultdict(
+        lambda: 0,
+        {
+            word: frequency / max_frequency
+            for word, frequency in word_frequencies.items()
+        },
+    )
+    return normalized_frequencies
+
+
+def calc_sentence_scores(
+    sentence_tokens: List[Span], word_frequencies: FrequenciesType
+) -> ScoresType:
+    """Calculate the sentence scores."""
+    sentence_scores = defaultdict(lambda: 0)
+    for sentence in sentence_tokens:
+        for token in sentence:
+            sentence_scores[sentence] += word_frequencies[token.text.lower()]
+
+    return sentence_scores
+
+
+def summarize(text: str, compression_factor: float, vocab: str) -> str:
+    """Summarize the given text, retaining the given compression factor."""
+    if not text:
+        raise ValueError("Cannot summarize empty text!")
+
+    nlp = load_model(vocab)
+    doc = nlp(text)
+    word_frequencies = calc_word_frequencies(doc)
+    sentence_tokens = list(doc.sents)
+    sentence_scores = calc_sentence_scores(sentence_tokens, word_frequencies)
+    n = int(len(sentence_tokens) * compression_factor)
+    summary = nlargest(n, sentence_scores, key=sentence_scores.get)
+    summary_words = [word.text for word in summary]
+    summary_text = "".join(summary_words)
+    return summary_text
 
 
 def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
@@ -235,6 +327,10 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     prompt = kwargs["prompt"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+    num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
+    num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
+    compression_factor = kwargs.get("compression_factor", DEFAULT_COMPRESSION_FACTOR)
+    vocab = kwargs.get("vocab", DEFAULT_VOCAB)
 
     openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
@@ -243,22 +339,30 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     engine = TOOL_TO_ENGINE[tool]
     additional_information = (
         fetch_additional_information(
-            prompt=prompt,
-            engine=engine,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            google_api_key=kwargs["api_keys"]["google_api_key"],
-            google_engine=kwargs["api_keys"]["google_engine_id"],
+            prompt,
+            engine,
+            temperature,
+            max_tokens,
+            kwargs["api_keys"]["google_api_key"],
+            kwargs["api_keys"]["google_engine_id"],
+            num_urls,
+            num_words,
         )
-        if tool == "prediction-online"
+        if tool.startswith("prediction-online")
         else ""
     )
+
+    if additional_information and tool == "prediction-online-summarized-info":
+        additional_information = summarize(
+            additional_information, compression_factor, vocab
+        )
+
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information
     )
     moderation_result = openai.Moderation.create(prediction_prompt)
     if moderation_result["results"][0]["flagged"]:
-        return "Moderation flagged the prompt as in violation of terms.", None
+        return "Moderation flagged the prompt as in violation of terms.", None, None
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prediction_prompt},
@@ -273,4 +377,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         request_timeout=150,
         stop=None,
     )
-    return response.choices[0].message.content, None
+    return response.choices[0].message.content, prediction_prompt, None

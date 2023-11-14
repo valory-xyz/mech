@@ -21,13 +21,15 @@
 
 from typing import Any
 
-from aea.skills.tasks import Task
 
-
-class AnyToolAsTask(Task):
+class AnyToolAsTask:
     """AnyToolAsTask"""
 
     def execute(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the task."""
-        method = kwargs.pop("method")
+        tool_py = kwargs.pop("tool_py")
+        if "run" in globals():
+            del globals()["run"]
+        exec(tool_py, globals())  # pylint: disable=W0122  # nosec
+        method = globals()["run"]
         return method(*args, **kwargs)

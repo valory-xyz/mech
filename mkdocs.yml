@@ -1,0 +1,105 @@
+site_name: product/mechkit #Required format to work with monorepo including a specific route in the address.
+site_url: https://docs.autonolas.network/product/mechkit/
+site_description: Autonolas MechKit developer documentation
+repo_url: https://github.com/valory-xyz/agent-academy-1
+site_author: developer@valory.xyz
+edit_uri: ""
+copyright:  Copyright &copy; 2021 - 2023 Valory AG 
+
+
+strict: true
+
+
+theme:
+  name: 'material'
+  language: en
+  favicon: images/favicon.ico
+  logo: images/logo.svg  
+  icon:
+    admonition:
+      abstract: material/book-open-variant  
+  features:
+    - navigation.indexes
+    - navigation.top
+    - navigation.tracking
+    - navigation.footer
+    - search.highlight
+    - search.share
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+
+
+extra_css:
+  - stylesheets/extra.css
+
+
+nav:
+  - MechKit: 'index.md' 
+
+
+plugins:
+  - macros:
+      on_error_fail: true
+      on_undefined: strict
+  - search
+
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - pymdownx.details
+  - pymdownx.keys
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight
+  - pymdownx.emoji:
+      emoji_index: !!python/name:materialx.emoji.twemoji
+      emoji_generator: !!python/name:materialx.emoji.to_svg
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - def_list  
+  - md_in_html
+  - toc:
+      title: On this page
+      toc_depth: 3
+
+
+extra:
+  open_aea: '[Open AEA](https://github.com/valory-xyz/open-aea)'
+  open_aea_doc: '[Open AEA documentation](https://open-aea.docs.autonolas.tech)'
+  open_aea_api: '[Open AEA API](https://open-aea.docs.autonolas.tech/api)'
+  fsm_app: 'FSM App'
+  open_autonomy: '[Open Autonomy](https://github.com/valory-xyz/open-autonomy)'
+  open_autonomy_api: '[Open Autonomy API](https://docs.autonolas.network)'
+  open_aea_repository: '[Open AEA repository](https://github.com/valory-xyz/open-aea)'
+  open_autonomy_repository: '[Open Autonomy repository](https://github.com/valory-xyz/open-autonomy)'
+  autonolas_whitepaper: '[Autonolas Whitepaper](https://www.autonolas.network/documents/whitepaper/Whitepaper%20v1.0.pdf)'
+  autonolas_protocol: '[Autonolas Protocol](https://docs.autonolas.network/protocol)'
+  autonolas_protocol_registry_dapp_link: 'https://registry.olas.network'
+  autonolas_protocol_registry_dapp: '[Autonolas Protocol web app](https://registry.olas.network)'
+  autonolas_protocol_tokenomics_dapp: '[Autonolas Tokenomics web app](https://tokenomics.olas.network)'
+  social:
+    - icon: fontawesome/brands/twitter
+      link: https://twitter.com/autonolas
+      name: Autonolas on Twitter
+    - icon: fontawesome/brands/discord
+      link: https://discord.com/invite/z2PT65jKqQ
+      name: Autonolas on Discord
+    - icon: fontawesome/brands/github
+      link: https://github.com/valory-xyz
+      name: Autonolas on GitHub
+
+
+extra_javascript:
+    - https://unpkg.com/mermaid@8.10.1/dist/mermaid.min.js
+    - javascripts/mathjax.js
+    - https://polyfill.io/v3/polyfill.min.js?features=es6
+    - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
