@@ -36,7 +36,7 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeih7nivpffgvqvribkxxejuhnkrhypadoqrfd2ca5xhc2ujhyuualu
 - valory/contract_subscription:0.1.0:bafybeigl52zsiduaabccpeqtii2f7uorzdnb6xgpoimo3mudvbudifmwtu
 - valory/mech_abci:0.1.0:bafybeih3gz2kphxkshag2x7zk53m3zqq6djcalt6surtquyhamnok5mnwy
-- valory/task_execution:0.1.0:bafybeibnudzqxomqsadcq3wqv3b6nab3aikbm5txq64dp4ftgpn3u2ogpi
+- valory/task_execution:0.1.0:bafybeibn5v2sdub3h6ube3wykwda7hyb2g3b52drc7anea2gxsc3awu5ke
 - valory/registration_abci:0.1.0:bafybeiafeoigktmz6u4g2btrlp5ssutclaek6no4sz2zzc67fbfotsnn3a
 - valory/reset_pause_abci:0.1.0:bafybeify27qvpxb2pkr7fmgf3vvxnolorunl7losg55mmxgrobxp5ny5te
 - valory/task_submission_abci:0.1.0:bafybeifo5acrwmojpepocaphucesn4w5poxdzcjfovmcyij2ptcaozbgbe
@@ -191,6 +191,7 @@ models:
       agent_index: ${int:0}
       num_agents: ${int:4}
       from_block_range: ${int:50000}
+      timeout_limit: ${int:3}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

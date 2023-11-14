@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of Mech."""
+from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, cast
 
 from aea.exceptions import enforce
@@ -59,6 +60,10 @@ class Params(Model):
         enforce(self.agent_index is not None, "agent_index must be set!")
         self.from_block_range = kwargs.get("from_block_range", None)
         enforce(self.from_block_range is not None, "from_block_range must be set!")
+        self.timeout_limit = kwargs.get("timeout_limit", None)
+        enforce(self.timeout_limit is not None, "timeout_limit must be set!")
+        # maps the request id to the number of times it has timed out
+        self.request_id_to_num_timeouts: Dict[int, int] = defaultdict(lambda: 0)
         super().__init__(*args, **kwargs)
 
     def _nested_list_todict_workaround(
