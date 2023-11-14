@@ -223,11 +223,7 @@ class AgentMechContract(Contract):
         contract_address: str,
         tx_receipt: TxReceipt,
     ) -> JSONLike:
-        """
-        Process transaction receipt to filter contract events.
-
-        :return: the events emitted by the contract.
-        """
+        """Process transaction receipt to filter contract events."""
 
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)

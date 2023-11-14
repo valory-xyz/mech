@@ -20,9 +20,8 @@
 """This module contains the shared state for the abci skill of Mech."""
 from typing import Any
 
-from aea.skills.base import Model
-
 from packages.valory.skills.websocket_client.models import Params as BaseParams
+
 
 DEFAULT_WEBSOCKET_PROVIDER = "ws://localhost:8001"
 DEFAULT_CONTRACT_ADDRESS = "0xFf82123dFB52ab75C417195c5fDB87630145ae81"

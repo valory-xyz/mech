@@ -23,8 +23,7 @@
 import asyncio
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from threading import Thread
-from typing import Any, Callable, Dict, Optional, cast
+from typing import Any, Dict, Optional, cast
 
 import websocket
 from aea.configurations.base import PublicId
@@ -38,6 +37,7 @@ from packages.valory.protocols.websocket_client.dialogues import (
     WebsocketClientDialogues as BaseWebsocketClientDialogues,
 )
 from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
+
 
 PUBLIC_ID = PublicId.from_str("valory/websocket_client:0.1.0")
 

@@ -8,18 +8,18 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihmbiavlq5ekiat57xuekfuxjkoniizurn77hivqwtsaqydv32owu
-  behaviours.py: bafybeibrjze22nenzuf6oemdkzlgtr76slyenorlz3ea5sn5v6oq2hvh4q
-  dialogues.py: bafybeibqpn4xfrhjhh5nlhhks3rced3cfca6wvlzimsa37gfsa5kjzfsme
-  handlers.py: bafybeihlgpj5iitz6cvqfvwa6krchhfgxkt64e6zdtmleplrvdplukh4oq
-  models.py: bafybeie5elh5kfxrbzbaes4cp3bn7z6tsz62iay52kpfwl6ie5444zdmrq
+  behaviours.py: bafybeihhhfpan6i5vzxaoggmnj5jw556wnxz75ufcmiucq3yygrbmlsdpm
+  dialogues.py: bafybeigxlbj6mte72ko7osykjfilg4udfmnrnhxtoib5k4xcxde6qi3niu
+  handlers.py: bafybeiasnq4qlq5qys4ugktetmaeqnreaswvaqyi7zvjjlifmhbylucasu
+  models.py: bafybeiafdc32u7yjph4kb4tvsdsaz4tpzo25m3gmthssc62newpgvrros4
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeicmfaxqwqunhvcdine64uz2utmfdy4mcxowxhkxvaih76f6gjzhnq
+- valory/websocket_client:0.1.0:bafybeiako6kyllvgdmqio5y7zxqysaqlwfzjbdij4dkpsibuz3cznh3oza
 contracts: []
 protocols:
 - valory/websocket_client:0.1.0:bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4
 skills:
-- valory/websocket_client:0.1.0:bafybeigwpexvzw3xty2ter7hy362arusywqwhzxcjpybtzscpkhadkqkrm
+- valory/websocket_client:0.1.0:bafybeiaazkuyvkg5xaz62tkmstqc65oyerwpdfe3vl2morsvxdolq4p2le
 behaviours:
   contract_subscriptions:
     args: {}

@@ -22,18 +22,14 @@
 
 import json
 import time
-from enum import Enum
 from typing import Any
 
-from aea.protocols.base import Message
-from aea.skills.base import Handler
 from web3 import Web3
 from web3.types import TxReceipt
 
 from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
 from packages.valory.skills.websocket_client.handlers import (
     SubscriptionStatus,
-    WEBSOCKET_SUBSCRIPTIONS,
     WEBSOCKET_SUBSCRIPTION_STATUS,
 )
 from packages.valory.skills.websocket_client.handlers import (
@@ -131,7 +127,7 @@ class WebSocketHandler(BaseWebSocketHandler):
             self.context.shared_state[JOB_QUEUE].append(event_args)
             self.context.logger.info(f"Added job to queue: {event_args}")
 
-    def _get_tx_args(self, tx_hash: str):
+    def _get_tx_args(self, tx_hash: str) -> Any:
         """Get the transaction arguments."""
         try:
             tx_receipt: TxReceipt = self.w3.eth.get_transaction_receipt(tx_hash)

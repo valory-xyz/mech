@@ -21,34 +21,19 @@
 """This package contains a scaffold of a behaviour."""
 
 import json
-import re
-from abc import ABC
-from datetime import datetime
-from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
+from typing import Any, cast
 
-from aea.mail.base import Envelope
-from aea.skills.behaviours import SimpleBehaviour
-
-from packages.valory.connections.websocket_client.connection import (
-    PUBLIC_ID as WEBSOCKET_CLIENT_CONNECTION,
-)
 from packages.valory.connections.websocket_client.connection import WebSocketClient
-from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
-from packages.valory.skills.contract_subscription.dialogues import (
-    WebsocketClientDialogue,
-    WebsocketClientDialogues,
-)
-from packages.valory.protocols.default.message import DefaultMessage
 from packages.valory.skills.contract_subscription.handlers import DISCONNECTION_POINT
 from packages.valory.skills.contract_subscription.models import Params
 from packages.valory.skills.websocket_client.behaviours import (
     SubscriptionBehaviour as BaseSubscriptionBehaviour,
 )
 from packages.valory.skills.websocket_client.handlers import (
-    WEBSOCKET_SUBSCRIPTION_STATUS,
-    WEBSOCKET_SUBSCRIPTIONS,
     SubscriptionStatus,
+    WEBSOCKET_SUBSCRIPTION_STATUS,
 )
+
 
 DEFAULT_ENCODING = "utf-8"
 WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
