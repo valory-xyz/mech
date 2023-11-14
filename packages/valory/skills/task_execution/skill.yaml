@@ -20,11 +20,12 @@ connections:
 - valory/ipfs:0.1.0:bafybeigfmqvlzbp67fttccpl4hsu3zaztbxv6vd7ikzra2hfppfkalgpji
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
 contracts:
-- valory/agent_mech:0.1.0:bafybeiektlfcs66jmprajmfg45rvyxbq7wqwj2yzpohyvlux4447talgsa
+- valory/agent_mech:0.1.0:bafybeidaavljfscd5s6lp3d3e7ulsshp6gayo6b56sl5h4leclujc7spui
 protocols:
-- valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
-- valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
+- valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
+- valory/ledger_api:1.0.0:bafybeige5agrztgzfevyglf7mb4o7pzfttmq4f6zi765y4g2zvftbyowru
+- valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq
 - valory/ipfs:0.1.0:bafybeiedxeismnx3k5ty4mvvhlqideixlhqmi5mtcki4lxqfa7uqh7p33u
 skills: []
 behaviours:
@@ -32,16 +33,22 @@ behaviours:
     args: {}
     class_name: TaskExecutionBehaviour
 handlers:
+  acn_data_share_handler:
+    args: {}
+    class_name: AcnHandler
   contract_handler:
     args: {}
     class_name: ContractHandler
   ipfs_handler:
     args: {}
     class_name: IpfsHandler
-  acn_data_share_handler:
+  ledger_handler:
     args: {}
-    class_name: AcnHandler
+    class_name: LedgerHandler
 models:
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
   contract_dialogues:
     args: {}
     class_name: ContractDialogues
@@ -51,13 +58,19 @@ models:
   ipfs_dialogues:
     args: {}
     class_name: IpfsDialogues
-  acn_data_share_dialogues:
+  ledger_dialogues:
     args: {}
-    class_name: AcnDataShareDialogues
+    class_name: LedgerDialogues
   params:
     args:
-      agent_mech_contract_address: '0x9A676e781A523b5d0C0e43731313A708CB607508'
-      task_deadline: 240.0
+      agent_index: 0
+      agent_mech_contract_addresses:
+      - '0x9A676e781A523b5d0C0e43731313A708CB607508'
+      api_keys_json:
+      - - openai
+        - dummy_api_key
+      - - stabilityai
+        - dummy_api_key
       file_hash_to_tools_json:
       - - bafybeif3izkobmvaoen23ine6tiqx55eaf4g3r56hdalnig656xivzpf3m
         - - openai-text-davinci-002
@@ -69,14 +82,10 @@ models:
           - stabilityai-stable-diffusion-xl-beta-v2-2-2
           - stabilityai-stable-diffusion-512-v2-1
           - stabilityai-stable-diffusion-768-v2-1
-      api_keys_json:
-      - - openai
-        - dummy_api_key
-      - - stabilityai
-        - dummy_api_key
-      polling_interval: 30.0
-      agent_index: 0
+      from_block_range: 50000
       num_agents: 4
+      polling_interval: 30.0
+      task_deadline: 240.0
       use_slashing: false
       slash_cooldown_hours: 3
       slash_threshold_amount: 10000000000000000
@@ -84,14 +93,14 @@ models:
       serious_slash_unit_amount: 8000000000000000
     class_name: Params
 dependencies:
+  beautifulsoup4:
+    version: ==4.12.2
+  googlesearch-python:
+    version: ==1.2.3
   openai:
     version: ==0.27.2
   py-multibase:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
-  googlesearch-python:
-    version: ==1.2.3
-  beautifulsoup4:
-    version: ==4.12.2
 is_abstract: false

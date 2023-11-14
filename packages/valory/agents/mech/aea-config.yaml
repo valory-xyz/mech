@@ -14,11 +14,12 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
 - valory/websocket_client:0.1.0:bafybeia3lo6hyhom2ht56gzgkv4gdsul5s4qoelljyks2wrcfvx5dtvsiq
 contracts:
-- valory/agent_mech:0.1.0:bafybeiektlfcs66jmprajmfg45rvyxbq7wqwj2yzpohyvlux4447talgsa
+- valory/agent_mech:0.1.0:bafybeidaavljfscd5s6lp3d3e7ulsshp6gayo6b56sl5h4leclujc7spui
 - valory/gnosis_safe:0.1.0:bafybeifyempvhciy6evbf2epqhry3qgqj3rh4x3ovuru6jtuibuyttjd5e
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeidxev2tfb7m2j6fxywqr5eyni5fofrqxgjrk26cqpug6gcxzm4feq
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeiblmhm3tjqn2vg2rwzgwua2mymewweuvh7o72jy4thgb2qdm4vjqa
+- valory/agent_registry:0.1.0:bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu
 protocols:
 - open_aea/signing:1.0.0:bafybeie7xyems76v5b4wc2lmaidcujizpxfzjnnwdeokmhje53g7ym25ii
 - valory/abci:0.1.0:bafybeihmzlmmb4pdo3zkhg6ehuyaa4lhw7bfpclln2o2z7v3o6fcep26iu
@@ -34,13 +35,13 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeiaxs5tgjhq5n2k4kmi2ekrfy3n2ohrentmxfft6nnv4xmec7emz3i
 - valory/abstract_round_abci:0.1.0:bafybeih7nivpffgvqvribkxxejuhnkrhypadoqrfd2ca5xhc2ujhyuualu
 - valory/contract_subscription:0.1.0:bafybeigl52zsiduaabccpeqtii2f7uorzdnb6xgpoimo3mudvbudifmwtu
-- valory/mech_abci:0.1.0:bafybeibain45gwquz6iu7nhoix6bpe4jtrmvqo5somjlckz4cxo4efrlha
+- valory/mech_abci:0.1.0:bafybeih3gz2kphxkshag2x7zk53m3zqq6djcalt6surtquyhamnok5mnwy
+- valory/task_execution:0.1.0:bafybeibnudzqxomqsadcq3wqv3b6nab3aikbm5txq64dp4ftgpn3u2ogpi
 - valory/registration_abci:0.1.0:bafybeiafeoigktmz6u4g2btrlp5ssutclaek6no4sz2zzc67fbfotsnn3a
 - valory/reset_pause_abci:0.1.0:bafybeify27qvpxb2pkr7fmgf3vvxnolorunl7losg55mmxgrobxp5ny5te
-- valory/task_execution:0.1.0:bafybeihah7eanflznxfowubqbvfz7epqz5vnimylcpyelxukxzbt3jiaqi
-- valory/task_submission_abci:0.1.0:bafybeid2pvgxr5y4m4o3szsaernoimplkakdrfpgmyazuy7y2ufpbype7e
-- valory/termination_abci:0.1.0:bafybeiedpbkacnreyhxm64zxom4mf4g2qe26hrtz6fbksbffnwn6bjfxy4
-- valory/transaction_settlement_abci:0.1.0:bafybeid6xssgfvhlopif6wm2wh6nci3nfastzo7iowefsvko4lg6oynapu
+- valory/task_submission_abci:0.1.0:bafybeifo5acrwmojpepocaphucesn4w5poxdzcjfovmcyij2ptcaozbgbe
+- valory/termination_abci:0.1.0:bafybeiftc7aylpcy5buuvyxyqq7wse6ldg67exrty7a5vuw65u35huhcvi
+- valory/transaction_settlement_abci:0.1.0:bafybeid4i3txzrgiyvu73u2mxvzjgnedspokku74zbzqo46wk5eccbgkaa
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -87,6 +88,16 @@ dependencies:
     version: ==0.0.303
   scikit-learn:
     version: ==1.3.1
+  pandas:
+    version: ==2.1.1
+  hypothesis:
+    version: ==6.21.6
+  spacy:
+    version: ==3.7.2
+  tiktoken:
+    version: ==0.5.1
+  python-dateutil:
+    version: ==2.8.2
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
@@ -150,13 +161,17 @@ models:
       tendermint_max_retries: ${int:5}
       tendermint_url: ${str:http://localhost:26657}
       use_termination: ${bool:false}
-      agent_mech_contract_address: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+      agent_mech_contract_addresses: ${list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
       round_timeout_seconds: ${float:30.0}
       reset_period_count: ${int:1000}
       on_chain_service_id: ${int:1}
+      agent_registry_address: ${str:0x0000000000000000000000000000000000000000}
+      agent_id: ${int:3}
+      metadata_hash: ${str:null}
       share_tm_config_on_startup: ${bool:false}
       multisend_address: ${str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
       service_registry_address: ${str:0x9338b5153AE39BB89f50468E608eD9d764B755fD}
+      init_fallback_gas: ${int:500000}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
@@ -167,7 +182,7 @@ type: skill
 models:
   params:
     args:
-      agent_mech_contract_address: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+      agent_mech_contract_addresses: ${list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
       task_deadline: ${float:240.0}
       file_hash_to_tools_json: ${list:[["bafybeibi34bhbvesmvd6o24jxvuldrwen4wj62na3lhva7k4afkg2shinu",["openai-text-davinci-002","openai-text-davinci-003","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]],["bafybeidpbnqbruzqlq424qt3i5dcvyqmcimshjilftabnrroujmjhdmteu",["transfer-native"]],["bafybeiglhy5epaytvt5qqdx77ld23ekouli53qrf2hjyebd5xghlunidfi",["prediction-online","prediction-offline"]]]}
       api_keys_json: ${list:[["openai", "dummy_api_key"],["stabilityai", "dummy_api_key"],["google_api_key",
@@ -175,12 +190,18 @@ models:
       polling_interval: ${float:30.0}
       agent_index: ${int:0}
       num_agents: ${int:4}
+      from_block_range: ${int:50000}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
 config:
   ledger_apis:
     ethereum:
+      address: ${str:https://rpc.gnosischain.com/}
+      chain_id: ${int:100}
+      poa_chain: ${bool:false}
+      default_gas_price_strategy: ${str:eip1559}
+    gnosis:
       address: ${str:https://rpc.gnosischain.com/}
       chain_id: ${int:100}
       poa_chain: ${bool:false}

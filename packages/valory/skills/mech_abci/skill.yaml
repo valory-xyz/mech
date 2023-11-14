@@ -21,9 +21,9 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeih7nivpffgvqvribkxxejuhnkrhypadoqrfd2ca5xhc2ujhyuualu
 - valory/registration_abci:0.1.0:bafybeiafeoigktmz6u4g2btrlp5ssutclaek6no4sz2zzc67fbfotsnn3a
 - valory/reset_pause_abci:0.1.0:bafybeify27qvpxb2pkr7fmgf3vvxnolorunl7losg55mmxgrobxp5ny5te
-- valory/task_submission_abci:0.1.0:bafybeid2pvgxr5y4m4o3szsaernoimplkakdrfpgmyazuy7y2ufpbype7e
-- valory/termination_abci:0.1.0:bafybeiedpbkacnreyhxm64zxom4mf4g2qe26hrtz6fbksbffnwn6bjfxy4
-- valory/transaction_settlement_abci:0.1.0:bafybeid6xssgfvhlopif6wm2wh6nci3nfastzo7iowefsvko4lg6oynapu
+- valory/task_submission_abci:0.1.0:bafybeifo5acrwmojpepocaphucesn4w5poxdzcjfovmcyij2ptcaozbgbe
+- valory/termination_abci:0.1.0:bafybeiftc7aylpcy5buuvyxyqq7wse6ldg67exrty7a5vuw65u35huhcvi
+- valory/transaction_settlement_abci:0.1.0:bafybeid4i3txzrgiyvu73u2mxvzjgnedspokku74zbzqo46wk5eccbgkaa
 behaviours:
   main:
     args: {}
@@ -54,6 +54,9 @@ models:
   abci_dialogues:
     args: {}
     class_name: AbciDialogues
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
   benchmark_tool:
     args:
       log_dir: /logs
@@ -70,12 +73,10 @@ models:
   ledger_api_dialogues:
     args: {}
     class_name: LedgerApiDialogues
-  acn_data_share_dialogues:
-    args: {}
-    class_name: AcnDataShareDialogues
   params:
     args:
-      agent_mech_contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      agent_mech_contract_addresses:
+      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
       api_keys_json:
       - - openai
         - dummy_api_key
@@ -151,6 +152,9 @@ models:
       validate_timeout: 1205
       task_wait_timeout: 15.0
       use_slashing: false
+      agent_registry_address: '0x0000000000000000000000000000000000000000'
+      agent_id: 3
+      metadata_hash: '00000000000000000000000000000000000000000000000000'
       slash_cooldown_hours: 3
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
@@ -165,7 +169,7 @@ models:
       response_key: null
       response_type: dict
       retries: 5
-      url: https://drand.cloudflare.com/public/latest
+      url: https://api.drand.sh/public/latest
     class_name: RandomnessApi
   requests:
     args: {}
