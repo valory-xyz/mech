@@ -418,7 +418,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             executing_task["sender"],
         )
         ipfs_hash = to_v1(message.ipfs_hash)
-        self.context.logger.info(f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}.")
+        self.context.logger.info(
+            f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
+        )
         self.send_data_via_acn(
             sender_address=sender,
             request_id=str(req_id),
