@@ -26,7 +26,7 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
-from web3.types import BlockIdentifier
+from web3.types import BlockIdentifier, TxReceipt
 
 
 partial_abis = [
@@ -215,6 +215,20 @@ class AgentMechContract(Contract):
             for entry in all_entries
         )
         return {"data": deliver_events}
+
+    @classmethod
+    def process_tx_receipt(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        tx_receipt: TxReceipt,
+    ) -> JSONLike:
+        """Process transaction receipt to filter contract events."""
+
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        event, *_ = contract_instance.events.Request().processReceipt(tx_receipt)
+        return dict(event["args"])
 
     @classmethod
     def get_undelivered_reqs(

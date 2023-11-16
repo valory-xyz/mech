@@ -21,110 +21,110 @@
 """This package contains a scaffold of a behaviour."""
 
 import json
-from typing import Any, List, Optional, cast
+from typing import Any, cast
 
-from aea.mail.base import Envelope
-from aea.skills.behaviours import SimpleBehaviour
-
-from packages.valory.connections.websocket_client.connection import (
-    PUBLIC_ID,
-    WebSocketClient,
-)
-from packages.valory.protocols.default.message import DefaultMessage
+from packages.valory.connections.websocket_client.connection import WebSocketClient
 from packages.valory.skills.contract_subscription.handlers import DISCONNECTION_POINT
+from packages.valory.skills.contract_subscription.models import Params
+from packages.valory.skills.websocket_client.behaviours import (
+    SubscriptionBehaviour as BaseSubscriptionBehaviour,
+)
+from packages.valory.skills.websocket_client.handlers import (
+    SubscriptionStatus,
+    WEBSOCKET_SUBSCRIPTION_STATUS,
+)
 
 
 DEFAULT_ENCODING = "utf-8"
 WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
 
 
-class SubscriptionBehaviour(SimpleBehaviour):
+class ContractSubscriptionBehaviour(BaseSubscriptionBehaviour):
     """This class scaffolds a behaviour."""
 
     def __init__(self, **kwargs: Any) -> None:
         """Initialise the agent."""
-        self._contracts: List[str] = kwargs.pop("contracts", [])
-        self._ws_client_connection: Optional[WebSocketClient] = None
-        self._subscription_required: bool = True
-        self._missed_parts: bool = False
         super().__init__(**kwargs)
+
+    @property
+    def params(self) -> Params:
+        """Return params model."""
+
+        return cast(Params, self.context.params)
 
     def setup(self) -> None:
         """Implement the setup."""
-        use_polling = self.context.params.use_polling
-        if use_polling:
-            # if we are using polling, then we don't set up an contract subscription
+        self._last_subscription_check = None
+
+        # if we are using polling, then we don't set up an contract subscription
+        if self.params.use_polling:
             return
-        for (
-            connection
-        ) in self.context.outbox._multiplexer.connections:  # pylint: disable=W0212
+
+        for connection in self.context.outbox._multiplexer.connections:
             if connection.component_id.name == WEBSOCKET_CLIENT_CONNECTION_NAME:
                 self._ws_client_connection = cast(WebSocketClient, connection)
 
+    def create_contract_subscription_payload(self) -> str:
+        """Create subscription payload."""
+        return json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "eth_subscribe",
+                "params": ["logs", {"address": self.params.contract_address}],
+            }
+        )
+
+    def create_contract_filter_payload(self, disconnection_point: int) -> str:
+        """Create subscription payload."""
+        return json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "eth_newFilter",
+                "params": [
+                    {
+                        "fromBlock": disconnection_point,
+                        "address": self.params.contract_address,
+                    }
+                ],
+            }
+        )
+
     def act(self) -> None:
-        """Implement the act."""
-        use_polling = self.context.params.use_polling
-        if use_polling:
+        """Perform subcription."""
+
+        if self.params.use_polling:
             # do nothing if we are polling
             return
-        is_connected = cast(WebSocketClient, self._ws_client_connection).is_connected
+
+        if self.subscribing or self.checking_subscription:
+            return
+
         disconnection_point = self.context.shared_state.get(DISCONNECTION_POINT, None)
-
-        if is_connected and self._subscription_required:
-            # we only subscribe once, because the envelope will remain in the multiplexer until handled
-            for contract in self._contracts:
-                subscription_msg_template = {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "eth_subscribe",
-                    "params": ["logs", {"address": contract}],
-                }
-                self.context.logger.info(f"Sending subscription to: {contract}")
-                self._create_call(
-                    bytes(json.dumps(subscription_msg_template), DEFAULT_ENCODING)
-                )
-            self._subscription_required = False
-            if disconnection_point is not None:
-                self._missed_parts = True
-
-        if is_connected and self._missed_parts:
-            # if we are connected and have a disconnection point, then we need to fetch the parts that were missed
-            for contract in self._contracts:
-                filter_msg_template = {
-                    "jsonrpc": "2.0",
-                    "id": 1,
-                    "method": "eth_newFilter",
-                    "params": [{"fromBlock": disconnection_point, "address": contract}],
-                }
-                self.context.logger.info(f"Creating filter to: {contract}")
-                self._create_call(
-                    bytes(json.dumps(filter_msg_template), DEFAULT_ENCODING)
-                )
+        if self.subscribed and disconnection_point is not None:
             self.context.logger.info(
-                "Getting parts that were missed while disconnected."
+                f"Requesting block filter for {disconnection_point}"
             )
-            self._missed_parts = False
-
-        if (
-            not is_connected
-            and not self._subscription_required
-            and disconnection_point is not None
-        ):
-            self.context.logger.warning(
-                f"Disconnection detected on block {disconnection_point}."
+            self._ws_send(
+                payload=self.create_contract_filter_payload(
+                    disconnection_point=disconnection_point
+                ),
+                subscription_id=self.params.subscription_id,
             )
+            self.context.shared_state[DISCONNECTION_POINT] = None
 
-        if not is_connected:
-            self._subscription_required = True
+        if self.subscribed:
+            self.check_subscription()
+            return
 
-    def _create_call(self, content: bytes) -> None:
-        """Create a call."""
-        msg, _ = self.context.default_dialogues.create(
-            counterparty=str(PUBLIC_ID),
-            performative=DefaultMessage.Performative.BYTES,
-            content=content,
-        )
-        # pylint: disable=W0212
-        msg._sender = str(self.context.skill_id)
-        envelope = Envelope(to=msg.to, sender=msg._sender, message=msg)
-        self.context.outbox.put(envelope)
+        if self.unsubscribed:
+            self._create_subscription(
+                provider=self.params.websocket_provider,
+                subscription_id=self.params.subscription_id,
+                subscription_payload=self.create_contract_subscription_payload(),
+            )
+            self.context.shared_state[WEBSOCKET_SUBSCRIPTION_STATUS][
+                self.params.subscription_id
+            ] = SubscriptionStatus.SUBSCRIBING
+            return
