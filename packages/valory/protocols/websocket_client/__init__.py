@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023 valory
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,22 +17,16 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the shared state for the abci skill of Mech."""
-from typing import Any
+"""
+This module contains the support resources for the websocket_client protocol.
 
-from packages.valory.skills.websocket_client.models import Params as BaseParams
+It was created with protocol buffer compiler version `libprotoc 3.19.4` and aea protocol generator version `1.0.0`.
+"""
+
+from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
+from packages.valory.protocols.websocket_client.serialization import (
+    WebsocketClientSerializer,
+)
 
 
-DEFAULT_WEBSOCKET_PROVIDER = "ws://localhost:8001"
-DEFAULT_CONTRACT_ADDRESS = "0xFf82123dFB52ab75C417195c5fDB87630145ae81"
-
-
-class Params(BaseParams):
-    """A model to represent params for multiple abci apps."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the parameters object."""
-        super().__init__(*args, **kwargs)
-
-        self.use_polling = kwargs.get("use_polling", False)
-        self.contract_address = kwargs.get("contract_address", DEFAULT_CONTRACT_ADDRESS)
+WebsocketClientMessage.serializer = WebsocketClientSerializer

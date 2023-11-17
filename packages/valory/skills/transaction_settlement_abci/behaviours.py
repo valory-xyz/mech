@@ -93,6 +93,7 @@ TxDataType = Dict[str, Union[VerificationStatus, Deque[str], int, Set[str], str]
 drand_check = VerifyDrand()
 
 REVERT_CODE_RE = r"\s(GS\d{3})[^\d]"
+MANUAL_GAS = 1_000_000
 
 # This mapping was copied from:
 # https://github.com/safe-global/safe-contracts/blob/ce5cbd256bf7a8a34538c7e5f1f2366a9d685f34/docs/error_codes.md
@@ -196,6 +197,8 @@ class TransactionSettlementBaseBehaviour(BaseBehaviour, ABC):
             )
             return tx_data
 
+        # TODO: remove once https://github.com/valory-xyz/open-autonomy/pull/2101 is merged and released
+        message.raw_transaction.body["gas"] = MANUAL_GAS
         # Send transaction
         tx_digest, rpc_status = yield from self.send_raw_transaction(
             message.raw_transaction, use_flashbots
