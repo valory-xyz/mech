@@ -15,7 +15,7 @@ classifiers = [ "Environment :: Console", "Environment :: Web Environment", "Dev
 include = "packages"
 
 [tool.poetry.dependencies]
-python = "==3.10"
+python = "^3.10"
 open-autonomy = "==0.13.4"
 openai = "==0.27.2"
 requests = "==2.28.2"

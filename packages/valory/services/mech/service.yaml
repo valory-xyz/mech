@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeiag6kzwog6zgdsk5v3sk6m636c67fipbcxuajfkcoozdt2knlt5da
+agent: valory/mech:0.1.0:bafybeifw2qj6n7kwpjdhupjkcwdz4ydqur4j7744jb3vtevcucxcylpd2e
 number_of_agents: 4
 deployment:
   agent:
@@ -44,6 +44,7 @@ type: skill
         termination_sleep: ${TERMINATION_SLEEP:int:900}
         use_termination: ${USE_TERMINATION:bool:false}
         agent_mech_contract_addresses: ${AGENT_MECH_CONTRACT_ADDRESSES:list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81","0x77af31De935740567Cf4fF1986D04B2c964A786a"]}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
         use_slashing: ${USE_SLASHING:bool:false}
         slash_cooldown_hours: ${SLASH_COOLDOWN_HOURS:int:3}
@@ -60,6 +61,7 @@ type: skill
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -89,6 +91,7 @@ type: skill
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
         setup: *id001
         share_tm_config_on_startup: ${USE_ACN:bool:false}
@@ -119,6 +122,7 @@ type: skill
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
         setup: *id001
         share_tm_config_on_startup: ${USE_ACN:bool:false}
+        manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
         tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
         tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}

@@ -20,6 +20,10 @@ packages/valory/protocols/http
 packages/valory/protocols/ipfs
 packages/valory/protocols/ledger_api
 packages/valory/protocols/tendermint
+/packages/valory/skills/abstract_round_abci
+/packages/valory/skills/registration_abci
+/packages/valory/skills/reset_pause_abci
+/packages/valory/skills/transaction_settlement_abci
 
 *test_mech.py
 
