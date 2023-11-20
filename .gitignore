@@ -23,6 +23,7 @@ packages/valory/protocols/tendermint
 /packages/valory/skills/abstract_round_abci
 /packages/valory/skills/registration_abci
 /packages/valory/skills/reset_pause_abci
+/packages/valory/skills/transaction_settlement_abci
 
 *test_mech.py
 
