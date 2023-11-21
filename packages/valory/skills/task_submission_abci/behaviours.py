@@ -39,7 +39,9 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
+from packages.valory.contracts.service_registry.contract import ServiceRegistryContract
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
@@ -391,6 +393,184 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
             "value": ZERO_ETHER_VALUE,
             "data": data,
         }
+
+    def _get_transfer_txs(self) -> Generator:
+        """Get the transfer txs."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(AgentRegistryContract.contract_id),
+            contract_callable="get_transfer_txs",
+            token_id=self.params.agent_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_transfer_txs unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+    def _get_num_requests_delivered(self) -> Generator[None, None, Optional[int]]:
+        """Return the total number of requests delivered."""
+        reqs_by_agent = yield from self._get_num_reqs_by_agent()
+        if reqs_by_agent is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return None
+
+        total_reqs = sum(reqs_by_agent.values())
+        return total_reqs
+
+    def _get_num_reqs_by_agent(self) -> Generator[None, None, Dict[str, int]]:
+        """Return the total number of requests delivered."""
+        # TODO: implement once the storage is ready
+        return {
+            "agent0": 0,
+            "agent1": 1,
+            "agent2": 2,
+            "agent3": 3,
+        }
+        yield
+
+    def _should_split_profits(self) -> Generator[None, None, bool]:
+        """
+        Returns true if profits from the mech should be split.
+
+        Profits will be split based on the number of requests that have been delivered.
+        I.e. We will be splitting every n-th request. Where, n- is configurable
+
+        :returns: True if profits should be split, False otherwise.
+        :yields: None
+        """
+        total_reqs = yield from self._get_num_requests_delivered()
+        if total_reqs is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return False
+        return total_reqs % self.params.profit_split_freq == 0
+
+    def _get_profits(self, address: str) -> Generator[None, None, int]:
+        """Get the profits."""
+        ledger_api_response = yield from self.get_ledger_api_response(
+            performative=LedgerApiMessage.Performative.GET_STATE,
+            ledger_callable="get_balance",
+            account=address,
+        )
+        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
+            return False  # transition to await top-up round
+        balance = cast(int, ledger_api_response.state.body.get("get_balance_result"))
+        return balance
+
+    def _split_funds(self, profits: int) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """
+        Split the funds among the operators based on the number of txs their agents have made.
+
+        :param profits: the amount of funds to split.
+        :returns: a dictionary mapping operator addresses to the amount of funds they should receive.
+        :yields: None
+        """
+        service_owner = yield from self._get_service_owner(self.params.on_chain_service_id)
+        if service_owner is None:
+            self.context.logger.warning(
+                "Could not get service owner. Don't split profits."
+            )
+            return None
+
+        funds_by_address = {}
+        service_owner_share = int(self.params.service_owner_share * profits)
+        funds_by_address[service_owner] = service_owner_share
+
+        operator_share = profits - service_owner_share
+        funds_by_operator = yield from self._get_funds_by_operator(operator_share)
+        if funds_by_operator is None:
+            self.context.logger.warning(
+                "Could not get funds by operator. Don't split profits."
+            )
+            return None
+
+        # accumulate the funds
+        funds_by_address.update(funds_by_operator)
+        return funds_by_address
+
+    def _get_service_owner(self, service_id: int) -> Generator[None, None, Optional[str]]:
+        """Get the service owner address."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.service_registry_address,
+            contract_id=str(ServiceRegistryContract.contract_id),
+            contract_callable="get_service_owner",
+            service_id=service_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):
+            self.context.logger.warning(
+                f"get_service_owner unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        return cast(str, contract_api_msg.state.body["service_owner"])
+
+
+    def _get_funds_by_operator(self, operator_share: int) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Split the funds among the operators based on the number of txs their agents have made."""
+        reqs_by_agent = yield from self._get_num_reqs_by_agent()
+        if reqs_by_agent is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return None
+
+        total_reqs = sum(reqs_by_agent.values())
+        if total_reqs == 0:
+            # nothing to split
+            return {
+                agent: 0
+                for agent in reqs_by_agent.keys()
+            }
+
+        accumulated_reqs_by_operator = yield from self._accumulate_reqs_by_operator(reqs_by_agent)
+        if accumulated_reqs_by_operator is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return None
+
+        for agent, reqs in accumulated_reqs_by_operator.items():
+            accumulated_reqs_by_operator[agent] = int(operator_share * (reqs / total_reqs))
+
+        return accumulated_reqs_by_operator
+
+    def _accumulate_reqs_by_operator(self, reqs_by_agent: Dict[str, int]) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Accumulate requests by operator."""
+        agent_instances = list(reqs_by_agent.keys())
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(ServiceRegistryContract.contract_id),
+            contract_callable="get_operators_mapping",
+            agent_instances=agent_instances,
+        )
+        if (
+                contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_operators_mapping unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        agent_to_operator = cast(Dict[str, str], contract_api_msg.state.body)
+
+        # accumulate reqs by operator
+        reqs_by_operator = {}
+        for agent, reqs in reqs_by_agent.items():
+            operator = agent_to_operator[agent]
+            if operator not in reqs_by_operator:
+                reqs_by_operator[operator] = reqs
+            else:
+                reqs_by_operator[operator] += reqs
+        return reqs_by_operator
 
 
 class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
