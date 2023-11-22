@@ -29,7 +29,10 @@ import openai  # noqa
 from multibase import multibase
 from multicodec import multicodec
 
-from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.agent_mech.contract import (
+    AgentMechContract,
+    MechOperation,
+)
 from packages.valory.contracts.agent_registry.contract import AgentRegistryContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -62,9 +65,10 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
 
 
 ZERO_ETHER_VALUE = 0
-SAFE_GAS = 0
+AUTO_GAS = SAFE_GAS = 0
 DONE_TASKS = "ready_tasks"
 DONE_TASKS_LOCK = "lock"
+NO_DATA = b""
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
@@ -118,6 +122,22 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
                     not_submitted.append(done_task)
             self.context.shared_state[DONE_TASKS] = not_submitted
 
+    @property
+    def mech_addresses(self) -> List[str]:
+        """Get the addresses of the MECHs."""
+        return self.context.params.mech_addresses
+
+    @staticmethod
+    def to_multihash(hash_string: str) -> str:
+        """To multihash string."""
+        # Decode the Base32 CID to bytes
+        cid_bytes = multibase.decode(hash_string)
+        # Remove the multicodec prefix (0x01) from the bytes
+        multihash_bytes = multicodec.remove_prefix(cid_bytes)
+        # Convert the multihash bytes to a hexadecimal string
+        hex_multihash = multihash_bytes.hex()
+        return hex_multihash[6:]
+
 
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
     """TaskPoolingBehaviour"""
@@ -168,7 +188,325 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
         self.remove_tasks(submitted_tasks)
 
 
-class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
+class FundsSplittingBehaviour(TaskExecutionBaseBehaviour):
+    """FundsSplittingBehaviour"""
+
+    def _get_num_requests_delivered(self) -> Generator[None, None, Optional[int]]:
+        """Return the total number of requests delivered."""
+        reqs_by_agent = yield from self._get_num_reqs_by_agent()
+        if reqs_by_agent is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return None
+
+        total_reqs = sum(reqs_by_agent.values())
+        return total_reqs
+
+    def _get_num_reqs_by_agent(self) -> Generator[None, None, Dict[str, int]]:
+        """Return the total number of requests delivered."""
+        # TODO: implement once the storage is ready
+        return {
+            "agent0": 0,
+            "agent1": 1,
+            "agent2": 2,
+            "agent3": 3,
+        }
+        yield
+
+    def _should_split_profits(self) -> Generator[None, None, bool]:
+        """
+        Returns true if profits from the mech should be split.
+
+        Profits will be split based on the number of requests that have been delivered.
+        I.e. We will be splitting every n-th request. Where, n- is configurable
+
+        :returns: True if profits should be split, False otherwise.
+        :yields: None
+        """
+        total_reqs = yield from self._get_num_requests_delivered()
+        if total_reqs is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return False
+        return total_reqs % self.params.profit_split_freq == 0
+
+    def get_split_profit_txs(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        """Get and split all the profits from all the mechs."""
+        should_split_profits = yield from self._should_split_profits()
+        if not should_split_profits:
+            self.context.logger.info("Not splitting profits.")
+            return []
+
+        self.context.logger.info(f"Splitting profits {self.mech_addresses}.")
+        txs = []
+        for mech_address in self.mech_addresses:
+            profits = yield from self._get_profits(mech_address)
+            if profits is None:
+                self.context.logger.error(
+                    f"Could not get profits from mech {mech_address}. Don't split profits."
+                )
+                return None
+
+            self.context.logger.info(f"Got {profits} profits from mech {mech_address}")
+            split_funds = yield from self._split_funds(profits)
+            if split_funds is None:
+                self.context.logger.error(
+                    f"Could not split profits from mech {mech_address}. Don't split profits."
+                )
+                return None
+
+            self.context.logger.info(
+                f"Split {profits} profits from mech {mech_address} into {split_funds}"
+            )
+            for receiver_address, amount in split_funds.items():
+                tx = yield from self._get_transfer_tx(
+                    mech_address, receiver_address, amount
+                )
+                if tx is None:
+                    self.context.logger.error(
+                        f"Could not get transfer tx from mech {mech_address} to {receiver_address}. "
+                        f"Don't split profits."
+                    )
+                    return None
+                txs.append(tx)
+
+        return txs
+
+    def _get_profits(self, address: str) -> Generator[None, None, int]:
+        """Get the profits."""
+        ledger_api_response = yield from self.get_ledger_api_response(
+            performative=LedgerApiMessage.Performative.GET_STATE,
+            ledger_callable="get_balance",
+            account=address,
+        )
+        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
+            return False  # transition to await top-up round
+        balance = cast(int, ledger_api_response.state.body.get("get_balance_result"))
+        return balance
+
+    def _split_funds(
+        self, profits: int
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """
+        Split the funds among the operators based on the number of txs their agents have made.
+
+        :param profits: the amount of funds to split.
+        :returns: a dictionary mapping operator addresses to the amount of funds they should receive.
+        :yields: None
+        """
+        service_owner = yield from self._get_service_owner(
+            self.params.on_chain_service_id
+        )
+        if service_owner is None:
+            self.context.logger.warning(
+                "Could not get service owner. Don't split profits."
+            )
+            return None
+
+        funds_by_address = {}
+        service_owner_share = int(self.params.service_owner_share * profits)
+        funds_by_address[service_owner] = service_owner_share
+
+        operator_share = profits - service_owner_share
+        funds_by_operator = yield from self._get_funds_by_operator(operator_share)
+        if funds_by_operator is None:
+            self.context.logger.warning(
+                "Could not get funds by operator. Don't split profits."
+            )
+            return None
+
+        # accumulate the funds
+        funds_by_address.update(funds_by_operator)
+        return funds_by_address
+
+    def _get_transfer_tx(
+        self, mech_address: str, receiver_address: str, amount: int
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get the transfer tx."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=mech_address,
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_exec_tx_data",
+            to=receiver_address,
+            value=amount,
+            data=NO_DATA,
+            tx_gas=AUTO_GAS,
+            operation=MechOperation.CALL,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_exec_tx_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": mech_address,
+            # the safe is not moving any funds, the mech contract is
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
+
+    def _get_service_owner(
+        self, service_id: int
+    ) -> Generator[None, None, Optional[str]]:
+        """Get the service owner address."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.service_registry_address,
+            contract_id=str(ServiceRegistryContract.contract_id),
+            contract_callable="get_service_owner",
+            service_id=service_id,
+        )
+        if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
+            self.context.logger.warning(
+                f"get_service_owner unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        return cast(str, contract_api_msg.state.body["service_owner"])
+
+    def _get_funds_by_operator(
+        self, operator_share: int
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Split the funds among the operators based on the number of txs their agents have made."""
+        reqs_by_agent = yield from self._get_num_reqs_by_agent()
+        if reqs_by_agent is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return None
+
+        total_reqs = sum(reqs_by_agent.values())
+        if total_reqs == 0:
+            # nothing to split
+            return {agent: 0 for agent in reqs_by_agent.keys()}
+
+        accumulated_reqs_by_operator = yield from self._accumulate_reqs_by_operator(
+            reqs_by_agent
+        )
+        if accumulated_reqs_by_operator is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return None
+
+        for agent, reqs in accumulated_reqs_by_operator.items():
+            accumulated_reqs_by_operator[agent] = int(
+                operator_share * (reqs / total_reqs)
+            )
+
+        return accumulated_reqs_by_operator
+
+    def _accumulate_reqs_by_operator(
+        self, reqs_by_agent: Dict[str, int]
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Accumulate requests by operator."""
+        agent_instances = list(reqs_by_agent.keys())
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(ServiceRegistryContract.contract_id),
+            contract_callable="get_operators_mapping",
+            agent_instances=agent_instances,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_operators_mapping unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        agent_to_operator = cast(Dict[str, str], contract_api_msg.state.body)
+
+        # accumulate reqs by operator
+        reqs_by_operator = {}
+        for agent, reqs in reqs_by_agent.items():
+            operator = agent_to_operator[agent]
+            if operator not in reqs_by_operator:
+                reqs_by_operator[operator] = reqs
+            else:
+                reqs_by_operator[operator] += reqs
+        return reqs_by_operator
+
+
+class HashUpdateBehaviour(TaskExecutionBaseBehaviour):
+    """HashUpdateBehaviour"""
+
+    def _get_latest_hash(self) -> Generator[None, None, Optional[bytes]]:
+        """Get latest update hash."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(AgentRegistryContract.contract_id),
+            contract_callable="get_token_hash",
+            token_id=self.params.agent_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_token_hash unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        latest_hash = cast(bytes, contract_api_msg.state.body["data"])
+        return latest_hash
+
+    def _should_update_hash(self) -> Generator:
+        """Check if the agent should update the hash."""
+        if self.params.task_mutable_params.latest_metadata_hash is None:
+            latest_hash = yield from self._get_latest_hash()
+            if latest_hash is None:
+                self.context.logger.warning(
+                    "Could not get latest hash. Don't update the metadata."
+                )
+                return False
+            self.params.task_mutable_params.latest_metadata_hash = latest_hash
+
+        configured_hash = self.to_multihash(self.params.metadata_hash)
+        latest_hash = self.params.task_mutable_params.latest_metadata_hash
+        return configured_hash != latest_hash
+
+    def get_mech_update_hash_tx(self) -> Generator:
+        """Get the mech update hash tx."""
+        should_update_hash = yield from self._should_update_hash()
+        if not should_update_hash:
+            return None
+
+        metadata_str = self.to_multihash(self.params.metadata_hash)
+        metadata = bytes.fromhex(metadata_str)
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(AgentRegistryContract.contract_id),
+            contract_callable="get_update_hash_tx_data",
+            token_id=self.params.agent_id,
+            metadata_hash=metadata,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_mech_update_hash unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": self.params.agent_registry_address,
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
+
+
+class TransactionPreparationBehaviour(FundsSplittingBehaviour, HashUpdateBehaviour):
     """TransactionPreparationBehaviour"""
 
     matching_round: Type[AbstractRound] = TransactionPreparationRound
@@ -187,18 +525,25 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
     def get_payload_content(self) -> Generator[None, None, str]:
         """Prepare the transaction"""
         all_txs = []
-        should_update_hash = yield from self._should_update_hash()
-        if should_update_hash:
-            update_hash_tx = yield from self._get_mech_update_hash_tx()
-            if update_hash_tx is None:
-                # something went wrong, respond with ERROR payload for now
-                return TransactionPreparationRound.ERROR_PAYLOAD
+        update_hash_tx = yield from self.get_mech_update_hash_tx()
+        if update_hash_tx is not None:
+            # in case of None, the agent should not update the hash
+            # if this is caused by an error, the agent should still proceed with the rest
+            # of the txs. The error will be logged.
             all_txs.append(update_hash_tx)
+
+        split_profit_txs = yield from self.get_split_profit_txs()
+        if split_profit_txs is not None:
+            # in case of None, the agent should not update the hash
+            # if this is caused by an error, the agent should still proceed with the rest
+            # of the txs. The error will be logged.
+            all_txs.extend(split_profit_txs)
 
         for task in self.synchronized_data.done_tasks:
             deliver_tx = yield from self._get_deliver_tx(task)
             if deliver_tx is None:
                 # something went wrong, respond with ERROR payload for now
+                # nothing should proceed if this happens
                 return TransactionPreparationRound.ERROR_PAYLOAD
             all_txs.append(deliver_tx)
             response_tx = task.get("transaction", None)
@@ -320,257 +665,6 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
             "value": ZERO_ETHER_VALUE,
             "data": data,
         }
-
-    def _get_latest_hash(self) -> Generator[None, None, Optional[bytes]]:
-        """Get latest update hash."""
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
-            contract_id=str(AgentRegistryContract.contract_id),
-            contract_callable="get_token_hash",
-            token_id=self.params.agent_id,
-        )
-        if (
-            contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
-            self.context.logger.warning(
-                f"get_token_hash unsuccessful!: {contract_api_msg}"
-            )
-            return None
-
-        latest_hash = cast(bytes, contract_api_msg.state.body["data"])
-        return latest_hash
-
-    def _should_update_hash(self) -> Generator:
-        """Check if the agent should update the hash."""
-        if self.params.task_mutable_params.latest_metadata_hash is None:
-            latest_hash = yield from self._get_latest_hash()
-            if latest_hash is None:
-                self.context.logger.warning(
-                    "Could not get latest hash. Don't update the metadata."
-                )
-                return False
-            self.params.task_mutable_params.latest_metadata_hash = latest_hash
-
-        configured_hash = self.to_multihash(self.params.metadata_hash)
-        latest_hash = self.params.task_mutable_params.latest_metadata_hash
-        return configured_hash != latest_hash
-
-    @staticmethod
-    def to_multihash(hash_string: str) -> str:
-        """To multihash string."""
-        # Decode the Base32 CID to bytes
-        cid_bytes = multibase.decode(hash_string)
-        # Remove the multicodec prefix (0x01) from the bytes
-        multihash_bytes = multicodec.remove_prefix(cid_bytes)
-        # Convert the multihash bytes to a hexadecimal string
-        hex_multihash = multihash_bytes.hex()
-        return hex_multihash[6:]
-
-    def _get_mech_update_hash_tx(self) -> Generator:
-        """Get the mech update hash tx."""
-        metadata_str = self.to_multihash(self.params.metadata_hash)
-        metadata = bytes.fromhex(metadata_str)
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
-            contract_id=str(AgentRegistryContract.contract_id),
-            contract_callable="get_update_hash_tx_data",
-            token_id=self.params.agent_id,
-            metadata_hash=metadata,
-        )
-        if (
-            contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
-            self.context.logger.warning(
-                f"get_mech_update_hash unsuccessful!: {contract_api_msg}"
-            )
-            return None
-
-        data = cast(bytes, contract_api_msg.state.body["data"])
-        return {
-            "to": self.params.agent_registry_address,
-            "value": ZERO_ETHER_VALUE,
-            "data": data,
-        }
-
-    def _get_transfer_txs(self) -> Generator:
-        """Get the transfer txs."""
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
-            contract_id=str(AgentRegistryContract.contract_id),
-            contract_callable="get_transfer_txs",
-            token_id=self.params.agent_id,
-        )
-        if (
-            contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
-            self.context.logger.warning(
-                f"get_transfer_txs unsuccessful!: {contract_api_msg}"
-            )
-            return None
-
-    def _get_num_requests_delivered(self) -> Generator[None, None, Optional[int]]:
-        """Return the total number of requests delivered."""
-        reqs_by_agent = yield from self._get_num_reqs_by_agent()
-        if reqs_by_agent is None:
-            self.context.logger.warning(
-                "Could not get number of requests delivered. Don't split profits."
-            )
-            return None
-
-        total_reqs = sum(reqs_by_agent.values())
-        return total_reqs
-
-    def _get_num_reqs_by_agent(self) -> Generator[None, None, Dict[str, int]]:
-        """Return the total number of requests delivered."""
-        # TODO: implement once the storage is ready
-        return {
-            "agent0": 0,
-            "agent1": 1,
-            "agent2": 2,
-            "agent3": 3,
-        }
-        yield
-
-    def _should_split_profits(self) -> Generator[None, None, bool]:
-        """
-        Returns true if profits from the mech should be split.
-
-        Profits will be split based on the number of requests that have been delivered.
-        I.e. We will be splitting every n-th request. Where, n- is configurable
-
-        :returns: True if profits should be split, False otherwise.
-        :yields: None
-        """
-        total_reqs = yield from self._get_num_requests_delivered()
-        if total_reqs is None:
-            self.context.logger.warning(
-                "Could not get number of requests delivered. Don't split profits."
-            )
-            return False
-        return total_reqs % self.params.profit_split_freq == 0
-
-    def _get_profits(self, address: str) -> Generator[None, None, int]:
-        """Get the profits."""
-        ledger_api_response = yield from self.get_ledger_api_response(
-            performative=LedgerApiMessage.Performative.GET_STATE,
-            ledger_callable="get_balance",
-            account=address,
-        )
-        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
-            return False  # transition to await top-up round
-        balance = cast(int, ledger_api_response.state.body.get("get_balance_result"))
-        return balance
-
-    def _split_funds(self, profits: int) -> Generator[None, None, Optional[Dict[str, int]]]:
-        """
-        Split the funds among the operators based on the number of txs their agents have made.
-
-        :param profits: the amount of funds to split.
-        :returns: a dictionary mapping operator addresses to the amount of funds they should receive.
-        :yields: None
-        """
-        service_owner = yield from self._get_service_owner(self.params.on_chain_service_id)
-        if service_owner is None:
-            self.context.logger.warning(
-                "Could not get service owner. Don't split profits."
-            )
-            return None
-
-        funds_by_address = {}
-        service_owner_share = int(self.params.service_owner_share * profits)
-        funds_by_address[service_owner] = service_owner_share
-
-        operator_share = profits - service_owner_share
-        funds_by_operator = yield from self._get_funds_by_operator(operator_share)
-        if funds_by_operator is None:
-            self.context.logger.warning(
-                "Could not get funds by operator. Don't split profits."
-            )
-            return None
-
-        # accumulate the funds
-        funds_by_address.update(funds_by_operator)
-        return funds_by_address
-
-    def _get_service_owner(self, service_id: int) -> Generator[None, None, Optional[str]]:
-        """Get the service owner address."""
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.service_registry_address,
-            contract_id=str(ServiceRegistryContract.contract_id),
-            contract_callable="get_service_owner",
-            service_id=service_id,
-        )
-        if (
-            contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):
-            self.context.logger.warning(
-                f"get_service_owner unsuccessful!: {contract_api_msg}"
-            )
-            return None
-        return cast(str, contract_api_msg.state.body["service_owner"])
-
-
-    def _get_funds_by_operator(self, operator_share: int) -> Generator[None, None, Optional[Dict[str, int]]]:
-        """Split the funds among the operators based on the number of txs their agents have made."""
-        reqs_by_agent = yield from self._get_num_reqs_by_agent()
-        if reqs_by_agent is None:
-            self.context.logger.warning(
-                "Could not get number of requests delivered. Don't split profits."
-            )
-            return None
-
-        total_reqs = sum(reqs_by_agent.values())
-        if total_reqs == 0:
-            # nothing to split
-            return {
-                agent: 0
-                for agent in reqs_by_agent.keys()
-            }
-
-        accumulated_reqs_by_operator = yield from self._accumulate_reqs_by_operator(reqs_by_agent)
-        if accumulated_reqs_by_operator is None:
-            self.context.logger.warning(
-                "Could not get number of requests delivered. Don't split profits."
-            )
-            return None
-
-        for agent, reqs in accumulated_reqs_by_operator.items():
-            accumulated_reqs_by_operator[agent] = int(operator_share * (reqs / total_reqs))
-
-        return accumulated_reqs_by_operator
-
-    def _accumulate_reqs_by_operator(self, reqs_by_agent: Dict[str, int]) -> Generator[None, None, Optional[Dict[str, int]]]:
-        """Accumulate requests by operator."""
-        agent_instances = list(reqs_by_agent.keys())
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
-            contract_id=str(ServiceRegistryContract.contract_id),
-            contract_callable="get_operators_mapping",
-            agent_instances=agent_instances,
-        )
-        if (
-                contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
-            self.context.logger.warning(
-                f"get_operators_mapping unsuccessful!: {contract_api_msg}"
-            )
-            return None
-        agent_to_operator = cast(Dict[str, str], contract_api_msg.state.body)
-
-        # accumulate reqs by operator
-        reqs_by_operator = {}
-        for agent, reqs in reqs_by_agent.items():
-            operator = agent_to_operator[agent]
-            if operator not in reqs_by_operator:
-                reqs_by_operator[operator] = reqs
-            else:
-                reqs_by_operator[operator] += reqs
-        return reqs_by_operator
 
 
 class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
