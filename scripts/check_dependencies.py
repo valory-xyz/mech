@@ -38,7 +38,6 @@ from typing import Tuple, cast
 
 import click
 import toml
-
 from aea.configurations.data_types import Dependency
 from aea.package_manager.base import load_configuration
 from aea.package_manager.v1 import PackageManagerV1
