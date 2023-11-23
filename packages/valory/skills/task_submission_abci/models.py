@@ -66,6 +66,7 @@ class Params(BaseParams):
         self.manual_gas_limit = self._ensure("manual_gas_limit", kwargs, int)
         self.service_owner_share = self._ensure("service_owner_share", kwargs, float)
         self.profit_split_freq = self._ensure("profit_split_freq", kwargs, int)
+        self.hash_checkpoint_address = self._ensure("hash_checkpoint_address", kwargs, str)
         super().__init__(*args, **kwargs)
 
 

@@ -22,8 +22,9 @@ import abc
 import json
 import threading
 import time
+from abc import ABC
 from copy import deepcopy
-from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
+from typing import Any, Dict, Generator, List, Optional, Set, Type, cast, Tuple
 
 import openai  # noqa
 from multibase import multibase
@@ -38,6 +39,7 @@ from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
 )
+from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
@@ -71,7 +73,7 @@ DONE_TASKS_LOCK = "lock"
 NO_DATA = b""
 
 
-class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
+class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the task_execution_abci skill."""
 
     @property
@@ -139,7 +141,7 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
         return hex_multihash[6:]
 
 
-class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
+class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     """TaskPoolingBehaviour"""
 
     matching_round: Type[AbstractRound] = TaskPoolingRound
@@ -188,7 +190,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
         self.remove_tasks(submitted_tasks)
 
 
-class FundsSplittingBehaviour(TaskExecutionBaseBehaviour):
+class FundsSplittingBehaviour(TaskExecutionBaseBehaviour, ABC):
     """FundsSplittingBehaviour"""
 
     def _get_num_requests_delivered(self) -> Generator[None, None, Optional[int]]:
@@ -434,6 +436,94 @@ class FundsSplittingBehaviour(TaskExecutionBaseBehaviour):
             else:
                 reqs_by_operator[operator] += reqs
         return reqs_by_operator
+
+
+class TrackingBehaviour(TaskExecutionBaseBehaviour, ABC):
+    """Behaviour to track the execution of a task."""
+
+    def _get_checkpoint_tx(
+        self,
+        hashcheckpoint_address: str,
+        ipfs_hash: bytes,
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get the transfer tx."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=hashcheckpoint_address,
+            contract_id=str(HashCheckpointContract.contract_id),
+            contract_callable="get_checkpoint_data",
+            ipfs_hash=ipfs_hash,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_checkpoint_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": hashcheckpoint_address,
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
+
+    def _get_current_usage(
+        self
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get the current ."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.hash_checkpoint_address,
+            contract_id=str(HashCheckpointContract.contract_id),
+            contract_callable="get_latest_hash",
+            sender_address=self.synchronized_data.safe_contract_address,
+        )
+        if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
+            self.context.logger.warning(
+                f"get_latest_hash unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        latest_ipfs_hash = cast(str, contract_api_msg.state.body["data"])
+        usage_data = yield from self.get_from_ipfs(latest_ipfs_hash)
+        if usage_data is None:
+            self.context.logger.warning(
+                f"Could not get usage data from IPFS: {latest_ipfs_hash}"
+            )
+            return None
+        return usage_data
+
+    def _update_usage(
+        self,
+        current_usage: Dict[str, Any],
+        done_tasks: List[Dict[str, Any]],
+    ) -> Generator[None, None, Optional[Tuple[str, Dict[str, Any]]]]:
+        """Update the usage of the tool on IPFS."""
+        for task in done_tasks:
+            agent, tool = task["executor_address"], task["tool"]
+            if agent not in current_usage:
+                current_usage[agent] = {}
+            if tool not in current_usage[agent]:
+                current_usage[agent][tool] = 0
+            current_usage[agent][tool] += 1
+        ipfs_hash = yield from self.send_to_ipfs("usage", current_usage)
+        if ipfs_hash is None:
+            self.context.logger.warning("Could not update usage.")
+            return None
+        return ipfs_hash, current_usage
+
+    def get_update_usage_tx(self) -> Generator:
+        """Get a tx to update the usage."""
+        current_usage = yield from self._get_current_usage()
+        if current_usage is None:
+            # something went wrong
+            self.context.logger.warning("Could not get current usage.")
+            return None
+
+        updated_usage, ipfs_hash = yield from self._update_usage(current_usage, self.synchronized_data.done_tasks)
+        tx = yield from self._get_checkpoint_tx(self.params.hash_checkpoint_address, ipfs_hash)
+        return tx
 
 
 class HashUpdateBehaviour(TaskExecutionBaseBehaviour):
