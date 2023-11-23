@@ -64,6 +64,7 @@ class Params(BaseParams):
         self.agent_id: int = self._ensure("agent_id", kwargs, int)
         self.metadata_hash: str = self._ensure("metadata_hash", kwargs, str)
         self.task_mutable_params = MutableParams()
+        self.manual_gas_limit = self._ensure("manual_gas_limit", kwargs, int)
         super().__init__(*args, **kwargs)
 
 

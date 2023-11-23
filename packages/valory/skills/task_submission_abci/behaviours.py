@@ -254,6 +254,7 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
             operation=SafeOperation.DELEGATE_CALL.value,
             to_address=self.params.multisend_address,
             data=tx_data,
+            gas_limit=self.params.manual_gas_limit,
         )
         return payload_data
 

@@ -8,23 +8,22 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihmbiavlq5ekiat57xuekfuxjkoniizurn77hivqwtsaqydv32owu
-  behaviours.py: bafybeihxsq5bhffykzlqkxzd6sfz3s6vmbddalgqhnyuokyf4r62iglvhy
-  dialogues.py: bafybeihqahapiqyvs7if33hscihx5r6o7ymtopfhuraiyg3h5l6frhghdm
-  handlers.py: bafybeiffpw6miyxhkygjkkhnkrvcnwztlkpy6ko77zcb4726q6vqge2f2y
-  models.py: bafybeicxiv2m6whj37zffrqmb3zw6tzlouqvziocallca4gcghx3vigs6q
+  behaviours.py: bafybeihhhfpan6i5vzxaoggmnj5jw556wnxz75ufcmiucq3yygrbmlsdpm
+  dialogues.py: bafybeigxlbj6mte72ko7osykjfilg4udfmnrnhxtoib5k4xcxde6qi3niu
+  handlers.py: bafybeiasnq4qlq5qys4ugktetmaeqnreaswvaqyi7zvjjlifmhbylucasu
+  models.py: bafybeiafdc32u7yjph4kb4tvsdsaz4tpzo25m3gmthssc62newpgvrros4
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeia3lo6hyhom2ht56gzgkv4gdsul5s4qoelljyks2wrcfvx5dtvsiq
+- valory/websocket_client:0.1.0:bafybeiflmystocxaqblhpzqlcop2vkhsknpzjx2jomohomaxamwskeokzm
 contracts: []
 protocols:
-- valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq
-skills: []
+- valory/websocket_client:0.1.0:bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4
+skills:
+- valory/websocket_client:0.1.0:bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta
 behaviours:
-  subscriptions:
-    args:
-      contracts:
-      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
-    class_name: SubscriptionBehaviour
+  contract_subscriptions:
+    args: {}
+    class_name: ContractSubscriptionBehaviour
 handlers:
   new_event:
     args:
@@ -32,17 +31,15 @@ handlers:
       websocket_provider: https://rpc.gnosischain.com
     class_name: WebSocketHandler
 models:
-  default_dialogues:
+  websocket_client_dialogues:
     args: {}
-    class_name: DefaultDialogues
+    class_name: WebsocketClientDialogues
   params:
     args:
       use_polling: false
-      use_slashing: false
-      slash_cooldown_hours: 3
-      slash_threshold_amount: 10000000000000000
-      light_slash_unit_amount: 5000000000000000
-      serious_slash_unit_amount: 8000000000000000
+      websocket_provider: ws://localhost:8001
+      contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      subscription_id: mech-contract-subscription
     class_name: Params
 dependencies:
   web3:

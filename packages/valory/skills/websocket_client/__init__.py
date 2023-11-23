@@ -2,6 +2,7 @@
 # ------------------------------------------------------------------------------
 #
 #   Copyright 2023 Valory AG
+#   Copyright 2023 eightballer
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,22 +18,8 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the shared state for the abci skill of Mech."""
-from typing import Any
+"""This module contains the implementation of the default skill."""
 
-from packages.valory.skills.websocket_client.models import Params as BaseParams
+from aea.configurations.base import PublicId
 
-
-DEFAULT_WEBSOCKET_PROVIDER = "ws://localhost:8001"
-DEFAULT_CONTRACT_ADDRESS = "0xFf82123dFB52ab75C417195c5fDB87630145ae81"
-
-
-class Params(BaseParams):
-    """A model to represent params for multiple abci apps."""
-
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the parameters object."""
-        super().__init__(*args, **kwargs)
-
-        self.use_polling = kwargs.get("use_polling", False)
-        self.contract_address = kwargs.get("contract_address", DEFAULT_CONTRACT_ADDRESS)
+PUBLIC_ID = PublicId.from_str("valory/websocket_client:0.1.0")
