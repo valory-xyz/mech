@@ -337,6 +337,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._prepare_task(task_data)
         elif is_data_valid:
             tool = task_data["tool"]
+            self._executing_task["tool"] = tool
             self.context.logger.warning(f"Tool {tool} is not valid.")
             self._invalid_request = True
         else:

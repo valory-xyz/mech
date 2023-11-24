@@ -21,7 +21,7 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifcq2nwd6m5tgxooe7436bc6lwo73xcreedmhcwauzhp5jic6jeq4
 - valory/registration_abci:0.1.0:bafybeig5fb3ibz3tr4kie53venqtajnlhvh7gwt5h45rxwzakwgs6jjsjq
 - valory/reset_pause_abci:0.1.0:bafybeiergfseqtmsphdimzjijxezqyyhigktvqriw2xb4dyujim6s5dr4a
-- valory/task_submission_abci:0.1.0:bafybeidk7pqb3hr2cokhroi4sfjbbwssidkfx5lhkjuitoeb4fswhdixra
+- valory/task_submission_abci:0.1.0:bafybeigzbkoy7hhhv5uiv2a7v63dlslpzm75auvk6gt63ohrvoi45cnyqy
 - valory/termination_abci:0.1.0:bafybeia73cl2vqj2uawt5lnoej3fzlhhum72i2p6ld4bbudd67lxb7f3cu
 - valory/transaction_settlement_abci:0.1.0:bafybeifqase6vqfrakahogdl4h2hpxntug5ckioicfqlw2og5tn6htru3q
 behaviours:
@@ -157,8 +157,11 @@ models:
       agent_id: 3
       metadata_hash: '00000000000000000000000000000000000000000000000000'
       slash_cooldown_hours: 3
+      hash_checkpoint_address: '0x0000000000000000000000000000000000000000'
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
+      service_owner_share: 0.1
+      profit_split_freq: 100
       serious_slash_unit_amount: 8000000000000000
     class_name: Params
   randomness_api:

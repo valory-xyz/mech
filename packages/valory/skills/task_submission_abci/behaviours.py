@@ -27,6 +27,7 @@ from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast, Tuple
 
 import openai  # noqa
+from aea.helpers.cid import to_v1, CID
 from multibase import multibase
 from multicodec import multicodec
 
@@ -52,6 +53,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
+from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import TransactionPayload
 from packages.valory.skills.task_submission_abci.rounds import (
@@ -71,7 +73,8 @@ AUTO_GAS = SAFE_GAS = 0
 DONE_TASKS = "ready_tasks"
 DONE_TASKS_LOCK = "lock"
 NO_DATA = b""
-
+ZERO_IPFS_HASH = "f017012200000000000000000000000000000000000000000000000000000000000000000"
+FILENAME = "usage"
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the task_execution_abci skill."""
@@ -127,7 +130,7 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     @property
     def mech_addresses(self) -> List[str]:
         """Get the addresses of the MECHs."""
-        return self.context.params.mech_addresses
+        return self.context.params.agent_mech_contract_addresses
 
     @staticmethod
     def to_multihash(hash_string: str) -> str:
@@ -190,7 +193,82 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         self.remove_tasks(submitted_tasks)
 
 
-class FundsSplittingBehaviour(TaskExecutionBaseBehaviour, ABC):
+class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):
+    """Behaviour for tracking task delivery by the agents."""
+
+    def _get_current_delivery_report(
+        self
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get the current ."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.hash_checkpoint_address,
+            contract_id=str(HashCheckpointContract.contract_id),
+            contract_callable="get_latest_hash",
+            sender_address=self.synchronized_data.safe_contract_address,
+        )
+        if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
+            self.context.logger.warning(
+                f"get_latest_hash unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        latest_ipfs_hash = cast(str, contract_api_msg.state.body["data"])
+        self.context.logger.debug(f"Latest IPFS hash: {latest_ipfs_hash}")
+        if latest_ipfs_hash == ZERO_IPFS_HASH:
+            return {}
+        # format the hash
+        ipfs_hash = str(CID.from_string(latest_ipfs_hash))
+        usage_data = yield from self.get_from_ipfs(ipfs_hash, filetype=SupportedFiletype.JSON)
+        if usage_data is None:
+            self.context.logger.warning(
+                f"Could not get usage data from IPFS: {latest_ipfs_hash}"
+            )
+            return None
+        return usage_data
+
+    def _update_current_delivery_report(
+        self,
+        current_usage: Dict[str, Any],
+        done_tasks: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Update the usage of the tool on IPFS."""
+        for task in done_tasks:
+            agent, tool = task["task_executor_address"], task["tool"]
+            if agent not in current_usage:
+                current_usage[agent] = {}
+            if tool not in current_usage[agent]:
+                current_usage[agent][tool] = 0
+            current_usage[agent][tool] += 1
+        return current_usage
+
+    def get_delivery_report(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """
+        Get the task delivery report.
+
+        This method returns a dictionary of the form:
+        {
+            "agent_address": {
+                "tool_name": num_delivered_tasks
+            }
+        }
+
+        Note that the report contains the tasks that are being delivered on-chain in the current period.
+
+        :return: the delivery report:
+        :yield: None
+        """
+        current_usage = yield from self._get_current_delivery_report()
+        if current_usage is None:
+            # something went wrong
+            self.context.logger.warning("Could not get current usage.")
+            return None
+
+        done_tasks = self.synchronized_data.done_tasks
+        updated_usage = self._update_current_delivery_report(current_usage, done_tasks)
+        return updated_usage
+
+
+class FundsSplittingBehaviour(DeliverBehaviour, ABC):
     """FundsSplittingBehaviour"""
 
     def _get_num_requests_delivered(self) -> Generator[None, None, Optional[int]]:
@@ -205,16 +283,21 @@ class FundsSplittingBehaviour(TaskExecutionBaseBehaviour, ABC):
         total_reqs = sum(reqs_by_agent.values())
         return total_reqs
 
-    def _get_num_reqs_by_agent(self) -> Generator[None, None, Dict[str, int]]:
+    def _get_num_reqs_by_agent(self) -> Generator[None, None, Optional[Dict[str, int]]]:
         """Return the total number of requests delivered."""
-        # TODO: implement once the storage is ready
-        return {
-            "agent0": 0,
-            "agent1": 1,
-            "agent2": 2,
-            "agent3": 3,
-        }
-        yield
+        delivery_report = yield from self.get_delivery_report()
+        if delivery_report is None:
+            self.context.logger.warning(
+                "Could not get delivery report. Don't split profits."
+            )
+            return None
+
+        # accumulate the number of requests delivered by each agent
+        reqs_by_agent = {}
+        for agent, tool_usage in delivery_report.items():
+            reqs_by_agent[agent] = sum(tool_usage.values())
+
+        return reqs_by_agent
 
     def _should_split_profits(self) -> Generator[None, None, bool]:
         """
@@ -438,13 +521,13 @@ class FundsSplittingBehaviour(TaskExecutionBaseBehaviour, ABC):
         return reqs_by_operator
 
 
-class TrackingBehaviour(TaskExecutionBaseBehaviour, ABC):
+class TrackingBehaviour(DeliverBehaviour, ABC):
     """Behaviour to track the execution of a task."""
 
     def _get_checkpoint_tx(
         self,
         hashcheckpoint_address: str,
-        ipfs_hash: bytes,
+        ipfs_hash: str,
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get the transfer tx."""
         contract_api_msg = yield from self.get_contract_api_response(
@@ -452,7 +535,7 @@ class TrackingBehaviour(TaskExecutionBaseBehaviour, ABC):
             contract_address=hashcheckpoint_address,
             contract_id=str(HashCheckpointContract.contract_id),
             contract_callable="get_checkpoint_data",
-            ipfs_hash=ipfs_hash,
+            data=bytes.fromhex(ipfs_hash),
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -469,64 +552,35 @@ class TrackingBehaviour(TaskExecutionBaseBehaviour, ABC):
             "data": data,
         }
 
-    def _get_current_usage(
-        self
-    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
-        """Get the current ."""
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.hash_checkpoint_address,
-            contract_id=str(HashCheckpointContract.contract_id),
-            contract_callable="get_latest_hash",
-            sender_address=self.synchronized_data.safe_contract_address,
-        )
-        if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
-            self.context.logger.warning(
-                f"get_latest_hash unsuccessful!: {contract_api_msg}"
-            )
-            return None
-        latest_ipfs_hash = cast(str, contract_api_msg.state.body["data"])
-        usage_data = yield from self.get_from_ipfs(latest_ipfs_hash)
-        if usage_data is None:
-            self.context.logger.warning(
-                f"Could not get usage data from IPFS: {latest_ipfs_hash}"
-            )
-            return None
-        return usage_data
-
-    def _update_usage(
-        self,
-        current_usage: Dict[str, Any],
-        done_tasks: List[Dict[str, Any]],
-    ) -> Generator[None, None, Optional[Tuple[str, Dict[str, Any]]]]:
-        """Update the usage of the tool on IPFS."""
-        for task in done_tasks:
-            agent, tool = task["executor_address"], task["tool"]
-            if agent not in current_usage:
-                current_usage[agent] = {}
-            if tool not in current_usage[agent]:
-                current_usage[agent][tool] = 0
-            current_usage[agent][tool] += 1
-        ipfs_hash = yield from self.send_to_ipfs("usage", current_usage)
+    def _save_usage_to_ipfs(self, current_usage: Dict[str, Any]) -> Generator[None, None, Optional[str]]:
+        """Save usage to ipfs."""
+        ipfs_hash = yield from self.send_to_ipfs(FILENAME, current_usage, filetype=SupportedFiletype.JSON)
         if ipfs_hash is None:
             self.context.logger.warning("Could not update usage.")
             return None
-        return ipfs_hash, current_usage
+        return ipfs_hash
 
     def get_update_usage_tx(self) -> Generator:
         """Get a tx to update the usage."""
-        current_usage = yield from self._get_current_usage()
-        if current_usage is None:
+        updated_usage = yield from self.get_delivery_report()
+        if updated_usage is None:
             # something went wrong
             self.context.logger.warning("Could not get current usage.")
             return None
 
-        updated_usage, ipfs_hash = yield from self._update_usage(current_usage, self.synchronized_data.done_tasks)
+        ipfs_hash = yield from self._save_usage_to_ipfs(updated_usage)
+        if ipfs_hash is None:
+            # something went wrong
+            self.context.logger.warning("Could not save usage to IPFS.")
+            return None
+
+        self.context.logger.info(f"Saved updated usage to IPFS: {ipfs_hash}")
+        ipfs_hash = self.to_multihash(to_v1(ipfs_hash))
         tx = yield from self._get_checkpoint_tx(self.params.hash_checkpoint_address, ipfs_hash)
         return tx
 
 
-class HashUpdateBehaviour(TaskExecutionBaseBehaviour):
+class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
     """HashUpdateBehaviour"""
 
     def _get_latest_hash(self) -> Generator[None, None, Optional[bytes]]:
@@ -596,7 +650,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour):
         }
 
 
-class TransactionPreparationBehaviour(FundsSplittingBehaviour, HashUpdateBehaviour):
+class TransactionPreparationBehaviour(FundsSplittingBehaviour, HashUpdateBehaviour, TrackingBehaviour):
     """TransactionPreparationBehaviour"""
 
     matching_round: Type[AbstractRound] = TransactionPreparationRound
@@ -640,6 +694,13 @@ class TransactionPreparationBehaviour(FundsSplittingBehaviour, HashUpdateBehavio
             if response_tx is not None:
                 all_txs.append(response_tx)
 
+        update_usage_tx = yield from self.get_update_usage_tx()
+        if update_usage_tx is None:
+            # something went wrong, respond with ERROR payload for now
+            # in case we cannot update the usage, we should not proceed with the rest of the txs
+            return TransactionPreparationRound.ERROR_PAYLOAD
+
+        all_txs.append(update_usage_tx)
         multisend_tx_str = yield from self._to_multisend(all_txs)
         if multisend_tx_str is None:
             # something went wrong, respond with ERROR payload for now
