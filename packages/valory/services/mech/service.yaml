@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeib6pandgld3qtqprrvrjmptpehc65ue6m5ozbavfpjqrrb5ikjbgi
+agent: valory/mech:0.1.0:bafybeih5idugp2jm7hxzj63tvvfep3tradk2hhnxipro2egaxnvmdaqjka
 number_of_agents: 4
 deployment:
   agent:
@@ -55,6 +55,8 @@ type: skill
         agent_registry_address: ${AGENT_REGISTRY_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
         agent_id: ${AGENT_ID:int:3}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
+        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
 1:
   models:
     params:
@@ -83,6 +85,8 @@ type: skill
         agent_registry_address: ${AGENT_REGISTRY_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
         agent_id: ${AGENT_ID:int:3}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
+        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
 2:
   models:
@@ -113,6 +117,8 @@ type: skill
         agent_registry_address: ${AGENT_REGISTRY_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
         agent_id: ${AGENT_ID:int:3}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
+        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
 3:
   models:
     params:
@@ -141,6 +147,8 @@ type: skill
         agent_registry_address: ${AGENT_REGISTRY_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
         agent_id: ${AGENT_ID:int:3}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
+        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
 ---
 public_id: valory/task_execution:0.1.0

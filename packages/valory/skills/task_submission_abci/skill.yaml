@@ -12,7 +12,7 @@ fingerprint:
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeig6bhn554qyou7kef5bstnlv54zke32avyti63uu4hvsol3lzqkoi
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeihzit6sstyzry2puyusyxx76wlqkd5r7a4nazmeutoodv32o7wv6q
+  models.py: bafybeibil7zmdpa3daz4wdhx2ekvspawtqswt56elj4hrvtiwykc6td6de
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
   rounds.py: bafybeicstmau4vlzpxz3kjgiwwsetwmotdk4un4iucmdddzvot5dgdkg2a
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
@@ -83,6 +83,8 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
+      agent_mech_contract_addresses:
+      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0
