@@ -37,11 +37,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieynwkrnlm6wwtufh2jsgnlprjbpmte7now5rk7fbgd5mh5yumhry
 - valory/abstract_round_abci:0.1.0:bafybeifcq2nwd6m5tgxooe7436bc6lwo73xcreedmhcwauzhp5jic6jeq4
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeiaqb6zgnzicjemwh4nfjvhowiazdk42t4kqtlr23kxwwf3gnlx64u
+- valory/mech_abci:0.1.0:bafybeifqcfbpwipyvlkrpttnkxnd2fv6pov3gapjhz3b3sbfbmykidrrkq
 - valory/task_execution:0.1.0:bafybeieup24rlnjosvbixq62f225qayflmxjohzmcopc2y5qfixohv2dlq
 - valory/registration_abci:0.1.0:bafybeig5fb3ibz3tr4kie53venqtajnlhvh7gwt5h45rxwzakwgs6jjsjq
 - valory/reset_pause_abci:0.1.0:bafybeiergfseqtmsphdimzjijxezqyyhigktvqriw2xb4dyujim6s5dr4a
-- valory/task_submission_abci:0.1.0:bafybeieohw4xxxw6ec27p3oh6n4g7imrmydvjvjfdp47l4p2tjnnts6jwm
+- valory/task_submission_abci:0.1.0:bafybeidz6os4qfq657vzne2inn76vuteohs2rfldthys37atsgcvznitvi
 - valory/termination_abci:0.1.0:bafybeia73cl2vqj2uawt5lnoej3fzlhhum72i2p6ld4bbudd67lxb7f3cu
 - valory/transaction_settlement_abci:0.1.0:bafybeifqase6vqfrakahogdl4h2hpxntug5ckioicfqlw2og5tn6htru3q
 - valory/websocket_client:0.1.0:bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta

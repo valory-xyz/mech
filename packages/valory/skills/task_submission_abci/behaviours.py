@@ -387,9 +387,8 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         :returns: a dictionary mapping operator addresses to the amount of funds they should receive.
         :yields: None
         """
-        service_owner = yield from self._get_service_owner(
-            self.params.on_chain_service_id
-        )
+        on_chain_id = cast(int, self.params.on_chain_service_id)
+        service_owner = yield from self._get_service_owner(on_chain_id)
         if service_owner is None:
             self.context.logger.warning(
                 "Could not get service owner. Don't split profits."
