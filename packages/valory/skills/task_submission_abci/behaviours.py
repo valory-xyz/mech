@@ -18,16 +18,15 @@
 # ------------------------------------------------------------------------------
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
-import abc
 import json
 import threading
 import time
 from abc import ABC
 from copy import deepcopy
-from typing import Any, Dict, Generator, List, Optional, Set, Type, cast, Tuple
+from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
 import openai  # noqa
-from aea.helpers.cid import to_v1, CID
+from aea.helpers.cid import CID, to_v1
 from multibase import multibase
 from multicodec import multicodec
 
@@ -73,8 +72,11 @@ AUTO_GAS = SAFE_GAS = 0
 DONE_TASKS = "ready_tasks"
 DONE_TASKS_LOCK = "lock"
 NO_DATA = b""
-ZERO_IPFS_HASH = "f017012200000000000000000000000000000000000000000000000000000000000000000"
+ZERO_IPFS_HASH = (
+    "f017012200000000000000000000000000000000000000000000000000000000000000000"
+)
 FILENAME = "usage"
+
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the task_execution_abci skill."""
@@ -197,11 +199,11 @@ class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):
     """Behaviour for tracking task delivery by the agents."""
 
     def _get_current_delivery_report(
-        self
+        self,
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get the current ."""
         contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=self.params.hash_checkpoint_address,
             contract_id=str(HashCheckpointContract.contract_id),
             contract_callable="get_latest_hash",
@@ -218,13 +220,15 @@ class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):
             return {}
         # format the hash
         ipfs_hash = str(CID.from_string(latest_ipfs_hash))
-        usage_data = yield from self.get_from_ipfs(ipfs_hash, filetype=SupportedFiletype.JSON)
+        usage_data = yield from self.get_from_ipfs(
+            ipfs_hash, filetype=SupportedFiletype.JSON
+        )
         if usage_data is None:
             self.context.logger.warning(
                 f"Could not get usage data from IPFS: {latest_ipfs_hash}"
             )
             return None
-        return usage_data
+        return cast(Dict[str, Any], usage_data)
 
     def _update_current_delivery_report(
         self,
@@ -364,7 +368,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
     def _get_profits(self, address: str) -> Generator[None, None, int]:
         """Get the profits."""
         ledger_api_response = yield from self.get_ledger_api_response(
-            performative=LedgerApiMessage.Performative.GET_STATE,
+            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
             ledger_callable="get_balance",
             account=address,
         )
@@ -421,7 +425,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             value=amount,
             data=NO_DATA,
             tx_gas=AUTO_GAS,
-            operation=MechOperation.CALL,
+            operation=MechOperation.CALL.value,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -444,7 +448,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
     ) -> Generator[None, None, Optional[str]]:
         """Get the service owner address."""
         contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=self.params.service_registry_address,
             contract_id=str(ServiceRegistryContract.contract_id),
             contract_callable="get_service_owner",
@@ -552,9 +556,13 @@ class TrackingBehaviour(DeliverBehaviour, ABC):
             "data": data,
         }
 
-    def _save_usage_to_ipfs(self, current_usage: Dict[str, Any]) -> Generator[None, None, Optional[str]]:
+    def _save_usage_to_ipfs(
+        self, current_usage: Dict[str, Any]
+    ) -> Generator[None, None, Optional[str]]:
         """Save usage to ipfs."""
-        ipfs_hash = yield from self.send_to_ipfs(FILENAME, current_usage, filetype=SupportedFiletype.JSON)
+        ipfs_hash = yield from self.send_to_ipfs(
+            FILENAME, current_usage, filetype=SupportedFiletype.JSON
+        )
         if ipfs_hash is None:
             self.context.logger.warning("Could not update usage.")
             return None
@@ -576,7 +584,9 @@ class TrackingBehaviour(DeliverBehaviour, ABC):
 
         self.context.logger.info(f"Saved updated usage to IPFS: {ipfs_hash}")
         ipfs_hash = self.to_multihash(to_v1(ipfs_hash))
-        tx = yield from self._get_checkpoint_tx(self.params.hash_checkpoint_address, ipfs_hash)
+        tx = yield from self._get_checkpoint_tx(
+            self.params.hash_checkpoint_address, ipfs_hash
+        )
         return tx
 
 
@@ -650,7 +660,9 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         }
 
 
-class TransactionPreparationBehaviour(FundsSplittingBehaviour, HashUpdateBehaviour, TrackingBehaviour):
+class TransactionPreparationBehaviour(
+    FundsSplittingBehaviour, HashUpdateBehaviour, TrackingBehaviour
+):
     """TransactionPreparationBehaviour"""
 
     matching_round: Type[AbstractRound] = TransactionPreparationRound
