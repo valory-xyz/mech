@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the dynamic_contribution contract definition."""
-
+from enum import Enum
 from typing import Any, Dict, List, cast
 
 from aea.common import JSONLike
@@ -79,6 +79,13 @@ partial_abis = [
         }
     ],
 ]
+
+
+class MechOperation(Enum):
+    """Operation types."""
+
+    CALL = 0
+    DELEGATE_CALL = 1
 
 
 class AgentMechContract(Contract):
@@ -272,3 +279,26 @@ class AgentMechContract(Contract):
             ).get("data")
             pending_tasks.extend(pending_tasks_batch)
         return {"data": pending_tasks}
+
+    @classmethod
+    def get_exec_tx_data(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        to: str,
+        value: int,
+        data: bytes,
+        operation: int,
+        tx_gas: int,
+    ) -> JSONLike:
+        """Get tx data"""
+        ledger_api = cast(EthereumApi, ledger_api)
+
+        if not isinstance(ledger_api, EthereumApi):
+            raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
+
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encodeABI(
+            fn_name="exec", args=[to, value, data, operation, tx_gas]
+        )
+        return {"data": bytes.fromhex(data[2:])}  # type: ignore

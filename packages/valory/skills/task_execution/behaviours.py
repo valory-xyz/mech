@@ -274,8 +274,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
         mech_address = executing_task.get("contract_address", None)
+        tool = executing_task.get("tool", None)
         response = {"requestId": req_id, "result": "Invalid response"}
-        self._done_task = {"request_id": req_id, "mech_address": mech_address}
+        task_executor = self.context.agent_address
+        self._done_task = {
+            "request_id": req_id,
+            "mech_address": mech_address,
+            "task_executor_address": task_executor,
+            "tool": tool,
+        }
         if task_result is not None:
             # task succeeded
             deliver_msg, prompt, transaction = task_result
@@ -330,6 +337,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._prepare_task(task_data)
         elif is_data_valid:
             tool = task_data["tool"]
+            executing_task = cast(Dict[str, Any], self._executing_task)
+            executing_task["tool"] = tool
             self.context.logger.warning(f"Tool {tool} is not valid.")
             self._invalid_request = True
         else:
@@ -358,6 +367,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         future = self._submit_task(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
+        executing_task["tool"] = task_data["tool"]
         self._async_result = cast(Optional[Future], future)
 
     def _build_ipfs_message(

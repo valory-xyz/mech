@@ -2,16 +2,17 @@
     "dev": {
         "connection/valory/websocket_client/0.1.0": "bafybeiflmystocxaqblhpzqlcop2vkhsknpzjx2jomohomaxamwskeokzm",
         "skill/valory/contract_subscription/0.1.0": "bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4",
-        "agent/valory/mech/0.1.0": "bafybeiamnuotz3zj7whskv6hoieswntuobr3fowkfoh52xw4vait4b5eli",
-        "skill/valory/mech_abci/0.1.0": "bafybeid6pm3a3yd33hpcvcj5s4rydk623b6hmukrgs4oxnabct2zylzotm",
-        "contract/valory/agent_mech/0.1.0": "bafybeicshvlc2slopzidzblf2zhdcw2uuav3ntxcgqduxskjujvebikg5u",
-        "service/valory/mech/0.1.0": "bafybeigh5gm3yc5dsi2gjxcussokytzxqbjvpabedhdshxzgwkmdhknxom",
+        "agent/valory/mech/0.1.0": "bafybeih5idugp2jm7hxzj63tvvfep3tradk2hhnxipro2egaxnvmdaqjka",
+        "skill/valory/mech_abci/0.1.0": "bafybeigrndr6sd3nayqa3wbffl263f6guxcbnk67m6x2vzhpvpkmtdn6xu",
+        "contract/valory/agent_mech/0.1.0": "bafybeidyfhwye3ybk3vxrceljafe2n4o43oxtmjepvexpcrwlccboi34e4",
+        "service/valory/mech/0.1.0": "bafybeiewvz4sdoarlrgrjwnlnzgpxz6t7xafsbhifbuhoimq333bev7hwy",
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeihluuiksi63kwp2kzn5hdbeek74bnhsctdwl72qv2xjmzqvf7j3va",
-        "skill/valory/task_execution/0.1.0": "bafybeianf56ypn6pjrqvj24uhmty2b5vtsewzjcrqxnrqyjsuudhyjpiue",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeigdvfzghhjfrlov4f4newyalguuaxl7jk4ccomflgloy46wfijs5i",
+        "skill/valory/task_execution/0.1.0": "bafybeieup24rlnjosvbixq62f225qayflmxjohzmcopc2y5qfixohv2dlq",
         "contract/valory/agent_registry/0.1.0": "bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu",
         "protocol/valory/websocket_client/0.1.0": "bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4",
-        "skill/valory/websocket_client/0.1.0": "bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta"
+        "skill/valory/websocket_client/0.1.0": "bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta",
+        "contract/valory/hash_checkpoint/0.1.0": "bafybeiap5fvi2w53e4uwxt75gjzie557hwuegf76xupimx3dvpkgfmj4ei"
     },
     "third_party": {
         "skill/valory/transaction_settlement_abci/0.1.0": "bafybeifqase6vqfrakahogdl4h2hpxntug5ckioicfqlw2og5tn6htru3q",

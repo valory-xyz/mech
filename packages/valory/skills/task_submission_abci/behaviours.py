@@ -18,33 +18,41 @@
 # ------------------------------------------------------------------------------
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
-import abc
 import json
 import threading
 import time
+from abc import ABC
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
 import openai  # noqa
+from aea.helpers.cid import CID, to_v1
 from multibase import multibase
 from multicodec import multicodec
 
-from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.agent_mech.contract import (
+    AgentMechContract,
+    MechOperation,
+)
 from packages.valory.contracts.agent_registry.contract import AgentRegistryContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
 )
+from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
+from packages.valory.contracts.service_registry.contract import ServiceRegistryContract
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
+from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import TransactionPayload
 from packages.valory.skills.task_submission_abci.rounds import (
@@ -60,12 +68,17 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
 
 
 ZERO_ETHER_VALUE = 0
-SAFE_GAS = 0
+AUTO_GAS = SAFE_GAS = 0
 DONE_TASKS = "ready_tasks"
 DONE_TASKS_LOCK = "lock"
+NO_DATA = b""
+ZERO_IPFS_HASH = (
+    "f017012200000000000000000000000000000000000000000000000000000000000000000"
+)
+FILENAME = "usage"
 
 
-class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
+class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     """Base behaviour for the task_execution_abci skill."""
 
     @property
@@ -116,8 +129,24 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, abc.ABC):
                     not_submitted.append(done_task)
             self.context.shared_state[DONE_TASKS] = not_submitted
 
+    @property
+    def mech_addresses(self) -> List[str]:
+        """Get the addresses of the MECHs."""
+        return self.context.params.agent_mech_contract_addresses
 
-class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
+    @staticmethod
+    def to_multihash(hash_string: str) -> str:
+        """To multihash string."""
+        # Decode the Base32 CID to bytes
+        cid_bytes = multibase.decode(hash_string)
+        # Remove the multicodec prefix (0x01) from the bytes
+        multihash_bytes = multicodec.remove_prefix(cid_bytes)
+        # Convert the multihash bytes to a hexadecimal string
+        hex_multihash = multihash_bytes.hex()
+        return hex_multihash[6:]
+
+
+class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     """TaskPoolingBehaviour"""
 
     matching_round: Type[AbstractRound] = TaskPoolingRound
@@ -166,7 +195,473 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour):
         self.remove_tasks(submitted_tasks)
 
 
-class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
+class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):
+    """Behaviour for tracking task delivery by the agents."""
+
+    def _get_current_delivery_report(
+        self,
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get the current ."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.hash_checkpoint_address,
+            contract_id=str(HashCheckpointContract.contract_id),
+            contract_callable="get_latest_hash",
+            sender_address=self.synchronized_data.safe_contract_address,
+        )
+        if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
+            self.context.logger.warning(
+                f"get_latest_hash unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        latest_ipfs_hash = cast(str, contract_api_msg.state.body["data"])
+        self.context.logger.debug(f"Latest IPFS hash: {latest_ipfs_hash}")
+        if latest_ipfs_hash == ZERO_IPFS_HASH:
+            return {}
+        # format the hash
+        ipfs_hash = str(CID.from_string(latest_ipfs_hash))
+        usage_data = yield from self.get_from_ipfs(
+            ipfs_hash, filetype=SupportedFiletype.JSON
+        )
+        if usage_data is None:
+            self.context.logger.warning(
+                f"Could not get usage data from IPFS: {latest_ipfs_hash}"
+            )
+            return None
+        return cast(Dict[str, Any], usage_data)
+
+    def _update_current_delivery_report(
+        self,
+        current_usage: Dict[str, Any],
+        done_tasks: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Update the usage of the tool on IPFS."""
+        for task in done_tasks:
+            agent, tool = task["task_executor_address"], task["tool"]
+            if agent not in current_usage:
+                current_usage[agent] = {}
+            if tool not in current_usage[agent]:
+                current_usage[agent][tool] = 0
+            current_usage[agent][tool] += 1
+        return current_usage
+
+    def get_delivery_report(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """
+        Get the task delivery report.
+
+        This method returns a dictionary of the form:
+        {
+            "agent_address": {
+                "tool_name": num_delivered_tasks
+            }
+        }
+
+        Note that the report contains the tasks that are being delivered on-chain in the current period.
+
+        :return: the delivery report:
+        :yield: None
+        """
+        current_usage = yield from self._get_current_delivery_report()
+        if current_usage is None:
+            # something went wrong
+            self.context.logger.warning("Could not get current usage.")
+            return None
+
+        done_tasks = self.synchronized_data.done_tasks
+        updated_usage = self._update_current_delivery_report(current_usage, done_tasks)
+        return updated_usage
+
+
+class FundsSplittingBehaviour(DeliverBehaviour, ABC):
+    """FundsSplittingBehaviour"""
+
+    def _get_num_requests_delivered(self) -> Generator[None, None, Optional[int]]:
+        """Return the total number of requests delivered."""
+        reqs_by_agent = yield from self._get_num_reqs_by_agent()
+        if reqs_by_agent is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return None
+
+        total_reqs = sum(reqs_by_agent.values())
+        return total_reqs
+
+    def _get_num_reqs_by_agent(self) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Return the total number of requests delivered."""
+        delivery_report = yield from self.get_delivery_report()
+        if delivery_report is None:
+            self.context.logger.warning(
+                "Could not get delivery report. Don't split profits."
+            )
+            return None
+
+        # accumulate the number of requests delivered by each agent
+        reqs_by_agent = {}
+        for agent, tool_usage in delivery_report.items():
+            reqs_by_agent[agent] = sum(tool_usage.values())
+
+        return reqs_by_agent
+
+    def _should_split_profits(self) -> Generator[None, None, bool]:
+        """
+        Returns true if profits from the mech should be split.
+
+        Profits will be split based on the number of requests that have been delivered.
+        I.e. We will be splitting every n-th request. Where, n- is configurable
+
+        :returns: True if profits should be split, False otherwise.
+        :yields: None
+        """
+        total_reqs = yield from self._get_num_requests_delivered()
+        if total_reqs is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return False
+        return total_reqs % self.params.profit_split_freq == 0
+
+    def get_split_profit_txs(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        """Get and split all the profits from all the mechs."""
+        should_split_profits = yield from self._should_split_profits()
+        if not should_split_profits:
+            self.context.logger.info("Not splitting profits.")
+            return []
+
+        self.context.logger.info(f"Splitting profits {self.mech_addresses}.")
+        txs = []
+        for mech_address in self.mech_addresses:
+            profits = yield from self._get_profits(mech_address)
+            if profits is None:
+                self.context.logger.error(
+                    f"Could not get profits from mech {mech_address}. Don't split profits."
+                )
+                return None
+
+            self.context.logger.info(f"Got {profits} profits from mech {mech_address}")
+            split_funds = yield from self._split_funds(profits)
+            if split_funds is None:
+                self.context.logger.error(
+                    f"Could not split profits from mech {mech_address}. Don't split profits."
+                )
+                return None
+
+            self.context.logger.info(
+                f"Split {profits} profits from mech {mech_address} into {split_funds}"
+            )
+            for receiver_address, amount in split_funds.items():
+                tx = yield from self._get_transfer_tx(
+                    mech_address, receiver_address, amount
+                )
+                if tx is None:
+                    self.context.logger.error(
+                        f"Could not get transfer tx from mech {mech_address} to {receiver_address}. "
+                        f"Don't split profits."
+                    )
+                    return None
+                txs.append(tx)
+
+        return txs
+
+    def _get_profits(self, address: str) -> Generator[None, None, int]:
+        """Get the profits."""
+        ledger_api_response = yield from self.get_ledger_api_response(
+            performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
+            ledger_callable="get_balance",
+            account=address,
+        )
+        if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
+            return False  # transition to await top-up round
+        balance = cast(int, ledger_api_response.state.body.get("get_balance_result"))
+        return balance
+
+    def _split_funds(
+        self, profits: int
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """
+        Split the funds among the operators based on the number of txs their agents have made.
+
+        :param profits: the amount of funds to split.
+        :returns: a dictionary mapping operator addresses to the amount of funds they should receive.
+        :yields: None
+        """
+        on_chain_id = cast(int, self.params.on_chain_service_id)
+        service_owner = yield from self._get_service_owner(on_chain_id)
+        if service_owner is None:
+            self.context.logger.warning(
+                "Could not get service owner. Don't split profits."
+            )
+            return None
+
+        funds_by_address = {}
+        service_owner_share = int(self.params.service_owner_share * profits)
+        funds_by_address[service_owner] = service_owner_share
+
+        operator_share = profits - service_owner_share
+        funds_by_operator = yield from self._get_funds_by_operator(operator_share)
+        if funds_by_operator is None:
+            self.context.logger.warning(
+                "Could not get funds by operator. Don't split profits."
+            )
+            return None
+
+        # accumulate the funds
+        funds_by_address.update(funds_by_operator)
+        return funds_by_address
+
+    def _get_transfer_tx(
+        self, mech_address: str, receiver_address: str, amount: int
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get the transfer tx."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=mech_address,
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_exec_tx_data",
+            to=receiver_address,
+            value=amount,
+            data=NO_DATA,
+            tx_gas=AUTO_GAS,
+            operation=MechOperation.CALL.value,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_exec_tx_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": mech_address,
+            # the safe is not moving any funds, the mech contract is
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
+
+    def _get_service_owner(
+        self, service_id: int
+    ) -> Generator[None, None, Optional[str]]:
+        """Get the service owner address."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.service_registry_address,
+            contract_id=str(ServiceRegistryContract.contract_id),
+            contract_callable="get_service_owner",
+            service_id=service_id,
+        )
+        if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
+            self.context.logger.warning(
+                f"get_service_owner unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        return cast(str, contract_api_msg.state.body["service_owner"])
+
+    def _get_funds_by_operator(
+        self, operator_share: int
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Split the funds among the operators based on the number of txs their agents have made."""
+        reqs_by_agent = yield from self._get_num_reqs_by_agent()
+        if reqs_by_agent is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return None
+
+        total_reqs = sum(reqs_by_agent.values())
+        if total_reqs == 0:
+            # nothing to split
+            return {agent: 0 for agent in reqs_by_agent.keys()}
+
+        accumulated_reqs_by_operator = yield from self._accumulate_reqs_by_operator(
+            reqs_by_agent
+        )
+        if accumulated_reqs_by_operator is None:
+            self.context.logger.warning(
+                "Could not get number of requests delivered. Don't split profits."
+            )
+            return None
+
+        for agent, reqs in accumulated_reqs_by_operator.items():
+            accumulated_reqs_by_operator[agent] = int(
+                operator_share * (reqs / total_reqs)
+            )
+
+        return accumulated_reqs_by_operator
+
+    def _accumulate_reqs_by_operator(
+        self, reqs_by_agent: Dict[str, int]
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Accumulate requests by operator."""
+        agent_instances = list(reqs_by_agent.keys())
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(ServiceRegistryContract.contract_id),
+            contract_callable="get_operators_mapping",
+            agent_instances=agent_instances,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_operators_mapping unsuccessful!: {contract_api_msg}"
+            )
+            return None
+        agent_to_operator = cast(Dict[str, str], contract_api_msg.state.body)
+
+        # accumulate reqs by operator
+        reqs_by_operator = {}
+        for agent, reqs in reqs_by_agent.items():
+            operator = agent_to_operator[agent]
+            if operator not in reqs_by_operator:
+                reqs_by_operator[operator] = reqs
+            else:
+                reqs_by_operator[operator] += reqs
+        return reqs_by_operator
+
+
+class TrackingBehaviour(DeliverBehaviour, ABC):
+    """Behaviour to track the execution of a task."""
+
+    def _get_checkpoint_tx(
+        self,
+        hashcheckpoint_address: str,
+        ipfs_hash: str,
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get the transfer tx."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=hashcheckpoint_address,
+            contract_id=str(HashCheckpointContract.contract_id),
+            contract_callable="get_checkpoint_data",
+            data=bytes.fromhex(ipfs_hash),
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_checkpoint_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": hashcheckpoint_address,
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
+
+    def _save_usage_to_ipfs(
+        self, current_usage: Dict[str, Any]
+    ) -> Generator[None, None, Optional[str]]:
+        """Save usage to ipfs."""
+        ipfs_hash = yield from self.send_to_ipfs(
+            FILENAME, current_usage, filetype=SupportedFiletype.JSON
+        )
+        if ipfs_hash is None:
+            self.context.logger.warning("Could not update usage.")
+            return None
+        return ipfs_hash
+
+    def get_update_usage_tx(self) -> Generator:
+        """Get a tx to update the usage."""
+        updated_usage = yield from self.get_delivery_report()
+        if updated_usage is None:
+            # something went wrong
+            self.context.logger.warning("Could not get current usage.")
+            return None
+
+        ipfs_hash = yield from self._save_usage_to_ipfs(updated_usage)
+        if ipfs_hash is None:
+            # something went wrong
+            self.context.logger.warning("Could not save usage to IPFS.")
+            return None
+
+        self.context.logger.info(f"Saved updated usage to IPFS: {ipfs_hash}")
+        ipfs_hash = self.to_multihash(to_v1(ipfs_hash))
+        tx = yield from self._get_checkpoint_tx(
+            self.params.hash_checkpoint_address, ipfs_hash
+        )
+        return tx
+
+
+class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
+    """HashUpdateBehaviour"""
+
+    def _get_latest_hash(self) -> Generator[None, None, Optional[bytes]]:
+        """Get latest update hash."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(AgentRegistryContract.contract_id),
+            contract_callable="get_token_hash",
+            token_id=self.params.agent_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_token_hash unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        latest_hash = cast(bytes, contract_api_msg.state.body["data"])
+        return latest_hash
+
+    def _should_update_hash(self) -> Generator:
+        """Check if the agent should update the hash."""
+        if self.params.task_mutable_params.latest_metadata_hash is None:
+            latest_hash = yield from self._get_latest_hash()
+            if latest_hash is None:
+                self.context.logger.warning(
+                    "Could not get latest hash. Don't update the metadata."
+                )
+                return False
+            self.params.task_mutable_params.latest_metadata_hash = latest_hash
+
+        configured_hash = self.to_multihash(self.params.metadata_hash)
+        latest_hash = self.params.task_mutable_params.latest_metadata_hash
+        return configured_hash != latest_hash
+
+    def get_mech_update_hash_tx(self) -> Generator:
+        """Get the mech update hash tx."""
+        should_update_hash = yield from self._should_update_hash()
+        if not should_update_hash:
+            return None
+
+        metadata_str = self.to_multihash(self.params.metadata_hash)
+        metadata = bytes.fromhex(metadata_str)
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.agent_registry_address,
+            contract_id=str(AgentRegistryContract.contract_id),
+            contract_callable="get_update_hash_tx_data",
+            token_id=self.params.agent_id,
+            metadata_hash=metadata,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_mech_update_hash unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": self.params.agent_registry_address,
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
+
+
+class TransactionPreparationBehaviour(
+    FundsSplittingBehaviour, HashUpdateBehaviour, TrackingBehaviour
+):
     """TransactionPreparationBehaviour"""
 
     matching_round: Type[AbstractRound] = TransactionPreparationRound
@@ -185,24 +680,38 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
     def get_payload_content(self) -> Generator[None, None, str]:
         """Prepare the transaction"""
         all_txs = []
-        should_update_hash = yield from self._should_update_hash()
-        if should_update_hash:
-            update_hash_tx = yield from self._get_mech_update_hash_tx()
-            if update_hash_tx is None:
-                # something went wrong, respond with ERROR payload for now
-                return TransactionPreparationRound.ERROR_PAYLOAD
+        update_hash_tx = yield from self.get_mech_update_hash_tx()
+        if update_hash_tx is not None:
+            # in case of None, the agent should not update the hash
+            # if this is caused by an error, the agent should still proceed with the rest
+            # of the txs. The error will be logged.
             all_txs.append(update_hash_tx)
+
+        split_profit_txs = yield from self.get_split_profit_txs()
+        if split_profit_txs is not None:
+            # in case of None, the agent should not update the hash
+            # if this is caused by an error, the agent should still proceed with the rest
+            # of the txs. The error will be logged.
+            all_txs.extend(split_profit_txs)
 
         for task in self.synchronized_data.done_tasks:
             deliver_tx = yield from self._get_deliver_tx(task)
             if deliver_tx is None:
                 # something went wrong, respond with ERROR payload for now
+                # nothing should proceed if this happens
                 return TransactionPreparationRound.ERROR_PAYLOAD
             all_txs.append(deliver_tx)
             response_tx = task.get("transaction", None)
             if response_tx is not None:
                 all_txs.append(response_tx)
 
+        update_usage_tx = yield from self.get_update_usage_tx()
+        if update_usage_tx is None:
+            # something went wrong, respond with ERROR payload for now
+            # in case we cannot update the usage, we should not proceed with the rest of the txs
+            return TransactionPreparationRound.ERROR_PAYLOAD
+
+        all_txs.append(update_usage_tx)
         multisend_tx_str = yield from self._to_multisend(all_txs)
         if multisend_tx_str is None:
             # something went wrong, respond with ERROR payload for now
@@ -315,79 +824,6 @@ class TransactionPreparationBehaviour(TaskExecutionBaseBehaviour):
         data = cast(bytes, contract_api_msg.state.body["data"])
         return {
             "to": task_data["mech_address"],
-            "value": ZERO_ETHER_VALUE,
-            "data": data,
-        }
-
-    def _get_latest_hash(self) -> Generator[None, None, Optional[bytes]]:
-        """Get latest update hash."""
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
-            contract_id=str(AgentRegistryContract.contract_id),
-            contract_callable="get_token_hash",
-            token_id=self.params.agent_id,
-        )
-        if (
-            contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
-            self.context.logger.warning(
-                f"get_token_hash unsuccessful!: {contract_api_msg}"
-            )
-            return None
-
-        latest_hash = cast(bytes, contract_api_msg.state.body["data"])
-        return latest_hash
-
-    def _should_update_hash(self) -> Generator:
-        """Check if the agent should update the hash."""
-        if self.params.task_mutable_params.latest_metadata_hash is None:
-            latest_hash = yield from self._get_latest_hash()
-            if latest_hash is None:
-                self.context.logger.warning(
-                    "Could not get latest hash. Don't update the metadata."
-                )
-                return False
-            self.params.task_mutable_params.latest_metadata_hash = latest_hash
-
-        configured_hash = self.to_multihash(self.params.metadata_hash)
-        latest_hash = self.params.task_mutable_params.latest_metadata_hash
-        return configured_hash != latest_hash
-
-    @staticmethod
-    def to_multihash(hash_string: str) -> str:
-        """To multihash string."""
-        # Decode the Base32 CID to bytes
-        cid_bytes = multibase.decode(hash_string)
-        # Remove the multicodec prefix (0x01) from the bytes
-        multihash_bytes = multicodec.remove_prefix(cid_bytes)
-        # Convert the multihash bytes to a hexadecimal string
-        hex_multihash = multihash_bytes.hex()
-        return hex_multihash[6:]
-
-    def _get_mech_update_hash_tx(self) -> Generator:
-        """Get the mech update hash tx."""
-        metadata_str = self.to_multihash(self.params.metadata_hash)
-        metadata = bytes.fromhex(metadata_str)
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
-            contract_id=str(AgentRegistryContract.contract_id),
-            contract_callable="get_update_hash_tx_data",
-            token_id=self.params.agent_id,
-            metadata_hash=metadata,
-        )
-        if (
-            contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
-            self.context.logger.warning(
-                f"get_mech_update_hash unsuccessful!: {contract_api_msg}"
-            )
-            return None
-
-        data = cast(bytes, contract_api_msg.state.body["data"])
-        return {
-            "to": self.params.agent_registry_address,
             "value": ZERO_ETHER_VALUE,
             "data": data,
         }

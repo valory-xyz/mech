@@ -1,18 +1,18 @@
-name: agent_mech
+name: hash_checkpoint
 author: valory
 version: 0.1.0
 type: contract
-description: agent mech contract
+description: Hash checkpoint contract
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigpq5lxfj2aza6ok3fjuywtdafelkbvoqwaits7regfbgu4oynmku
-  build/AgentMech.json: bafybeidrlu7vpusp2tzovyf5rbnqy2jicuq3e6czizfkzswjq4rjusu72i
-  contract.py: bafybeig65qzfwsetro4ncnb4zlmtws3dliun6q57mw3xzy7qh5s2kczj64
+  build/HashCheckpoint.json: bafybeicdse6k7xbis3mdurqee7a3ghiba4hzfk4llhc3hk6q4qbfjd5rg4
+  contract.py: bafybeiaklk45tud5qogk6zeufwlewlgbaunux5kbahj4auf6xzkikfgwru
 fingerprint_ignore_patterns: []
-class_name: AgentMechContract
+class_name: HashCheckpointContract
 contract_interface_paths:
-  ethereum: build/AgentMech.json
+  ethereum: build/HashCheckpoint.json
 dependencies:
   open-aea-ledger-ethereum:
     version: ==1.41.0.post1
