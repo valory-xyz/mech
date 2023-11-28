@@ -37,11 +37,11 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieynwkrnlm6wwtufh2jsgnlprjbpmte7now5rk7fbgd5mh5yumhry
 - valory/abstract_round_abci:0.1.0:bafybeifcq2nwd6m5tgxooe7436bc6lwo73xcreedmhcwauzhp5jic6jeq4
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeigrndr6sd3nayqa3wbffl263f6guxcbnk67m6x2vzhpvpkmtdn6xu
+- valory/mech_abci:0.1.0:bafybeicb4xpabwxb7vui2bzbv7kxflrch567hm55fjclf2nbsekzwnj6lq
 - valory/task_execution:0.1.0:bafybeieup24rlnjosvbixq62f225qayflmxjohzmcopc2y5qfixohv2dlq
 - valory/registration_abci:0.1.0:bafybeig5fb3ibz3tr4kie53venqtajnlhvh7gwt5h45rxwzakwgs6jjsjq
 - valory/reset_pause_abci:0.1.0:bafybeiergfseqtmsphdimzjijxezqyyhigktvqriw2xb4dyujim6s5dr4a
-- valory/task_submission_abci:0.1.0:bafybeigdvfzghhjfrlov4f4newyalguuaxl7jk4ccomflgloy46wfijs5i
+- valory/task_submission_abci:0.1.0:bafybeihwkaxdvlgalbgnx3xrfb4nmyyre5fmqtl24yjowqw3q7busf5pfq
 - valory/termination_abci:0.1.0:bafybeia73cl2vqj2uawt5lnoej3fzlhhum72i2p6ld4bbudd67lxb7f3cu
 - valory/transaction_settlement_abci:0.1.0:bafybeifqase6vqfrakahogdl4h2hpxntug5ckioicfqlw2og5tn6htru3q
 - valory/websocket_client:0.1.0:bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta
@@ -176,6 +176,9 @@ models:
       service_endpoint_base: ${str:https://dummy_service.autonolas.tech/}
       init_fallback_gas: ${int:500000}
       manual_gas_limit: ${int:1000000}
+      service_owner_share: ${float:0.1}
+      profit_split_freq: ${int:1}
+      hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}

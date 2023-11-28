@@ -464,6 +464,10 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         self, operator_share: int
     ) -> Generator[None, None, Optional[Dict[str, int]]]:
         """Split the funds among the operators based on the number of txs their agents have made."""
+        if operator_share == 0:
+            # nothing to split, no need to get the number of txs
+            return {}
+
         reqs_by_agent = yield from self._get_num_reqs_by_agent()
         if reqs_by_agent is None:
             self.context.logger.warning(
