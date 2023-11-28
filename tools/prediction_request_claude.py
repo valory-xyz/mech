@@ -110,7 +110,9 @@ OUTPUT_FORMAT
    - "queries": An array of strings of size between 1 and 5. Each string must be a search engine query that can help obtain relevant information to estimate
      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
      or lead to obtain the same set of results.
-* Output only the JSON object to be parsed by Python's "json.loads()". Do not include any other contents in your response.
+* Output only the JSON object to be parsed by Python's "json.loads()". Do not include any other contents in your response. This means the output MUST be a stringified JSON object. 
+* A valid output format is: {{"queries": ["q1", "q2"]}}
+* You MUST NOT include any extra characters, like end-lines, quotes etc.
 """
 
 
