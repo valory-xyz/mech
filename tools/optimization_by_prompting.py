@@ -153,9 +153,11 @@ PROMPT_INSTRUCTOR = PromptTemplate(
 OUTPUT_FORMAT = """
 Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
 The JSON must contain a field "p_yes" which marks the probability of the event happening. 
+A valid example is: {{"p_yes": 0.5}}
 """
 
 def evaluate_prompt(prompt, df, llm):
+    prompt += OUTPUT_FORMAT
     chain = LLMChain(llm=llm, prompt=prompt)
     probas = []
 
@@ -200,6 +202,12 @@ def prompt_engineer(openai_api_key, init_instructions, instructions_format, iter
             # it may happen that the generated prompt is not valid
             # in that case, we just skip it
             print(f"Failed to parse template {generated_template}: {e}")
+            # regenerate the template
+            template = create_new_instructions(
+                llm=llm,
+                instructions=score_template["template"],
+                score=score_template["score"],
+            )
             continue
 
         df["probability"] = evaluate_prompt(prompt=prompt, llm=llm, df=df)
