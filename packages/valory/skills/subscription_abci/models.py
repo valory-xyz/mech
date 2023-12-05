@@ -19,7 +19,7 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 from dataclasses import dataclass
-from typing import Any, Optional, Type, Dict
+from typing import Any, Optional, Type, Dict, cast, List
 
 from aea.exceptions import enforce
 
@@ -34,13 +34,13 @@ from packages.valory.skills.abstract_round_abci.models import (
 )
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.abstract_round_abci.utils import check_type
-from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
+from packages.valory.skills.task_submission_abci.rounds import SubscriptionUpdateAbciApp
 
 
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
-    abci_app_cls: Type[AbciApp] = TaskSubmissionAbciApp
+    abci_app_cls: Type[AbciApp] = SubscriptionUpdateAbciApp
 
 
 @dataclass
@@ -56,25 +56,23 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.task_wait_timeout = self._ensure("task_wait_timeout", kwargs, float)
-        self.service_endpoint_base = self._ensure("service_endpoint_base", kwargs, str)
-        self.multisend_address = self._ensure_get("multisend_address", kwargs, str)
-        self.agent_registry_address = self._ensure(
-            "agent_registry_address", kwargs, str
+        self.mech_to_subscription_address: Dict[str, str] = self._nested_list_todict_workaround(
+            kwargs, "mech_to_subscription_address"
         )
-        self.agent_id: int = self._ensure("agent_id", kwargs, int)
-        self.metadata_hash: str = self._ensure("metadata_hash", kwargs, str)
-        self.task_mutable_params = MutableParams()
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
-        self.service_owner_share = self._ensure("service_owner_share", kwargs, float)
-        self.profit_split_freq = self._ensure("profit_split_freq", kwargs, int)
-        self.agent_mech_contract_addresses = self._ensure(
-            "agent_mech_contract_addresses", kwargs, list
-        )
-        self.hash_checkpoint_address = self._ensure(
-            "hash_checkpoint_address", kwargs, str
-        )
+        self.multisend_address = self._ensure_get("multisend_address", kwargs, int)
         super().__init__(*args, **kwargs)
+
+    @staticmethod
+    def _nested_list_todict_workaround(
+        kwargs: Dict,
+        key: str,
+    ) -> Dict:
+        """Get a nested list from the kwargs and convert it to a dictionary."""
+        values = cast(List, kwargs.get(key))
+        if len(values) == 0:
+            raise ValueError(f"No {key} specified!")
+        return {value[0]: value[1] for value in values}
 
     @classmethod
     def _ensure_get(cls, key: str, kwargs: Dict, type_: Any) -> Any:
