@@ -84,6 +84,10 @@ OUTPUT_FORMAT
      0 indicates lowest utility; 1 maximum utility.
 * The sum of "p_yes" and "p_no" must equal 1.
 * Output only the JSON object. Do not include any other contents in your response.
+* Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
+* This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
+* This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+* This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
 URL_QUERY_PROMPT = """
@@ -111,6 +115,10 @@ OUTPUT_FORMAT
      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
      or lead to obtain the same set of results.
 * Output only the JSON object to be parsed by Python's "json.loads()". Do not include any other contents in your response.
+* Never use Markdown syntax highlighting, such as ```json```. Only output the raw json string.
+* This is incorrect: "```json{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}```"
+* This is incorrect: ```json"{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}"```
+* This is correct: "{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}"
 """
 
 
