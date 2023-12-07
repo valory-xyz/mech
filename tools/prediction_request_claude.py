@@ -19,17 +19,14 @@
 
 """This module implements a Mech tool for binary predictions."""
 
-from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT, Stream
 import json
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, Generator, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Iterator
 
-import openai
 import requests
-from anthropic.types import Completion
+from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
-
 
 NUM_URLS_EXTRACT = 5
 DEFAULT_OPENAI_SETTINGS = {
@@ -168,7 +165,7 @@ def extract_text(
 
 def process_in_batches(
     urls: List[str], window: int = 5, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Iterator[List[Tuple[Future, str]]]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
