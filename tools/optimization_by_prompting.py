@@ -102,7 +102,7 @@ OUTPUT_FORMAT
    - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction.
      0 indicates lowest utility; 1 maximum utility.
 * The sum of "p_yes" and "p_no" must equal 1.
-* Output only the JSON object. Do not include any other contents in your response."""
+"""
 
 URL_QUERY_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -150,14 +150,19 @@ NEW INSTRUCTIONS:"""
 PROMPT_INSTRUCTOR = PromptTemplate(
     input_variables=["instructions", "score"], template=TEMPLATE_INSTRUCTOR
 )
-
+OUTPUT_FORMAT = """
+Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
+The JSON must contain a field "p_yes" which marks the probability of the event happening. 
+A valid example is: {{"p_yes": 0.5}}
+"""
 
 def evaluate_prompt(prompt, df, llm):
+    prompt += OUTPUT_FORMAT
     chain = LLMChain(llm=llm, prompt=prompt)
     probas = []
 
     for row in df.itertuples():
-        pred_chain = chain.run({"user_prompt": row.query, "additional_information": ""})
+        pred_chain = chain.run({"user_prompt": row.query, "additional_information": OUTPUT_FORMAT})
         try:
             dictionary_match = float(eval(pred_chain)["p_yes"])
         except:
@@ -187,10 +192,23 @@ def prompt_engineer(openai_api_key, init_instructions, instructions_format, iter
     template = init_instructions
 
     for _ in range(iterations):
-        prompt = PromptTemplate(
-            input_variables=["user_prompt", "additional_information"],
-            template=template + instructions_format,
-        )
+        generated_template = template + instructions_format
+        try:
+            prompt = PromptTemplate(
+                input_variables=["user_prompt", "additional_information"],
+                template=generated_template,
+            )
+        except Exception as e:
+            # it may happen that the generated prompt is not valid
+            # in that case, we just skip it
+            print(f"Failed to parse template {generated_template}: {e}")
+            # regenerate the template
+            template = create_new_instructions(
+                llm=llm,
+                instructions=score_template["template"],
+                score=score_template["score"],
+            )
+            continue
 
         df["probability"] = evaluate_prompt(prompt=prompt, llm=llm, df=df)
 
