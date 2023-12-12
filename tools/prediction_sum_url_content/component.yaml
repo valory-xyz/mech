@@ -1,0 +1,14 @@
+name: prediction_sum_url_content
+author: valory
+version: 0.1.0
+type: custom_component
+description: A tool for making binary predictions using the sum of the content of a URL article.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeidey4syohls5hxmso6qsp5p4uhtzle5txv2mlbym6ktjzknich6oa
+  prediction_sum_url_content.py: bafybeibqwl52cnz64cysjd2jnjijuakdvyrffapxq65cdzx6g65gu42deq
+fingerprint_ignore_patterns: []
+entry_point: prediction_sum_url_content.py
+callable: run
+dependencies: {}
