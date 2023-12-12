@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeiahzfpgcjpvbhpfkbifrkzb6qaj2gesnkswdi2lj7yszhe27dvjtm
+  behaviours.py: bafybeia4ohotkawmpee6k7jr3jin2cnuoikxnm2r7vd3mgapewbt6ea6vy
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
   models.py: bafybeihc2kmymmh5oousjddbc7xujqbk5niermuqak2dhtgryukzq5wxeq
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
-  utils/ipfs.py: bafybeicuaj23qrcdv6ly4j7yo6il2r5plozhd6mwvcp5acwqbjxb2t3u2i
-  utils/task.py: bafybeiakokty64m5cqp72drrpvfckhruldlwcge5hcc2bsy2ujk6nnrazq
+  utils/ipfs.py: bafybeidinbdqkidix44ibz5hug7inkcbijooag53gr5mtbaa72tk335uqq
+  utils/task.py: bafybeieuziu7owtk543z3umgmayhjh67klftk7vrhz24l6rlaii5lvkqh4
 fingerprint_ignore_patterns: []
 connections:
 - valory/ledger:0.19.0:bafybeia47rr37ianvwsh77tjjpv3nwif5sywhhy2fbdshnz4a2icwln76a
@@ -104,4 +104,6 @@ dependencies:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
+  pyyaml:
+    version: <=6.0.1,>=3.10
 is_abstract: false

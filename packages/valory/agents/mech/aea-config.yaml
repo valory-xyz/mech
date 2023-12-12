@@ -12,7 +12,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeihx7wb5hngjobw2salzqqryrhxvmxfuw7o2npjyqd2talmh2flqeq
 - valory/ledger:0.19.0:bafybeia47rr37ianvwsh77tjjpv3nwif5sywhhy2fbdshnz4a2icwln76a
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
-- valory/http_server:0.22.0:bafybeiesafy2af2wakqvsal4hz6ldycb73j5w62szhwy25iyhlf2wgyg44
+- valory/http_server:0.22.0:bafybeib6axuzanyktdidtygeibsm426fw4a2dcpc5ppdwsjblaboeepmry
 - valory/websocket_client:0.1.0:bafybeiflmystocxaqblhpzqlcop2vkhsknpzjx2jomohomaxamwskeokzm
 contracts:
 - valory/agent_mech:0.1.0:bafybeicgt3bwogpwv7t57xuxzcq7vxmoq4glcjoprabb6d4ajtgjwzsrzi
@@ -37,8 +37,8 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeiflcfufixmsrhobf56bn5745m2iipcfqyulwk2qegtnagb3kvaaxi
 - valory/abstract_round_abci:0.1.0:bafybeiaqcl7h2famylusiffigwem7tevkcsyocdu5xd42jkmgq6kvowzgq
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeifktlrkncnb5hjtwc7xqjag2pzmtciogp6nsm4t5umrqhmkmzyl5i
-- valory/task_execution:0.1.0:bafybeidmgp7dwelaxbul532vsebllmb6tyqbnvrifosmxwkzwgvyekyrve
+- valory/mech_abci:0.1.0:bafybeid3uhvakfymmly2uqezynq7a5xdqg7u4pmtas3cnxaxyhtfnbuff4
+- valory/task_execution:0.1.0:bafybeiffc4nqpk3ri7kq5tuljbgnxqmhfj3brpznr6ujxqaif24tj64kcq
 - valory/registration_abci:0.1.0:bafybeic2ynseiak7jpta7jfwuqwyp453b4p7lolr4wihxmpn633uekv5am
 - valory/reset_pause_abci:0.1.0:bafybeidzajbe3erygeh2xbd6lrjv7nsptznjuzrt24ykgvhgotdeyhfnba
 - valory/task_submission_abci:0.1.0:bafybeia6b7rzrbrhijkctxpwzeywqvsdqm2j5u5ee6fbmrp6t3x2afdase
