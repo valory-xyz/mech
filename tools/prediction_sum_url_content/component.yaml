@@ -1,5 +1,5 @@
 name: prediction_sum_url_content
-author: valory
+author: jhehemann
 version: 0.1.0
 type: custom_component
 description: A tool for making binary predictions using the sum of the content of a URL article.

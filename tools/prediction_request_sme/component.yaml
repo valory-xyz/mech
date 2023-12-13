@@ -1,5 +1,5 @@
 name: prediction_request_sme
-author: valory
+author: nickcom007
 version: 0.1.0
 type: custom_component
 description: A tool to establish Subject Matter Expert (SME) roles for specific market-related questions.

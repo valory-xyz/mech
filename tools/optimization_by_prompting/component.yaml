@@ -1,5 +1,5 @@
 name: optimization_by_prompting
-author: valory
+author: psouranis
 version: 0.1.0
 type: custom_component
 description: A tool that implements the optimization by prompting methodology.
