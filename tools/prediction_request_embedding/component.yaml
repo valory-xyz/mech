@@ -9,6 +9,6 @@ fingerprint:
   __init__.py: bafybeidey4syohls5hxmso6qsp5p4uhtzle5txv2mlbym6ktjzknich6oa
   prediction_request_embedding.py: bafybeibqwl52cnz64cysjd2jnjijuakdvyrffapxq65cdzx6g65gu42deq
 fingerprint_ignore_patterns: []
-entry_point: prediction_request_embedding.py
+entry_point: prediction_sentence_embedding.py
 callable: run
 dependencies: {}
