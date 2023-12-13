@@ -49,6 +49,7 @@ from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils.ipfs import (
+    ComponentPackageLoader,
     get_ipfs_file_hash,
     to_multihash,
 )
@@ -73,7 +74,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executor = ProcessPoolExecutor(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
         self._tools_to_file_hash: Dict[str, str] = {}
-        self._all_tools: Dict[str, str] = {}
+        self._all_tools: Dict[str, Tuple[str, str]] = {}
         self._inflight_tool_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_polling: Optional[float] = None
@@ -183,9 +184,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_get_tool(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle get tool response"""
-        tool_py = list(message.files.values())[0]
+        _component_yaml, tool_py, callable_method = ComponentPackageLoader.load(
+            message.files
+        )
         tool_req = cast(str, self._inflight_tool_req)
-        self._all_tools[tool_req] = tool_py
+        self._all_tools[tool_req] = tool_py, callable_method
         self._inflight_tool_req = None
 
     def _populate_from_block(self) -> None:
@@ -361,8 +364,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         tool_task = AnyToolAsTask()
-        tool_py = self._all_tools[task_data["tool"]]
+        tool_py, callable_method = self._all_tools[task_data["tool"]]
         task_data["tool_py"] = tool_py
+        task_data["callable_method"] = callable_method
         task_data["api_keys"] = self.params.api_keys
         future = self._submit_task(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)

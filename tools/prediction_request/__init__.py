@@ -17,20 +17,4 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains a custom Loader for the ipfs connection."""
-
-from typing import Any
-
-
-class AnyToolAsTask:
-    """AnyToolAsTask"""
-
-    def execute(self, *args: Any, **kwargs: Any) -> Any:
-        """Execute the task."""
-        tool_py = kwargs.pop("tool_py")
-        callable_method = kwargs.pop("callable_method")
-        if callable_method in globals():
-            del globals()[callable_method]
-        exec(tool_py, globals())  # pylint: disable=W0122  # nosec
-        method = globals()[callable_method]
-        return method(*args, **kwargs)
+"""This module contains the bet amount per threshold strategy."""
