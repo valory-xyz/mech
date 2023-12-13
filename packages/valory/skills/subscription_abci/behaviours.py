@@ -89,6 +89,7 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
         self,
         mech_address: str,
         expected_subscription: str,
+        expected_token_id: int,
     ) -> Generator[None, None, Optional[bool]]:
         """Check if the agent should update the subscription."""
         contract_api_msg = yield from self.get_contract_api_response(
@@ -105,13 +106,15 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
             )
             return None
 
-        actual_subscription_address = cast(str, contract_api_msg.state.body["data"])
-        return actual_subscription_address != expected_subscription
+        actual_subscription_address = cast(str, contract_api_msg.state.body["nft"])
+        actual_token_id = cast(int, contract_api_msg.state.body["token_id"])
+        return actual_subscription_address != expected_subscription or actual_token_id != expected_token_id
 
     def _get_subscription_update_tx(
         self,
         mech_address: str,
         subscription_address: str,
+        token_id: int,
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get the mech update hash tx."""
         contract_api_msg = yield from self.get_contract_api_response(
@@ -120,6 +123,7 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_set_subscription_tx_data",
             subscription_address=subscription_address,
+            token_id=token_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -139,9 +143,10 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
     def get_subscription_update_txs(self) -> Generator[None, None, List[Dict[str, Any]]]:
         """Get the mech update hash tx."""
         txs = []
-        for mech_address, subscription_address in self.params.mech_to_subscription_address.items():
+        for mech_address, subscription in self.params.mech_to_subscription.items():
+            subscription_address, token_id = subscription
             should_update = yield from self._should_update_subscription(
-                mech_address, subscription_address
+                mech_address, subscription_address, token_id
             )
             if should_update is None:
                 # something went wrong
@@ -152,7 +157,7 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
                 self.context.logger.info(f"No need to update subscription for {mech_address}.")
                 continue
 
-            tx = yield from self._get_subscription_update_tx(mech_address, subscription_address)
+            tx = yield from self._get_subscription_update_tx(mech_address, subscription_address, token_id)
             if tx is None:
                 # something went wrong
                 self.context.logger.warning(f"Could not get subscription update tx for {mech_address}.")

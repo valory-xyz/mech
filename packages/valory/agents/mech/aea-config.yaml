@@ -178,6 +178,7 @@ models:
       manual_gas_limit: ${int:1000000}
       service_owner_share: ${float:0.1}
       profit_split_freq: ${int:1}
+      mech_to_subscription: ${list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}

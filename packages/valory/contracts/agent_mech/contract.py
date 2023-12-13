@@ -302,3 +302,34 @@ class AgentMechContract(Contract):
             fn_name="exec", args=[to, value, data, operation, tx_gas]
         )
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
+
+    @classmethod
+    def get_subscription(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get tx data"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        nft = contract_instance.functions.subscriptionNFT().call()
+        token_id = contract_instance.functions.subscriptionTokenId().call()
+        return {"nft": nft, "token_id": token_id}
+
+    @classmethod
+    def get_set_subscription_tx_data(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        subscription_address: str,
+    ) -> JSONLike:
+        """Get tx data"""
+        ledger_api = cast(EthereumApi, ledger_api)
+
+        if not isinstance(ledger_api, EthereumApi):
+            raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
+
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encodeABI(
+            fn_name="setSubscription", args=[subscription_address]
+        )
+        return {"data": bytes.fromhex(data[2:])}  # type: ignore

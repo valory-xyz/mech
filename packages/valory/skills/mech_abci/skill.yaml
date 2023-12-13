@@ -165,6 +165,7 @@ models:
       service_owner_share: 0.1
       profit_split_freq: 100
       serious_slash_unit_amount: 8000000000000000
+      mech_to_subscription: [ [ "0x77af31De935740567Cf4fF1986D04B2c964A786a",[ "0x0000000000000000000000000000000000000000", "1" ] ] ]
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   randomness_api:

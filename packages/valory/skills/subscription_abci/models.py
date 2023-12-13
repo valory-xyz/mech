@@ -19,7 +19,7 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 from dataclasses import dataclass
-from typing import Any, Optional, Type, Dict, cast, List
+from typing import Any, Optional, Type, Dict, cast, List, Tuple
 
 from aea.exceptions import enforce
 
@@ -56,8 +56,8 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.mech_to_subscription_address: Dict[str, str] = self._nested_list_todict_workaround(
-            kwargs, "mech_to_subscription_address"
+        self.mech_to_subscription: Dict[str, Tuple[str, int]] = self._nested_list_todict_workaround(
+            kwargs, "mech_to_subscription"
         )
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
         self.multisend_address = self._ensure_get("multisend_address", kwargs, int)
@@ -67,12 +67,12 @@ class Params(BaseParams):
     def _nested_list_todict_workaround(
         kwargs: Dict,
         key: str,
-    ) -> Dict:
+    ) -> Dict[str, Tuple[str, int]]:
         """Get a nested list from the kwargs and convert it to a dictionary."""
         values = cast(List, kwargs.get(key))
         if len(values) == 0:
             raise ValueError(f"No {key} specified!")
-        return {value[0]: value[1] for value in values}
+        return {value[0]: (value[1][0], int(value[1][1]),) for value in values}
 
     @classmethod
     def _ensure_get(cls, key: str, kwargs: Dict, type_: Any) -> Any:

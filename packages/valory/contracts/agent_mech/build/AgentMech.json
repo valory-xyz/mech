@@ -603,6 +603,50 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "subscriptionNFT",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "subscriptionTokenId",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_subscriptionNFT",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "_subscriptionTokenId",
+          "type": "uint256"
+        }
+      ],
+      "name": "setSubscription",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
       "stateMutability": "payable",
       "type": "receive"
     }

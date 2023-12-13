@@ -147,7 +147,7 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
-      mech_to_subscription_address: [["0x77af31De935740567Cf4fF1986D04B2c964A786a","0x0000000000000000000000000000000000000000"]]
+      mech_to_subscription: [["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000", "1"]]]
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   requests:
