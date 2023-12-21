@@ -118,6 +118,9 @@ OUTPUT_FORMAT
 * This is correct: "{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}"
 """
 
+ASSISTANT_TEXT = "```json"
+STOP_SEQUENCES = ["```"]
+
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
@@ -254,11 +257,12 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information
     )
-    prediction_prompt = f"{HUMAN_PROMPT}{prediction_prompt}{AI_PROMPT}"
+    prediction_prompt = f"{HUMAN_PROMPT}{prediction_prompt}{AI_PROMPT}{ASSISTANT_TEXT}"
 
     completion = anthropic.completions.create(
         model=engine,
         max_tokens_to_sample=300,
         prompt=prediction_prompt,
+        stop_sequences=STOP_SEQUENCES,
     )
     return completion.completion, prediction_prompt, None
