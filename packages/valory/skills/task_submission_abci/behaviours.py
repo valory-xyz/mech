@@ -637,6 +637,9 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         if not should_update_hash:
             return None
 
+        # reset the latest hash, this will be updated after the tx is sent
+        self.params.task_mutable_params.latest_metadata_hash = None
+
         metadata_str = self.to_multihash(self.params.metadata_hash)
         metadata = bytes.fromhex(metadata_str)
         contract_api_msg = yield from self.get_contract_api_response(

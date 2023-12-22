@@ -1,41 +1,36 @@
-name: task_submission_abci
+name: subscription_abci
 author: valory
 version: 0.1.0
 type: skill
-description: An abci skill that implements task execution and transaction preparation
-  for the mech.
+description: An abci skill that implements logic for updating the subscription of
+  the mech. for the mech.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeig7wngxnzdshonx7fblsy3nbxior6bxu7bfz77rsn5mq2njhxu7ya
-  dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
-  fsm_specification.yaml: bafybeig6bhn554qyou7kef5bstnlv54zke32avyti63uu4hvsol3lzqkoi
-  handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeia3nyyoujxtum4rtsa3zpsm3jecb53o6xpq4h5hltg2prxa2rxhmq
-  payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
-  rounds.py: bafybeicstmau4vlzpxz3kjgiwwsetwmotdk4un4iucmdddzvot5dgdkg2a
-  tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
+  __init__.py: bafybeih2y4s3vu6xleujurx5mihfmzaxubeubykopyftjgklbwtfn6m5yu
+  behaviours.py: bafybeihzleoe6al33gy4nhjc3dpcdx5xm7nf4mfypdgmyr2tdqb745blj4
+  dialogues.py: bafybeif2euu7wehnyr2r6efrbk6jh757dvbbnb3m7v5gxfdc4qzr3fnd74
+  fsm_specification.yaml: bafybeia77avtbeclmr4lil2hvjrxk4unstxb4fyvdmbpdgocn3ebs2hcdi
+  handlers.py: bafybeiegulbnno4efmaqmsuvjo4vrhcwcrg3faeryjjhwyabpywzty5m2u
+  models.py: bafybeies5ej7gbm3kuyky4gn5gouyubbmsdaqxcnycdleaddstzppsenta
+  payloads.py: bafybeidqcjuyceawnzf2dkeoro2geivfeqrh34h6a7lkxvfqcl62d4hyuy
+  rounds.py: bafybeihrq5aswsgbzxn3ftq7tcqncmfkizo5zirna7zml6miebjqqzu2hq
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
 - valory/agent_mech:0.1.0:bafybeiggowhbqwg7ex2yfz57l3qzorlnu4fkipdrlzs23nrldrbbfa7dri
-- valory/agent_registry:0.1.0:bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu
 - valory/gnosis_safe:0.1.0:bafybeidll7frtdsq2ckiluazkwk4zpkp7natt4kdejjehwvykqwzyuf6ei
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
-- valory/service_registry:0.1.0:bafybeia2swgpmczn3iykmptigabklk2eqbqxzhmbnunq3givmjygvmgtbm
-- valory/hash_checkpoint:0.1.0:bafybeieys27hidb5m267jwqsxdgorf5v37o6lvrfy2oga557stjn4xgoaa
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
-- valory/ledger_api:1.0.0:bafybeige5agrztgzfevyglf7mb4o7pzfttmq4f6zi765y4g2zvftbyowru
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiaqcl7h2famylusiffigwem7tevkcsyocdu5xd42jkmgq6kvowzgq
 - valory/transaction_settlement_abci:0.1.0:bafybeiaefgqbs7zsn5xe5kdwrujj7ivygkn3ujpw6crnvi3knvxw75qmja
 behaviours:
   main:
     args: {}
-    class_name: TaskSubmissionRoundBehaviour
+    class_name: UpdateSubscriptionRoundBehaviour
 handlers:
   abci:
     args: {}
@@ -107,15 +102,12 @@ models:
         voting_power: '10'
       history_check_timeout: 1205
       ipfs_domain_name: null
-      agent_registry_address: '0x0000000000000000000000000000000000000000'
       agent_id: 3
-      metadata_hash: '00000000000000000000000000000000000000000000000000'
       ipfs_fetch_timeout: 15.0
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
       max_attempts: 10
       max_healthcheck: 120
-      hash_checkpoint_address: '0x0000000000000000000000000000000000000000'
       on_chain_service_id: null
       request_retry_delay: 1.0
       request_timeout: 10.0
@@ -150,6 +142,10 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
+      mech_to_subscription:
+      - - '0x77af31De935740567Cf4fF1986D04B2c964A786a'
+        - - '0x0000000000000000000000000000000000000000'
+          - '1'
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   requests:

@@ -27,6 +27,7 @@ from packages.valory.skills.abstract_round_abci.models import (
 from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
 from packages.valory.skills.mech_abci.composition import MechAbciApp
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
+from packages.valory.skills.subscription_abci.models import Params as SubscriptionParams
 from packages.valory.skills.task_submission_abci.models import (
     Params as TaskExecutionAbciParams,
 )
@@ -99,5 +100,5 @@ class SharedState(TaskExecSharedState):
         )
 
 
-class Params(TaskExecutionParams, TerminationParams):  # type: ignore
+class Params(TaskExecutionParams, SubscriptionParams, TerminationParams):  # type: ignore
     """A model to represent params for multiple abci apps."""
