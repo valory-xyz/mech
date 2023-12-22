@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the transaction payloads of the TaskExecutionAbciApp."""
+"""This module contains the transaction payloads of the UpdateSubscriptionAbciApp."""
 
 from dataclasses import dataclass
 

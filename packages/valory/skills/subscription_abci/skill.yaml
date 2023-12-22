@@ -7,14 +7,14 @@ description: An abci skill that implements logic for updating the subscription o
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeidfw3cx65vigxxk3qjrgehdgu4rll5f6wexnn7bvp6wktlwlgqgle
-  dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
-  fsm_specification.yaml: bafybeieqbqbbd6yitedf3r3n5z5wqydbdcwdhgqefbdpivd5pavx5wbhay
-  handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeigcpjaaak4usvfmvbxixxy5jezjiezzqfd65t23gejscpwhohan5y
-  payloads.py: bafybeigefol5dsi6yreewshd2pgmrgp2bbepvueh3io4bwoiqejzrb6zrq
-  rounds.py: bafybeigm5yfd6ganfcux6uo7fdbitmzyovlesbwcdeayikl5uu66h6x57y
+  __init__.py: bafybeih2y4s3vu6xleujurx5mihfmzaxubeubykopyftjgklbwtfn6m5yu
+  behaviours.py: bafybeihzleoe6al33gy4nhjc3dpcdx5xm7nf4mfypdgmyr2tdqb745blj4
+  dialogues.py: bafybeif2euu7wehnyr2r6efrbk6jh757dvbbnb3m7v5gxfdc4qzr3fnd74
+  fsm_specification.yaml: bafybeia77avtbeclmr4lil2hvjrxk4unstxb4fyvdmbpdgocn3ebs2hcdi
+  handlers.py: bafybeiegulbnno4efmaqmsuvjo4vrhcwcrg3faeryjjhwyabpywzty5m2u
+  models.py: bafybeies5ej7gbm3kuyky4gn5gouyubbmsdaqxcnycdleaddstzppsenta
+  payloads.py: bafybeidqcjuyceawnzf2dkeoro2geivfeqrh34h6a7lkxvfqcl62d4hyuy
+  rounds.py: bafybeihrq5aswsgbzxn3ftq7tcqncmfkizo5zirna7zml6miebjqqzu2hq
 fingerprint_ignore_patterns: []
 connections: []
 contracts:

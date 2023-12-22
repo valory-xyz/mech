@@ -96,11 +96,6 @@ class UpdateSubscriptionRound(CollectSameUntilThresholdRound):
 class FinishedWithTxRound(DegenerateRound):
     """FinishedWithTxRound"""
 
-
-class FinishedWithErrorRound(DegenerateRound):
-    """FinishedWithErrorRound"""
-
-
 class FinishedWithoutTxRound(DegenerateRound):
     """FinishedWithoutTxRound"""
 
@@ -120,9 +115,8 @@ class SubscriptionUpdateAbciApp(AbciApp[Event]):
             - no majority: 0.
         1. FinishedWithTxRound
         2. FinishedWithoutTxRound
-        3. FinishedWithErrorRound
 
-    Final states: {FinishedWithErrorRound, FinishedWithTxRound, FinishedWithoutTxRound}
+    Final states: {FinishedWithTxRound, FinishedWithoutTxRound}
 
     Timeouts:
         round timeout: 60.0
@@ -139,12 +133,10 @@ class SubscriptionUpdateAbciApp(AbciApp[Event]):
         },
         FinishedWithTxRound: {},
         FinishedWithoutTxRound: {},
-        FinishedWithErrorRound: {},
     }
     final_states: Set[AppState] = {
         FinishedWithTxRound,
         FinishedWithoutTxRound,
-        FinishedWithErrorRound,
     }
     event_to_timeout: EventToTimeout = {
         Event.ROUND_TIMEOUT: 60.0,
@@ -155,5 +147,4 @@ class SubscriptionUpdateAbciApp(AbciApp[Event]):
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedWithTxRound: {"most_voted_tx_hash"},
         FinishedWithoutTxRound: set(),
-        FinishedWithErrorRound: set(),
     }

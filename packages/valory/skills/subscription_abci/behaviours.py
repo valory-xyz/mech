@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of TaskExecutionAbciApp."""
+"""This package contains round behaviours of UpdateSubscriptionAbciApp."""
 from abc import ABC
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 

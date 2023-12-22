@@ -17,9 +17,9 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the task submission skill."""
+"""This module contains the implementation of the update subscription skill."""
 
 from aea.configurations.base import PublicId
 
 
-PUBLIC_ID = PublicId.from_str("valory/task_submission_abci:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/subscription_abci:0.1.0")

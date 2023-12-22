@@ -2,24 +2,20 @@ alphabet_in:
 - DONE
 - ERROR
 - NO_MAJORITY
-- NO_TASKS
-default_start_state: TaskPoolingRound
+- NO_TX
+default_start_state: UpdateSubscriptionRound
 final_states:
-- FinishedTaskExecutionWithErrorRound
-- FinishedTaskPoolingRound
-- FinishedWithoutTasksRound
+- FinishedWithTxRound
+- FinishedWithoutTxRound
 label: SubscriptionUpdateAbciApp
 start_states:
-- TaskPoolingRound
+- UpdateSubscriptionRound
 states:
-- FinishedTaskExecutionWithErrorRound
-- FinishedTaskPoolingRound
-- FinishedWithoutTasksRound
-- TaskPoolingRound
-- TransactionPreparationRound
+- FinishedWithTxRound
+- FinishedWithoutTxRound
+- UpdateSubscriptionRound
 transition_func:
-    (TaskPoolingRound, DONE): TransactionPreparationRound
-    (TaskPoolingRound, NO_TASKS): FinishedWithoutTasksRound
-    (TransactionPreparationRound, DONE): FinishedTaskPoolingRound
-    (TransactionPreparationRound, ERROR): FinishedTaskExecutionWithErrorRound
-    (TransactionPreparationRound, NO_MAJORITY): FinishedTaskExecutionWithErrorRound
+    (UpdateSubscriptionRound, DONE): FinishedWithTxRound
+    (UpdateSubscriptionRound, ERROR): UpdateSubscriptionRound
+    (UpdateSubscriptionRound, NO_MAJORITY): UpdateSubscriptionRound
+    (UpdateSubscriptionRound, NO_TX): FinishedWithoutTxRound
