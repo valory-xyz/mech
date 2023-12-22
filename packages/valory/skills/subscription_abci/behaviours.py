@@ -262,8 +262,9 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
         tx_hash = cast(str, response.state.body["tx_hash"])[2:]
         return tx_hash
 
-class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
-    """TaskSubmissionRoundBehaviour"""
+
+class UpdateSubscriptionRoundBehaviour(AbstractRoundBehaviour):
+    """UpdateSubscriptionRoundBehaviour"""
 
     initial_behaviour_cls = UpdateSubscriptionBehaviour
     abci_app_cls = SubscriptionUpdateAbciApp

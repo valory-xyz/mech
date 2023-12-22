@@ -19,7 +19,7 @@
 
 """This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
 from dataclasses import dataclass
-from typing import Any, Optional, Type, Dict
+from typing import Any, Dict, Optional, Type
 
 from aea.exceptions import enforce
 
@@ -83,7 +83,7 @@ class Params(BaseParams):
         skill_id = kwargs["skill_context"].skill_id
         enforce(
             key in kwargs,
-            f"'{key}' of type '{type_}' required, but it is not set in `models.params.args` of `skill.yaml` of `{skill_id}`",
+            f"'{key!r}' of type '{type_!r}' required, but it is not set in `models.params.args` of `skill.yaml` of `{skill_id}`",
         )
         value = kwargs.get(key, None)
         try:
@@ -91,7 +91,7 @@ class Params(BaseParams):
         except TypeError:  # pragma: nocover
             enforce(
                 False,
-                f"'{key}' must be a {type_}, but type {type(value)} was found in `models.params.args` of `skill.yaml` of `{skill_id}`",
+                f"'{key!r}' must be a {type_!r}, but type {type(value)} was found in `models.params.args` of `skill.yaml` of `{skill_id}`",
             )
         return value
 

@@ -18,9 +18,8 @@
 # ------------------------------------------------------------------------------
 
 """This package contains the rounds of SubscriptionUpdateAbciApp."""
-import json
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, cast
+from typing import Dict, Optional, Set, Tuple, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp,
@@ -28,16 +27,11 @@ from packages.valory.skills.abstract_round_abci.base import (
     AppState,
     BaseSynchronizedData,
     CollectSameUntilThresholdRound,
-    CollectionRound,
     DegenerateRound,
     EventToTimeout,
     get_name,
 )
 from packages.valory.skills.subscription_abci.payloads import UpdateSubscriptionPayload
-from packages.valory.skills.task_submission_abci.payloads import (
-    TaskPoolingPayload,
-    TransactionPayload,
-)
 
 
 class Event(Enum):
@@ -119,21 +113,19 @@ class SubscriptionUpdateAbciApp(AbciApp[Event]):
     Initial states: {UpdateSubscriptionRound}
 
     Transition states:
-        0. TaskPoolingRound
+        0. UpdateSubscriptionRound
             - done: 1.
-            - no tasks: 4.
-        1. TransactionPreparationRound
-            - done: 2.
-            - error: 3.
-            - no majority: 3.
-        2. FinishedTaskPoolingRound
-        3. FinishedTaskExecutionWithErrorRound
-        4. FinishedWithoutTasksRound
+            - no tx: 2.
+            - error: 0.
+            - no majority: 0.
+        1. FinishedWithTxRound
+        2. FinishedWithoutTxRound
+        3. FinishedWithErrorRound
 
-    Final states: {FinishedWithTxRound, FinishedWithoutTxRound, FinishedWithErrorRound}
+    Final states: {FinishedWithErrorRound, FinishedWithTxRound, FinishedWithoutTxRound}
 
     Timeouts:
-        task execution round timeout: 60.0
+        round timeout: 60.0
     """
 
     initial_round_cls: AppState = UpdateSubscriptionRound

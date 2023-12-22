@@ -21,9 +21,9 @@
 
 import packages.valory.skills.registration_abci.rounds as RegistrationAbci
 import packages.valory.skills.reset_pause_abci.rounds as ResetAndPauseAbci
+import packages.valory.skills.subscription_abci.rounds as SubscriptionUpdateAbciApp
 import packages.valory.skills.task_submission_abci.rounds as TaskSubmissionAbciApp
 import packages.valory.skills.transaction_settlement_abci.rounds as TransactionSubmissionAbciApp
-import packages.valory.skills.subscription_abci.rounds as SubscriptionUpdateAbciApp
 from packages.valory.skills.abstract_round_abci.abci_app_chain import (
     AbciAppTransitionMapping,
     chain,
@@ -41,7 +41,7 @@ from packages.valory.skills.termination_abci.rounds import (
 abci_app_transition_mapping: AbciAppTransitionMapping = {
     RegistrationAbci.FinishedRegistrationRound: SubscriptionUpdateAbciApp.UpdateSubscriptionRound,
     SubscriptionUpdateAbciApp.FinishedWithoutTxRound: TaskSubmissionAbciApp.TaskPoolingRound,
-    SubscriptionUpdateAbciApp.FinishedWithTxRound: TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound,   # pylint: disable=C0301
+    SubscriptionUpdateAbciApp.FinishedWithTxRound: TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound,  # pylint: disable=C0301
     TaskSubmissionAbciApp.FinishedTaskPoolingRound: TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound,  # pylint: disable=C0301
     TaskSubmissionAbciApp.FinishedTaskExecutionWithErrorRound: ResetAndPauseAbci.ResetAndPauseRound,
     TaskSubmissionAbciApp.FinishedWithoutTasksRound: ResetAndPauseAbci.ResetAndPauseRound,
@@ -63,6 +63,7 @@ MechAbciApp = chain(
         TaskSubmissionAbciApp.TaskSubmissionAbciApp,
         ResetAndPauseAbci.ResetPauseAbciApp,
         TransactionSubmissionAbciApp.TransactionSubmissionAbciApp,
+        SubscriptionUpdateAbciApp.SubscriptionUpdateAbciApp,
     ),
     abci_app_transition_mapping,
 ).add_background_app(termination_config)

@@ -26,6 +26,7 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
+from web3 import Web3
 from web3.types import BlockIdentifier, TxReceipt
 
 
@@ -321,6 +322,7 @@ class AgentMechContract(Contract):
         ledger_api: LedgerApi,
         contract_address: str,
         subscription_address: str,
+        token_id: int,
     ) -> JSONLike:
         """Get tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -330,6 +332,7 @@ class AgentMechContract(Contract):
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encodeABI(
-            fn_name="setSubscription", args=[subscription_address]
+            fn_name="setSubscription",
+            args=[Web3.to_checksum_address(subscription_address), token_id],
         )
         return {"data": bytes.fromhex(data[2:])}  # type: ignore

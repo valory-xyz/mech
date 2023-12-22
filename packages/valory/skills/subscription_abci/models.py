@@ -34,7 +34,7 @@ from packages.valory.skills.abstract_round_abci.models import (
 )
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.abstract_round_abci.utils import check_type
-from packages.valory.skills.task_submission_abci.rounds import SubscriptionUpdateAbciApp
+from packages.valory.skills.subscription_abci.rounds import SubscriptionUpdateAbciApp
 
 
 class SharedState(BaseSharedState):
@@ -60,7 +60,7 @@ class Params(BaseParams):
             kwargs, "mech_to_subscription"
         )
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
-        self.multisend_address = self._ensure_get("multisend_address", kwargs, int)
+        self.multisend_address = self._ensure_get("multisend_address", kwargs, str)
         super().__init__(*args, **kwargs)
 
     @staticmethod

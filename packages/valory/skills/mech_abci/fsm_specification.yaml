@@ -12,6 +12,7 @@ alphabet_in:
 - NONE
 - NO_MAJORITY
 - NO_TASKS
+- NO_TX
 - RESET_AND_PAUSE_TIMEOUT
 - RESET_TIMEOUT
 - ROUND_TIMEOUT
@@ -39,6 +40,7 @@ states:
 - SynchronizeLateMessagesRound
 - TaskPoolingRound
 - TransactionPreparationRound
+- UpdateSubscriptionRound
 - ValidateTransactionRound
 transition_func:
     (CheckLateTxHashesRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
@@ -65,9 +67,9 @@ transition_func:
     (RandomnessTransactionSubmissionRound, DONE): SelectKeeperTransactionSubmissionARound
     (RandomnessTransactionSubmissionRound, NO_MAJORITY): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, ROUND_TIMEOUT): RandomnessTransactionSubmissionRound
-    (RegistrationRound, DONE): TaskPoolingRound
+    (RegistrationRound, DONE): UpdateSubscriptionRound
     (RegistrationRound, NO_MAJORITY): RegistrationRound
-    (RegistrationStartupRound, DONE): TaskPoolingRound
+    (RegistrationStartupRound, DONE): UpdateSubscriptionRound
     (ResetAndPauseRound, DONE): TaskPoolingRound
     (ResetAndPauseRound, NO_MAJORITY): RegistrationRound
     (ResetAndPauseRound, RESET_AND_PAUSE_TIMEOUT): RegistrationRound
@@ -97,6 +99,10 @@ transition_func:
     (TransactionPreparationRound, DONE): RandomnessTransactionSubmissionRound
     (TransactionPreparationRound, ERROR): ResetAndPauseRound
     (TransactionPreparationRound, NO_MAJORITY): ResetAndPauseRound
+    (UpdateSubscriptionRound, DONE): RandomnessTransactionSubmissionRound
+    (UpdateSubscriptionRound, ERROR): UpdateSubscriptionRound
+    (UpdateSubscriptionRound, NO_MAJORITY): UpdateSubscriptionRound
+    (UpdateSubscriptionRound, NO_TX): TaskPoolingRound
     (ValidateTransactionRound, DONE): ResetAndPauseRound
     (ValidateTransactionRound, NEGATIVE): CheckTransactionHistoryRound
     (ValidateTransactionRound, NONE): SelectKeeperTransactionSubmissionBRound
