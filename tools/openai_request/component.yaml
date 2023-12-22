@@ -1,0 +1,14 @@
+name: openai_request
+author: valory
+version: 0.1.0
+type: custom_component
+description: A tool that runs a prompt against the OpenAI API.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeidey4syohls5hxmso6qsp5p4uhtzle5txv2mlbym6ktjzknich6oa
+  openai_request.py: bafybeibqwl52cnz64cysjd2jnjijuakdvyrffapxq65cdzx6g65gu42deq
+fingerprint_ignore_patterns: []
+entry_point: openai_request.py
+callable: run
+dependencies: {}
