@@ -1,7 +1,7 @@
 name: stability_ai_request
 author: valory
 version: 0.1.0
-type: custom_component
+type: custom
 description: A tool that runs a prompt against StabilityAI.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
