@@ -113,9 +113,9 @@ OUTPUT_FORMAT
      or lead to obtain the same set of results.
 * Output only the JSON object to be parsed by Python's "json.loads()". Do not include any other contents in your response.
 * Never use Markdown syntax highlighting, such as ```json```. Only output the raw json string.
-* This is incorrect: "```json{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}```"
-* This is incorrect: ```json"{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}"```
-* This is correct: "{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}"
+* This is incorrect:"```json{{\n  \"queries\": [\"term1\", \"term2\"]}}```"
+* This is incorrect:```json"{{\n  \"queries\": [\"term1\", \"term2\"]}}"```
+* This is correct:"{{\n  \"quries\": [\"term1\", \"term2\"]}}"
 """
 
 ASSISTANT_TEXT = "```json"
@@ -217,11 +217,12 @@ def fetch_additional_information(
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
-    url_query_prompt = f"{HUMAN_PROMPT}{url_query_prompt}{AI_PROMPT}"
+    url_query_prompt = f"{HUMAN_PROMPT}{url_query_prompt}{AI_PROMPT}{ASSISTANT_TEXT}"
     completion = anthropic.completions.create(
         model=engine,
         max_tokens_to_sample=300,
         prompt=url_query_prompt,
+        stop_sequences=STOP_SEQUENCES,
     )
     json_data = json.loads(completion.completion)
     urls = get_urls_from_queries(
