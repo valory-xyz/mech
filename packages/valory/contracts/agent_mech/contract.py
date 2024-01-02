@@ -19,7 +19,6 @@
 
 """This module contains the dynamic_contribution contract definition."""
 from enum import Enum
-
 from typing import Any, Dict, List, Optional, cast
 
 from aea.common import JSONLike
@@ -226,21 +225,23 @@ class AgentMechContract(Contract):
         if not isinstance(ledger_api, EthereumApi):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
-        deliver_with_nonce = [{
-            "inputs": [
-                {"internalType": "uint256", "name": "requestId", "type": "uint256"},
-                {
-                    "internalType": "uint256",
-                    "name": "requestIdWithNonce",
-                    "type": "uint256",
-                },
-                {"internalType": "bytes", "name": "data", "type": "bytes"},
-            ],
-            "name": "deliver",
-            "outputs": [],
-            "stateMutability": "nonpayable",
-            "type": "function",
-        }]
+        deliver_with_nonce = [
+            {
+                "inputs": [
+                    {"internalType": "uint256", "name": "requestId", "type": "uint256"},
+                    {
+                        "internalType": "uint256",
+                        "name": "requestIdWithNonce",
+                        "type": "uint256",
+                    },
+                    {"internalType": "bytes", "name": "data", "type": "bytes"},
+                ],
+                "name": "deliver",
+                "outputs": [],
+                "stateMutability": "nonpayable",
+                "type": "function",
+            }
+        ]
         if request_id_nonce is not None:
             contract_instance = ledger_api.api.eth.contract(
                 contract_address, abi=deliver_with_nonce
