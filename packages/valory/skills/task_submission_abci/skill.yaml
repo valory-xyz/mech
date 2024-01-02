@@ -141,7 +141,6 @@ models:
       tendermint_url: http://localhost:26657
       tx_timeout: 10.0
       use_termination: false
-      manual_gas_limit: 1000000
       validate_timeout: 1205
       use_slashing: false
       service_owner_share: 0.1

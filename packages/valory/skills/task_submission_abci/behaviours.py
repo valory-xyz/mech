@@ -819,6 +819,7 @@ class TransactionPreparationBehaviour(
             contract_callable="get_deliver_data",
             request_id=task_data["request_id"],
             data=task_data["task_result"],
+            request_id_nonce=task_data["request_id_nonce"],
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE

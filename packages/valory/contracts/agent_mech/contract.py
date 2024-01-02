@@ -19,7 +19,8 @@
 
 """This module contains the dynamic_contribution contract definition."""
 from enum import Enum
-from typing import Any, Dict, List, cast
+
+from typing import Any, Dict, List, Optional, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -50,9 +51,65 @@ partial_abis = [
             ],
             "name": "Deliver",
             "type": "event",
-        }
+        },
+        {
+            "anonymous": False,
+            "inputs": [
+                {
+                    "indexed": True,
+                    "internalType": "address",
+                    "name": "sender",
+                    "type": "address",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestId",
+                    "type": "uint256",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "bytes",
+                    "name": "data",
+                    "type": "bytes",
+                },
+            ],
+            "name": "Request",
+            "type": "event",
+        },
     ],
     [
+        {
+            "anonymous": False,
+            "inputs": [
+                {
+                    "indexed": True,
+                    "internalType": "address",
+                    "name": "sender",
+                    "type": "address",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestId",
+                    "type": "uint256",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "uint256",
+                    "name": "requestIdWithNonce",
+                    "type": "uint256",
+                },
+                {
+                    "indexed": False,
+                    "internalType": "bytes",
+                    "name": "data",
+                    "type": "bytes",
+                },
+            ],
+            "name": "Request",
+            "type": "event",
+        },
         {
             "anonymous": False,
             "inputs": [
@@ -77,7 +134,7 @@ partial_abis = [
             ],
             "name": "Deliver",
             "type": "event",
-        }
+        },
     ],
 ]
 
@@ -147,7 +204,12 @@ class AgentMechContract(Contract):
 
     @classmethod
     def get_deliver_data(
-        cls, ledger_api: LedgerApi, contract_address: str, request_id: int, data: str
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        request_id: int,
+        data: str,
+        request_id_nonce: Optional[int],
     ) -> JSONLike:
         """
         Deliver a response to a request.
@@ -156,6 +218,7 @@ class AgentMechContract(Contract):
         :param contract_address: the address of the token to be used
         :param request_id: the id of the target request
         :param data: the response data
+        :param request_id_nonce: request id with nonce, to ensure uniqueness on-chain.
         :return: the deliver data
         """
         ledger_api = cast(EthereumApi, ledger_api)
@@ -163,10 +226,34 @@ class AgentMechContract(Contract):
         if not isinstance(ledger_api, EthereumApi):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="deliver", args=[request_id, bytes.fromhex(data)]
-        )
+        deliver_with_nonce = [{
+            "inputs": [
+                {"internalType": "uint256", "name": "requestId", "type": "uint256"},
+                {
+                    "internalType": "uint256",
+                    "name": "requestIdWithNonce",
+                    "type": "uint256",
+                },
+                {"internalType": "bytes", "name": "data", "type": "bytes"},
+            ],
+            "name": "deliver",
+            "outputs": [],
+            "stateMutability": "nonpayable",
+            "type": "function",
+        }]
+        if request_id_nonce is not None:
+            contract_instance = ledger_api.api.eth.contract(
+                contract_address, abi=deliver_with_nonce
+            )
+            data = contract_instance.encodeABI(
+                fn_name="deliver",
+                args=[request_id, request_id_nonce, bytes.fromhex(data)],
+            )
+        else:
+            contract_instance = cls.get_instance(ledger_api, contract_address)
+            data = contract_instance.encodeABI(
+                fn_name="deliver", args=[request_id, bytes.fromhex(data)]
+            )
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
 
     @classmethod
@@ -179,19 +266,23 @@ class AgentMechContract(Contract):
     ) -> JSONLike:
         """Get the Request events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        entries = contract_instance.events.Request.create_filter(
-            fromBlock=from_block,
-            toBlock=to_block,
-        ).get_all_entries()
+        all_entries = []
+        for abi in partial_abis:
+            contract_instance = ledger_api.api.eth.contract(contract_address, abi=abi)
+            entries = contract_instance.events.Request.create_filter(
+                fromBlock=from_block,
+                toBlock=to_block,
+            ).get_all_entries()
+            all_entries.extend(entries)
+
         request_events = list(
             {
                 "tx_hash": entry.transactionHash.hex(),
                 "block_number": entry.blockNumber,
-                "contract_address": contract_address,
                 **entry["args"],
+                "contract_address": contract_address,
             }
-            for entry in entries
+            for entry in all_entries
         )
         return {"data": request_events}
 
