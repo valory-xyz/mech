@@ -82,9 +82,6 @@ partial_abis = [
 ]
 
 
-BLOCK_INDEXING_TOLERANCE = 50
-
-
 class MechOperation(Enum):
     """Operation types."""
 
