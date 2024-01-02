@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -225,6 +225,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     from_block=self.params.from_block,
                     chain_id=GNOSIS_CHAIN,
                     contract_addresses=self.params.agent_mech_contract_addresses,
+                    max_block_window=self.params.max_block_window,
                 )
             ),
             counterparty=LEDGER_API_ADDRESS,

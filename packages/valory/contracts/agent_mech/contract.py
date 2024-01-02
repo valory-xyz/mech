@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -270,9 +270,13 @@ class AgentMechContract(Contract):
         contract_address: str,
         contract_addresses: List[str],
         from_block: BlockIdentifier = "earliest",
+        max_block_window: int = 1000,
         **kwargs: Any,
     ) -> JSONLike:
         """Get the requests that are not delivered."""
+        current_block = ledger_api.api.eth.block_number
+        if from_block != "earliest" and current_block - from_block > max_block_window:
+            from_block = current_block - max_block_window
         pending_tasks: List[Dict[str, Any]] = []
         for contract_address in contract_addresses:
             pending_tasks_batch = cls.get_undelivered_reqs(
