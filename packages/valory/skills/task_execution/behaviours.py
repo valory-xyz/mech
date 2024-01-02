@@ -225,6 +225,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     from_block=self.params.from_block,
                     chain_id=GNOSIS_CHAIN,
                     contract_addresses=self.params.agent_mech_contract_addresses,
+                    max_block_window=self.params.max_block_window,
                 )
             ),
             counterparty=LEDGER_API_ADDRESS,

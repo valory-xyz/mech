@@ -62,6 +62,8 @@ class Params(Model):
         enforce(self.from_block_range is not None, "from_block_range must be set!")
         self.timeout_limit = kwargs.get("timeout_limit", None)
         enforce(self.timeout_limit is not None, "timeout_limit must be set!")
+        self.max_block_window = kwargs.get("max_block_window", None)
+        enforce(self.max_block_window is not None, "max_block_window must be set!")
         # maps the request id to the number of times it has timed out
         self.request_id_to_num_timeouts: Dict[int, int] = defaultdict(lambda: 0)
         super().__init__(*args, **kwargs)

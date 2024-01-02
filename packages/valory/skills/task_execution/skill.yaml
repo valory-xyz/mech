@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeia4ohotkawmpee6k7jr3jin2cnuoikxnm2r7vd3mgapewbt6ea6vy
+  behaviours.py: bafybeicgj2sbbmcqslxlupyhcu7yzmx3yssesod6ux3odqtax74ammvmea
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
-  models.py: bafybeihc2kmymmh5oousjddbc7xujqbk5niermuqak2dhtgryukzq5wxeq
+  models.py: bafybeihscidxutj3uocgedrxuifq333mexywgnnec3cqjxzvwussjlybby
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/ipfs.py: bafybeidinbdqkidix44ibz5hug7inkcbijooag53gr5mtbaa72tk335uqq
   utils/task.py: bafybeieuziu7owtk543z3umgmayhjh67klftk7vrhz24l6rlaii5lvkqh4
@@ -20,7 +20,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeihx7wb5hngjobw2salzqqryrhxvmxfuw7o2npjyqd2talmh2flqeq
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
 contracts:
-- valory/agent_mech:0.1.0:bafybeiggowhbqwg7ex2yfz57l3qzorlnu4fkipdrlzs23nrldrbbfa7dri
+- valory/agent_mech:0.1.0:bafybeigmmtcquo7kivoerkirqzpocp43lkylwzktf36hwhxae5gblcygbm
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
@@ -86,6 +86,7 @@ models:
       num_agents: 4
       polling_interval: 30.0
       task_deadline: 240.0
+      max_block_window: 500
       use_slashing: false
       timeout_limit: 3
       slash_cooldown_hours: 3

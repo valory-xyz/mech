@@ -2,18 +2,18 @@
     "dev": {
         "connection/valory/websocket_client/0.1.0": "bafybeiflmystocxaqblhpzqlcop2vkhsknpzjx2jomohomaxamwskeokzm",
         "skill/valory/contract_subscription/0.1.0": "bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4",
-        "agent/valory/mech/0.1.0": "bafybeigpn5qnabtrwamfqpnerefnlgo2dumjni22kl4zcwhjzq4srrmnt4",
-        "skill/valory/mech_abci/0.1.0": "bafybeiej4fot4ee27d5tujxxb2u5w4rtbanpm7txwfti73rrhgmf43xmwq",
-        "contract/valory/agent_mech/0.1.0": "bafybeiggowhbqwg7ex2yfz57l3qzorlnu4fkipdrlzs23nrldrbbfa7dri",
-        "service/valory/mech/0.1.0": "bafybeieany5auucyblft2i7hssabpv6hi3v7j3ulugrnkqcngawgbqqkze",
+        "agent/valory/mech/0.1.0": "bafybeidekztxvnwtppvtrgocllasnbv52247zfvfuf2hnufqbj47yue7aq",
+        "skill/valory/mech_abci/0.1.0": "bafybeigyt54jptufmofqe3hb4o5qaxomrn36gsis2sys6bozj7aotjtdja",
+        "contract/valory/agent_mech/0.1.0": "bafybeigmmtcquo7kivoerkirqzpocp43lkylwzktf36hwhxae5gblcygbm",
+        "service/valory/mech/0.1.0": "bafybeieslmhxzqoehamfpcv5q2nn463y77e2gypts2mji6pp5oag3arj2u",
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeiewwpv5veykxbd7wfbq7vvnlcnfsraxhz6ymqxcaf5nfz6nz7g2pa",
-        "skill/valory/task_execution/0.1.0": "bafybeidmvbucjd472m5lo3ebyhlojpl2o25mndlnllqtakqe73r7vghztq",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeiadiemhdckxxeco3aej7oc4c63tqg5vepizr42meidbmm4rhhdgs4",
+        "skill/valory/task_execution/0.1.0": "bafybeieykbnpg4c545f7vd3jacdsdijvbntv6qjgguhuiiij72jo3ci6x4",
         "contract/valory/agent_registry/0.1.0": "bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu",
         "protocol/valory/websocket_client/0.1.0": "bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4",
         "skill/valory/websocket_client/0.1.0": "bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta",
         "contract/valory/hash_checkpoint/0.1.0": "bafybeieys27hidb5m267jwqsxdgorf5v37o6lvrfy2oga557stjn4xgoaa",
-        "skill/valory/subscription_abci/0.1.0": "bafybeibtm62zrvzg2jp7yb5oi77pi6glrgewg2tael5oildf4wd6nzugbm"
+        "skill/valory/subscription_abci/0.1.0": "bafybeibwgwd2d2q3pg76yahq2zgn4cgmfxokelbg76noexyvzaofyi63wa"
     },
     "third_party": {
         "skill/valory/transaction_settlement_abci/0.1.0": "bafybeiaefgqbs7zsn5xe5kdwrujj7ivygkn3ujpw6crnvi3knvxw75qmja",
