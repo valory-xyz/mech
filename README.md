@@ -160,15 +160,15 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
     ```
     Note down the generated hashes for your tool.
 
-3. **Configure your service.** Edit the `.1env` file. The demo service has this configuration:
+3. **Configure your service.** Edit the `.env` file. The demo service has this configuration:
     ```bash
-    FILE_HASH_TO_TOOLS=[["bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e",["openai-text-davinci-002","openai-text-davinci-003","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
+    FILE_HASH_TO_TOOLS=[["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
     API_KEYS=[["openai","dummy_api_key"],["stabilityai","dummy_api_key"]]
     ```
 
     To add your new tool with hash `<your_tool_hash>` and sub-tool list `[a, b, c]` and API key `<your_api_key>` simply update the variables above to:
     ```bash
-    FILE_HASH_TO_TOOLS=[["bafybeihhxncljjtzniecvm7yr7u44g6ooquzqek473ma5fcnn2f6244v3e",["openai-text-davinci-002","openai-text-davinci-003","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
+    FILE_HASH_TO_TOOLS=[["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
     API_KEYS=[[openai, dummy_api_key],[<your_api_key_id>, <your_api_key>]]
     ```
 
@@ -185,7 +185,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
       "inputFormat": "ipfs-v0.1",
       "outputFormat": "ipfs-v0.1",
       "image": "tbd",
-      "tools": ["openai-text-davinci-002", "openai-text-davinci-003", "openai-gpt-3.5-turbo", "openai-gpt-4"]
+      "tools": ["openai-gpt-3.5-turbo-instruct", "openai-gpt-3.5-turbo", "openai-gpt-4"]
     }
     ```
 
@@ -198,8 +198,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 - **OpenAI request** (`openai_request.py`). Executes requests to the OpenAI API through the engine associated to the specific tool. It receives as input an arbitrary prompt and outputs the returned output by the OpenAI API.
   - `openai-gpt-3.5-turbo`
   - `openai-gpt-4`
-  - `openai-text-davinci-002`
-  - `openai-text-davinci-003`
+  - `openai-gpt-3.5-turbo-instruct`
 
 - **Stability AI request** (`stabilityai_request.py`): Executes requests to the Stability AI through the engine associated to the specific tool. It receives as input an arbitrary prompt and outputs the image data corresponding to the output of Stability AI.
   - `stabilityai-stable-diffusion-v1-5`

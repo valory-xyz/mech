@@ -72,9 +72,8 @@ models:
       - - stabilityai
         - dummy_api_key
       file_hash_to_tools_json:
-      - - bafybeif3izkobmvaoen23ine6tiqx55eaf4g3r56hdalnig656xivzpf3m
-        - - openai-text-davinci-002
-          - openai-text-davinci-003
+      - - bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4
+        - - openai-gpt-3.5-turbo-instruct
           - openai-gpt-3.5-turbo
           - openai-gpt-4
       - - bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua
