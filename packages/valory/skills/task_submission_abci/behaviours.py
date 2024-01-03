@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -819,6 +819,7 @@ class TransactionPreparationBehaviour(
             contract_callable="get_deliver_data",
             request_id=task_data["request_id"],
             data=task_data["task_result"],
+            request_id_nonce=task_data["request_id_nonce"],
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE

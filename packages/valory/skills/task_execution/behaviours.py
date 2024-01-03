@@ -277,6 +277,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle done tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+        request_id_nonce = executing_task.get("requestIdWithNonce", None)
         mech_address = executing_task.get("contract_address", None)
         tool = executing_task.get("tool", None)
         response = {"requestId": req_id, "result": "Invalid response"}
@@ -286,6 +287,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "mech_address": mech_address,
             "task_executor_address": task_executor,
             "tool": tool,
+            "request_id_nonce": request_id_nonce,
         }
         if task_result is not None:
             # task succeeded
