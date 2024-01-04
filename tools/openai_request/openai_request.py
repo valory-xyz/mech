@@ -30,7 +30,7 @@ DEFAULT_OPENAI_SETTINGS = {
 PREFIX = "openai-"
 ENGINES = {
     "chat": ["gpt-3.5-turbo", "gpt-4"],
-    "completion": ["text-davinci-002", "text-davinci-003"],
+    "completion": ["gpt-3.5-turbo-instruct"],
 }
 ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in values]
 
