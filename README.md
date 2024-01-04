@@ -168,7 +168,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
     To add your new tool with hash `<your_tool_hash>` and sub-tool list `[a, b, c]` and API key `<your_api_key>` simply update the variables above to:
     ```bash
-    FILE_HASH_TO_TOOLS=[["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
+    FILE_HASH_TO_TOOLS=[[<your_tool_hash>, [a, b, c]],["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
     API_KEYS=[[openai, dummy_api_key],[<your_api_key_id>, <your_api_key>]]
     ```
 
