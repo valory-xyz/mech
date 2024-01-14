@@ -61,4 +61,4 @@ pandas = "==2.1.1"
 tiktoken = "==0.5.1"
 python-dateutil = "==2.8.2"
 tomte = {version = "==0.2.15", extras = ["cli", "tests"]}
-
+evo_researcher = "==0.1.7"
