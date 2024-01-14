@@ -1459,13 +1459,13 @@ test = ["hypothesis (>=4.43.0)", "mypy (==0.971)", "pytest (>=7.0.0)", "pytest-x
 
 [[package]]
 name = "evo-researcher"
-version = "0.1.7"
+version = "0.1.8"
 description = ""
 optional = false
 python-versions = ">=3.10,<4.0"
 files = [
-    {file = "evo_researcher-0.1.7-py3-none-any.whl", hash = "sha256:fab47aa48a3495de8693bd31afa99f330d4f9b2a55a89a01df41368a72d9a71b"},
-    {file = "evo_researcher-0.1.7.tar.gz", hash = "sha256:9d78be4c83d93e800c38f4a60a3cd369fd9b1e8d914aa89867aa97bcce95727f"},
+    {file = "evo_researcher-0.1.8-py3-none-any.whl", hash = "sha256:d6b9846cf725c3b6ee0e2fd2bcd87214c82797f3cb7cdd56873022df1978304e"},
+    {file = "evo_researcher-0.1.8.tar.gz", hash = "sha256:8d9eeafb4af628aebc64159369e3e44d454d289d249c4ca81eec5028ff8206ee"},
 ]
 
 [package.dependencies]
@@ -5671,4 +5671,4 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "c43d35e70ba17d85ec07353c3006200674a4af3b18fe35ee1c6ece32eacd5009"
+content-hash = "906f17584514826327aec76d10f4717f57d0e1c994a31c5590ee41fa5e02d95a"
