@@ -36,6 +36,12 @@ The clever part? All the intricacies of dealing with APIs and data scraping are 
 
     This section is under active development - please report issues in the [Autonolas Discord](https://discord.com/invite/z2PT65jKqQ).
 
+    The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry). Since you will not have access to its private key, your local instance will not be able to transact.
+
+    However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).
+
+    Please, refer to the complete instructions on the repository [README.md](https://github.com/valory-xyz/mech)
+
 In order to run a local demo service based on the MechKit:
 
 1. [Set up your system](https://docs.autonolas.network/open-autonomy/guides/set_up/) to work with the Open Autonomy framework and prepare the repository:
@@ -61,14 +67,6 @@ In order to run a local demo service based on the MechKit:
     # Source the env file
     source .1env
     ```
-
-    !!! warning "Important"
-
-        The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry). Since you will not have access to its private key, your local instance will not be able to transact.
-
-        However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).
-
-        Please, refer to the complete instructions on the repository [README.md](https://github.com/valory-xyz/mech)
 
 3. Run the service.
 
