@@ -74,20 +74,21 @@ In order to run a local demo service based on the MechKit:
 
     1. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
 
-    ```bash
-    autonomy generate-key ethereum -n 1
-    ```
+        ```bash
+        autonomy generate-key ethereum -n 1
+        ```
 
     2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` matches the agent address within the file `keys.json`:
 
-    ```bash
-    ALL_PARTICIPANTS='["your_agent_address"]'
-    ```
+        ```bash
+        ALL_PARTICIPANTS='["your_agent_address"]'
+        ```
 
     3. Launch the service using the provided script:
-    ```bash
-    bash run_service.sh
-    ```
+
+        ```bash
+        bash run_service.sh
+        ```
 
 ## Build
 
