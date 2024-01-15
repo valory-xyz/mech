@@ -13,7 +13,7 @@ For instance, if an agent service needs to perform a task requiring access to an
 
 !!! tip "See it in action!"
 
-    Watch a Mech service in action [here](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a).
+    Watch a Mech service live in action [here](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a)!
 
 ## Live use case
 
@@ -36,6 +36,55 @@ The clever part? All the intricacies of dealing with APIs and data scraping are 
 
     This section is under active development - please report issues in the [Autonolas Discord](https://discord.com/invite/z2PT65jKqQ).
 
+In order to run a local demo service based on the MechKit:
+
+1. [Set up your system](https://docs.autonolas.network/open-autonomy/guides/set_up/) to work with the Open Autonomy framework and prepare the repository:
+
+    ```bash
+    git clone https://github.com/valory-xyz/mech && cd mech
+    poetry run pip install openapi-core==0.13.2
+    poetry run pip install openapi-spec-validator==0.2.8
+    poetry install && poetry shell
+
+    autonomy init --remote --ipfs --reset --author=your_name
+    autonomy packages sync --update-packages 
+    ```
+
+2. Configure the service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
+
+    ```bash
+    # Copy the prefilled template
+    cp .example.env .1env
+
+    # Edit ".1env" and replace "dummy_api_key" with your OpenAI API key.
+
+    # Source the env file
+    source .1env
+    ```
+
+    !!! warning "Important"
+
+        The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry). Since you will not have access to its private key, your local instance will not be able to transact.
+
+        However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).**
+
+3. Run the service.
+   1. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
+
+    ```bash
+    autonomy generate-key ethereum -n 1
+    ```
+
+   2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` matches the agent address within the file `keys.json`:
+
+   ```bash
+   ALL_PARTICIPANTS='["your_agent_address"]'
+   ```
+
+   3. Launch the service using the provided script:
+    ```bash
+    bash run_service.sh
+    ```
 
 ## Build
 
