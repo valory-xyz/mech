@@ -40,7 +40,7 @@ The clever part? All the intricacies of dealing with APIs and data scraping are 
 
     However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).
 
-    Please, refer to the complete instructions on the repository [README.md](https://github.com/valory-xyz/mech)
+    Please, refer to the complete instructions on the repository [README.md](https://github.com/valory-xyz/mech).
 
 In order to run a local demo service based on the MechKit:
 
