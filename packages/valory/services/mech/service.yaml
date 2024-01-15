@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeie5mmcpvopfn7tjnbwlpctqorevyn5qdxyarhcpecwozsl3wt6tei
+agent: valory/mech:0.1.0:bafybeihcp6iy7exj3tfswom6efrxpqkrpcvqc2ucirkwsq3j7m72s46h2m
 number_of_agents: 4
 deployment:
   agent:
@@ -58,6 +58,8 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         mech_to_subscription: ${MECH_TO_SUBSCRIPTION:list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
+        agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
+        minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
 1:
   models:
     params:
@@ -90,6 +92,8 @@ type: skill
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         mech_to_subscription: ${MECH_TO_SUBSCRIPTION:list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
+        agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
+        minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
 2:
   models:
     params:
@@ -122,6 +126,8 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         mech_to_subscription: ${MECH_TO_SUBSCRIPTION:list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
+        agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
+        minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
 3:
   models:
     params:
@@ -154,6 +160,8 @@ type: skill
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         mech_to_subscription: ${MECH_TO_SUBSCRIPTION:list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
+        agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
+        minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
