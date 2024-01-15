@@ -11,7 +11,9 @@ A Mech service consists of a library of tools. These can range from something as
 
 For instance, if an agent service needs to perform a task requiring access to an API, instead of each operator having to manage their own keys, the service can make use of a Mech tool. Agents then only need to make a request to a Mech, which gets returned in the form of a deliver event. The agent can then use the deliver event to accomplish what it set out to do. Both the request and deliver events are executed on-chain and the associated data is stored on IPFS making them easily retrievable by agents or anyone else.
 
-Watch a Mech service in action [here](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a).
+!!! tip "See it in action!"
+
+    Watch a Mech service in action [here](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a).
 
 ## Live use case
 
@@ -30,9 +32,10 @@ The clever part? All the intricacies of dealing with APIs and data scraping are 
 
 ## Demo
 
-!!! info
+!!! warning "Important"
 
-	This section will be completed soon.
+    This section is under active development - please report issues in the [Autonolas Discord](https://discord.com/invite/z2PT65jKqQ).
+
 
 ## Build
 
