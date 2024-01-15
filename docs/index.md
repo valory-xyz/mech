@@ -11,11 +11,11 @@ A Mech service consists of a library of tools. These can range from something as
 
 For instance, if an agent service needs to perform a task requiring access to an API, instead of each operator having to manage their own keys, the service can make use of a Mech tool. Agents then only need to make a request to a Mech, which gets returned in the form of a deliver event. The agent can then use the deliver event to accomplish what it set out to do. Both the request and deliver events are executed on-chain and the associated data is stored on IPFS making them easily retrievable by agents or anyone else.
 
+## Live use case
+
 !!! tip "See it in action!"
 
     Watch a Mech service live in action [here](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a)!
-
-## Live use case
 
 Consider the [Trader service](https://github.com/valory-xyz/trader), an autonomous service that trades in prediction markets. It utilizes a specific tool called `prediction_request` provided by the Mech service.
 
@@ -66,22 +66,25 @@ In order to run a local demo service based on the MechKit:
 
         The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry). Since you will not have access to its private key, your local instance will not be able to transact.
 
-        However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).**
+        However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).
+
+        Please, refer to the complete instructions on the repository [README.md](https://github.com/valory-xyz/mech)
 
 3. Run the service.
-   1. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
+
+    1. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
 
     ```bash
     autonomy generate-key ethereum -n 1
     ```
 
-   2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` matches the agent address within the file `keys.json`:
+    2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` matches the agent address within the file `keys.json`:
 
-   ```bash
-   ALL_PARTICIPANTS='["your_agent_address"]'
-   ```
+    ```bash
+    ALL_PARTICIPANTS='["your_agent_address"]'
+    ```
 
-   3. Launch the service using the provided script:
+    3. Launch the service using the provided script:
     ```bash
     bash run_service.sh
     ```
