@@ -406,7 +406,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         funds_by_address.update(agent_funding_amounts)
         total_required_amount_for_agents = sum(agent_funding_amounts.values())
         if total_required_amount_for_agents > profits:
-            self.context.logger.info(
+            self.context.logger.warning(
                 f"Total required amount for agents {total_required_amount_for_agents} is greater than profits {profits}. "
                 f"Splitting all the funds among the agents."
             )
