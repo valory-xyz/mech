@@ -19,6 +19,7 @@
 
 """This module implements a Mech tool for binary predictions."""
 
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 from evo_researcher.functions.research import research
 import openai
@@ -139,13 +140,15 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         raise ValueError(f"Tool {tool} is not supported.")
 
     engine = TOOL_TO_ENGINE[tool]
+    
+    current_time_utc = datetime.now(timezone.utc)
+    formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
 
     prediction_prompt = PREDICTION_PROMPT.format(
-        user_prompt=prompt, additional_information=research_report
+        user_prompt=prompt,
+        additional_information=research_report,
+        timestamp=formatted_time_utc
     )
-    moderation_result = openai.Moderation.create(prediction_prompt)
-    if moderation_result["results"][0]["flagged"]:
-        return "Moderation flagged the prompt as in violation of terms.", None, None
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prediction_prompt},
@@ -159,5 +162,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         timeout=150,
         request_timeout=150,
         stop=None,
+        api_key=openai_api_key
     )
     return response.choices[0].message.content, prediction_prompt, None
