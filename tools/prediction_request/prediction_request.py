@@ -24,7 +24,7 @@ from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
 from string import punctuation
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 
 import openai
 import requests
@@ -231,6 +231,8 @@ def fetch_additional_information(
     google_engine: str,
     num_urls: int,
     num_words: Optional[int],
+    counter_callback: Optional[Callable] = None,
+    source_links: Optional[List[str]] = None,
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
@@ -252,14 +254,24 @@ def fetch_additional_information(
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
-    urls = get_urls_from_queries(
-        json_data["queries"],
-        google_api_key,
-        google_engine,
-        num_urls,
-    )
-    texts = extract_texts(urls, num_words)
-    return "\n".join(["- " + text for text in texts])
+    if not source_links:
+        urls = get_urls_from_queries(
+            json_data["queries"],
+            google_api_key,
+            google_engine,
+            num_urls,
+        )
+        texts = extract_texts(urls, num_words)
+    else:
+        texts = extract_texts(source_links, num_words)
+    if counter_callback:
+        counter_callback(
+            input_tokens=response['usage']['prompt_tokens'],
+            output_tokens=response['usage']['completion_tokens'],
+            model=engine,
+        )
+        return "\n".join(["- " + text for text in texts]), counter_callback
+    return "\n".join(["- " + text for text in texts]), None
 
 
 def load_model(vocab: str) -> Language:
@@ -331,14 +343,15 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
     compression_factor = kwargs.get("compression_factor", DEFAULT_COMPRESSION_FACTOR)
     vocab = kwargs.get("vocab", DEFAULT_VOCAB)
+    counter_callback = kwargs.get("counter_callback", None)
 
     openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
 
     engine = TOOL_TO_ENGINE[tool]
-    additional_information = (
-        fetch_additional_information(
+    if tool.startswith("prediction-online"):
+        additional_information, counter_callback = fetch_additional_information(
             prompt,
             engine,
             temperature,
@@ -347,11 +360,12 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             kwargs["api_keys"]["google_engine_id"],
             num_urls,
             num_words,
+            counter_callback=counter_callback,
+            source_links=kwargs.get("source_links", None),
         )
-        if tool.startswith("prediction-online")
-        else ""
-    )
-
+    else:
+        additional_information = ""
+        
     if additional_information and tool == "prediction-online-summarized-info":
         additional_information = summarize(
             additional_information, compression_factor, vocab
@@ -377,4 +391,11 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         request_timeout=150,
         stop=None,
     )
+    if counter_callback is not None:
+        counter_callback(
+            input_tokens=response['usage']['prompt_tokens'],
+            output_tokens=response['usage']['completion_tokens'],
+            model=engine,
+        )
+        return response.choices[0].message.content, prediction_prompt, counter_callback
     return response.choices[0].message.content, prediction_prompt, None
