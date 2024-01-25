@@ -20,8 +20,10 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from itertools import islice
 
 import openai
 import requests
@@ -29,6 +31,7 @@ from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 
 NUM_URLS_EXTRACT = 5
+DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
@@ -167,10 +170,10 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
     results = []
     for query in queries:
         for url in search_google(
-                query=query,
-                api_key=api_key,
-                engine=engine,
-                num=3,  # Number of returned results
+            query=query,
+            api_key=api_key,
+            engine=engine,
+            num=3,  # Number of returned results
         ):
             results.append(url)
     unique_results = list(set(results))
@@ -178,8 +181,8 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
 
 
 def extract_text(
-        html: str,
-        num_words: int = 300,  # TODO: summerise using GPT instead of limit
+    html: str,
+    num_words: int = 300,  # TODO: summerise using GPT instead of limit
 ) -> str:
     """Extract text from a single HTML document"""
     soup = BeautifulSoup(html, "html.parser")
@@ -193,13 +196,16 @@ def extract_text(
 
 
 def process_in_batches(
-        urls: List[str], window: int = 5, timeout: int = 10
+    urls: List[str], window: int = 5, timeout: int = 10
 ) -> Generator[None, None, List[Tuple[Future, str]]]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
-            batch = urls[i: i + window]
-            futures = [(executor.submit(requests.get, url, timeout=timeout), url) for url in batch]
+            batch = urls[i : i + window]
+            futures = [
+                (executor.submit(requests.get, url, timeout=timeout), url)
+                for url in batch
+            ]
             yield futures
 
 
@@ -215,7 +221,9 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(extract_text(html=result.text, num_words=num_words))
+                extracted_texts.append(
+                    extract_text(html=result.text, num_words=num_words)
+                )
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -230,12 +238,16 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
 
 
 def fetch_additional_information(
-        prompt: str,
-        engine: str,
-        temperature: float,
-        max_tokens: int,
-        google_api_key: str,
-        google_engine: str,
+    prompt: str,
+    engine: str,
+    temperature: float,
+    max_tokens: int,
+    google_api_key: Optional[str],
+    google_engine: Optional[str],
+    num_urls: Optional[int],
+    num_words: Optional[int],
+    counter_callback: Optional[Callable] = None,
+    source_links: Optional[List[str]] = None,
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
@@ -257,16 +269,32 @@ def fetch_additional_information(
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
-    urls = get_urls_from_queries(
-        json_data["queries"],
-        api_key=google_api_key,
-        engine=google_engine,
-    )
-    texts = extract_texts(urls)
-    return "\n".join(["- " + text for text in texts])
+
+    if not source_links:
+        urls = get_urls_from_queries(
+            json_data["queries"],
+            api_key=google_api_key,
+            engine=google_engine,
+            num_urls=num_urls,
+        )
+        texts = extract_texts(urls, num_words)
+    else:
+        texts = []
+        for source_link in islice(source_links.values(), 3):
+            texts.append(extract_text(html=source_link, num_words=num_words))
+    if counter_callback:
+        counter_callback(
+            input_tokens=response["usage"]["prompt_tokens"],
+            output_tokens=response["usage"]["completion_tokens"],
+            model=engine,
+        )
+        return "\n".join(["- " + text for text in texts]), counter_callback
+    return "\n".join(["- " + text for text in texts]), None
 
 
-def get_sme_role(engine, temperature, max_tokens, prompt) -> Tuple[str, str]:
+def get_sme_role(
+    engine, temperature, max_tokens, prompt, counter_callback=None
+) -> Tuple[str, str]:
     """Get SME title and introduction"""
     market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
     system_prompt = SME_GENERATION_SYSTEM_PROMPT
@@ -287,7 +315,15 @@ def get_sme_role(engine, temperature, max_tokens, prompt) -> Tuple[str, str]:
     )
     generated_sme_roles = response.choices[0].message.content
     sme = json.loads(generated_sme_roles)[0]
-    return sme["sme"], sme["sme_introduction"]
+    if counter_callback is not None:
+        counter_callback(
+            input_tokens=response["usage"]["prompt_tokens"],
+            output_tokens=response["usage"]["completion_tokens"],
+            total_tokens=response["usage"]["total_tokens"],
+            model=engine,
+        )
+        return sme["sme"], sme["sme_introduction"], counter_callback
+    return sme["sme"], sme["sme_introduction"], None
 
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
@@ -296,6 +332,13 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     prompt = kwargs["prompt"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+    source_links = kwargs.get("source_links", None)
+    num_urls = kwargs.get("num_urls", NUM_URLS_EXTRACT)
+    num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS)
+    counter_callback = kwargs.get("counter_callback", None)
+    api_keys = kwargs.get("api_keys", {})
+    google_api_key = api_keys.get("google_api_key", None)
+    google_engine_id = api_keys.get("google_engine_id", None)
 
     openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
@@ -304,35 +347,43 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     engine = TOOL_TO_ENGINE[tool]
 
     try:
-        sme, sme_introduction = get_sme_role(
+        sme, sme_introduction, counter_callback = get_sme_role(
             engine,
             temperature,
             max_tokens,
             prompt,
+            counter_callback=counter_callback,
         )
     except Exception as e:
         print(f"An error occurred during SME role creation: {e}")
         print("Using default SME introduction.")
         sme_introduction = "You are a helpful assistant."
 
-    additional_information = (
-        fetch_additional_information(
+    if tool.startswith("prediction-online"):
+        additional_information, counter_callback = fetch_additional_information(
             prompt=prompt,
             engine=engine,
             temperature=temperature,
             max_tokens=max_tokens,
-            google_api_key=kwargs["api_keys"]["google_api_key"],
-            google_engine=kwargs["api_keys"]["google_engine_id"],
+            google_api_key=google_api_key,
+            google_engine=google_engine_id,
+            num_urls=num_urls,
+            num_words=num_words,
+            counter_callback=counter_callback,
+            source_links=source_links,
         )
-        if tool == "prediction-online-sme"
-        else ""
-    )
+    else:
+        additional_information = None
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information
     )
     moderation_result = openai.Moderation.create(prediction_prompt)
     if moderation_result["results"][0]["flagged"]:
-        return "Moderation flagged the prompt as in violation of terms.", prediction_prompt, None
+        return (
+            "Moderation flagged the prompt as in violation of terms.",
+            prediction_prompt,
+            None,
+        )
     messages = [
         {"role": "system", "content": sme_introduction},
         {"role": "user", "content": prediction_prompt},
@@ -347,4 +398,11 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         request_timeout=150,
         stop=None,
     )
+    if counter_callback is not None:
+        counter_callback(
+            input_tokens=response["usage"]["prompt_tokens"],
+            output_tokens=response["usage"]["completion_tokens"],
+            model=engine,
+        )
+        return response.choices[0].message.content, prediction_prompt, counter_callback
     return response.choices[0].message.content, prediction_prompt, None

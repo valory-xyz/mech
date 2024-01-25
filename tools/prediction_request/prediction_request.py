@@ -23,6 +23,7 @@ import json
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
+from itertools import islice
 from string import punctuation
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 
@@ -227,9 +228,9 @@ def fetch_additional_information(
     engine: str,
     temperature: float,
     max_tokens: int,
-    google_api_key: str,
-    google_engine: str,
-    num_urls: int,
+    google_api_key: Optional[str],
+    google_engine: Optional[str],
+    num_urls: Optional[int],
     num_words: Optional[int],
     counter_callback: Optional[Callable] = None,
     source_links: Optional[List[str]] = None,
@@ -263,11 +264,13 @@ def fetch_additional_information(
         )
         texts = extract_texts(urls, num_words)
     else:
-        texts = extract_texts(source_links, num_words)
+        texts = []
+        for source_link in islice(source_links.values(), 3):
+            texts.append(extract_text(html=source_link, num_words=num_words))
     if counter_callback:
         counter_callback(
-            input_tokens=response['usage']['prompt_tokens'],
-            output_tokens=response['usage']['completion_tokens'],
+            input_tokens=response["usage"]["prompt_tokens"],
+            output_tokens=response["usage"]["completion_tokens"],
             model=engine,
         )
         return "\n".join(["- " + text for text in texts]), counter_callback
@@ -344,6 +347,9 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     compression_factor = kwargs.get("compression_factor", DEFAULT_COMPRESSION_FACTOR)
     vocab = kwargs.get("vocab", DEFAULT_VOCAB)
     counter_callback = kwargs.get("counter_callback", None)
+    api_keys = kwargs.get("api_keys", {})
+    google_api_key = api_keys.get("google_api_key", None)
+    google_engine_id = api_keys.get("google_engine_id", None)
 
     openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
@@ -356,8 +362,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             engine,
             temperature,
             max_tokens,
-            kwargs["api_keys"]["google_api_key"],
-            kwargs["api_keys"]["google_engine_id"],
+            google_api_key,
+            google_engine_id,
             num_urls,
             num_words,
             counter_callback=counter_callback,
@@ -365,7 +371,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         )
     else:
         additional_information = ""
-        
+
     if additional_information and tool == "prediction-online-summarized-info":
         additional_information = summarize(
             additional_information, compression_factor, vocab
@@ -393,8 +399,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     )
     if counter_callback is not None:
         counter_callback(
-            input_tokens=response['usage']['prompt_tokens'],
-            output_tokens=response['usage']['completion_tokens'],
+            input_tokens=response["usage"]["prompt_tokens"],
+            output_tokens=response["usage"]["completion_tokens"],
             model=engine,
         )
         return response.choices[0].message.content, prediction_prompt, counter_callback
