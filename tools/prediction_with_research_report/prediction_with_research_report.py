@@ -30,12 +30,12 @@ DEFAULT_OPENAI_SETTINGS = {
 }
 
 ALLOWED_TOOLS = [
-    "prediction-sentence-embedding-conservative",
-    "prediction-sentence-embedding-bold",
+    "prediction-with-research-conservative",
+    "prediction-with-research-bold",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-sentence-embedding-conservative": "gpt-3.5-turbo-1106",
-    "prediction-sentence-embedding-bold": "gpt-4-1106-preview",
+    "prediction-with-research-conservative": "gpt-3.5-turbo-1106",
+    "prediction-with-research-bold": "gpt-4-1106-preview",
 }
 
 DEFAULT_RESEARCH_SETTINGS = {
@@ -127,13 +127,11 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         openai_key=openai_api_key,
         tavily_key=tavily_api_key,
         model=engine,
-        kwargs={
-            "initial_subqueries_limit": initial_subqueries_limit,
-            "subqueries_limit": subqueries_limit,
-            "scrape_content_split_chunk_size": scrape_content_split_chunk_size,
-            "scrape_content_split_chunk_overlap": scrape_content_split_chunk_overlap,
-            "top_k_per_query": top_k_per_query,
-        }
+        initial_subqueries_limit=initial_subqueries_limit,
+        subqueries_limit=subqueries_limit,
+        scrape_content_split_chunk_size=scrape_content_split_chunk_size,
+        scrape_content_split_chunk_overlap=scrape_content_split_chunk_overlap,
+        top_k_per_query=top_k_per_query,
     )
 
     if tool not in ALLOWED_TOOLS:
