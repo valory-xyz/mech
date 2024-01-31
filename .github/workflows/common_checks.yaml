@@ -17,9 +17,10 @@ jobs:
         os: [ ubuntu-latest, macos-latest, windows-latest ]
         python-version: [ "3.10" ]
         poetry-version: ["1.3.2"]
-
     timeout-minutes: 10
-
+    defaults:
+      run:
+        shell: bash
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-python@v4
@@ -33,6 +34,10 @@ jobs:
         virtualenvs-in-project: false
         virtualenvs-path: ~/my-custom-path
         installer-parallel: true
+    - name: Check if dependencies can be locked
+      run: poetry lock
+    - name: Poetry install requirements and check they can be locked
+      run: poetry install --all-extras --no-interaction -vvv
 
   copyright_and_dependencies_check:
     continue-on-error: False
