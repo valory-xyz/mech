@@ -25,10 +25,31 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from itertools import islice
 
-import openai
+from openai import OpenAI
+
 import requests
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
+
+
+client: Optional[OpenAI] = None
+
+
+def init_openai_client(api_key: str) -> OpenAI:
+    """Initialize the OpenAI client"""
+    global client
+    if client is None:
+        client = OpenAI(api_key=api_key)
+    return client
+
+def close_openai_client() -> None:
+    """Close the OpenAI client"""
+    global client
+    if client is not None:
+        client.close()
+        client = None
+
+
 
 NUM_URLS_EXTRACT = 5
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
@@ -251,21 +272,20 @@ def fetch_additional_information(
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
-    moderation_result = openai.Moderation.create(url_query_prompt)
-    if moderation_result["results"][0]["flagged"]:
+    moderation_result = client.moderations.create(input=url_query_prompt)
+    if moderation_result.results[0].flagged:
         return ""
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": url_query_prompt},
     ]
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
         timeout=90,
-        request_timeout=90,
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
@@ -303,14 +323,13 @@ def get_sme_role(
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": market_question},
     ]
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
         timeout=150,
-        request_timeout=150,
         stop=None,
     )
     generated_sme_roles = response.choices[0].message.content
@@ -328,6 +347,7 @@ def get_sme_role(
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
+    init_openai_client(kwargs["api_keys"]["openai"])
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
@@ -340,7 +360,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     google_api_key = api_keys.get("google_api_key", None)
     google_engine_id = api_keys.get("google_engine_id", None)
 
-    openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
 
@@ -377,8 +396,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information
     )
-    moderation_result = openai.Moderation.create(prediction_prompt)
-    if moderation_result["results"][0]["flagged"]:
+    moderation_result = client.moderations.create(input=prediction_prompt)
+    if moderation_result.results[0].flagged:
         return (
             "Moderation flagged the prompt as in violation of terms.",
             prediction_prompt,
@@ -388,16 +407,16 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         {"role": "system", "content": sme_introduction},
         {"role": "user", "content": prediction_prompt},
     ]
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
         timeout=150,
-        request_timeout=150,
         stop=None,
     )
+    close_openai_client()
     if counter_callback is not None:
         counter_callback(
             input_tokens=response["usage"]["prompt_tokens"],

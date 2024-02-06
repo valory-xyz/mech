@@ -20,7 +20,24 @@
 
 from typing import Any, Dict, Optional, Tuple
 
-import openai
+from openai import OpenAI
+
+client: Optional[OpenAI] = None
+
+def init_openai_client(api_key: str) -> OpenAI:
+    """Initialize the OpenAI client"""
+    global client
+    if client is None:
+        client = OpenAI(api_key=api_key)
+    return client
+
+
+def close_openai_client() -> None:
+    """Close the OpenAI client"""
+    global client
+    if client is not None:
+        client.close()
+        client = None
 
 
 DEFAULT_OPENAI_SETTINGS = {
@@ -37,7 +54,7 @@ ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in valu
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
-    openai.api_key = kwargs["api_keys"]["openai"]
+    init_openai_client(kwargs["api_keys"]["openai"])
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
     prompt = kwargs["prompt"]
@@ -46,8 +63,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         return f"Tool {tool} is not in the list of supported tools.", None, None
 
     engine = tool.replace(PREFIX, "")
-    moderation_result = openai.Moderation.create(prompt)
-    if moderation_result["results"][0]["flagged"]:
+    moderation_result = client.moderations.create(input=prompt)
+    if moderation_result.results[0].flagged:
         return "Moderation flagged the prompt as in violation of terms.", None, None
 
     if engine in ENGINES["chat"]:
@@ -55,7 +72,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prompt},
         ]
-        response = openai.ChatCompletion.create(
+        response = client.chat.completions.create(
             model=engine,
             messages=messages,
             temperature=temperature,
@@ -65,7 +82,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
             stop=None,
         )
         return response.choices[0].message.content, prompt, None
-    response = openai.Completion.create(
+    response = client.completions.create(
         engine=engine,
         prompt=prompt,
         temperature=temperature,
@@ -75,4 +92,5 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         timeout=120,
         presence_penalty=0,
     )
+    close_openai_client()
     return response.choices[0].text, prompt, None

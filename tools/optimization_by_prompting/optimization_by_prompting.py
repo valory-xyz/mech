@@ -21,7 +21,6 @@
 
 import os
 from io import StringIO
-from typing import Any, Dict, Optional, Tuple
 import re
 import json
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -31,12 +30,34 @@ import requests
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 
-import openai
+from openai import OpenAI
+
 import pandas as pd
 from langchain.chains import LLMChain
-from langchain.llms import OpenAI
+from langchain.llms import OpenAI as OpenAILLM
 from langchain.prompts import PromptTemplate
 from sklearn.metrics import roc_auc_score
+
+
+client: Optional[OpenAI] = None
+
+
+def init_openai_client(api_key: str) -> OpenAI:
+    """Initialize the OpenAI client"""
+    global client
+    if client is None:
+        client = OpenAI(api_key=api_key)
+    return client
+
+
+def close_openai_client() -> None:
+    """Close the OpenAI client"""
+    global client
+    if client is not None:
+        client.close()
+        client = None
+
+
 
 # Provide several examples in order to backtest the resulted prompt
 EXAMPLES = """query;event
@@ -156,17 +177,22 @@ The JSON must contain a field "p_yes" which marks the probability of the event h
 A valid example is: {{"p_yes": 0.5}}
 """
 
+
 def evaluate_prompt(prompt, df, llm):
     prompt += OUTPUT_FORMAT
     chain = LLMChain(llm=llm, prompt=prompt)
     probas = []
 
     for row in df.itertuples():
-        pred_chain = chain.run({"user_prompt": row.query, "additional_information": OUTPUT_FORMAT})
+        pred_chain = chain.run(
+            {"user_prompt": row.query, "additional_information": OUTPUT_FORMAT}
+        )
         try:
             dictionary_match = float(eval(pred_chain)["p_yes"])
         except:
-            dictionary_match = float(eval(re.search(r'\{.*\}', pred_chain).group(0))["p_yes"])
+            dictionary_match = float(
+                eval(re.search(r"\{.*\}", pred_chain).group(0))["p_yes"]
+            )
         probas.append(dictionary_match)
 
     return probas
@@ -183,9 +209,15 @@ def create_new_instructions(llm, instructions, score):
     return evaluations
 
 
-def prompt_engineer(openai_api_key, init_instructions, instructions_format, iterations=3, model_name="gpt-3.5-turbo"):
+def prompt_engineer(
+    openai_api_key,
+    init_instructions,
+    instructions_format,
+    iterations=3,
+    model_name="gpt-3.5-turbo",
+):
 
-    llm = OpenAI(model_name=model_name, openai_api_key=openai_api_key)
+    llm = OpenAILLM(model_name=model_name, openai_api_key=openai_api_key)
     score_template = {"template": init_instructions, "score": 0.0}
 
     df = pd.read_csv(StringIO(EXAMPLES), sep=";")
@@ -215,9 +247,7 @@ def prompt_engineer(openai_api_key, init_instructions, instructions_format, iter
         score = calculate_score(df)
         print(f"Score: {score}\n")
         if score > score_template["score"]:
-            print(
-                f"Best template score: {score} \nTemplate: {template}\n"
-            )
+            print(f"Best template score: {score} \nTemplate: {template}\n")
             score_template["template"] = template
             score_template["score"] = score
         template = create_new_instructions(
@@ -280,7 +310,10 @@ def process_in_batches(
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
             batch = urls[i : i + window]
-            futures = [(executor.submit(requests.get, url, timeout=timeout), url) for url in batch]
+            futures = [
+                (executor.submit(requests.get, url, timeout=timeout), url)
+                for url in batch
+            ]
             yield futures
 
 
@@ -296,7 +329,9 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(extract_text(html=result.text, num_words=num_words))
+                extracted_texts.append(
+                    extract_text(html=result.text, num_words=num_words)
+                )
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -304,38 +339,37 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
-                    print(f"An error occurred: {e}")
+                print(f"An error occurred: {e}")
         if stop:
             break
     return extracted_texts
 
 
 def fetch_additional_information(
-        prompt: str,
-        engine: str,
-        temperature: float,
-        max_tokens: int,
-        google_api_key: str,
-        google_engine: str,
+    prompt: str,
+    engine: str,
+    temperature: float,
+    max_tokens: int,
+    google_api_key: str,
+    google_engine: str,
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
-    moderation_result = openai.Moderation.create(url_query_prompt)
-    if moderation_result["results"][0]["flagged"]:
+    moderation_result = client.moderations.create(input=url_query_prompt)
+    if moderation_result.results[0].flagged:
         return ""
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": url_query_prompt},
     ]
 
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
         timeout=90,
-        request_timeout=90,
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
@@ -350,48 +384,50 @@ def fetch_additional_information(
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
+    init_openai_client(kwargs["api_keys"]["openai"])
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
     max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
     openai_key = kwargs["api_keys"]["openai"]
-    openai.api_key = openai_key
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
 
     engine = TOOL_TO_ENGINE[tool]
     additional_information = fetch_additional_information(
-            prompt=prompt,
-            engine=engine,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            google_api_key=kwargs["api_keys"]["google_api_key"],
-            google_engine=kwargs["api_keys"]["google_engine_id"],
-        )
+        prompt=prompt,
+        engine=engine,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        google_api_key=kwargs["api_keys"]["google_api_key"],
+        google_engine=kwargs["api_keys"]["google_engine_id"],
+    )
 
-    instructions = prompt_engineer(openai_key, PREDICTION_PROMPT_INSTRUCTIONS, PREDICTION_PROMPT_FORMAT)
+    instructions = prompt_engineer(
+        openai_key, PREDICTION_PROMPT_INSTRUCTIONS, PREDICTION_PROMPT_FORMAT
+    )
     instructions += PREDICTION_PROMPT_FORMAT
     prediction_prompt = instructions.format(
         user_prompt=prompt, additional_information=additional_information
     )
 
-    moderation_result = openai.Moderation.create(prediction_prompt)
-    if moderation_result["results"][0]["flagged"]:
+    moderation_result = client.moderations.create(input=prediction_prompt)
+    if moderation_result.results[0].flagged:
         return "Moderation flagged the prompt as in violation of terms.", None, None
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prediction_prompt},
     ]
 
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
         timeout=150,
-        request_timeout=150,
         stop=None,
     )
+    close_openai_client()
     return response.choices[0].message.content, prediction_prompt, None
