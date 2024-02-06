@@ -24,7 +24,26 @@ python native_transfer_request.py “transfer 0.0001 ETH to 0x4253cB6Fbf9Cb7CD6c
 import ast
 from typing import Any, Dict, Optional, Tuple, cast
 
-import openai
+from openai import OpenAI
+
+
+client: Optional[OpenAI] = None
+
+
+def init_openai_client(api_key: str) -> OpenAI:
+    """Initialize the OpenAI client"""
+    global client
+    if client is None:
+        client = OpenAI(api_key=api_key)
+    return client
+
+def close_openai_client() -> None:
+    """Close the OpenAI client"""
+    global client
+    if client is not None:
+        client.close()
+        client = None
+
 
 
 ENGINE = "gpt-3.5-turbo"
@@ -53,24 +72,22 @@ Do not respond with anything else other than the transaction object you construc
 
 def make_request_openai_request(
     prompt: str,
-    api_key: str,
     engine: str = ENGINE,
     max_tokens: Optional[int] = None,
     temperature: Optional[float] = None,
 ) -> str:
     """Make openai request."""
-    openai.api_key = api_key
     max_tokens = max_tokens or MAX_TOKENS
     temperature = temperature or TEMPERATURE
-    moderation_result = openai.Moderation.create(prompt)
-    if moderation_result["results"][0]["flagged"]:
+    moderation_result = client.moderations.create(input=prompt)
+    if moderation_result.results[0].flagged:
         return "Moderation flagged the prompt as in violation of terms."
 
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prompt},
     ]
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
@@ -88,7 +105,7 @@ def native_transfer(
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Perform native transfer."""
     tool_prompt = NATIVE_TRANSFER_PROMPT.format(user_prompt=prompt)
-    response = make_request_openai_request(prompt=tool_prompt, api_key=api_key)
+    response = make_request_openai_request(prompt=tool_prompt)
 
     try:
         # parse the response to get the transaction object string itself
@@ -101,7 +118,6 @@ def native_transfer(
         "to": str(parsed_txs["to"]),
         "value": int(parsed_txs["wei_value"]),
     }
-
     return response, prompt, transaction
 
 
@@ -112,6 +128,8 @@ AVAILABLE_TOOLS = {
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Run the task"""
+    init_openai_client(kwargs["api_keys"]["openai"])
+
     prompt = kwargs["prompt"]
     api_key = kwargs["api_keys"]["openai"]
     tool = cast(str, kwargs["tool"]).replace(TOOL_PREFIX, "")
@@ -120,4 +138,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         return f"No tool named `{kwargs['tool']}`", None, None
 
     transaction_builder = AVAILABLE_TOOLS[tool]
-    return transaction_builder(prompt, api_key)
+    response = transaction_builder(prompt, api_key)
+    close_openai_client()
+    return response

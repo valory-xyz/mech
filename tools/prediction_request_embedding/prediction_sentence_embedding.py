@@ -29,7 +29,8 @@ from operator import itemgetter
 
 from bs4 import BeautifulSoup, NavigableString
 from googleapiclient.discovery import build
-import openai
+from openai import OpenAI
+
 import requests
 from requests import Session
 import spacy
@@ -37,6 +38,26 @@ import spacy.util
 import tiktoken
 
 from dateutil import parser
+
+client: Optional[OpenAI] = None
+
+
+def init_openai_client(api_key: str) -> OpenAI:
+    """Initialize the OpenAI client"""
+    global client
+    if client is None:
+        client = OpenAI(api_key=api_key)
+    return client
+
+
+def close_openai_client() -> None:
+    """Close the OpenAI client"""
+    global client
+    if client is not None:
+        client.close()
+        client = None
+
+
 
 NUM_URLS_EXTRACT = 5
 MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4000  # Set the limit for cost efficiency
@@ -1029,8 +1050,8 @@ def fetch_additional_information(
     url_query_prompt = URL_QUERY_PROMPT.format(event_question=event_question)
 
     # Perform moderation check
-    moderation_result = openai.Moderation.create(url_query_prompt)
-    if moderation_result["results"][0]["flagged"]:
+    moderation_result = client.moderations.create(input=url_query_prompt)
+    if moderation_result.results[0].flagged:
         # return empty additional information if the prompt is flagged
         return ""
 
@@ -1041,14 +1062,13 @@ def fetch_additional_information(
     ]
 
     # Fetch queries from the OpenAI engine
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,  # Override the default temperature parameter set for the engine
         max_tokens=max_compl_tokens,  # Override the default max_compl_tokens parameter set for the engine
         n=1,
         timeout=90,
-        request_timeout=90,
         stop=None,
     )
 
@@ -1091,7 +1111,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     Returns:
         Tuple[str, Optional[Dict[str, Any]]]: The generated content and any additional data.
     """
-
+    init_openai_client(kwargs["api_keys"]["openai"])
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
     max_compl_tokens = kwargs.get(
@@ -1099,7 +1119,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     )
     temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
-    openai.api_key = kwargs["api_keys"]["openai"]
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"TOOL {tool} is not supported.")
 
@@ -1158,8 +1177,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     )
 
     # Perform moderation
-    moderation_result = openai.Moderation.create(prediction_prompt)
-    if moderation_result["results"][0]["flagged"]:
+    moderation_result = client.moderations.create(input=prediction_prompt)
+    if moderation_result.results[0].flagged:
         return "Moderation flagged the prompt as in violation of terms.", None, None
 
     # Create messages for the OpenAI engine
@@ -1169,15 +1188,14 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     ]
 
     # Generate the response
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
         max_tokens=max_compl_tokens,
         n=1,
         timeout=150,
-        request_timeout=150,
         stop=None,
     )
-
+    close_openai_client()
     return response.choices[0].message.content, prediction_prompt, None

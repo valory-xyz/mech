@@ -113,4 +113,8 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     )
     if response.status_code == 200:
         return json.dumps(response.json()), None, None
-    return (f"Error: Non-200 response ({response.status_code}): {response.text}", None, None)
+    return (
+        f"Error: Non-200 response ({response.status_code}): {response.text}",
+        None,
+        None,
+    )
