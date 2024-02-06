@@ -29,20 +29,22 @@ from openai import OpenAI
 
 client: Optional[OpenAI] = None
 
+class OpenAIClientManager:
+    """Client context manager for OpenAI."""
+    def __init__(self, api_key: str):
+        self.api_key = api_key
 
-def init_openai_client(api_key: str) -> OpenAI:
-    """Initialize the OpenAI client"""
-    global client
-    if client is None:
-        client = OpenAI(api_key=api_key)
-    return client
+    def __enter__(self) -> OpenAI:
+        global client
+        if client is None:
+            client = OpenAI(api_key=self.api_key)
+        return client
 
-def close_openai_client() -> None:
-    """Close the OpenAI client"""
-    global client
-    if client is not None:
-        client.close()
-        client = None
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.close()
+            client = None
 
 
 
@@ -102,7 +104,7 @@ def make_request_openai_request(
 def native_transfer(
     prompt: str,
     api_key: str,
-) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
+) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Perform native transfer."""
     tool_prompt = NATIVE_TRANSFER_PROMPT.format(user_prompt=prompt)
     response = make_request_openai_request(prompt=tool_prompt)
@@ -118,7 +120,7 @@ def native_transfer(
         "to": str(parsed_txs["to"]),
         "value": int(parsed_txs["wei_value"]),
     }
-    return response, prompt, transaction
+    return response, prompt, transaction, None
 
 
 AVAILABLE_TOOLS = {
@@ -126,18 +128,17 @@ AVAILABLE_TOOLS = {
 }
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    init_openai_client(kwargs["api_keys"]["openai"])
+    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
 
-    prompt = kwargs["prompt"]
-    api_key = kwargs["api_keys"]["openai"]
-    tool = cast(str, kwargs["tool"]).replace(TOOL_PREFIX, "")
+        prompt = kwargs["prompt"]
+        api_key = kwargs["api_keys"]["openai"]
+        tool = cast(str, kwargs["tool"]).replace(TOOL_PREFIX, "")
 
-    if tool not in AVAILABLE_TOOLS:
-        return f"No tool named `{kwargs['tool']}`", None, None
+        if tool not in AVAILABLE_TOOLS:
+            return f"No tool named `{kwargs['tool']}`", None, None, None
 
-    transaction_builder = AVAILABLE_TOOLS[tool]
-    response = transaction_builder(prompt, api_key)
-    close_openai_client()
-    return response
+        transaction_builder = AVAILABLE_TOOLS[tool]
+        response = transaction_builder(prompt, api_key)
+        return response

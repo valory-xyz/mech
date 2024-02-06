@@ -41,22 +41,22 @@ from sklearn.metrics import roc_auc_score
 
 client: Optional[OpenAI] = None
 
+class OpenAIClientManager:
+    """Client context manager for OpenAI."""
+    def __init__(self, api_key: str):
+        self.api_key = api_key
 
-def init_openai_client(api_key: str) -> OpenAI:
-    """Initialize the OpenAI client"""
-    global client
-    if client is None:
-        client = OpenAI(api_key=api_key)
-    return client
+    def __enter__(self) -> OpenAI:
+        global client
+        if client is None:
+            client = OpenAI(api_key=self.api_key)
+        return client
 
-
-def close_openai_client() -> None:
-    """Close the OpenAI client"""
-    global client
-    if client is not None:
-        client.close()
-        client = None
-
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.close()
+            client = None
 
 
 # Provide several examples in order to backtest the resulted prompt
@@ -382,52 +382,51 @@ def fetch_additional_information(
     return "\n".join(["- " + text for text in texts])
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    init_openai_client(kwargs["api_keys"]["openai"])
-    tool = kwargs["tool"]
-    prompt = kwargs["prompt"]
-    max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-    temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        tool = kwargs["tool"]
+        prompt = kwargs["prompt"]
+        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
-    openai_key = kwargs["api_keys"]["openai"]
-    if tool not in ALLOWED_TOOLS:
-        raise ValueError(f"Tool {tool} is not supported.")
+        openai_key = kwargs["api_keys"]["openai"]
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"Tool {tool} is not supported.")
 
-    engine = TOOL_TO_ENGINE[tool]
-    additional_information = fetch_additional_information(
-        prompt=prompt,
-        engine=engine,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        google_api_key=kwargs["api_keys"]["google_api_key"],
-        google_engine=kwargs["api_keys"]["google_engine_id"],
-    )
+        engine = TOOL_TO_ENGINE[tool]
+        additional_information = fetch_additional_information(
+            prompt=prompt,
+            engine=engine,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            google_api_key=kwargs["api_keys"]["google_api_key"],
+            google_engine=kwargs["api_keys"]["google_engine_id"],
+        )
 
-    instructions = prompt_engineer(
-        openai_key, PREDICTION_PROMPT_INSTRUCTIONS, PREDICTION_PROMPT_FORMAT
-    )
-    instructions += PREDICTION_PROMPT_FORMAT
-    prediction_prompt = instructions.format(
-        user_prompt=prompt, additional_information=additional_information
-    )
+        instructions = prompt_engineer(
+            openai_key, PREDICTION_PROMPT_INSTRUCTIONS, PREDICTION_PROMPT_FORMAT
+        )
+        instructions += PREDICTION_PROMPT_FORMAT
+        prediction_prompt = instructions.format(
+            user_prompt=prompt, additional_information=additional_information
+        )
 
-    moderation_result = client.moderations.create(input=prediction_prompt)
-    if moderation_result.results[0].flagged:
-        return "Moderation flagged the prompt as in violation of terms.", None, None
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": prediction_prompt},
-    ]
+        moderation_result = client.moderations.create(input=prediction_prompt)
+        if moderation_result.results[0].flagged:
+            return "Moderation flagged the prompt as in violation of terms.", None, None, None
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prediction_prompt},
+        ]
 
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=150,
-        stop=None,
-    )
-    close_openai_client()
-    return response.choices[0].message.content, prediction_prompt, None
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            n=1,
+            timeout=150,
+            stop=None,
+        )
+        return response.choices[0].message.content, prediction_prompt, None, None
