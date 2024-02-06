@@ -2,7 +2,26 @@
 import json
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
-import openai
+from openai import OpenAI
+
+client: Optional[OpenAI] = None
+
+
+def init_openai_client(api_key: str) -> OpenAI:
+    """Initialize the OpenAI client"""
+    global client
+    if client is None:
+        client = OpenAI(api_key=api_key)
+    return client
+
+def close_openai_client() -> None:
+    """Close the OpenAI client"""
+    global client
+    if client is not None:
+        client.close()
+        client = None
+
+
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
@@ -56,6 +75,7 @@ SME_GENERATION_MARKET_PROMPT = """
 task question: "{question}"
 """
 
+
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
     """Generate SME roles for a given market question
 
@@ -63,10 +83,11 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         ValueError: _description_
 
     Returns:
-        Tuple[str, Optional[Dict[str, Any]]]: str is the generated SME roles, it can be loaded with `json.loads` 
-        to get a list of dict. The dict has two keys: "sme" and "sme_introduction". 
+        Tuple[str, Optional[Dict[str, Any]]]: str is the generated SME roles, it can be loaded with `json.loads`
+        to get a list of dict. The dict has two keys: "sme" and "sme_introduction".
         The value of "sme" is the SME role name, and the value of "sme_introduction" is the introduction of the SME role.
     """
+    init_openai_client(kwargs["api_keys"]["openai"])
     tool = kwargs["tool"]
     # prompt is the actual question
     prompt = kwargs["prompt"]
@@ -75,7 +96,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
 
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"tool must be one of {ALLOWED_TOOLS}")
-    
+
     engine = TOOL_TO_ENGINE[tool]
 
     market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
@@ -85,14 +106,13 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         {"role": "system", "content": system_prompt},
         {"role": "user", "content": market_question},
     ]
-    response = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
         n=1,
         timeout=150,
-        request_timeout=150,
         stop=None,
     )
 
@@ -102,4 +122,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         generated_sme_roles = json.loads(generated_sme_roles)
     except json.decoder.JSONDecodeError as e:
         return f"Failed to generate SME roles due to {e}", json.dumps(messages), None
+
+    close_openai_client()
     return response.choices[0].message.content, json.dumps(messages), None
