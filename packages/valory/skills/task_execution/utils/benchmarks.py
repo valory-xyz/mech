@@ -16,20 +16,26 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
+"""Benchmarking for tools."""
 
 import logging
-import tiktoken
+from typing import Any, Dict, Union
+
 import anthropic
+import tiktoken
 from tiktoken import Encoding
+
 
 PRICE_NUM_TOKENS = 1000
 
 
 def encoding_for_model(model: str) -> Encoding:
+    """Get the encoding for a model."""
     return tiktoken.encoding_for_model(model)
 
 
 def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
     if "claude" in model:
         return anthropic.Anthropic().count_tokens(text)
 
@@ -49,21 +55,26 @@ class TokenCounterCallback:
 
     def __init__(self) -> None:
         """Initialize the callback."""
-        self.cost_dict = {
+        self.cost_dict: Dict[str, Union[int, float]] = {
             "input_tokens": 0,
             "output_tokens": 0,
             "total_tokens": 0,
             "input_cost": 0,
             "output_cost": 0,
-            "total_cost": 0
+            "total_cost": 0,
         }
 
     @staticmethod
     def token_to_cost(tokens: int, model: str, tokens_type: str) -> float:
         """Converts a number of tokens to a cost in dollars."""
-        return tokens / PRICE_NUM_TOKENS * TokenCounterCallback.TOKEN_PRICES[model][tokens_type]
+        return (
+            tokens
+            / PRICE_NUM_TOKENS
+            * TokenCounterCallback.TOKEN_PRICES[model][tokens_type]
+        )
 
-    def calculate_cost(self, tokens_type: str, model: str, **kwargs) -> None:
+    def calculate_cost(self, tokens_type: str, model: str, **kwargs: Any) -> None:
+        """Calculate the cost of a generation."""
         # Check if it its prompt or tokens are passed in
         prompt_key = f"{tokens_type}_prompt"
         token_key = f"{tokens_type}_tokens"
@@ -77,15 +88,18 @@ class TokenCounterCallback:
         self.cost_dict[token_key] += tokens
         self.cost_dict[f"{tokens_type}_cost"] += cost
 
-    def __call__(self, model: str, **kwargs) -> None:
+    def __call__(self, model: str, **kwargs: Any) -> None:
         """Callback to count the number of tokens used in a generation."""
         if model not in list(TokenCounterCallback.TOKEN_PRICES.keys()):
             raise ValueError(f"Model {model} not supported.")
         try:
             self.calculate_cost("input", model, **kwargs)
             self.calculate_cost("output", model, **kwargs)
-            self.cost_dict["total_tokens"] = self.cost_dict["input_tokens"] + self.cost_dict["output_tokens"]
-            self.cost_dict["total_cost"] = self.cost_dict["input_cost"] + self.cost_dict["output_cost"]
+            self.cost_dict["total_tokens"] = (
+                self.cost_dict["input_tokens"] + self.cost_dict["output_tokens"]
+            )
+            self.cost_dict["total_cost"] = (
+                self.cost_dict["input_cost"] + self.cost_dict["output_cost"]
+            )
         except Exception as e:
             logging.error(f"Error in TokenCounterCallback: {e}")
-

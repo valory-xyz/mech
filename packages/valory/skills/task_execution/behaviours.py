@@ -296,7 +296,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             cost_dict = {}
             if counter_callback is not None:
                 cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
-            response = {**response, "result": deliver_msg, "prompt": prompt, "cost_dict": cost_dict}
+            response = {
+                **response,
+                "result": deliver_msg,
+                "prompt": prompt,
+                "cost_dict": cost_dict,
+            }
             self._done_task["transaction"] = transaction
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
