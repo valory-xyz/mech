@@ -253,7 +253,7 @@ def fetch_additional_information(
     return "\n".join(["- " + text for text in texts]), None
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]

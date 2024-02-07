@@ -48,6 +48,7 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from packages.valory.skills.task_execution.utils.ipfs import (
     ComponentPackageLoader,
     get_ipfs_file_hash,
@@ -291,8 +292,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         }
         if task_result is not None:
             # task succeeded
-            deliver_msg, prompt, transaction = task_result
-            response = {**response, "result": deliver_msg, "prompt": prompt}
+            deliver_msg, prompt, transaction, counter_callback = task_result
+            cost_dict = {}
+            if counter_callback is not None:
+                cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
+            response = {
+                **response,
+                "result": deliver_msg,
+                "prompt": prompt,
+                "cost_dict": cost_dict,
+            }
             self._done_task["transaction"] = transaction
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
@@ -371,6 +380,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_data["tool_py"] = tool_py
         task_data["callable_method"] = callable_method
         task_data["api_keys"] = self.params.api_keys
+        task_data["counter_callback"] = TokenCounterCallback()
         future = self._submit_task(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
