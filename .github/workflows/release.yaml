@@ -95,7 +95,7 @@ jobs:
           docker push $DOCKER_USER/oar-$AGENT:$DEFAULT_IMAGE_TAG
   deploy-service-on-propel:
     name: Deploy service on propel
-    environment: ${{ github.event.action == 'released' && 'production' || 'staging' }}
+    environment: ${{ fromJSON('[["staging", "staging"], ["production", "shorts_production"]]')[github.event.action == 'released'][endsWith(github.event.release.name, '(shorts)')] }}
     needs:
     - "publish-packages"
     - "publish-images"
