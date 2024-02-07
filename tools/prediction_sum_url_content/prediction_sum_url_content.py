@@ -36,6 +36,7 @@ import tiktoken
 import traceback
 
 from dateutil import parser
+from tiktoken import encoding_for_model
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer, util
 
@@ -60,6 +61,11 @@ class OpenAIClientManager:
             client.close()
             client = None
 
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 NUM_URLS_EXTRACT = 5

@@ -37,6 +37,7 @@ from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
@@ -57,6 +58,11 @@ class OpenAIClientManager:
         if client is not None:
             client.close()
             client = None
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 FrequenciesType = Dict[str, float]
@@ -292,6 +298,7 @@ def fetch_additional_information(
             input_tokens=response["usage"]["prompt_tokens"],
             output_tokens=response["usage"]["completion_tokens"],
             model=engine,
+            token_counter=count_tokens,
         )
         return "\n".join(["- " + text for text in texts]), counter_callback
     return "\n".join(["- " + text for text in texts]), None
@@ -421,6 +428,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
                 input_tokens=response["usage"]["prompt_tokens"],
                 output_tokens=response["usage"]["completion_tokens"],
                 model=engine,
+                token_counter=count_tokens,
             )
             return response.choices[0].message.content, prediction_prompt, counter_callback
         return response.choices[0].message.content, prediction_prompt, None

@@ -21,6 +21,7 @@
 from typing import Any, Dict, Optional, Tuple
 
 from openai import OpenAI
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
@@ -40,6 +41,12 @@ class OpenAIClientManager:
         if client is not None:
             client.close()
             client = None
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 DEFAULT_OPENAI_SETTINGS = {

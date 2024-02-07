@@ -37,7 +37,7 @@ from langchain.chains import LLMChain
 from langchain.llms import OpenAI as OpenAILLM
 from langchain.prompts import PromptTemplate
 from sklearn.metrics import roc_auc_score
-
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
@@ -57,6 +57,11 @@ class OpenAIClientManager:
         if client is not None:
             client.close()
             client = None
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 # Provide several examples in order to backtest the resulted prompt

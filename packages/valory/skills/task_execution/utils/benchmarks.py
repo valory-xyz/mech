@@ -19,28 +19,10 @@
 """Benchmarking for tools."""
 
 import logging
-from typing import Any, Dict, Union
-
-import anthropic
-import tiktoken
-from tiktoken import Encoding
+from typing import Any, Callable, Dict, Union
 
 
 PRICE_NUM_TOKENS = 1000
-
-
-def encoding_for_model(model: str) -> Encoding:
-    """Get the encoding for a model."""
-    return tiktoken.encoding_for_model(model)
-
-
-def count_tokens(text: str, model: str) -> int:
-    """Count the number of tokens in a text."""
-    if "claude" in model:
-        return anthropic.Anthropic().count_tokens(text)
-
-    enc = encoding_for_model(model)
-    return len(enc.encode(text))
 
 
 class TokenCounterCallback:
@@ -73,13 +55,15 @@ class TokenCounterCallback:
             * TokenCounterCallback.TOKEN_PRICES[model][tokens_type]
         )
 
-    def calculate_cost(self, tokens_type: str, model: str, **kwargs: Any) -> None:
+    def calculate_cost(
+        self, tokens_type: str, model: str, token_counter: Callable, **kwargs: Any
+    ) -> None:
         """Calculate the cost of a generation."""
         # Check if it its prompt or tokens are passed in
         prompt_key = f"{tokens_type}_prompt"
         token_key = f"{tokens_type}_tokens"
         if prompt_key in kwargs:
-            tokens = count_tokens(kwargs[prompt_key], model)
+            tokens = token_counter(kwargs[prompt_key], model)
         elif token_key in kwargs:
             tokens = kwargs[token_key]
         else:
@@ -88,13 +72,13 @@ class TokenCounterCallback:
         self.cost_dict[token_key] += tokens
         self.cost_dict[f"{tokens_type}_cost"] += cost
 
-    def __call__(self, model: str, **kwargs: Any) -> None:
+    def __call__(self, model: str, token_counter: Callable, **kwargs: Any) -> None:
         """Callback to count the number of tokens used in a generation."""
         if model not in list(TokenCounterCallback.TOKEN_PRICES.keys()):
             raise ValueError(f"Model {model} not supported.")
         try:
-            self.calculate_cost("input", model, **kwargs)
-            self.calculate_cost("output", model, **kwargs)
+            self.calculate_cost("input", model, token_counter, **kwargs)
+            self.calculate_cost("output", model, token_counter, **kwargs)
             self.cost_dict["total_tokens"] = (
                 self.cost_dict["input_tokens"] + self.cost_dict["output_tokens"]
             )

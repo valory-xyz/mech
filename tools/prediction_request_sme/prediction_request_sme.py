@@ -30,7 +30,7 @@ from openai import OpenAI
 import requests
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
-
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
@@ -52,6 +52,11 @@ class OpenAIClientManager:
             client.close()
             client = None
 
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 NUM_URLS_EXTRACT = 5
@@ -310,6 +315,7 @@ def fetch_additional_information(
             input_tokens=response["usage"]["prompt_tokens"],
             output_tokens=response["usage"]["completion_tokens"],
             model=engine,
+            token_counter=count_tokens,
         )
         return "\n".join(["- " + text for text in texts]), counter_callback
     return "\n".join(["- " + text for text in texts]), None
@@ -343,6 +349,7 @@ def get_sme_role(
             output_tokens=response["usage"]["completion_tokens"],
             total_tokens=response["usage"]["total_tokens"],
             model=engine,
+            token_counter=count_tokens,
         )
         return sme["sme"], sme["sme_introduction"], counter_callback
     return sme["sme"], sme["sme_introduction"], None
@@ -424,6 +431,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 input_tokens=response["usage"]["prompt_tokens"],
                 output_tokens=response["usage"]["completion_tokens"],
                 model=engine,
+                token_counter=count_tokens,
             )
             return response.choices[0].message.content, prediction_prompt, counter_callback
         return response.choices[0].message.content, prediction_prompt, None

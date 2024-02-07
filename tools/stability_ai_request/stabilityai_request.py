@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
 import requests
-
+from tiktoken import encoding_for_model
 
 DEFAULT_STABILITYAI_SETTINGS = {
     "cfg_scale": 7,
@@ -52,6 +52,12 @@ ENGINE_SIZE_CHART = {
 }
 
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 class FinishReason(Enum):
