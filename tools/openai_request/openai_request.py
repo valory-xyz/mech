@@ -24,20 +24,22 @@ from openai import OpenAI
 
 client: Optional[OpenAI] = None
 
-def init_openai_client(api_key: str) -> OpenAI:
-    """Initialize the OpenAI client"""
-    global client
-    if client is None:
-        client = OpenAI(api_key=api_key)
-    return client
+class OpenAIClientManager:
+    """Client context manager for OpenAI."""
+    def __init__(self, api_key: str):
+        self.api_key = api_key
 
+    def __enter__(self) -> OpenAI:
+        global client
+        if client is None:
+            client = OpenAI(api_key=self.api_key)
+        return client
 
-def close_openai_client() -> None:
-    """Close the OpenAI client"""
-    global client
-    if client is not None:
-        client.close()
-        client = None
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.close()
+            client = None
 
 
 DEFAULT_OPENAI_SETTINGS = {
@@ -52,45 +54,45 @@ ENGINES = {
 ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in values]
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    init_openai_client(kwargs["api_keys"]["openai"])
-    max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-    temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
-    prompt = kwargs["prompt"]
-    tool = kwargs["tool"]
-    if tool not in ALLOWED_TOOLS:
-        return f"Tool {tool} is not in the list of supported tools.", None, None
+    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        prompt = kwargs["prompt"]
+        tool = kwargs["tool"]
+        counter_callback = kwargs.get("counter_callback", None)
+        if tool not in ALLOWED_TOOLS:
+            return f"Tool {tool} is not in the list of supported tools.", None, None
 
-    engine = tool.replace(PREFIX, "")
-    moderation_result = client.moderations.create(input=prompt)
-    if moderation_result.results[0].flagged:
-        return "Moderation flagged the prompt as in violation of terms.", None, None
+        engine = tool.replace(PREFIX, "")
+        moderation_result = client.moderations.create(input=prompt)
+        if moderation_result.results[0].flagged:
+            return "Moderation flagged the prompt as in violation of terms.", None, None
 
-    if engine in ENGINES["chat"]:
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prompt},
-        ]
-        response = client.chat.completions.create(
-            model=engine,
-            messages=messages,
+        if engine in ENGINES["chat"]:
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt},
+            ]
+            response = client.chat.completions.create(
+                model=engine,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=120,
+                stop=None,
+            )
+            return response.choices[0].message.content, prompt, None
+        response = client.completions.create(
+            engine=engine,
+            prompt=prompt,
             temperature=temperature,
             max_tokens=max_tokens,
-            n=1,
+            top_p=1,
+            frequency_penalty=0,
             timeout=120,
-            stop=None,
+            presence_penalty=0,
         )
-        return response.choices[0].message.content, prompt, None
-    response = client.completions.create(
-        engine=engine,
-        prompt=prompt,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        top_p=1,
-        frequency_penalty=0,
-        timeout=120,
-        presence_penalty=0,
-    )
-    close_openai_client()
-    return response.choices[0].text, prompt, None
+        return response.choices[0].text, prompt, counter_callback

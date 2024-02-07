@@ -20,8 +20,10 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from itertools import islice
 
 from openai import OpenAI
 
@@ -33,23 +35,27 @@ from googleapiclient.discovery import build
 client: Optional[OpenAI] = None
 
 
-def init_openai_client(api_key: str) -> OpenAI:
-    """Initialize the OpenAI client"""
-    global client
-    if client is None:
-        client = OpenAI(api_key=api_key)
-    return client
+class OpenAIClientManager:
+    """Client context manager for OpenAI."""
+    def __init__(self, api_key: str):
+        self.api_key = api_key
 
-def close_openai_client() -> None:
-    """Close the OpenAI client"""
-    global client
-    if client is not None:
-        client.close()
-        client = None
+    def __enter__(self) -> OpenAI:
+        global client
+        if client is None:
+            client = OpenAI(api_key=self.api_key)
+        return client
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.close()
+            client = None
 
 
 
 NUM_URLS_EXTRACT = 5
+DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
@@ -260,8 +266,12 @@ def fetch_additional_information(
     engine: str,
     temperature: float,
     max_tokens: int,
-    google_api_key: str,
-    google_engine: str,
+    google_api_key: Optional[str],
+    google_engine: Optional[str],
+    num_urls: Optional[int],
+    num_words: Optional[int],
+    counter_callback: Optional[Callable] = None,
+    source_links: Optional[List[str]] = None,
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
@@ -282,16 +292,32 @@ def fetch_additional_information(
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
-    urls = get_urls_from_queries(
-        json_data["queries"],
-        api_key=google_api_key,
-        engine=google_engine,
-    )
-    texts = extract_texts(urls)
-    return "\n".join(["- " + text for text in texts])
+
+    if not source_links:
+        urls = get_urls_from_queries(
+            json_data["queries"],
+            api_key=google_api_key,
+            engine=google_engine,
+            num_urls=num_urls,
+        )
+        texts = extract_texts(urls, num_words)
+    else:
+        texts = []
+        for source_link in islice(source_links.values(), 3):
+            texts.append(extract_text(html=source_link, num_words=num_words))
+    if counter_callback:
+        counter_callback(
+            input_tokens=response["usage"]["prompt_tokens"],
+            output_tokens=response["usage"]["completion_tokens"],
+            model=engine,
+        )
+        return "\n".join(["- " + text for text in texts]), counter_callback
+    return "\n".join(["- " + text for text in texts]), None
 
 
-def get_sme_role(engine, temperature, max_tokens, prompt) -> Tuple[str, str]:
+def get_sme_role(
+    engine, temperature, max_tokens, prompt, counter_callback=None
+) -> Tuple[str, str]:
     """Get SME title and introduction"""
     market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
     system_prompt = SME_GENERATION_SYSTEM_PROMPT
@@ -311,68 +337,93 @@ def get_sme_role(engine, temperature, max_tokens, prompt) -> Tuple[str, str]:
     )
     generated_sme_roles = response.choices[0].message.content
     sme = json.loads(generated_sme_roles)[0]
-    return sme["sme"], sme["sme_introduction"]
-
-
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
-    """Run the task"""
-    init_openai_client(kwargs["api_keys"]["openai"])
-    tool = kwargs["tool"]
-    prompt = kwargs["prompt"]
-    max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-    temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
-
-    if tool not in ALLOWED_TOOLS:
-        raise ValueError(f"Tool {tool} is not supported.")
-
-    engine = TOOL_TO_ENGINE[tool]
-
-    try:
-        sme, sme_introduction = get_sme_role(
-            engine,
-            temperature,
-            max_tokens,
-            prompt,
+    if counter_callback is not None:
+        counter_callback(
+            input_tokens=response["usage"]["prompt_tokens"],
+            output_tokens=response["usage"]["completion_tokens"],
+            total_tokens=response["usage"]["total_tokens"],
+            model=engine,
         )
-    except Exception as e:
-        print(f"An error occurred during SME role creation: {e}")
-        print("Using default SME introduction.")
-        sme_introduction = "You are a helpful assistant."
+        return sme["sme"], sme["sme_introduction"], counter_callback
+    return sme["sme"], sme["sme_introduction"], None
 
-    additional_information = (
-        fetch_additional_information(
-            prompt=prompt,
-            engine=engine,
+
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+    """Run the task"""
+    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        tool = kwargs["tool"]
+        prompt = kwargs["prompt"]
+        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        source_links = kwargs.get("source_links", None)
+        num_urls = kwargs.get("num_urls", NUM_URLS_EXTRACT)
+        num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS)
+        counter_callback = kwargs.get("counter_callback", None)
+        api_keys = kwargs.get("api_keys", {})
+        google_api_key = api_keys.get("google_api_key", None)
+        google_engine_id = api_keys.get("google_engine_id", None)
+
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"Tool {tool} is not supported.")
+
+        engine = TOOL_TO_ENGINE[tool]
+
+        try:
+            sme, sme_introduction, counter_callback = get_sme_role(
+                engine,
+                temperature,
+                max_tokens,
+                prompt,
+                counter_callback=counter_callback,
+            )
+        except Exception as e:
+            print(f"An error occurred during SME role creation: {e}")
+            print("Using default SME introduction.")
+            sme_introduction = "You are a helpful assistant."
+
+        if tool.startswith("prediction-online"):
+            additional_information, counter_callback = fetch_additional_information(
+                prompt=prompt,
+                engine=engine,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                google_api_key=google_api_key,
+                google_engine=google_engine_id,
+                num_urls=num_urls,
+                num_words=num_words,
+                counter_callback=counter_callback,
+                source_links=source_links,
+            )
+        else:
+            additional_information = None
+        prediction_prompt = PREDICTION_PROMPT.format(
+            user_prompt=prompt, additional_information=additional_information
+        )
+        moderation_result = client.moderations.create(input=prediction_prompt)
+        if moderation_result.results[0].flagged:
+            return (
+                "Moderation flagged the prompt as in violation of terms.",
+                prediction_prompt,
+                None,
+            )
+        messages = [
+            {"role": "system", "content": sme_introduction},
+            {"role": "user", "content": prediction_prompt},
+        ]
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            google_api_key=kwargs["api_keys"]["google_api_key"],
-            google_engine=kwargs["api_keys"]["google_engine_id"],
+            n=1,
+            timeout=150,
+            stop=None,
         )
-        if tool == "prediction-online-sme"
-        else ""
-    )
-    prediction_prompt = PREDICTION_PROMPT.format(
-        user_prompt=prompt, additional_information=additional_information
-    )
-    moderation_result = client.moderations.create(input=prediction_prompt)
-    if moderation_result.results[0].flagged:
-        return (
-            "Moderation flagged the prompt as in violation of terms.",
-            prediction_prompt,
-            None,
-        )
-    messages = [
-        {"role": "system", "content": sme_introduction},
-        {"role": "user", "content": prediction_prompt},
-    ]
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=150,
-        stop=None,
-    )
-    close_openai_client()
-    return response.choices[0].message.content, prediction_prompt, None
+        if counter_callback is not None:
+            counter_callback(
+                input_tokens=response["usage"]["prompt_tokens"],
+                output_tokens=response["usage"]["completion_tokens"],
+                model=engine,
+            )
+            return response.choices[0].message.content, prediction_prompt, counter_callback
+        return response.choices[0].message.content, prediction_prompt, None

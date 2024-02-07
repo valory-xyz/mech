@@ -43,20 +43,22 @@ from sentence_transformers import SentenceTransformer, util
 client: Optional[OpenAI] = None
 
 
-def init_openai_client(api_key: str) -> OpenAI:
-    """Initialize the OpenAI client"""
-    global client
-    if client is None:
-        client = OpenAI(api_key=api_key)
-    return client
+class OpenAIClientManager:
+    """Client context manager for OpenAI."""
+    def __init__(self, api_key: str):
+        self.api_key = api_key
 
+    def __enter__(self) -> OpenAI:
+        global client
+        if client is None:
+            client = OpenAI(api_key=self.api_key)
+        return client
 
-def close_openai_client() -> None:
-    """Close the OpenAI client"""
-    global client
-    if client is not None:
-        client.close()
-        client = None
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.close()
+            client = None
 
 
 
@@ -1041,7 +1043,7 @@ def fetch_additional_information(
     return additional_informations
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
 
@@ -1056,115 +1058,114 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     Returns:
         Tuple[str, Optional[Dict[str, Any]]]: The generated content and any additional data.
     """
-    init_openai_client(kwargs["api_keys"]["openai"])
-    tool = kwargs["tool"]
-    prompt = kwargs["prompt"]
-    max_compl_tokens = kwargs.get(
-        "max_tokens", DEFAULT_OPENAI_SETTINGS["max_compl_tokens"]
-    )
-    temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
-
-    if tool not in ALLOWED_TOOLS:
-        raise ValueError(f"TOOL {tool} is not supported.")
-
-    # Print the settings
-    print(f"MECH TOOL: {tool}")
-    print(f"PROMPT: {prompt}")
-    print(f"MAX OPENAI RETURN TOKENS: {max_compl_tokens}")
-    print(f"LLM TEMPERATURE: {temperature}")
-
-    # Load the spacy model
-    nlp = spacy.load("en_core_web_sm")
-
-    # Get the LLM engine to be used
-    engine = TOOL_TO_ENGINE[tool]
-    print(f"ENGINE: {engine}")
-
-    # Extract the event question from the prompt
-    event_question = re.search(r"\"(.+?)\"", prompt).group(1)
-    if not event_question:
-        raise ValueError("No event question found in prompt.")
-    print(f"EVENT_QUESTION: {event_question}")
-    print()
-
-    # Get the tiktoken base encoding
-    enc = tiktoken.get_encoding("cl100k_base")
-
-    # Calculate the maximum number of tokens and words that can be consumed by the additional information string
-    max_add_tokens = get_max_tokens_for_additional_information(
-        max_compl_tokens=max_compl_tokens,
-        prompt=prompt,
-        enc=enc,
-    )
-    max_add_words = int(max_add_tokens * 0.75)
-
-    # Fetch additional information
-    additional_information = (
-        fetch_additional_information(
-            event_question=event_question,
-            engine=engine,
-            temperature=temperature,
-            max_compl_tokens=max_compl_tokens,
-            nlp=nlp,
-            max_add_words=max_add_words,
-            google_api_key=kwargs["api_keys"]["google_api_key"],
-            google_engine=kwargs["api_keys"]["google_engine_id"],
+    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        tool = kwargs["tool"]
+        prompt = kwargs["prompt"]
+        max_compl_tokens = kwargs.get(
+            "max_tokens", DEFAULT_OPENAI_SETTINGS["max_compl_tokens"]
         )
-        if tool == "prediction-online-sum-url-content"
-        else ""
-    )
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
-    # Truncate additional information to stay within the chat completion token limit of 4096
-    additional_information = truncate_additional_information(
-        additional_information,
-        max_add_tokens,
-        enc=enc,
-    )
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"TOOL {tool} is not supported.")
 
-    # Get the current utc timestamp
-    current_time_utc = datetime.now(timezone.utc)
-    formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        # Print the settings
+        print(f"MECH TOOL: {tool}")
+        print(f"PROMPT: {prompt}")
+        print(f"MAX OPENAI RETURN TOKENS: {max_compl_tokens}")
+        print(f"LLM TEMPERATURE: {temperature}")
 
-    # Extract event date and format it to ISO 8601 with UTC timezone and 23:59:59 time
-    doc_question = nlp(event_question)
-    raw_event_date = extract_event_date(doc_question)
-    parsed_event_date = datetime.strptime(raw_event_date, "%Y-%m-%d")
-    final_event_date = parsed_event_date.replace(
-        hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc
-    )
-    formatted_event_date = final_event_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        # Load the spacy model
+        nlp = spacy.load("en_core_web_sm")
 
-    # Generate the prediction prompt
-    prediction_prompt = PREDICTION_PROMPT.format(
-        event_question=event_question,
-        user_prompt=prompt,
-        timepoint=formatted_event_date,
-        additional_information=additional_information,
-        timestamp=formatted_time_utc,
-    )
-    print(f"\nPREDICTION PROMPT: {prediction_prompt}\n")
+        # Get the LLM engine to be used
+        engine = TOOL_TO_ENGINE[tool]
+        print(f"ENGINE: {engine}")
 
-    # Perform moderation
-    moderation_result = client.moderations.create(input=prediction_prompt)
-    if moderation_result.results[0].flagged:
-        return "Moderation flagged the prompt as in violation of terms.", None
+        # Extract the event question from the prompt
+        event_question = re.search(r"\"(.+?)\"", prompt).group(1)
+        if not event_question:
+            raise ValueError("No event question found in prompt.")
+        print(f"EVENT_QUESTION: {event_question}")
+        print()
 
-    # Create messages for the OpenAI engine
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": prediction_prompt},
-    ]
+        # Get the tiktoken base encoding
+        enc = tiktoken.get_encoding("cl100k_base")
 
-    # Generate the response
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_compl_tokens,
-        n=1,
-        timeout=150,
-        stop=None,
-    )
-    print(f"RESPONSE: {response}")
-    close_openai_client()
-    return response.choices[0].message.content, None
+        # Calculate the maximum number of tokens and words that can be consumed by the additional information string
+        max_add_tokens = get_max_tokens_for_additional_information(
+            max_compl_tokens=max_compl_tokens,
+            prompt=prompt,
+            enc=enc,
+        )
+        max_add_words = int(max_add_tokens * 0.75)
+
+        # Fetch additional information
+        additional_information = (
+            fetch_additional_information(
+                event_question=event_question,
+                engine=engine,
+                temperature=temperature,
+                max_compl_tokens=max_compl_tokens,
+                nlp=nlp,
+                max_add_words=max_add_words,
+                google_api_key=kwargs["api_keys"]["google_api_key"],
+                google_engine=kwargs["api_keys"]["google_engine_id"],
+            )
+            if tool == "prediction-online-sum-url-content"
+            else ""
+        )
+
+        # Truncate additional information to stay within the chat completion token limit of 4096
+        additional_information = truncate_additional_information(
+            additional_information,
+            max_add_tokens,
+            enc=enc,
+        )
+
+        # Get the current utc timestamp
+        current_time_utc = datetime.now(timezone.utc)
+        formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+
+        # Extract event date and format it to ISO 8601 with UTC timezone and 23:59:59 time
+        doc_question = nlp(event_question)
+        raw_event_date = extract_event_date(doc_question)
+        parsed_event_date = datetime.strptime(raw_event_date, "%Y-%m-%d")
+        final_event_date = parsed_event_date.replace(
+            hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc
+        )
+        formatted_event_date = final_event_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+
+        # Generate the prediction prompt
+        prediction_prompt = PREDICTION_PROMPT.format(
+            event_question=event_question,
+            user_prompt=prompt,
+            timepoint=formatted_event_date,
+            additional_information=additional_information,
+            timestamp=formatted_time_utc,
+        )
+        print(f"\nPREDICTION PROMPT: {prediction_prompt}\n")
+
+        # Perform moderation
+        moderation_result = client.moderations.create(input=prediction_prompt)
+        if moderation_result.results[0].flagged:
+            return "Moderation flagged the prompt as in violation of terms.", None, None
+
+        # Create messages for the OpenAI engine
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prediction_prompt},
+        ]
+
+        # Generate the response
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_compl_tokens,
+            n=1,
+            timeout=150,
+            stop=None,
+        )
+        print(f"RESPONSE: {response}")
+        return response.choices[0].message.content, None, None
