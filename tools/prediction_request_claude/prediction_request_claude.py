@@ -25,6 +25,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Iterator, Callable
 from itertools import islice
 
+import anthropic
 import requests
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 from bs4 import BeautifulSoup
@@ -124,6 +125,10 @@ OUTPUT_FORMAT
 ASSISTANT_TEXT = "```json"
 STOP_SEQUENCES = ["```"]
 
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    return anthropic.Anthropic().count_tokens(text)
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
@@ -248,6 +253,7 @@ def fetch_additional_information(
             model=engine,
             input_prompt=url_query_prompt,
             output_tokens=40,
+            token_counter=count_tokens,
         )
         return "\n".join(["- " + text for text in texts]), counter_callback
     return "\n".join(["- " + text for text in texts]), None
@@ -300,6 +306,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
             input_prompt=prediction_prompt,
             output_prompt=completion.completion,
+            token_counter=count_tokens,
         )
         return completion.completion, prediction_prompt, counter_callback
 
