@@ -307,8 +307,8 @@ def fetch_additional_information(
             texts.append(extract_text(html=source_link, num_words=num_words))
     if counter_callback:
         counter_callback(
-            input_tokens=response["usage"]["prompt_tokens"],
-            output_tokens=response["usage"]["completion_tokens"],
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
             model=engine,
         )
         return "\n".join(["- " + text for text in texts]), counter_callback
@@ -339,9 +339,9 @@ def get_sme_role(
     sme = json.loads(generated_sme_roles)[0]
     if counter_callback is not None:
         counter_callback(
-            input_tokens=response["usage"]["prompt_tokens"],
-            output_tokens=response["usage"]["completion_tokens"],
-            total_tokens=response["usage"]["total_tokens"],
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            total_tokens=response.usage.total_tokens,
             model=engine,
         )
         return sme["sme"], sme["sme_introduction"], counter_callback
@@ -421,8 +421,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         )
         if counter_callback is not None:
             counter_callback(
-                input_tokens=response["usage"]["prompt_tokens"],
-                output_tokens=response["usage"]["completion_tokens"],
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
                 model=engine,
             )
             return response.choices[0].message.content, prediction_prompt, counter_callback
