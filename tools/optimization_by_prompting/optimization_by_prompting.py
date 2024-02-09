@@ -27,9 +27,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple
 
 import requests
-from bs4 import BeautifulSoup
+import html2text
+from readability import Document
 from googleapiclient.discovery import build
 
+import tiktoken
 from openai import OpenAI
 
 import pandas as pd
@@ -72,6 +74,10 @@ NUM_URLS_EXTRACT = 5
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.8,
+}
+MAX_TOKENS = {
+    "gpt-3.5-turbo": 4096,
+    "gpt-4": 8192,
 }
 ALLOWED_TOOLS = [
     "deepmind-optimization-strong",
@@ -293,13 +299,25 @@ def extract_text(
     num_words: int = 300,  # TODO: summerise using GPT instead of limit
 ) -> str:
     """Extract text from a single HTML document"""
-    soup = BeautifulSoup(html, "html.parser")
-    for script in soup(["script", "style"]):
-        script.extract()
-    text = soup.get_text()
-    lines = (line.strip() for line in text.splitlines())
-    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-    text = "\n".join(chunk for chunk in chunks if chunk)
+    text = Document(html).summary()
+
+    # use html2text to convert HTML to markdown
+    h = html2text.HTML2Text()
+    h.ignore_links = True
+    h.ignore_images = True
+    h.ignore_emphasis = True
+    text = h.handle(text)
+
+    # if text is None, return an empty string
+    if text is None:
+        return ""
+
+    # remove newlines and extra spaces
+    text = " ".join(text.split())
+
+    if not num_words:
+        return text
+    
     return text[:num_words]
 
 
@@ -382,6 +400,37 @@ def fetch_additional_information(
     return "\n".join(["- " + text for text in texts])
 
 
+def adjust_additional_information(
+    prompt: str, 
+    prompt_template:str, 
+    additional_information: str, 
+    model: str
+) -> str:
+    """Adjust the additional_information to fit within the token budget"""
+
+    # Initialize tiktoken encoder for the specified model
+    enc = tiktoken.encoding_for_model(model)
+    
+    # Encode the user prompt to calculate its token count
+    prompt = prompt_template.format(user_prompt=prompt, additional_information="")
+    prompt_tokens = len(enc.encode(prompt))
+    
+    # Calculate available tokens for additional_information
+    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+    available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
+    
+    # Encode the additional_information
+    additional_info_tokens = enc.encode(additional_information)
+    
+    # If additional_information exceeds available tokens, truncate it
+    if len(additional_info_tokens) > available_tokens:
+        truncated_info_tokens = additional_info_tokens[:available_tokens]
+        # Decode tokens back to text, ensuring the output fits within the budget
+        additional_information = enc.decode(truncated_info_tokens)
+    
+    return additional_information
+
+
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
@@ -408,6 +457,12 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             openai_key, PREDICTION_PROMPT_INSTRUCTIONS, PREDICTION_PROMPT_FORMAT
         )
         instructions += PREDICTION_PROMPT_FORMAT
+        additional_information = adjust_additional_information(
+            prompt=prompt,
+            prompt_template=instructions,
+            additional_information=additional_information,
+            model=engine
+        )
         prediction_prompt = instructions.format(
             user_prompt=prompt, additional_information=additional_information
         )

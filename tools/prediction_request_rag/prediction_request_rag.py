@@ -29,6 +29,7 @@ import html2text
 from itertools import islice
 import json
 import numpy as np
+import tiktoken
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from readability import Document
@@ -60,6 +61,10 @@ DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 300,
     "temperature": 0,
 }
+MAX_TOKENS = {
+    "gpt-3.5-turbo": 4096,
+    "gpt-4": 8192,
+}
 ALLOWED_TOOLS = [
     "prediction-request-rag",
 ]
@@ -70,10 +75,9 @@ DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 5)
 EMBEDDING_MODEL = "text-embedding-ada-002"
 EMBEDDING_BATCH_SIZE = 1000
-SPLITTER_MAX_TOKENS = 2000
-SPLITTER_OVERLAP = 100
-NUM_NEIGHBOURS = 5
-
+SPLITTER_MAX_TOKENS = 1800
+SPLITTER_OVERLAP = 50
+NUM_NEIGHBOURS = 4
 
 
 PREDICTION_PROMPT = """
@@ -101,6 +105,9 @@ Given the user's question: please generate {num_queries} diverse and relevant se
 Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
 USER's QUESTION: {user_prompt}
 """
+
+SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input. 
+You make predictions about the probability of an event happening based on the information provided in the input."""
 
 
 class OpenAISchema(BaseModel):  # type: ignore[misc]
@@ -167,8 +174,10 @@ class Results(OpenAISchema):
     confidence: float = Field(description="A value between 0 and 1 indicating the confidence in the prediction. 0 indicates lowest confidence value; 1 maximum confidence value.")
     info_utility: float = Field(description="Utility of the information provided in ADDITIONAL_INFORMATION to help you make the prediction. 0 indicates lowest utility; 1 maximum utility.")
 
+
 class Queries(OpenAISchema):
     queries: List[str]
+
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
@@ -200,6 +209,7 @@ def get_urls_from_queries(
     unique_results = list(set(results))
     return unique_results
 
+
 def find_similar_chunks(
     query: str, chunk_to_embedding: Dict, k: int = 4
 ) -> List:
@@ -217,13 +227,13 @@ def find_similar_chunks(
 
     return [list(chunk_to_embedding.keys())[i] for i in I[0]]
 
+
 def get_embeddings(split_docs):
     # Make chunks to embeddings mapping
     chunk_to_embedding = {}
     for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
         batch_end = batch_start + EMBEDDING_BATCH_SIZE
         batch = split_docs[batch_start:batch_end]
-        print(f"Batch {batch_start} to {batch_end-1}")
         response = client.embeddings.create(
             model=EMBEDDING_MODEL,
             input=batch,
@@ -234,6 +244,7 @@ def get_embeddings(split_docs):
         for chunk, embedding in zip(batch, batch_embeddings):
             chunk_to_embedding[chunk] = embedding
     return chunk_to_embedding
+
 
 def extract_text(
     html: str,
@@ -254,8 +265,9 @@ def extract_text(
 
     # remove newlines and extra spaces
     text = " ".join(text.split())
-
+    
     return text
+
 
 def process_in_batches(
     urls: List[str], window: int = 5, timeout: int = 10
@@ -298,11 +310,13 @@ def extract_texts(urls: List[str]) -> List[str]:
             break
     return extracted_texts
 
+
 def recursive_character_text_splitter(text, max_tokens, overlap):
     if len(text) <= max_tokens:
         return [text]
     else:
         return [text[i:i+max_tokens] for i in range(0, len(text), max_tokens - overlap)]
+
 
 def fetch_additional_information(
     prompt: str,
@@ -319,7 +333,7 @@ def fetch_additional_information(
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt, num_queries=num_queries)
     messages = [
-        {"role": "system", "content": "You are a world class algorithm for generating structured output from a given input."},
+        {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": url_query_prompt},
     ]
 
@@ -333,14 +347,10 @@ def fetch_additional_information(
         stop=None,
         functions=[Queries.openai_schema],
     )
-
-
-
     queries = Queries.from_response(response)
-
     if not source_links:
         urls = get_urls_from_queries(
-            queries,
+            queries.queries,
             google_api_key,
             google_engine,
             num_urls,
@@ -367,6 +377,37 @@ def fetch_additional_information(
     return "\n".join(["--- " + text for text in retrieved_chunks]), None
 
 
+def adjust_additional_information(
+    prompt: str, 
+    prompt_template:str, 
+    additional_information: str, 
+    model: str
+) -> str:
+    """Adjust the additional_information to fit within the token budget"""
+
+    # Initialize tiktoken encoder for the specified model
+    enc = tiktoken.encoding_for_model(model)
+    
+    # Encode the user prompt to calculate its token count
+    prompt = prompt_template.format(user_prompt=prompt, additional_information="")
+    prompt_tokens = len(enc.encode(prompt))
+    
+    # Calculate available tokens for additional_information
+    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+    available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
+    
+    # Encode the additional_information
+    additional_info_tokens = enc.encode(additional_information)
+    
+    # If additional_information exceeds available tokens, truncate it
+    if len(additional_info_tokens) > available_tokens:
+        truncated_info_tokens = additional_info_tokens[:available_tokens]
+        # Decode tokens back to text, ensuring the output fits within the budget
+        additional_information = enc.decode(truncated_info_tokens)
+    
+    return additional_information
+
+
 def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
@@ -381,7 +422,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
-
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
@@ -398,15 +438,19 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             counter_callback=counter_callback,
             source_links=kwargs.get("source_links", None),
         )
-
+        additional_information = adjust_additional_information(
+            prompt,
+            PREDICTION_PROMPT,
+            additional_information,
+            engine
+        )
         prediction_prompt = PREDICTION_PROMPT.format(
             user_prompt=prompt, additional_information=additional_information
         )
         messages = [
-            {"role": "system", "content": "You are a world class algorithm for generating structured output from a given input. You make predictions about the probability of an event happening based on the information provided in the input."},
+            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prediction_prompt},
         ]
-
         response = client.chat.completions.create(
             model=engine,
             messages=messages,
@@ -417,7 +461,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             stop=None,
             functions=[Results.openai_schema],
         )
-
         results = str(Results.from_response(response))
 
         pairs = str(results).split()

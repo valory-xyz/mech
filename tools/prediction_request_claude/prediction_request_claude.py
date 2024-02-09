@@ -27,7 +27,8 @@ from itertools import islice
 
 import requests
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
-from bs4 import BeautifulSoup
+import html2text
+from readability import Document
 from googleapiclient.discovery import build
 
 NUM_URLS_EXTRACT = 5
@@ -156,16 +157,28 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
 
 def extract_text(
     html: str,
-    num_words: int = 300,  # TODO: summarise using LLM instead of limit
+    num_words: int = 300,  # TODO: summerise using GPT instead of limit
 ) -> str:
     """Extract text from a single HTML document"""
-    soup = BeautifulSoup(html, "html.parser")
-    for script in soup(["script", "style"]):
-        script.extract()
-    text = soup.get_text()
-    lines = (line.strip() for line in text.splitlines())
-    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-    text = "\n".join(chunk for chunk in chunks if chunk)
+    text = Document(html).summary()
+
+    # use html2text to convert HTML to markdown
+    h = html2text.HTML2Text()
+    h.ignore_links = True
+    h.ignore_images = True
+    h.ignore_emphasis = True
+    text = h.handle(text)
+
+    # if text is None, return an empty string
+    if text is None:
+        return ""
+
+    # remove newlines and extra spaces
+    text = " ".join(text.split())
+
+    if not num_words:
+        return text
+    
     return text[:num_words]
 
 
