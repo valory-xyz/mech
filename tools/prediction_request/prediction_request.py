@@ -32,7 +32,6 @@ from openai import OpenAI
 
 import requests
 import spacy
-from typing import
 import  html2text
 from readability import Document
 from googleapiclient.discovery import build
