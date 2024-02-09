@@ -358,7 +358,7 @@ def fetch_additional_information(
         texts = extract_texts(urls)
     else:
         texts = []
-        for source_link in islice(source_links.values(), 3):
+        for source_link in islice(source_links.values(), num_urls):
             texts.append(extract_text(html=source_link))
 
     split_texts = []
