@@ -29,6 +29,7 @@ import requests
 import logging
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
@@ -310,6 +311,8 @@ class CloseMarketBehaviourMock:
         self.context.logger.info(f'Has "{question!r}" occurred?: {has_occurred}')
 
         json_data["question"] = question
+        json_data["utc_timestamp"] = int(datetime.utcnow().timestamp())
+
         return json_data
 
     def _get_news(
