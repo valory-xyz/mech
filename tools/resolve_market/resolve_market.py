@@ -19,42 +19,44 @@
 
 """This module implements a Mech tool for binary predictions.
 
-This module tries to mimic the current logic on the market-creator service 
+This module tries to mimic the current logic on the market-creator service
 (https://github.com/valory-xyz/market-creator) for resolving closed markets.
 """
 
 import json
-import os
-import requests
 import logging
-from collections import defaultdict
-from concurrent.futures import Future, ThreadPoolExecutor
+import os
 from datetime import datetime
-from heapq import nlargest
-from itertools import islice
-from string import punctuation
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
-from string import Template
+from typing import Any, Dict, List, Optional, Tuple
+
+import requests
 from openai import OpenAI
+
 
 client: Optional[OpenAI] = None
 
+
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
+        """Init OpenAIClientManager"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Enter"""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore
+        """Exit"""
         global client
         if client is not None:
             client.close()
             client = None
+
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 700,
@@ -139,24 +141,27 @@ OUTPUT_FORMAT
 
 logging.basicConfig(level=logging.INFO)
 
+
 class Object(object):
-    pass
+    """Object"""
+
 
 class CloseMarketBehaviourMock:
+    """CloseMarketBehaviourMock"""
 
     params: Object
     context: Object
     kwargs: Dict[str, Any]
 
-    def __init__(
-        self,
-        **kwargs
-    ):
-        self.kwargs=kwargs
+    def __init__(self, **kwargs):
+        """Init the object."""
+        self.kwargs = kwargs
         self.context = Object()
         self.context.logger = logging.getLogger(__name__)
         self.params = Object()
-        self.params.market_closing_newsapi_api_key = kwargs.get("api_keys", {})["newsapi"]
+        self.params.market_closing_newsapi_api_key = kwargs.get("api_keys", {})[
+            "newsapi"
+        ]
         self.params.newsapi_endpoint = NEWSAPI_ENDPOINT
 
     def get_http_response(
@@ -210,16 +215,21 @@ class CloseMarketBehaviourMock:
         return input_string
 
     def do_llm_request(self, **kwargs) -> str:
-
+        """Do LLM request."""
         with OpenAIClientManager(kwargs["api_keys"]["openai"]):
             max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-            temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
-            counter_callback = kwargs.get("counter_callback", None)
+            temperature = kwargs.get(
+                "temperature", DEFAULT_OPENAI_SETTINGS["temperature"]
+            )
             prompt = kwargs.get("prompt")
             engine = TOOL_TO_ENGINE.get(kwargs["tool"])
             moderation_result = client.moderations.create(input=prompt)
             if moderation_result.results[0].flagged:
-                return "Moderation flagged the prompt as in violation of terms.", None, None
+                return (
+                    "Moderation flagged the prompt as in violation of terms.",
+                    None,
+                    None,
+                )
 
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -238,7 +248,6 @@ class CloseMarketBehaviourMock:
             res.value = response.choices[0].message.content
 
             return res
- 
 
     def _get_answer(self, question: str) -> Optional[str]:
         """Get an answer for the provided questions"""
@@ -248,7 +257,9 @@ class CloseMarketBehaviourMock:
         # if the call succeeds. Newsapi returns 0 output if included the
         # question mark ? sign.
         input_news = ""
-        initial_news_articles = self._get_news(question.replace("will", "").replace("?", ""))
+        initial_news_articles = self._get_news(
+            question.replace("will", "").replace("?", "")
+        )
         if initial_news_articles is None:
             self.context.logger.info(
                 f"Could not get news articles for query {question} (initial)"
@@ -272,7 +283,7 @@ class CloseMarketBehaviourMock:
             self.context.logger.info(f"Could not parse LLM response: {result}")
             return None
 
-        queries = result["queries"] 
+        queries = result["queries"]
         self.context.logger.info(f"Got queries: {queries}")
         if len(queries) == 0:
             self.context.logger.info(f"No queries found in LLM response: {result}")
@@ -315,9 +326,7 @@ class CloseMarketBehaviourMock:
 
         return json_data
 
-    def _get_news(
-        self, query: str
-    ) -> List[Dict[str, Any]]:
+    def _get_news(self, query: str) -> List[Dict[str, Any]]:
         """Auxiliary method to collect data from endpoint."""
 
         headers = {"X-Api-Key": self.params.market_closing_newsapi_api_key}
@@ -356,14 +365,12 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
         raise ValueError(f"Tool {tool} is not supported.")
 
     market_behavior = CloseMarketBehaviourMock(**kwargs)
-    question = kwargs.pop('question', None)
+    question = kwargs.pop("question", None)
     result = market_behavior._get_answer(question)
     return result
 
 
 if __name__ == "__main__":
-    """Example usage"""
-
     newsapi_api_key = os.getenv("NEWSAPI_API_KEY")
     openai_api_key = os.getenv("OPENAI_API_KEY")
 
@@ -373,7 +380,7 @@ if __name__ == "__main__":
         "api_keys": {
             "newsapi": newsapi_api_key,
             "openai": openai_api_key,
-        }
+        },
     }
 
     print(run(**my_kwargs))
