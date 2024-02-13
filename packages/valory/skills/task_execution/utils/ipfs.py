@@ -40,7 +40,7 @@ def get_ipfs_file_hash(data: bytes) -> str:
         return file_hash
 
 
-def to_multihash(hash_string: str) -> bytes:
+def to_multihash(hash_string: str) -> str:
     """To multihash string."""
     # Decode the Base32 CID to bytes
     cid_bytes = multibase.decode(hash_string)
