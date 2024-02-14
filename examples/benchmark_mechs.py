@@ -89,8 +89,11 @@ def main(
     max_workers: int = 1,
     cache_path: t.Optional[str] = "predictions_cache.json",
     only_cached: bool = False,
+    excluded_questions: list[str] = [],
 ) -> None:
-    markets = get_markets(number=num_markets, source=reference)
+    markets = get_markets(
+        number=num_markets, source=reference, excluded_questions=excluded_questions
+    )
     markets_deduplicated = list(({m.question: m for m in markets}.values()))
     benchmarker = Benchmarker(
         markets=markets_deduplicated,
@@ -112,4 +115,11 @@ def main(
 
 
 if __name__ == "__main__":
-    main(num_markets=20)
+    main(
+        num_markets=12,
+        excluded_questions=[
+            "By the end of 2026, will we have transparency into any useful internal pattern within a Large Language Model whose semantics would have been unfamiliar to AI and cognitive science in 2006?",
+            "does manifold hate or love @america",
+            "Will @firstuserhere coauthor a publication in AIstats, AAAI, ICLR or JMLR before end of 2024? ($11,000M subsidy)",
+        ],
+    )

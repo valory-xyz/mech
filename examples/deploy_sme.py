@@ -3,10 +3,8 @@ import os
 import random
 
 import functions_framework
-import typer
 from dotenv import load_dotenv
 from flask.wrappers import Request
-from prediction_market_agent_tooling.config import APIKeys
 from prediction_market_agent_tooling.deploy.agent import DeployableAgent
 from prediction_market_agent_tooling.deploy.gcp.deploy import (
     deploy_to_gcp,
@@ -48,12 +46,11 @@ def main(request: Request) -> str:
     return "Success"
 
 
-def deploy(
-    deployable_agent_name: str,
-) -> None:
+if __name__ == "__main__":
     """
     Script to execute locally to deploy the agent to GCP.
     """
+    deployable_agent_name = "sme_agent"
     load_dotenv()
     fname = deploy_to_gcp(
         requirements_file=None,
@@ -61,7 +58,9 @@ def deploy(
         function_file=os.path.abspath(__file__),
         market_type=MarketType.MANIFOLD,
         api_keys={
-            "MANIFOLD_API_KEY": APIKeys().manifold_api_key,
+            "MANIFOLD_API_KEY": os.environ["MANIFOLD_API_KEY"],
+            "GOOGLE_SEARCH_API_KEY": os.environ["GOOGLE_SEARCH_API_KEY"],
+            "GOOGLE_SEARCH_ENGINE_ID": os.environ["GOOGLE_SEARCH_ENGINE_ID"],
             "OPENAI_API_KEY": os.environ["OPENAI_API_KEY"],
             "DEPLOYABLE_AGENT_NAME": deployable_agent_name,
         },
@@ -77,7 +76,3 @@ def deploy(
 
     # Schedule the function
     schedule_deployed_gcp_function(fname, cron_schedule="0 */2 * * *")
-
-
-if __name__ == "__main__":
-    typer.run(deploy)
