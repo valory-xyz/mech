@@ -54,7 +54,7 @@ if __name__ == "__main__":
     load_dotenv()
     fname = deploy_to_gcp(
         requirements_file=None,
-        extra_deps=["git+https://github.com/polywrap/evo.researcher.git@peter/pmat"],
+        extra_deps=["git+https://github.com/gnosis/mech.git@evan/with-pmat"],
         function_file=os.path.abspath(__file__),
         market_type=MarketType.MANIFOLD,
         api_keys={

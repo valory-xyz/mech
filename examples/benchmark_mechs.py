@@ -116,7 +116,7 @@ def main(
 
 if __name__ == "__main__":
     main(
-        num_markets=12,
+        num_markets=14,
         excluded_questions=[
             "By the end of 2026, will we have transparency into any useful internal pattern within a Large Language Model whose semantics would have been unfamiliar to AI and cognitive science in 2006?",
             "does manifold hate or love @america",

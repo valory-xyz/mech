@@ -36,6 +36,7 @@ from requests import Session
 import spacy
 import spacy.util
 import tiktoken
+import tenacity
 
 from dateutil import parser
 from tiktoken import encoding_for_model
@@ -334,7 +335,7 @@ HTML_TAGS_TO_REMOVE = [
     "link",
 ]
 
-
+@tenacity.retry(stop=tenacity.stop_after_attempt(3), wait=tenacity.wait_fixed(1), reraise=True)
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     """Search Google using a custom search engine."""
     service = build("customsearch", "v1", developerKey=api_key)
