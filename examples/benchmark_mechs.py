@@ -116,10 +116,14 @@ def main(
 
 if __name__ == "__main__":
     main(
-        num_markets=14,
+        num_markets=20,
         excluded_questions=[
             "By the end of 2026, will we have transparency into any useful internal pattern within a Large Language Model whose semantics would have been unfamiliar to AI and cognitive science in 2006?",
             "does manifold hate or love @america",
             "Will @firstuserhere coauthor a publication in AIstats, AAAI, ICLR or JMLR before end of 2024? ($11,000M subsidy)",
+            "Will @firstuserhere coauthor a NeurIPS or ICML conference publication before end of 2024? (10,000 Mana subsidy)",
+            "Will there be a >0 value liquidity event for me, a former Consensys Software Inc. employee, on my shares of the company?",
+            "Will there be a >0 value liquidity event for me, a former Consensys employee, on my shares of the company by 2025?",
+            "Will we find something showing equal or greater architectural advancement to Gobekli Tepe, from before 11,000 BC?",
         ],
     )
