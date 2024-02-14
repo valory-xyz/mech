@@ -81,33 +81,28 @@ NUM_NEIGHBOURS = 4
 
 
 PREDICTION_PROMPT = """
-You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
-for a given event. You are provided with an input under the label "USER_PROMPT". You are also provided with ADDITIONAL_INFORMATION.
-INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" specifies an event.
-* The event will only have two possible outcomes: either the event will happen or the event will not happen.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You must provide a probability estimation of the event happening, based on your training data.
-* You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION" delimited by three backticks.
-* You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data.
-* If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response.
-USER_QUESTION: 
+Your task is to predict the probability of the event in the USER_PROMPT occurring.
+USER_PROMPT is the user's question that you need to answer.
+ADDITIONAL_INFORMATION is the information that you can use to make your prediction.
+Think through your answer before making the prediction.
+Please make use of the function call to generate the prediction. Only function call is allowed in the response.
+
+USER_PROMPT:
 ```{user_prompt}```
+
 ADDITIONAL_INFORMATION: 
 ```{additional_information}```
 """
 
 URL_QUERY_PROMPT = """
-Given the user's question: please generate {num_queries} diverse and relevant search queries that can be used to find information on the internet to answer the initial question. 
+Given the user's question, please generate {num_queries} diverse and relevant search queries that can be used to find information on the internet to answer the initial question. 
 Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
+Only function call is allowed in the response.
+
 USER's QUESTION: {user_prompt}
 """
 
-SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input. 
-You make predictions about the probability of an event happening based on the information provided in the input."""
+SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
 
 class OpenAISchema(BaseModel):  # type: ignore[misc]
@@ -374,6 +369,7 @@ def fetch_additional_information(
             model=engine,
         )
         return "\n".join(["--- " + text for text in retrieved_chunks]), counter_callback
+
     return "\n".join(["--- " + text for text in retrieved_chunks]), None
 
 
