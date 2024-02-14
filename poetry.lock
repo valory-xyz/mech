@@ -757,6 +757,23 @@ files = [
 colorama = {version = "*", markers = "platform_system == \"Windows\""}
 
 [[package]]
+name = "cloudevents"
+version = "1.10.1"
+description = "CloudEvents Python SDK"
+optional = false
+python-versions = "*"
+files = [
+    {file = "cloudevents-1.10.1-py3-none-any.whl", hash = "sha256:832f1e3cca0887ab8f993cd2c0645a2155e73792f740d86f7b4bc8620a10d50e"},
+    {file = "cloudevents-1.10.1.tar.gz", hash = "sha256:984d90aa114deeb1c37ceecf78f9dc9d56f5866cf10b45142a23c84d22621ac9"},
+]
+
+[package.dependencies]
+deprecation = ">=2.0,<3.0"
+
+[package.extras]
+pydantic = ["pydantic (>=1.0.0,<3.0)"]
+
+[[package]]
 name = "cloudpathlib"
 version = "0.16.0"
 description = "pathlib-style classes for cloud storage services."
@@ -1163,6 +1180,20 @@ files = [
 [package.dependencies]
 marshmallow = ">=3.18.0,<4.0.0"
 typing-inspect = ">=0.4.0,<1"
+
+[[package]]
+name = "deprecation"
+version = "2.1.0"
+description = "A library to handle automated deprecations"
+optional = false
+python-versions = "*"
+files = [
+    {file = "deprecation-2.1.0-py2.py3-none-any.whl", hash = "sha256:a10811591210e1fb0e768a8c25517cabeabcba6f0bf96564f8ff45189f90b14a"},
+    {file = "deprecation-2.1.0.tar.gz", hash = "sha256:72b3bde64e5d778694b0cf68178aed03d15e15477116add3fb773e581f9518ff"},
+]
+
+[package.dependencies]
+packaging = "*"
 
 [[package]]
 name = "distlib"
@@ -1612,6 +1643,24 @@ ssh = ["paramiko"]
 tqdm = ["tqdm"]
 
 [[package]]
+name = "functions-framework"
+version = "3.5.0"
+description = "An open source FaaS (Function as a service) framework for writing portable Python functions -- brought to you by the Google Cloud Functions team."
+optional = false
+python-versions = ">=3.5, <4"
+files = [
+    {file = "functions-framework-3.5.0.tar.gz", hash = "sha256:b6d0d640016d14241c928b0f0c71e831387897709dc70bf19698a64c381f9e57"},
+    {file = "functions_framework-3.5.0-py3-none-any.whl", hash = "sha256:ca4a027d1e8b0a201364614d06fef4abe5294ccb412b35bb982026a6b3e1be58"},
+]
+
+[package.dependencies]
+click = ">=7.0,<9.0"
+cloudevents = ">=1.2.0,<2.0.0"
+flask = ">=1.0,<4.0"
+gunicorn = {version = ">=19.2.0", markers = "platform_system != \"Windows\""}
+watchdog = ">=1.0.0"
+
+[[package]]
 name = "gitdb"
 version = "4.0.11"
 description = "Git Object Database"
@@ -1917,6 +1966,26 @@ files = [
 
 [package.extras]
 protobuf = ["grpcio-tools (>=1.53.0)"]
+
+[[package]]
+name = "gunicorn"
+version = "21.2.0"
+description = "WSGI HTTP Server for UNIX"
+optional = false
+python-versions = ">=3.5"
+files = [
+    {file = "gunicorn-21.2.0-py3-none-any.whl", hash = "sha256:3213aa5e8c24949e792bcacfc176fef362e7aac80b76c56f6b5122bf350722f0"},
+    {file = "gunicorn-21.2.0.tar.gz", hash = "sha256:88ec8bff1d634f98e61b9f65bc4bf3cd918a90806c6f5c48bc5603849ec81033"},
+]
+
+[package.dependencies]
+packaging = "*"
+
+[package.extras]
+eventlet = ["eventlet (>=0.24.1)"]
+gevent = ["gevent (>=1.4.0)"]
+setproctitle = ["setproctitle"]
+tornado = ["tornado (>=0.2)"]
 
 [[package]]
 name = "h11"
@@ -5705,4 +5774,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "46480ab61125a0cf58207337f9b5d812084ac66d01f5c1cd050b35d57609b2ff"
+content-hash = "adaef11bac0f005a89cfe52e497b37988baa0a385eca8f9db5d1fb71f9b98ba8"

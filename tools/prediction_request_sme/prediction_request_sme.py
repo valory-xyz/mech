@@ -20,23 +20,23 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
-from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from itertools import islice
-
-from openai import OpenAI
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import requests
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
+from openai import OpenAI
 from tiktoken import encoding_for_model
+
 
 client: Optional[OpenAI] = None
 
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -60,7 +60,8 @@ def count_tokens(text: str, model: str) -> int:
 
 
 NUM_URLS_EXTRACT = 5
-DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
+# DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
+DEFAULT_NUM_WORDS = 300
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
@@ -202,7 +203,7 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
             query=query,
             api_key=api_key,
             engine=engine,
-            num=3,  # Number of returned results
+            num=NUM_URLS_EXTRACT,  # Number of returned results
         ):
             results.append(url)
     unique_results = list(set(results))
@@ -303,7 +304,6 @@ def fetch_additional_information(
             json_data["queries"],
             api_key=google_api_key,
             engine=google_engine,
-            num_urls=num_urls,
         )
         texts = extract_texts(urls, num_words)
     else:
@@ -433,5 +433,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-            return response.choices[0].message.content, prediction_prompt, counter_callback
+            return (
+                response.choices[0].message.content,
+                prediction_prompt,
+                counter_callback,
+            )
         return response.choices[0].message.content, prediction_prompt, None
