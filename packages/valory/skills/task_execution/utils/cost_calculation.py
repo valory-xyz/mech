@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 """Calculate the cost for tools."""
 import logging
+import math
 from typing import Any, Dict, cast
 
 from packages.valory.skills.task_execution import PUBLIC_ID
@@ -27,7 +28,7 @@ _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.utils.cost_calculation"
 )
 
-DEFAULT_PRICE = 1 * 10**16
+DEFAULT_PRICE = 1
 
 
 def get_cost_for_done_task(
@@ -46,4 +47,6 @@ def get_cost_for_done_task(
         return fallback_price
 
     total_cost = cast(float, total_cost)
-    return int(total_cost * 10**18)
+    # 0.01 token (ex. xDAI/USDC) -> 1 NFT credit
+    cost_in_credits = math.ceil(total_cost * 100)
+    return cost_in_credits

@@ -7,13 +7,13 @@ description: Simple Websocket Client to allow the agent to interact with a Webso
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeicyrebbic2h3ytyxeg776zelg2bpshcepnkm4qc5oypqqqfq3sqmq
-  connection.py: bafybeiakisvetjqs3qqlpdo5asm45gfygx35lw7cciypaneyqieyf6ul34
+  __init__.py: bafybeiblpz4ectgegknj5dwd3jmce4w3pmrqhfzapfatqztrt3l6xtq7zq
+  connection.py: bafybeiadziz6xynw7nnqjxcyklo54ibplqesyhqjysia64y7mhkdk3nvly
   readme.md: bafybeihg5yfzgqvg5ngy7r2o5tfeqnelx2ffxw4po5hmheqjfhumpmxpoq
 fingerprint_ignore_patterns: []
 connections: []
 protocols:
-- valory/websocket_client:0.1.0:bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4
+- valory/websocket_client:0.1.0:bafybeihgjcjzhsjnxvkaltoqhretc2spvnf4jtoqy5p7vgp2mger4ynx4q
 class_name: WebSocketClient
 config:
   endpoint: null

@@ -100,14 +100,17 @@ class Params(Model):
         mech_configs_json = self._nested_list_todict_workaround(
             kwargs, "mech_to_config"
         )
+        mech_configs_json = {
+            key: {value[0]: value[1]} for key, value in mech_configs_json.items()
+        }
+
         mech_configs = {
             mech: MechConfig.from_dict(config)
             for mech, config in mech_configs_json.items()
         }
-        for self.agent_mech_contract_addresses in mech_configs.keys():
+        for address in self.agent_mech_contract_addresses:
             enforce(
-                self.agent_mech_contract_addresses
-                in self.agent_mech_contract_addresses,
-                f"agent_mech_contract_addresses {self.agent_mech_contract_addresses} must be in mech_configs!",
+                address in mech_configs,
+                f"agent_mech_contract_addresses {address} must be in mech_configs!",
             )
         return mech_configs

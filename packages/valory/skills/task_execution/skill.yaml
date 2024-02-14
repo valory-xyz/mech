@@ -7,14 +7,14 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeihxko4mv7dpeypi6g2v4zgdmwwvurnfd3yzdgyxvxx6oydr5izjd4
+  behaviours.py: bafybeiclizwd4icgkkof7zx4z5ckruckzlq7b5mho3flicpobahgsqguya
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
-  models.py: bafybeiaz5lwhqzfv2azbdqjozwm5sums5eoingrhd2wz6syr4qiddftbhm
+  models.py: bafybeicnze4r7ge7ul62fvm5krbdymqee3rtb5q5wz73bwozurttvdvo6u
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/benchmarks.py: bafybeibdwt4svz24ahok4x4h2rpeotlmlmvifccd27oizsz5bjwj6dqree
-  utils/cost_calculation.py: bafybeib7wpojbriolfvrdb57ts6wl3cz5p4is2myofpvde7isr5iqztjem
-  utils/ipfs.py: bafybeibffem6y23fxdilc373kge4z6ht7phshbnlqbl55irb2xr7brdrlm
+  utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
+  utils/ipfs.py: bafybeic7cbuv3tomi2xv7h2qowrqnpoufpanngzlgzljl4ptimpss3meqm
   utils/task.py: bafybeieuziu7owtk543z3umgmayhjh67klftk7vrhz24l6rlaii5lvkqh4
 fingerprint_ignore_patterns: []
 connections:
@@ -24,7 +24,7 @@ connections:
 contracts:
 - valory/agent_mech:0.1.0:bafybeiepxumywg6z2zapqzc3bg3iey23cmlgjzxisqox5j74o5i2texr5e
 protocols:
-- valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
+- valory/acn_data_share:0.1.0:bafybeibomntloszuvaerlz5d3br6m2nizozewghg3sgkg43nmvoopt4eji
 - valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
 - valory/ledger_api:1.0.0:bafybeige5agrztgzfevyglf7mb4o7pzfttmq4f6zi765y4g2zvftbyowru
 - valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq

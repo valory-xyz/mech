@@ -466,7 +466,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.info(f"Dynamic pricing is enabled for task {req_id}.")
             task_result = encode(
                 ["uint256", "bytes"], [cost, bytes.fromhex(task_result)]
-            )
+            ).hex()
 
         done_task["task_result"] = task_result
         # add to done tasks, in thread safe way

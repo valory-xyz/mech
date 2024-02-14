@@ -8,14 +8,14 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   README.md: bafybeiexqywrjzv4ajzesbzaw7bujvmgadsqtxzfnerwqogi7nz6jcvp6u
-  __init__.py: bafybeif7fohg7vfalh35nyuqchdw5lnjblqtodhxmcnnhycderagqs46du
+  __init__.py: bafybeidy3rxwh6zfwyzhdykymtwazgdcahfedthq57f2dotybvk6lqdepq
   acn_data_share.proto: bafybeiell3oa6eo2oogbgymu5cupeakbkpkmxkh7gossgy4jdip7lrr7tu
   acn_data_share_pb2.py: bafybeifyna3ykdjrh2t5etusxc22hiplfvekh6vjlrnom2tzgcolmhsslu
-  dialogues.py: bafybeigtnzvicosvctjk67qni5mu3yy77fp5u2xpb2eszwfht7igeaip4m
-  message.py: bafybeiggjuq6fooopoy423v6huhfk6szyzdlgkxk5ardlyllawj2qykhfq
-  serialization.py: bafybeihi2cogvek6irdncct5ga2ztdeqho4eai6krtk354yq2ip2d5f3se
-  tests/test_acn_data_share_dialogues.py: bafybeie5kcwchjl5vozdlrnwhmim4kffa7fr5zsqjy3r27mjzuilaog5su
-  tests/test_acn_data_share_messages.py: bafybeifap2cnraojc4ohd46rrjgusi6iisjm5tum2bs4sfgdocx5zjsqea
+  dialogues.py: bafybeieg4ksez4v2pnosvin6jmevflofjpnupinxu352k5qe7pamw5tmme
+  message.py: bafybeibvhh5aaqp5gl55rtlnvlhbtbkbrfvppmyr6pu2pxn3njqvtl6u4a
+  serialization.py: bafybeiafsqn27z6pfukxbqe5quni34vfnkys7wcxl5qxcib77ew2feizwm
+  tests/test_acn_data_share_dialogues.py: bafybeiceldlprmdjvhphsv2ezyixlglsrsie3lurek7izi6z3vmtmyru7i
+  tests/test_acn_data_share_messages.py: bafybeicktuow6ekap5o3yk6pyg3shoruebyegcjemlqoq3kahr3h2f7zuu
 fingerprint_ignore_patterns: []
 dependencies:
   protobuf: {}

@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeiazsvppldwszwte6m2htcd3glh2kk35cb7fql73stdeijcbphilgq
+agent: valory/mech:0.1.0:bafybeigkgbssv6uihdreow3dajv3vx46eeukr3xw3ycu2leyemodcf2qlu
 number_of_agents: 4
 deployment:
   agent:
@@ -232,6 +232,8 @@ type: connection
         chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
         poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      gnosis:
+        address: ${GNOSIS_RPC_0:str:http://host.docker.internal:8545}
 1:
   config:
     ledger_apis:
@@ -240,6 +242,8 @@ type: connection
         chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
         poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      gnosis:
+        address: ${GNOSIS_RPC_1:str:http://host.docker.internal:8545}
 2:
   config:
     ledger_apis:
@@ -248,6 +252,8 @@ type: connection
         chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
         poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      gnosis:
+        address: ${GNOSIS_RPC_2:str:http://host.docker.internal:8545}
 3:
   config:
     ledger_apis:
@@ -256,6 +262,8 @@ type: connection
         chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
         poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      gnosis:
+        address: ${GNOSIS_RPC_3:str:http://host.docker.internal:8545}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

@@ -6,17 +6,17 @@ description: Websocket client.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeibgl4hnpsd3vokfs6cfkg4elgqu7nm4yhs6sh373j6erwvgpjdqeu
-  behaviours.py: bafybeianfyloqfumjydjgogjg2sr5wrw7epzjt5o7sxv4drfasl2kgmq4i
-  dialogues.py: bafybeicc26sbiipnfublma3ywvh54elbx5y5sj7xckq3xyqyfmmoamiouy
-  handlers.py: bafybeibqfinswattz7gu4pijjxvixp5gtrgfz5idsz3uzlgrjw2vanjiu4
+  __init__.py: bafybeibkv63mtgar5snm2kqqh2dz4undeerm6kpcx5e3m52oksor6zccly
+  behaviours.py: bafybeidntlztp7yzlmsj2odqu3xkylp54iugbbetg7olkp4r3boqvykkca
+  dialogues.py: bafybeia6it4ogryyuxrlujf47l7cllfdxq5cevumnjqskhvfoerelkgif4
+  handlers.py: bafybeidtgq7jmrfe4x64u3rpea5yzqmpu5y6pomlo3fedo4ijr62akmmke
   models.py: bafybeicuei7xoozvgr6kyp6cp7b6gqonlkmlgkvhhff37iecnjqzhkvbgi
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeiflmystocxaqblhpzqlcop2vkhsknpzjx2jomohomaxamwskeokzm
+- valory/websocket_client:0.1.0:bafybeie2774vydtn7qxpaaqvghmt36ez3nagq22hn2mxznkebeeldxzjfm
 contracts: []
 protocols:
-- valory/websocket_client:0.1.0:bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4
+- valory/websocket_client:0.1.0:bafybeihgjcjzhsjnxvkaltoqhretc2spvnf4jtoqy5p7vgp2mger4ynx4q
 skills: []
 behaviours:
   websocket_subscription:
