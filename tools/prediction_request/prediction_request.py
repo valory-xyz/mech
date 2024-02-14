@@ -261,7 +261,7 @@ def fetch_additional_information(
     num_words: Optional[int],
     counter_callback: Optional[Callable] = None,
     source_links: Optional[List[str]] = None,
-) -> str:
+) -> Tuple[str, Any]:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
     moderation_result = client.moderations.create(input=url_query_prompt)
@@ -363,7 +363,7 @@ def summarize(text: str, compression_factor: float, vocab: str) -> str:
     return summary_text
 
 
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
@@ -409,7 +409,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
         )
         moderation_result = client.moderations.create(input=prediction_prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None
+            return "Moderation flagged the prompt as in violation of terms.", None, None, None
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
@@ -430,5 +430,5 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-            return response.choices[0].message.content, prediction_prompt, counter_callback
-        return response.choices[0].message.content, prediction_prompt, None
+            return response.choices[0].message.content, prediction_prompt, None, counter_callback
+        return response.choices[0].message.content, prediction_prompt, None, None

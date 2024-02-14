@@ -1105,7 +1105,7 @@ def fetch_additional_information(
     return additional_informations
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
 
@@ -1187,7 +1187,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         # Perform moderation
         moderation_result = client.moderations.create(input=prediction_prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None
+            return "Moderation flagged the prompt as in violation of terms.", None, None, None
 
         # Create messages for the OpenAI engine
         messages = [
@@ -1205,4 +1205,4 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             timeout=150,
             stop=None,
         )
-        return response.choices[0].message.content, prediction_prompt, None
+        return response.choices[0].message.content, prediction_prompt, None, None

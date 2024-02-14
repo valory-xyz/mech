@@ -387,7 +387,7 @@ def fetch_additional_information(
     return "\n".join(["- " + text for text in texts])
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]

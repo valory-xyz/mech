@@ -119,7 +119,7 @@ def native_transfer(
         # parse the response to get the transaction object string itself
         parsed_txs = ast.literal_eval(response)
     except SyntaxError:
-        return response, None, None
+        return response, None, None, None
 
     # build the transaction object, unknowns are referenced from parsed_txs
     transaction = {
