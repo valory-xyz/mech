@@ -19,32 +19,32 @@
 
 """This module implements a Mech tool for binary predictions."""
 
+from typing import Any, Dict, Generator, List, Optional, Tuple
+from datetime import datetime, timezone
 import json
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
-from datetime import datetime, timezone
 from itertools import groupby
 from operator import itemgetter
-from typing import Any, Dict, Generator, List, Optional, Tuple
+
+from bs4 import BeautifulSoup, NavigableString
+from googleapiclient.discovery import build
+from openai import OpenAI
 
 import requests
+from requests import Session
 import spacy
 import spacy.util
 import tiktoken
-from bs4 import BeautifulSoup, NavigableString
-from dateutil import parser
-from googleapiclient.discovery import build
-from openai import OpenAI
-from requests import Session
-from tiktoken import encoding_for_model
 
+from dateutil import parser
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
-
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -60,11 +60,11 @@ class OpenAIClientManager:
             client.close()
             client = None
 
-
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
     return len(enc.encode(text))
+
 
 
 NUM_URLS_EXTRACT = 5
@@ -1174,9 +1174,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         # Get the current utc timestamp
         current_time_utc = datetime.now(timezone.utc)
-        formatted_time_utc = (
-            current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
-        )
+        formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
 
         # Generate the prediction prompt
         prediction_prompt = PREDICTION_PROMPT.format(

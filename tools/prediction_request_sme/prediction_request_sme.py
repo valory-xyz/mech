@@ -20,23 +20,23 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from itertools import islice
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
+
+from openai import OpenAI
 
 import requests
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
-from openai import OpenAI
 from tiktoken import encoding_for_model
-
 
 client: Optional[OpenAI] = None
 
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
-
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -433,9 +433,5 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-            return (
-                response.choices[0].message.content,
-                prediction_prompt,
-                counter_callback,
-            )
+            return response.choices[0].message.content, prediction_prompt, counter_callback
         return response.choices[0].message.content, prediction_prompt, None
