@@ -40,6 +40,9 @@ class SMEAgent(AbstractBenchmarkedAgent):
                 "google_engine_id": os.getenv("GOOGLE_SEARCH_ENGINE_ID"),
             },
         )
+
+        # TODO write reports and inspect
+
         p = json.loads(response[0])
         return Prediction(
             evaluation=evaluated,
@@ -116,7 +119,7 @@ def main(
 
 if __name__ == "__main__":
     main(
-        num_markets=20,
+        num_markets=25,
         excluded_questions=[
             "By the end of 2026, will we have transparency into any useful internal pattern within a Large Language Model whose semantics would have been unfamiliar to AI and cognitive science in 2006?",
             "does manifold hate or love @america",
@@ -125,5 +128,15 @@ if __name__ == "__main__":
             "Will there be a >0 value liquidity event for me, a former Consensys Software Inc. employee, on my shares of the company?",
             "Will there be a >0 value liquidity event for me, a former Consensys employee, on my shares of the company by 2025?",
             "Will we find something showing equal or greater architectural advancement to Gobekli Tepe, from before 11,000 BC?",
+            "Instant deepfakes of anyone by the end of 2027?",
+            "Will Eliezer Yudkowsky win his $150,000 - $1,000 bet about UFOs not having a worldview-shattering origin?",
+            "Will @firstuserhere author a bestselling book by the end of 2027? (10000 Mana subsidy)",
         ],
+        reference=MarketSource.MANIFOLD,
+        output="benchmark_report.manifold.md",
+    )
+    main(
+        num_markets=30,
+        reference=MarketSource.POLYMARKET,
+        output="benchmark_report.polymarket.md",
     )

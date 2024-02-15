@@ -53,5 +53,6 @@ agent/
 backup_mech/
 /packages/valory/skills/termination_abci/
 
-benchmark_report.md
+benchmark_report*.md
 predictions_cache.json
+additional_info*.txt

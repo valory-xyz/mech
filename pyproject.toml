@@ -6,6 +6,7 @@ build-backend = "poetry.core.masonry.api"
 name = "mech"
 version = "0.1.0"
 description = ""
+authors = [ "8baller <8ball030@gmail.com>" ]
 readme = "README.md"
 repository = "https://github.com/valory-xyz/mech"
 
