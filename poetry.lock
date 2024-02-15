@@ -952,6 +952,21 @@ files = [
 ]
 
 [[package]]
+name = "cron-validator"
+version = "1.0.8"
+description = "Unix cron implementation by Python"
+optional = false
+python-versions = "*"
+files = [
+    {file = "cron-validator-1.0.8.tar.gz", hash = "sha256:dd485257adb6f590b3e9433f641440c801d307015259c1ee3eb6e21c964c8026"},
+    {file = "cron_validator-1.0.8-py3-none-any.whl", hash = "sha256:6477fcc3d60bfbd1ec00a708f0b8b5136c1fef8140c10effea1f45b79d778653"},
+]
+
+[package.dependencies]
+python-dateutil = "*"
+pytz = "*"
+
+[[package]]
 name = "cryptography"
 version = "42.0.2"
 description = "cryptography is a package which provides cryptographic recipes and primitives to Python developers."
@@ -5870,4 +5885,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "86122d2c0f675b29e934201d7860767fe2169d7d0c4e568fc5f91cd64530d172"
+content-hash = "7fe32ee90d53c502d9194df4f5e5da261878e754763175b4b7bd3e3c60f7b1ce"
