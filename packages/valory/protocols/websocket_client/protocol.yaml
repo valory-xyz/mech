@@ -8,12 +8,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   README.md: bafybeieot47xhqlvc3dwl2hc4yq3f6wcva7xf5dx5wz5n4ir6woknyqrsi
-  __init__.py: bafybeibtetavf2d4i6m6opwg672prrkzmpgblew7g2pvaozuvzxf7jdifa
-  dialogues.py: bafybeifans57uwhcy3zfj3uoynreg7my7yj4qc4ut4x6p37vgwhidwgra4
-  message.py: bafybeicdcrshwx5jf3epyzzj2opacgvzzp3qfs4eougfpfgdhu7tooxkjy
-  serialization.py: bafybeig3wpnbr4v2ir7emji6urraeqepehevxjhs2i2z5bnd7ldgmta4gi
-  tests/test_websocket_client_dialogues.py: bafybeidefxcd7j5qeou7pbzffyv6kk2fji2txulirabov6xiu7b5bjqndy
-  tests/test_websocket_client_messages.py: bafybeiagmqf36glbu326d7nptqfuqjgyafjja5rl4jswvc4jmawexzpjya
+  __init__.py: bafybeifhhqtcfac5lcrjxrcdpsrs3kyyxt7uf2qv2a4ivllyyt3c62q4aq
+  dialogues.py: bafybeienrjdbwqsx4dikqo3wjfgner5pz5qtbwfb2qtzsukn6iog6e4iyi
+  message.py: bafybeigpuhz4fw5ng3qay7duci7qhb4rj336wb2qwiyszddkjmnjebf72e
+  serialization.py: bafybeiar6guqw2qgofycbjuyhy7puxill5wcy6hsyrqmbkzcjzitxuws5i
+  tests/test_websocket_client_dialogues.py: bafybeig7cd7mllqmk6w4oaz7wqwubueaa4hpofgplhzeivqtwihalhpnne
+  tests/test_websocket_client_messages.py: bafybeibboz4j4itkwjh5ahza53v4d4dew3qxqq6fsbzragz76wnjin254u
   websocket_client.proto: bafybeifqkmkqzbepxkj56o45ljysxujmoftjlm6pkllj7t4tbryqt42ql4
   websocket_client_pb2.py: bafybeickjzx5ikfg5hwisfiypifzvnp4dxecqrqf6op2gzcaojmuvkcdlq
 fingerprint_ignore_patterns: []
