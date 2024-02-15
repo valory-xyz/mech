@@ -61,7 +61,7 @@ ENGINES = {
 ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in values]
 
 
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
@@ -70,12 +70,12 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
         tool = kwargs["tool"]
         counter_callback = kwargs.get("counter_callback", None)
         if tool not in ALLOWED_TOOLS:
-            return f"Tool {tool} is not in the list of supported tools.", None, None
+            return f"Tool {tool} is not in the list of supported tools.", None, None, None
 
         engine = tool.replace(PREFIX, "")
         moderation_result = client.moderations.create(input=prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None
+            return "Moderation flagged the prompt as in violation of terms.", None, None, None
 
         if engine in ENGINES["chat"]:
             messages = [
@@ -91,9 +91,9 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
                 timeout=120,
                 stop=None,
             )
-            return response.choices[0].message.content, prompt, None
+            return response.choices[0].message.content, prompt, None, None
         response = client.completions.create(
-            engine=engine,
+            model=engine,
             prompt=prompt,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -102,4 +102,4 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             timeout=120,
             presence_penalty=0,
         )
-        return response.choices[0].text, prompt, counter_callback
+        return response.choices[0].text, prompt, None, counter_callback

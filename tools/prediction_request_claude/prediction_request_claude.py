@@ -32,7 +32,7 @@ from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 
 NUM_URLS_EXTRACT = 5
-DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
+DEFAULT_NUM_WORDS = 300
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
@@ -259,7 +259,7 @@ def fetch_additional_information(
     return "\n".join(["- " + text for text in texts]), None
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
@@ -308,6 +308,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             output_prompt=completion.completion,
             token_counter=count_tokens,
         )
-        return completion.completion, prediction_prompt, counter_callback
+        return completion.completion, prediction_prompt, None, counter_callback
 
-    return completion.completion, prediction_prompt, None
+    return completion.completion, prediction_prompt, None, None

@@ -303,7 +303,6 @@ def fetch_additional_information(
             json_data["queries"],
             api_key=google_api_key,
             engine=google_engine,
-            num_urls=num_urls,
         )
         texts = extract_texts(urls, num_words)
     else:
@@ -433,5 +432,5 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-            return response.choices[0].message.content, prediction_prompt, counter_callback
-        return response.choices[0].message.content, prediction_prompt, None
+            return response.choices[0].message.content, prediction_prompt, None, counter_callback
+        return response.choices[0].message.content, prediction_prompt, None, None
