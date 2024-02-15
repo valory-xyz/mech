@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeie5mmcpvopfn7tjnbwlpctqorevyn5qdxyarhcpecwozsl3wt6tei
+agent: valory/mech:0.1.0:bafybeifcrgru4m3wsftglweasvybe7n74dwmyiisjs6kuieooeiagmhthi
 number_of_agents: 4
 deployment:
   agent:
@@ -58,6 +58,8 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         mech_to_subscription: ${MECH_TO_SUBSCRIPTION:list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
+        agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
+        minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
 1:
   models:
     params:
@@ -90,6 +92,8 @@ type: skill
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         mech_to_subscription: ${MECH_TO_SUBSCRIPTION:list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
+        agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
+        minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
 2:
   models:
     params:
@@ -122,6 +126,8 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         mech_to_subscription: ${MECH_TO_SUBSCRIPTION:list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
+        agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
+        minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
 3:
   models:
     params:
@@ -154,6 +160,8 @@ type: skill
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         mech_to_subscription: ${MECH_TO_SUBSCRIPTION:list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
+        agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
+        minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
@@ -169,6 +177,7 @@ type: skill
         agent_index: ${AGENT_INDEX_0:int:0}
         num_agents: ${NUM_AGENTS:int:4}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
+        mech_to_config: ${list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 1:
   models:
@@ -181,6 +190,7 @@ type: skill
         polling_interval: ${POLLING_INTERVAL:float:30.0}
         agent_index: ${AGENT_INDEX_1:int:1}
         num_agents: ${NUM_AGENTS:int:4}
+        mech_to_config: ${list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 2:
@@ -194,6 +204,7 @@ type: skill
         polling_interval: ${POLLING_INTERVAL:float:30.0}
         agent_index: ${AGENT_INDEX_2:int:2}
         num_agents: ${NUM_AGENTS:int:4}
+        mech_to_config: ${list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 3:
@@ -208,6 +219,7 @@ type: skill
         agent_index: ${AGENT_INDEX_3:int:3}
         num_agents: ${NUM_AGENTS:int:4}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
+        mech_to_config: ${list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 ---
 public_id: valory/ledger:0.19.0
@@ -220,6 +232,8 @@ type: connection
         chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
         poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      gnosis:
+        address: ${GNOSIS_RPC_0:str:http://host.docker.internal:8545}
 1:
   config:
     ledger_apis:
@@ -228,6 +242,8 @@ type: connection
         chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
         poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      gnosis:
+        address: ${GNOSIS_RPC_1:str:http://host.docker.internal:8545}
 2:
   config:
     ledger_apis:
@@ -236,6 +252,8 @@ type: connection
         chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
         poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      gnosis:
+        address: ${GNOSIS_RPC_2:str:http://host.docker.internal:8545}
 3:
   config:
     ledger_apis:
@@ -244,6 +262,8 @@ type: connection
         chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
         poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      gnosis:
+        address: ${GNOSIS_RPC_3:str:http://host.docker.internal:8545}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection

@@ -24,7 +24,7 @@ from enum import Enum
 from typing import Any, Dict, Optional, Tuple
 
 import requests
-
+from tiktoken import encoding_for_model
 
 DEFAULT_STABILITYAI_SETTINGS = {
     "cfg_scale": 7,
@@ -54,6 +54,12 @@ ENGINE_SIZE_CHART = {
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
 
 
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
+
+
 class FinishReason(Enum):
     """The finish reasons of the API."""
 
@@ -62,14 +68,14 @@ class FinishReason(Enum):
     ERROR = 2
 
 
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
 
     api_key = kwargs["api_keys"]["stabilityai"]
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
     if tool not in ALLOWED_TOOLS:
-        return f"Tool {tool} is not in the list of supported tools.", None
+        return f"Tool {tool} is not in the list of supported tools.", None, None, None
 
     # Place content moderation request here if needed
     engine = tool.replace(PREFIX, "")
@@ -112,5 +118,10 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         json=json_params,
     )
     if response.status_code == 200:
-        return json.dumps(response.json()), None, None
-    return (f"Error: Non-200 response ({response.status_code}): {response.text}", None, None)
+        return json.dumps(response.json()), None, None, None
+    return (
+        f"Error: Non-200 response ({response.status_code}): {response.text}",
+        None,
+        None,
+        None
+    )

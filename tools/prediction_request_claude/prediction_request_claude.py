@@ -20,15 +20,19 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, List, Optional, Tuple, Iterator
+from typing import Any, Dict, List, Optional, Tuple, Iterator, Callable
+from itertools import islice
 
+import anthropic
 import requests
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 
 NUM_URLS_EXTRACT = 5
+DEFAULT_NUM_WORDS = 300
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
@@ -122,6 +126,10 @@ ASSISTANT_TEXT = "```json"
 STOP_SEQUENCES = ["```"]
 
 
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    return anthropic.Anthropic().count_tokens(text)
+
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
@@ -211,9 +219,13 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
 def fetch_additional_information(
     prompt: str,
     engine: str,
-    google_api_key: str,
-    google_engine: str,
     anthropic: Anthropic,
+    google_api_key: Optional[str],
+    google_engine: Optional[str],
+    num_urls: Optional[int],
+    num_words: Optional[int],
+    counter_callback: Optional[Callable] = None,
+    source_links: Optional[List[str]] = None,
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
@@ -225,36 +237,59 @@ def fetch_additional_information(
         stop_sequences=STOP_SEQUENCES,
     )
     json_data = json.loads(completion.completion)
-    urls = get_urls_from_queries(
-        json_data["queries"],
-        api_key=google_api_key,
-        engine=google_engine,
-    )
-    texts = extract_texts(urls)
-    return "\n".join(["- " + text for text in texts])
+    if not source_links:
+        urls = get_urls_from_queries(
+            json_data["queries"],
+            api_key=google_api_key,
+            engine=google_engine,
+        )
+        texts = extract_texts(urls)
+    else:
+        texts = []
+        for source_link in islice(source_links.values(), 3):
+            texts.append(extract_text(html=source_link, num_words=num_words))
+    if counter_callback:
+        counter_callback(
+            model=engine,
+            input_prompt=url_query_prompt,
+            output_tokens=40,
+            token_counter=count_tokens,
+        )
+        return "\n".join(["- " + text for text in texts]), counter_callback
+    return "\n".join(["- " + text for text in texts]), None
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
     anthropic = Anthropic(api_key=kwargs["api_keys"]["anthropic"])
+    num_urls = kwargs.get("num_urls", NUM_URLS_EXTRACT)
+    num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS)
+    counter_callback = kwargs.get("counter_callback", None)
+    api_keys = kwargs.get("api_keys", {})
+    google_api_key = api_keys.get("google_api_key", None)
+    google_engine_id = api_keys.get("google_engine_id", None)
 
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
 
     engine = TOOL_TO_ENGINE[tool]
-    additional_information = (
-        fetch_additional_information(
+
+    if tool == "claude-prediction-online":
+        additional_information, counter_callback = fetch_additional_information(
             prompt=prompt,
             engine=engine,
-            google_api_key=kwargs["api_keys"]["google_api_key"],
-            google_engine=kwargs["api_keys"]["google_engine_id"],
             anthropic=anthropic,
+            google_api_key=google_api_key,
+            google_engine=google_engine_id,
+            num_urls=num_urls,
+            num_words=num_words,
+            counter_callback=counter_callback,
+            source_links=kwargs.get("source_links", None),
         )
-        if tool == "claude-prediction-online"
-        else ""
-    )
+    else:
+        additional_information = ""
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt, additional_information=additional_information
     )
@@ -266,4 +301,13 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]]]:
         prompt=prediction_prompt,
         stop_sequences=STOP_SEQUENCES,
     )
-    return completion.completion, prediction_prompt, None
+    if counter_callback is not None:
+        counter_callback(
+            model=engine,
+            input_prompt=prediction_prompt,
+            output_prompt=completion.completion,
+            token_counter=count_tokens,
+        )
+        return completion.completion, prediction_prompt, None, counter_callback
+
+    return completion.completion, prediction_prompt, None, None

@@ -31,6 +31,7 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
+from eth_abi import encode
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
@@ -48,6 +49,10 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
+from packages.valory.skills.task_execution.utils.cost_calculation import (
+    get_cost_for_done_task,
+)
 from packages.valory.skills.task_execution.utils.ipfs import (
     ComponentPackageLoader,
     get_ipfs_file_hash,
@@ -291,8 +296,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         }
         if task_result is not None:
             # task succeeded
-            deliver_msg, prompt, transaction = task_result
-            response = {**response, "result": deliver_msg, "prompt": prompt}
+            deliver_msg, prompt, transaction, counter_callback = task_result
+            cost_dict = {}
+            if counter_callback is not None:
+                cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
+            response = {
+                **response,
+                "result": deliver_msg,
+                "prompt": prompt,
+                "cost_dict": cost_dict,
+            }
             self._done_task["transaction"] = transaction
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
@@ -371,6 +384,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_data["tool_py"] = tool_py
         task_data["callable_method"] = callable_method
         task_data["api_keys"] = self.params.api_keys
+        task_data["counter_callback"] = TokenCounterCallback()
         future = self._submit_task(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
@@ -444,7 +458,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             data=ipfs_hash,
         )
         done_task = cast(Dict[str, Any], self._done_task)
-        done_task["task_result"] = to_multihash(ipfs_hash)
+        task_result = to_multihash(ipfs_hash)
+        cost = get_cost_for_done_task(done_task)
+        self.context.logger.info(f"Cost for task {req_id}: {cost}")
+        mech_config = self.params.mech_to_config[done_task["mech_address"]]
+        if mech_config.use_dynamic_pricing:
+            self.context.logger.info(f"Dynamic pricing is enabled for task {req_id}.")
+            task_result = encode(
+                ["uint256", "bytes"], [cost, bytes.fromhex(task_result)]
+            ).hex()
+
+        done_task["task_result"] = task_result
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)

@@ -333,7 +333,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         self.context.logger.info(f"Splitting profits {self.mech_addresses}.")
         txs = []
         for mech_address in self.mech_addresses:
-            profits = yield from self._get_profits(mech_address)
+            profits = yield from self._get_balance(mech_address)
             if profits is None:
                 self.context.logger.error(
                     f"Could not get profits from mech {mech_address}. Don't split profits."
@@ -365,15 +365,15 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
 
         return txs
 
-    def _get_profits(self, address: str) -> Generator[None, None, int]:
-        """Get the profits."""
+    def _get_balance(self, address: str) -> Generator[None, None, Optional[int]]:
+        """Get the balance for the provided address."""
         ledger_api_response = yield from self.get_ledger_api_response(
             performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
             ledger_callable="get_balance",
             account=address,
         )
         if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
-            return False  # transition to await top-up round
+            return None
         balance = cast(int, ledger_api_response.state.body.get("get_balance_result"))
         return balance
 
@@ -396,9 +396,35 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             return None
 
         funds_by_address = {}
+        agent_funding_amounts = yield from self._get_agent_funding_amounts()
+        if agent_funding_amounts is None:
+            self.context.logger.warning(
+                "Could not get agent funding amounts. Don't split profits."
+            )
+            return None
+
+        funds_by_address.update(agent_funding_amounts)
+        total_required_amount_for_agents = sum(agent_funding_amounts.values())
+        if total_required_amount_for_agents > profits:
+            self.context.logger.warning(
+                f"Total required amount for agents {total_required_amount_for_agents} is greater than profits {profits}. "
+                f"Splitting all the funds among the agents."
+            )
+            # if it's the case that the required amount for the agents is greater than the profits
+            # split all the funds among the agent, proportional to their intended funding amount
+            for agent, amount in agent_funding_amounts.items():
+                agent_share = int((amount / total_required_amount_for_agents) * profits)
+                funds_by_address[agent] = agent_share
+
+            # return here because we don't have any funds left to split
+            return funds_by_address
+
+        # if we have funds left after splitting among the agents,
+        # split the rest among the service owner and the operator
+        profits = profits - total_required_amount_for_agents
+
         service_owner_share = int(self.params.service_owner_share * profits)
         funds_by_address[service_owner] = service_owner_share
-
         operator_share = profits - service_owner_share
         funds_by_operator = yield from self._get_funds_by_operator(operator_share)
         if funds_by_operator is None:
@@ -526,6 +552,38 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             else:
                 reqs_by_operator[operator] += reqs
         return reqs_by_operator
+
+    def _get_agent_balances(self) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Get the agent balances."""
+        balances = {}
+        for agent in self.synchronized_data.all_participants:
+            balance = yield from self._get_balance(agent)
+            if balance is None:
+                self.context.logger.warning(
+                    f"Could not get balance for agent {agent}. Skipping re-funding."
+                )
+                return None
+            balances[agent] = balance
+
+        return balances
+
+    def _get_agent_funding_amounts(
+        self,
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        """Get the agent balances."""
+        agent_funding_amounts = {}
+        agent_balances = yield from self._get_agent_balances()
+        if agent_balances is None:
+            self.context.logger.warning(
+                "Could not get agent balances. Skipping re-funding."
+            )
+            return None
+
+        for agent, balance in agent_balances.items():
+            if balance < self.params.minimum_agent_balance:
+                agent_funding_amounts[agent] = self.params.agent_funding_amount
+
+        return agent_funding_amounts
 
 
 class TrackingBehaviour(DeliverBehaviour, ABC):

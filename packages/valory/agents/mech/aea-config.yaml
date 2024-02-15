@@ -15,7 +15,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
 - valory/websocket_client:0.1.0:bafybeiflmystocxaqblhpzqlcop2vkhsknpzjx2jomohomaxamwskeokzm
 contracts:
-- valory/agent_mech:0.1.0:bafybeig7zpqhcpt6z4eutedx6prciuq4g7mpadw636zkkcx3ach6oytdry
+- valory/agent_mech:0.1.0:bafybeiepxumywg6z2zapqzc3bg3iey23cmlgjzxisqox5j74o5i2texr5e
 - valory/agent_registry:0.1.0:bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu
 - valory/gnosis_safe:0.1.0:bafybeidll7frtdsq2ckiluazkwk4zpkp7natt4kdejjehwvykqwzyuf6ei
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeidvcgnbbmjtha6tl7st2ysna2l3iiqfhnzjfasyvml5unecozeeka
@@ -38,12 +38,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeiflcfufixmsrhobf56bn5745m2iipcfqyulwk2qegtnagb3kvaaxi
 - valory/abstract_round_abci:0.1.0:bafybeiaqcl7h2famylusiffigwem7tevkcsyocdu5xd42jkmgq6kvowzgq
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeie23zqol44pvz7clarq5jecrbpl2fn6ltlnf6wy62dgnn7b4ycraa
+- valory/mech_abci:0.1.0:bafybeieimp7xzxcnbzsuunf2xkcy5juulhmzsmkq2v3sw3o3lgssb53cnu
 - valory/registration_abci:0.1.0:bafybeic2ynseiak7jpta7jfwuqwyp453b4p7lolr4wihxmpn633uekv5am
 - valory/reset_pause_abci:0.1.0:bafybeidzajbe3erygeh2xbd6lrjv7nsptznjuzrt24ykgvhgotdeyhfnba
-- valory/subscription_abci:0.1.0:bafybeibgnw53s5nh6up35z6fgjisrrvrlt4nnjmx3ia7fcgwpmcprvja5u
-- valory/task_execution:0.1.0:bafybeidwzdfodrb6el7hjtrt4fodw6qpcptnmfnpfcagf4qi5qvoeocu4i
-- valory/task_submission_abci:0.1.0:bafybeifb3vw25nlz2tecbpsbzrynwva2ey4r624htty62rjg6lrqwmh6l4
+- valory/subscription_abci:0.1.0:bafybeigaxq7m2dqv2huhg5jvb4jx3rysqwvvjj2xhojow3t3zzuwq2k4ie
+- valory/task_execution:0.1.0:bafybeidsq3mpnfmjp2jfrurrx3ck3ozwfh7jg4mzhc3742dqyoeijizocq
+- valory/task_submission_abci:0.1.0:bafybeib4m2bwgchloqss3wotsx4rz7qqkwydaesiqkls2zq7zbtp6jtpsi
 - valory/termination_abci:0.1.0:bafybeie4zvjfxvdu7qrulmur3chpjz3kpj5m4bjsxvpk4gvj5zbyyayfaa
 - valory/transaction_settlement_abci:0.1.0:bafybeiaefgqbs7zsn5xe5kdwrujj7ivygkn3ujpw6crnvi3knvxw75qmja
 - valory/websocket_client:0.1.0:bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta
@@ -180,6 +180,8 @@ models:
       manual_gas_limit: ${int:1000000}
       service_owner_share: ${float:0.1}
       profit_split_freq: ${int:1}
+      agent_funding_amount: ${int:200000000000000000}
+      minimum_agent_balance: ${int:100000000000000000}
       mech_to_subscription: ${list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
@@ -194,13 +196,14 @@ models:
     args:
       agent_mech_contract_addresses: ${list:["0xFf82123dFB52ab75C417195c5fDB87630145ae81"]}
       task_deadline: ${float:240.0}
-      file_hash_to_tools_json: ${list:[["bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu",["claude-prediction-offline","claude-prediction-online"]],["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]],["bafybeidpbnqbruzqlq424qt3i5dcvyqmcimshjilftabnrroujmjhdmteu",["transfer-native"]],["bafybeiglhy5epaytvt5qqdx77ld23ekouli53qrf2hjyebd5xghlunidfi",["prediction-online","prediction-offline"]]]}
+      file_hash_to_tools_json: ${list:[["bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]],["bafybeideuyqn4uslp4ccanzd5tjladzotyi6tiwfxbouecw5ufzgyi4ryy",["transfer-native"]],["bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi",["prediction-offline","prediction-online","prediction-online-summarized-info"]],["bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy",["prediction-online-sme","prediction-offline-sme"]],["bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu",["claude-prediction-online","claude-prediction-offline"]],["bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum",["deepmind-optimization-strong","deepmind-optimization"]],["bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai",["prediction-sentence-embedding-conservative","prediction-sentence-embedding-bold"]],["bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e",["prediction-online-sum-url-content"]]]}
       api_keys_json: ${list:[["openai", "dummy_api_key"],["stabilityai", "dummy_api_key"],["google_api_key",
         "dummy_api_key"],["google_engine_id", "dummy_api_key"]]}
       polling_interval: ${float:30.0}
       agent_index: ${int:0}
       num_agents: ${int:4}
       from_block_range: ${int:50000}
+      mech_to_config: ${list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
 ---

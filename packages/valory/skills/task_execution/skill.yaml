@@ -7,12 +7,14 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeifa72egwarcmfneqmo3ak6wfygjc3i7hplxl6ptafb263vuaey3fm
+  behaviours.py: bafybeiclizwd4icgkkof7zx4z5ckruckzlq7b5mho3flicpobahgsqguya
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
-  models.py: bafybeihgclxctyltuehj2f4fzj26edptqugrrm4phd6ovuulezrqot6qo4
+  models.py: bafybeid6befxrrbiaw7nduz4zgbm5nfc246fn2eb6rfmja6v5hmq4wtcwe
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
-  utils/ipfs.py: bafybeidinbdqkidix44ibz5hug7inkcbijooag53gr5mtbaa72tk335uqq
+  utils/benchmarks.py: bafybeibdwt4svz24ahok4x4h2rpeotlmlmvifccd27oizsz5bjwj6dqree
+  utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
+  utils/ipfs.py: bafybeic7cbuv3tomi2xv7h2qowrqnpoufpanngzlgzljl4ptimpss3meqm
   utils/task.py: bafybeieuziu7owtk543z3umgmayhjh67klftk7vrhz24l6rlaii5lvkqh4
 fingerprint_ignore_patterns: []
 connections:
@@ -20,7 +22,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeihx7wb5hngjobw2salzqqryrhxvmxfuw7o2npjyqd2talmh2flqeq
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
 contracts:
-- valory/agent_mech:0.1.0:bafybeig7zpqhcpt6z4eutedx6prciuq4g7mpadw636zkkcx3ach6oytdry
+- valory/agent_mech:0.1.0:bafybeiepxumywg6z2zapqzc3bg3iey23cmlgjzxisqox5j74o5i2texr5e
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
@@ -83,6 +85,10 @@ models:
           - stabilityai-stable-diffusion-768-v2-1
       from_block_range: 50000
       num_agents: 4
+      mech_to_config:
+      - - '0x9A676e781A523b5d0C0e43731313A708CB607508'
+        - - - use_dynamic_pricing
+            - 'false'
       polling_interval: 30.0
       task_deadline: 240.0
       max_block_window: 500
@@ -99,11 +105,17 @@ dependencies:
   googlesearch-python:
     version: ==1.2.3
   openai:
-    version: ==0.27.2
+    version: ==1.11.0
   py-multibase:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
   pyyaml:
     version: <=6.0.1,>=3.10
+  tiktoken:
+    version: ==0.5.1
+  anthropic:
+    version: ==0.3.11
+  eth-abi:
+    version: ==4.0.0
 is_abstract: false

@@ -8,18 +8,18 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeif74c5ieukt56bgq3ynpwfxdpp36ug2rrejm76vxhuw5r2lqjpsqq
+  behaviours.py: bafybeifirwywbj433tyu45hhkuftlbxjg4hc7qsgtl3hppah77kcl7keye
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeig6bhn554qyou7kef5bstnlv54zke32avyti63uu4hvsol3lzqkoi
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeia3nyyoujxtum4rtsa3zpsm3jecb53o6xpq4h5hltg2prxa2rxhmq
+  models.py: bafybeigmraodqqx33mlflscp27tkngjkmtk6j7askmwe4ynhinimtcomuq
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
   rounds.py: bafybeicstmau4vlzpxz3kjgiwwsetwmotdk4un4iucmdddzvot5dgdkg2a
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeig7zpqhcpt6z4eutedx6prciuq4g7mpadw636zkkcx3ach6oytdry
+- valory/agent_mech:0.1.0:bafybeiepxumywg6z2zapqzc3bg3iey23cmlgjzxisqox5j74o5i2texr5e
 - valory/agent_registry:0.1.0:bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu
 - valory/gnosis_safe:0.1.0:bafybeidll7frtdsq2ckiluazkwk4zpkp7natt4kdejjehwvykqwzyuf6ei
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
@@ -146,6 +146,8 @@ models:
       service_owner_share: 0.1
       profit_split_freq: 1000
       slash_cooldown_hours: 3
+      agent_funding_amount: 200000000000000000
+      minimum_agent_balance: 100000000000000000
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
@@ -169,7 +171,7 @@ dependencies:
   googlesearch-python:
     version: ==1.2.3
   openai:
-    version: ==0.27.2
+    version: ==1.11.0
   py-multibase:
     version: ==1.0.3
   py-multicodec:

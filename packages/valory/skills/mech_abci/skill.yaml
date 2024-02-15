@@ -23,10 +23,10 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeiaqcl7h2famylusiffigwem7tevkcsyocdu5xd42jkmgq6kvowzgq
 - valory/registration_abci:0.1.0:bafybeic2ynseiak7jpta7jfwuqwyp453b4p7lolr4wihxmpn633uekv5am
 - valory/reset_pause_abci:0.1.0:bafybeidzajbe3erygeh2xbd6lrjv7nsptznjuzrt24ykgvhgotdeyhfnba
-- valory/task_submission_abci:0.1.0:bafybeifb3vw25nlz2tecbpsbzrynwva2ey4r624htty62rjg6lrqwmh6l4
+- valory/task_submission_abci:0.1.0:bafybeib4m2bwgchloqss3wotsx4rz7qqkwydaesiqkls2zq7zbtp6jtpsi
 - valory/termination_abci:0.1.0:bafybeie4zvjfxvdu7qrulmur3chpjz3kpj5m4bjsxvpk4gvj5zbyyayfaa
 - valory/transaction_settlement_abci:0.1.0:bafybeiaefgqbs7zsn5xe5kdwrujj7ivygkn3ujpw6crnvi3knvxw75qmja
-- valory/subscription_abci:0.1.0:bafybeibgnw53s5nh6up35z6fgjisrrvrlt4nnjmx3ia7fcgwpmcprvja5u
+- valory/subscription_abci:0.1.0:bafybeigaxq7m2dqv2huhg5jvb4jx3rysqwvvjj2xhojow3t3zzuwq2k4ie
 behaviours:
   main:
     args: {}
@@ -165,6 +165,8 @@ models:
       service_owner_share: 0.1
       profit_split_freq: 100
       serious_slash_unit_amount: 8000000000000000
+      agent_funding_amount: 200000000000000000
+      minimum_agent_balance: 100000000000000000
       mech_to_subscription:
       - - '0x77af31De935740567Cf4fF1986D04B2c964A786a'
         - - '0x0000000000000000000000000000000000000000'
