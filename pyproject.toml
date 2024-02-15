@@ -6,11 +6,11 @@ build-backend = "poetry.core.masonry.api"
 name = "mech"
 version = "0.1.0"
 description = ""
-authors = [ "8baller <8ball030@gmail.com>", "David Vilela <dvilelaf@gmail.com>", "David Minarsch <david.minarsch@googlemail.com>", "Justice Mace <justice.mace@valory.xyz>", "Ardian Abazi <ardian.abazi@valory.xyz>", "Jose Moreira Sanchez <jose.moreira.sanchez@valory.xyz>", "Adamantios Zaras <adamantios.zaras@valory.xyz>",]
 readme = "README.md"
 repository = "https://github.com/valory-xyz/mech"
-keywords = [ "mech", "autonomy", "autonomous", "autonolas", "service", "multi", "agent",]
-classifiers = [ "Environment :: Console", "Environment :: Web Environment", "Development Status :: 2 - Pre-Alpha", "Intended Audience :: Developers", "License :: OSI Approved :: Apache Software License", "Natural Language :: English", "Operating System :: MacOS", "Operating System :: Microsoft", "Operating System :: Unix", "Programming Language :: Python :: 3.10", "Topic :: Communications", "Topic :: Internet", "Topic :: Scientific/Engineering", "Topic :: Software Development", "Topic :: System",]
+
+[[tool.poetry.packages]]
+include = "tools"
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -63,6 +63,3 @@ prediction-market-agent-tooling = { git = "https://github.com/gnosis/prediction-
 tabulate = "^0.9.0"
 functions-framework = "^3.5.0"
 google-cloud-functions = "^1.16.1"
-google-cloud-resource-manager = "^1.12.1"
-cron-validator = "^1.0.8"
-tenacity = "^8.2.3"
