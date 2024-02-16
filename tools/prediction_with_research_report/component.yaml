@@ -1,5 +1,5 @@
 name: prediction_with_research_report
-author: evo.ninja
+author: polywrap
 version: 0.1.0
 type: custom
 description: A tool for making binary predictions on markets using more robust research from external sources, and OpenAI API.
@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeid74x2il46x64tdpixbuw4l6iua2p2rxseewtxfnrjdp4dcer5yee
-  prediction_with_research_report.py: bafybeidypmypdaedqmpvqgtmfvi53usozq4nytffvchlwhepb2vyk6kyae
+  prediction_with_research_report.py: bafybeia4mxed6lwjeobgfegkr6zl7wathiixioh3xd6ppzdukftrip6pzi
 fingerprint_ignore_patterns: []
 entry_point: prediction_with_research_report.py
 callable: run
