@@ -21,8 +21,21 @@
 
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Tuple
-from evo_researcher.functions.research import research
-import openai
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from openai import OpenAI
+from pydantic import BaseModel
+from tavily import TavilyClient
+import logging
+from markdownify import markdownify
+import requests
+from bs4 import BeautifulSoup
+from requests import Response
+from chromadb import Collection, EphemeralClient
+import chromadb.utils.embedding_functions as embedding_functions
+
+
+# CONFIGURATION
 
 DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0,
@@ -45,6 +58,8 @@ DEFAULT_RESEARCH_SETTINGS = {
     "scrape_content_split_chunk_overlap": 225,
     "top_k_per_query": 8,
 }
+
+# PROMPTS
 
 PREDICTION_PROMPT = """
 INTRODUCTION:
@@ -99,7 +114,301 @@ OUTPUT_FORMAT:
 """
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+SUBQUERIES_PROMPT_TEMPLATE = """
+    Your goal is to prepare a research plan for {query}.
+
+    The plan will consist of multiple web searches separated by commas.
+    Return ONLY the web searches, separated by commas and without quotes.
+
+    Limit your searches to {search_limit}.
+"""
+
+
+QUERY_RERANKING_PROMPT_TEMPLATE = """
+    I will present you with a list of queries to search the web for, for answers to the question: {goal}.
+
+    The queries are divided by '---query---'
+
+    Evaluate the queries in order that will provide the best data to answer the question. Do not modify the queries.
+    Return them, in order of relevance, as a comma separated list of strings with no quotes.
+
+    Queries: {queries}
+"""
+
+REPORT_PROMPT_TEMPLATE = """
+    Your goal is to provide a relevant information report
+    in order to make an informed prediction for the question: '{goal}'.
+    
+    Here are the results of relevant web searches:
+    
+    {search_results}
+    
+    Prepare a full comprehensive report that provides relevant information to answer the aforementioned question.
+    If that is not possible, state why.
+    You will structure your report in the following sections:
+    
+    - Introduction
+    - Background
+    - Findings and Analysis
+    - Conclusion
+    - Caveats
+    
+    Don't limit yourself to just stating each finding; provide a thorough, full and comprehensive analysis of each finding.
+    Use markdown syntax. Include as much relevant information as possible and try not to summarize.
+    """
+
+# MODELS
+
+
+class WebSearchResult(BaseModel):
+    title: str
+    url: str
+    description: str
+    relevancy: float
+    query: str
+    
+    def __getitem__(self, item):
+        return getattr(self, item)
+    
+class WebScrapeResult(BaseModel):
+    query: str
+    url: str
+    title: str
+    content: str
+
+    def __getitem__(self, item):
+        return getattr(self, item)
+
+
+# FUNCTIONS
+
+
+def fetch_html(url: str, timeout: int) -> Response:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:107.0) Gecko/20100101 Firefox/107.0"
+    }
+    response = requests.get(url, headers=headers, timeout=timeout)
+    return response
+
+
+def web_scrape(url: str, timeout: int = 10000) -> tuple[str, str]:
+    try:
+        response = fetch_html(url=url, timeout=timeout)
+
+        if 'text/html' in response.headers.get('Content-Type', ''):
+            soup = BeautifulSoup(response.content, "html.parser")
+            
+            [x.extract() for x in soup.findAll('script')]
+            [x.extract() for x in soup.findAll('style')]
+            [x.extract() for x in soup.findAll('noscript')]
+            [x.extract() for x in soup.findAll('link')]
+            [x.extract() for x in soup.findAll('head')]
+            [x.extract() for x in soup.findAll('image')]
+            [x.extract() for x in soup.findAll('img')]
+            
+            text = soup.get_text()
+            text = markdownify(text)
+            text = "  ".join([x.strip() for x in text.split("\n")])
+            text = " ".join([x.strip() for x in text.split("  ")])
+            
+            return (text, url)
+        else:
+            logging.warning("Non-HTML content received")
+            return ("", url)
+
+    except requests.RequestException as e:
+        logging.error(f"HTTP request failed: {e}")
+        return ("", url)
+
+
+def scrape_results(results: list[WebSearchResult]) -> list[WebScrapeResult]:
+    scraped: list[WebScrapeResult] = []
+    results_by_url = {result.url: result for result in results}
+
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(web_scrape, result.url) for result in results}
+        for future in as_completed(futures):
+            (scraped_content, url) = future.result()
+            websearch_result = results_by_url[url]
+            result = WebScrapeResult(
+                query=websearch_result.query,
+                url=websearch_result.url,
+                title=websearch_result.title,
+                content=scraped_content
+            )
+            
+            scraped.append(result)
+
+    return scraped
+
+
+def web_search(query: str, api_key: str, max_results=5) -> list[WebSearchResult]:
+    tavily = TavilyClient(api_key=api_key)
+    response = tavily.search(
+        query=query,
+        search_depth="advanced",
+        max_results=max_results,
+    )
+
+    transformed_results = [
+        WebSearchResult(
+            title=result['title'],
+            url=result['url'],
+            description=result['content'],
+            relevancy=result['score'],
+            query=query
+        )
+        for result in response['results']
+    ]
+
+    return transformed_results
+
+
+def search(queries: list[str], api_key: str, filter = lambda x: True) -> list[tuple[str, WebSearchResult]]:
+    results: list[list[WebSearchResult]] = []
+    results_with_queries: list[tuple[str, WebSearchResult]] = []
+
+    # Each result will have a query associated with it
+    # We only want to keep the results that are unique
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        futures = {executor.submit(web_search, query, api_key) for query in queries}
+        for future in as_completed(futures):
+            results.append(future.result())
+
+    for i in range(len(results)):
+        for result in results[i]:
+            if result.url not in [existing_result.url for (_,existing_result) in results_with_queries]:
+                if filter(result):
+                  results_with_queries.append((queries[i], result))
+
+    return results_with_queries
+
+
+def create_embeddings_from_results(results: list[WebScrapeResult], text_splitter, api_key: str) -> Collection:
+    client = EphemeralClient()
+    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+                api_key=api_key,
+                model_name="text-embedding-ada-002"
+            )
+    collection = client.create_collection(
+        name="web_search_results",
+        embedding_function=openai_ef,
+        metadata={"hnsw:space": "cosine"}
+    )
+    texts = []
+    metadatas = []
+
+    for scrape_result in results:
+        text_splits = text_splitter.split_text(scrape_result.content)
+        texts += text_splits
+        metadatas += [scrape_result.dict() for _ in text_splits]   
+
+    collection.add(
+        documents=texts,
+        metadatas=metadatas, # type: ignore
+        ids=[f'id{i}' for i in range(len(texts))]
+    )
+    return collection
+
+
+def generate_subqueries(query: str, limit: int, api_key: str, model: str) -> list[str]:
+    client = OpenAI(api_key=api_key)
+    subquery_generation_prompt = SUBQUERIES_PROMPT_TEMPLATE.format(query=query, search_limit=limit)
+    
+    response = client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a professional researcher"
+            },
+            {
+                "role": "user",
+                "content": subquery_generation_prompt,
+            }
+        ],
+        model=model,
+        n=1,
+        timeout=90,
+        stop=None,
+    )
+
+    subqueries_str = str(response.choices[0].message.content)
+
+    return [query] + [subquery.strip('\"').strip() for subquery in subqueries_str.split(',')]
+
+
+def rerank_subqueries(queries: list[str], goal: str, api_key: str, model: str) -> list[str]:
+    client = OpenAI(api_key=api_key)
+    rerank_results_prompt = QUERY_RERANKING_PROMPT_TEMPLATE.format(
+        goal=goal,
+        queries="\n---query---\n".join(queries)
+    )
+
+    response = client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a professional researcher"
+            },
+            {
+                "role": "user",
+                "content": rerank_results_prompt,
+            }
+        ],
+        model=model,
+        n=1,
+        timeout=90,
+        stop=None,
+    )
+
+    subqueries_str = str(response.choices[0].message.content)
+
+    return [subquery.strip('\"').strip() for subquery in subqueries_str.split(',')]
+
+def prepare_report(goal: str, scraped: list[str], model: str, api_key: str):
+    evaluation_prompt = REPORT_PROMPT_TEMPLATE.format(search_results=scraped, goal=goal)
+    
+    client = OpenAI(api_key=api_key)
+
+    response = client.chat.completions.create(
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a professional researcher"
+            },
+            {
+                "role": "user",
+                "content": evaluation_prompt,
+            }
+        ],
+        model=model,
+        n=1,
+        timeout=90,
+        stop=None,
+    )
+
+    return str(response.choices[0].message.content)
+
+def make_prediction(prompt: str, model: str, temperature: float, max_compl_tokens: int, openai_api_key: str):
+    client = OpenAI(api_key=openai_api_key)
+
+    response = client.chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt},
+        ],
+        temperature=temperature,
+        max_tokens=max_compl_tokens,
+        n=1,
+        timeout=150,
+        stop=None
+    )
+    
+    return response.choices[0].message.content
+
+
+def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
@@ -120,24 +429,32 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"TOOL {tool} is not supported.")
     
-    engine = TOOL_TO_ENGINE[tool]
+    model = TOOL_TO_ENGINE[tool]
     
-    (research_report, _) = research(
-        prompt,
-        openai_key=openai_api_key,
-        tavily_key=tavily_api_key,
-        model=engine,
-        initial_subqueries_limit=initial_subqueries_limit,
-        subqueries_limit=subqueries_limit,
-        scrape_content_split_chunk_size=scrape_content_split_chunk_size,
-        scrape_content_split_chunk_overlap=scrape_content_split_chunk_overlap,
-        top_k_per_query=top_k_per_query,
+    queries = generate_subqueries(query=prompt, limit=initial_subqueries_limit, api_key=openai_api_key, model=model)
+    queries = rerank_subqueries(queries=queries, goal=prompt, api_key=openai_api_key, model=model)[:subqueries_limit]
+
+    search_results_with_queries = search(queries, tavily_api_key, lambda result: not result["url"].startswith("https://www.youtube"))
+
+    scrape_args = [result for (_, result) in search_results_with_queries]
+    scraped = scrape_results(scrape_args)
+    scraped = [result for result in scraped if result.content != ""]
+
+    text_splitter = RecursiveCharacterTextSplitter(
+        separators=["\n\n", "\n", ". ", "  "],
+        chunk_size=scrape_content_split_chunk_size,
+        chunk_overlap=scrape_content_split_chunk_overlap
     )
+    collection = create_embeddings_from_results(scraped, text_splitter, api_key=openai_api_key)
 
-    if tool not in ALLOWED_TOOLS:
-        raise ValueError(f"Tool {tool} is not supported.")
+    
+    query_results = collection.query(query_texts=queries, n_results=top_k_per_query)
+    vector_result_texts: list[str] = []
+    
+    for documents_list in query_results['documents']: # type: ignore
+        vector_result_texts += [x for x in documents_list]
 
-    engine = TOOL_TO_ENGINE[tool]
+    research_report = prepare_report(prompt, vector_result_texts, api_key=openai_api_key, model=model)
     
     current_time_utc = datetime.now(timezone.utc)
     formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
@@ -147,19 +464,12 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         additional_information=research_report,
         timestamp=formatted_time_utc
     )
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": prediction_prompt},
-    ]
-    response = openai.ChatCompletion.create(
-        model=engine,
-        messages=messages,
+    prediction = make_prediction(
+        prompt=prediction_prompt,
+        model=model,
         temperature=temperature,
-        max_tokens=max_compl_tokens,
-        n=1,
-        timeout=150,
-        request_timeout=150,
-        stop=None,
-        api_key=openai_api_key
+        max_compl_tokens=max_compl_tokens,
+        openai_api_key=openai_api_key
     )
-    return response.choices[0].message.content, prediction_prompt, None
+    
+    return prediction, prediction_prompt, None, None
