@@ -19,20 +19,24 @@
 
 """This module implements a Mech tool for binary predictions."""
 
-import json
+from io import BytesIO
+import PyPDF2
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
-
+from pydantic import BaseModel, Field
+from docstring_parser import parse
 import tiktoken
 from openai import OpenAI
+import numpy as np
+import faiss
 
 import requests
-import  html2text
-from readability import Document
+import html2text
+from readability import Document as ReadabilityDocument
 from googleapiclient.discovery import build
 
 client: Optional[OpenAI] = None
@@ -40,6 +44,7 @@ client: Optional[OpenAI] = None
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -65,19 +70,170 @@ MAX_TOKENS = {
     "gpt-4": 8192,
 }
 ALLOWED_TOOLS = [
-    "resolve-market-reasoning",
+    "resolve-market-reasoning-gpt-3.5-turbo",
+    "resolve-market-reasoning-gpt-4",
 ]
-TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
-# the default number of URLs to fetch online information for
-DEFAULT_NUM_URLS = defaultdict(lambda: 3)
-# the default number of words to fetch online information for
+TOOL_TO_ENGINE = {
+    "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo",
+    "resolve-market-reasoning-gpt-4": "gpt-4",
+}
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
+NUM_QUERIES = 3
+NUM_URLS_PER_QUERY = 3
+SPLITTER_CHUNK_SIZE = 1800
+SPLITTER_OVERLAP = 50
+EMBEDDING_MODEL = "text-embedding-3-large"
+EMBEDDING_BATCH_SIZE = 1000
+EMBEDDING_SIZE = 3072
+NUM_NEIGHBORS = 4
+BUFFER_TOKENS = 250
+
+
+class OpenAISchema(BaseModel):  # type: ignore[misc]
+    @classmethod  # type: ignore[misc]
+    @property
+    def openai_schema(cls) -> Dict[str, Any]:
+        """
+        Return the schema in the format of OpenAI's schema as jsonschema
+        Note:
+            Its important to add a docstring to describe how to best use this class, it will be included in the description attribute and be part of the prompt.
+        Returns:
+            model_json_schema (dict): A dictionary in the format of OpenAI's schema as jsonschema
+        """
+        schema = cls.model_json_schema()
+        docstring = parse(cls.__doc__ or "")
+        parameters = {
+            k: v for k, v in schema.items() if k not in ("title", "description")
+        }
+        for param in docstring.params:
+            if (name := param.arg_name) in parameters["properties"] and (
+                description := param.description
+            ):
+                if "description" not in parameters["properties"][name]:
+                    parameters["properties"][name]["description"] = description
+
+        parameters["required"] = sorted(
+            k for k, v in parameters["properties"].items() if "default" not in v
+        )
+
+        if "description" not in schema:
+            if docstring.short_description:
+                schema["description"] = docstring.short_description
+            else:
+                schema["description"] = (
+                    f"Correctly extracted `{cls.__name__}` with all "
+                    f"the required parameters with correct types"
+                )
+
+        return {
+            "name": schema["title"],
+            "description": schema["description"],
+            "parameters": parameters,
+        }
+
+    @classmethod
+    def from_response(cls, completion: Dict[str, Any]) -> "OpenAISchema":
+        """
+        Convert the response from OpenAI into the class instance
+        Args:
+            completion (dict): The response from OpenAI
+        Returns:
+            OpenAISchema: The instance of the class
+        """
+
+        message = completion.choices[0].message
+
+        return cls.model_validate_json(
+            message.function_call.arguments,
+        )
+
+
+class Queries(OpenAISchema):
+    queries: List[str]
+
+
+class Date(OpenAISchema):
+    date_available: bool = Field(..., description="Whether the date is available")
+    year: Optional[int] = Field(..., description="The year the article was published")
+    month: Optional[str] = Field(..., description="The month the article was published")
+    day: Optional[int] = Field(..., description="The day the article was published")
+
+
+class Results(OpenAISchema):
+    has_occurred: bool = Field(..., description="Whether the event has occurred.")
+
+
+class Document(BaseModel):
+    text: str
+    date: str
+    url: str
+    embedding: Optional[List[float]] = None
+
+
+URL_QUERY_PROMPT = """
+ You are an expert fact checker in a team tasked with determining whether an event happened before a given date in the past. 
+* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event occured. 
+* You are provided with the input question about the event under the label "USER_PROMPT". 
+* You must follow the instructions under the label "INSTRUCTIONS". 
+
+INSTRUCTIONS
+* Read the input under the label "USER_PROMPT" delimited by three backticks.
+* The "USER_PROMPT" is a question about whether an event happened.
+* The "USER_PROMPT" will contain a date which in the past.
+* The event will only have has two possible outcomes: either the event has happened or the event has not happened.
+* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
+* You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event occured. 
+* Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
+* Make sure the queries are in past tense and are in the form of a question.
+* ONLY function calls are allowed in the response.
+
+USER_PROMPT:
+```
+{user_prompt}
+```
+"""
+
+
+GET_DATE_PROMPT = """
+INSTRUCTIONS
+* You are an expert data analyst that takes in extracted text from a web search result. 
+* You are provided with text extracted from a relevant web page under the label "EXTRACTED_TEXT" delimited by three backticks.
+* Your task is to extract the date that the web page was published. 
+* If there is no date information available, you should not try to guess. Instead indicate that it is not available.
+* Your response should only be a function call with the extracted date information as arguments.
+
+EXTRACTED_TEXT:
+```
+{extracted_text}
+```
+"""
+
 
 PREDICTION_PROMPT = """
+INSTRUCTIONS
+* You are an expert data analyst. 
+* You are provided with the input question about the event under the label "USER_PROMPT". 
+* You are provided with a colleague's reasoning as to whether the event occurred based on online research under the label "REASONING" delimited by three backticks.
+* Your task is to parse the decision on whether an event occurred.
+* The answer that you give should match the answer that you come to in the reasoning field
+* ONLY function calls are allowed in the response.
+
+USER_PROMPT:
+```
+{user_prompt}
+```
+
+REASONING:
+```
+{reasoning}
+```
+"""
+
+REASONING_PROMPT = """
 You are an expert fact checker that takes in a question asking whether an event will happen before a given date. 
 That date has now passed and your role is to determine whether the event actually happened before the date.
 You are provided with the input question about the event under the label "USER_PROMPT". You must follow the instructions
-under the label "INSTRUCTIONS". You must provide your response in the format specified under "OUTPUT_FORMAT".
+under the label "INSTRUCTIONS".
 
 INSTRUCTIONS
 * Read the input question under the label "USER_PROMPT" delimited by three backticks.
@@ -91,8 +247,8 @@ possible answers: either the event did happen or it did not happen.
 * If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
 * Ideally, these will be news articles about the event in question.
 * Pay special attention to the date of the article if it is available.
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response.
+* You should show your process of thinking through the problem step by step, taking the date and information of the various articles into consideration, and explain your reasoning for your decision as to whether an event occurred by the specified date. 
+* The articles will not always explicitly contain all the information needed to determine the answer. In this case, you may need to make an educated guess based on certain assumptions. If you need to do this, please provide your assumptions in your explanation.
 
 Here are some examples of how you can figure out whether an event occurred by the date:
 * If an article says that the event did happen and the date of the article is before the question date, then it is likely that the event did occur before the question date.
@@ -105,67 +261,54 @@ USER_PROMPT:
 
 ADDITIONAL_INFORMATION:
 ```
-{additional_information}
+{formatted_docs}
 ```
-
-OUTPUT_FORMAT
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
-* The JSON must contain two fields: "reasoning", and "has_occurred".
-   - "reasoning": A string that shows you thinking through the problem step by step, taking the date and information of the various articles into consideration. It should help to explain your reasoning for your decision as to whether an event occurred by the specified date. 
-   - "has_occurred": When the event in "USER_PROMPT" has occurred, the value of "has_occurred" must be True if it has occurred, and False if it has not. The answer that you give for this field should match the answer that you come to in the reasoning field. 
-* Output only the JSON object. Do not include any other contents in your response.
 """
 
-URL_QUERY_PROMPT = """
-* You are an expert fact checker in a team tasked with determining whether an event happened before a given date in the past. 
-* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event occured. 
-* You are provided with the input question about the event under the label "USER_PROMPT". 
-* You must follow the instructions under the label "INSTRUCTIONS". 
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
+SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
-INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" is a question about whether an event happened.
-* The "USER_PROMPT" will contain a date which in the past.
-* The event will only have has two possible outcomes: either the event has happened or the event has not happened.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You should come up with queries to search for relevant news articles that may help in determining whether the event occured. 
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response.
 
-USER_PROMPT:
-```
-{user_prompt}
-```
+def multi_queries(
+    client: OpenAI,
+    prompt: str,
+    engine: str,
+    num_queries: int,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> List[str]:
+    """Generate multiple queries for fetching information from the web."""
 
-OUTPUT_FORMAT
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
-* The JSON must contain two fields: "queries", and "urls".
-   - "queries": An array of strings of size between 1 and 4. Each string must be a search engine query that can help
-     obtain relevant information to check that the event in "USER_PROMPT" occurs.
-     You must provide original information in each query, and they should not overlap.
-     or lead to obtain the same set of results.
-* Output only the JSON object. Do not include any other contents in your response.
-"""
+    url_query_prompt = URL_QUERY_PROMPT.format(
+        user_prompt=prompt, num_queries=num_queries
+    )
 
-GET_DATE_PROMPT = """
-INSTRUCTIONS
-* You are an expert data analyst that takes in extracted text from a web search result. 
-* You are provided with text extracted from a relevant web page under the label "EXTRACTED_TEXT" delimited by three backticks.
-* Your task is to extract the date that the web page was published. 
-* If there is no date information available, you should not try to guess. Instead indicate that it is not available.
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": url_query_prompt},
+    ]
 
-EXTRACTED_TEXT:
-```
-{extracted_text}
-```
+    response = client.chat.completions.create(
+        model=engine,
+        messages=messages,
+        temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+        max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+        n=1,
+        timeout=150,
+        stop=None,
+        functions=[Queries.openai_schema],
+    )
+    queries = Queries.from_response(response)
 
-OUTPUT_FORMAT
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
-* The JSON must contain two fields: "year" and "month". The month field must be the name of the month e.g. January, not a number. If there is no information for a field within the extracted text, the value should be none. 
-* Output only the JSON object. Do not include any other contents in your response.
-"""
+    # append the user's question to the list of queries
+    queries.queries.append(prompt)
+
+    if counter_callback:
+        counter_callback(
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            model=engine,
+        )
+        return queries.queries, counter_callback
+    return queries.queries, None
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
@@ -199,36 +342,121 @@ def get_urls_from_queries(
     return unique_results
 
 
+def get_dates(
+    client: OpenAI,
+    text: str,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+):
+    """Get the date from the extracted text"""
+    adjusted_text = adjust_additional_information(
+        prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo"
+    )
+    get_date_prompt = GET_DATE_PROMPT.format(extracted_text=adjusted_text)
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": get_date_prompt},
+    ]
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=messages,
+        temperature=0,
+        n=1,
+        timeout=90,
+        stop=None,
+        functions=[Date.openai_schema],
+    )
+    date = Date.from_response(response)
+    if date.date_available:
+        if counter_callback:
+            counter_callback(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+                model="gpt-3.5-turbo",
+            )
+            return f"{date.year}-{date.month}-{date.day}", counter_callback
+        return f"{date.year}-{date.month}-{date.day}", None
+    return "Date not available", None
+
+
+def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
+    """Extract text from a PDF document at the given URL."""
+    try:
+        response = requests.get(url, timeout=20)
+        response.raise_for_status()
+
+        if "application/pdf" not in response.headers.get("Content-Type", ""):
+            return ValueError("URL does not point to a PDF document")
+
+        with BytesIO(response.content) as pdf_file:
+            reader = PyPDF2.PdfReader(pdf_file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text()
+
+        doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
+
+        return doc
+    except Exception as e:
+        return None
+
+
 def extract_text(
+    client: OpenAI,
     html: str,
-    num_words: int = 300,  # TODO: summerise using GPT instead of limit
+    num_words: Optional[int] = None,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> str:
     """Extract text from a single HTML document"""
-    text = Document(html).summary()
-
-    # use html2text to convert HTML to markdown
     h = html2text.HTML2Text()
     h.ignore_links = True
     h.ignore_images = True
     h.ignore_emphasis = True
-    text = h.handle(text)
+    text = " ".join(h.handle(ReadabilityDocument(html).summary()).split())
+    date, counter_callback = get_dates(
+        client=client, text=text, counter_callback=counter_callback
+    )
+    doc = Document(text=text[:num_words] if num_words else text, date=date, url="")
+    return doc, counter_callback
 
-    # if text is None, return an empty string
-    if text is None:
-        return ""
 
-    # remove newlines and extra spaces
-    text = " ".join(text.split())
-
-    date = get_dates(text)
-
-    if not num_words:
-        return text
-    return text[:num_words], date
+def extract_texts(
+    urls: List[str],
+    client: OpenAI,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> Tuple[List[str], Dict[str, str]]:
+    """Extract texts from URLs"""
+    extracted_texts = []
+    for batch in process_in_batches(urls=urls):
+        for future, url in batch:
+            try:
+                if url.lower().endswith(".pdf"):
+                    result = extract_text_from_pdf(url)
+                    if result:
+                        extracted_texts.append(result)
+                    continue
+                result = future.result()
+                if result.status_code != 200:
+                    continue
+                # first 4 bytes is pdf
+                if result.content[:4] == b"%PDF":
+                    result = extract_text_from_pdf(url)
+                    if result:
+                        extracted_texts.append(result)
+                    continue
+                doc, counter_callback = extract_text(
+                    html=result.text, client=client, counter_callback=counter_callback
+                )
+                doc.url = url
+                extracted_texts.append(doc)
+            except requests.exceptions.ReadTimeout:
+                print(f"Request timed out: {url}.")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+    return extracted_texts, counter_callback
 
 
 def process_in_batches(
-    urls: List[str], window: int = 5, timeout: int = 10
+    urls: List[str], window: int = 5, timeout: int = 50
 ) -> Generator[None, None, List[Tuple[Future, str]]]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
@@ -240,132 +468,148 @@ def process_in_batches(
             ]
             yield futures
 
-def get_dates(text):
-    get_date_prompt = GET_DATE_PROMPT.format(extracted_text=text)
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": get_date_prompt},
-    ]
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
-        messages=messages,
-        temperature=0,
-        # max_tokens=4096,
-        n=1,
-        timeout=90,
-        stop=None,
+
+def recursive_character_text_splitter(text, max_tokens, overlap):
+    if len(text) <= max_tokens:
+        return [text]
+    else:
+        return [
+            text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)
+        ]
+
+
+def get_embeddings(split_docs: List[Document]) -> List[Document]:
+    """Get embeddings for the split documents."""
+    for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
+        batch_end = batch_start + EMBEDDING_BATCH_SIZE
+        batch = [doc.text for doc in split_docs[batch_start:batch_end]]
+        response = client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=batch,
+        )
+        for i, be in enumerate(response.data):
+            assert i == be.index
+        batch_embeddings = [e.embedding for e in response.data]
+        for i, doc in enumerate(split_docs[batch_start:batch_end]):
+            doc.embedding = batch_embeddings[i]
+    return split_docs
+
+
+def find_similar_chunks(
+    query: str, docs_with_embeddings: List[Document], k: int = 4
+) -> List:
+    """Similarity search to find similar chunks to a query"""
+
+    query_embedding = (
+        client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=query,
+        )
+        .data[0]
+        .embedding
     )
-    json_data = json.loads(response.choices[0].message.content)
-    year = json_data['year']
-    month = json_data['month']
-    date = f"{month}/{year}"
 
-    return date
+    index = faiss.IndexFlatIP(EMBEDDING_SIZE)
+    index.add(np.array([doc.embedding for doc in docs_with_embeddings]))
+    D, I = index.search(np.array([query_embedding]), k)
 
-def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
-    """Extract texts from URLs"""
-    max_allowed = 5
-    extracted_texts = []
-    dates = {}
-    count = 0
-    stop = False
-    for batch in process_in_batches(urls=urls):
-        for future, url in batch:
-            try:
-                result = future.result()
-                if result.status_code != 200:
-                    continue
-                extracted_text, extracted_date = extract_text(html=result.text, num_words=num_words)
-                extracted_texts.append(
-                    f"ARTICLE {count}, DATE: {extracted_date}, URL: {url}, CONTENT: {extracted_text}"
-                )
-                dates[url] = extracted_date  
-                count += 1
-                if count >= max_allowed:
-                    stop = True
-                    break
-            except requests.exceptions.ReadTimeout:
-                print(f"Request timed out: {url}.")
-            except Exception as e:
-                print(f"An error occurred: {e}")
-        if stop:
-            break
-    return extracted_texts, dates
+    return [docs_with_embeddings[i] for i in I[0]]
 
 
 def fetch_additional_information(
+    client: OpenAI,
     prompt: str,
     engine: str,
-    temperature: float,
-    max_tokens: int,
     google_api_key: Optional[str],
-    google_engine: Optional[str],
-    num_urls: Optional[int],
-    num_words: Optional[int],
-    counter_callback: Optional[Callable] = None,
-    source_links: Optional[List[str]] = None,
-) -> str:
-    """Fetch additional information."""
-    url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
-    moderation_result = client.moderations.create(input=url_query_prompt)
-    if moderation_result.results[0].flagged:
-        return ""
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": url_query_prompt},
-    ]
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=90,
-        stop=None,
-    )
-    json_data = json.loads(response.choices[0].message.content)
-    if not source_links:
-        urls = get_urls_from_queries(
-            json_data["queries"],
-            google_api_key,
-            google_engine,
-            num_urls,
-        )
-        texts, dates = extract_texts(urls, num_words)
-    else:
-        texts = []
-        for source_link in islice(source_links.values(), num_urls):
-            texts.append(extract_text(html=source_link, num_words=num_words))
+    google_engine_id: Optional[str],
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> Tuple:
+    """Fetch additional information from the web."""
 
-        return "\n".join(["- " + text for text in texts]), json_data["queries"], dates, counter_callback
-    return "\n".join(["- " + text for text in texts]), json_data["queries"], dates, None
+    # generate multiple queries for fetching information from the web
+    queries, counter_callback = multi_queries(
+        client=client,
+        prompt=prompt,
+        engine=engine,
+        num_queries=NUM_QUERIES,
+        counter_callback=counter_callback,
+    )
+    print(f"Queries: {queries}")
+
+    # get the top URLs for the queries
+    urls = get_urls_from_queries(
+        queries=queries,
+        api_key=google_api_key,
+        engine=google_engine_id,
+        num=NUM_URLS_PER_QUERY,
+    )
+    print(f"URLs: {urls}")
+
+    # Extract text and dates from the URLs
+    docs, counter_callback = extract_texts(
+        urls=urls, client=client, counter_callback=counter_callback
+    )
+
+    # Chunk the documents
+    split_docs = []
+    for doc in docs:
+        t = recursive_character_text_splitter(
+            doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
+        )
+        split_docs.extend(
+            [Document(text=chunk, date=doc.date, url=doc.url) for chunk in t]
+        )
+    print(f"Split Docs: {len(split_docs)}")
+
+    # Embed the documents
+    docs_with_embeddings = get_embeddings(split_docs)
+    print(f"Docs with embeddings: {len(docs_with_embeddings)}")
+
+    # Find similar chunks
+    similar_chunks = find_similar_chunks(
+        query=prompt,
+        docs_with_embeddings=docs_with_embeddings,
+        k=NUM_NEIGHBORS,
+    )
+    print(f"Similar Chunks: {len(similar_chunks)}")
+
+    # Format the additional information
+    additional_information = "\n".join(
+        [
+            f"ARTICLE {i}, URL: {doc.url}, DATE: {doc.date}, CONTENT: {doc.text}\n"
+            for i, doc in enumerate(similar_chunks)
+        ]
+    )
+
+    return additional_information, queries, counter_callback
+
 
 def adjust_additional_information(
-    prompt: str, 
-    prompt_template:str, 
-    additional_information: str, 
-    model: str
+    prompt: str, additional_information: str, model: str
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
     # Initialize tiktoken encoder for the specified model
     enc = tiktoken.encoding_for_model(model)
-    
+
     # Encode the user prompt to calculate its token count
-    prompt = prompt_template.format(user_prompt=prompt, additional_information="")
     prompt_tokens = len(enc.encode(prompt))
-    
+
     # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
-    available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
+    MAX_PREDICTION_PROMPT_TOKENS = (
+        MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+    )
+    available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens - BUFFER_TOKENS
+
     # Encode the additional_information
     additional_info_tokens = enc.encode(additional_information)
+
     # If additional_information exceeds available tokens, truncate it
     if len(additional_info_tokens) > available_tokens:
         truncated_info_tokens = additional_info_tokens[:available_tokens]
         # Decode tokens back to text, ensuring the output fits within the budget
         additional_information = enc.decode(truncated_info_tokens)
-    
+
     return additional_information
 
 
@@ -374,10 +618,6 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
         prompt = kwargs["question"]
-        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
-        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
-        num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
@@ -387,49 +627,92 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             raise ValueError(f"Tool {tool} is not supported.")
 
         engine = TOOL_TO_ENGINE[tool]
-        additional_information, queries, dates, counter_callback = fetch_additional_information(
-            prompt,
-            engine,
-            temperature,
-            max_tokens,
-            google_api_key,
-            google_engine_id,
-            num_urls,
-            num_words,
-            counter_callback=counter_callback,
-            source_links=kwargs.get("source_links", None),
-        )
 
-        additional_information = adjust_additional_information(
-            prompt=prompt,
-            prompt_template=PREDICTION_PROMPT,
-            additional_information=additional_information,
-            model=engine,
-        )
-        prediction_prompt = PREDICTION_PROMPT.format(
-            user_prompt=prompt, additional_information=additional_information
-        )
-        moderation_result = client.moderations.create(input=prediction_prompt)
-        if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prediction_prompt},
-        ]
-        response = client.chat.completions.create(
-            model=engine,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            n=1,
-            timeout=150,
-            stop=None,
-        )
-        if counter_callback is not None:
-            counter_callback(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
+        try:
+            (
+                additional_information,
+                queries,
+                counter_callback,
+            ) = fetch_additional_information(
+                client=client,
+                prompt=prompt,
+                engine=engine,
+                google_api_key=google_api_key,
+                google_engine_id=google_engine_id,
+                counter_callback=counter_callback,
+            )
+
+            # Adjust the additional_information to fit within the token budget
+            adjusted_info = adjust_additional_information(
+                prompt=PREDICTION_PROMPT,
+                additional_information=additional_information,
                 model=engine,
             )
-            return response.choices[0].message.content, additional_information, queries, dates, counter_callback
-        return response.choices[0].message.content, additional_information, queries, dates, None
+
+            # Do reasoning
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": REASONING_PROMPT.format(
+                        user_prompt=prompt, formatted_docs=adjusted_info
+                    ),
+                },
+            ]
+
+            response_reasoning = client.chat.completions.create(
+                model=engine,
+                messages=messages,
+                temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+                max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+                n=1,
+                timeout=150,
+                stop=None,
+            )
+
+            reasoning = response_reasoning.choices[0].message.content
+
+            # Make the prediction
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": PREDICTION_PROMPT.format(
+                        user_prompt=prompt, reasoning=reasoning
+                    ),
+                },
+            ]
+
+            response_prediction = client.chat.completions.create(
+                model=engine,
+                messages=messages,
+                temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+                max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+                n=1,
+                timeout=150,
+                stop=None,
+                functions=[Results.openai_schema],
+            )
+
+            results = Results.from_response(response_prediction)
+            print(f"Results: {results}")
+
+            if counter_callback is not None:
+                counter_callback(
+                    input_tokens=response_reasoning.usage.prompt_tokens
+                    + response_prediction.usage.prompt_tokens,
+                    output_tokens=response_reasoning.usage.completion_tokens
+                    + response_prediction.usage.completion_tokens,
+                    model=engine,
+                )
+                return (
+                    results,
+                    reasoning,
+                    additional_information,
+                    queries,
+                    counter_callback,
+                )
+            return results, reasoning, additional_information, queries, None
+
+        except Exception as e:
+            return None, None, None, None, e
