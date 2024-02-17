@@ -220,3 +220,12 @@ A keyfile is just a file with your ethereum private key as a hex-string, example
 ```
 
 Make sure you don't have any extra characters in the file, like newlines or spaces.
+
+## Examples of deployed mechs
+
+| Network | Service |
+| :---:   | :---: |
+| Ethereum | https://registry.olas.network/ethereum/services/21 |
+| Gnosis | https://registry.olas.network/gnosis/services/3 |
+| Arbitrum | https://registry.olas.network/arbitrum/services/1 |
+| Polygon | https://registry.olas.network/polygon/services/3 |
