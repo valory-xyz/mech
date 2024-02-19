@@ -550,6 +550,9 @@ def fetch_additional_information(
         urls=urls, client=client, counter_callback=counter_callback
     )
 
+    # Remove None values from the list
+    docs = [doc for doc in docs if doc]
+
     # Chunk the documents
     split_docs = []
     for doc in docs:
@@ -560,6 +563,9 @@ def fetch_additional_information(
             [Document(text=chunk, date=doc.date, url=doc.url) for chunk in t]
         )
     print(f"Split Docs: {len(split_docs)}")
+
+    # Remove None values from the list
+    split_docs = [doc for doc in split_docs if doc]
 
     # Embed the documents
     docs_with_embeddings = get_embeddings(split_docs)
