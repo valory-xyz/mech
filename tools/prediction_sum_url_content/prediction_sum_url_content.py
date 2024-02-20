@@ -162,6 +162,9 @@ OUTPUT_FORMAT:
 * The JSON must contain two fields: "queries", and "urls".
    - "queries": A 1-5 item array of the generated search engine queries.
 * Include only the JSON object in your output.
+* This is incorrect: "```json{{"queries": []}}```"
+* This is incorrect: "```json"{{"queries": []}}"```"
+* This is correct: "{{"queries": []}}"
 """
 
 # Global constants for possible attribute names for release and update dates
