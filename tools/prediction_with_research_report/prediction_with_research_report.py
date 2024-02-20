@@ -22,6 +22,8 @@
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
+
+import openai
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from openai import OpenAI
 from pydantic import BaseModel
@@ -31,7 +33,7 @@ from markdownify import markdownify
 import requests
 from bs4 import BeautifulSoup
 from requests import Response
-from chromadb import Collection, EphemeralClient
+from chromadb import Collection, EphemeralClient, Documents, Embeddings
 import chromadb.utils.embedding_functions as embedding_functions
 from tiktoken import encoding_for_model
 
@@ -112,6 +114,10 @@ OUTPUT_FORMAT:
    - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the probability estimation ranging from 0 (lowest utility) to 1 (maximum utility).
 * The sum of "p_yes" and "p_no" must equal 1.
 * Output only the JSON object in your response. Do not include any other contents in your response.
+* Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
+* This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
+* This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+* This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
 
@@ -158,7 +164,31 @@ REPORT_PROMPT_TEMPLATE = """
     Use markdown syntax. Include as much relevant information as possible and try not to summarize.
     """
 
+class CustomOpenAIEmbeddingFunction(embedding_functions.OpenAIEmbeddingFunction):
+    """Custom OpenAI embedding function"""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """Initialize custom OpenAI embedding function"""
+        super().__init__(*args, **kwargs)
+        # OpenAI@v1 compatible
+        self._client = openai.embeddings
+
+    def __call__(self, texts: Documents) -> Embeddings:
+        """Return embedding"""
+        # replace newlines, which can negatively affect performance.
+        texts = [t.replace("\n", " ") for t in texts]
+
+        # Call the OpenAI Embedding API
+        embeddings = self._client.create(input=texts, model=self._model_name).data
+
+        # Sort resulting embeddings by index
+        sorted_embeddings = sorted(embeddings, key=lambda e: e.index)  # type: ignore
+
+        # Return just the embeddings
+        return [result.embedding for result in sorted_embeddings]
 # MODELS
+
+MAX_TEXT_LENGTH = 7500
 
 
 class WebSearchResult(BaseModel):
@@ -293,7 +323,7 @@ def search(queries: list[str], api_key: str, filter = lambda x: True) -> list[tu
 
 def create_embeddings_from_results(results: list[WebScrapeResult], text_splitter, api_key: str) -> Collection:
     client = EphemeralClient()
-    openai_ef = embedding_functions.OpenAIEmbeddingFunction(
+    openai_ef = CustomOpenAIEmbeddingFunction(
                 api_key=api_key,
                 model_name="text-embedding-ada-002"
             )
@@ -307,12 +337,13 @@ def create_embeddings_from_results(results: list[WebScrapeResult], text_splitter
 
     for scrape_result in results:
         text_splits = text_splitter.split_text(scrape_result.content)
-        texts += text_splits
+        if not len(texts + text_splits) > MAX_TEXT_LENGTH:
+            texts += text_splits
         metadatas += [scrape_result.dict() for _ in text_splits]   
 
     collection.add(
         documents=texts,
-        metadatas=metadatas, # type: ignore
+        metadatas=metadatas,  # type: ignore
         ids=[f'id{i}' for i in range(len(texts))]
     )
     return collection

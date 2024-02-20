@@ -52,3 +52,5 @@ leak_report
 agent/
 backup_mech/
 /packages/valory/skills/termination_abci/
+/pip
+/tool_test.py
