@@ -119,7 +119,7 @@ OUTPUT_FORMAT
 * Never use Markdown syntax highlighting, such as ```json```. Only output the raw json string.
 * This is incorrect:"```json{{\n  \"queries\": [\"term1\", \"term2\"]}}```"
 * This is incorrect:```json"{{\n  \"queries\": [\"term1\", \"term2\"]}}"```
-* This is correct:"{{\n  \"quries\": [\"term1\", \"term2\"]}}"
+* This is correct:"{{\n  \"queries\": [\"term1\", \"term2\"]}}"
 """
 
 ASSISTANT_TEXT = "```json"
