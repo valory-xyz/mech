@@ -2,13 +2,13 @@
     "dev": {
         "connection/valory/websocket_client/0.1.0": "bafybeiflmystocxaqblhpzqlcop2vkhsknpzjx2jomohomaxamwskeokzm",
         "skill/valory/contract_subscription/0.1.0": "bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4",
-        "agent/valory/mech/0.1.0": "bafybeidav4566ayg4erydeuwwnmhjko4luytkacv6lseit7v3le5vcpigq",
-        "skill/valory/mech_abci/0.1.0": "bafybeieimp7xzxcnbzsuunf2xkcy5juulhmzsmkq2v3sw3o3lgssb53cnu",
+        "agent/valory/mech/0.1.0": "bafybeibgyzcq73sdf5dewafwbeqvx7qeoq36xy3jsfqhym37jvf7habwcq",
+        "skill/valory/mech_abci/0.1.0": "bafybeidh7atj75ind43hfa4bparuc7emhh6ctnw445qnzmxtqwxjmmz5au",
         "contract/valory/agent_mech/0.1.0": "bafybeiepxumywg6z2zapqzc3bg3iey23cmlgjzxisqox5j74o5i2texr5e",
-        "service/valory/mech/0.1.0": "bafybeib2d3a3nab4ujlx7luds2q3amuwuq4zjgmt4kpwks2qnuvrhfv6ne",
+        "service/valory/mech/0.1.0": "bafybeibpga7mffi5qbbmavuksdcjb3r7yyv6x5ik6nlpqhlp2qjrr5saoy",
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeib4m2bwgchloqss3wotsx4rz7qqkwydaesiqkls2zq7zbtp6jtpsi",
-        "skill/valory/task_execution/0.1.0": "bafybeietxo6qxe2kfrt3jv6bm3sc53genwbzprlifn5pdwvpekgokcbghq",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeibqha4ztrbezvbctztu2hb573m3qfmwuwkgpdxflg6h6rtm236ova",
+        "skill/valory/task_execution/0.1.0": "bafybeihgvrziswylu3rs263zo7rtsxwxe5s3kxv26lflkgldb7uwkl25mu",
         "contract/valory/agent_registry/0.1.0": "bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu",
         "protocol/valory/websocket_client/0.1.0": "bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4",
         "skill/valory/websocket_client/0.1.0": "bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta",
@@ -40,6 +40,6 @@
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeidvcgnbbmjtha6tl7st2ysna2l3iiqfhnzjfasyvml5unecozeeka",
         "contract/valory/gnosis_safe/0.1.0": "bafybeidll7frtdsq2ckiluazkwk4zpkp7natt4kdejjehwvykqwzyuf6ei",
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
-        "connection/valory/http_server/0.22.0": "bafybeiasbuy4c65ai5plg6i73apzjdjm5vhpqmcxus65rq3zr6qpbahvge"
+        "connection/valory/http_server/0.22.0": "bafybeiesafy2af2wakqvsal4hz6ldycb73j5w62szhwy25iyhlf2wgyg44"
     }
 }
