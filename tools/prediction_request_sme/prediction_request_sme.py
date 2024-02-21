@@ -144,6 +144,9 @@ OUTPUT_FORMAT
      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
      or lead to obtain the same set of results.
 * Output only the JSON object. Do not include any other contents in your response.
+* This is incorrect: "```json{{"queries": []}}```"
+* This is incorrect: "```json"{{"queries": []}}"```"
+* This is correct: "{{"queries": []}}"
 """
 
 SME_GENERATION_MARKET_PROMPT = """
