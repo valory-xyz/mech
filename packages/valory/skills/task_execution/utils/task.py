@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -29,8 +29,7 @@ class AnyToolAsTask:
         """Execute the task."""
         tool_py = kwargs.pop("tool_py")
         callable_method = kwargs.pop("callable_method")
-        if callable_method in globals():
-            del globals()[callable_method]
-        exec(tool_py, globals())  # pylint: disable=W0122  # nosec
-        method = globals()[callable_method]
+        local_namespace: Any = {}
+        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
+        method = local_namespace[callable_method]
         return method(*args, **kwargs)

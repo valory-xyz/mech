@@ -18,11 +18,26 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of Mech."""
+import dataclasses
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional, cast
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
+
+
+@dataclasses.dataclass
+class MechConfig:
+    """Mech config dataclass."""
+
+    use_dynamic_pricing: bool
+
+    @staticmethod
+    def from_dict(raw_dict: Dict[str, Any]) -> "MechConfig":
+        """From dict."""
+        return MechConfig(
+            use_dynamic_pricing=raw_dict["use_dynamic_pricing"].lower() == "true"
+        )
 
 
 class Params(Model):
@@ -66,6 +81,7 @@ class Params(Model):
         enforce(self.max_block_window is not None, "max_block_window must be set!")
         # maps the request id to the number of times it has timed out
         self.request_id_to_num_timeouts: Dict[int, int] = defaultdict(lambda: 0)
+        self.mech_to_config: Dict[str, MechConfig] = self._parse_mech_configs(kwargs)
         super().__init__(*args, **kwargs)
 
     def _nested_list_todict_workaround(
@@ -78,3 +94,23 @@ class Params(Model):
         if len(values) == 0:
             raise ValueError(f"No {key} specified!")
         return {value[0]: value[1] for value in values}
+
+    def _parse_mech_configs(self, kwargs: Dict) -> Dict[str, MechConfig]:
+        """Parse the mech configs."""
+        mech_configs_json = self._nested_list_todict_workaround(
+            kwargs, "mech_to_config"
+        )
+        mech_configs_json = {
+            key: {value[0]: value[1]} for key, value in mech_configs_json.items()
+        }
+
+        mech_configs = {
+            mech: MechConfig.from_dict(config)
+            for mech, config in mech_configs_json.items()
+        }
+        for address in self.agent_mech_contract_addresses:
+            enforce(
+                address in mech_configs,
+                f"agent_mech_contract_addresses {address} must be in mech_configs!",
+            )
+        return mech_configs
