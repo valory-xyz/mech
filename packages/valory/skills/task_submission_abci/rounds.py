@@ -199,11 +199,13 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         TaskPoolingRound: {
             Event.DONE: TransactionPreparationRound,
             Event.NO_TASKS: FinishedWithoutTasksRound,
+            Event.ROUND_TIMEOUT: TaskPoolingRound,
         },
         TransactionPreparationRound: {
             Event.DONE: FinishedTaskPoolingRound,
             Event.ERROR: FinishedTaskExecutionWithErrorRound,
             Event.NO_MAJORITY: FinishedTaskExecutionWithErrorRound,
+            Event.TASK_EXECUTION_ROUND_TIMEOUT: TransactionPreparationRound,
         },
         FinishedTaskPoolingRound: {},
         FinishedTaskExecutionWithErrorRound: {},
@@ -216,6 +218,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     }
     event_to_timeout: EventToTimeout = {
         Event.TASK_EXECUTION_ROUND_TIMEOUT: 60.0,
+        Event.ROUND_TIMEOUT: 60.0,
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         [get_name(SynchronizedData.done_tasks)]
