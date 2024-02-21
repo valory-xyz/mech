@@ -241,9 +241,10 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(
-                    extract_text(html=result.text, num_words=num_words)
-                )
+                doc = {}
+                doc['text'] = extract_text(html=result.text, num_words=num_words)
+                doc['url'] = url
+                extracted_texts.append(doc)
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -298,8 +299,17 @@ def fetch_additional_information(
         texts = extract_texts(urls, num_words)
     else:
         texts = []
-        for source_link in islice(source_links.values(), 3):
-            texts.append(extract_text(html=source_link, num_words=num_words))
+        for url, content in islice(source_links.items(), 3):
+            doc = {}
+            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+            texts.append(doc)
+    # Format the additional information
+    additional_information = "\n".join(
+        [
+            f"ARTICLE {i}, URL: {doc['url']}, CONTENT: {doc['text']}\n"
+            for i, doc in enumerate(texts)
+        ]
+    )
     if counter_callback:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
@@ -307,8 +317,8 @@ def fetch_additional_information(
             model=engine,
             token_counter=count_tokens,
         )
-        return "\n".join(["- " + text for text in texts]), counter_callback
-    return "\n".join(["- " + text for text in texts]), None
+        return additional_information, counter_callback
+    return additional_information, None
 
 
 def load_model(vocab: str) -> Language:
