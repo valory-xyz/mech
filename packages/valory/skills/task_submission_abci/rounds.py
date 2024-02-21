@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -179,10 +179,12 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         0. TaskPoolingRound
             - done: 1.
             - no tasks: 4.
+            - round timeout: 0.
         1. TransactionPreparationRound
             - done: 2.
             - error: 3.
             - no majority: 3.
+            - task execution round timeout: 1.
         2. FinishedTaskPoolingRound
         3. FinishedTaskExecutionWithErrorRound
         4. FinishedWithoutTasksRound
@@ -191,6 +193,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
 
     Timeouts:
         task execution round timeout: 60.0
+        round timeout: 60.0
     """
 
     initial_round_cls: AppState = TaskPoolingRound
