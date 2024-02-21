@@ -1,0 +1,14 @@
+name: resolve_market_reasoning
+author: valory
+version: 0.1.0
+type: custom
+description: An improved tool for resolving markets after they have been closed.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeibtv3zzi5vssl6kssgxdzbjrdrdelyrt2numoxxtbervihh4x2w6i
+  resolve_market_reasoning.py: bafybeibu36cft3gqmg4yfs2zrafkav56pirlywrmpsjjjoiv54nzewfuxm
+fingerprint_ignore_patterns: []
+entry_point: resolve_market_reasoning.py
+callable: run
+dependencies: {}
