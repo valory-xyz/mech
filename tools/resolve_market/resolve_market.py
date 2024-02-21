@@ -365,7 +365,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
         raise ValueError(f"Tool {tool} is not supported.")
 
     market_behavior = CloseMarketBehaviourMock(**kwargs)
-    question = kwargs.pop("question", None)
+    question = kwargs.pop("prompt", None)
     result = market_behavior._get_answer(question)
     return result
 

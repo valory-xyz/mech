@@ -623,7 +623,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
-        prompt = kwargs["question"]
+        prompt = kwargs["prompt"]
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
@@ -722,39 +722,3 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
 
         except Exception as e:
             return None, None, None, None, e
-
-
-if __name__ == "__main__":
-    import os
-    import json
-    newsapi_api_key = os.getenv("NEWSAPI_API_KEY")
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    google_api_key = os.getenv("GOOGLE_API_KEY")
-    google_engine_id = os.getenv("GOOGLE_ENGINE_ID")
-
-    # This question is OK
-    question = "Will L.A. officially start preparing for 'Toilet-to-Tap' wastewater recycling technology on 11 February 2024?"
-
-    # This question returns "BadRequestError"
-    question = "Will Brock Purdy lead his Super Bowl team to victory in Super Bowl 58 on 12 February 2024?"
-
-    my_kwargs = {
-        "tool": "resolve-market-reasoning-gpt-4",
-        "question": question,
-        "api_keys": {
-            "newsapi": newsapi_api_key,
-            "openai": openai_api_key,
-            "google_api_key": google_api_key,
-            "google_engine_id": google_engine_id,
-        },
-    }
-
-    tool_output = run(**my_kwargs)
-    print(tool_output)
-
-    if tool_output[0] == None:
-        print("None")
-    else:
-        has_occurred = tool_output[0].has_occurred
-        print(type(has_occurred))
-        print(has_occurred)
