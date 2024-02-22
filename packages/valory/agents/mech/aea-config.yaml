@@ -9,7 +9,7 @@ fingerprint_ignore_patterns: []
 connections:
 - valory/abci:0.1.0:bafybeiejo5uyurbmafretedivyci2ktastxclbmgrkwcwc2yt36jftyqgm
 - valory/http_client:0.23.0:bafybeiddrfvomrmgvh5yuv2coq7ci72wcdf663stayi3m5aawnj4srggce
-- valory/http_server:0.22.0:bafybeiasbuy4c65ai5plg6i73apzjdjm5vhpqmcxus65rq3zr6qpbahvge
+- valory/http_server:0.22.0:bafybeiesafy2af2wakqvsal4hz6ldycb73j5w62szhwy25iyhlf2wgyg44
 - valory/ipfs:0.1.0:bafybeihx7wb5hngjobw2salzqqryrhxvmxfuw7o2npjyqd2talmh2flqeq
 - valory/ledger:0.19.0:bafybeia47rr37ianvwsh77tjjpv3nwif5sywhhy2fbdshnz4a2icwln76a
 - valory/p2p_libp2p_client:0.1.0:bafybeihge56dn3xep2dzomu7rtvbgo4uc2qqh7ljl3fubqdi2lq44gs5lq
@@ -38,7 +38,7 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeiflcfufixmsrhobf56bn5745m2iipcfqyulwk2qegtnagb3kvaaxi
 - valory/abstract_round_abci:0.1.0:bafybeiaqcl7h2famylusiffigwem7tevkcsyocdu5xd42jkmgq6kvowzgq
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeihn6xhjucw5xvm66dwtdyrzfi2yp36mf5oaykfgjy3r2uajywl4uu
+- valory/mech_abci:0.1.0:bafybeiapytxgypoetryw466pb4lplcmmcll4hx6ujslyvkxwubcgybb2gy
 - valory/registration_abci:0.1.0:bafybeic2ynseiak7jpta7jfwuqwyp453b4p7lolr4wihxmpn633uekv5am
 - valory/reset_pause_abci:0.1.0:bafybeidzajbe3erygeh2xbd6lrjv7nsptznjuzrt24ykgvhgotdeyhfnba
 - valory/subscription_abci:0.1.0:bafybeigaxq7m2dqv2huhg5jvb4jx3rysqwvvjj2xhojow3t3zzuwq2k4ie
@@ -103,6 +103,14 @@ dependencies:
     version: ==3.7.2
   tiktoken:
     version: ==0.5.1
+  readability-lxml:
+    version: ==0.8.1
+  docstring-parser:
+    version: ==0.15
+  faiss-cpu:
+    version: ==1.7.4
+  pypdf2:
+    version: ==3.0.1
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
