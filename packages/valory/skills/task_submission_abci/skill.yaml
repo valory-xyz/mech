@@ -19,19 +19,19 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeiepxumywg6z2zapqzc3bg3iey23cmlgjzxisqox5j74o5i2texr5e
+- valory/agent_mech:0.1.0:bafybeihykiw35u7tsjn5yicbi32zzhbsyl2oidip6qc6b3li3wuuufxvyy
 - valory/agent_registry:0.1.0:bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu
-- valory/gnosis_safe:0.1.0:bafybeidll7frtdsq2ckiluazkwk4zpkp7natt4kdejjehwvykqwzyuf6ei
+- valory/gnosis_safe:0.1.0:bafybeia2m32xfpsddrww7j3unkhcijuitlixffg66igrdyt6kgh5jvvwum
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
-- valory/service_registry:0.1.0:bafybeia2swgpmczn3iykmptigabklk2eqbqxzhmbnunq3givmjygvmgtbm
-- valory/hash_checkpoint:0.1.0:bafybeieys27hidb5m267jwqsxdgorf5v37o6lvrfy2oga557stjn4xgoaa
+- valory/service_registry:0.1.0:bafybeiew6yobxk5jd4yct7z5tlsuobryymedj6vz7t74hmjo5llahahsxi
+- valory/hash_checkpoint:0.1.0:bafybeibrucepel2ppqrmtem4p37q3nsmp4ilrpa2piv6ynt56kf7yqc5ra
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
-- valory/contract_api:1.0.0:bafybeialhbjvwiwcnqq3ysxcyemobcbie7xza66gaofcvla5njezkvhcka
-- valory/ledger_api:1.0.0:bafybeige5agrztgzfevyglf7mb4o7pzfttmq4f6zi765y4g2zvftbyowru
+- valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
+- valory/ledger_api:1.0.0:bafybeihdk6psr4guxmbcrc26jr2cbgzpd5aljkqvpwo64bvaz7tdti2oni
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeiaqcl7h2famylusiffigwem7tevkcsyocdu5xd42jkmgq6kvowzgq
-- valory/transaction_settlement_abci:0.1.0:bafybeiaefgqbs7zsn5xe5kdwrujj7ivygkn3ujpw6crnvi3knvxw75qmja
+- valory/abstract_round_abci:0.1.0:bafybeib3te5ami7gi7vh6v2rvq7mjmatyqdzqwkqpn7qh6mzfmpc4ikq4q
+- valory/transaction_settlement_abci:0.1.0:bafybeib4qqbpcdbfba23jm4c3ki7imo4wn5wtsja3tqrsrdlulh3lnixby
 behaviours:
   main:
     args: {}

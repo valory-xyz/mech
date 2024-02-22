@@ -15,18 +15,18 @@ fingerprint:
   models.py: bafybeigpimz5vhgzelhc7c3ipo56wh2o7d7whyqcjd2kjigtxos5d6bwqa
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeiasbuy4c65ai5plg6i73apzjdjm5vhpqmcxus65rq3zr6qpbahvge
+- valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
 contracts: []
 protocols:
-- valory/http:1.0.0:bafybeiejoqgv7finfxo3rcvvovrlj5ccrbgxodjq43uo26ylpowsa3llfe
+- valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeiaqcl7h2famylusiffigwem7tevkcsyocdu5xd42jkmgq6kvowzgq
-- valory/registration_abci:0.1.0:bafybeic2ynseiak7jpta7jfwuqwyp453b4p7lolr4wihxmpn633uekv5am
-- valory/reset_pause_abci:0.1.0:bafybeidzajbe3erygeh2xbd6lrjv7nsptznjuzrt24ykgvhgotdeyhfnba
-- valory/task_submission_abci:0.1.0:bafybeiagazy6g3dwyofelyih7oyosvbnvq7z6ccfr5qgk7vjvkvrwjhkyi
-- valory/termination_abci:0.1.0:bafybeie4zvjfxvdu7qrulmur3chpjz3kpj5m4bjsxvpk4gvj5zbyyayfaa
-- valory/transaction_settlement_abci:0.1.0:bafybeiaefgqbs7zsn5xe5kdwrujj7ivygkn3ujpw6crnvi3knvxw75qmja
-- valory/subscription_abci:0.1.0:bafybeigaxq7m2dqv2huhg5jvb4jx3rysqwvvjj2xhojow3t3zzuwq2k4ie
+- valory/abstract_round_abci:0.1.0:bafybeib3te5ami7gi7vh6v2rvq7mjmatyqdzqwkqpn7qh6mzfmpc4ikq4q
+- valory/registration_abci:0.1.0:bafybeigeferybxvqw4fl2cu2mcmfhfpxdruw3jtsswlmvhag3pav47ia5e
+- valory/reset_pause_abci:0.1.0:bafybeig2fb6i66uq5g3kzcd32rmv4z4xqjsslteqpz44adwxjd6op54uxq
+- valory/task_submission_abci:0.1.0:bafybeicyprjfnuhnweqhfvdps2gw6abtutm6skwhgehnq6ybvmfsxak5ka
+- valory/termination_abci:0.1.0:bafybeihn5gc2uf7gnnjwwpgbgvbcivhac7hgzq54zlr4mj3vmsblhl2fna
+- valory/transaction_settlement_abci:0.1.0:bafybeib4qqbpcdbfba23jm4c3ki7imo4wn5wtsja3tqrsrdlulh3lnixby
+- valory/subscription_abci:0.1.0:bafybeid5og3ernlchhgdqacsuwq4asqfruarbybvup2qqoa4uuuglz4rka
 behaviours:
   main:
     args: {}
@@ -198,5 +198,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.42.0
+    version: ==1.47.0
 is_abstract: false
