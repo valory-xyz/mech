@@ -17,6 +17,7 @@ alphabet_in:
 - RESET_TIMEOUT
 - ROUND_TIMEOUT
 - SUSPICIOUS_ACTIVITY
+- TASK_EXECUTION_ROUND_TIMEOUT
 - VALIDATE_TIMEOUT
 default_start_state: RegistrationStartupRound
 final_states: []
@@ -96,9 +97,11 @@ transition_func:
     (SynchronizeLateMessagesRound, SUSPICIOUS_ACTIVITY): ResetAndPauseRound
     (TaskPoolingRound, DONE): TransactionPreparationRound
     (TaskPoolingRound, NO_TASKS): ResetAndPauseRound
+    (TaskPoolingRound, ROUND_TIMEOUT): TaskPoolingRound
     (TransactionPreparationRound, DONE): RandomnessTransactionSubmissionRound
     (TransactionPreparationRound, ERROR): ResetAndPauseRound
     (TransactionPreparationRound, NO_MAJORITY): ResetAndPauseRound
+    (TransactionPreparationRound, TASK_EXECUTION_ROUND_TIMEOUT): TransactionPreparationRound
     (UpdateSubscriptionRound, DONE): RandomnessTransactionSubmissionRound
     (UpdateSubscriptionRound, ERROR): UpdateSubscriptionRound
     (UpdateSubscriptionRound, NO_MAJORITY): UpdateSubscriptionRound
