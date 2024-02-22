@@ -25,7 +25,6 @@ This module tries to mimic the current logic on the market-creator service
 
 import json
 import logging
-import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -368,19 +367,3 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
     question = kwargs.pop("prompt", None)
     result = market_behavior._get_answer(question)
     return result
-
-
-if __name__ == "__main__":
-    newsapi_api_key = os.getenv("NEWSAPI_API_KEY")
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-
-    my_kwargs = {
-        "tool": "close_market",
-        "question": "Will a cease-fire be implemented in the Gaza Strip by 5 February 2024?",
-        "api_keys": {
-            "newsapi": newsapi_api_key,
-            "openai": openai_api_key,
-        },
-    }
-
-    print(run(**my_kwargs))

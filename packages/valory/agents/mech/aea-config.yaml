@@ -103,16 +103,14 @@ dependencies:
     version: ==3.7.2
   tiktoken:
     version: ==0.5.1
-  pypdf2:
-    version: ==3.0.1
+  readability-lxml:
+    version: ==0.8.1
   docstring-parser:
     version: ==0.15
   faiss-cpu:
     version: ==1.7.4
-  html2text:
-    version: ==2020.1.16
-  readability-lxml:
-    version: ==0.8.1
+  pypdf2:
+    version: ==3.0.1
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
