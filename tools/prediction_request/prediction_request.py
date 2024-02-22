@@ -209,10 +209,7 @@ def extract_text(
 ) -> str:
     """Extract text from a single HTML document"""
     text = Document(html).summary()
-
-    # use html2text to convert HTML to markdown
     text = md(text, heading_style="ATX")
-
     if text is None:
         return ""
 
