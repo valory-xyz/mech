@@ -24,8 +24,6 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from docstring_parser import parse
 import faiss
 from googleapiclient.discovery import build
-from heapq import nlargest
-import html2text
 from itertools import islice
 import json
 import numpy as np
@@ -34,7 +32,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
 import requests
-from string import punctuation
+from markdownify import markdownify as md
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 
 client: Optional[OpenAI] = None
@@ -69,9 +67,7 @@ ALLOWED_TOOLS = [
     "prediction-request-rag",
 ]
 TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
-# the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
-# the default number of queries to generate for fetching online information
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
 NUM_URLS_PER_QUERY = 3
 SPLITTER_CHUNK_SIZE = 1800
@@ -269,7 +265,7 @@ def get_urls_from_queries(
                 num=num,
             ):
                 results.append(url)
-        except:
+        except Exception:
             pass
     unique_results = list(set(results))
     return unique_results
@@ -314,25 +310,24 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
 
 
 def extract_text(
-    client: OpenAI,
     html: str,
+    num_words: Optional[int] = None,
 ) -> str:
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
 
     # use html2text to convert HTML to markdown
-    h = html2text.HTML2Text()
-    h.ignore_links = True
-    h.ignore_images = True
-    h.ignore_emphasis = True
-    text = h.handle(text)
+    text = md(text, heading_style="ATX")
 
-    # if text is None, return an empty string
     if text is None:
         return ""
 
     # remove newlines and extra spaces
     text = " ".join(text.split())
+
+    if num_words:
+        text = " ".join(text.split()[:num_words])
+
     doc = Document(text=text, url="")
     return doc
 
@@ -353,7 +348,7 @@ def process_in_batches(
 
 def extract_texts(
     urls: List[str],
-    client: OpenAI,
+    num_words: Optional[int] = None,
 ) -> Tuple[List[str], Dict[str, str]]:
     """Extract texts from URLs"""
     max_allowed = 5
@@ -362,12 +357,12 @@ def extract_texts(
     stop = False
     for batch in process_in_batches(urls=urls):
         for future, url in batch:
-            # try:
             result = future.result()
             if result.status_code != 200:
                 continue
             doc = extract_text(
-                html=result.text, client=client
+                html=result.text,
+                num_words=num_words,
             )
             doc.url = url
             extracted_texts.append(doc)
@@ -375,10 +370,6 @@ def extract_texts(
             if count >= max_allowed:
                 stop = True
                 break
-            # except requests.exceptions.ReadTimeout:
-            #     print(f"Request timed out: {url}.")
-            # except Exception as e:
-            #     print(f"An error occurred: {e}")
         if stop:
             break
     return extracted_texts
@@ -399,6 +390,9 @@ def fetch_additional_information(
     google_engine_id: Optional[str],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
     source_links: Optional[List[str]] = None,
+    num_words: Optional[int] = None,
+    num_urls: Optional[int] = None,
+    num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
 ) -> Tuple:
     """Fetch additional information from the web."""
 
@@ -407,7 +401,7 @@ def fetch_additional_information(
         client=client,
         prompt=prompt,
         engine=engine,
-        num_queries=DEFAULT_NUM_QUERIES,
+        num_queries=num_queries,
         counter_callback=counter_callback,
     )
     print(f"Queries: {queries}")
@@ -424,11 +418,11 @@ def fetch_additional_information(
 
         # Extract text and dates from the URLs
         docs = extract_texts(
-            urls=urls, client=client, 
+            urls=urls,
         )
     else:
         texts = []
-        for url, content in islice(source_links.items(), 3):
+        for url, content in islice(source_links.items(), num_urls or len(source_links)):
             doc = {}
             doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
             texts.append(doc)
@@ -489,7 +483,7 @@ def adjust_additional_information(
     prompt_tokens = len(enc.encode(prompt))
     
     # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"] - 150 # for function calls
     available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
     
     # Encode the additional_information
@@ -512,6 +506,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         prompt = kwargs["prompt"]
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        num_words = kwargs.get("num_words", None)
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
         counter_callback = kwargs.get("counter_callback", None)
@@ -523,7 +518,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
 
         engine = TOOL_TO_ENGINE[tool]
 
-        # try:
         additional_information, counter_callback = fetch_additional_information(
             client=client,
             prompt=prompt,
@@ -532,6 +526,9 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             google_engine_id=google_engine_id,
             counter_callback=counter_callback,
             source_links=kwargs.get("source_links", None),
+            num_words=num_words,
+            num_urls=num_urls,
+            num_queries=num_queries,
         )
         additional_information = adjust_additional_information(
             prompt,
@@ -565,7 +562,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             result_dict[key] = float(value)  # Convert value to float
         results = result_dict
         results = json.dumps(results)
-
         if counter_callback is not None:
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
@@ -574,6 +570,3 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             )
             return results, prediction_prompt, counter_callback
         return results, prediction_prompt, None
-
-        # except Exception as e:
-        #     return None, None, None

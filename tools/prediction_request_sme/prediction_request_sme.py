@@ -29,7 +29,6 @@ import tiktoken
 from openai import OpenAI
 
 import requests
-import html2text
 from readability import Document
 from googleapiclient.discovery import build
 from tiktoken import encoding_for_model
@@ -231,11 +230,7 @@ def extract_text(
     text = Document(html).summary()
 
     # use html2text to convert HTML to markdown
-    h = html2text.HTML2Text()
-    h.ignore_links = True
-    h.ignore_images = True
-    h.ignore_emphasis = True
-    text = h.handle(text)
+    text 
 
     # if text is None, return an empty string
     if text is None:

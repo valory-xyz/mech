@@ -31,7 +31,9 @@ from openai import OpenAI
 
 import requests
 import spacy
-from bs4 import BeautifulSoup
+import tiktoken
+from markdownify import markdownify as md
+from readability import Document
 from googleapiclient.discovery import build
 from spacy import Language
 from spacy.cli import download
@@ -78,6 +80,10 @@ ALLOWED_TOOLS = [
     "prediction-online",
     "prediction-online-summarized-info",
 ]
+MAX_TOKENS = {
+    "gpt-3.5-turbo": 4096,
+    "gpt-4": 8192,
+}
 TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
@@ -199,20 +205,24 @@ def get_urls_from_queries(
 
 def extract_text(
     html: str,
-    num_words: Optional[int],
+    num_words: Optional[int] = None,
 ) -> str:
     """Extract text from a single HTML document"""
-    soup = BeautifulSoup(html, "html.parser")
-    for script in soup(["script", "style"]):
-        script.extract()
-    text = soup.get_text()
-    lines = (line.strip() for line in text.splitlines())
-    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-    text = "\n".join(chunk for chunk in chunks if chunk)
+    text = Document(html).summary()
 
-    if num_words is None:
-        return text
-    return text[:num_words]
+    # use html2text to convert HTML to markdown
+    text = md(text, heading_style="ATX")
+
+    if text is None:
+        return ""
+
+    # remove newlines and extra spaces
+    text = " ".join(text.split())
+
+    if num_words:
+        return " ".join(text.split()[:num_words])
+    
+    return text
 
 
 def process_in_batches(
@@ -380,6 +390,37 @@ def summarize(text: str, compression_factor: float, vocab: str) -> str:
     return summary_text
 
 
+def adjust_additional_information(
+    prompt: str, 
+    prompt_template:str, 
+    additional_information: str, 
+    model: str
+) -> str:
+    """Adjust the additional_information to fit within the token budget"""
+
+    # Initialize tiktoken encoder for the specified model
+    enc = tiktoken.encoding_for_model(model)
+    
+    # Encode the user prompt to calculate its token count
+    prompt = prompt_template.format(user_prompt=prompt, additional_information="")
+    prompt_tokens = len(enc.encode(prompt))
+    
+    # Calculate available tokens for additional_information
+    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+    available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
+    
+    # Encode the additional_information
+    additional_info_tokens = enc.encode(additional_information)
+    
+    # If additional_information exceeds available tokens, truncate it
+    if len(additional_info_tokens) > available_tokens:
+        truncated_info_tokens = additional_info_tokens[:available_tokens]
+        # Decode tokens back to text, ensuring the output fits within the budget
+        additional_information = enc.decode(truncated_info_tokens)
+    
+    return additional_information
+
+
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
@@ -420,7 +461,9 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             additional_information = summarize(
                 additional_information, compression_factor, vocab
             )
-
+        additional_information = adjust_additional_information(
+            prompt, PREDICTION_PROMPT, additional_information, engine
+        )
         prediction_prompt = PREDICTION_PROMPT.format(
             user_prompt=prompt, additional_information=additional_information
         )

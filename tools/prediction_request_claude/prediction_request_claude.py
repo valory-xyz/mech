@@ -20,7 +20,6 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
-from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Iterator, Callable
 from itertools import islice
@@ -28,8 +27,8 @@ from itertools import islice
 import anthropic
 import requests
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
-import html2text
 from readability import Document
+from markdownify import markdownify as md
 from googleapiclient.discovery import build
 
 NUM_URLS_EXTRACT = 5
@@ -162,29 +161,24 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
 
 def extract_text(
     html: str,
-    num_words: int = 300,  # TODO: summerise using GPT instead of limit
+    num_words: Optional[int] = 300,
 ) -> str:
     """Extract text from a single HTML document"""
     text = Document(html).summary()
 
     # use html2text to convert HTML to markdown
-    h = html2text.HTML2Text()
-    h.ignore_links = True
-    h.ignore_images = True
-    h.ignore_emphasis = True
-    text = h.handle(text)
+    text = md(text, heading_style="ATX")
 
-    # if text is None, return an empty string
     if text is None:
         return ""
 
     # remove newlines and extra spaces
     text = " ".join(text.split())
 
-    if not num_words:
-        return text
+    if num_words:
+        return " ".join(text.split()[:num_words])
     
-    return text[:num_words]
+    return text
 
 
 def process_in_batches(
