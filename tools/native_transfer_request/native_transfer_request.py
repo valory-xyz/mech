@@ -25,7 +25,7 @@ import ast
 from typing import Any, Dict, Optional, Tuple, cast
 
 from openai import OpenAI
-
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
@@ -45,6 +45,12 @@ class OpenAIClientManager:
         if client is not None:
             client.close()
             client = None
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 
@@ -113,7 +119,7 @@ def native_transfer(
         # parse the response to get the transaction object string itself
         parsed_txs = ast.literal_eval(response)
     except SyntaxError:
-        return response, None, None
+        return response, None, None, None
 
     # build the transaction object, unknowns are referenced from parsed_txs
     transaction = {

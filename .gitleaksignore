@@ -21,3 +21,7 @@ a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/termination_abci
 a8e306437319e480ae967d24c27b7e0265a853c8:packages/valory/skills/transaction_settlement_abci/skill.yaml:generic-api-key:92
 ed97b16cdd270e228ecd3d837da4484c09357108:packages/valory/skills/reset_pause_abci/skill.yaml:generic-api-key:80
 0c8c92a4a5e3b94e0f8b8aadb7c104c644f23277:packages/valory/skills/subscription_abci/skill.yaml:generic-api-key:89
+f92a447c4f4ecbfd32c1096f122bf6a0f555e22a:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:15
+f92a447c4f4ecbfd32c1096f122bf6a0f555e22a:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:16
+76e101cc83c5ee35d29227539c91071490c97bf5:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:15
+76e101cc83c5ee35d29227539c91071490c97bf5:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:16

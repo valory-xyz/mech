@@ -32,7 +32,7 @@ import requests
 import html2text
 from readability import Document
 from googleapiclient.discovery import build
-
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
@@ -54,6 +54,11 @@ class OpenAIClientManager:
             client.close()
             client = None
 
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 NUM_URLS_EXTRACT = 5
@@ -114,6 +119,10 @@ OUTPUT_FORMAT
      0 indicates lowest utility; 1 maximum utility.
 * The sum of "p_yes" and "p_no" must equal 1.
 * Output only the JSON object. Do not include any other contents in your response.
+* Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
+* This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
+* This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+* This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
 URL_QUERY_PROMPT = """
@@ -141,6 +150,10 @@ OUTPUT_FORMAT
      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
      or lead to obtain the same set of results.
 * Output only the JSON object. Do not include any other contents in your response.
+* Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
+* This is incorrect: "```json{{"queries": []}}```"
+* This is incorrect: "```json"{{"queries": []}}"```"
+* This is correct: "{{"queries": []}}"
 """
 
 SME_GENERATION_MARKET_PROMPT = """
@@ -263,9 +276,10 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(
-                    extract_text(html=result.text, num_words=num_words)
-                )
+                doc = {}
+                doc['text'] = extract_text(html=result.text, num_words=num_words)
+                doc['url'] = url
+                extracted_texts.append(doc)
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -316,21 +330,30 @@ def fetch_additional_information(
             json_data["queries"],
             api_key=google_api_key,
             engine=google_engine,
-            num_urls=num_urls,
         )
         texts = extract_texts(urls, num_words)
     else:
         texts = []
-        for source_link in islice(source_links.values(), 3):
-            texts.append(extract_text(html=source_link, num_words=num_words))
+        for url, content in islice(source_links.items(), 3):
+            doc = {}
+            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+            texts.append(doc)
+    # Format the additional information
+    additional_information = "\n".join(
+        [
+            f"ARTICLE {i}, URL: {doc['url']}, CONTENT: {doc['text']}\n"
+            for i, doc in enumerate(texts)
+        ]
+    )
     if counter_callback:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
             model=engine,
+            token_counter=count_tokens,
         )
-        return "\n".join(["- " + text for text in texts]), counter_callback
-    return "\n".join(["- " + text for text in texts]), None
+        return additional_information, counter_callback
+    return additional_information, None
 
 
 def get_sme_role(
@@ -361,6 +384,7 @@ def get_sme_role(
             output_tokens=response.usage.completion_tokens,
             total_tokens=response.usage.total_tokens,
             model=engine,
+            token_counter=count_tokens,
         )
         return sme["sme"], sme["sme_introduction"], counter_callback
     return sme["sme"], sme["sme_introduction"], None
@@ -480,6 +504,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
                 model=engine,
+                token_counter=count_tokens,
             )
-            return response.choices[0].message.content, prediction_prompt, counter_callback
-        return response.choices[0].message.content, prediction_prompt, None
+            return response.choices[0].message.content, prediction_prompt, None, counter_callback
+        return response.choices[0].message.content, prediction_prompt, None, None

@@ -27,18 +27,17 @@ from itertools import islice
 from string import punctuation
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 
-import tiktoken
 from openai import OpenAI
 
 import requests
 import spacy
-import  html2text
-from readability import Document
+from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
 from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
@@ -60,6 +59,11 @@ class OpenAIClientManager:
             client.close()
             client = None
 
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
+
 
 FrequenciesType = Dict[str, float]
 ScoresType = Dict[Span, float]
@@ -68,10 +72,6 @@ ScoresType = Dict[Span, float]
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
-}
-MAX_TOKENS = {
-    "gpt-3.5-turbo": 4096,
-    "gpt-4": 8192,
 }
 ALLOWED_TOOLS = [
     "prediction-offline",
@@ -129,6 +129,9 @@ OUTPUT_FORMAT
      0 indicates lowest utility; 1 maximum utility.
 * The sum of "p_yes" and "p_no" must equal 1.
 * Output only the JSON object. Do not include any other contents in your response.
+* This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
+* This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+* This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
 URL_QUERY_PROMPT = """
@@ -156,6 +159,10 @@ OUTPUT_FORMAT
      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
      or lead to obtain the same set of results.
 * Output only the JSON object. Do not include any other contents in your response.
+* Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
+* This is incorrect: "```json{{"queries": []}}```"
+* This is incorrect: "```json"{{"queries": []}}"```"
+* This is correct: "{{"queries": []}}"
 """
 
 
@@ -192,26 +199,18 @@ def get_urls_from_queries(
 
 def extract_text(
     html: str,
-    num_words: int = 300,  # TODO: summerise using GPT instead of limit
+    num_words: Optional[int],
 ) -> str:
     """Extract text from a single HTML document"""
-    text = Document(html).summary()
+    soup = BeautifulSoup(html, "html.parser")
+    for script in soup(["script", "style"]):
+        script.extract()
+    text = soup.get_text()
+    lines = (line.strip() for line in text.splitlines())
+    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+    text = "\n".join(chunk for chunk in chunks if chunk)
 
-    # use html2text to convert HTML to markdown
-    h = html2text.HTML2Text()
-    h.ignore_links = True
-    h.ignore_images = True
-    h.ignore_emphasis = True
-    text = h.handle(text)
-
-    # if text is None, return an empty string
-    if text is None:
-        return ""
-
-    # remove newlines and extra spaces
-    text = " ".join(text.split())
-
-    if not num_words:
+    if num_words is None:
         return text
     return text[:num_words]
 
@@ -242,9 +241,10 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(
-                    extract_text(html=result.text, num_words=num_words)
-                )
+                doc = {}
+                doc['text'] = extract_text(html=result.text, num_words=num_words)
+                doc['url'] = url
+                extracted_texts.append(doc)
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -269,7 +269,7 @@ def fetch_additional_information(
     num_words: Optional[int],
     counter_callback: Optional[Callable] = None,
     source_links: Optional[List[str]] = None,
-) -> str:
+) -> Tuple[str, Any]:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
     moderation_result = client.moderations.create(input=url_query_prompt)
@@ -299,16 +299,26 @@ def fetch_additional_information(
         texts = extract_texts(urls, num_words)
     else:
         texts = []
-        for source_link in islice(source_links.values(), num_urls):
-            texts.append(extract_text(html=source_link, num_words=num_words))
+        for url, content in islice(source_links.items(), 3):
+            doc = {}
+            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+            texts.append(doc)
+    # Format the additional information
+    additional_information = "\n".join(
+        [
+            f"ARTICLE {i}, URL: {doc['url']}, CONTENT: {doc['text']}\n"
+            for i, doc in enumerate(texts)
+        ]
+    )
     if counter_callback:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
             model=engine,
+            token_counter=count_tokens,
         )
-        return "\n".join(["- " + text for text in texts]), counter_callback
-    return "\n".join(["- " + text for text in texts]), None
+        return additional_information, counter_callback
+    return additional_information, None
 
 
 def load_model(vocab: str) -> Language:
@@ -370,36 +380,7 @@ def summarize(text: str, compression_factor: float, vocab: str) -> str:
     return summary_text
 
 
-def adjust_additional_information(
-    prompt: str, 
-    prompt_template:str, 
-    additional_information: str, 
-    model: str
-) -> str:
-    """Adjust the additional_information to fit within the token budget"""
-
-    # Initialize tiktoken encoder for the specified model
-    enc = tiktoken.encoding_for_model(model)
-    
-    # Encode the user prompt to calculate its token count
-    prompt = prompt_template.format(user_prompt=prompt, additional_information="")
-    prompt_tokens = len(enc.encode(prompt))
-    
-    # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
-    available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
-    # Encode the additional_information
-    additional_info_tokens = enc.encode(additional_information)
-    # If additional_information exceeds available tokens, truncate it
-    if len(additional_info_tokens) > available_tokens:
-        truncated_info_tokens = additional_info_tokens[:available_tokens]
-        # Decode tokens back to text, ensuring the output fits within the budget
-        additional_information = enc.decode(truncated_info_tokens)
-    
-    return additional_information
-
-
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
@@ -419,7 +400,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             raise ValueError(f"Tool {tool} is not supported.")
 
         engine = TOOL_TO_ENGINE[tool]
-        if tool in ["prediction-online", "prediction-online-summarized-info"]:
+        if tool.startswith("prediction-online"):
             additional_information, counter_callback = fetch_additional_information(
                 prompt,
                 engine,
@@ -439,18 +420,13 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             additional_information = summarize(
                 additional_information, compression_factor, vocab
             )
-        additional_information = adjust_additional_information(
-            prompt=prompt,
-            prompt_template=PREDICTION_PROMPT,
-            additional_information=additional_information,
-            model=engine,
-        )
+
         prediction_prompt = PREDICTION_PROMPT.format(
             user_prompt=prompt, additional_information=additional_information
         )
         moderation_result = client.moderations.create(input=prediction_prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None
+            return "Moderation flagged the prompt as in violation of terms.", None, None, None
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
@@ -469,6 +445,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
                 model=engine,
+                token_counter=count_tokens,
             )
-            return response.choices[0].message.content, prediction_prompt, counter_callback
-        return response.choices[0].message.content, prediction_prompt, None
+            return response.choices[0].message.content, prediction_prompt, None, counter_callback
+        return response.choices[0].message.content, prediction_prompt, None, None

@@ -7,14 +7,15 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeihprwot27csugwpoimsqcwprxu5bstqpvanot3nkmfgvhbr66ww4y
+  behaviours.py: bafybeiclizwd4icgkkof7zx4z5ckruckzlq7b5mho3flicpobahgsqguya
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
-  models.py: bafybeihgclxctyltuehj2f4fzj26edptqugrrm4phd6ovuulezrqot6qo4
+  models.py: bafybeid6befxrrbiaw7nduz4zgbm5nfc246fn2eb6rfmja6v5hmq4wtcwe
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
-  utils/benchmarks.py: bafybeihdutp44ds4cupszbd34gsmcw6fsdda2tzkh5b27fpg65ejbpdvdm
-  utils/ipfs.py: bafybeidinbdqkidix44ibz5hug7inkcbijooag53gr5mtbaa72tk335uqq
-  utils/task.py: bafybeieuziu7owtk543z3umgmayhjh67klftk7vrhz24l6rlaii5lvkqh4
+  utils/benchmarks.py: bafybeibdwt4svz24ahok4x4h2rpeotlmlmvifccd27oizsz5bjwj6dqree
+  utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
+  utils/ipfs.py: bafybeic7cbuv3tomi2xv7h2qowrqnpoufpanngzlgzljl4ptimpss3meqm
+  utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
 fingerprint_ignore_patterns: []
 connections:
 - valory/ledger:0.19.0:bafybeia47rr37ianvwsh77tjjpv3nwif5sywhhy2fbdshnz4a2icwln76a
@@ -84,6 +85,10 @@ models:
           - stabilityai-stable-diffusion-768-v2-1
       from_block_range: 50000
       num_agents: 4
+      mech_to_config:
+      - - '0x9A676e781A523b5d0C0e43731313A708CB607508'
+        - - - use_dynamic_pricing
+            - 'false'
       polling_interval: 30.0
       task_deadline: 240.0
       max_block_window: 500
@@ -111,4 +116,6 @@ dependencies:
     version: ==0.5.1
   anthropic:
     version: ==0.3.11
+  eth-abi:
+    version: ==4.0.0
 is_abstract: false

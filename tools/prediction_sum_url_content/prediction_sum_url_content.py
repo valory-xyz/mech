@@ -36,6 +36,7 @@ import tiktoken
 import traceback
 
 from dateutil import parser
+from tiktoken import encoding_for_model
 from tqdm import tqdm
 from sentence_transformers import SentenceTransformer, util
 
@@ -60,6 +61,11 @@ class OpenAIClientManager:
             client.close()
             client = None
 
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 NUM_URLS_EXTRACT = 5
@@ -126,6 +132,10 @@ OUTPUT_FORMAT:
    - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction ranging from 0 (lowest utility) to 1 (maximum utility).
 * The sum of "p_yes" and "p_no" must equal 1.
 * Output only the JSON object in your response. Do not include any other contents in your response.
+* Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
+* This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
+* This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+* This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
 URL_QUERY_PROMPT = """
@@ -152,6 +162,9 @@ OUTPUT_FORMAT:
 * The JSON must contain two fields: "queries", and "urls".
    - "queries": A 1-5 item array of the generated search engine queries.
 * Include only the JSON object in your output.
+* This is incorrect: "```json{{"queries": []}}```"
+* This is incorrect: "```json"{{"queries": []}}"```"
+* This is correct: "{{"queries": []}}"
 """
 
 # Global constants for possible attribute names for release and update dates
@@ -1043,7 +1056,7 @@ def fetch_additional_information(
     return additional_informations
 
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
 
@@ -1149,7 +1162,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]], Any]:
         # Perform moderation
         moderation_result = client.moderations.create(input=prediction_prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None
+            return "Moderation flagged the prompt as in violation of terms.", None, None, None
 
         # Create messages for the OpenAI engine
         messages = [
@@ -1168,4 +1181,4 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]], Any]:
             stop=None,
         )
         print(f"RESPONSE: {response}")
-        return response.choices[0].message.content, None, None
+        return response.choices[0].message.content, None, None, None

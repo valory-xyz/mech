@@ -32,7 +32,7 @@ import numpy as np
 import tiktoken
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from readability import Document
+from readability import Document as ReadabilityDocument
 import requests
 from string import punctuation
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
@@ -72,34 +72,55 @@ TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 # the default number of queries to generate for fetching online information
-DEFAULT_NUM_QUERIES = defaultdict(lambda: 5)
+DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
+NUM_URLS_PER_QUERY = 3
+SPLITTER_CHUNK_SIZE = 1800
+SPLITTER_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-ada-002"
 EMBEDDING_BATCH_SIZE = 1000
+EMBEDDING_SIZE = 1536
 SPLITTER_MAX_TOKENS = 1800
 SPLITTER_OVERLAP = 50
-NUM_NEIGHBOURS = 4
+NUM_NEIGHBORS = 4
 
 
 PREDICTION_PROMPT = """
-Your task is to predict the probability of the event in the USER_PROMPT occurring.
-USER_PROMPT is the user's question that you need to answer.
-ADDITIONAL_INFORMATION is the information that you can use to make your prediction.
-Think through your answer before making the prediction.
-Please make use of the function call to generate the prediction. Only function call is allowed in the response.
+INSTRUCTIONS
+* You are an expert data analyst. 
+* You are provided with the input question about an event under the label "USER_PROMPT". 
+* Your task is to predict the probability of the event in the USER_PROMPT occurring.
+* ADDITIONAL_INFORMATION is the information that you can use to make your prediction.
+* Think through your answer before making the prediction.
+* ONLY function calls are allowed in the response.
 
 USER_PROMPT:
-```{user_prompt}```
+```
+{user_prompt}
+```
 
 ADDITIONAL_INFORMATION: 
 ```{additional_information}```
 """
 
 URL_QUERY_PROMPT = """
-Given the user's question, please generate {num_queries} diverse and relevant search queries that can be used to find information on the internet to answer the initial question. 
-Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
-Only function call is allowed in the response.
+ You are an expert fact checker in a team tasked with determining whether an event will happen before a given date in the past. 
+* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event occured. 
+* You are provided with the input question about the event under the label "USER_PROMPT". 
+* You must follow the instructions under the label "INSTRUCTIONS". 
 
-USER's QUESTION: {user_prompt}
+INSTRUCTIONS
+* Read the input under the label "USER_PROMPT" delimited by three backticks.
+* The "USER_PROMPT" is a question about whether an event will happen before a given date.
+* The event will only have has two possible outcomes: either the event will happen or the event will not happen.
+* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
+* You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event will occur. 
+* Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
+* ONLY function calls are allowed in the response.
+
+USER_PROMPT:
+```
+{user_prompt}
+```
 """
 
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
@@ -173,6 +194,52 @@ class Results(OpenAISchema):
 class Queries(OpenAISchema):
     queries: List[str]
 
+class Document(BaseModel):
+    text: str
+    url: str
+    embedding: Optional[List[float]] = None
+
+def multi_queries(
+    client: OpenAI,
+    prompt: str,
+    engine: str,
+    num_queries: int,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> List[str]:
+    """Generate multiple queries for fetching information from the web."""
+
+    url_query_prompt = URL_QUERY_PROMPT.format(
+        user_prompt=prompt, num_queries=num_queries
+    )
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": url_query_prompt},
+    ]
+
+    response = client.chat.completions.create(
+        model=engine,
+        messages=messages,
+        temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+        max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+        n=1,
+        timeout=150,
+        stop=None,
+        functions=[Queries.openai_schema],
+    )
+    queries = Queries.from_response(response)
+
+    # append the user's question to the list of queries
+    queries.queries.append(prompt)
+
+    if counter_callback:
+        counter_callback(
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            model=engine,
+        )
+        return queries.queries, counter_callback
+    return queries.queries, None
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
@@ -194,41 +261,46 @@ def get_urls_from_queries(
     """Get URLs from search engine queries"""
     results = []
     for query in queries:
-        for url in search_google(
-            query=query,
-            api_key=api_key,
-            engine=engine,
-            num=num,
-        ):
-            results.append(url)
+        try:
+            for url in search_google(
+                query=query,
+                api_key=api_key,
+                engine=engine,
+                num=num,
+            ):
+                results.append(url)
+        except:
+            pass
     unique_results = list(set(results))
     return unique_results
 
 
 def find_similar_chunks(
-    query: str, chunk_to_embedding: Dict, k: int = 4
+    query: str, docs_with_embeddings: List[Document], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
 
+    query_embedding = (
+        client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=query,
+        )
+        .data[0]
+        .embedding
+    )
 
-    query_embedding = client.embeddings.create(
-        model=EMBEDDING_MODEL,
-        input=query,
-    ).data[0].embedding
-
-    index = faiss.IndexFlatIP(1536)
-    index.add(np.array(list(chunk_to_embedding.values())))
+    index = faiss.IndexFlatIP(EMBEDDING_SIZE)
+    index.add(np.array([doc.embedding for doc in docs_with_embeddings]))
     D, I = index.search(np.array([query_embedding]), k)
 
-    return [list(chunk_to_embedding.keys())[i] for i in I[0]]
+    return [docs_with_embeddings[i] for i in I[0]]
 
 
-def get_embeddings(split_docs):
-    # Make chunks to embeddings mapping
-    chunk_to_embedding = {}
+def get_embeddings(split_docs: List[Document]) -> List[Document]:
+    """Get embeddings for the split documents."""
     for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
         batch_end = batch_start + EMBEDDING_BATCH_SIZE
-        batch = split_docs[batch_start:batch_end]
+        batch = [doc.text for doc in split_docs[batch_start:batch_end]]
         response = client.embeddings.create(
             model=EMBEDDING_MODEL,
             input=batch,
@@ -236,16 +308,17 @@ def get_embeddings(split_docs):
         for i, be in enumerate(response.data):
             assert i == be.index
         batch_embeddings = [e.embedding for e in response.data]
-        for chunk, embedding in zip(batch, batch_embeddings):
-            chunk_to_embedding[chunk] = embedding
-    return chunk_to_embedding
+        for i, doc in enumerate(split_docs[batch_start:batch_end]):
+            doc.embedding = batch_embeddings[i]
+    return split_docs
 
 
 def extract_text(
+    client: OpenAI,
     html: str,
 ) -> str:
     """Extract text from a single HTML document"""
-    text = Document(html).summary()
+    text = ReadabilityDocument(html).summary()
 
     # use html2text to convert HTML to markdown
     h = html2text.HTML2Text()
@@ -260,8 +333,8 @@ def extract_text(
 
     # remove newlines and extra spaces
     text = " ".join(text.split())
-    
-    return text
+    doc = Document(text=text, url="")
+    return doc
 
 
 def process_in_batches(
@@ -278,7 +351,10 @@ def process_in_batches(
             yield futures
 
 
-def extract_texts(urls: List[str]) -> List[str]:
+def extract_texts(
+    urls: List[str],
+    client: OpenAI,
+) -> Tuple[List[str], Dict[str, str]]:
     """Extract texts from URLs"""
     max_allowed = 5
     extracted_texts = []
@@ -286,21 +362,23 @@ def extract_texts(urls: List[str]) -> List[str]:
     stop = False
     for batch in process_in_batches(urls=urls):
         for future, url in batch:
-            try:
-                result = future.result()
-                if result.status_code != 200:
-                    continue
-                extracted_texts.append(
-                    extract_text(html=result.text)
-                )
-                count += 1
-                if count >= max_allowed:
-                    stop = True
-                    break
-            except requests.exceptions.ReadTimeout:
-                print(f"Request timed out: {url}.")
-            except Exception as e:
-                print(f"An error occurred: {e}")
+            # try:
+            result = future.result()
+            if result.status_code != 200:
+                continue
+            doc = extract_text(
+                html=result.text, client=client
+            )
+            doc.url = url
+            extracted_texts.append(doc)
+            count += 1
+            if count >= max_allowed:
+                stop = True
+                break
+            # except requests.exceptions.ReadTimeout:
+            #     print(f"Request timed out: {url}.")
+            # except Exception as e:
+            #     print(f"An error occurred: {e}")
         if stop:
             break
     return extracted_texts
@@ -314,63 +392,85 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
 
 
 def fetch_additional_information(
+    client: OpenAI,
     prompt: str,
     engine: str,
-    temperature: float,
-    max_tokens: int,
     google_api_key: Optional[str],
-    google_engine: Optional[str],
-    num_urls: Optional[int],
-    num_queries: Optional[int],
-    counter_callback: Optional[Callable] = None,
+    google_engine_id: Optional[str],
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
     source_links: Optional[List[str]] = None,
-) -> str:
-    """Fetch additional information."""
-    url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt, num_queries=num_queries)
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": url_query_prompt},
-    ]
+) -> Tuple:
+    """Fetch additional information from the web."""
 
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=150,
-        stop=None,
-        functions=[Queries.openai_schema],
+    # generate multiple queries for fetching information from the web
+    queries, counter_callback = multi_queries(
+        client=client,
+        prompt=prompt,
+        engine=engine,
+        num_queries=DEFAULT_NUM_QUERIES,
+        counter_callback=counter_callback,
     )
-    queries = Queries.from_response(response)
+    print(f"Queries: {queries}")
+
+    # get the top URLs for the queries
     if not source_links:
         urls = get_urls_from_queries(
-            queries.queries,
-            google_api_key,
-            google_engine,
-            num_urls,
+            queries=queries,
+            api_key=google_api_key,
+            engine=google_engine_id,
+            num=NUM_URLS_PER_QUERY,
         )
-        texts = extract_texts(urls)
+        print(f"URLs: {urls}")
+
+        # Extract text and dates from the URLs
+        docs = extract_texts(
+            urls=urls, client=client, 
+        )
     else:
         texts = []
-        for source_link in islice(source_links.values(), num_urls):
-            texts.append(extract_text(html=source_link))
+        for url, content in islice(source_links.items(), 3):
+            doc = {}
+            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+            texts.append(doc)
 
-    split_texts = []
-    for text in texts:
-        split_texts += recursive_character_text_splitter(text, SPLITTER_MAX_TOKENS, SPLITTER_OVERLAP)
-    chunk_to_embedding = get_embeddings(split_texts)
-    retrieved_chunks = find_similar_chunks(prompt, chunk_to_embedding, NUM_NEIGHBOURS)
+    # Remove None values from the list
+    docs = [doc for doc in docs if doc]
 
-    if counter_callback:
-        counter_callback(
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=engine,
+    # Chunk the documents
+    split_docs = []
+    for doc in docs:
+        t = recursive_character_text_splitter(
+            doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
         )
-        return "\n".join(["--- " + text for text in retrieved_chunks]), counter_callback
+        split_docs.extend(
+            [Document(text=chunk, url=doc.url) for chunk in t]
+        )
+    print(f"Split Docs: {len(split_docs)}")
 
-    return "\n".join(["--- " + text for text in retrieved_chunks]), None
+    # Remove None values from the list
+    split_docs = [doc for doc in split_docs if doc]
+
+    # Embed the documents
+    docs_with_embeddings = get_embeddings(split_docs)
+    print(f"Docs with embeddings: {len(docs_with_embeddings)}")
+
+    # Find similar chunks
+    similar_chunks = find_similar_chunks(
+        query=prompt,
+        docs_with_embeddings=docs_with_embeddings,
+        k=NUM_NEIGHBORS,
+    )
+    print(f"Similar Chunks: {len(similar_chunks)}")
+
+    # Format the additional information
+    additional_information = "\n".join(
+        [
+            f"ARTICLE {i}, URL: {doc.url}, CONTENT: {doc.text}\n"
+            for i, doc in enumerate(similar_chunks)
+        ]
+    )
+
+    return additional_information, counter_callback
 
 
 def adjust_additional_information(
@@ -422,15 +522,14 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             raise ValueError(f"Tool {tool} is not supported.")
 
         engine = TOOL_TO_ENGINE[tool]
+
+        # try:
         additional_information, counter_callback = fetch_additional_information(
-            prompt,
-            engine,
-            temperature,
-            max_tokens,
-            google_api_key,
-            google_engine_id,
-            num_urls,
-            num_queries,
+            client=client,
+            prompt=prompt,
+            engine=engine,
+            google_api_key=google_api_key,
+            google_engine_id=google_engine_id,
             counter_callback=counter_callback,
             source_links=kwargs.get("source_links", None),
         )
@@ -475,3 +574,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             )
             return results, prediction_prompt, counter_callback
         return results, prediction_prompt, None
+
+        # except Exception as e:
+        #     return None, None, None

@@ -25,6 +25,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Iterator, Callable
 from itertools import islice
 
+import anthropic
 import requests
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 import html2text
@@ -32,7 +33,7 @@ from readability import Document
 from googleapiclient.discovery import build
 
 NUM_URLS_EXTRACT = 5
-DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
+DEFAULT_NUM_WORDS = 300
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0.7,
@@ -119,12 +120,16 @@ OUTPUT_FORMAT
 * Never use Markdown syntax highlighting, such as ```json```. Only output the raw json string.
 * This is incorrect:"```json{{\n  \"queries\": [\"term1\", \"term2\"]}}```"
 * This is incorrect:```json"{{\n  \"queries\": [\"term1\", \"term2\"]}}"```
-* This is correct:"{{\n  \"quries\": [\"term1\", \"term2\"]}}"
+* This is correct:"{{\n  \"queries\": [\"term1\", \"term2\"]}}"
 """
 
 ASSISTANT_TEXT = "```json"
 STOP_SEQUENCES = ["```"]
 
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    return anthropic.Anthropic().count_tokens(text)
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
@@ -208,9 +213,10 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(
-                    extract_text(html=result.text, num_words=num_words)
-                )
+                doc = {}
+                doc['text'] = extract_text(html=result.text, num_words=num_words)
+                doc['url'] = url
+                extracted_texts.append(doc)
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -254,19 +260,29 @@ def fetch_additional_information(
         texts = extract_texts(urls)
     else:
         texts = []
-        for source_link in islice(source_links.values(), num_urls):
-            texts.append(extract_text(html=source_link, num_words=num_words))
+        for url, content in islice(source_links.items(), num_urls):
+            doc = {}
+            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+            texts.append(doc)
+    # Format the additional information
+    additional_information = "\n".join(
+        [
+            f"ARTICLE {i}, URL: {doc['url']}, CONTENT: {doc['text']}\n"
+            for i, doc in enumerate(texts)
+        ]
+    )
     if counter_callback:
         counter_callback(
             model=engine,
             input_prompt=url_query_prompt,
             output_tokens=40,
+            token_counter=count_tokens,
         )
-        return "\n".join(["- " + text for text in texts]), counter_callback
-    return "\n".join(["- " + text for text in texts]), None
+        return additional_information, counter_callback
+    return additional_information, None
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
@@ -313,7 +329,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
             input_prompt=prediction_prompt,
             output_prompt=completion.completion,
+            token_counter=count_tokens,
         )
-        return completion.completion, prediction_prompt, counter_callback
+        return completion.completion, prediction_prompt, None, counter_callback
 
-    return completion.completion, prediction_prompt, None
+    return completion.completion, prediction_prompt, None, None
