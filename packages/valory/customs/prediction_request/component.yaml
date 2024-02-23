@@ -1,0 +1,14 @@
+name: prediction_request
+author: valory
+version: 0.1.0
+type: custom
+description: A tool for making binary predictions on markets using OpenAI API.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
+  prediction_request.py: bafybeiexzmkoe4266md7upysfjp25duqfs46tngmya2itebziezvibbnbi
+fingerprint_ignore_patterns: []
+entry_point: prediction_request.py
+callable: run
+dependencies: {}

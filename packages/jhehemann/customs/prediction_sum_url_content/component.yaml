@@ -1,0 +1,15 @@
+name: prediction_sum_url_content
+author: jhehemann
+version: 0.1.0
+type: custom
+description: A tool for making binary predictions using the sum of the content of
+  a URL article.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
+  prediction_sum_url_content.py: bafybeigsvwhkf7ajrgfy3ovzzqh6h5qg3rues4cqrysiautl6flpr35ja4
+fingerprint_ignore_patterns: []
+entry_point: prediction_sum_url_content.py
+callable: run
+dependencies: {}
