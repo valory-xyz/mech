@@ -86,8 +86,10 @@ OUTPUT_FORMAT
 * The sum of "p_yes" and "p_no" must equal 1.
 * Output only the JSON object. Do not include any other contents in your response.
 * Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
+* Do not output the json string surrounded by quotation marks
 * This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
 * This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+* This is incorrect:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 * This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
@@ -141,7 +143,11 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
         )
         .execute()
     )
-    return [result["link"] for result in search["items"]]
+    items = search.get('items')
+    if items is not None:
+        return [result["link"] for result in items]
+    else:
+        return []
 
 
 def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List[str]:

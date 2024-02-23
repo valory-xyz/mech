@@ -144,6 +144,7 @@ OUTPUT_FORMAT
      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
      or lead to obtain the same set of results.
 * Output only the JSON object. Do not include any other contents in your response.
+* Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
 * This is incorrect: "```json{{"queries": []}}```"
 * This is incorrect: "```json"{{"queries": []}}"```"
 * This is correct: "{{"queries": []}}"
@@ -198,7 +199,11 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
         )
         .execute()
     )
-    return [result["link"] for result in search["items"]]
+    items = search.get('items')
+    if items is not None:
+        return [result["link"] for result in items]
+    else:
+        return []
 
 
 def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List[str]:
