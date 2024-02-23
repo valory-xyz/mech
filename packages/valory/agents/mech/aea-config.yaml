@@ -38,7 +38,7 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihljirk3d4rgvmx2nmz3p2mp27iwh2o5euce5gccwjwrpawyjzuaq
 - valory/abstract_round_abci:0.1.0:bafybeigjrepaqpb3m7zunmt4hryos4vto4yyj3u6iyofdb2fotwho3bqvm
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeib6nqbsmlsgbomld2tsyk4cjni4t7rnx7css4tmsmssmhjzm4gs74
+- valory/mech_abci:0.1.0:bafybeiahkev6ur4otoeuprgedck3pk6ob4q44lyvdkvz733ftu54zicw3i
 - valory/registration_abci:0.1.0:bafybeif3ln6eg53ebrfe6uicjew4uqp2ynyrcxkw5wi4jm3ixqv3ykte4a
 - valory/reset_pause_abci:0.1.0:bafybeicm7onl72rfnn33pbvzwjpkl5gafeieyobfcnyresxz7kunjwmqea
 - valory/subscription_abci:0.1.0:bafybeidtoiyzlenxawjkyogwbfjgui2a22srdo6zbajubgg6awgha5hm4m
@@ -196,6 +196,7 @@ models:
       profit_split_freq: ${int:1}
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
+      termination_from_block: ${int:0}
       mech_to_subscription: ${list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["0x0000000000000000000000000000000000000000","1"]]]}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
