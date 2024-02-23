@@ -48,8 +48,6 @@ In order to run a local demo service based on the MechKit:
 
     ```bash
     git clone https://github.com/valory-xyz/mech && cd mech
-    poetry run pip install openapi-core==0.13.2
-    poetry run pip install openapi-spec-validator==0.2.8
     poetry install && poetry shell
 
     autonomy init --remote --ipfs --reset --author=your_name
