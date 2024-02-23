@@ -7,7 +7,7 @@ Mechs address a critical need in the agent ecosystem: the ability to outsource c
 
 ## How it works
 
-A Mech service consists of a library of tools. These can range from something as simple as an API call to highly complex business logic. Some examples of tools can be found on [the `valory/customs` folder](https://github.com/valory-xyz/mech/tree/main/packages/valory/customs/tools) of the first operational Mech service.
+A Mech service consists of a library of tools. These can range from something as simple as an API call to highly complex business logic. Some examples of tools can be found on [the `valory/customs` folder](https://github.com/valory-xyz/mech/tree/main/packages/valory/customs) of the first operational Mech service.
 
 For instance, if an agent service needs to perform a task requiring access to an API, instead of each operator having to manage their own keys, the service can make use of a Mech tool. Agents then only need to make a request to a Mech, which gets returned in the form of a deliver event. The agent can then use the deliver event to accomplish what it set out to do. Both the request and deliver events are executed on-chain and the associated data is stored on IPFS making them easily retrievable by agents or anyone else.
 
