@@ -23,9 +23,6 @@ from io import BytesIO
 import PyPDF2
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
-from heapq import nlargest
-from itertools import islice
-from string import punctuation
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from pydantic import BaseModel, Field
 from docstring_parser import parse
@@ -33,10 +30,9 @@ import tiktoken
 from openai import OpenAI
 import numpy as np
 import faiss
-
 import requests
-import html2text
 from readability import Document as ReadabilityDocument
+from markdownify import markdownify as md
 from googleapiclient.discovery import build
 from tiktoken import encoding_for_model
 
@@ -404,6 +400,7 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
 
         return doc
     except Exception as e:
+        print(f"An error occurred: {e}")
         return None
 
 
@@ -414,11 +411,8 @@ def extract_text(
         counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> str:
     """Extract text from a single HTML document"""
-    h = html2text.HTML2Text()
-    h.ignore_links = True
-    h.ignore_images = True
-    h.ignore_emphasis = True
-    text = " ".join(h.handle(ReadabilityDocument(html).summary()).split())
+    text = ReadabilityDocument(html).summary()
+    text = text = md(text, heading_style="ATX")
     date, counter_callback = get_dates(
         client=client, text=text, counter_callback=counter_callback
     )
@@ -630,7 +624,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
-        prompt = kwargs["question"]
+        prompt = kwargs["prompt"]
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)

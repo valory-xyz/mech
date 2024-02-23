@@ -64,3 +64,7 @@ tomte = {version = "==0.2.15", extras = ["cli", "tests"]}
 markdownify = "==0.11.6"
 tavily-python = "==0.3.0"
 chromadb = "==0.4.13"
+readability-lxml = "0.8.1"
+docstring-parser = "0.15"
+faiss-cpu = "1.7.4"
+pypdf2 = "^3.0.1"
