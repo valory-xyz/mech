@@ -25,8 +25,8 @@
         "skill/valory/task_execution/0.1.0": "bafybeienkm3nxcyqllpnndsacaq27nhgwgs4v5vyynvqkyv5uc6aojatji",
         "skill/valory/websocket_client/0.1.0": "bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta",
         "skill/valory/subscription_abci/0.1.0": "bafybeidtoiyzlenxawjkyogwbfjgui2a22srdo6zbajubgg6awgha5hm4m",
-        "agent/valory/mech/0.1.0": "bafybeid7h5igfhffydjhsxu76jchbofarmagq255ld6zf3a5iu6yubfchy",
-        "service/valory/mech/0.1.0": "bafybeiapgyqt7wopqhwfatatxppcynuhg2ye65ltnf5k6zrih5lnka2bee"
+        "agent/valory/mech/0.1.0": "bafybeigileaik3lno5mb3je2tfsmep33eq43qfxtp4razjfo7mzaxzqfxa",
+        "service/valory/mech/0.1.0": "bafybeianvggwocwrat6w6zirab44nwpptigb6aw533zawmqxgjg6eslkdm"
     },
     "third_party": {
         "protocol/valory/default/1.0.0": "bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq",

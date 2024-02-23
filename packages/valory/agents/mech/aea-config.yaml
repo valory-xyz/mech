@@ -185,7 +185,7 @@ models:
       on_chain_service_id: ${int:1}
       agent_registry_address: ${str:0x0000000000000000000000000000000000000000}
       agent_id: ${int:3}
-      metadata_hash: ${str:null}
+      metadata_hash: ${str:0000000000000000000000000000000000000000000000000000000000000000}
       share_tm_config_on_startup: ${bool:false}
       multisend_address: ${str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
       service_registry_address: ${str:0x9338b5153AE39BB89f50468E608eD9d764B755fD}
@@ -218,7 +218,7 @@ models:
       agent_index: ${int:0}
       num_agents: ${int:4}
       from_block_range: ${int:50000}
-      mech_to_config: ${list:[["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
+      mech_to_config: ${list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"]]]}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
 ---
