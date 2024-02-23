@@ -56,8 +56,6 @@ Follow these instructions to have your local environment prepared to run the dem
 1. Create a Poetry virtual environment and install the dependencies:
 
     ```bash
-    poetry run pip install openapi-core==0.13.2
-    poetry run pip install openapi-spec-validator==0.2.8
     poetry install && poetry shell
     ```
 
@@ -71,7 +69,7 @@ Follow these instructions to have your local environment prepared to run the dem
 
 ## Run the demo
 
-Follow the instructions below to run the AI Mech demo executing the tool in `./tools/openai_request.py`. Note that AI Mechs can be configured to work in two modes: *polling mode*, which periodically reads the chain, and *websocket mode*, which receives event updates from the chain. The default mode used by the demo is *polling*.
+Follow the instructions below to run the AI Mech demo executing the tool in `./packages/valory/customs/openai_request.py`. Note that AI Mechs can be configured to work in two modes: *polling mode*, which periodically reads the chain, and *websocket mode*, which receives event updates from the chain. The default mode used by the demo is *polling*.
 
 First, you need to configure the worker service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
 
