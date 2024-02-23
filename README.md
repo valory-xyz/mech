@@ -129,15 +129,15 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 You can create and mint your own AI Mech that handles requests for tasks that you can define.
 
-1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools must be located in the folder `./tools` as a single Python file. Such file must contain a `run` function that accepts `kwargs` and must **always** return a string (`str`). That is, the `run` function must not raise any exception. If exceptions occur inside the function, they must be processed, and the return value must be set accordingly, for example, returning an error code.
+1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools are custom components and should be under the `customs` packages (ex. [valory tools](./packages/valory/customs)). Such file must contain a `run` function that accepts `kwargs` and must **always** return a tuple (`Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]`). That is, the `run` function must not raise any exception. If exceptions occur inside the function, they must be processed, and the return value must be set accordingly, for example, returning an error code.
 
     ```python
-    def run(**kwargs) -> str:
+    def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]::
         """Run the task"""
 
         # Your code here
 
-        return result  # a string
+        return result_str, prompt_used, generated_tx, counter_callback
     ```
 
     The `kwargs` are guaranteed to contain:
@@ -148,17 +148,20 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
     * `prompt` (`kwargs["prompt"]`): a string containing the user prompt.
     * `tool` (`kwargs["tool"]`): a string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
 
-2. **Upload the tool file to IPFS.** You can use the following script:
+2. **Upload the tool file to IPFS.** You can push your tool to IPFS like the other packages:
     ```bash
-    mechx push-to-ipfs "tools/<your_tool>.py"
+    autonomy push-all
     ```
 
     You should see an output similar to this:
     ```
-    IPFS file hash v1: bafybei0123456789abcdef...0
-    IPFS file hash v1 hex: f017012200123456789abcdef...0
+        Pushing: /home/ardian/vlr/mech/packages/valory/customs/openai_request
+        Pushed component with:
+        PublicId: valory/openai_request:0.1.0
+        Package hash: bafybeibdcttrlgp5udygntka5fofi566pitkxhquke37ng7csvndhy4s2i
     ```
-    Note down the generated hashes for your tool.
+    Your tool will be available on [packages.json](packages/packages.json).
+
 
 3. **Configure your service.** Edit the `.env` file. The demo service has this configuration:
     ```bash
