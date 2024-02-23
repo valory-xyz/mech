@@ -161,6 +161,7 @@ models:
       slash_cooldown_hours: 3
       hash_checkpoint_address: '0x0000000000000000000000000000000000000000'
       slash_threshold_amount: 10000000000000000
+      termination_from_block: 0
       light_slash_unit_amount: 5000000000000000
       service_owner_share: 0.1
       profit_split_freq: 100
