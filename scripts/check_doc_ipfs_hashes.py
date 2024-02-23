@@ -83,6 +83,9 @@ class Package:  # pylint: disable=too-few-public-methods
 
         if self.name == "scaffold":
             return
+        if self.type == "customs":
+            print(f"Package: skipping {self.package_id} as it is a custom packages")
+            return
 
         if self.type not in (
             "connections",
