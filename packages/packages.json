@@ -2,7 +2,7 @@
     "dev": {
         "custom/valory/native_transfer_request/0.1.0": "bafybeihugaylajwh2fgypxatcw5qrw5qxadtrsi2h2s2246442wlvjirtm",
         "custom/valory/resolve_market_reasoning/0.1.0": "bafybeiesjzyamxd2g3jl2osfesxze67qhhsqxnhp5pl5bqcv3vgfddy5ae",
-        "custom/valory/prediction_request_claude/0.1.0": "bafybeigrgi7osdbzdii46qi6dhuwjp7zx3szofez5jm4fk2kx2f4nz5cxy",
+        "custom/valory/prediction_request_claude/0.1.0": "bafybeifakrqkifkozpbvar3ek34xouckj5ct3x7g64k26x6cf55j5rux3u",
         "custom/valory/openai_request/0.1.0": "bafybeibdcttrlgp5udygntka5fofi566pitkxhquke37ng7csvndhy4s2i",
         "custom/valory/prediction_request_embedding/0.1.0": "bafybeieyebiw4vedicpkyibj4zqtcnqp2i3kvk7vpn35psud4ujmrknux4",
         "custom/valory/resolve_market/0.1.0": "bafybeih3a4n3fnx4qmy3lpp4paat4wqvpgjyd5emot37cs4i5p6ii672bm",
@@ -12,7 +12,7 @@
         "custom/jhehemann/prediction_sum_url_content/0.1.0": "bafybeia2coxsrc3ruodypqvxqyweaqphneyh6o3j7n7gqg3ipe5n3ec6zu",
         "custom/psouranis/optimization_by_prompting/0.1.0": "bafybeibgfovquvu3gg4o7y6ud2sr536v45o2dj4shqobc7bqzzdyjbinei",
         "custom/nickcom007/sme_generation_request/0.1.0": "bafybeihfl4663yjkxltidavnxou7rumld5wzcr43uw23bpvb3ivefsjhv4",
-        "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeiclabo2ywvvnky2h3iahue7s3dslalab7xpttez6p2m4x36jae6xy",
+        "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeicswze7sobpdtpypcgt75b4wvxs3eex5sznswnopxwunyzki6ew5a",
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
         "protocol/valory/websocket_client/0.1.0": "bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4",
         "contract/valory/agent_mech/0.1.0": "bafybeigidwivuynzbtakkzsnnxxls54qaycw2oef4yth5lmtmwotmrf6qq",
