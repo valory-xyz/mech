@@ -337,15 +337,27 @@ class AgentMechContract(Contract):
         contract_address: str,
         from_block: BlockIdentifier = "earliest",
         to_block: BlockIdentifier = "latest",
+        max_block_window: int = 1000,
         **kwargs: Any,
     ) -> JSONLike:
         """Get the requests that are not delivered."""
-        requests: List[Dict[str, Any]] = cls.get_request_events(
-            ledger_api, contract_address, from_block, to_block
-        )["data"]
-        delivers: List[Dict[str, Any]] = cls.get_deliver_events(
-            ledger_api, contract_address, from_block, to_block
-        )["data"]
+        if from_block == "earliest":
+            from_block = 0
+
+        current_block = ledger_api.api.eth.block_number
+        requests, delivers = [], []
+        for from_block_batch in range(int(from_block), current_block, max_block_window):
+            to_block_batch = (from_block_batch + max_block_window) - 1
+            if to_block_batch >= current_block:
+                to_block_batch = "latest"
+            requests_batch: List[Dict[str, Any]] = cls.get_request_events(
+                ledger_api, contract_address, from_block_batch, to_block_batch
+            )["data"]
+            delivers_batch: List[Dict[str, Any]] = cls.get_deliver_events(
+                ledger_api, contract_address, from_block_batch, to_block_batch
+            )["data"]
+            requests.extend(requests_batch)
+            delivers.extend(delivers_batch)
         pending_tasks: List[Dict[str, Any]] = []
         for request in requests:
             if request["requestId"] not in [
@@ -366,22 +378,12 @@ class AgentMechContract(Contract):
         **kwargs: Any,
     ) -> JSONLike:
         """Get the requests that are not delivered."""
-        current_block = ledger_api.api.eth.block_number
-        if from_block == "earliest":
-            from_block = 0
-
-        from_block = int(from_block)
         pending_tasks: List[Dict[str, Any]] = []
-        for from_block_batch in range(from_block, current_block, max_block_window):
-            for contract_address in contract_addresses:
-                to_block_batch = (from_block_batch + max_block_window) - 1
-                if to_block_batch >= current_block:
-                    to_block_batch = "latest"
-                to_block_batch = cast(BlockIdentifier, to_block_batch)
-                pending_tasks_batch = cls.get_undelivered_reqs(
-                    ledger_api, contract_address, from_block_batch, to_block_batch
-                ).get("data")
-                pending_tasks.extend(pending_tasks_batch)
+        for contract_address in contract_addresses:
+            pending_tasks_batch = cls.get_undelivered_reqs(
+                ledger_api, contract_address, from_block, max_block_window
+            ).get("data")
+            pending_tasks.extend(pending_tasks_batch)
         return {"data": pending_tasks}
 
     @classmethod
