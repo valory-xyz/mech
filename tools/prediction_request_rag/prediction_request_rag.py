@@ -34,6 +34,7 @@ from readability import Document as ReadabilityDocument
 import requests
 from markdownify import markdownify as md
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
@@ -233,6 +234,7 @@ def multi_queries(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
             model=engine,
+            token_counter=count_tokens,
         )
         return queries.queries, counter_callback
     return queries.queries, None
@@ -249,6 +251,12 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
         .execute()
     )
     return [result["link"] for result in search["items"]]
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 def get_urls_from_queries(
@@ -567,6 +575,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
                 model=engine,
+                token_counter=count_tokens,
+
             )
-            return results, prediction_prompt, counter_callback
-        return results, prediction_prompt, None
+            return results, prediction_prompt, None, counter_callback
+        return results, prediction_prompt, None, None
