@@ -23,10 +23,10 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeigjrepaqpb3m7zunmt4hryos4vto4yyj3u6iyofdb2fotwho3bqvm
 - valory/registration_abci:0.1.0:bafybeif3ln6eg53ebrfe6uicjew4uqp2ynyrcxkw5wi4jm3ixqv3ykte4a
 - valory/reset_pause_abci:0.1.0:bafybeicm7onl72rfnn33pbvzwjpkl5gafeieyobfcnyresxz7kunjwmqea
-- valory/task_submission_abci:0.1.0:bafybeifaqewhshy4xrm7nejtmwgm6wwm6k4ps2xn4v2kckpwqsr7wblslm
+- valory/task_submission_abci:0.1.0:bafybeigvqvwyveifx7igpfsgu2kemx23yo4m6gdk22bqgj4frv3nzkqcly
 - valory/termination_abci:0.1.0:bafybeie6h7j4hyhgj2wte64n3xyudxq4pgqcqjmslxi5tff4mb6vce2tay
 - valory/transaction_settlement_abci:0.1.0:bafybeid57tozt5f3kgzmu22nbr3c3oy4p7bi2bu66rqsgnlylq6xgh2ixe
-- valory/subscription_abci:0.1.0:bafybeidtoiyzlenxawjkyogwbfjgui2a22srdo6zbajubgg6awgha5hm4m
+- valory/subscription_abci:0.1.0:bafybeibffhyly723sb65diu7iul2iclkkwp5egm3ybuqh65hylyyo5o53u
 behaviours:
   main:
     args: {}

@@ -367,14 +367,21 @@ class AgentMechContract(Contract):
     ) -> JSONLike:
         """Get the requests that are not delivered."""
         current_block = ledger_api.api.eth.block_number
-        if from_block != "earliest" and current_block - from_block > max_block_window:
-            from_block = current_block - max_block_window
+        if from_block == "earliest":
+            from_block = 0
+
+        from_block = int(from_block)
         pending_tasks: List[Dict[str, Any]] = []
-        for contract_address in contract_addresses:
-            pending_tasks_batch = cls.get_undelivered_reqs(
-                ledger_api, contract_address, from_block
-            ).get("data")
-            pending_tasks.extend(pending_tasks_batch)
+        for from_block_batch in range(from_block, current_block, max_block_window):
+            for contract_address in contract_addresses:
+                to_block_batch = from_block_batch + max_block_window
+                if to_block_batch >= current_block:
+                    to_block_batch = "latest"
+                to_block_batch = cast(BlockIdentifier, to_block_batch)
+                pending_tasks_batch = cls.get_undelivered_reqs(
+                    ledger_api, contract_address, from_block_batch, to_block_batch
+                ).get("data")
+                pending_tasks.extend(pending_tasks_batch)
         return {"data": pending_tasks}
 
     @classmethod

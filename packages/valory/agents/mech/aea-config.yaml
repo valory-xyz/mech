@@ -15,7 +15,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 - valory/websocket_client:0.1.0:bafybeiflmystocxaqblhpzqlcop2vkhsknpzjx2jomohomaxamwskeokzm
 contracts:
-- valory/agent_mech:0.1.0:bafybeigidwivuynzbtakkzsnnxxls54qaycw2oef4yth5lmtmwotmrf6qq
+- valory/agent_mech:0.1.0:bafybeicv5zqu3pxy26qisewcphqulsfe6dc4hwanlcmdbxiq3zybhosvb4
 - valory/agent_registry:0.1.0:bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu
 - valory/gnosis_safe:0.1.0:bafybeictjc7saviboxbsdcey3trvokrgo7uoh76mcrxecxhlvcrp47aqg4
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeie6ynnoavvk2fpbn426nlp32sxrj7pz5esgebtlezy4tmx5gjretm
@@ -38,12 +38,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihljirk3d4rgvmx2nmz3p2mp27iwh2o5euce5gccwjwrpawyjzuaq
 - valory/abstract_round_abci:0.1.0:bafybeigjrepaqpb3m7zunmt4hryos4vto4yyj3u6iyofdb2fotwho3bqvm
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeiahkev6ur4otoeuprgedck3pk6ob4q44lyvdkvz733ftu54zicw3i
+- valory/mech_abci:0.1.0:bafybeihiwqcelimabxrcszvgszlvk4ibjkqsvqr2flsueccapudimyfhqa
 - valory/registration_abci:0.1.0:bafybeif3ln6eg53ebrfe6uicjew4uqp2ynyrcxkw5wi4jm3ixqv3ykte4a
 - valory/reset_pause_abci:0.1.0:bafybeicm7onl72rfnn33pbvzwjpkl5gafeieyobfcnyresxz7kunjwmqea
-- valory/subscription_abci:0.1.0:bafybeidtoiyzlenxawjkyogwbfjgui2a22srdo6zbajubgg6awgha5hm4m
-- valory/task_execution:0.1.0:bafybeienkm3nxcyqllpnndsacaq27nhgwgs4v5vyynvqkyv5uc6aojatji
-- valory/task_submission_abci:0.1.0:bafybeifaqewhshy4xrm7nejtmwgm6wwm6k4ps2xn4v2kckpwqsr7wblslm
+- valory/subscription_abci:0.1.0:bafybeibffhyly723sb65diu7iul2iclkkwp5egm3ybuqh65hylyyo5o53u
+- valory/task_execution:0.1.0:bafybeigj2a7hae32kprtxmfi7b2alphionbskhqk5lfsrn3p3hxef6b4ie
+- valory/task_submission_abci:0.1.0:bafybeigvqvwyveifx7igpfsgu2kemx23yo4m6gdk22bqgj4frv3nzkqcly
 - valory/termination_abci:0.1.0:bafybeie6h7j4hyhgj2wte64n3xyudxq4pgqcqjmslxi5tff4mb6vce2tay
 - valory/transaction_settlement_abci:0.1.0:bafybeid57tozt5f3kgzmu22nbr3c3oy4p7bi2bu66rqsgnlylq6xgh2ixe
 - valory/websocket_client:0.1.0:bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta
