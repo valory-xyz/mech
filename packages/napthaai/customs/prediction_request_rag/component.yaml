@@ -6,8 +6,8 @@ description: A tool for making binary predictions on markets using RAG.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiaokvzidix34ql4jbggljf7qxjffglveezsk62ehohesblazf5knu
-  prediction_request_rag.py: bafybeidfmj4gtb2e7qiruzs6wnl2mxzigv2agxqwdskpe2hvzga2kp7gz4
+  __init__.py: bafybeibt7f7crtwvmkg7spy3jhscmlqltvyblzp32g6gj44v7tlo5lycuq
+  prediction_request_rag.py: bafybeihf7keywcjed6jhjr57svmhhv54yjlnaws2yvoxtixws43fmpdcmy
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_rag.py
 callable: run
