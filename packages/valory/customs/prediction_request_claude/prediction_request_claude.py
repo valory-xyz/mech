@@ -20,7 +20,6 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
-from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, List, Optional, Tuple, Iterator, Callable
 from itertools import islice
@@ -28,7 +27,8 @@ from itertools import islice
 import anthropic
 import requests
 from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
-from bs4 import BeautifulSoup
+from readability import Document
+from markdownify import markdownify as md
 from googleapiclient.discovery import build
 
 NUM_URLS_EXTRACT = 5
@@ -167,17 +167,21 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
 
 def extract_text(
     html: str,
-    num_words: int = 300,  # TODO: summarise using LLM instead of limit
+    num_words: Optional[int] = None,
 ) -> str:
     """Extract text from a single HTML document"""
-    soup = BeautifulSoup(html, "html.parser")
-    for script in soup(["script", "style"]):
-        script.extract()
-    text = soup.get_text()
-    lines = (line.strip() for line in text.splitlines())
-    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
-    text = "\n".join(chunk for chunk in chunks if chunk)
-    return text[:num_words]
+    text = Document(html).summary()
+    text = md(text, heading_style="ATX")
+    if text is None:
+        return ""
+
+    if num_words:
+        return " ".join(text.split()[:num_words])
+    
+    # remove newlines and extra spaces
+    text = " ".join(text.split())
+    
+    return text
 
 
 def process_in_batches(
@@ -206,9 +210,10 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                extracted_texts.append(
-                    extract_text(html=result.text, num_words=num_words)
-                )
+                doc = {}
+                doc['text'] = extract_text(html=result.text, num_words=num_words)
+                doc['url'] = url
+                extracted_texts.append(doc)
                 count += 1
                 if count >= max_allowed:
                     stop = True
@@ -252,8 +257,17 @@ def fetch_additional_information(
         texts = extract_texts(urls)
     else:
         texts = []
-        for source_link in islice(source_links.values(), 3):
-            texts.append(extract_text(html=source_link, num_words=num_words))
+        for url, content in islice(source_links.items(), num_urls):
+            doc = {}
+            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+            texts.append(doc)
+    # Format the additional information
+    additional_information = "\n".join(
+        [
+            f"ARTICLE {i}, URL: {doc['url']}, CONTENT: {doc['text']}\n"
+            for i, doc in enumerate(texts)
+        ]
+    )
     if counter_callback:
         counter_callback(
             model=engine,
@@ -261,8 +275,7 @@ def fetch_additional_information(
             output_tokens=40,
             token_counter=count_tokens,
         )
-        return "\n".join(["- " + text for text in texts]), counter_callback
-    return "\n".join(["- " + text for text in texts]), None
+    return additional_information, counter_callback
 
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
@@ -314,6 +327,5 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             output_prompt=completion.completion,
             token_counter=count_tokens,
         )
-        return completion.completion, prediction_prompt, None, counter_callback
 
-    return completion.completion, prediction_prompt, None, None
+    return completion.completion, prediction_prompt, None, counter_callback

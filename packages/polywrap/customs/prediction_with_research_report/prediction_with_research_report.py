@@ -22,6 +22,7 @@
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
+import random
 
 import openai
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -328,7 +329,7 @@ def create_embeddings_from_results(results: list[WebScrapeResult], text_splitter
                 model_name="text-embedding-ada-002"
             )
     collection = client.create_collection(
-        name="web_search_results",
+        name=f"web_search_results_{random.randint(1, 100)}",
         embedding_function=openai_ef,
         metadata={"hnsw:space": "cosine"}
     )
@@ -530,7 +531,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     model = TOOL_TO_ENGINE[tool]
     
     queries, counter_callback = generate_subqueries(query=prompt, limit=initial_subqueries_limit, api_key=openai_api_key, model=model, counter_callback=counter_callback)
-    queries, counter_callback = rerank_subqueries(queries=queries, goal=prompt, api_key=openai_api_key, model=model, counter_callback=counter_callback)[:subqueries_limit]
+    queries, counter_callback = rerank_subqueries(queries=queries, goal=prompt, api_key=openai_api_key, model=model, counter_callback=counter_callback)
+    queries = queries[:subqueries_limit]
 
     search_results_with_queries = search(queries, tavily_api_key, lambda result: not result["url"].startswith("https://www.youtube"))
 
@@ -545,7 +547,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     )
     collection = create_embeddings_from_results(scraped, text_splitter, api_key=openai_api_key)
 
-    
     query_results = collection.query(query_texts=queries, n_results=top_k_per_query)
     vector_result_texts: list[str] = []
     

@@ -1,0 +1,14 @@
+name: prediction_request_rag
+author: napthaai
+version: 0.1.0
+type: custom
+description: A tool for making binary predictions on markets using RAG.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeibt7f7crtwvmkg7spy3jhscmlqltvyblzp32g6gj44v7tlo5lycuq
+  prediction_request_rag.py: bafybeicom4vvc5am4jik3ufvozrf7akbizd4ab6yeaazw6m4qrb5sirldi
+fingerprint_ignore_patterns: []
+entry_point: prediction_request_rag.py
+callable: run
+dependencies: {}
