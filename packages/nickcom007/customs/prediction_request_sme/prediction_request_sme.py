@@ -30,6 +30,7 @@ from openai import OpenAI
 
 import requests
 from readability import Document
+from markdownify import markdownify as md
 from googleapiclient.discovery import build
 from tiktoken import encoding_for_model
 
@@ -228,25 +229,21 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
 
 def extract_text(
     html: str,
-    num_words: int = 300,  # TODO: summerise using GPT instead of limit
+    num_words: Optional[int] = None,
 ) -> str:
     """Extract text from a single HTML document"""
     text = Document(html).summary()
-
-    # use html2text to convert HTML to markdown
-    text 
-
-    # if text is None, return an empty string
+    text = md(text, heading_style="ATX")
     if text is None:
         return ""
 
+    if num_words:
+        return " ".join(text.split()[:num_words])
+    
     # remove newlines and extra spaces
     text = " ".join(text.split())
-
-    if not num_words:
-        return text
     
-    return text[:num_words]
+    return text
 
 
 def process_in_batches(
@@ -351,8 +348,8 @@ def fetch_additional_information(
             model=engine,
             token_counter=count_tokens,
         )
-        return additional_information, counter_callback
-    return additional_information, None
+    
+    return additional_information, counter_callback
 
 
 def get_sme_role(
@@ -505,5 +502,5 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-            return response.choices[0].message.content, prediction_prompt, None, counter_callback
-        return response.choices[0].message.content, prediction_prompt, None, None
+        
+        return response.choices[0].message.content, prediction_prompt, None, counter_callback

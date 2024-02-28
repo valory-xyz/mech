@@ -330,11 +330,10 @@ def extract_text(
     if text is None:
         return ""
 
-    # remove newlines and extra spaces
-    text = " ".join(text.split())
-
     if num_words:
         text = " ".join(text.split()[:num_words])
+    else:
+        text = " ".join(text.split())
 
     doc = Document(text=text, url="")
     return doc
@@ -578,5 +577,5 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
                 token_counter=count_tokens,
 
             )
-            return results, prediction_prompt, None, counter_callback
-        return results, prediction_prompt, None, None
+    
+    return results, prediction_prompt, None, counter_callback

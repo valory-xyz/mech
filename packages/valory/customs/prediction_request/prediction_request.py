@@ -213,11 +213,11 @@ def extract_text(
     if text is None:
         return ""
 
-    # remove newlines and extra spaces
-    text = " ".join(text.split())
-
     if num_words:
         return " ".join(text.split()[:num_words])
+    
+    # remove newlines and extra spaces
+    text = " ".join(text.split())
     
     return text
 
@@ -324,8 +324,7 @@ def fetch_additional_information(
             model=engine,
             token_counter=count_tokens,
         )
-        return additional_information, counter_callback
-    return additional_information, None
+    return additional_information, counter_callback
 
 
 def load_model(vocab: str) -> Language:
@@ -487,5 +486,4 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-            return response.choices[0].message.content, prediction_prompt, None, counter_callback
-        return response.choices[0].message.content, prediction_prompt, None, None
+        return response.choices[0].message.content, prediction_prompt, None, counter_callback

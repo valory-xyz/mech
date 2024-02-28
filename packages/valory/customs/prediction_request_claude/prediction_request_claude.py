@@ -167,22 +167,19 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
 
 def extract_text(
     html: str,
-    num_words: Optional[int] = 300,
+    num_words: Optional[int] = None,
 ) -> str:
     """Extract text from a single HTML document"""
     text = Document(html).summary()
-
-    # use html2text to convert HTML to markdown
     text = md(text, heading_style="ATX")
-
     if text is None:
         return ""
 
-    # remove newlines and extra spaces
-    text = " ".join(text.split())
-
     if num_words:
         return " ".join(text.split()[:num_words])
+    
+    # remove newlines and extra spaces
+    text = " ".join(text.split())
     
     return text
 
@@ -278,8 +275,7 @@ def fetch_additional_information(
             output_tokens=40,
             token_counter=count_tokens,
         )
-        return additional_information, counter_callback
-    return additional_information, None
+    return additional_information, counter_callback
 
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
@@ -331,6 +327,5 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             output_prompt=completion.completion,
             token_counter=count_tokens,
         )
-        return completion.completion, prediction_prompt, None, counter_callback
 
-    return completion.completion, prediction_prompt, None, None
+    return completion.completion, prediction_prompt, None, counter_callback
