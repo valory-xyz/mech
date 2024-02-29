@@ -340,6 +340,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             f"Task timed out {self.params.timeout_limit} times during execution. ",
             "",
             None,
+            None,
         )
         self._handle_done_task(task_result)
 
