@@ -28,10 +28,14 @@ from itertools import islice
 import json
 import numpy as np
 import tiktoken
+from io import BytesIO
+import PyPDF2
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
 import requests
+from requests.exceptions import RequestException, TooManyRedirects
+from requests.packages.urllib3.util.retry import Retry
 from markdownify import markdownify as md
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from tiktoken import encoding_for_model
@@ -70,7 +74,7 @@ ALLOWED_TOOLS = [
 TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
-NUM_URLS_PER_QUERY = 3
+NUM_URLS_PER_QUERY = 5
 SPLITTER_CHUNK_SIZE = 1800
 SPLITTER_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-ada-002"
@@ -79,7 +83,9 @@ EMBEDDING_SIZE = 1536
 SPLITTER_MAX_TOKENS = 1800
 SPLITTER_OVERLAP = 50
 NUM_NEIGHBORS = 4
-
+HTTP_TIMEOUT = 20
+HTTP_MAX_REDIRECTS = 5
+HTTP_MAX_RETIES = 2
 
 PREDICTION_PROMPT = """
 INSTRUCTIONS
@@ -328,7 +334,7 @@ def extract_text(
     text = md(text, heading_style="ATX")
 
     if text is None:
-        return ""
+        return None
 
     if num_words:
         text = " ".join(text.split()[:num_words])
@@ -339,46 +345,79 @@ def extract_text(
     return doc
 
 
+def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
+    """Extract text from a PDF document at the given URL."""
+    try:
+        response = requests.get(url, timeout=HTTP_TIMEOUT)
+        response.raise_for_status()
+
+        if "application/pdf" not in response.headers.get("Content-Type", ""):
+            return ValueError("URL does not point to a PDF document")
+
+        with BytesIO(response.content) as pdf_file:
+            reader = PyPDF2.PdfReader(pdf_file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text()
+
+        doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
+        print(f"Using PDF: {url}: {doc.text[:300]}...")
+        return doc
+    
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+    
+
 def process_in_batches(
-    urls: List[str], window: int = 5, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
-    """Iter URLs in batches."""
-    with ThreadPoolExecutor() as executor:
+    urls: List[str], 
+    window: int = 5, 
+    timeout: int = HTTP_TIMEOUT,
+    max_redirects: int = HTTP_MAX_REDIRECTS,
+    retries: int = HTTP_MAX_RETIES,
+) -> Generator[None, None, List[Tuple[Optional[Future], str]]]:
+    """Iter URLs in batches with improved error handling and retry mechanism."""
+    with ThreadPoolExecutor() as executor, requests.Session() as session:
+        session.max_redirects = max_redirects
         for i in range(0, len(urls), window):
             batch = urls[i : i + window]
-            futures = [
-                (executor.submit(requests.get, url, timeout=timeout), url)
-                for url in batch
-            ]
+            futures = []
+            for url in batch:
+                future = None
+                attempt = 0
+                while attempt < retries:
+                    try:
+                        future = executor.submit(session.get, url, timeout=timeout)
+                        break  
+                    except (TooManyRedirects, RequestException) as e:
+                        print(f"Attempt {attempt + 1} failed for {url}: {e}")
+                        attempt += 1
+                        if attempt == retries:
+                            print(f"Max retries reached for {url}. Moving to next URL.")
+                futures.append((future, url))
             yield futures
 
 
-def extract_texts(
-    urls: List[str],
-    num_words: Optional[int] = None,
-) -> Tuple[List[str], Dict[str, str]]:
-    """Extract texts from URLs"""
-    max_allowed = 5
+def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Document]:
+    """Extract texts from URLs with improved error handling, excluding failed URLs."""
     extracted_texts = []
-    count = 0
-    stop = False
     for batch in process_in_batches(urls=urls):
         for future, url in batch:
-            result = future.result()
-            if result.status_code != 200:
+            if future is None:
                 continue
-            doc = extract_text(
-                html=result.text,
-                num_words=num_words,
-            )
-            doc.url = url
-            extracted_texts.append(doc)
-            count += 1
-            if count >= max_allowed:
-                stop = True
-                break
-        if stop:
-            break
+            try:
+                result = future.result()
+                if result.status_code == 200:
+                    # Check if URL ends with .pdf or content starts with %PDF
+                    if url.endswith('.pdf') or result.content[:4] == b'%PDF':
+                        doc = extract_text_from_pdf(url, num_words=num_words)
+                    else:
+                        doc = extract_text(html=result.text, num_words=num_words)
+                    doc.url = url  # Ensure the URL is attached to the Document
+                    extracted_texts.append(doc)
+            except Exception as e:
+                print(f"Error processing {url}: {e}")
+                continue
     return extracted_texts
 
 
@@ -423,6 +462,8 @@ def fetch_additional_information(
         )
         print(f"URLs: {urls}")
 
+        urls = list(set(urls))
+
         # Extract text and dates from the URLs
         docs = extract_texts(
             urls=urls,
@@ -437,22 +478,45 @@ def fetch_additional_information(
     # Remove None values from the list
     docs = [doc for doc in docs if doc]
 
+    # remove empty documents ""
+    filtered_docs = []
+    for doc in docs:
+        try:
+            if doc.text != "":
+                filtered_docs.append(doc)
+        except Exception as e:
+            continue
+    
     # Chunk the documents
     split_docs = []
     for doc in docs:
-        t = recursive_character_text_splitter(
-            doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
-        )
-        split_docs.extend(
-            [Document(text=chunk, url=doc.url) for chunk in t]
-        )
+        try:
+            t = recursive_character_text_splitter(
+                doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
+            )
+            split_docs.extend(
+                [Document(text=chunk, url=doc.url) for chunk in t]
+            )
+        except Exception as e:
+            print(f"Error splitting document: {e}")
+            continue
     print(f"Split Docs: {len(split_docs)}")
 
     # Remove None values from the list
     split_docs = [doc for doc in split_docs if doc]
 
+    # remove empty documents ""
+    filtered_split_docs = []
+    for doc in split_docs:
+        try:
+            if doc.text != "":
+                filtered_split_docs.append(doc)
+        except Exception as e:
+            continue
+    print(f"Filtered Split Docs: {len(filtered_split_docs)}")
+
     # Embed the documents
-    docs_with_embeddings = get_embeddings(split_docs)
+    docs_with_embeddings = get_embeddings(filtered_split_docs)
     print(f"Docs with embeddings: {len(docs_with_embeddings)}")
 
     # Find similar chunks
