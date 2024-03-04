@@ -413,7 +413,7 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
                         doc = extract_text_from_pdf(url, num_words=num_words)
                     else:
                         doc = extract_text(html=result.text, num_words=num_words)
-                    doc.url = url  # Ensure the URL is attached to the Document
+                    doc.url = url
                     extracted_texts.append(doc)
             except Exception as e:
                 print(f"Error processing {url}: {e}")
@@ -479,17 +479,11 @@ def fetch_additional_information(
     docs = [doc for doc in docs if doc]
 
     # remove empty documents ""
-    filtered_docs = []
-    for doc in docs:
-        try:
-            if doc.text != "":
-                filtered_docs.append(doc)
-        except Exception as e:
-            continue
-    
+    filtered_docs = [doc for doc in docs if hasattr(doc, 'text') and doc.text != ""]
+
     # Chunk the documents
     split_docs = []
-    for doc in docs:
+    for doc in filtered_docs:
         try:
             t = recursive_character_text_splitter(
                 doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
@@ -505,18 +499,8 @@ def fetch_additional_information(
     # Remove None values from the list
     split_docs = [doc for doc in split_docs if doc]
 
-    # remove empty documents ""
-    filtered_split_docs = []
-    for doc in split_docs:
-        try:
-            if doc.text != "":
-                filtered_split_docs.append(doc)
-        except Exception as e:
-            continue
-    print(f"Filtered Split Docs: {len(filtered_split_docs)}")
-
     # Embed the documents
-    docs_with_embeddings = get_embeddings(filtered_split_docs)
+    docs_with_embeddings = get_embeddings(split_docs)
     print(f"Docs with embeddings: {len(docs_with_embeddings)}")
 
     # Find similar chunks
