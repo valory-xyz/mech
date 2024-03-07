@@ -158,6 +158,12 @@ class Date(OpenAISchema):
 class Results(OpenAISchema):
     has_occurred: bool = Field(..., description="Whether the event has occurred.")
 
+class Valid(OpenAISchema):
+    is_valid: bool = Field(..., description="Whether the question is valid.")
+    reason: Optional[str] = Field(..., description="Reason that the question is invalid.")
+
+class Determinable(OpenAISchema):
+    is_determinable: bool = Field(..., description="Whether it is possible to answer the question based on the information provided and reasoning.")
 
 class Document(BaseModel):
     text: str
@@ -259,6 +265,45 @@ ADDITIONAL_INFORMATION:
 ```
 {formatted_docs}
 ```
+"""
+
+VALID_PROMPT = """
+* You are an expert data analyst. 
+* You are provided with a question about an event (submitted to a prediction market) under "USER_PROMPT" delimited by three backticks.
+* Your task is to determine whether the question is valid.
+* You are provided with rules that determine whether a question is invalid (as well as examples) under the label "RULES".
+* Your response should only be a function call with the information about whether a question is valid and reason as arguments.
+
+RULES
+* Questions with relative dates should be marked as invalid. E.g. Invalid: Who will be the president of the United States in 6 months? (“in 6 months depends on the current time”).
+* Questions about moral values and not facts should be marked as invalid. E.g. Invalid: “Is it ethical to eat meat?”.
+* Questions in which none of the answers are valid should be marked as invalid. E.g. Invalid: “What is the result of 1+1?” with the outcomes “0” and “1”.
+* Questions in which multiple answers are valid should be marked as invalid. E.g. Invalid: “Who will be the Time person of the year 1937?” with answers “Chiang Kai-shek” and “Soong Mei-ling” (they got the prize jointly).
+
+USER_PROMPT:
+```
+{user_prompt}
+```
+"""
+
+DETERMINABLE_PROMPT = """
+* You are an expert data analyst. 
+* You are provided with a question about an event (submitted to a prediction market) under "USER_PROMPT" delimited by three backticks.
+* You are provided with a colleague's reasoning as to whether the event occurred based on online research under the label "REASONING" delimited by three backticks.
+* Your task is to determine whether it is possible to answer whether the event actually happened before the date based on the content of this reasoning. 
+* The answer that you give should reflect the opinion in the reasoning field.
+* Your response should only be a function call with the information about whether a question is valid and reason as arguments.
+
+USER_PROMPT:
+```
+{user_prompt}
+```
+
+REASONING:
+```
+{reasoning}
+```
+
 """
 
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
@@ -628,6 +673,34 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
 
         engine = TOOL_TO_ENGINE[tool]
 
+        # Check if question is valid
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": VALID_PROMPT.format(
+                    user_prompt=prompt
+                ),
+            },
+        ]
+
+        response_valid = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            n=1,
+            timeout=150,
+            stop=None,
+            functions=[Valid.openai_schema],
+        )
+
+        valid_results = Valid.from_response(response_valid)
+        print(f"Valid: {valid_results}")
+
+        if not valid_results.is_valid:
+            return valid_results, None, None, None, None
+
         try:
             (
                 additional_information,
@@ -671,6 +744,34 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             )
 
             reasoning = response_reasoning.choices[0].message.content
+
+            # Check if question is determinable
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": DETERMINABLE_PROMPT.format(
+                        user_prompt=prompt, reasoning=reasoning
+                    ),
+                },
+            ]
+
+            response_determinable = client.chat.completions.create(
+                model=engine,
+                messages=messages,
+                temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+                max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+                n=1,
+                timeout=150,
+                stop=None,
+                functions=[Determinable.openai_schema],
+            )
+
+            determinable_results = Determinable.from_response(response_determinable)
+            print(f"Determinable: {determinable_results}")
+
+            if not determinable_results.is_determinable:
+                return determinable_results, reasoning, additional_information, queries, None
 
             # Make the prediction
             messages = [
