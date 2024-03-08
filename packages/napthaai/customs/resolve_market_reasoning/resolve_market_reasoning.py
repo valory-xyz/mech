@@ -27,6 +27,7 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from pydantic import BaseModel, Field
 from docstring_parser import parse
 import tiktoken
+import json
 from openai import OpenAI
 import numpy as np
 import faiss
@@ -699,7 +700,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
         print(f"Valid: {valid_results}")
 
         if not valid_results.is_valid:
-            return valid_results, None, None, None, None
+            return valid_results.json(), None, None, None, None
 
         try:
             (
@@ -771,7 +772,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             print(f"Determinable: {determinable_results}")
 
             if not determinable_results.is_determinable:
-                return determinable_results, reasoning, additional_information, queries, None
+                return determinable_results.json(), reasoning, additional_information, queries, None
 
             # Make the prediction
             messages = [
@@ -807,13 +808,13 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
                     model=engine,
                 )
                 return (
-                    results,
+                    results.json(),
                     reasoning,
                     additional_information,
                     queries,
                     counter_callback,
                 )
-            return results, reasoning, additional_information, queries, None
+            return results.json(), reasoning, additional_information, queries, None
 
         except Exception as e:
             return None, None, None, None, e
