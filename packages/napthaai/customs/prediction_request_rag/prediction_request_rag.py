@@ -106,15 +106,15 @@ ADDITIONAL_INFORMATION:
 """
 
 URL_QUERY_PROMPT = """
- You are an expert fact checker in a team tasked with determining whether an event will happen before a given date in the past. 
-* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event occured. 
+ You are an expert fact checker in a team tasked with determining whether an event will happen before a given date. 
+* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event will occur. 
 * You are provided with the input question about the event under the label "USER_PROMPT". 
 * You must follow the instructions under the label "INSTRUCTIONS". 
 
 INSTRUCTIONS
 * Read the input under the label "USER_PROMPT" delimited by three backticks.
 * The "USER_PROMPT" is a question about whether an event will happen before a given date.
-* The event will only have has two possible outcomes: either the event will happen or the event will not happen.
+* The event will only have two possible outcomes: either the event will happen or the event will not happen.
 * If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
 * You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event will occur. 
 * Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
