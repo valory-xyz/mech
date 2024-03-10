@@ -469,11 +469,11 @@ def fetch_additional_information(
             urls=urls,
         )
     else:
-        texts = []
+        docs = []
         for url, content in islice(source_links.items(), num_urls or len(source_links)):
-            doc = {}
-            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
-            texts.append(doc)
+            doc = extract_text(html=content, num_words=num_words)
+            doc.url = url
+            docs.append(doc)
 
     # Remove None values from the list
     docs = [doc for doc in docs if doc]
@@ -623,7 +623,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
                 output_tokens=response.usage.completion_tokens,
                 model=engine,
                 token_counter=count_tokens,
-
             )
     
     return results, prediction_prompt, None, counter_callback
