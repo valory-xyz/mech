@@ -19,6 +19,7 @@
 
 """This module implements a Mech tool for binary predictions."""
 
+import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from docstring_parser import parse
@@ -35,7 +36,6 @@ from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
 import requests
 from requests.exceptions import RequestException, TooManyRedirects
-from requests.packages.urllib3.util.retry import Retry
 from markdownify import markdownify as md
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from tiktoken import encoding_for_model
@@ -553,12 +553,23 @@ def adjust_additional_information(
     return additional_information
 
 
+def extract_question(prompt: str) -> str:
+    pattern = r'\"(.*?)\"'
+    try:
+        question = re.findall(pattern, prompt)[0]
+    except Exception as e:
+        print(f"Error extracting question: {e}")
+        question = prompt
+
+    return question
+
+
 def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
 
         tool = kwargs["tool"]
-        prompt = kwargs["prompt"]
+        prompt = extract_question(kwargs["prompt"])
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
         num_words = kwargs.get("num_words", None)
@@ -572,7 +583,6 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             raise ValueError(f"Tool {tool} is not supported.")
 
         engine = TOOL_TO_ENGINE[tool]
-
         additional_information, counter_callback = fetch_additional_information(
             client=client,
             prompt=prompt,
@@ -607,6 +617,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             timeout=150,
             stop=None,
             functions=[Results.openai_schema],
+            function_call={'name': 'Results'}
         )
         results = str(Results.from_response(response))
 
