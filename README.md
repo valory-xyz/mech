@@ -196,6 +196,25 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
 ## Included tools
 
+| Tools |
+|---|
+| packages/jhehemann/customs/prediction_sum_url_content |
+| packages/napthaai/customs/prediction_request_rag |
+| packages/napthaai/customs/resolve_market_reasoning |
+| packages/nickcom007/customs/prediction_request_sme |
+| packages/nickcom007/customs/sme_generation_request |
+| packages/polywrap/customs/prediction_with_research_report |
+| packages/psouranis/customs/optimization_by_prompting |
+| packages/valory/customs/native_transfer_request |
+| packages/valory/customs/openai_request |
+| packages/valory/customs/prediction_request |
+| packages/valory/customs/prediction_request_claude |
+| packages/valory/customs/prediction_request_embedding |
+| packages/valory/customs/resolve_market |
+| packages/valory/customs/stability_ai_request |
+
+## More on tools
+
 - **OpenAI request** (`openai_request.py`). Executes requests to the OpenAI API through the engine associated to the specific tool. It receives as input an arbitrary prompt and outputs the returned output by the OpenAI API.
   - `openai-gpt-3.5-turbo`
   - `openai-gpt-4`
