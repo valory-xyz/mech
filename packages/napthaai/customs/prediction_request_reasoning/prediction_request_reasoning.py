@@ -27,6 +27,7 @@ from docstring_parser import parse
 from googleapiclient.discovery import build
 from io import BytesIO
 from itertools import islice
+import re
 import json
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -36,6 +37,7 @@ import requests
 from readability import Document as ReadabilityDocument
 from markdownify import markdownify as md
 import tiktoken
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
@@ -64,17 +66,13 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0,
 }
 MAX_TOKENS = {
-    "gpt-3.5-turbo": 4096,
+    "gpt-3.5-turbo-0125": 16385,
     "gpt-4": 8192,
 }
 ALLOWED_TOOLS = [
-    "prediction-request-reasoning-gpt-3.5-turbo",
-    "prediction-request-reasoning-gpt-4",
+    "prediction-request-reasoning",
 ]
-TOOL_TO_ENGINE = {
-    "prediction-request-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo",
-    "prediction-request-reasoning-gpt-4": "gpt-4",
-}
+TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo-0125" for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 NUM_QUERIES = 3
@@ -149,6 +147,10 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
 
 class Queries(OpenAISchema):
     queries: List[str]
+
+
+class MultiQuestions(OpenAISchema):
+    questions: List[str]
 
 
 class Date(OpenAISchema):
@@ -268,6 +270,14 @@ ADDITIONAL_INFORMATION:
 """
 
 
+MULTI_QUESTIONS_PROMPT = """
+You are an AI language model assistant. Your task is to generate 3 
+different versions of the given user question to retrieve relevant documents from a vector 
+database. By generating multiple perspectives on the user question, your goal is to help
+the user overcome some of the limitations of the distance-based similarity search. 
+Provide these alternative questions separated by newlines. Original question: {question}"""
+
+
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
 
@@ -277,6 +287,8 @@ def multi_queries(
     engine: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    temperature: float = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
 
@@ -292,12 +304,13 @@ def multi_queries(
     response = client.chat.completions.create(
         model=engine,
         messages=messages,
-        temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-        max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+        temperature=temperature,
+        max_tokens=max_tokens,
         n=1,
         timeout=150,
         stop=None,
         functions=[Queries.openai_schema],
+        function_call={'name':'Queries'}
     )
     queries = Queries.from_response(response)
 
@@ -309,6 +322,7 @@ def multi_queries(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
             model=engine,
+            token_counter=count_tokens,
         )
         return queries.queries, counter_callback
     return queries.queries, None
@@ -348,11 +362,14 @@ def get_urls_from_queries(
 def get_dates(
     client: OpenAI,
     text: str,
+    engine: str,
+    temperature: float = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ):
     """Get the date from the extracted text"""
     adjusted_text = adjust_additional_information(
-        prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo"
+        prompt=GET_DATE_PROMPT, additional_information=text, model=engine
     )
     get_date_prompt = GET_DATE_PROMPT.format(extracted_text=adjusted_text)
     messages = [
@@ -360,13 +377,15 @@ def get_dates(
         {"role": "user", "content": get_date_prompt},
     ]
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=engine,
         messages=messages,
-        temperature=0,
+        temperature=temperature,
+        max_tokens=max_tokens,
         n=1,
         timeout=90,
         stop=None,
         functions=[Date.openai_schema],
+        function_call={'name':'Date'}
     )
     date = Date.from_response(response)
     if date.date_available:
@@ -374,7 +393,8 @@ def get_dates(
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
-                model="gpt-3.5-turbo",
+                model=engine,
+                token_counter=count_tokens,
             )
             return f"{date.year}-{date.month}-{date.day}", counter_callback
         return f"{date.year}-{date.month}-{date.day}", None
@@ -406,6 +426,7 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
 
 def extract_text(
     client: OpenAI,
+    engine: str,
     html: str,
     num_words: Optional[int] = None,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
@@ -414,7 +435,10 @@ def extract_text(
     text = ReadabilityDocument(html).summary()
     text = text = md(text, heading_style="ATX")
     date, counter_callback = get_dates(
-        client=client, text=text, counter_callback=counter_callback
+        client=client, 
+        text=text, 
+        counter_callback=counter_callback,
+        engine=engine
     )
     doc = Document(text=text[:num_words] if num_words else text, date=date, url="")
     return doc, counter_callback
@@ -423,6 +447,7 @@ def extract_text(
 def extract_texts(
     urls: List[str],
     client: OpenAI,
+    engine: str,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> Tuple[List[str], Dict[str, str]]:
     """Extract texts from URLs"""
@@ -445,7 +470,10 @@ def extract_texts(
                         extracted_texts.append(result)
                     continue
                 doc, counter_callback = extract_text(
-                    html=result.text, client=client, counter_callback=counter_callback
+                    html=result.text, 
+                    client=client, 
+                    counter_callback=counter_callback,
+                    engine=engine
                 )
                 doc.url = url
                 extracted_texts.append(doc)
@@ -517,6 +545,71 @@ def find_similar_chunks(
     return [docs_with_embeddings[i] for i in I[0]]
 
 
+def multi_questions_response(
+    prompt:str, 
+    engine:str,
+    temperature:float = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens:int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> List[str]:
+    """Generate multiple questions for fetching information from the web."""
+    try:
+        multi_questions_prompt = MULTI_QUESTIONS_PROMPT.format(question=prompt)
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": multi_questions_prompt},
+        ]
+
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            n=1,
+            timeout=150,
+            stop=None,
+            functions=[MultiQuestions.openai_schema],
+            function_call={"name": "MultiQuestions"}
+        )
+        multi_questions = MultiQuestions.from_response(response)
+
+        if counter_callback:
+            counter_callback(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+                model=engine,
+                token_counter=count_tokens,
+            )
+
+        # append the user's question to the list of questions
+        multi_questions.questions.append(prompt)
+
+        return multi_questions.questions, counter_callback
+
+    except Exception as e:
+        return [prompt], counter_callback
+    
+
+def reciprocal_rank_refusion(similar_chunks: List[Document], k: int) -> List[Document]:
+    """Reciprocal rank refusion to re-rank the similar chunks based on the text."""
+    fused_chunks = {}
+    for rank, doc in enumerate(similar_chunks):
+        doc_text = doc.text
+        if doc_text not in fused_chunks:
+            fused_chunks[doc_text] = (doc, 0)
+        fused_chunks[doc_text] = (doc, fused_chunks[doc_text][1] + 1 / (rank + 60))
+    
+    sorted_fused_chunks = sorted(fused_chunks.values(), key=lambda x: x[1], reverse=True)
+
+    return [doc for doc, _ in sorted_fused_chunks[:k]]
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
+
+
 def fetch_additional_information(
     client: OpenAI,
     prompt: str,
@@ -526,6 +619,8 @@ def fetch_additional_information(
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = None,
+    temperature: float = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
 ) -> Tuple:
     """Fetch additional information from the web."""
 
@@ -536,6 +631,8 @@ def fetch_additional_information(
         engine=engine,
         num_queries=NUM_QUERIES,
         counter_callback=counter_callback,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
     print(f"Queries: {queries}")
 
@@ -551,13 +648,19 @@ def fetch_additional_information(
 
         # Extract text and dates from the URLs
         docs, counter_callback = extract_texts(
-            urls=urls, client=client, counter_callback=counter_callback
+            urls=urls, 
+            client=client, 
+            counter_callback=counter_callback,
+            engine=engine
         )
     else:
         docs = []
         for url, content in islice(source_links.items(), num_urls or len(source_links)):
             doc, counter_callback = extract_text(
-                html=content, client=client, counter_callback=counter_callback
+                html=content, 
+                client=client, 
+                counter_callback=counter_callback,
+                engine=engine
             )
             doc.url = url
             docs.append(doc)
@@ -565,11 +668,16 @@ def fetch_additional_information(
     # Remove None values from the list
     docs = [doc for doc in docs if doc]
 
+    # remove empty documents with ""
+    docs = [doc for doc in docs if hasattr(doc, "text") and doc.text != ""]
+
     # Chunk the documents
     split_docs = []
     for doc in docs:
         t = recursive_character_text_splitter(
-            doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
+            doc.text, 
+            SPLITTER_CHUNK_SIZE, 
+            SPLITTER_OVERLAP
         )
         split_docs.extend(
             [Document(text=chunk, date=doc.date, url=doc.url) for chunk in t]
@@ -583,14 +691,25 @@ def fetch_additional_information(
     docs_with_embeddings = get_embeddings(split_docs)
     print(f"Docs with embeddings: {len(docs_with_embeddings)}")
 
-    # Find similar chunks
-    similar_chunks = find_similar_chunks(
-        query=prompt,
-        docs_with_embeddings=docs_with_embeddings,
-        k=NUM_NEIGHBORS,
+    # multi questions prompt
+    questions, counter_callback = multi_questions_response(
+        prompt=prompt, 
+        engine=engine, 
+        counter_callback=counter_callback,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
-    print(f"Similar Chunks: {len(similar_chunks)}")
+    print(f"Questions: {questions}")
 
+    similar_chunks = []
+    for question in questions:
+        similar_chunks.extend(find_similar_chunks(question, docs_with_embeddings, k=NUM_NEIGHBORS))
+    print(f"Similar Chunks before refusion: {len(similar_chunks)}")
+
+    # Reciprocal rank refusion
+    similar_chunks = reciprocal_rank_refusion(similar_chunks, NUM_NEIGHBORS)
+    print(f"Similar Chunks after refusion: {len(similar_chunks)}")
+    
     # Format the additional information
     additional_information = "\n".join(
         [
@@ -631,23 +750,33 @@ def adjust_additional_information(
     return additional_information
 
 
+def extract_question(prompt: str) -> str:
+    pattern = r'\"(.*?)\"'
+    try:
+        question = re.findall(pattern, prompt)[0]
+    except Exception as e:
+        question = prompt
+
+    return question
+
+
 def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
-        prompt = kwargs["prompt"]
+        prompt = extract_question(kwargs["prompt"])
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+        engine = TOOL_TO_ENGINE[tool]
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
-        engine = TOOL_TO_ENGINE[tool]
-
-        # try:
         (
             additional_information,
             queries,
@@ -661,6 +790,8 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             counter_callback=counter_callback,
             source_links=kwargs.get("source_links", None),
             num_urls=num_urls,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
 
         # Adjust the additional_information to fit within the token budget
@@ -670,6 +801,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
         )
 
+        # Reasoning prompt
         reasoning_prompt = REASONING_PROMPT.format(
             user_prompt=prompt, formatted_docs=adjusted_info
         )
@@ -683,18 +815,21 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             },
         ]
 
+        # Reasoning
         response_reasoning = client.chat.completions.create(
             model=engine,
             messages=messages,
-            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            temperature=temperature,
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
         )
 
+        # Extract the reasoning
         reasoning = response_reasoning.choices[0].message.content
 
+        # Prediction prompt
         prediction_prompt = PREDICTION_PROMPT.format(
             user_prompt=prompt, reasoning=reasoning
         )
@@ -708,36 +843,33 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             },
         ]
 
-        response_prediction = client.chat.completions.create(
+        response = client.chat.completions.create(
             model=engine,
             messages=messages,
-            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            temperature=temperature,
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
             functions=[Results.openai_schema],
+            function_call={'name':'Results'}
         )
+        results = str(Results.from_response(response))
 
-        results = Results.from_response(response_prediction)
-        print(f"Results: {results}")
-
+        pairs = str(results).split()
+        result_dict = {}
+        for pair in pairs:
+            key, value = pair.split("=")
+            result_dict[key] = float(value)  # Convert value to float
+        results = result_dict
+        results = json.dumps(results)
         if counter_callback is not None:
             counter_callback(
                 input_tokens=response_reasoning.usage.prompt_tokens
-                + response_prediction.usage.prompt_tokens,
+                + response.usage.prompt_tokens,
                 output_tokens=response_reasoning.usage.completion_tokens
-                + response_prediction.usage.completion_tokens,
+                + response.usage.completion_tokens,
                 model=engine,
+                token_counter=count_tokens,
             )
-            return (
-                results.json(),
-                reasoning,
-                additional_information,
-                queries,
-                counter_callback,
-            )
-        return results.json(), reasoning_prompt + "////" + prediction_prompt, None, counter_callback
-
-        # except Exception as e:
-        #     return None, None, None, e
+        return results, reasoning_prompt + "////" + prediction_prompt, None, counter_callback
