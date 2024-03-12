@@ -65,13 +65,13 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0,
 }
 MAX_TOKENS = {
-    "gpt-3.5-turbo": 4096,
+    "gpt-3.5-turbo-0125": 16385,
     "gpt-4": 8192,
 }
 ALLOWED_TOOLS = [
     "prediction-request-rag",
 ]
-TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
+TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo-0125" for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
 NUM_URLS_PER_QUERY = 5
@@ -208,6 +208,8 @@ def multi_queries(
     engine: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    temperature: Optional[float] = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens: Optional[int] = DEFAULT_OPENAI_SETTINGS["max_tokens"],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
 
@@ -223,8 +225,8 @@ def multi_queries(
     response = client.chat.completions.create(
         model=engine,
         messages=messages,
-        temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-        max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+        temperature=temperature,
+        max_tokens=max_tokens,
         n=1,
         timeout=150,
         stop=None,
@@ -245,7 +247,13 @@ def multi_queries(
         return queries.queries, counter_callback
     return queries.queries, None
 
-def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
+def search_google(
+    query: str, 
+    api_key: str, 
+    engine: str, 
+    num: int
+) -> List[str]:
+    """Search Google for the given query."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
         service.cse()
@@ -286,7 +294,9 @@ def get_urls_from_queries(
 
 
 def find_similar_chunks(
-    query: str, docs_with_embeddings: List[Document], k: int = 4
+    query: str, 
+    docs_with_embeddings: List[Document], 
+    k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
 
@@ -439,6 +449,8 @@ def fetch_additional_information(
     num_words: Optional[int] = None,
     num_urls: Optional[int] = None,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
+    temperature: Optional[float] = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens: Optional[int] = DEFAULT_OPENAI_SETTINGS["max_tokens"],
 ) -> Tuple:
     """Fetch additional information from the web."""
 
@@ -449,6 +461,8 @@ def fetch_additional_information(
         engine=engine,
         num_queries=num_queries,
         counter_callback=counter_callback,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
     print(f"Queries: {queries}")
 
@@ -602,7 +616,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             engine
         )
         prediction_prompt = PREDICTION_PROMPT.format(
-            user_prompt=prompt, additional_information=additional_information
+            user_prompt=prompt, 
+            additional_information=additional_information
         )
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
