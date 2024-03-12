@@ -13,7 +13,7 @@
         "custom/nickcom007/sme_generation_request/0.1.0": "bafybeihfl4663yjkxltidavnxou7rumld5wzcr43uw23bpvb3ivefsjhv4",
         "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeicfenfjer2kvmnstul4bzxf7xfiupbipkjzattjsieaapdflnsyni",
         "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeibxt2c654xfcrw24m7wiuhlsawfszogybkadngmun3lfghmbwqbpe",
-        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeidhhs2qabix5tuav7fcyc2ov3zbompveojspjmj6pjmiqnb24qzyi",
+        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeie6nedzzqwjycrg4oncgm5rh7t6duapltd5hiemsyvkurqoyfeom4",
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
         "protocol/valory/websocket_client/0.1.0": "bafybeih43mnztdv3v2hetr2k3gezg7d3yj4ur7cxdvcyaqhg65e52s5sf4",
         "contract/valory/agent_mech/0.1.0": "bafybeicbhvrlug56qvwlh6b4y35xg6fytvtahhaae7xm7jssecbie576mu",
@@ -30,7 +30,7 @@
         "service/valory/mech/0.1.0": "bafybeifmcgdmynv7ww6x334ygt6eyljqepoddtaqhlywfi2jlqzhkecsu4"
     },
     "third_party": {
-        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeibnkvas3bizokp6zjqtxm4zzdwwcf2ab63lesjiqws5qortkjzwa4",
+        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeicdhfypatiocju7gnitzcbeipfcvzjjiwpsn2eb3aliedtr3jtdau",
         "protocol/valory/default/1.0.0": "bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq",
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",
         "protocol/valory/abci/0.1.0": "bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u",
