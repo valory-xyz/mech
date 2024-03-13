@@ -608,6 +608,8 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             num_words=num_words,
             num_urls=num_urls,
             num_queries=num_queries,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
         additional_information = adjust_additional_information(
             prompt,
