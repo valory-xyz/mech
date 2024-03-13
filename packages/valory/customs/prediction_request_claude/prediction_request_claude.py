@@ -35,7 +35,7 @@ NUM_URLS_EXTRACT = 5
 DEFAULT_NUM_WORDS = 300
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
-    "temperature": 0.7,
+    "temperature": 0.,
 }
 ALLOWED_TOOLS = [
     "claude-prediction-offline",

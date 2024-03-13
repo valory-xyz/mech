@@ -65,7 +65,7 @@ NUM_URLS_EXTRACT = 5
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
-    "temperature": 0.7,
+    "temperature": 0.,
 }
 MAX_TOKENS = {
     "gpt-3.5-turbo": 4096,

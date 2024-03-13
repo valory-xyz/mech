@@ -73,7 +73,7 @@ ScoresType = Dict[Span, float]
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
-    "temperature": 0.7,
+    "temperature": 0.,
 }
 ALLOWED_TOOLS = [
     "prediction-offline",
