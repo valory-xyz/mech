@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_request_claude.py: bafybeienihjropcwp6ctjhmw4mh64p5mpscwwopz5hhcxx7w4en7k3md7q
+  prediction_request_claude.py: bafybeiesemwvrzwvflckvasmywbep6h52r4x6skit4tpp6gbvq47zvumuu
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_claude.py
 callable: run
