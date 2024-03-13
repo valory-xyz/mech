@@ -700,7 +700,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
         print(f"Valid: {valid_results}")
 
         if not valid_results.is_valid:
-            return valid_results.json(), None, None, None, None
+            return valid_results.json(), None, None, None
 
         try:
             (
@@ -772,7 +772,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             print(f"Determinable: {determinable_results}")
 
             if not determinable_results.is_determinable:
-                return determinable_results.json(), reasoning, additional_information, queries, None
+                return determinable_results.json(), reasoning, additional_information, None
 
             # Make the prediction
             messages = [
@@ -811,10 +811,9 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
                     results.json(),
                     reasoning,
                     additional_information,
-                    queries,
                     counter_callback,
                 )
-            return results.json(), reasoning, additional_information, queries, None
+            return results.json(), reasoning, additional_information, None
 
         except Exception as e:
-            return None, None, None, None, e
+            return None, None, None, e
