@@ -104,7 +104,7 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
         }
         for param in docstring.params:
             if (name := param.arg_name) in parameters["properties"] and (
-                description := param.description
+                    description := param.description
             ):
                 if "description" not in parameters["properties"][name]:
                     parameters["properties"][name]["description"] = description
@@ -159,12 +159,16 @@ class Date(OpenAISchema):
 class Results(OpenAISchema):
     has_occurred: bool = Field(..., description="Whether the event has occurred.")
 
+
 class Valid(OpenAISchema):
     is_valid: bool = Field(..., description="Whether the question is valid.")
     reason: Optional[str] = Field(..., description="Reason that the question is invalid.")
 
+
 class Determinable(OpenAISchema):
-    is_determinable: bool = Field(..., description="Whether it is possible to answer the question based on the information provided and reasoning.")
+    is_determinable: bool = Field(...,
+                                  description="Whether it is possible to answer the question based on the information provided and reasoning.")
+
 
 class Document(BaseModel):
     text: str
@@ -196,7 +200,6 @@ USER_PROMPT:
 ```
 """
 
-
 GET_DATE_PROMPT = """
 INSTRUCTIONS
 * You are an expert data analyst that takes in extracted text from a web search result. 
@@ -210,7 +213,6 @@ EXTRACTED_TEXT:
 {extracted_text}
 ```
 """
-
 
 PREDICTION_PROMPT = """
 INSTRUCTIONS
@@ -311,11 +313,11 @@ SYSTEM_PROMPT = """You are a world class algorithm for generating structured out
 
 
 def multi_queries(
-    client: OpenAI,
-    prompt: str,
-    engine: str,
-    num_queries: int,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+        client: OpenAI,
+        prompt: str,
+        engine: str,
+        num_queries: int,
+        counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
 
@@ -368,16 +370,16 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
 
 
 def get_urls_from_queries(
-    queries: List[str], api_key: str, engine: str, num: int
+        queries: List[str], api_key: str, engine: str, num: int
 ) -> List[str]:
     """Get URLs from search engine queries"""
     results = []
     for query in queries:
         for url in search_google(
-            query=query,
-            api_key=api_key,
-            engine=engine,
-            num=num,
+                query=query,
+                api_key=api_key,
+                engine=engine,
+                num=num,
         ):
             results.append(url)
     unique_results = list(set(results))
@@ -385,9 +387,9 @@ def get_urls_from_queries(
 
 
 def get_dates(
-    client: OpenAI,
-    text: str,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+        client: OpenAI,
+        text: str,
+        counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ):
     """Get the date from the extracted text"""
     adjusted_text = adjust_additional_information(
@@ -444,10 +446,10 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
 
 
 def extract_text(
-    client: OpenAI,
-    html: str,
-    num_words: Optional[int] = None,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+        client: OpenAI,
+        html: str,
+        num_words: Optional[int] = None,
+        counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> str:
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
@@ -460,9 +462,9 @@ def extract_text(
 
 
 def extract_texts(
-    urls: List[str],
-    client: OpenAI,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+        urls: List[str],
+        client: OpenAI,
+        counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> Tuple[List[str], Dict[str, str]]:
     """Extract texts from URLs"""
     extracted_texts = []
@@ -496,12 +498,12 @@ def extract_texts(
 
 
 def process_in_batches(
-    urls: List[str], window: int = 5, timeout: int = 50
+        urls: List[str], window: int = 5, timeout: int = 50
 ) -> Generator[None, None, List[Tuple[Future, str]]]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
-            batch = urls[i : i + window]
+            batch = urls[i: i + window]
             futures = [
                 (executor.submit(requests.get, url, timeout=timeout), url)
                 for url in batch
@@ -514,7 +516,7 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
         return [text]
     else:
         return [
-            text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)
+            text[i: i + max_tokens] for i in range(0, len(text), max_tokens - overlap)
         ]
 
 
@@ -536,7 +538,7 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
 
 
 def find_similar_chunks(
-    query: str, docs_with_embeddings: List[Document], k: int = 4
+        query: str, docs_with_embeddings: List[Document], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
 
@@ -557,12 +559,12 @@ def find_similar_chunks(
 
 
 def fetch_additional_information(
-    client: OpenAI,
-    prompt: str,
-    engine: str,
-    google_api_key: Optional[str],
-    google_engine_id: Optional[str],
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+        client: OpenAI,
+        prompt: str,
+        engine: str,
+        google_api_key: Optional[str],
+        google_engine_id: Optional[str],
+        counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> Tuple:
     """Fetch additional information from the web."""
 
@@ -631,7 +633,7 @@ def fetch_additional_information(
 
 
 def adjust_additional_information(
-    prompt: str, additional_information: str, model: str
+        prompt: str, additional_information: str, model: str
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
@@ -643,7 +645,7 @@ def adjust_additional_information(
 
     # Calculate available tokens for additional_information
     MAX_PREDICTION_PROMPT_TOKENS = (
-        MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+            MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
     )
     available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens - BUFFER_TOKENS
 
@@ -702,118 +704,114 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
         if not valid_results.is_valid:
             return valid_results.json(), None, None, None
 
-        try:
-            (
+        (
+            additional_information,
+            queries,
+            counter_callback,
+        ) = fetch_additional_information(
+            client=client,
+            prompt=prompt,
+            engine=engine,
+            google_api_key=google_api_key,
+            google_engine_id=google_engine_id,
+            counter_callback=counter_callback,
+        )
+
+        # Adjust the additional_information to fit within the token budget
+        adjusted_info = adjust_additional_information(
+            prompt=PREDICTION_PROMPT,
+            additional_information=additional_information,
+            model=engine,
+        )
+
+        # Do reasoning
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": REASONING_PROMPT.format(
+                    user_prompt=prompt, formatted_docs=adjusted_info
+                ),
+            },
+        ]
+
+        response_reasoning = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            n=1,
+            timeout=150,
+            stop=None,
+        )
+
+        reasoning = response_reasoning.choices[0].message.content
+
+        # Check if question is determinable
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": DETERMINABLE_PROMPT.format(
+                    user_prompt=prompt, reasoning=reasoning
+                ),
+            },
+        ]
+
+        response_determinable = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            n=1,
+            timeout=150,
+            stop=None,
+            functions=[Determinable.openai_schema],
+        )
+
+        determinable_results = Determinable.from_response(response_determinable)
+        print(f"Determinable: {determinable_results}")
+
+        if not determinable_results.is_determinable:
+            return determinable_results.json(), reasoning, additional_information, None
+
+        # Make the prediction
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": PREDICTION_PROMPT.format(
+                    user_prompt=prompt, reasoning=reasoning
+                ),
+            },
+        ]
+
+        response_prediction = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            n=1,
+            timeout=150,
+            stop=None,
+            functions=[Results.openai_schema],
+        )
+
+        results = Results.from_response(response_prediction)
+        print(f"Results: {results}")
+
+        if counter_callback is not None:
+            counter_callback(
+                input_tokens=response_reasoning.usage.prompt_tokens
+                             + response_prediction.usage.prompt_tokens,
+                output_tokens=response_reasoning.usage.completion_tokens
+                              + response_prediction.usage.completion_tokens,
+                model=engine,
+            )
+            return (
+                results.json(),
+                reasoning,
                 additional_information,
-                queries,
                 counter_callback,
-            ) = fetch_additional_information(
-                client=client,
-                prompt=prompt,
-                engine=engine,
-                google_api_key=google_api_key,
-                google_engine_id=google_engine_id,
-                counter_callback=counter_callback,
             )
-
-            # Adjust the additional_information to fit within the token budget
-            adjusted_info = adjust_additional_information(
-                prompt=PREDICTION_PROMPT,
-                additional_information=additional_information,
-                model=engine,
-            )
-
-            # Do reasoning
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": REASONING_PROMPT.format(
-                        user_prompt=prompt, formatted_docs=adjusted_info
-                    ),
-                },
-            ]
-
-            response_reasoning = client.chat.completions.create(
-                model=engine,
-                messages=messages,
-                temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-                max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
-                n=1,
-                timeout=150,
-                stop=None,
-            )
-
-            reasoning = response_reasoning.choices[0].message.content
-
-            # Check if question is determinable
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": DETERMINABLE_PROMPT.format(
-                        user_prompt=prompt, reasoning=reasoning
-                    ),
-                },
-            ]
-
-            response_determinable = client.chat.completions.create(
-                model=engine,
-                messages=messages,
-                temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-                max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
-                n=1,
-                timeout=150,
-                stop=None,
-                functions=[Determinable.openai_schema],
-            )
-
-            determinable_results = Determinable.from_response(response_determinable)
-            print(f"Determinable: {determinable_results}")
-
-            if not determinable_results.is_determinable:
-                return determinable_results.json(), reasoning, additional_information, None
-
-            # Make the prediction
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": PREDICTION_PROMPT.format(
-                        user_prompt=prompt, reasoning=reasoning
-                    ),
-                },
-            ]
-
-            response_prediction = client.chat.completions.create(
-                model=engine,
-                messages=messages,
-                temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-                max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
-                n=1,
-                timeout=150,
-                stop=None,
-                functions=[Results.openai_schema],
-            )
-
-            results = Results.from_response(response_prediction)
-            print(f"Results: {results}")
-
-            if counter_callback is not None:
-                counter_callback(
-                    input_tokens=response_reasoning.usage.prompt_tokens
-                    + response_prediction.usage.prompt_tokens,
-                    output_tokens=response_reasoning.usage.completion_tokens
-                    + response_prediction.usage.completion_tokens,
-                    model=engine,
-                )
-                return (
-                    results.json(),
-                    reasoning,
-                    additional_information,
-                    counter_callback,
-                )
-            return results.json(), reasoning, additional_information, None
-
-        except Exception as e:
-            return None, None, None, e
+        return results.json(), reasoning, additional_information, None
