@@ -38,6 +38,51 @@ The project consists of three components:
   - Gives an overview of the AI workers in the registry.
   - Allows Mech owners to create new workers.
   - Allows users to request work from an existing worker.
+ 
+## Mech request-response flow
+
+![image](https://github.com/adrianoVal/mech/assets/90184519/c93a0096-b102-4414-822f-567e1fe719f5)
+
+1. Write request metadata: the application writes the request metadata to IPFS. The request can look like this:
+
+```
+{
+  "nonce": 15,
+  "tool": "prediction_request",
+  "prompt": "Will my favourite football team win this week's match?"
+}
+```
+2. The application gets the metadata’s IPFS hash.
+
+3. The application writes the request’s IPFS hash to the mech contract and makes a small payment (currently $0.01 on the Gnosis chain deployment). Alternatively, the payment could be done separately through a Nevermined subscription.
+
+4. The mech service is constantly monitoring mech contract events, and therefore gets the request hash.
+
+5. The mech reads the request metadata from IPFS using its hash.
+
+6. The mech selects the appropriate tool to handle the request from the “tool” entry in the metadata, and runs the tool with the given arguments, usually a prompt. In this example, the mech has been requested to interact with OpenAI’s API, so it forwards the prompt to it, but the tool can implement any other desired behavior. 
+
+7. The mech gets a response from OpenAI’s API.
+
+8. The mech writes the response to IPFS.
+
+9. The mech receives the response IPFS hash.
+
+10. The mech writes the response hash to the mech contract.
+
+11. The application reads the response hash from the contract.
+
+12. The application gets the response metadata from IPFS:
+
+```
+{
+  "requestId": 68039248068127180134548324138158983719531519331279563637951550269130775,
+  "result": "{\"p_yes\": 0.35, \"p_no\": 0.65, \"confidence\": 0.85, \"info_utility\": 0.75}"
+}
+```
+
+See some examples of requests and responses on the [Mech Hub](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a).
+
 
 ## Requirements
 
@@ -122,6 +167,31 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
     ```bash
     bash run_service.sh
     ```
+
+## Integrating mechs into your application
+
+### For generic apps and scripts
+
+Use the [mech-client](https://github.com/valory-xyz/mech-client), that can be used either as a CLI or directly from a python script.
+
+### For other autonomous services
+
+To perform mech requests from your service, use the [mech_interact_abci skill](https://github.com/valory-xyz/IEKit/tree/main/packages/valory/skills/mech_interact_abci). This skill abstracts away all the IPFS and contract interactions so you only need to care about the following:
+
+-   Add the mech_interact_abci skill to your dependency list, both in packages.json, aea-config.yaml and any composed skill.yaml
+
+-   Import [MechInteractParams and MechResponseSpecs in your models.py file](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/models.py#L88). You will also need to copy[ some dataclasses to your rounds.py](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L66-L97).
+
+-   Add mech_requests and mech_responses to your skills' SynchonizedData class ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L181-193))
+
+-   To send a request, [prepare the request metadata](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L857), write it to [synchronized_data.mech_requests](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L535) and [transition into mech_interact](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L736).
+
+-   You will need to appropriately chain the mech_interact_abci skill with your other skills ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/composition.py#L66)) and transaction_settlement_abci.
+
+-   After the interaction finishes, the responses will be inside [synchronized_data.mech_responses](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L903)
+
+For a complete list of required changes, [use this PR as reference](https://github.com/valory-xyz/market-creator/pull/91).
+
 
 ## Build your own
 
@@ -240,6 +310,7 @@ A keyfile is just a file with your ethereum private key as a hex-string, example
 ```
 
 Make sure you don't have any extra characters in the file, like newlines or spaces.
+
 
 ## Examples of deployed mechs
 
