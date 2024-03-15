@@ -52,7 +52,7 @@ The project consists of three components:
   "prompt": "Will my favourite football team win this week's match?"
 }
 ```
-2. The application gets the metadata’s IPFS hash.
+2. The application gets the metadata's IPFS hash.
 
 3. The application writes the request’s IPFS hash to the Mech contract and makes a small payment (currently $0.01 on the Gnosis chain deployment). Alternatively, the payment could be done separately through a Nevermined subscription.
 
