@@ -67,13 +67,6 @@ OUTPUT_FORMAT:
 """
 
 
-
-
-
-# name = "GetMarketRules"
-# description = "A specialized LLM that formulates structured rules for prediction market questions, providing clear, measurable criteria for 'Yes' or 'No' outcomes"
-# args_schema: Type[BaseModel] = SearchInput
-
 def get_market_rules(
     market_question: str,
     client: OpenAI,

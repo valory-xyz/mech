@@ -28,7 +28,7 @@ from itertools import islice
 from string import punctuation
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from packages.jhehemann.customs.prediction_openai_assistant.infer_rules import get_market_rules
-
+from packages.jhehemann.customs.prediction_openai_assistant.research_additional_information import research_additional_information
 
 from openai import OpenAI
 
@@ -88,14 +88,18 @@ MAX_TOKENS = {
 TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
-DEFAULT_NUM_URLS["prediction-online-summarized-info"] = 7
+DEFAULT_NUM_URLS["prediction-openai-assistant"] = 3
 # the default number of words to fetch online information for
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
-DEFAULT_NUM_WORDS["prediction-online-summarized-info"] = None
+
 # how much of the initial content will be kept during summarization
 DEFAULT_COMPRESSION_FACTOR = 0.05
 # the vocabulary to use for the summarization
 DEFAULT_VOCAB = "en_core_web_sm"
+OPENAI_TOOLS_FUNCTIONS ={
+        "get_market_rules": get_market_rules,
+        "research_additional_information": research_additional_information,
+    }
 
 # * Use the current date and time ({timestamp}) as a reference to understand the context of the market question, but focus primarily on the market question's specified date to guide your answer.
 
@@ -203,32 +207,32 @@ OUTPUT_FORMAT
 * This is correct: "{{"queries": []}}"
 """
 
-ASSISTANT_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_market_rules",
-            "description": "Get the rules for a prediction market question that defines under which conditions the market question will be resolved as 'Yes' and 'No'",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "market_question": {"type": "string", "description": "The market question to infer the rules for"},
-                },
-                "required": ["market_question"],
-            }
-        }
-    },
+PREDICTION_ASSISTANT_TOOLS = [
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "get_market_rules",
+    #         "description": "Get the rules for a prediction market question that defines under which conditions the market question will be resolved as 'Yes' and 'No'",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "market_question": {"type": "string", "description": "The market question to infer the rules for"},
+    #             },
+    #             "required": ["market_question"],
+    #         }
+    #     }
+    # },
     {
         "type": "function",
         "function": {
             "name": "research_additional_information",
-            "description": "Get the rules for a prediction market question that defines under which conditions the market question will be resolved as 'Yes' and 'No'",
+            "description": "A search engine optimized for comprehensive, accurate, and trusted information to help you make a probability estimation for a market question",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "market_question": {"type": "string", "description": "The market question to infer the rules for"},
+                    "input_query": {"type": "string", "description": "The market question to infer the rules for"},
                 },
-                "required": ["market_question"],
+                "required": ["input_query"],
             }
         }
     }
@@ -496,37 +500,31 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
 
-
-
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
         engine = TOOL_TO_ENGINE[tool]
 
-        assistant_tools = ASSISTANT_TOOLS
-
         try:
             # Create an openai assistant
             assistant = client.beta.assistants.create(
-                name="Prediction Agent Assistant",
+                name="Prediction Agent",
                 instructions=ASSISTANT_INSTRUCTIONS,
-                tools=assistant_tools,
+                tools=PREDICTION_ASSISTANT_TOOLS,
                 model=engine,
             )
 
             thread = client.beta.threads.create(
-            messages=[
-                {
-                "role": "user",
-                "content": prompt,
-                }
-            ]
+                messages=[
+                    {"role": "user", "content": prompt},
+                ]
             )
 
             run = client.beta.threads.runs.create(
                 thread_id=thread.id,
                 assistant_id=assistant.id,
             )
+
             print(f"Run created:\n{run}\n")
 
             waiting_status = ["queued", "in_progress"]
@@ -546,7 +544,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 if time.time() - start_time > run_timeout:
                     print(f"Run timed out. Run status:\n{run.status}\n")
                     break
-                time.sleep(3)
+                time.sleep(1)
                 run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
                 print(f"Run status: {run.status}")
                 
@@ -560,15 +558,22 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             
             if run.status == "requires_action":
                 print(f"Required action:\n {run.required_action}\n")
-                available_functions = {
-                    "get_market_rules": get_market_rules,
-                }
+                available_functions = OPENAI_TOOLS_FUNCTIONS
                 for tool_call in run.required_action.submit_tool_outputs.tool_calls:
                     function_name = tool_call.function.name
                     function_to_call = available_functions[function_name]
                     function_args = json.loads(tool_call.function.arguments)
                     if function_name == "get_market_rules":
                         function_output = function_to_call(**function_args, client=client)
+                    elif function_name == "research_additional_information":
+                        function_output = function_to_call(
+                            **function_args,
+                            client=client,
+                            thread_id=thread_id,
+                            google_api_key=google_api_key,
+                            google_engine_id=google_engine_id,
+                            engine=engine,
+                        )
                     else:
                         function_output = function_to_call(**function_args)
                     print(f"Result of {function_name}:\n{function_output}\n")
