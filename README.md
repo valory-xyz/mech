@@ -41,7 +41,7 @@ The project consists of three components:
  
 ## Mech request-response flow
 
-![image](https://github.com/adrianoVal/mech/assets/90184519/c93a0096-b102-4414-822f-567e1fe719f5)
+![image](https://github.com/valory-xyz/mech/blob/89572e5857dfcb69f8d4d9182df205b735448a53/docs/images/mech_request_response_flow.png)
 
 1. Write request metadata: the application writes the request metadata to the IPFS. The request metadata must contain the attributes `nonce`, `tool`, and `prompt`. Additional attributes can be passed depending on the specific tool:
 
