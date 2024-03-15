@@ -72,7 +72,7 @@ The project consists of three components:
 
 11. The application monitors for contract Deliver events and reads the response hash from the associated transaction.
 
-12. The application gets the response metadata from IPFS:
+12. The application gets the response metadata from the IPFS:
 
 ```
 {
