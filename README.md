@@ -70,7 +70,7 @@ The project consists of three components:
 
 10. The Mech writes the response hash to the Mech contract.
 
-11. The application reads the response hash from the contract.
+11. The application monitors for contract Deliver events and reads the response hash from the associated transaction.
 
 12. The application gets the response metadata from IPFS:
 
