@@ -172,7 +172,7 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 ### For generic apps and scripts
 
-Use the [mech-client](https://github.com/valory-xyz/mech-client), that can be used either as a CLI or directly from a python script.
+Use the [mech-client](https://github.com/valory-xyz/mech-client), which can be used either as a CLI or directly from a Python script.
 
 ### For other autonomous services
 
