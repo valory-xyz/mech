@@ -186,7 +186,7 @@ To perform mech requests from your service, use the [mech_interact_abci skill](h
 
 -   To send a request, [prepare the request metadata](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L857), write it to [synchronized_data.mech_requests](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L535) and [transition into mech_interact](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L736).
 
--   You will need to appropriately chain the mech_interact_abci skill with your other skills ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/composition.py#L66)) and transaction_settlement_abci.
+-   You will need to appropriately chain the `mech_interact_abci` skill with your other skills ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/composition.py#L66)) and `transaction_settlement_abci`.
 
 -   After the interaction finishes, the responses will be inside [synchronized_data.mech_responses](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L903)
 
