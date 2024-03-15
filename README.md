@@ -180,7 +180,7 @@ To perform mech requests from your service, use the [mech_interact_abci skill](h
 
 -   Add the mech_interact_abci skill to your dependency list, both in `packages.json`, `aea-config.yaml` and any composed `skill.yaml`.
 
--   Import [MechInteractParams and MechResponseSpecs in your models.py file](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/models.py#L88). You will also need to copy[ some dataclasses to your rounds.py](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L66-L97).
+-   Import [MechInteractParams and MechResponseSpecs in your `models.py` file](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/models.py#L88). You will also need to copy[ some dataclasses to your rounds.py](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L66-L97).
 
 -   Add mech_requests and mech_responses to your skills' SynchonizedData class ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L181-193))
 
