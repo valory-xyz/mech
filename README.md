@@ -178,7 +178,7 @@ Use the [mech-client](https://github.com/valory-xyz/mech-client), which can be u
 
 To perform mech requests from your service, use the [mech_interact_abci skill](https://github.com/valory-xyz/IEKit/tree/main/packages/valory/skills/mech_interact_abci). This skill abstracts away all the IPFS and contract interactions so you only need to care about the following:
 
--   Add the mech_interact_abci skill to your dependency list, both in packages.json, aea-config.yaml and any composed skill.yaml
+-   Add the mech_interact_abci skill to your dependency list, both in `packages.json`, `aea-config.yaml` and any composed `skill.yaml`.
 
 -   Import [MechInteractParams and MechResponseSpecs in your models.py file](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/models.py#L88). You will also need to copy[ some dataclasses to your rounds.py](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L66-L97).
 
