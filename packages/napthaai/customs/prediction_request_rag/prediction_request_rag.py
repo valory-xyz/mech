@@ -234,6 +234,7 @@ def multi_queries(
 
     # append the user's question to the list of queries
     queries.queries.append(prompt)
+    print(f"\nQueries: {queries.queries}")
 
     if counter_callback:
         counter_callback(
@@ -282,6 +283,7 @@ def get_urls_from_queries(
         except Exception:
             pass
     unique_results = list(set(results))
+    print(f"\nUnique URLs: {unique_results}")
     return unique_results
 
 
@@ -550,6 +552,7 @@ def adjust_additional_information(
         # Decode tokens back to text, ensuring the output fits within the budget
         additional_information = enc.decode(truncated_info_tokens)
     
+    print(f"\nAdditional Information: {additional_information}")    
     return additional_information
 
 
@@ -594,6 +597,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
         prediction_prompt = PREDICTION_PROMPT.format(
             user_prompt=prompt, additional_information=additional_information
         )
+        print(f"\nPrediction Prompt: {prediction_prompt}")
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prediction_prompt},
@@ -609,6 +613,7 @@ def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
             functions=[Results.openai_schema],
         )
         results = str(Results.from_response(response))
+        print
 
         pairs = str(results).split()
         result_dict = {}
