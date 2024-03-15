@@ -54,19 +54,19 @@ The project consists of three components:
 ```
 2. The application gets the metadata's IPFS hash.
 
-3. The application writes the request’s IPFS hash to the Mech contract and makes a small payment (currently $0.01 on the Gnosis chain deployment). Alternatively, the payment could be done separately through a Nevermined subscription.
+3. The application writes the request's IPFS hash to the Mech contract which includes a small payment (currently $0.01 on the Gnosis chain deployment). Alternatively, the payment could be done separately through a Nevermined subscription.
 
 4. The Mech service is constantly monitoring Mech contract events, and therefore gets the request hash.
 
 5. The Mech reads the request metadata from IPFS using its hash.
 
-6. The Mech selects the appropriate tool to handle the request from the “tool” entry in the metadata, and runs the tool with the given arguments, usually a prompt. In this example, the mech has been requested to interact with OpenAI’s API, so it forwards the prompt to it, but the tool can implement any other desired behavior. 
+6. The Mech selects the appropriate tool to handle the request from the `tool` entry in the metadata, and runs the tool with the given arguments, usually a prompt. In this example, the mech has been requested to interact with OpenAI's API, so it forwards the prompt to it, but the tool can implement any other desired behavior. 
 
-7. The Mech gets a response from OpenAI’s API.
+7. The Mech gets a response from the tool.
 
-8. The Mech writes the response to IPFS.
+8. The Mech writes the response to the IPFS.
 
-9. The Mech receives the response IPFS hash.
+9. The Mech receives the response the IPFS hash.
 
 10. The Mech writes the response hash to the Mech contract.
 
