@@ -1,8 +1,8 @@
 """This module implements a research agent for extracting relevant information from URLs."""
 
 from collections import defaultdict
-from concurrent.futures import Future, ThreadPoolExecutor
-import datetime
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta
 import re
 from bs4 import BeautifulSoup
 from docstring_parser import parse
@@ -24,6 +24,10 @@ from requests.exceptions import RequestException, TooManyRedirects
 from markdownify import markdownify as md
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from tiktoken import encoding_for_model
+import html2text
+from readability import Document
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
 
 from openai import OpenAI
 from tqdm import tqdm
@@ -68,6 +72,11 @@ from dateutil import parser
 
 #NUM_URLS_EXTRACT = 5
 NUM_URLS_PER_QUERY = 3
+SPLITTER_CHUNK_SIZE = 1800
+SPLITTER_OVERLAP = 50
+EMBEDDING_MODEL = "text-embedding-ada-002"
+EMBEDDING_BATCH_SIZE = 1000
+EMBEDDING_SIZE = 1536
 MAX_TOKENS_ADDITIONAL_INFORMATION = 2000
 WORDS_PER_TOKEN_FACTOR = 0.75
 DEFAULT_OPENAI_SETTINGS = {
@@ -118,13 +127,15 @@ OUTPUT_FORMAT:
 
 URL_RERANKING_PROMPT = """
 I will present you with a collection of web pages along with their titles, descriptions, release dates and publishers. \
-These web pages were fetched to find the most relevant information to answer the question: {market_question}. \
+These web pages were preselected for probably containing relevant information to answer the question: {market_question}. \
 
 The web pages are divided by '---web_page---'
 
-Evaluate the web pages along with their publishing dates, titles and descriptions for probably containing \
-relevant data to answer the question. Information can be considered relevant if it supports or refutes the question.
-\
+Evaluate the web pages details (publication dates, titles, descriptions and publishers) for relevance to answer the question. \
+Consider content, recency of information and publisher in your relevance evaluation. \
+Content can be considered relevant if it contains information that could help answer the question. \
+Recent information can be considered more relevant than older information. For this consider that the current date is {current_date} \
+A reputable publisher can be considered more relevant than a less reputable or unknown publisher. \
 
 Rank the web pages in descending order of relevance and return the ranked list of its web page IDs. \
 
@@ -134,7 +145,7 @@ WEB_PAGES:
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
 * The JSON must contain two fields: "explanation" and "ranked_web_page_ids"
-    - "explanation": A brief explanation of why you decided for this ranking
+    - "relevance_evaluation": A dict of web page IDs along with their evaluated relevance a scale between 1 and 10 and a one sentence explanation
     - "ranked_web_page_ids": A list of web page IDs ranked by relevance of their corresponding web pages
 * Include only the JSON object in your output
 * Do not include any formatting characters in your response!
@@ -267,6 +278,7 @@ class WebPage:
         self.id = type(self)._id_counter
         self.url = url
         self.html = html
+        self.scraped_text = None
         self.publisher = publisher
         self.title = title
         self.description = description
@@ -275,9 +287,13 @@ class WebPage:
 
 
     def get_title(self, soup, scripts):
-        title = soup.title.string
+        title = soup.title
         if title:
-            return title.strip()
+            return title.string.strip()
+        else:
+            title = soup.find("meta", attrs={"name": "title"}) or soup.find("meta", attrs={"property": "title"})
+            if title and title.get("content"):
+                return title["content"].strip()
         return "n/a"
 
 
@@ -357,6 +373,7 @@ class WebPage:
         Function to convert article attributes into a structured format for LLM prompts.
         """
         page_info = f"ID: {self.id}\n"
+        page_info += f"URL: {self.url}\n"
         page_info += f"Title: {self.title or 'Untitled'}\n"
         page_info += f"Description: {self.description or 'n/a'}\n"
         page_info += f"Published: {self.publication_date or 'Unknown'}\n"
@@ -530,22 +547,38 @@ def get_urls_from_queries(
     if num > max_num_fetch:
         raise ValueError(f"The maximum number of URLs per query is {max_num_fetch}.")
 
-    for query in queries:
-        fetched_urls = search_google(
-            query=query,
-            api_key=api_key,
-            engine=engine,
-            num=max_num_fetch  # Limit the number of fetched URLs per query
-        )
+    
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        futures = {executor.submit(search_google, query, api_key, engine, max_num_fetch) for query in queries}
+        for future in as_completed(futures):
+            result = future.result()
+            count = 0
+            for url in result:
+                if url not in results and not url.endswith(".pdf"):
+                    results.add(url)
+                    count += 1
+                    if count >= num:
+                        break
+                else:
+                    print(f"URL {url} already in results or is a PDF, skipping...")
+            #results.append(future.result())
 
-        # Add only unique URLs up to 'num' per query, omitting PDF and 'download' URLs
-        count = 0
-        for url in fetched_urls:
-            if url not in results and not url.endswith(".pdf"):
-                results.add(url)
-                count += 1
-                if count >= num:
-                    break
+    # for query in queries:
+    #     fetched_urls = search_google(
+    #         query=query,
+    #         api_key=api_key,
+    #         engine=engine,
+    #         num=max_num_fetch  # Limit the number of fetched URLs per query
+    #     )
+
+        # # Add only unique URLs up to 'num' per query, omitting PDF and 'download' URLs
+        # count = 0
+        # for url in fetched_urls:
+        #     if url not in results and not url.endswith(".pdf"):
+        #         results.add(url)
+        #         count += 1
+        #         if count >= num:
+        #             break
 
     print("\nget_urls_from_queries result:")
     for url in results:
@@ -729,29 +762,30 @@ def process_in_batches(
     }
     session.headers.update(headers)
 
-    # Using ThreadPoolExecutor to execute requests in parallel
     with ThreadPoolExecutor() as executor:
-        # Loop through the URLs in batch_size of size 'batch_size'
+        # Loop through the URLs in batches
         for i in range(0, len(web_pages), batch_size):
-            batch = web_pages[i : i + batch_size]
+            batch = web_pages[i:i + batch_size]
             
-            # Submit the batch of URLs for processing
-            futures = []
-            for web_page in batch:
+            # Submit HEAD requests for all URLs in the batch
+            head_futures = {executor.submit(session.head, web_page.url, headers=headers, timeout=timeout, allow_redirects=True): web_page for web_page in batch}
+            
+            # Process HEAD requests as they complete
+            get_futures = []
+            for future in as_completed(head_futures):
+                web_page = head_futures[future]
                 try:
-                    url = web_page.url
-                    # Submit a HEAD request to the url and check Content-Type
-                    head_future = executor.submit(session.head, url, headers=headers, timeout=timeout, allow_redirects=True)
-                    head_response = head_future.result()
-                    if 'text/html' not in head_response.headers.get('Content-Type', ''):
-                        continue
-                    else:
-                        # Submit a GET request to the url
-                        futures.append((executor.submit(session.get, url, headers=headers, timeout=timeout), web_page))
+                    head_response = future.result()
+                    if 'text/html' in head_response.headers.get('Content-Type', ''):
+                        # Only submit GET requests for URLs with 'text/html' Content-Type
+                        get_future = executor.submit(session.get, web_page.url, headers=headers, timeout=timeout, allow_redirects=True)
+                        get_futures.append((get_future, web_page))
                 except requests.exceptions.Timeout:
-                    print(f"Request for {url} timed out.")
+                    print(f"HEAD request for {web_page.url} timed out.")
+                except Exception as e:
+                    print(f"Error processing HEAD request for {web_page.url}: {e}")
 
-            yield futures
+            yield get_futures
 
 
 def extract_html_texts(
@@ -764,14 +798,22 @@ def extract_html_texts(
     for batch in process_in_batches(web_pages=web_pages):
         for future, web_page in tqdm(batch, desc="Processing URLs"):
             if future is None:
+                print(f"Future for {web_page.url} is None.")
                 continue
             try:
                 result = future.result()
                 if result.status_code == 200:
                     # Extract relevant information for the event question
                     web_page.html = result.text
+                    if web_page.html is None:
+                        print(f"HTML content for {web_page.url} is None.")
                     parsed_web_page = web_page.extract_page_attributes()
                     parsed_web_pages.append(parsed_web_page)
+                elif result.status_code != 200:
+                    print(f"Request for {web_page.url} returned status code {result.status_code}.")
+                elif 'text/html' not in result.headers.get('Content-Type', ''):
+                    print(f"Content-Type for {web_page.url} is not 'text/html'.")
+                  
             
             except requests.exceptions.Timeout:
                 print(f"Request for {web_page.url} timed out.")
@@ -1025,8 +1067,9 @@ def rerank_web_pages(
 ):
     """Rerank the web pages based on their relevance"""
     web_pages_info = "\n---web_page---\n".join([web_page.to_prompt() for web_page in parsed_web_pages])
+    current_date = datetime.now().strftime("%B %d, %Y, %I:%M %p")
     url_reranking_prompt = URL_RERANKING_PROMPT.format(
-        market_question=market_question, web_pages_info=web_pages_info
+        market_question=market_question, web_pages_info=web_pages_info, current_date=current_date
     )
     
     messages = [
@@ -1042,19 +1085,90 @@ def rerank_web_pages(
     )
     output = response.choices[0].message.content
     print(output)
-    exit()
     
-
-
-    sort_indexes = response.choices[0].message.content
     # Iterate over each web_page and set its sort_index
     for index, web_page in enumerate(parsed_web_pages):
-        web_page.sort_index = sort_indexes[index]
+        web_page.sort_index = output[index]
 
     # To verify the changes
-    for web_page in web_pages:
+    for web_page in parsed_web_pages:
         print(f"URL: {web_page.url}, Sort Index: {web_page.sort_index}")
-    return
+    return parsed_web_pages
+
+
+def scrape_web_pages(web_pages: List[WebPage], week_interval) -> List[WebPage]:
+    """Scrape text from web pages"""
+    filtered_web_pages = []
+    for web_page in web_pages:
+        if web_page.html:
+            date_parsed = parse_date_str([None, web_page.publication_date])
+            if date_parsed > datetime.now() - timedelta(weeks=5) or date_parsed == datetime.min:
+                soup = BeautifulSoup(web_page.html, "html.parser")
+                soup_string = str(soup)
+
+                # The pattern matches either a bracketed prefix followed by an "https" URL
+                # or an "https" URL directly.
+                pattern = r'(?:\[\d+\]\s*)?(https?://\S+)'
+
+                # Remove the matched "https" URLs, with or without bracketed prefixes
+                soup_string = re.sub(pattern, '', soup_string)
+                
+                # Clean the text
+                doc = Document(soup_string)
+                doc_sum = doc.summary()
+                h = html2text.HTML2Text()
+                h.ignore_links = True
+                h.ignore_images = True
+                h.ignore_emphasis = True
+                web_page.scraped_text = h.handle(doc_sum)
+                filtered_web_pages.append(web_page)
+
+            else:
+                web_page.scraped_text = ""
+                print(f"Publication date {web_page.publication_date} is older than {week_interval} weeks.")
+        else:
+            web_page.html = ""
+            print("HTML content is not available for web page.")
+
+    return filtered_web_pages
+
+
+def get_chunks(scraped_text: Document) -> List[Document]:
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=20, length_function=len)
+    chunks = text_splitter.create_documents([scraped_text])
+    return chunks
+
+
+def get_embeddings(client: OpenAI, split_docs: List[Document]) -> List[Document]:
+    """Get embeddings for the split documents."""
+    print("Starting to get embeddings.")
+    for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
+        batch_end = batch_start + EMBEDDING_BATCH_SIZE
+        batch = [doc.text for doc in split_docs[batch_start:batch_end]]
+        response = client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=batch,
+        )
+        for i, be in enumerate(response.data):
+            assert i == be.index
+        batch_embeddings = [e.embedding for e in response.data]
+        for i, doc in enumerate(split_docs[batch_start:batch_end]):
+            doc.embedding = batch_embeddings[i]
+    print("Finished getting embeddings.")
+    exit()
+    return split_docs
+
+
+
+def get_relevant_chunks(client: OpenAI, web_pages: List[WebPage]) -> List[WebPage]:
+    """Get relevant chunk for each web page"""
+    for web_page in web_pages:
+        chunks = get_chunks(web_page.scraped_text)
+        docs_with_embeddings = get_embeddings(client, chunks)
+        
+        exit()
+
+    return web_pages
 
 
 def research_additional_information(
@@ -1077,13 +1191,28 @@ def research_additional_information(
         num=NUM_URLS_PER_QUERY,
     )
     web_pages = [WebPage(url) for url in urls]
-    parsed_web_pages = extract_html_texts(web_pages)
+    web_pages = extract_html_texts(web_pages)
     
     # print attributes of all web pages
-    for page in parsed_web_pages:
+    for page in web_pages:
         print(page.to_prompt())
 
-    reranked_web_pages = rerank_web_pages(client, parsed_web_pages, market_question=input_query)
+    # reranked_web_pages = rerank_web_pages(client, parsed_web_pages, market_question=input_query)
+    
+    
+    week_interval = 5
+    # Scrape text from web pages not older <week_interval> weeks
+    web_pages = scrape_web_pages(web_pages, week_interval)
+
+    for page in web_pages:
+        print(f"\n{page.to_prompt()}\n")
+        print(page.scraped_text[:500])
+
+    web_pages = get_relevant_chunks(client, web_pages)
+
+
+        
+    
 
     
 
