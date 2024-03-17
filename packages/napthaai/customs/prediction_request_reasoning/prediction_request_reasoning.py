@@ -153,13 +153,6 @@ class MultiQuestions(OpenAISchema):
     questions: List[str]
 
 
-class Date(OpenAISchema):
-    date_available: bool = Field(..., description="Whether the date is available")
-    year: Optional[int] = Field(None, description="The year the article was published")
-    month: Optional[str] = Field(None, description="The month the article was published")
-    day: Optional[int] = Field(None, description="The day the article was published")
-
-
 class Results(OpenAISchema):
     p_yes: float =  Field(description="Estimated probability that the event in the USER_QUESTION occurs.")
     p_no: float = Field(description="Estimated probability that the event in the USER_QUESTION does not occur.")
@@ -175,7 +168,6 @@ class Determinable(OpenAISchema):
 
 class Document(BaseModel):
     text: str
-    date: str
     url: str
     embedding: Optional[List[float]] = None
 
@@ -183,14 +175,10 @@ class Document(BaseModel):
 URL_QUERY_PROMPT = """
  You are an expert fact checker in a team tasked with determining whether an event will happen before a given date. 
 * Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event will occur. 
-* You are provided with the input question about the event under the label "USER_PROMPT". 
-* You must follow the instructions under the label "INSTRUCTIONS". 
 
 INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" is a question about whether an event will happen before a given date.
+* You are provided with the input question about the event under the label "USER_PROMPT" delimited by three backticks, which is a question about whether an event will happen before a given date.
 * The event will only have two possible outcomes: either the event will happen or the event will not happen.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
 * You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event will occur. 
 * Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
 * ONLY function calls are allowed in the response.
@@ -198,21 +186,6 @@ INSTRUCTIONS
 USER_PROMPT:
 ```
 {user_prompt}
-```
-"""
-
-
-GET_DATE_PROMPT = """
-INSTRUCTIONS
-* You are an expert data analyst that takes in extracted text from a web search result. 
-* You are provided with text extracted from a relevant web page under the label "EXTRACTED_TEXT" delimited by three backticks.
-* Your task is to extract the date that the web page was published. 
-* If there is no date information available, you should not try to guess. Instead indicate that it is not available.
-* ONLY function calls are allowed in the response.
-
-EXTRACTED_TEXT:
-```
-{extracted_text}
 ```
 """
 
@@ -240,24 +213,17 @@ REASONING:
 REASONING_PROMPT = """
 You are an expert fact checker that takes in a question asking whether an event will happen before a given date. 
 Your role is to determine whether the event will happen before the date.
-You are provided with the input question about the event under the label "USER_PROMPT". You must follow the instructions
-under the label "INSTRUCTIONS".
 
 INSTRUCTIONS
-* Read the input question under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" specifies a question about whether an event will happen before a certain date.
-* You need to determine whether the event will or will not happen. There are only two
-possible answers: either the event will happen or it will not happen.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION" delimited by three backticks.
-* The items in "ADDITIONAL_INFORMATION" "ARTICLE (N), DATE: (MONTH/YEAR), URL: (URL), CONTENT: (CONTENT)"
-* You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data.
-* If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
+* You are provided with the input question about the event under the label "USER_PROMPT" delimited by three backticks, which is a question about whether an event will happen before a certain date.
+* You need to determine whether the event will or will not happen. There are only two possible answers: either the event will happen or it will not happen.
+* You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION" delimited by three backticks, with format "ARTICLE (N), URL: (URL), CONTENT: (CONTENT)"
 * Ideally, these will be news articles about the event in question.
-* Pay special attention to the date of the article if it is available.
-* You should show your process of thinking through the problem step by step, taking the date and information of the various articles into consideration, and explain your reasoning for your decision as to whether an event will occur by the specified date. 
+* If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
+* You should show your process of thinking through the problem step by step, taking the information of the various articles into consideration, and explain your reasoning for your decision as to whether an event will occur by the specified date. 
 * The articles will not contain all the information needed to determine the answer. In this case, you may need to make an educated guess based on certain assumptions. If you need to do this, please provide your assumptions in your explanation.
-* Do not output "error"
+* Try to be concise in your reasoning, providing only information that is important for making a decision (aim for a response of about 100 words)
+* Do not repeat the task or instructions in the response
 
 USER_PROMPT:
 ```
@@ -360,50 +326,6 @@ def get_urls_from_queries(
     return unique_results
 
 
-def get_dates(
-    client: OpenAI,
-    text: str,
-    engine: str,
-    temperature: float = DEFAULT_OPENAI_SETTINGS["temperature"],
-    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-):
-    """Get the date from the extracted text"""
-    adjusted_text = adjust_additional_information(
-        prompt=GET_DATE_PROMPT, additional_information=text, model=engine
-    )
-    get_date_prompt = GET_DATE_PROMPT.format(extracted_text=adjusted_text)
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": get_date_prompt},
-    ]
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=90,
-        stop=None,
-        functions=[Date.openai_schema],
-        function_call={'name':'Date'}
-    )
-    date = Date.from_response(response)
-    if date.date_available:
-        date_res = f"{date.year}-{date.month}-{date.day}"
-    else:
-        date_res = "Date not available"
-    if counter_callback:
-        counter_callback(
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=engine,
-            token_counter=count_tokens,
-        )
-        return date_res, counter_callback
-    return date_res, None
-
-
 def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
     """Extract text from a PDF document at the given URL."""
     try:
@@ -419,7 +341,7 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
             for page in reader.pages:
                 text += page.extract_text()
 
-        doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
+        doc = Document(text=text[:num_words] if num_words else text, url=url)
 
         return doc
     except Exception as e:
@@ -437,13 +359,7 @@ def extract_text(
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
     text = text = md(text, heading_style="ATX")
-    date, counter_callback = get_dates(
-        client=client, 
-        text=text, 
-        counter_callback=counter_callback,
-        engine=engine
-    )
-    doc = Document(text=text[:num_words] if num_words else text, date=date, url="")
+    doc = Document(text=text[:num_words] if num_words else text, url="")
     return doc, counter_callback
 
 
@@ -649,7 +565,7 @@ def fetch_additional_information(
         )
         print(f"URLs: {urls}")
 
-        # Extract text and dates from the URLs
+        # Extract text from the URLs
         docs, counter_callback = extract_texts(
             urls=urls, 
             client=client, 
@@ -683,7 +599,7 @@ def fetch_additional_information(
             SPLITTER_OVERLAP
         )
         split_docs.extend(
-            [Document(text=chunk, date=doc.date, url=doc.url) for chunk in t]
+            [Document(text=chunk, url=doc.url) for chunk in t]
         )
     print(f"Split Docs: {len(split_docs)}")
 
@@ -716,7 +632,7 @@ def fetch_additional_information(
     # Format the additional information
     additional_information = "\n".join(
         [
-            f"ARTICLE {i}, URL: {doc.url}, DATE: {doc.date}, CONTENT: {doc.text}\n"
+            f"ARTICLE {i}, URL: {doc.url}, CONTENT: {doc.text}\n"
             for i, doc in enumerate(similar_chunks)
         ]
     )
