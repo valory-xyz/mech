@@ -67,22 +67,22 @@ DEFAULT_OPENAI_SETTINGS = {
 }
 MAX_TOKENS = {
     "gpt-3.5-turbo-0125": 16385,
-    "gpt-4": 8192,
+    "gpt-4-0125-preview": 8192,
 }
 ALLOWED_TOOLS = [
     "prediction-request-reasoning",
 ]
-TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo-0125" for tool in ALLOWED_TOOLS}
+TOOL_TO_ENGINE = {tool: "gpt-4-0125-preview" for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 NUM_QUERIES = 3
 NUM_URLS_PER_QUERY = 3
-SPLITTER_CHUNK_SIZE = 1800
+SPLITTER_CHUNK_SIZE = 300
 SPLITTER_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-3-large"
 EMBEDDING_BATCH_SIZE = 1000
 EMBEDDING_SIZE = 3072
-NUM_NEIGHBORS = 4
+NUM_NEIGHBORS = 3
 BUFFER_TOKENS = 250
 
 
@@ -257,6 +257,7 @@ possible answers: either the event will happen or it will not happen.
 * Pay special attention to the date of the article if it is available.
 * You should show your process of thinking through the problem step by step, taking the date and information of the various articles into consideration, and explain your reasoning for your decision as to whether an event will occur by the specified date. 
 * The articles will not contain all the information needed to determine the answer. In this case, you may need to make an educated guess based on certain assumptions. If you need to do this, please provide your assumptions in your explanation.
+* Do not output "error"
 
 USER_PROMPT:
 ```
@@ -389,16 +390,18 @@ def get_dates(
     )
     date = Date.from_response(response)
     if date.date_available:
-        if counter_callback:
-            counter_callback(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
-                model=engine,
-                token_counter=count_tokens,
-            )
-            return f"{date.year}-{date.month}-{date.day}", counter_callback
-        return f"{date.year}-{date.month}-{date.day}", None
-    return "Date not available", None
+        date_res = f"{date.year}-{date.month}-{date.day}"
+    else:
+        date_res = "Date not available"
+    if counter_callback:
+        counter_callback(
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            model=engine,
+            token_counter=count_tokens,
+        )
+        return date_res, counter_callback
+    return date_res, None
 
 
 def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
