@@ -27,7 +27,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from pydantic import BaseModel, Field
 from docstring_parser import parse
 import tiktoken
-import json
 from openai import OpenAI
 import numpy as np
 import faiss
@@ -373,13 +372,16 @@ def get_urls_from_queries(
     """Get URLs from search engine queries"""
     results = []
     for query in queries:
-        for url in search_google(
-            query=query,
-            api_key=api_key,
-            engine=engine,
-            num=num,
-        ):
-            results.append(url)
+        try:
+            for url in search_google(
+                query=query,
+                api_key=api_key,
+                engine=engine,
+                num=num,
+            ):
+                results.append(url)
+        except Exception as e:
+            print(f"An error occurred: {e}")
     unique_results = list(set(results))
     return unique_results
 
@@ -592,6 +594,9 @@ def fetch_additional_information(
 
     # Remove None values from the list
     docs = [doc for doc in docs if doc]
+
+    # remove doc with ""
+    docs = [doc for doc in docs if hasattr(doc, "text") and doc.text != ""]
 
     # Chunk the documents
     split_docs = []
@@ -807,14 +812,8 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
                     + response_prediction.usage.completion_tokens,
                     model=engine,
                 )
-                return (
-                    results.json(),
-                    reasoning,
-                    additional_information,
-                    queries,
-                    counter_callback,
-                )
-            return results.json(), reasoning, additional_information, queries, None
+            return results.json(), reasoning, additional_information, queries, counter_callback
 
         except Exception as e:
+            print(f"An error occurred: {e}")
             return None, None, None, None, e
