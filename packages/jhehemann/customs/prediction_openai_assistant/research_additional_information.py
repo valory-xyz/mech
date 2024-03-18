@@ -75,6 +75,7 @@ NUM_URLS_PER_QUERY = 3
 SPLITTER_CHUNK_SIZE = 1800
 SPLITTER_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-ada-002"
+MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_BATCH_SIZE = 1000
 EMBEDDING_SIZE = 1536
 MAX_TOKENS_ADDITIONAL_INFORMATION = 2000
@@ -408,6 +409,13 @@ class WebPage:
 
         # If no 'publisher' or 'author' found, or data is neither a list nor a dict
         return 'n/a'
+
+
+class TextChunk(BaseModel):
+    text: str
+    url: str
+    num_tokens: Optional[int] = None
+    embedding: Optional[List[float]] = None
 
 
 def get_first_dict_from_list(data):
@@ -1106,13 +1114,6 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval) -> List[WebPage]:
                 soup = BeautifulSoup(web_page.html, "html.parser")
                 soup_string = str(soup)
 
-                # The pattern matches either a bracketed prefix followed by an "https" URL
-                # or an "https" URL directly.
-                pattern = r'(?:\[\d+\]\s*)?(https?://\S+)'
-
-                # Remove the matched "https" URLs, with or without bracketed prefixes
-                soup_string = re.sub(pattern, '', soup_string)
-                
                 # Clean the text
                 doc = Document(soup_string)
                 doc_sum = doc.summary()
@@ -1121,6 +1122,13 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval) -> List[WebPage]:
                 h.ignore_images = True
                 h.ignore_emphasis = True
                 web_page.scraped_text = h.handle(doc_sum)
+                
+                # # The pattern matches either a bracketed prefix followed by an "https" URL
+                # # or an "https" URL directly.
+                # pattern = r'(?:\[\d+\]\s*)?(https?://\S+)'
+                # # Remove the matched "https" URLs, with or without bracketed prefixes
+                # web_page.scraped_text = re.sub(pattern, '', web_page.scraped_text)
+
                 filtered_web_pages.append(web_page)
 
             else:
@@ -1133,42 +1141,100 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval) -> List[WebPage]:
     return filtered_web_pages
 
 
-def get_chunks(scraped_text: Document) -> List[Document]:
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=20, length_function=len)
-    chunks = text_splitter.create_documents([scraped_text])
+def recursive_character_text_splitter(text, max_tokens, overlap):
+    if len(text) <= max_tokens:
+        return [text]
+    else:
+        return [text[i:i+max_tokens] for i in range(0, len(text), max_tokens - overlap)]
+
+
+def get_chunks(scraped_text: str) -> List[str]:
+    chunks = recursive_character_text_splitter(scraped_text, 400, 50)
+    # text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50, length_function=len)
+    # chunks = text_splitter.split_text(scraped_text)
     return chunks
 
 
-def get_embeddings(client: OpenAI, split_docs: List[Document]) -> List[Document]:
-    """Get embeddings for the split documents."""
+def embed_batch(client: OpenAI, batch):
+    """
+    Helper function to process a single batch of texts and return the embeddings.
+    """
+    response = client.embeddings.create(
+        model="text-embedding-ada-002",
+        input=[text_chunk.text for text_chunk in batch]
+    )
+
+    # Assert the order of documents in the response matches the request
+    for i, data in enumerate(response.data):
+        assert i == data.index, "Document order in the response does not match the request."
+
+    # Return the embeddings
+    return [data.embedding for data in response.data]
+
+
+def get_embeddings(client: OpenAI, text_chunks: List[TextChunk]) -> List[TextChunk]:
+    """Get embeddings for the text chunks."""
     print("Starting to get embeddings.")
-    for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
-        batch_end = batch_start + EMBEDDING_BATCH_SIZE
-        batch = [doc.text for doc in split_docs[batch_start:batch_end]]
-        response = client.embeddings.create(
-            model=EMBEDDING_MODEL,
-            input=batch,
-        )
-        for i, be in enumerate(response.data):
-            assert i == be.index
-        batch_embeddings = [e.embedding for e in response.data]
-        for i, doc in enumerate(split_docs[batch_start:batch_end]):
-            doc.embedding = batch_embeddings[i]
-    print("Finished getting embeddings.")
-    exit()
-    return split_docs
+    
+    # Initialize tokenizer
+    enc = tiktoken.get_encoding("cl100k_base") 
+    
+    # Batch the text chunks that the sum of tokens is less than MAX_EMBEDDING_TOKEN_INPUT
+    batches = []
+    current_batch = []
+    current_batch_token_count = 0
+    for text_chunk in text_chunks:
+        # print the type of text_chunk
+        print(type(text_chunk))
+        text_chunk.num_tokens  = len(enc.encode(text_chunk.text))
+        if text_chunk.num_tokens + current_batch_token_count <= MAX_EMBEDDING_TOKEN_INPUT:
+            # Add document to the batch if token limit is not exceeded
+            current_batch.append(text_chunk)
+            current_batch_token_count += text_chunk.num_tokens
+        else:
+            # Process the current batch and start a new one if the token limit would be exceeded
+            batches.append(current_batch)
+            current_batch = [text_chunk]
+            current_batch_token_count = text_chunk.num_tokens
+
+    # Add the last batch
+    if current_batch:
+        batches.append(current_batch)
 
 
+    # Process batches in parallel
+    with ThreadPoolExecutor(max_workers=5) as executor:
+        future_to_batch = {executor.submit(embed_batch, client, batch): batch for batch in batches}
 
-def get_relevant_chunks(client: OpenAI, web_pages: List[WebPage]) -> List[WebPage]:
+        for future in as_completed(future_to_batch):
+            batch = future_to_batch[future]
+            try:
+                embeddings = future.result()
+                # Assign embeddings to the corresponding documents
+                for text_chunk, embedding in zip(batch, embeddings):
+                    #print(f"Embedding for {text_chunk.text}: {embedding}")
+                    text_chunk.embedding = embedding
+
+            except Exception as e:
+                print(f"Exception: {e}")
+
+    return text_chunks
+
+
+def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
     """Get relevant chunk for each web page"""
+    text_chunks = []
     for web_page in web_pages:
-        chunks = get_chunks(web_page.scraped_text)
-        docs_with_embeddings = get_embeddings(client, chunks)
-        
-        exit()
+        chunks = recursive_character_text_splitter(web_page.scraped_text, 400, 50)
+        # print the first three chunks
+        text_chunks.extend(TextChunk(text=chunk, url=web_page.url) for chunk in chunks)
+        print(f"\nChunks for {web_page.url}:")
+        for i, chunk in enumerate(chunks[:3]):
+            print(f"Chunk {i+1}:")
+            print(chunk)
+            print()
 
-    return web_pages
+    return text_chunks
 
 
 def research_additional_information(
@@ -1208,7 +1274,10 @@ def research_additional_information(
         print(f"\n{page.to_prompt()}\n")
         print(page.scraped_text[:500])
 
-    web_pages = get_relevant_chunks(client, web_pages)
+    text_chunks = get_chunks(web_pages)
+    text_chunks_embedded = get_embeddings(client, text_chunks)
+
+
 
 
         

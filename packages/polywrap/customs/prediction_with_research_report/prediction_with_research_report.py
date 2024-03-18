@@ -531,14 +531,30 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     model = TOOL_TO_ENGINE[tool]
     
     queries, counter_callback = generate_subqueries(query=prompt, limit=initial_subqueries_limit, api_key=openai_api_key, model=model, counter_callback=counter_callback)
+    # print queries
+    print("\nInitial queries")
+    for query in queries:
+        print(query)
+
     queries, counter_callback = rerank_subqueries(queries=queries, goal=prompt, api_key=openai_api_key, model=model, counter_callback=counter_callback)
+    print("\nReranked queries")
+    for query in queries:
+        print(query)
+
     queries = queries[:subqueries_limit]
+    print("\nFinal queries")
+    for query in queries:
+        print(query)
 
     search_results_with_queries = search(queries, tavily_api_key, lambda result: not result["url"].startswith("https://www.youtube"))
 
     scrape_args = [result for (_, result) in search_results_with_queries]
     scraped = scrape_results(scrape_args)
     scraped = [result for result in scraped if result.content != ""]
+    print("\nScraped content")
+    for result in scraped:
+        print(result.content)
+        print("--------------------------------------------------\n")
 
     text_splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n", ". ", "  "],
@@ -554,7 +570,9 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         vector_result_texts += [x for x in documents_list]
 
     research_report, counter_callback = prepare_report(prompt, vector_result_texts, api_key=openai_api_key, model=model, counter_callback=counter_callback)
-    
+    print("\nResearch report: ")
+    print(research_report)
+
     current_time_utc = datetime.now(timezone.utc)
     formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
 
@@ -563,6 +581,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         additional_information=research_report,
         timestamp=formatted_time_utc
     )
+    print("\nPrediction prompt: ")
+    print(prediction_prompt)
     prediction, counter_callback = make_prediction(
         prompt=prediction_prompt,
         model=model,
