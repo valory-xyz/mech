@@ -670,7 +670,7 @@ def adjust_additional_information(
     return additional_information
 
 
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
