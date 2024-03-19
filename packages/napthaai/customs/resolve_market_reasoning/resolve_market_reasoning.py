@@ -35,8 +35,15 @@ import requests
 from readability import Document as ReadabilityDocument
 from markdownify import markdownify as md
 from googleapiclient.discovery import build
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 class OpenAIClientManager:
@@ -350,6 +357,7 @@ def multi_queries(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
             model=engine,
+            token_counter=count_tokens,
         )
         return queries.queries, counter_callback
     return queries.queries, None
@@ -416,6 +424,7 @@ def get_dates(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
                 model="gpt-3.5-turbo",
+                token_counter=count_tokens,
             )
             return f"{date.year}-{date.month}-{date.day}", counter_callback
         return f"{date.year}-{date.month}-{date.day}", None
@@ -807,7 +816,8 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
                 output_tokens=response_reasoning.usage.completion_tokens
                               + response_prediction.usage.completion_tokens,
                 model=engine,
-            )
+                token_counter=count_tokens,
+                )
             return (
                 results.json(),
                 reasoning,
