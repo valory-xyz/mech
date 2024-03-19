@@ -4,7 +4,7 @@ from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 import re
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, NavigableString
 from docstring_parser import parse
 import faiss
 from googleapiclient.discovery import build
@@ -16,7 +16,6 @@ from io import BytesIO
 import PyPDF2
 from openai import OpenAI
 from pydantic import BaseModel, Field
-from readability import Document as ReadabilityDocument
 import requests
 from requests import Session
 from requests.exceptions import RequestException, TooManyRedirects
@@ -27,6 +26,13 @@ from tiktoken import encoding_for_model
 import html2text
 from readability import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
+import spacy
+from spacy import Language
+from spacy.cli import download
+
+import logging
+
+
 
 
 from openai import OpenAI
@@ -34,6 +40,8 @@ from tqdm import tqdm
 
 
 from dateutil import parser
+
+#logging.basicConfig(level=logging.DEBUG)
 
 # from typing import Any, Dict, Generator, List, Optional, Tuple
 # from datetime import datetime, timezone, timedelta
@@ -62,7 +70,7 @@ from dateutil import parser
 # from typing import Optional, Type
 # import requests
 # from requests import Session
-# import spacy
+
 # import spacy.util
 # import tiktoken
 
@@ -72,14 +80,16 @@ from dateutil import parser
 
 #NUM_URLS_EXTRACT = 5
 NUM_URLS_PER_QUERY = 3
-SPLITTER_CHUNK_SIZE = 1800
-SPLITTER_OVERLAP = 50
+TEXT_CHUNK_LENGTH = 300
+TEXT_CHUNK_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-ada-002"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_BATCH_SIZE = 1000
 EMBEDDING_SIZE = 1536
 MAX_TOKENS_ADDITIONAL_INFORMATION = 2000
 WORDS_PER_TOKEN_FACTOR = 0.75
+VOCAB = "en_core_web_sm"
+
 DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 500,
     "temperature": 0,
@@ -273,6 +283,15 @@ HTML_TAGS_TO_REMOVE = [
  
 class WebPage:
     _id_counter = 0
+    id: int
+    url: str
+    html: Optional[str] = None
+    scraped_text: Optional[str] = None
+    publisher: Optional[str] = None
+    title: Optional[str] = None
+    description: Optional[str] = None
+    publication_date: Optional[str] = None
+    relevant_chunks: List[str] = Field(default_factory=list)
 
     def __init__(self, url, html=None, title=None, description=None, publication_date=None, publisher=None):
         type(self)._id_counter += 1
@@ -284,6 +303,7 @@ class WebPage:
         self.title = title
         self.description = description
         self.publication_date = publication_date
+        self.relevant_chunks = []
         self.extract_attribute_names = ["title", "description", "publication_date", "publisher"]
 
 
@@ -416,6 +436,17 @@ class TextChunk(BaseModel):
     url: str
     num_tokens: Optional[int] = None
     embedding: Optional[List[float]] = None
+    similarity: Optional[float] = None
+
+
+def load_model(vocab: str) -> Language:
+    """Utilize spaCy to load the model and download it if it is not already available."""
+    try:
+        return spacy.load(vocab)
+    except OSError:
+        print("Downloading language model...")
+        download(vocab)
+        return spacy.load(vocab)
 
 
 def get_first_dict_from_list(data):
@@ -526,73 +557,6 @@ def truncate_additional_information(
         add_trunc_enc = add_enc[:-int(len_add_enc - max_add_tokens)]
         return enc.decode(add_trunc_enc)
 
-
-def get_urls_from_queries(
-    queries: List[str],
-    api_key: str,
-    engine: str,
-    num: int = 3
-) -> List[str]:
-    """
-    Fetch unique URLs from search engine queries, limiting the number of URLs per query.
-    
-    Args:
-        queries (List[str]): List of search engine queries.
-        api_key (str): API key for the search engine.
-        engine (str): Custom google search engine ID.
-        num (int, optional): Number of returned URLs per query. Defaults to 3.
-
-    Raises:
-        ValueError: If the number of URLs per query exceeds the maximum allowed.
-    
-    Returns:
-        List[str]: Unique list of URLs, omitting PDF and download-related URLs.
-    """
-
-    results = set()
-    max_num_fetch = 10
-
-    if num > max_num_fetch:
-        raise ValueError(f"The maximum number of URLs per query is {max_num_fetch}.")
-
-    
-    with ThreadPoolExecutor(max_workers=15) as executor:
-        futures = {executor.submit(search_google, query, api_key, engine, max_num_fetch) for query in queries}
-        for future in as_completed(futures):
-            result = future.result()
-            count = 0
-            for url in result:
-                if url not in results and not url.endswith(".pdf"):
-                    results.add(url)
-                    count += 1
-                    if count >= num:
-                        break
-                else:
-                    print(f"URL {url} already in results or is a PDF, skipping...")
-            #results.append(future.result())
-
-    # for query in queries:
-    #     fetched_urls = search_google(
-    #         query=query,
-    #         api_key=api_key,
-    #         engine=engine,
-    #         num=max_num_fetch  # Limit the number of fetched URLs per query
-    #     )
-
-        # # Add only unique URLs up to 'num' per query, omitting PDF and 'download' URLs
-        # count = 0
-        # for url in fetched_urls:
-        #     if url not in results and not url.endswith(".pdf"):
-        #         results.add(url)
-        #         count += 1
-        #         if count >= num:
-        #             break
-
-    print("\nget_urls_from_queries result:")
-    for url in results:
-        print(url)
-
-    return list(results)
 
 
 def find_release_date_in_data(data):
@@ -754,7 +718,7 @@ def process_in_batches(
     web_pages: List[WebPage],
     batch_size: int = 15,
     timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[None, None, List[Tuple[Future, WebPage]]]:
     if batch_size <= 0:
         raise ValueError("The 'batch_size' size must be greater than zero.")
     
@@ -796,42 +760,7 @@ def process_in_batches(
             yield get_futures
 
 
-def extract_html_texts(
-    web_pages: List[WebPage],
-) -> List[Tuple[str, float, str]]:    
-    # Initialize empty list for storing extracted sentences along with their similarity scores, release dates and urls
-    parsed_web_pages = []
 
-    # Process URLs in batches
-    for batch in process_in_batches(web_pages=web_pages):
-        for future, web_page in tqdm(batch, desc="Processing URLs"):
-            if future is None:
-                print(f"Future for {web_page.url} is None.")
-                continue
-            try:
-                result = future.result()
-                if result.status_code == 200:
-                    # Extract relevant information for the event question
-                    web_page.html = result.text
-                    if web_page.html is None:
-                        print(f"HTML content for {web_page.url} is None.")
-                    parsed_web_page = web_page.extract_page_attributes()
-                    parsed_web_pages.append(parsed_web_page)
-                elif result.status_code != 200:
-                    print(f"Request for {web_page.url} returned status code {result.status_code}.")
-                elif 'text/html' not in result.headers.get('Content-Type', ''):
-                    print(f"Content-Type for {web_page.url} is not 'text/html'.")
-                  
-            
-            except requests.exceptions.Timeout:
-                print(f"Request for {web_page.url} timed out.")
-            
-            # except Exception as e:
-            #     print(f"An error occurred in extract_html_texts: {e}")
-
-    print("Web pages parsed successfully.\n")
-
-    return parsed_web_pages
 
 
 
@@ -979,43 +908,6 @@ def join_and_group_sentences(
     return final_output
 
 
-def fetch_queries(
-    client: OpenAI,
-    input_query: str,
-    model="gpt-3.5-turbo",
-    temperature=1.0,
-    max_attempts=2,
-):
-    """Fetch queries from the OpenAI engine"""
-    attempts = 0
-    while attempts < max_attempts:
-        try:
-            queries_prompt = QUERIES_PROMPT.format(input_query=input_query)
-            messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": queries_prompt},
-            ]
-            
-            # Fetch queries from the OpenAI engine
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-            )
-            output = response.choices[0].message.content
-            # Parse the response content
-            print(output)
-            trimmed_output = trim_json_formatting(output)
-            json_data = json.loads(trimmed_output)
-            queries = json_data["queries"]
-            return queries  # Return the parsed data if successful
-        except Exception as e:
-            print(f"Attempt {attempts + 1} failed with error: {e}")
-            attempts += 1
-            if attempts == max_attempts:
-                print("Maximum attempts reached, returning an empty string.")
-                return ""  # Return an empty string after exhausting retries
-
 
 
 def fetch_additional_information(
@@ -1104,55 +996,11 @@ def rerank_web_pages(
     return parsed_web_pages
 
 
-def scrape_web_pages(web_pages: List[WebPage], week_interval) -> List[WebPage]:
-    """Scrape text from web pages"""
-    filtered_web_pages = []
-    for web_page in web_pages:
-        if web_page.html:
-            date_parsed = parse_date_str([None, web_page.publication_date])
-            if date_parsed > datetime.now() - timedelta(weeks=5) or date_parsed == datetime.min:
-                soup = BeautifulSoup(web_page.html, "html.parser")
-                soup_string = str(soup)
-
-                # Clean the text
-                doc = Document(soup_string)
-                doc_sum = doc.summary()
-                h = html2text.HTML2Text()
-                h.ignore_links = True
-                h.ignore_images = True
-                h.ignore_emphasis = True
-                web_page.scraped_text = h.handle(doc_sum)
-                
-                # # The pattern matches either a bracketed prefix followed by an "https" URL
-                # # or an "https" URL directly.
-                # pattern = r'(?:\[\d+\]\s*)?(https?://\S+)'
-                # # Remove the matched "https" URLs, with or without bracketed prefixes
-                # web_page.scraped_text = re.sub(pattern, '', web_page.scraped_text)
-
-                filtered_web_pages.append(web_page)
-
-            else:
-                web_page.scraped_text = ""
-                print(f"Publication date {web_page.publication_date} is older than {week_interval} weeks.")
-        else:
-            web_page.html = ""
-            print("HTML content is not available for web page.")
-
-    return filtered_web_pages
-
-
 def recursive_character_text_splitter(text, max_tokens, overlap):
     if len(text) <= max_tokens:
         return [text]
     else:
         return [text[i:i+max_tokens] for i in range(0, len(text), max_tokens - overlap)]
-
-
-def get_chunks(scraped_text: str) -> List[str]:
-    chunks = recursive_character_text_splitter(scraped_text, 400, 50)
-    # text_splitter = RecursiveCharacterTextSplitter(chunk_size=400, chunk_overlap=50, length_function=len)
-    # chunks = text_splitter.split_text(scraped_text)
-    return chunks
 
 
 def embed_batch(client: OpenAI, batch):
@@ -1172,6 +1020,41 @@ def embed_batch(client: OpenAI, batch):
     return [data.embedding for data in response.data]
 
 
+
+def sort_text_chunks(
+    client: OpenAI, query: str, text_chunks_embedded: List[TextChunk]
+) -> List[TextChunk]:
+    """Similarity search to find similar chunks to a query"""
+
+    print("\nInput query:")  
+    print(query)
+    print()
+
+    query_embedding = (
+        client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=query,
+        )
+        .data[0]
+        .embedding
+    )
+
+    index = faiss.IndexFlatIP(EMBEDDING_SIZE)
+    index.add(np.array([text_chunk.embedding for text_chunk in text_chunks_embedded]))
+    D, I = index.search(np.array([query_embedding]), len(text_chunks_embedded))
+    print(I)
+    print(D)
+    print()
+    for i, sim in enumerate(D[0]):
+        text_chunks_embedded[I[0][i]].similarity = sim
+        # print(f"SIMILARITY: {sim}, INDEX: {I[0][i]}")
+        # print(text_chunks_embedded[I[0][i]].text)
+        # print()
+    
+    #sorted_text_chunks = [text_chunks_embedded[i] for i in I[0]]
+    return [text_chunks_embedded[i] for i in I[0]]
+
+
 def get_embeddings(client: OpenAI, text_chunks: List[TextChunk]) -> List[TextChunk]:
     """Get embeddings for the text chunks."""
     print("Starting to get embeddings.")
@@ -1184,8 +1067,6 @@ def get_embeddings(client: OpenAI, text_chunks: List[TextChunk]) -> List[TextChu
     current_batch = []
     current_batch_token_count = 0
     for text_chunk in text_chunks:
-        # print the type of text_chunk
-        print(type(text_chunk))
         text_chunk.num_tokens  = len(enc.encode(text_chunk.text))
         if text_chunk.num_tokens + current_batch_token_count <= MAX_EMBEDDING_TOKEN_INPUT:
             # Add document to the batch if token limit is not exceeded
@@ -1222,19 +1103,192 @@ def get_embeddings(client: OpenAI, text_chunks: List[TextChunk]) -> List[TextChu
 
 
 def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
-    """Get relevant chunk for each web page"""
+    """Create chunks from the text of all web pages"""
     text_chunks = []
     for web_page in web_pages:
-        chunks = recursive_character_text_splitter(web_page.scraped_text, 400, 50)
+        chunks = recursive_character_text_splitter(web_page.scraped_text, TEXT_CHUNK_LENGTH, TEXT_CHUNK_OVERLAP)
         # print the first three chunks
         text_chunks.extend(TextChunk(text=chunk, url=web_page.url) for chunk in chunks)
-        print(f"\nChunks for {web_page.url}:")
-        for i, chunk in enumerate(chunks[:3]):
-            print(f"Chunk {i+1}:")
-            print(chunk)
-            print()
+        # print(f"\nChunks for {web_page.url}:")
+        # for i, chunk in enumerate(chunks[:3]):
+        #     print(f"Chunk {i+1}:")
+        #     print(chunk)
+        #     print()
 
     return text_chunks
+
+
+def scrape_web_pages(web_pages: List[WebPage], week_interval, nlp: Language) -> List[WebPage]:
+    """Scrape text from web pages"""
+    filtered_web_pages = []
+    for web_page in web_pages:
+        if web_page.html:
+            date_parsed = parse_date_str([None, web_page.publication_date])
+            if date_parsed > datetime.now() - timedelta(weeks=5) or date_parsed == datetime.min:
+                print(f"\nURL: {web_page.url}")
+                # Clean the text
+                doc_html2str = Document(web_page.html)
+                doc_sum = doc_html2str.summary()
+                h = html2text.HTML2Text()
+                h.ignore_links = True
+                h.ignore_images = True
+                h.ignore_emphasis = True
+                scraped_text = h.handle(doc_sum)
+                scraped_text = "  ".join([x.strip() for x in scraped_text.split("\n")])
+                scraped_text = re.sub(r'\s+', ' ', scraped_text)
+                print()
+                print(scraped_text)
+                print()
+
+                if len(scraped_text) < 300:
+                    print("\nScraped text is quite short. Trying a different approach.\n")
+                    print()
+                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+                    print()
+                    soup = BeautifulSoup(web_page.html, "lxml")
+                    #Remove unnecessary tags to clean up html
+                    for element in soup(HTML_TAGS_TO_REMOVE):
+                        element.replace_with(NavigableString(' '))
+
+                    text = h.handle(soup.prettify())
+                    text = "  ".join([x.strip() for x in text.split("\n")])
+                    text = re.sub(r'\s+', ' ', text)
+                    scraped_text = text
+                    print()
+                    print(scraped_text)
+                    print()
+                
+                web_page.scraped_text = scraped_text
+                
+                # # The pattern matches either a bracketed prefix followed by an "https" URL
+                # # or an "https" URL directly.
+                # pattern = r'(?:\[\d+\]\s*)?(https?://\S+)'
+                # # Remove the matched "https" URLs, with or without bracketed prefixes
+                # web_page.scraped_text = re.sub(pattern, '', web_page.scraped_text)
+
+                filtered_web_pages.append(web_page)
+
+            else:
+                web_page.scraped_text = ""
+                print(f"Publication date {web_page.publication_date} is older than {week_interval} weeks.")
+        else:
+            web_page.html = ""
+            print("HTML content is not available for web page.")
+
+    return filtered_web_pages
+
+
+def extract_html_texts(
+    web_pages: List[WebPage],
+) -> List[WebPage]:    
+    # Initialize empty list for storing extracted sentences along with their similarity scores, release dates and urls
+    parsed_web_pages = []
+
+    # Process URLs in batches
+    for batch in process_in_batches(web_pages=web_pages):
+        for future, web_page in tqdm(batch, desc="Processing URLs"):
+            if future is None:
+                print(f"Future for {web_page.url} is None.")
+                continue
+            try:
+                result = future.result()
+                if result.status_code == 200:
+                    # Extract relevant information for the event question
+                    web_page.html = result.text
+                    if web_page.html is None:
+                        print(f"HTML content for {web_page.url} is None.")
+                    parsed_web_page = web_page.extract_page_attributes()
+                    parsed_web_pages.append(parsed_web_page)
+                elif result.status_code != 200:
+                    print(f"Request for {web_page.url} returned status code {result.status_code}.")
+                elif 'text/html' not in result.headers.get('Content-Type', ''):
+                    print(f"Content-Type for {web_page.url} is not 'text/html'.")
+                  
+            
+            except requests.exceptions.Timeout:
+                print(f"Request for {web_page.url} timed out.")
+            
+            # except Exception as e:
+            #     print(f"An error occurred in extract_html_texts: {e}")
+
+    print("Web pages parsed successfully.\n")
+
+    return parsed_web_pages
+
+
+def get_urls_from_queries(
+    queries: List[str],
+    api_key: str,
+    engine: str,
+    num: int = 3
+) -> List[str]:
+    """Fetch unique URLs from search engine queries, limiting the number of URLs per query."""
+    results = set()
+    max_num_fetch = 10
+
+    if num > max_num_fetch:
+        raise ValueError(f"The maximum number of URLs per query is {max_num_fetch}.")
+
+    
+    with ThreadPoolExecutor(max_workers=15) as executor:
+        futures = {executor.submit(search_google, query, api_key, engine, max_num_fetch) for query in queries}
+        for future in as_completed(futures):
+            result = future.result()
+            count = 0
+            for url in result:
+                if url not in results and not url.endswith(".pdf"):
+                    results.add(url)
+                    count += 1
+                    if count >= num:
+                        break
+                else:
+                    print(f"URL {url} already in results or is a PDF, skipping...")
+
+    print("\nget_urls_from_queries result:")
+    for url in results:
+        print(url)
+
+    return list(results)
+
+
+def fetch_queries(
+    client: OpenAI,
+    input_query: str,
+    model="gpt-3.5-turbo",
+    temperature=1.0,
+    max_attempts=2,
+):
+    """Fetch queries from the OpenAI engine"""
+    attempts = 0
+    while attempts < max_attempts:
+        try:
+            queries_prompt = QUERIES_PROMPT.format(input_query=input_query)
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": queries_prompt},
+            ]
+            
+            # Fetch queries from the OpenAI engine
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+            )
+            output = response.choices[0].message.content
+            # Parse the response content
+            print(output)
+            trimmed_output = trim_json_formatting(output)
+            json_data = json.loads(trimmed_output)
+            queries = json_data["queries"]
+            return queries  # Return the parsed data if successful
+        except Exception as e:
+            print(f"Attempt {attempts + 1} failed with error: {e}")
+            attempts += 1
+            if attempts == max_attempts:
+                print("Maximum attempts reached, returning an empty string.")
+                return ""  # Return an empty string after exhausting retries
+
+
 
 
 def research_additional_information(
@@ -1259,31 +1313,55 @@ def research_additional_information(
     web_pages = [WebPage(url) for url in urls]
     web_pages = extract_html_texts(web_pages)
     
-    # print attributes of all web pages
-    for page in web_pages:
-        print(page.to_prompt())
+    # # print attributes of all web pages
+    # for page in web_pages:
+    #     print(page.to_prompt())
 
     # reranked_web_pages = rerank_web_pages(client, parsed_web_pages, market_question=input_query)
-    
-    
+    nlp = load_model(VOCAB)
     week_interval = 5
     # Scrape text from web pages not older <week_interval> weeks
-    web_pages = scrape_web_pages(web_pages, week_interval)
+    web_pages = scrape_web_pages(web_pages, week_interval, nlp)
 
     for page in web_pages:
-        print(f"\n{page.to_prompt()}\n")
-        print(page.scraped_text[:500])
+        print(f"\n{page.to_prompt()}")
+        print(f"Length of scraped text: {len(page.scraped_text)}\n")
+
 
     text_chunks = get_chunks(web_pages)
     text_chunks_embedded = get_embeddings(client, text_chunks)
+    text_chunks_sorted = sort_text_chunks(client, input_query, text_chunks_embedded)
+    print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
+    for chunk in text_chunks_sorted:
+        print(f"Similarity: {chunk.similarity}")
+        print(chunk.text)
+        print()
+
+    # Create a dictionary mapping URLs to WebPage objects for quicker lookups
+    web_pages_dict = {web_page.url: web_page for web_page in web_pages}
+
+    for text_chunk in text_chunks_sorted:
+        if text_chunk.url in web_pages_dict:
+            web_pages_dict[text_chunk.url].relevant_chunks.append(text_chunk.text)
+
+    for url, web_page in web_pages_dict.items():
+        print(f"\nURL: {url}")
+        print(f"Relevant chunks: {web_page.relevant_chunks}")
+
+    # TODO: Add character limit to the relevant chunks per web_page
+
+    exit()
+
+    for text_chunk in text_chunks_sorted:
+        if text_chunk.url in web_pages_dict:
+            web_page = web_pages_dict.get(text_chunk.url)
+            if web_page is not None:
+                print(f"Type before append: {type(web_page.relevant_chunks)}")
+                web_page.relevant_chunks.append(text_chunk.text)
+                print(f"Type after append: {type(web_page.relevant_chunks)}")
 
 
 
-
-        
-    
-
-    
 
     exit()
 

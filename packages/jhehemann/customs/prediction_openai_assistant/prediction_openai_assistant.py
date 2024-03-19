@@ -230,7 +230,7 @@ PREDICTION_ASSISTANT_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "input_query": {"type": "string", "description": "The market question to infer the rules for"},
+                    "input_query": {"type": "string", "description": "The exactly phrased market question to infer the rules for"},
                 },
                 "required": ["input_query"],
             }
