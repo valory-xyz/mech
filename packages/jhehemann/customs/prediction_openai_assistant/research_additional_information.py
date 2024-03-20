@@ -202,7 +202,7 @@ You are a Large Language Model in a multi-agent system. Your task is to summariz
 The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
 
 INSTRUCTIONS:
-* Carefully read the search query under 'SEARCH_QUERY', enclosed by triple backticks
+* Carefully read the search query under 'SEARCH_QUERY'
 * Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant with respect to the search query
 * A chunk can be considered relevant if it contains information that might support or refute the event question
 * Summarize the relevant information in a way that is concise and informative
@@ -211,9 +211,7 @@ INSTRUCTIONS:
 * Do not include any other contents in your response.
 
 SEARCH_QUERY:
-```
 {input_query}
-```
 
 SEARCH_OUTPUT:
 ```
@@ -222,6 +220,7 @@ SEARCH_OUTPUT:
 
 OUTPUT_FORMAT:
 * Only output the summary containing the relevant information from 'SEARCH_OUTPUT' with respect to the search query.
+* The summary must be structured in bullet points.
 * Do not include any other contents in your response!
 * If there is no relevant information at all that could be useful with respect to the search query, respond solely with the word "Error".
 """
@@ -292,7 +291,7 @@ class WebPage:
     title: Optional[str] = None
     description: Optional[str] = None
     publication_date: Optional[str] = None
-    relevant_chunks: List[str] = Field(default_factory=list)
+    chunks_sorted: List[str] = Field(default_factory=list)
     relevant_chunks_summary: Optional[str] = None
 
     def __init__(self, url, html=None, title=None, description=None, publication_date=None, publisher=None):
@@ -305,7 +304,7 @@ class WebPage:
         self.title = title
         self.description = description
         self.publication_date = publication_date
-        self.relevant_chunks = []
+        self.chunks_sorted = []
         self.extract_attribute_names = ["title", "description", "publication_date", "publisher"]
 
 
@@ -459,7 +458,6 @@ def get_first_dict_from_list(data):
         return data  # or raise an appropriate exception
 
 
-
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     """Search Google using a custom search engine."""
     service = build("customsearch", "v1", developerKey=api_key)
@@ -474,42 +472,6 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     )
     return [result["link"] for result in search.get("items", [])]
 
-
-def download_spacy_model(self, model_name: str) -> None:
-    """Downloads the specified spaCy language model if it is not already installed."""
-    if not isinstance(model_name, str) or not model_name:
-        raise ValueError("spacy model_name must be a non-empty string")
-    if not spacy.util.is_package(model_name):
-        spacy.cli.download(model_name)
-    else:
-        print(f"{model_name} is already installed.")
-
-
-def extract_event_date(self, doc_question) -> str:
-    '''
-    Extracts the event date from the event question if present.
-    
-    Args:
-        doc_question (spaCy Doc): Document text as a spaCy Doc object.
-        
-    Returns:
-        str: The event date in year-month-day format if present, otherwise None.
-    '''
-    
-    event_date_ymd = None
-
-    # Extract the date from the event question if present
-    for ent in doc_question.ents:
-        if ent.label_ == 'DATE':
-            event_date_ymd = self.standardize_date(ent.text)
-
-    # If event date not formatted as YMD or not found, return None
-    try:
-        datetime.strptime(event_date_ymd, '%Y-%m-%d')
-    except (ValueError, TypeError):
-        return None
-    else:
-        return event_date_ymd
     
 def trim_json_formatting(output_string):
     # Define a regular expression pattern that matches the start and end markers
@@ -523,7 +485,9 @@ def trim_json_formatting(output_string):
         # Extract the JSON part from the matched pattern
         print("JSON formatting characters found and removed")
         formatted_json = match.group(1)
+        print()
         print(f"\nFORMATTED MODEL ANSWER:\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n{formatted_json}\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+        print()
         return formatted_json
     else:
         # Return the original string if no match is found
@@ -560,7 +524,6 @@ def truncate_additional_information(
         return enc.decode(add_trunc_enc)
 
 
-
 def find_release_date_in_data(data):
     for name in RELEASE_DATE_NAMES:
         if name in data:
@@ -575,7 +538,6 @@ def format_date(date_string):
     # Handle the case where the date string is "unknown"
     if date_string.lower() == "unknown":
         return date_string
-
     try:
         # Parse the date string to datetime object
         parsed_date = parser.parse(date_string)
@@ -588,132 +550,131 @@ def format_date(date_string):
         return date_string
     
 
-def parse_date_str(item):
+def parse_date_str(date_str: str) -> datetime:
     # Desired format "February 16, 2024, 3:30 PM"
-    date_str = item[1]
-    format_str = "%B %d, %Y, %I:%M %p"
+    datetime_format = "%B %d, %Y, %I:%M %p"
     try:
         # Parse the date string to datetime object
-        return datetime.strptime(date_str, format_str)
+        return datetime.strptime(date_str, datetime_format)
     except (ValueError, TypeError):
-        # If there's an error during parsing, return datetime.min to sort at the beginning
+        # If there's an error during parsing, return datetime.min
         return datetime.min
     
 
-def concatenate_short_sentences(self, sentences, len_sentence_threshold):
-    modified_sentences = []
-    i = 0
-    while i < len(sentences):
-        sentence = sentences[i]
-        word_count = len(sentence.split())
+# def concatenate_short_sentences(self, sentences, len_sentence_threshold):
+#     modified_sentences = []
+#     i = 0
+#     while i < len(sentences):
+#         sentence = sentences[i]
+#         word_count = len(sentence.split())
         
-        # Check if the sentence is shorter than the threshold
-        while word_count < len_sentence_threshold:
-            i += 1
-            # Break the loop if we reach the end of the list
-            if i >= len(sentences):
-                break
-            next_sentence = sentences[i]
-            sentence += " " + next_sentence
-            word_count += len(next_sentence.split())
+#         # Check if the sentence is shorter than the threshold
+#         while word_count < len_sentence_threshold:
+#             i += 1
+#             # Break the loop if we reach the end of the list
+#             if i >= len(sentences):
+#                 break
+#             next_sentence = sentences[i]
+#             sentence += " " + next_sentence
+#             word_count += len(next_sentence.split())
         
-        modified_sentences.append(sentence)
-        i += 1
+#         modified_sentences.append(sentence)
+#         i += 1
 
-    return modified_sentences
+#     return modified_sentences
 
 
-def extract_similarity_scores(
-    self,
-    text: str,
-    query_emb,
-    event_date: str,
-    nlp,
-    date: str,
-    url: str,
-    embedding_model,
-) -> List[Tuple[str, float, str]]:
-    """
-    Extract relevant information from website text based on a given event question.
+# def extract_similarity_scores(
+#     self,
+#     text: str,
+#     query_emb,
+#     event_date: str,
+#     nlp,
+#     date: str,
+#     url: str,
+#     embedding_model,
+# ) -> List[Tuple[str, float, str]]:
+#     """
+#     Extract relevant information from website text based on a given event question.
 
-    Args:
-        text (str): The website text to extract information from.
-        input_query (str): The question to find relevant information to.
-        event_date (str): Event date in year-day-month format.
-        nlp: The spaCy NLP model.
-        date (str): The release and modification dates of the website.
-        url (str): The URL of the website.
+#     Args:
+#         text (str): The website text to extract information from.
+#         input_query (str): The question to find relevant information to.
+#         event_date (str): Event date in year-day-month format.
+#         nlp: The spaCy NLP model.
+#         date (str): The release and modification dates of the website.
+#         url (str): The URL of the website.
 
-    Returns:
-        List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
-    """        
+#     Returns:
+#         List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
+#     """        
     
-    # Constants for sentence length and number thresholds
-    len_sentence_threshold = 5
-    max_chunk_size = 400
-    overlap = 15
-    num_sentences_threshold = 1000
-    sentences = []     
-    event_date_sentences = []
-    seen = set()
+#     # Constants for sentence length and number thresholds
+#     len_sentence_threshold = 5
+#     max_chunk_size = 400
+#     overlap = 15
+#     num_sentences_threshold = 1000
+#     sentences = []     
+#     event_date_sentences = []
+#     seen = set()
 
-    # Truncate text for performance optimization
-    text = text[:50000]
+#     # Truncate text for performance optimization
+#     text = text[:50000]
     
-    # Apply NLP pipeline to text
-    doc_text = nlp(text)
+#     # Apply NLP pipeline to text
+#     doc_text = nlp(text)
 
-    current_chunk = ""
-    words = []
-    #words = doc_text.split(" ")
+#     current_chunk = ""
+#     words = []
+#     #words = doc_text.split(" ")
 
-    for sent in doc_text.sents:
-        sentence_text = sent.text
-        sent_words = sentence_text.split(" ")
-        if len(sent_words) >= len_sentence_threshold:
-            words.extend(sent_words)
+#     for sent in doc_text.sents:
+#         sentence_text = sent.text
+#         sent_words = sentence_text.split(" ")
+#         if len(sent_words) >= len_sentence_threshold:
+#             words.extend(sent_words)
 
-    for word in words:
-        if len(current_chunk) + len(word) <= max_chunk_size:
-            current_chunk += " " + word
-        else:
-            # Before adding the chunk to the list, add the url at the end of the chunk
-            #current_chunk += " Source: " + url
-            sentences.append(current_chunk)
-            current_chunk = (
-                " ".join(current_chunk.split(" ")[-overlap:]) + " " + word
-            )
+#     for word in words:
+#         if len(current_chunk) + len(word) <= max_chunk_size:
+#             current_chunk += " " + word
+#         else:
+#             # Before adding the chunk to the list, add the url at the end of the chunk
+#             #current_chunk += " Source: " + url
+#             sentences.append(current_chunk)
+#             current_chunk = (
+#                 " ".join(current_chunk.split(" ")[-overlap:]) + " " + word
+#             )
 
-    if not sentences:
-        return ""
+#     if not sentences:
+#         return ""
     
-    # Concatenate short sentences
+#     # Concatenate short sentences
     
-    sentences = self.concatenate_short_sentences(sentences, len_sentence_threshold)
+#     sentences = self.concatenate_short_sentences(sentences, len_sentence_threshold)
 
 
 
-    # Limit the number of sentences for performance optimization
-    sentences = sentences[:num_sentences_threshold]
+#     # Limit the number of sentences for performance optimization
+#     sentences = sentences[:num_sentences_threshold]
     
-    similarities = []
+#     similarities = []
 
-    # Encode sentences using spaCy model
-    for i, sentence in enumerate(sentences):
-        # # spacy embedding specific
-        # doc_sentence = nlp(sentence)
-        # similarity_score = query_emb.similarity(doc_sentence)
+#     # Encode sentences using spaCy model
+#     for i, sentence in enumerate(sentences):
+#         # # spacy embedding specific
+#         # doc_sentence = nlp(sentence)
+#         # similarity_score = query_emb.similarity(doc_sentence)
 
-        # sentence-transformers embedding specific
-        sent_emb = embedding_model.encode(sentence)
-        similarity_score = util.cos_sim(query_emb, sent_emb)[0].item()
+#         # sentence-transformers embedding specific
+#         sent_emb = embedding_model.encode(sentence)
+#         similarity_score = util.cos_sim(query_emb, sent_emb)[0].item()
 
-        similarities.append(similarity_score)
+#         similarities.append(similarity_score)
 
-    # Create tuples and store them in a list
-    sentence_similarity_date_url_tuples = [(sentence, similarity, date, url) for sentence, similarity in zip(sentences, similarities) if similarity > 0.3]
+#     # Create tuples and store them in a list
+#     sentence_similarity_date_url_tuples = [(sentence, similarity, date, url) for sentence, similarity in zip(sentences, similarities) if similarity > 0.3]
 
-    return sentence_similarity_date_url_tuples
+#     return sentence_similarity_date_url_tuples
 
 
 def process_in_batches(
@@ -762,202 +723,119 @@ def process_in_batches(
             yield get_futures
 
 
+# def drop_irrelevant_sentences(
+#     self,
+#     paragraph: str,
+#     engine: str,
+#     temperature: float,
+#     input_query: str,
+#     reducer_model
+# ) -> str:
+#     """Drop irrelevant sentences from a paragraph"""
+#     reducer_prompt = REDUCER_PROMPT.format(input_query=input_query, additional_information_paragraph=paragraph)
+
+#     # Create messages for the model engine
+#     messages = [
+#         {"role": "system", "content": "You are a helpful assistant."},
+#         {"role": "user", "content": reducer_prompt},
+#     ]
+
+#     response = reducer_model.invoke(messages, seed=1234)
+
+#     # try:
+#     #     json_data = json.loads(response)
+#     # except:
+#     #     print("Error parsing JSON")
+#     #     exit()
+
+#     # print(json_data["additional_information"])
+#     #print(response.content)
+#     return response.content
 
 
-
-
-def drop_irrelevant_sentences(
-    self,
-    paragraph: str,
-    engine: str,
-    temperature: float,
-    input_query: str,
-    reducer_model
-) -> str:
-    """Drop irrelevant sentences from a paragraph"""
-    reducer_prompt = REDUCER_PROMPT.format(input_query=input_query, additional_information_paragraph=paragraph)
-
-    # Create messages for the model engine
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": reducer_prompt},
-    ]
-
-    response = reducer_model.invoke(messages, seed=1234)
-
-    # try:
-    #     json_data = json.loads(response)
-    # except:
-    #     print("Error parsing JSON")
-    #     exit()
-
-    # print(json_data["additional_information"])
-    #print(response.content)
-    return response.content
-
-
-def summarize_relevant_sentences(
-    self,
-    paragraph: str,
-    engine: str,
-    temperature: float,
-    input_query: str,
-    reducer_model
-) -> str:
-    """Summarize relevant sentences from a paragraph"""
-    summarize_prompt = SUMMARIZE_PROMPT.format(input_query=input_query, additional_information_paragraph=paragraph)
-
-    # Create messages for the model engine
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": summarize_prompt},
-    ]
-
-    response = reducer_model.invoke(messages, seed=1234)
-
-    # try:
-    #     json_data = json.loads(response)
-    # except:
-    #     print("Error parsing JSON")
-    #     exit()
-
-    # print(json_data["additional_information"])
-    return response.content
-
-
-def join_and_group_sentences(
-    self,
-    sentences: List[Tuple[str, float, str, str]],
-    max_words: int,
-    engine: str,
-    temperature: float,
-    input_query: str,
-    reducer_model
-) -> str:
-    """
-    Join the sentences and group them by date.
+# def join_and_group_sentences(
+#     self,
+#     sentences: List[Tuple[str, float, str, str]],
+#     max_words: int,
+#     engine: str,
+#     temperature: float,
+#     input_query: str,
+#     reducer_model
+# ) -> str:
+#     """
+#     Join the sentences and group them by date.
     
-    Args:
-        sentences (List[Tuple[str, float, str]]): List of tuples containing the extracted sentences, their similarity scores, and release dates.
-        max_words (int): Maximum number of words allowed for the output summary.
+#     Args:
+#         sentences (List[Tuple[str, float, str]]): List of tuples containing the extracted sentences, their similarity scores, and release dates.
+#         max_words (int): Maximum number of words allowed for the output summary.
     
-    Returns:
-        str: The joined sentences grouped by date.
-    """
-    # Initialize final output string and word count
-    final_output = ""
-    current_word_count = 0
+#     Returns:
+#         str: The joined sentences grouped by date.
+#     """
+#     # Initialize final output string and word count
+#     final_output = ""
+#     current_word_count = 0
 
-    # Initialize a list to hold the sentences that will be included in the final output
-    filtered_sentences = []
+#     # Initialize a list to hold the sentences that will be included in the final output
+#     filtered_sentences = []
 
-    # Filter sentences based on word count
-    for sentence, _, date, url in sentences:
-        additional_word_count = len(sentence.split())
-        if current_word_count + additional_word_count <= max_words:
-            filtered_sentences.append((f"...{sentence}...\n\n", date, url))
-            current_word_count += additional_word_count
-        else:
-            break
+#     # Filter sentences based on word count
+#     for sentence, _, date, url in sentences:
+#         additional_word_count = len(sentence.split())
+#         if current_word_count + additional_word_count <= max_words:
+#             filtered_sentences.append((f"...{sentence}...\n\n", date, url))
+#             current_word_count += additional_word_count
+#         else:
+#             break
     
-    # Sort filtered_sentences by date for grouping
-    # filtered_sentences.sort(key=itemgetter(1, 2))
-    filtered_sentences.sort(key=lambda x: (self.parse_date_str(x), x[2]))
+#     # Sort filtered_sentences by date for grouping
+#     # filtered_sentences.sort(key=itemgetter(1, 2))
+#     filtered_sentences.sort(key=lambda x: (self.parse_date_str(x), x[2]))
 
-    #release_date = self.format_date(release_date)
+#     #release_date = self.format_date(release_date)
 
-    # Group by date and iterate
-    for date, date_group in groupby(filtered_sentences, key=lambda x: self.parse_date_str(x)):
-        print(f"Sentences with release date {date}:")
-        for url, url_group in groupby(date_group, key=itemgetter(2)):
-            print(f"URL: {url}\n")
-            sentences_group = [sentence for sentence, _, _ in url_group]
-            concatenated_sentences = "\n".join(sentences_group)
-            print(concatenated_sentences)
-            print()
+#     # Group by date and iterate
+#     for date, date_group in groupby(filtered_sentences, key=lambda x: self.parse_date_str(x)):
+#         print(f"Sentences with release date {date}:")
+#         for url, url_group in groupby(date_group, key=itemgetter(2)):
+#             print(f"URL: {url}\n")
+#             sentences_group = [sentence for sentence, _, _ in url_group]
+#             concatenated_sentences = "\n".join(sentences_group)
+#             print(concatenated_sentences)
+#             print()
 
-            final_sentences = self.summarize_relevant_sentences(concatenated_sentences, engine, temperature, input_query, reducer_model)
-            if "Error" in final_sentences:
-                continue
+#             final_sentences = self.summarize_relevant_sentences(concatenated_sentences, engine, temperature, input_query, reducer_model)
+#             if "Error" in final_sentences:
+#                 continue
             
-            # Parse the URL to extract the domain
-            parsed_url = urlparse(url)
-            # The 'netloc' attribute of the result contains the domain
-            domain = parsed_url.netloc
+#             # Parse the URL to extract the domain
+#             parsed_url = urlparse(url)
+#             # The 'netloc' attribute of the result contains the domain
+#             domain = parsed_url.netloc
             
-            # Some URLs might include 'www.', so we strip it to get the clean domain
-            if domain.startswith('www.'):
-                domain = domain[4:]
+#             # Some URLs might include 'www.', so we strip it to get the clean domain
+#             if domain.startswith('www.'):
+#                 domain = domain[4:]
             
-            if date == datetime.min:
-                date_str = "unknown"
-            else:
-                date_str = date.strftime("%B %d, %Y, %I:%M %p")
+#             if date == datetime.min:
+#                 date_str = "unknown"
+#             else:
+#                 date_str = date.strftime("%B %d, %Y, %I:%M %p")
 
-            # Formatting the string as per your requirement
-            # formatted_string = f"Source: {domain}\n{date}\"Article:\n\"\"\"\n{final_sentences}\n\"\"\"\n\n"
-            # formatted_string = f"{date}\"{final_sentences}\"\n\n"
-            formatted_string = f"Source: {domain}\nRelease date: {date_str}\n\"{final_sentences}\"\n\n"
+#             # Formatting the string as per your requirement
+#             # formatted_string = f"Source: {domain}\n{date}\"Article:\n\"\"\"\n{final_sentences}\n\"\"\"\n\n"
+#             # formatted_string = f"{date}\"{final_sentences}\"\n\n"
+#             formatted_string = f"Source: {domain}\nRelease date: {date_str}\n\"{final_sentences}\"\n\n"
 
 
-            # Add this formatted string to the final output
-            final_output += formatted_string
+#             # Add this formatted string to the final output
+#             final_output += formatted_string
     
-    # Get the current date and time in the format "Month Day, Year, Hour:Minute AM/PM"
-    current_date = datetime.now().strftime("%B %d, %Y, %I:%M %p")
-    final_output += f"For reference, the current date and time is {current_date}.\n"
+#     # Get the current date and time in the format "Month Day, Year, Hour:Minute AM/PM"
+#     current_date = datetime.now().strftime("%B %d, %Y, %I:%M %p")
+#     final_output += f"For reference, the current date and time is {current_date}.\n"
 
-    return final_output
-
-
-
-
-def fetch_additional_information(
-    input_query: str,
-    max_add_words: int,
-    google_api_key: str,
-    google_engine: str,
-    nlp,
-    engine: str,
-    reducer_model,
-    fetch_queries_model,
-    temperature: float = 0.5,
-    max_compl_tokens: int = 500,
-) -> str:
-
-    """
-    Get urls from a web search and extract relevant information based on an event question.
-    
-    Args:
-        input_query (str): The question related to the event.
-        max_add_words (int): The maximum number of words allowed for additional information.
-        google_api_key (str): The API key for the Google service.
-        google_engine (str): The Google engine to be used.
-        temperature (float): The temperature parameter for the engine.
-        engine (str): The openai engine. Defaults to "gpt-3.5-turbo".
-        temperature (float): The temperature parameter for the engine. Defaults to 1.0.
-        max_compl_tokens (int): The maximum number of tokens for the engine's response.
-        
-    Returns:
-        str: The relevant information fetched from all the URLs concatenated.
-    """
-
-
-    
-
-    # Extract relevant sentences from URLs
-    relevant_sentences_sorted = self.extract_and_sort_sentences(
-        urls=urls,
-        input_query=input_query,
-        nlp=nlp,
-    )
-
-    # Join the sorted sentences and group them by date
-    additional_informations = self.join_and_group_sentences(
-        relevant_sentences_sorted, max_add_words, engine, temperature, input_query, reducer_model
-    )
-
-    return additional_informations
+#     return final_output
 
 
 def rerank_web_pages(
@@ -1106,11 +984,6 @@ def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
         chunks = recursive_character_text_splitter(web_page.scraped_text, TEXT_CHUNK_LENGTH, TEXT_CHUNK_OVERLAP)
         # print the first three chunks
         text_chunks.extend(TextChunk(text=chunk, url=web_page.url) for chunk in chunks)
-        # print(f"\nChunks for {web_page.url}:")
-        # for i, chunk in enumerate(chunks[:3]):
-        #     print(f"Chunk {i+1}:")
-        #     print(chunk)
-        #     print()
 
     return text_chunks
 
@@ -1118,11 +991,17 @@ def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
 def scrape_web_pages(web_pages: List[WebPage], week_interval, nlp: Language) -> List[WebPage]:
     """Scrape text from web pages"""
     filtered_web_pages = []
+    investigate_urls = [
+        "https://www.itftennis.com/en/news-and-media/articles/i-beat-cancer-by-refusing-to-give-up-tennis/",
+        "https://www.usopen.org/en_US/news/articles/2023-06-04/rafael_nadal_gives_latest_injury_update_on_37th_birthday.html"
+    ]
     for web_page in web_pages:
         if web_page.html:
-            date_parsed = parse_date_str([None, web_page.publication_date])
+            date_parsed = parse_date_str(web_page.publication_date)
             if date_parsed > datetime.now() - timedelta(weeks=5) or date_parsed == datetime.min:
                 print(f"\nURL: {web_page.url}")
+                if web_page.url in investigate_urls:
+                    print(web_page.html)
                 # Clean the text
                 doc_html2str = Document(web_page.html)
                 doc_sum = doc_html2str.summary()
@@ -1166,10 +1045,10 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, nlp: Language) -> 
                 filtered_web_pages.append(web_page)
 
             else:
-                web_page.scraped_text = ""
+                web_page.scraped_text = None
                 print(f"Publication date {web_page.publication_date} is older than {week_interval} weeks.")
         else:
-            web_page.html = ""
+            web_page.html = None
             print("HTML content is not available for web page.")
 
     return filtered_web_pages
@@ -1200,8 +1079,7 @@ def extract_html_texts(
                     print(f"Request for {web_page.url} returned status code {result.status_code}.")
                 elif 'text/html' not in result.headers.get('Content-Type', ''):
                     print(f"Content-Type for {web_page.url} is not 'text/html'.")
-                  
-            
+    
             except requests.exceptions.Timeout:
                 print(f"Request for {web_page.url} timed out.")
             
@@ -1222,6 +1100,7 @@ def get_urls_from_queries(
     """Fetch unique URLs from search engine queries, limiting the number of URLs per query."""
     results = set()
     max_num_fetch = 10
+    omit_keywords = ["pdf", "instagram", "youtube", "reddit"]
 
     if num > max_num_fetch:
         raise ValueError(f"The maximum number of URLs per query is {max_num_fetch}.")
@@ -1233,13 +1112,13 @@ def get_urls_from_queries(
             result = future.result()
             count = 0
             for url in result:
-                if url not in results and not url.endswith(".pdf"):
+                if url not in results and not any(keyword in url for keyword in omit_keywords):
                     results.add(url)
                     count += 1
                     if count >= num:
                         break
                 else:
-                    print(f"URL {url} already in results or is a PDF, skipping...")
+                    print(f"URL {url} already in results or omitting keyword found, skipping...")
 
     print("\nget_urls_from_queries result:")
     for url in results:
@@ -1293,7 +1172,6 @@ def trim_chunks_string(chunks_string: str, enc: tiktoken.Encoding) -> str:
     return enc.decode(encoding)
 
 
-
 def summarize_relevant_chunks(
         web_pages: List[WebPage],
         input_query: str,
@@ -1304,10 +1182,13 @@ def summarize_relevant_chunks(
 ) -> List[WebPage]:
     def summarize_for_web_page(web_page: WebPage) -> None:
         chunks_string = ""
-        for i, chunk in enumerate(web_page.relevant_chunks):
-            chunks_string += f"CHUNK {i+1}:\n…{chunk}…\n\n"
+        for i, chunk in enumerate(web_page.chunks_sorted):
+            chunks_string += f"\n…{chunk}…\n"
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
         summarize_prompt = SUMMARIZE_PROMPT.format(input_query=input_query, chunks=trimmed_chunks)
+        print()
+        print(summarize_prompt)
+        print()
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": summarize_prompt},
@@ -1320,7 +1201,6 @@ def summarize_relevant_chunks(
         output = response.choices[0].message.content
         web_page.relevant_chunks_summary = output
 
-    
     with ThreadPoolExecutor() as executor:
         # Submit all web pages to the executor for processing
         future_to_web_page = {executor.submit(summarize_for_web_page, web_page): web_page for web_page in web_pages}
@@ -1333,14 +1213,14 @@ def summarize_relevant_chunks(
                 future.result()
             except Exception as e:
                 print(f'Web page {web_page.url} generated an exception: {e}')
-    return web_pages
+    return [web_page for web_page in web_pages if "Error" not in web_page.relevant_chunks_summary]
 
 
 def format_additional_information(web_pages: List[WebPage]) -> str:
     """Format the additional information from the web pages"""
     formatted_information = ""
     for i, web_page in enumerate(web_pages):
-        formatted_information += f"ARTICLE {i}: {web_page.title}, {web_page.publisher}, {web_page.publication_date}\n"
+        formatted_information += f"ARTICLE {i+1}: {web_page.title}, {web_page.publisher}, {web_page.publication_date}\n"
         formatted_information += f"{web_page.relevant_chunks_summary}\n\n"
     return formatted_information
 
@@ -1399,105 +1279,12 @@ def research_additional_information(
 
     for text_chunk in text_chunks_sorted:
         if text_chunk.url in web_pages_dict:
-            web_pages_dict[text_chunk.url].relevant_chunks.append(text_chunk.text)
+            web_pages_dict[text_chunk.url].chunks_sorted.append(text_chunk.text)
 
-    for url, web_page in web_pages_dict.items():
-        print(f"\nURL: {url}")
-        print(f"Relevant chunks: {web_page.relevant_chunks}")
-    
     web_pages = list(web_pages_dict.values())
     web_pages = summarize_relevant_chunks(web_pages, input_query, client, enc)
-    web_pages = sorted(web_pages, key=lambda web_page: web_page.publication_date)
+    web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
 
     additional_information = format_additional_information(web_pages)
-    
-    print()
-    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-    print()
-    print(additional_information)
-
-    exit()
-
-    for text_chunk in text_chunks_sorted:
-        if text_chunk.url in web_pages_dict:
-            web_page = web_pages_dict.get(text_chunk.url)
-            if web_page is not None:
-                print(f"Type before append: {type(web_page.relevant_chunks)}")
-                web_page.relevant_chunks.append(text_chunk.text)
-                print(f"Type after append: {type(web_page.relevant_chunks)}")
-
-
-
-
-    exit()
-
-
-    reducer_model_name = "gpt-3.5-turbo"
-    reducer_model_temperature = 0
-
-    reducer_model = ChatOpenAI(
-        openai_api_key=openai_api_key,
-        model_name=reducer_model_name,
-        temperature=reducer_model_temperature,
-    )
-
-    tool = default_tool
-    temperature = default_temperature
-    # input_query = kwargs["prompt"]
-    max_compl_tokens = DEFAULT_OPENAI_SETTINGS["max_compl_tokens"]
-    input_query = input_query.replace("'",'').replace('"','') # Remove double quotes from the input query to avoid issues with react agent execution
-    
- 
-    
-    
-    #openai.api_key = kwargs["api_keys"]["openai"]
-    # if tool not in ALLOWED_TOOLS:
-    #     raise ValueError(f"TOOL {tool} is not supported.")
-
-    # Load the spacy model
-    # self.download_spacy_model("en_core_web_lg")
-    # nlp = spacy.load("en_core_web_md")
-    nlp = spacy_universal_sentence_encoder.load_model("en_use_lg")
-
-
-    # Get the LLM engine to be used
-    # engine = TOOL_TO_ENGINE[tool]
-
-    # Get the tiktoken base encoding
-    enc = tiktoken.get_encoding("cl100k_base") 
-
-    # Calculate the maximum number of tokens and words that can be consumed by the additional information string
-    # max_add_tokens = get_max_tokens_for_additional_information(
-    #     max_compl_tokens=max_compl_tokens,
-    #     prompt=prompt,
-    #     enc=enc,
-    # )
-    max_add_tokens = MAX_TOKENS_ADDITIONAL_INFORMATION
-    max_add_words = int(max_add_tokens * 0.75)
-
-    # Fetch additional information
-    additional_information = (
-        self.fetch_additional_information(
-            input_query=input_query,
-            engine=tool,
-            temperature=temperature,
-            max_compl_tokens=max_compl_tokens,
-            nlp=nlp,
-            max_add_words=max_add_words,
-            google_api_key=google_api_key,
-            google_engine=google_engine_id,
-            reducer_model=reducer_model,
-            fetch_queries_model=fetch_queries_model,
-        )
-    )
-#         additional_information = """The search generated the following relevant information:
-# \"\"\"
-# None
-# \"\"\""""
-    
-    # Truncate additional information to stay within the chat completion token limit of 4096
-    additional_information = self.truncate_additional_information(
-        additional_information, MAX_TOKENS_ADDITIONAL_INFORMATION, enc=enc,
-    )
-
-    return additional_information
+  
+    return(additional_information)

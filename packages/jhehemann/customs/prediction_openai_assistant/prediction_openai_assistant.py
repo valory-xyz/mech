@@ -22,7 +22,7 @@
 import json
 import time
 from collections import defaultdict
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
@@ -82,10 +82,10 @@ ALLOWED_TOOLS = [
     "prediction-openai-assistant"
 ]
 MAX_TOKENS = {
-    "gpt-3.5-turbo": 4096,
+    "gpt-3.5-turbo-1106": 4096,
     "gpt-4": 8192,
 }
-TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
+TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo-1106" for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_URLS["prediction-openai-assistant"] = 3
@@ -208,20 +208,20 @@ OUTPUT_FORMAT
 """
 
 PREDICTION_ASSISTANT_TOOLS = [
-    # {
-    #     "type": "function",
-    #     "function": {
-    #         "name": "get_market_rules",
-    #         "description": "Get the rules for a prediction market question that defines under which conditions the market question will be resolved as 'Yes' and 'No'",
-    #         "parameters": {
-    #             "type": "object",
-    #             "properties": {
-    #                 "market_question": {"type": "string", "description": "The market question to infer the rules for"},
-    #             },
-    #             "required": ["market_question"],
-    #         }
-    #     }
-    # },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_market_rules",
+            "description": "Get the rules for a prediction market question that defines under which conditions the market question will be resolved as 'Yes' and 'No'",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "market_question": {"type": "string", "description": "The market question to infer the rules for"},
+                },
+                "required": ["market_question"],
+            }
+        }
+    },
     {
         "type": "function",
         "function": {
@@ -484,6 +484,85 @@ def adjust_additional_information(
     return additional_information
 
 
+def execute_function(tool_call, client, thread_id=None, google_api_key=None, google_engine_id=None, engine=None):
+    function_name = tool_call.function.name
+    function_to_call = OPENAI_TOOLS_FUNCTIONS[function_name]
+    function_args = json.loads(tool_call.function.arguments)
+
+    if function_name == "get_market_rules":
+        return function_to_call(**function_args, client=client)
+    elif function_name == "research_additional_information":
+        return function_to_call(
+            **function_args,
+            client=client,
+            thread_id=thread_id,
+            google_api_key=google_api_key,
+            google_engine_id=google_engine_id,
+            engine=engine,
+        )
+    else:
+        return function_to_call(**function_args)
+
+
+def is_terminated(run):
+    """Check if the run is terminated"""
+    return run.status in ["expired", "completed", "failed", "cancelled"]
+
+
+def wait_for_run(
+    client,
+    thread_id,
+    run_id,
+    timeout=60,
+):
+    waiting_states = ["queued", "in_progress"]
+
+    timeout = timeout
+    start_time = time.time()
+    thread_id = thread_id
+    run_id = run_id
+
+    print(f"Thread ID: {thread_id}\n")
+    print(f"Run ID: {run_id}\n")
+
+    run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
+    print(f"Run retrieved:\n{run}\n")
+    print(f"Run status: {run.status}\n")
+
+    while True:
+        run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
+        print(f"Run status: {run.status}")
+
+        if run.status not in waiting_states:
+            print(f"Run status changed to: {run.status}\n")
+            print(f"Run new:\n{run}\n")
+            return run  # Assuming run contains all needed information
+
+        if time.time() - start_time > timeout:
+            print(f"Run timed out. Run status:\n{run.status}\n")
+            return run  # Timeout, return None or handle as needed
+
+        time.sleep(0.1)
+
+    # while run.status in waiting_states:
+    #     if time.time() - start_time > timeout:
+    #         print(f"Run timed out. Run status:\n{run.status}\n")
+    #         break
+    #     time.sleep(0.1)
+    #     run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
+    #     print(f"Run status: {run.status}")
+    
+            
+
+    # if run.status in waiting_states:
+    #     print(f"Run timed out. Run status:\n{run.status}\n")
+    #     return None, None, None, None
+
+    # print(f"Run status changed to: {run.status}\n")
+    # print(f"Run new:\n{run}\n") 
+    # return
+
+
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
@@ -527,56 +606,45 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
 
             print(f"Run created:\n{run}\n")
 
-            waiting_status = ["queued", "in_progress"]
+            run = wait_for_run(client, thread.id, run.id)
 
-            run_timeout = 60
-            start_time = time.time()
-            thread_id = thread.id
-            run_id = run.id
-
-            print(f"Thread ID: {thread_id}\n")
-            print(f"Run ID: {run_id}\n")
-
-            run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-            print(f"Run retrieved:\n{run}\n")
-            print(f"Run status: {run.status}\n")
-            while run.status in waiting_status:
-                if time.time() - start_time > run_timeout:
-                    print(f"Run timed out. Run status:\n{run.status}\n")
-                    break
-                time.sleep(1)
-                run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-                print(f"Run status: {run.status}")
-                
-
-            if run.status in waiting_status:
-                print(f"Run timed out. Run status:\n{run.status}\n")
-                return None, None, None, None
-
-            print(f"Run status changed to: {run.status}\n")
-            print(f"Run new:\n{run}\n") 
-            
             if run.status == "requires_action":
                 print(f"Required action:\n {run.required_action}\n")
-                available_functions = OPENAI_TOOLS_FUNCTIONS
-                for tool_call in run.required_action.submit_tool_outputs.tool_calls:
-                    function_name = tool_call.function.name
-                    function_to_call = available_functions[function_name]
-                    function_args = json.loads(tool_call.function.arguments)
-                    if function_name == "get_market_rules":
-                        function_output = function_to_call(**function_args, client=client)
-                    elif function_name == "research_additional_information":
-                        function_output = function_to_call(
-                            **function_args,
-                            client=client,
-                            thread_id=thread_id,
-                            google_api_key=google_api_key,
-                            google_engine_id=google_engine_id,
-                            engine=engine,
-                        )
-                    else:
-                        function_output = function_to_call(**function_args)
-                    print(f"Result of {function_name}:\n{function_output}\n")
+
+                # List to store futures
+                futures_dict = {}
+
+                # Outer ThreadPoolExecutor to manage parallel execution of all functions
+                with ThreadPoolExecutor(max_workers=len(run.required_action.submit_tool_outputs.tool_calls)) as executor:
+                    for tool_call in run.required_action.submit_tool_outputs.tool_calls:
+                        # Submit each function execution as a separate task to the executor
+                        future = executor.submit(execute_function, tool_call, client, thread.id, google_api_key, google_engine_id, engine)
+                        futures_dict[future] = tool_call.id
+
+                    tool_outputs = []
+                    # Wait for all futures to complete and print their results
+                    for future in as_completed(futures_dict):
+                        result = future.result()
+                        tool_call_id = futures_dict[future]
+                        tool_outputs.append({
+                            "tool_call_id": tool_call_id,
+                            "output": result
+                        })
+                        print(f"Result of function:\n{result}\n")
+                
+                print(tool_outputs)
+
+                run = client.beta.threads.runs.submit_tool_outputs(
+                    thread_id=thread.id,
+                    run_id=run.id,
+                    tool_outputs=tool_outputs,
+                )
+                run = wait_for_run(client, thread.id, run.id)
+                print(f"Run status: {run.status}\n")
+
+            
+            thread_messages = client.beta.threads.messages.list(thread.id)
+            print(thread_messages.data)
 
 
 
@@ -632,7 +700,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 )
             return response.choices[0].message.content, prediction_prompt, None, counter_callback
         finally:
-            if run:
+            if run and not is_terminated(run):
                 client.beta.threads.runs.cancel(thread_id=thread.id, run_id=run.id)
             if thread:
                 client.beta.threads.delete(thread.id)

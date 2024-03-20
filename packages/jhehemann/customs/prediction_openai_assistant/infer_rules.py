@@ -92,10 +92,6 @@ def get_market_rules(
         messages=messages,
         temperature=temperature,
     )
-    response_message = response.choices[0].message.content
-    print(response_message)
+    response_message = response.choices[0].message.content 
 
-
-    
-
-    return response
+    return response_message
