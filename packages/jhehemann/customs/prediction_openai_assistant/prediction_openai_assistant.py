@@ -96,10 +96,6 @@ DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 DEFAULT_COMPRESSION_FACTOR = 0.05
 # the vocabulary to use for the summarization
 DEFAULT_VOCAB = "en_core_web_sm"
-OPENAI_TOOLS_FUNCTIONS ={
-        "get_market_rules": get_market_rules,
-        "research_additional_information": research_additional_information,
-    }
 RUN_TERMINATED_STATES = ["expired", "completed", "failed", "cancelled"]
 RUN_RUNNING_STATES = ["queued", "in_progress"]
 RUN_ACTION_REQUIRED_STATES = ["requires_action"]
@@ -125,7 +121,7 @@ INSTRUCTIONS:
 
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* The JSON must contain three fields: "p_yes", "p_no", "confidence"
+* The JSON must contain four fields: "p_yes", "p_no", "confidence"
 * Each item in the JSON must have a value between 0 and 1
     - "p_yes": Probability that the user question's outcome will be `Yes`
     - "p_no": Probability that the user question's outcome will be `No`
@@ -135,80 +131,80 @@ Do not include any other contents except for the JSON object in your outputs.
 """
 
 
-PREDICTION_PROMPT = """
-You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
-for a given event. You are provided with an input under the label "USER_PROMPT". You must follow the instructions
-under the label "INSTRUCTIONS". You must provide your response in the format specified under "OUTPUT_FORMAT".
+# PREDICTION_PROMPT = """
+# You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
+# for a given event. You are provided with an input under the label "USER_PROMPT". You must follow the instructions
+# under the label "INSTRUCTIONS". You must provide your response in the format specified under "OUTPUT_FORMAT".
 
-INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" specifies an event.
-* The event will only have two possible outcomes: either the event will happen or the event will not happen.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You must provide a probability estimation of the event happening, based on your training data.
-* You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION" delimited by three backticks.
-* You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data.
-* If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response.
+# INSTRUCTIONS
+# * Read the input under the label "USER_PROMPT" delimited by three backticks.
+# * The "USER_PROMPT" specifies an event.
+# * The event will only have two possible outcomes: either the event will happen or the event will not happen.
+# * If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
+# * You must provide a probability estimation of the event happening, based on your training data.
+# * You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION" delimited by three backticks.
+# * You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data.
+# * If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
+# * You must provide your response in the format specified under "OUTPUT_FORMAT".
+# * Do not include any other contents in your response.
 
-USER_PROMPT:
-```
-{user_prompt}
-```
+# USER_PROMPT:
+# ```
+# {user_prompt}
+# ```
 
-ADDITIONAL_INFORMATION:
-```
-{additional_information}
-```
+# ADDITIONAL_INFORMATION:
+# ```
+# {additional_information}
+# ```
 
-OUTPUT_FORMAT
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
-* The JSON must contain four fields: "p_yes", "p_no", "confidence", and "info_utility".
-* Each item in the JSON must have a value between 0 and 1.
-   - "p_yes": Estimated probability that the event in the "USER_PROMPT" occurs.
-   - "p_no": Estimated probability that the event in the "USER_PROMPT" does not occur.
-   - "confidence": A value between 0 and 1 indicating the confidence in the prediction. 0 indicates lowest
-     confidence value; 1 maximum confidence value.
-   - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction.
-     0 indicates lowest utility; 1 maximum utility.
-* The sum of "p_yes" and "p_no" must equal 1.
-* Output only the JSON object. Do not include any other contents in your response.
-* This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
-* This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
-* This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
-"""
+# OUTPUT_FORMAT
+# * Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
+# * The JSON must contain four fields: "p_yes", "p_no", "confidence", and "info_utility".
+# * Each item in the JSON must have a value between 0 and 1.
+#    - "p_yes": Estimated probability that the event in the "USER_PROMPT" occurs.
+#    - "p_no": Estimated probability that the event in the "USER_PROMPT" does not occur.
+#    - "confidence": A value between 0 and 1 indicating the confidence in the prediction. 0 indicates lowest
+#      confidence value; 1 maximum confidence value.
+#    - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction.
+#      0 indicates lowest utility; 1 maximum utility.
+# * The sum of "p_yes" and "p_no" must equal 1.
+# * Output only the JSON object. Do not include any other contents in your response.
+# * This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
+# * This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+# * This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
+# """
 
-URL_QUERY_PROMPT = """
-You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
-for a given event. You are provided with an input under the label "USER_PROMPT". You must follow the instructions
-under the label "INSTRUCTIONS". You must provide your response in the format specified under "OUTPUT_FORMAT".
+# URL_QUERY_PROMPT = """
+# You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
+# for a given event. You are provided with an input under the label "USER_PROMPT". You must follow the instructions
+# under the label "INSTRUCTIONS". You must provide your response in the format specified under "OUTPUT_FORMAT".
 
-INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" specifies an event.
-* The event will only have two possible outcomes: either the event will happen or the event will not happen.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response.
+# INSTRUCTIONS
+# * Read the input under the label "USER_PROMPT" delimited by three backticks.
+# * The "USER_PROMPT" specifies an event.
+# * The event will only have two possible outcomes: either the event will happen or the event will not happen.
+# * If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
+# * You must provide your response in the format specified under "OUTPUT_FORMAT".
+# * Do not include any other contents in your response.
 
-USER_PROMPT:
-```
-{user_prompt}
-```
+# USER_PROMPT:
+# ```
+# {user_prompt}
+# ```
 
-OUTPUT_FORMAT
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
-* The JSON must contain two fields: "queries", and "urls".
-   - "queries": An array of strings of size between 1 and 5. Each string must be a search engine query that can help obtain relevant information to estimate
-     the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
-     or lead to obtain the same set of results.
-* Output only the JSON object. Do not include any other contents in your response.
-* Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
-* This is incorrect: "```json{{"queries": []}}```"
-* This is incorrect: "```json"{{"queries": []}}"```"
-* This is correct: "{{"queries": []}}"
-"""
+# OUTPUT_FORMAT
+# * Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
+# * The JSON must contain two fields: "queries", and "urls".
+#    - "queries": An array of strings of size between 1 and 5. Each string must be a search engine query that can help obtain relevant information to estimate
+#      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
+#      or lead to obtain the same set of results.
+# * Output only the JSON object. Do not include any other contents in your response.
+# * Never use Markdown syntax highlighting, such as ```json``` to surround the output. Only output the raw json string.
+# * This is incorrect: "```json{{"queries": []}}```"
+# * This is incorrect: "```json"{{"queries": []}}"```"
+# * This is correct: "{{"queries": []}}"
+# """
 
 PREDICTION_ASSISTANT_TOOLS = [
     {
@@ -240,6 +236,52 @@ PREDICTION_ASSISTANT_TOOLS = [
         }
     }
 ]
+
+
+JSON_ASSISTANT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "format_prediction_values",
+            "description": "Format the prediction values and return them in JSON format. You must NOT use this tool before you have made the prediction.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "p_yes": {"type": "string", "description": "The estimated probability that the market resolves as 'Yes'"},
+                    "p_no": {"type": "string", "description": "The estimated probability that the market resolves as 'No'"},
+                    "confidence": {"type": "string", "description": "Confidence in the prediction"},
+                    "info_utility": {"type": "string", "description": "Utility of the information provided"},
+                },
+                "required": ["p_yes", "p_no", "confidence", "info_utility"],
+            }
+        }
+    }
+]
+
+### Functions that can be called by an assistant
+
+def format_prediction_values(p_yes, p_no, confidence, info_utility):
+    """Format the prediction values and return them in JSON format"""
+
+    # Construct a dictionary with the prediction values
+    prediction_values = {
+        "p_yes": p_yes,
+        "p_no": p_no,
+        "confidence": confidence,
+        "info_utility": info_utility
+    }
+
+    # Convert the dictionary to a JSON-formatted string
+    json_output = json.dumps(prediction_values, indent=4)
+
+    return json_output
+
+
+OPENAI_TOOLS_FUNCTIONS = {
+    "get_market_rules": get_market_rules,
+    "research_additional_information": research_additional_information,
+    "format_prediction_values": format_prediction_values,
+}
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
@@ -335,58 +377,58 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
     return extracted_texts
 
 
-def fetch_additional_information(
-    prompt: str,
-    engine: str,
-    temperature: float,
-    max_tokens: int,
-    google_api_key: Optional[str],
-    google_engine: Optional[str],
-    num_urls: Optional[int],
-    num_words: Optional[int],
-    source_links: Optional[List[str]] = None,
-) -> Tuple[str, Any]:
-    """Fetch additional information."""
-    url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
-    moderation_result = client.moderations.create(input=url_query_prompt)
-    if moderation_result.results[0].flagged:
-        return ""
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": url_query_prompt},
-    ]
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=90,
-        stop=None,
-    )
-    json_data = json.loads(response.choices[0].message.content)
-    if not source_links:
-        urls = get_urls_from_queries(
-            json_data["queries"],
-            google_api_key,
-            google_engine,
-            num_urls,
-        )
-        texts = extract_texts(urls, num_words)
-    else:
-        texts = []
-        for url, content in islice(source_links.items(), 3):
-            doc = {}
-            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
-            texts.append(doc)
-    # Format the additional information
-    additional_information = "\n".join(
-        [
-            f"ARTICLE {i}, URL: {doc['url']}, CONTENT: {doc['text']}\n"
-            for i, doc in enumerate(texts)
-        ]
-    )
-    return additional_information
+# def fetch_additional_information(
+#     prompt: str,
+#     engine: str,
+#     temperature: float,
+#     max_tokens: int,
+#     google_api_key: Optional[str],
+#     google_engine: Optional[str],
+#     num_urls: Optional[int],
+#     num_words: Optional[int],
+#     source_links: Optional[List[str]] = None,
+# ) -> Tuple[str, Any]:
+#     """Fetch additional information."""
+#     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
+#     moderation_result = client.moderations.create(input=url_query_prompt)
+#     if moderation_result.results[0].flagged:
+#         return ""
+#     messages = [
+#         {"role": "system", "content": "You are a helpful assistant."},
+#         {"role": "user", "content": url_query_prompt},
+#     ]
+#     response = client.chat.completions.create(
+#         model=engine,
+#         messages=messages,
+#         temperature=temperature,
+#         max_tokens=max_tokens,
+#         n=1,
+#         timeout=90,
+#         stop=None,
+#     )
+#     json_data = json.loads(response.choices[0].message.content)
+#     if not source_links:
+#         urls = get_urls_from_queries(
+#             json_data["queries"],
+#             google_api_key,
+#             google_engine,
+#             num_urls,
+#         )
+#         texts = extract_texts(urls, num_words)
+#     else:
+#         texts = []
+#         for url, content in islice(source_links.items(), 3):
+#             doc = {}
+#             doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+#             texts.append(doc)
+#     # Format the additional information
+#     additional_information = "\n".join(
+#         [
+#             f"ARTICLE {i}, URL: {doc['url']}, CONTENT: {doc['text']}\n"
+#             for i, doc in enumerate(texts)
+#         ]
+#     )
+#     return additional_information
 
 
 def load_model(vocab: str) -> Language:
@@ -581,7 +623,11 @@ def wait_for_run_termination(
         )
         run = wait_for_run(client, thread_id, run.id)
         print(f"Run status: {run.status}\n")
-    
+
+        thread_messages = client.beta.threads.messages.list(thread_id)
+        response = thread_messages.data[0].content[0].text.value
+        print(f"Assistant message added to thread:\n{thread_id}: {response}\n")
+
     return run
 
 
@@ -649,12 +695,39 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 google_engine_id=google_engine_id,
                 engine=engine,
             )
+
+            thread_message = client.beta.threads.messages.create(
+                thread.id,
+                role="user",
+                content="Output your answer in JSON format.",
+            )
+
+            # update assistant
+            assistant = client.beta.assistants.update(
+                assistant.id,
+                tools=JSON_ASSISTANT_TOOLS,
+            )
+
+            run = client.beta.threads.runs.create(
+                thread_id=thread.id,
+                assistant_id=assistant.id,
+            )
+
+            run = wait_for_run_termination(
+                client,
+                thread.id,
+                run.id,
+                google_api_key=google_api_key,
+                google_engine_id=google_engine_id,
+                engine=engine,
+            )
+
             
             # print()
             # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
             # print()
             
-            runs = client.beta.threads.runs.list(thread_id=thread.id)
+            # runs = client.beta.threads.runs.list(thread_id=thread.id)
             # for r in runs:
             #     print(f"RUN: {r.id}")
             #     steps = client.beta.threads.runs.steps.list(thread_id=thread.id, run_id=r.id)
@@ -673,6 +746,18 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             #     print(f"{message.role}: {message.content[0].text.value}")
             #     print("\n----------------------------------------------------\n")
             prediction = thread_messages.data[0].content[0].text.value
+            
+            # # Create an openai assistant
+            # assistant = client.beta.assistants.create(
+            #     name="JSON Agent",
+            #     instructions=JSON_AGENT_INSTRUCTIONS,
+            #     model=engine,
+            # )
+            
+            # Add the response to the thread as a message. 
+
+
+
             print(f"Prediction: {prediction}")
 
             return prediction, prompt, None, counter_callback

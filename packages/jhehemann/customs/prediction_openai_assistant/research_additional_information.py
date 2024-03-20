@@ -80,7 +80,7 @@ NUM_URLS_PER_QUERY = 3
 TEXT_CHUNK_LENGTH = 300
 TEXT_CHUNK_OVERLAP = 50
 MAX_CHUNKS_TOKENS_TO_SUMMARIZE = 1000
-EMBEDDING_MODEL = "text-embedding-ada-002"
+EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_BATCH_SIZE = 1000
 EMBEDDING_SIZE = 1536
@@ -157,38 +157,6 @@ OUTPUT_FORMAT:
     - "relevance_evaluation": A dict of web page IDs along with their evaluated relevance a scale between 1 and 10 and a one sentence explanation
     - "ranked_web_page_ids": A list of web page IDs ranked by relevance of their corresponding web pages
 * Include only the JSON object in your output
-* Do not include any formatting characters in your response!
-* Do not include any other contents or explanations in your response!
-"""
-
-
-REDUCER_PROMPT = """
-You are a Large Language Model in a multi-agent system. Your task is to drop sentences in 'SEARCH_OUTPUT' \
-without modifying or rephrasing the remaining sentences in any way. The remaining and unchanged sentences inside the paragraphs \
-must contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
-
-INSTRUCTIONS:
-* Carefully read the search query under 'SEARCH_QUERY', enclosed by triple backticks.
-* Select only the relevant sentences from 'SEARCH_OUTPUT' that are useful with respect to the search query 
-* A sentence can be considered relevant if it contains information that might support or refute the event question.
-* Drop the irrelevant sentences.
-* You must not add or modify any content in 'SEARCH_OUTPUT'
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response.
-
-SEARCH_QUERY:
-```
-{input_query}
-```
-
-SEARCH_OUTPUT:
-```
-{additional_information_paragraph}
-```
-
-OUTPUT_FORMAT:
-* If there is no relevant information at all that could be useful with respect to the search query, respond solely with the word "Error".
-* Only output the remaining relevant sentences from 'SEARCH_OUTPUT' that could be useful with respect to the search query.
 * Do not include any formatting characters in your response!
 * Do not include any other contents or explanations in your response!
 """
