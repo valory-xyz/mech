@@ -82,6 +82,7 @@ from dateutil import parser
 NUM_URLS_PER_QUERY = 3
 TEXT_CHUNK_LENGTH = 300
 TEXT_CHUNK_OVERLAP = 50
+MAX_CHUNKS_TOKENS_TO_SUMMARIZE = 1000
 EMBEDDING_MODEL = "text-embedding-ada-002"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_BATCH_SIZE = 1000
@@ -197,13 +198,13 @@ OUTPUT_FORMAT:
 
 
 SUMMARIZE_PROMPT = """
-You are a Large Language Model in a multi-agent system. Your task is to summarize sentences in 'SEARCH_OUTPUT' \
+You are a Large Language Model in a multi-agent system. Your task is to summarize chunks in 'SEARCH_OUTPUT' \
 The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
 
 INSTRUCTIONS:
 * Carefully read the search query under 'SEARCH_QUERY', enclosed by triple backticks
 * Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant with respect to the search query
-* A sentence can be considered relevant if it contains information that might support or refute the event question
+* A chunk can be considered relevant if it contains information that might support or refute the event question
 * Summarize the relevant information in a way that is concise and informative
 * You must not infer or add any new information, but only summarize the existing statements in an unbiased way
 * You must provide your response in the format specified under "OUTPUT_FORMAT"
@@ -216,7 +217,7 @@ SEARCH_QUERY:
 
 SEARCH_OUTPUT:
 ```
-{additional_information_paragraph}
+{chunks}
 ```
 
 OUTPUT_FORMAT:
@@ -292,6 +293,7 @@ class WebPage:
     description: Optional[str] = None
     publication_date: Optional[str] = None
     relevant_chunks: List[str] = Field(default_factory=list)
+    relevant_chunks_summary: Optional[str] = None
 
     def __init__(self, url, html=None, title=None, description=None, publication_date=None, publisher=None):
         type(self)._id_counter += 1
@@ -1050,17 +1052,12 @@ def sort_text_chunks(
         # print(f"SIMILARITY: {sim}, INDEX: {I[0][i]}")
         # print(text_chunks_embedded[I[0][i]].text)
         # print()
-    
-    #sorted_text_chunks = [text_chunks_embedded[i] for i in I[0]]
     return [text_chunks_embedded[i] for i in I[0]]
 
 
-def get_embeddings(client: OpenAI, text_chunks: List[TextChunk]) -> List[TextChunk]:
+def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.Encoding) -> List[TextChunk]:
     """Get embeddings for the text chunks."""
     print("Starting to get embeddings.")
-    
-    # Initialize tokenizer
-    enc = tiktoken.get_encoding("cl100k_base") 
     
     # Batch the text chunks that the sum of tokens is less than MAX_EMBEDDING_TOKEN_INPUT
     batches = []
@@ -1289,6 +1286,63 @@ def fetch_queries(
                 return ""  # Return an empty string after exhausting retries
 
 
+def trim_chunks_string(chunks_string: str, enc: tiktoken.Encoding) -> str:
+    encoding = enc.encode(chunks_string)
+    if len(encoding) > MAX_CHUNKS_TOKENS_TO_SUMMARIZE:
+        encoding = encoding[:MAX_CHUNKS_TOKENS_TO_SUMMARIZE]
+    return enc.decode(encoding)
+
+
+
+def summarize_relevant_chunks(
+        web_pages: List[WebPage],
+        input_query: str,
+        client: OpenAI,
+        enc: tiktoken.Encoding,
+        model = "gpt-3.5-turbo",
+        temperature = 0.0
+) -> List[WebPage]:
+    def summarize_for_web_page(web_page: WebPage) -> None:
+        chunks_string = ""
+        for i, chunk in enumerate(web_page.relevant_chunks):
+            chunks_string += f"CHUNK {i+1}:\n…{chunk}…\n\n"
+        trimmed_chunks = trim_chunks_string(chunks_string, enc)
+        summarize_prompt = SUMMARIZE_PROMPT.format(input_query=input_query, chunks=trimmed_chunks)
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": summarize_prompt},
+        ]
+        response = client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+        )
+        output = response.choices[0].message.content
+        web_page.relevant_chunks_summary = output
+
+    
+    with ThreadPoolExecutor() as executor:
+        # Submit all web pages to the executor for processing
+        future_to_web_page = {executor.submit(summarize_for_web_page, web_page): web_page for web_page in web_pages}
+
+        # Wait for all futures to complete
+        for future in as_completed(future_to_web_page):
+            web_page = future_to_web_page[future]
+            try:
+                # Result is None, as we're modifying web_page objects in-place
+                future.result()
+            except Exception as e:
+                print(f'Web page {web_page.url} generated an exception: {e}')
+    return web_pages
+
+
+def format_additional_information(web_pages: List[WebPage]) -> str:
+    """Format the additional information from the web pages"""
+    formatted_information = ""
+    for i, web_page in enumerate(web_pages):
+        formatted_information += f"ARTICLE {i}: {web_page.title}, {web_page.publisher}, {web_page.publication_date}\n"
+        formatted_information += f"{web_page.relevant_chunks_summary}\n\n"
+    return formatted_information
 
 
 def research_additional_information(
@@ -1327,9 +1381,12 @@ def research_additional_information(
         print(f"\n{page.to_prompt()}")
         print(f"Length of scraped text: {len(page.scraped_text)}\n")
 
-
     text_chunks = get_chunks(web_pages)
-    text_chunks_embedded = get_embeddings(client, text_chunks)
+    
+    # Initialize Tokenizer
+    enc = tiktoken.get_encoding("cl100k_base") 
+    
+    text_chunks_embedded = get_embeddings(client, text_chunks, enc)
     text_chunks_sorted = sort_text_chunks(client, input_query, text_chunks_embedded)
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
     for chunk in text_chunks_sorted:
@@ -1347,8 +1404,17 @@ def research_additional_information(
     for url, web_page in web_pages_dict.items():
         print(f"\nURL: {url}")
         print(f"Relevant chunks: {web_page.relevant_chunks}")
+    
+    web_pages = list(web_pages_dict.values())
+    web_pages = summarize_relevant_chunks(web_pages, input_query, client, enc)
+    web_pages = sorted(web_pages, key=lambda web_page: web_page.publication_date)
 
-    # TODO: Add character limit to the relevant chunks per web_page
+    additional_information = format_additional_information(web_pages)
+    
+    print()
+    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+    print()
+    print(additional_information)
 
     exit()
 
