@@ -32,9 +32,6 @@ from spacy.cli import download
 
 import logging
 
-
-
-
 from openai import OpenAI
 from tqdm import tqdm
 
@@ -399,7 +396,7 @@ class WebPage:
         page_info += f"Title: {self.title or 'Untitled'}\n"
         page_info += f"Description: {self.description or 'n/a'}\n"
         page_info += f"Published: {self.publication_date or 'Unknown'}\n"
-        page_info += f"Publisher: {self.publisher or 'Unknown'}\n"
+        page_info += f"Publisher: {self.publisher or 'Unknown'}"
         
         return page_info
     
@@ -485,9 +482,6 @@ def trim_json_formatting(output_string):
         # Extract the JSON part from the matched pattern
         print("JSON formatting characters found and removed")
         formatted_json = match.group(1)
-        print()
-        print(f"\nFORMATTED MODEL ANSWER:\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n{formatted_json}\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-        print()
         return formatted_json
     else:
         # Return the original string if no match is found
@@ -531,7 +525,7 @@ def find_release_date_in_data(data):
     return None
 
 
-def format_date(date_string):
+def format_date(date_string) -> str:
     # Desired format "February 16, 2024, 3:30 PM"
     format_str = "%B %d, %Y, %I:%M %p"
 
@@ -554,127 +548,9 @@ def parse_date_str(date_str: str) -> datetime:
     # Desired format "February 16, 2024, 3:30 PM"
     datetime_format = "%B %d, %Y, %I:%M %p"
     try:
-        # Parse the date string to datetime object
         return datetime.strptime(date_str, datetime_format)
     except (ValueError, TypeError):
-        # If there's an error during parsing, return datetime.min
         return datetime.min
-    
-
-# def concatenate_short_sentences(self, sentences, len_sentence_threshold):
-#     modified_sentences = []
-#     i = 0
-#     while i < len(sentences):
-#         sentence = sentences[i]
-#         word_count = len(sentence.split())
-        
-#         # Check if the sentence is shorter than the threshold
-#         while word_count < len_sentence_threshold:
-#             i += 1
-#             # Break the loop if we reach the end of the list
-#             if i >= len(sentences):
-#                 break
-#             next_sentence = sentences[i]
-#             sentence += " " + next_sentence
-#             word_count += len(next_sentence.split())
-        
-#         modified_sentences.append(sentence)
-#         i += 1
-
-#     return modified_sentences
-
-
-# def extract_similarity_scores(
-#     self,
-#     text: str,
-#     query_emb,
-#     event_date: str,
-#     nlp,
-#     date: str,
-#     url: str,
-#     embedding_model,
-# ) -> List[Tuple[str, float, str]]:
-#     """
-#     Extract relevant information from website text based on a given event question.
-
-#     Args:
-#         text (str): The website text to extract information from.
-#         input_query (str): The question to find relevant information to.
-#         event_date (str): Event date in year-day-month format.
-#         nlp: The spaCy NLP model.
-#         date (str): The release and modification dates of the website.
-#         url (str): The URL of the website.
-
-#     Returns:
-#         List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
-#     """        
-    
-#     # Constants for sentence length and number thresholds
-#     len_sentence_threshold = 5
-#     max_chunk_size = 400
-#     overlap = 15
-#     num_sentences_threshold = 1000
-#     sentences = []     
-#     event_date_sentences = []
-#     seen = set()
-
-#     # Truncate text for performance optimization
-#     text = text[:50000]
-    
-#     # Apply NLP pipeline to text
-#     doc_text = nlp(text)
-
-#     current_chunk = ""
-#     words = []
-#     #words = doc_text.split(" ")
-
-#     for sent in doc_text.sents:
-#         sentence_text = sent.text
-#         sent_words = sentence_text.split(" ")
-#         if len(sent_words) >= len_sentence_threshold:
-#             words.extend(sent_words)
-
-#     for word in words:
-#         if len(current_chunk) + len(word) <= max_chunk_size:
-#             current_chunk += " " + word
-#         else:
-#             # Before adding the chunk to the list, add the url at the end of the chunk
-#             #current_chunk += " Source: " + url
-#             sentences.append(current_chunk)
-#             current_chunk = (
-#                 " ".join(current_chunk.split(" ")[-overlap:]) + " " + word
-#             )
-
-#     if not sentences:
-#         return ""
-    
-#     # Concatenate short sentences
-    
-#     sentences = self.concatenate_short_sentences(sentences, len_sentence_threshold)
-
-
-
-#     # Limit the number of sentences for performance optimization
-#     sentences = sentences[:num_sentences_threshold]
-    
-#     similarities = []
-
-#     # Encode sentences using spaCy model
-#     for i, sentence in enumerate(sentences):
-#         # # spacy embedding specific
-#         # doc_sentence = nlp(sentence)
-#         # similarity_score = query_emb.similarity(doc_sentence)
-
-#         # sentence-transformers embedding specific
-#         sent_emb = embedding_model.encode(sentence)
-#         similarity_score = util.cos_sim(query_emb, sent_emb)[0].item()
-
-#         similarities.append(similarity_score)
-
-#     # Create tuples and store them in a list
-#     sentence_similarity_date_url_tuples = [(sentence, similarity, date, url) for sentence, similarity in zip(sentences, similarities) if similarity > 0.3]
-
-#     return sentence_similarity_date_url_tuples
 
 
 def process_in_batches(
@@ -906,7 +782,7 @@ def sort_text_chunks(
 ) -> List[TextChunk]:
     """Similarity search to find similar chunks to a query"""
 
-    print("\nInput query:")  
+    print("\nINPUT QUERY:")  
     print(query)
     print()
 
@@ -922,7 +798,10 @@ def sort_text_chunks(
     index = faiss.IndexFlatIP(EMBEDDING_SIZE)
     index.add(np.array([text_chunk.embedding for text_chunk in text_chunks_embedded]))
     D, I = index.search(np.array([query_embedding]), len(text_chunks_embedded))
+    print("SIMILAR CHUNK INDICES (SORTED IN DESCENDING ORDER):")
     print(I)
+    print()
+    print("SIMILARITY SCORES (SORTED IN DESCENDING ORDER):")
     print(D)
     print()
     for i, sim in enumerate(D[0]):
@@ -935,7 +814,7 @@ def sort_text_chunks(
 
 def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.Encoding) -> List[TextChunk]:
     """Get embeddings for the text chunks."""
-    print("Starting to get embeddings.")
+    print("Start getting embeddings ...")
     
     # Batch the text chunks that the sum of tokens is less than MAX_EMBEDDING_TOKEN_INPUT
     batches = []
@@ -991,15 +870,11 @@ def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
 def scrape_web_pages(web_pages: List[WebPage], week_interval, nlp: Language) -> List[WebPage]:
     """Scrape text from web pages"""
     filtered_web_pages = []
-    investigate_urls = [
-        "https://www.itftennis.com/en/news-and-media/articles/i-beat-cancer-by-refusing-to-give-up-tennis/",
-        "https://www.usopen.org/en_US/news/articles/2023-06-04/rafael_nadal_gives_latest_injury_update_on_37th_birthday.html"
-    ]
+    investigate_urls = []
     for web_page in web_pages:
         if web_page.html:
             date_parsed = parse_date_str(web_page.publication_date)
             if date_parsed > datetime.now() - timedelta(weeks=5) or date_parsed == datetime.min:
-                print(f"\nURL: {web_page.url}")
                 if web_page.url in investigate_urls:
                     print(web_page.html)
                 # Clean the text
@@ -1012,15 +887,15 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, nlp: Language) -> 
                 scraped_text = h.handle(doc_sum)
                 scraped_text = "  ".join([x.strip() for x in scraped_text.split("\n")])
                 scraped_text = re.sub(r'\s+', ' ', scraped_text)
-                print()
-                print(scraped_text)
-                print()
+                # print()
+                # print(scraped_text)
+                # print()
 
                 if len(scraped_text) < 300:
-                    print("\nScraped text is quite short. Trying a different approach.\n")
-                    print()
-                    print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-                    print()
+                    print(f"\nScraped text for {web_page.url} is quite short. Trying a different approach.\n")
+                    # print()
+                    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+                    # print()
                     soup = BeautifulSoup(web_page.html, "lxml")
                     #Remove unnecessary tags to clean up html
                     for element in soup(HTML_TAGS_TO_REMOVE):
@@ -1030,9 +905,9 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, nlp: Language) -> 
                     text = "  ".join([x.strip() for x in text.split("\n")])
                     text = re.sub(r'\s+', ' ', text)
                     scraped_text = text
-                    print()
-                    print(scraped_text)
-                    print()
+                    # print()
+                    # print(scraped_text)
+                    # print()
                 
                 web_page.scraped_text = scraped_text
                 
@@ -1118,7 +993,8 @@ def get_urls_from_queries(
                     if count >= num:
                         break
                 else:
-                    print(f"URL {url} already in results or omitting keyword found, skipping...")
+                    # print(f"URL {url} already in results or omitting keyword found, skipping...")
+                    continue
 
     print("\nget_urls_from_queries result:")
     for url in results:
@@ -1133,7 +1009,7 @@ def fetch_queries(
     model="gpt-3.5-turbo",
     temperature=1.0,
     max_attempts=2,
-):
+) -> List[str]:
     """Fetch queries from the OpenAI engine"""
     attempts = 0
     while attempts < max_attempts:
@@ -1152,8 +1028,8 @@ def fetch_queries(
             )
             output = response.choices[0].message.content
             # Parse the response content
-            print(output)
             trimmed_output = trim_json_formatting(output)
+            print(trimmed_output)
             json_data = json.loads(trimmed_output)
             queries = json_data["queries"]
             return queries  # Return the parsed data if successful
@@ -1162,7 +1038,7 @@ def fetch_queries(
             attempts += 1
             if attempts == max_attempts:
                 print("Maximum attempts reached, returning an empty string.")
-                return ""  # Return an empty string after exhausting retries
+                return []
 
 
 def trim_chunks_string(chunks_string: str, enc: tiktoken.Encoding) -> str:
@@ -1186,9 +1062,9 @@ def summarize_relevant_chunks(
             chunks_string += f"\n…{chunk}…\n"
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
         summarize_prompt = SUMMARIZE_PROMPT.format(input_query=input_query, chunks=trimmed_chunks)
-        print()
-        print(summarize_prompt)
-        print()
+        # print()
+        # print(summarize_prompt)
+        # print()
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": summarize_prompt},
@@ -1246,12 +1122,7 @@ def research_additional_information(
     )
     web_pages = [WebPage(url) for url in urls]
     web_pages = extract_html_texts(web_pages)
-    
-    # # print attributes of all web pages
-    # for page in web_pages:
-    #     print(page.to_prompt())
 
-    # reranked_web_pages = rerank_web_pages(client, parsed_web_pages, market_question=input_query)
     nlp = load_model(VOCAB)
     week_interval = 5
     # Scrape text from web pages not older <week_interval> weeks
@@ -1268,11 +1139,11 @@ def research_additional_information(
     
     text_chunks_embedded = get_embeddings(client, text_chunks, enc)
     text_chunks_sorted = sort_text_chunks(client, input_query, text_chunks_embedded)
-    print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-    for chunk in text_chunks_sorted:
-        print(f"Similarity: {chunk.similarity}")
-        print(chunk.text)
-        print()
+    # print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
+    # for chunk in text_chunks_sorted:
+    #     print(f"Similarity: {chunk.similarity}")
+    #     print(chunk.text)
+    #     print()
 
     # Create a dictionary mapping URLs to WebPage objects for quicker lookups
     web_pages_dict = {web_page.url: web_page for web_page in web_pages}
@@ -1287,4 +1158,4 @@ def research_additional_information(
 
     additional_information = format_additional_information(web_pages)
   
-    return(additional_information)
+    return additional_information

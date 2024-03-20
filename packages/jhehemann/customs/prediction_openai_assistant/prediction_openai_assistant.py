@@ -100,6 +100,9 @@ OPENAI_TOOLS_FUNCTIONS ={
         "get_market_rules": get_market_rules,
         "research_additional_information": research_additional_information,
     }
+RUN_TERMINATED_STATES = ["expired", "completed", "failed", "cancelled"]
+RUN_RUNNING_STATES = ["queued", "in_progress"]
+RUN_ACTION_REQUIRED_STATES = ["requires_action"]
 
 # * Use the current date and time ({timestamp}) as a reference to understand the context of the market question, but focus primarily on the market question's specified date to guide your answer.
 
@@ -341,7 +344,6 @@ def fetch_additional_information(
     google_engine: Optional[str],
     num_urls: Optional[int],
     num_words: Optional[int],
-    counter_callback: Optional[Callable] = None,
     source_links: Optional[List[str]] = None,
 ) -> Tuple[str, Any]:
     """Fetch additional information."""
@@ -384,14 +386,7 @@ def fetch_additional_information(
             for i, doc in enumerate(texts)
         ]
     )
-    if counter_callback:
-        counter_callback(
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=engine,
-            token_counter=count_tokens,
-        )
-    return additional_information, counter_callback
+    return additional_information
 
 
 def load_model(vocab: str) -> Language:
@@ -506,61 +501,100 @@ def execute_function(tool_call, client, thread_id=None, google_api_key=None, goo
 
 def is_terminated(run):
     """Check if the run is terminated"""
-    return run.status in ["expired", "completed", "failed", "cancelled"]
+    return run.status in RUN_TERMINATED_STATES
 
 
 def wait_for_run(
-    client,
-    thread_id,
-    run_id,
+    client: OpenAI,
+    thread_id: str,
+    run_id: str,
     timeout=60,
 ):
-    waiting_states = ["queued", "in_progress"]
-
     timeout = timeout
     start_time = time.time()
     thread_id = thread_id
     run_id = run_id
 
-    print(f"Thread ID: {thread_id}\n")
-    print(f"Run ID: {run_id}\n")
+    # print(f"Thread ID: {thread_id}\n")
+    # print(f"Run ID: {run_id}\n")
 
     run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-    print(f"Run retrieved:\n{run}\n")
-    print(f"Run status: {run.status}\n")
+    # print(f"Run retrieved:\n{run}\n")
+    # print(f"Run status: {run.status}\n")
 
     while True:
         run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
         print(f"Run status: {run.status}")
 
-        if run.status not in waiting_states:
+        if run.status not in RUN_RUNNING_STATES:
             print(f"Run status changed to: {run.status}\n")
-            print(f"Run new:\n{run}\n")
-            return run  # Assuming run contains all needed information
+            # print(f"Run new:\n{run}\n")
+            return run
 
         if time.time() - start_time > timeout:
             print(f"Run timed out. Run status:\n{run.status}\n")
-            return run  # Timeout, return None or handle as needed
+            return None
 
         time.sleep(0.1)
 
-    # while run.status in waiting_states:
-    #     if time.time() - start_time > timeout:
-    #         print(f"Run timed out. Run status:\n{run.status}\n")
-    #         break
-    #     time.sleep(0.1)
-    #     run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-    #     print(f"Run status: {run.status}")
+
+def wait_for_run_termination(
+    client: OpenAI,
+    thread_id,
+    run_id,
+    google_api_key=None,
+    google_engine_id=None,
+    engine=None,
+):
+    run = wait_for_run(client, thread_id, run_id)
+
+    if run.status in RUN_ACTION_REQUIRED_STATES:
+        print(f"Required action:\n {run.required_action}\n")
+
+        # List to store futures
+        futures_dict = {}
+
+        # Outer ThreadPoolExecutor to manage parallel execution of all functions
+        with ThreadPoolExecutor(max_workers=len(run.required_action.submit_tool_outputs.tool_calls)) as executor:
+            for tool_call in run.required_action.submit_tool_outputs.tool_calls:
+                # Submit each function execution as a separate task to the executor
+                future = executor.submit(execute_function, tool_call, client, thread_id, google_api_key, google_engine_id, engine)
+                futures_dict[future] = tool_call.id
+
+            tool_outputs = []
+            # Wait for all futures to complete and print their results
+            for future in as_completed(futures_dict):
+                result = future.result()
+                tool_call_id = futures_dict[future]
+                tool_outputs.append({
+                    "tool_call_id": tool_call_id,
+                    "output": result
+                })
+        
+        for tool_output in tool_outputs:
+            print(f"TOOL OUTPUT:\n{tool_output['output']}\n\n")
+
+        run = client.beta.threads.runs.submit_tool_outputs(
+            thread_id=thread_id,
+            run_id=run.id,
+            tool_outputs=tool_outputs,
+        )
+        run = wait_for_run(client, thread_id, run.id)
+        print(f"Run status: {run.status}\n")
     
-            
+    return run
 
-    # if run.status in waiting_states:
-    #     print(f"Run timed out. Run status:\n{run.status}\n")
-    #     return None, None, None, None
 
-    # print(f"Run status changed to: {run.status}\n")
-    # print(f"Run new:\n{run}\n") 
-    # return
+# def count_tokens(runs) -> Tuple[int, int, int]:
+#     """Count the number of tokens in the runs"""
+#     prompt_tokens = 0
+#     completion_tokens = 0
+#     total_tokens = 0
+#     for run in runs:
+#         prompt_tokens += run.usage.prompt_tokens
+#         completion_tokens += run.usage.completion_tokens
+#         total_tokens += run.usage.total_tokens
+#     return prompt_tokens, completion_tokens, total_tokens
 
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
@@ -592,120 +626,77 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 tools=PREDICTION_ASSISTANT_TOOLS,
                 model=engine,
             )
-
+            
+            # Create a thread
             thread = client.beta.threads.create(
                 messages=[
                     {"role": "user", "content": prompt},
                 ]
             )
 
+            # Create a run by applying the assistant to the thread
             run = client.beta.threads.runs.create(
                 thread_id=thread.id,
                 assistant_id=assistant.id,
             )
 
-            print(f"Run created:\n{run}\n")
-
-            run = wait_for_run(client, thread.id, run.id)
-
-            if run.status == "requires_action":
-                print(f"Required action:\n {run.required_action}\n")
-
-                # List to store futures
-                futures_dict = {}
-
-                # Outer ThreadPoolExecutor to manage parallel execution of all functions
-                with ThreadPoolExecutor(max_workers=len(run.required_action.submit_tool_outputs.tool_calls)) as executor:
-                    for tool_call in run.required_action.submit_tool_outputs.tool_calls:
-                        # Submit each function execution as a separate task to the executor
-                        future = executor.submit(execute_function, tool_call, client, thread.id, google_api_key, google_engine_id, engine)
-                        futures_dict[future] = tool_call.id
-
-                    tool_outputs = []
-                    # Wait for all futures to complete and print their results
-                    for future in as_completed(futures_dict):
-                        result = future.result()
-                        tool_call_id = futures_dict[future]
-                        tool_outputs.append({
-                            "tool_call_id": tool_call_id,
-                            "output": result
-                        })
-                        print(f"Result of function:\n{result}\n")
-                
-                print(tool_outputs)
-
-                run = client.beta.threads.runs.submit_tool_outputs(
-                    thread_id=thread.id,
-                    run_id=run.id,
-                    tool_outputs=tool_outputs,
-                )
-                run = wait_for_run(client, thread.id, run.id)
-                print(f"Run status: {run.status}\n")
-
+            # Wait until run is in one of the terminal states
+            run = wait_for_run_termination(
+                client,
+                thread.id,
+                run.id,
+                google_api_key=google_api_key,
+                google_engine_id=google_engine_id,
+                engine=engine,
+            )
             
+            # print()
+            # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            # print()
+            
+            runs = client.beta.threads.runs.list(thread_id=thread.id)
+            # for r in runs:
+            #     print(f"RUN: {r.id}")
+            #     steps = client.beta.threads.runs.steps.list(thread_id=thread.id, run_id=r.id)
+            #     for s in steps:
+            #         print(f"STEP: {s.id}")
+            #         print(s)
+            #         print("\n----------------------------------------------------\n")
+            
+            # print()
+            # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+            # print()
+
+            # Print all the thread messages
             thread_messages = client.beta.threads.messages.list(thread.id)
-            print(thread_messages.data)
+            # for message in thread_messages:
+            #     print(f"{message.role}: {message.content[0].text.value}")
+            #     print("\n----------------------------------------------------\n")
+            prediction = thread_messages.data[0].content[0].text.value
+            print(f"Prediction: {prediction}")
 
-
-
-
-            exit()
-
-
-            additional_information, counter_callback = fetch_additional_information(
-                prompt,
-                engine,
-                temperature,
-                max_tokens,
-                google_api_key,
-                google_engine_id,
-                num_urls,
-                num_words,
-                counter_callback=counter_callback,
-                source_links=kwargs.get("source_links", None),
-            )
-
-            if additional_information and tool == "prediction-online-summarized-info":
-                additional_information = summarize(
-                    additional_information, compression_factor, vocab
-                )
-            additional_information = adjust_additional_information(
-                prompt, PREDICTION_PROMPT, additional_information, engine
-            )
-            prediction_prompt = PREDICTION_PROMPT.format(
-                user_prompt=prompt, additional_information=additional_information
-            )
-            moderation_result = client.moderations.create(input=prediction_prompt)
-            if moderation_result.results[0].flagged:
-                return "Moderation flagged the prompt as in violation of terms.", None, None, None
-            messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": prediction_prompt},
-            ]
-            response = client.chat.completions.create(
-                model=engine,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                n=1,
-                timeout=150,
-                stop=None,
-            )
-            if counter_callback is not None:
-                counter_callback(
-                    input_tokens=response.usage.prompt_tokens,
-                    output_tokens=response.usage.completion_tokens,
-                    model=engine,
-                    token_counter=count_tokens,
-                )
-            return response.choices[0].message.content, prediction_prompt, None, counter_callback
+            return prediction, prompt, None, counter_callback
+        
         finally:
             if run and not is_terminated(run):
                 client.beta.threads.runs.cancel(thread_id=thread.id, run_id=run.id)
-            if thread:
-                client.beta.threads.delete(thread.id)
-            if assistant:
-                client.beta.assistants.delete(assistant.id)
+                print(f"Run cancelled: {run.id}")
+                if thread:
+                    client.beta.threads.delete(thread.id)
+                    print(f"Thread deleted: {thread.id}")
+                    if assistant:
+                        client.beta.assistants.delete(assistant.id)
+                        print(f"Assistant deleted: {assistant.id}")
+                    else:
+                        print("Assistant not found.")
+                else:
+                    print("Thread not found.")
+            elif is_terminated(run):
+                print(f"Run successfully terminated: {run.id}")
+            else:
+                print("Run not found.")
+                
+
 
 
 
