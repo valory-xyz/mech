@@ -513,7 +513,7 @@ def get_answer(
         
     return Results(p_yes=0.5, p_no=0.5, confidence=0.5, info_utility=0.5, prediction="I don't know"), counter_callback, prediction_prompt
 
-def run(**kwargs) -> Tuple[str, Optional[Dict[str, Any]]]:
+def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
 
