@@ -39,6 +39,51 @@ The project consists of three components:
   - Allows Mech owners to create new workers.
   - Allows users to request work from an existing worker.
 
+## Mech request-response flow
+
+![image](docs/images/mech_request_response_flow.png)
+
+1. Write request metadata: the application writes the request metadata to the IPFS. The request metadata must contain the attributes `nonce`, `tool`, and `prompt`. Additional attributes can be passed depending on the specific tool:
+
+    ```json
+    {
+      "nonce": 15,
+      "tool": "prediction_request",
+      "prompt": "Will my favourite football team win this week's match?"
+    }
+    ```
+
+2. The application gets the metadata's IPFS hash.
+
+3. The application writes the request's IPFS hash to the Mech contract which includes a small payment (currently $0.01 on the Gnosis chain deployment). Alternatively, the payment could be done separately through a Nevermined subscription.
+
+4. The Mech service is constantly monitoring Mech contract events, and therefore gets the request hash.
+
+5. The Mech reads the request metadata from IPFS using its hash.
+
+6. The Mech selects the appropriate tool to handle the request from the `tool` entry in the metadata, and runs the tool with the given arguments, usually a prompt. In this example, the mech has been requested to interact with OpenAI's API, so it forwards the prompt to it, but the tool can implement any other desired behavior. 
+
+7. The Mech gets a response from the tool.
+
+8. The Mech writes the response to the IPFS.
+
+9. The Mech receives the response the IPFS hash.
+
+10. The Mech writes the response hash to the Mech contract.
+
+11. The application monitors for contract Deliver events and reads the response hash from the associated transaction.
+
+12. The application gets the response metadata from the IPFS:
+
+    ```json
+    {
+      "requestId": 68039248068127180134548324138158983719531519331279563637951550269130775,
+      "result": "{\"p_yes\": 0.35, \"p_no\": 0.65, \"confidence\": 0.85, \"info_utility\": 0.75}"
+    }
+    ```
+
+See some examples of requests and responses on the [Mech Hub](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a).
+
 ## Requirements
 
 This repository contains a demo AI Mech. You can clone and extend the codebase to create your own AI Mech. You need the following requirements installed in your system:
@@ -123,11 +168,36 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
     bash run_service.sh
     ```
 
+## Integrating mechs into your application
+
+### For generic apps and scripts
+
+Use the [mech-client](https://github.com/valory-xyz/mech-client), which can be used either as a CLI or directly from a Python script.
+
+### For other autonomous services
+
+To perform mech requests from your service, use the [mech_interact_abci skill](https://github.com/valory-xyz/IEKit/tree/main/packages/valory/skills/mech_interact_abci). This skill abstracts away all the IPFS and contract interactions so you only need to care about the following:
+
+-   Add the mech_interact_abci skill to your dependency list, both in `packages.json`, `aea-config.yaml` and any composed `skill.yaml`.
+
+-   Import [MechInteractParams and MechResponseSpecs in your `models.py` file](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/models.py#L88). You will also need to copy[ some dataclasses to your rounds.py](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L66-L97).
+
+-   Add mech_requests and mech_responses to your skills' `SynchonizedData` class ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L181-193))
+
+-   To send a request, [prepare the request metadata](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L857), write it to [`synchronized_data.mech_requests`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L535) and [transition into mech_interact](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L736).
+
+-   You will need to appropriately chain the `mech_interact_abci` skill with your other skills ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/composition.py#L66)) and `transaction_settlement_abci`.
+
+-   After the interaction finishes, the responses will be inside [`synchronized_data.mech_responses`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L903)
+
+For a complete list of required changes, [use this PR as reference](https://github.com/valory-xyz/market-creator/pull/91).
+
+
 ## Build your own
 
 You can create and mint your own AI Mech that handles requests for tasks that you can define.
 
-1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools are custom components and should be under the `customs` packages (ex. [valory tools](./packages/valory/customs)). Such file must contain a `run` function that accepts `kwargs` and must **always** return a tuple (`Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]`). That is, the `run` function must not raise any exception. If exceptions occur inside the function, they must be processed, and the return value must be set accordingly, for example, returning an error code.
+1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools are custom components and should be under the `customs` packages (ex. [valory tools](./packages/valory/customs)). Such file must contain a `run` function satisfying the following interface:
 
     ```python
     def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]::
@@ -138,15 +208,35 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
         return result_str, prompt_used, generated_tx, counter_callback
     ```
 
-    The `kwargs` are guaranteed to contain:
-    * `api_keys` (`kwargs["api_keys"]`): the required API keys. This is a dictionary containing the API keys required by your Mech:
-        ```python
-        <api_key>=kwargs["api_keys"][<api_key_id>]).
-        ```
-    * `prompt` (`kwargs["prompt"]`): a string containing the user prompt.
-    * `tool` (`kwargs["tool"]`): a string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
+    - **Input**: Keyword arguments (`**kwargs`). The `kwargs` object is guaranteed to contain the following keys:
+        - `tool` (`kwargs["tool"]`): A string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
+        - `prompt` (`kwargs["prompt"]`): A string containing the user prompt.
+        - `api_keys` (`kwargs["api_keys"]`): A dictionary containing the API keys required by your tool:
+
+            ```python
+            <api_key>=kwargs["api_keys"][<api_key_id>].
+            ```
+
+    - **Output**: It must **always** return a tuple (`Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]`):
+        - `result_str`: A string-serialized JSON object containing the result of the tool execution (custom format).
+        - `prompt_used`: A string representing the prompt used internally by the tool. This output is only used for analytics and it can be set to `None`.
+        - `generated_tx`: A dictionary containing the fields of a generated transaction to be submitted following the execution of the tool (e.g., a token transfer). It can be set to `None`. Template of a generated transaction:
+
+            ```json
+          {
+              "to": TARGET_ADDRESS,       # must be provided
+              "value": VALUE_TO_TRANSFER, # default value is 0
+              "data": TX_DATA,            # default value is b' '
+              "operation": CALL_OR_DELEGATE_CALL, # default value is CALL
+          }
+          ```
+
+        - `counter_callback`: Object to be called for calculating the cost when making requests to this tool. It can be set to `None`.
+
+    - **Exceptions**: A compliant implementation of the `run` function must capture any exception raised during its execution and return it appropriately, for example as an error code in `result_str`. If `run` raises an exception the Mech will capture and output an `Invalid response` string.
 
 2. **Upload the tool file to IPFS.** You can push your tool to IPFS like the other packages:
+
     ```bash
     autonomy push-all
     ```
@@ -196,6 +286,25 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
 ## Included tools
 
+| Tools |
+|---|
+| packages/jhehemann/customs/prediction_sum_url_content |
+| packages/napthaai/customs/prediction_request_rag |
+| packages/napthaai/customs/resolve_market_reasoning |
+| packages/nickcom007/customs/prediction_request_sme |
+| packages/nickcom007/customs/sme_generation_request |
+| packages/polywrap/customs/prediction_with_research_report |
+| packages/psouranis/customs/optimization_by_prompting |
+| packages/valory/customs/native_transfer_request |
+| packages/valory/customs/openai_request |
+| packages/valory/customs/prediction_request |
+| packages/valory/customs/prediction_request_claude |
+| packages/valory/customs/prediction_request_embedding |
+| packages/valory/customs/resolve_market |
+| packages/valory/customs/stability_ai_request |
+
+## More on tools
+
 - **OpenAI request** (`openai_request.py`). Executes requests to the OpenAI API through the engine associated to the specific tool. It receives as input an arbitrary prompt and outputs the returned output by the OpenAI API.
   - `openai-gpt-3.5-turbo`
   - `openai-gpt-4`
@@ -221,6 +330,7 @@ A keyfile is just a file with your ethereum private key as a hex-string, example
 ```
 
 Make sure you don't have any extra characters in the file, like newlines or spaces.
+
 
 ## Examples of deployed mechs
 

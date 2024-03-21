@@ -377,7 +377,7 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
 
 
 def get_urls_from_queries(
-    queries: List[str], api_key: str, engine: str, num: int
+        queries: List[str], api_key: str, engine: str, num: int
 ) -> List[str]:
     """Get URLs from search engine queries"""
     results = []
@@ -818,6 +818,31 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         results = Results.from_response(response_prediction)
         print(f"Results: {results}")
 
+        # Make the prediction
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": PREDICTION_PROMPT.format(
+                    user_prompt=prompt, reasoning=reasoning
+                ),
+            },
+        ]
+
+        response_prediction = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            n=1,
+            timeout=150,
+            stop=None,
+            functions=[Results.openai_schema],
+        )
+
+        results = Results.from_response(response_prediction)
+        print(f"Results: {results}")
+
         if counter_callback is not None:
             counter_callback(
                 input_tokens=response_reasoning.usage.prompt_tokens
@@ -827,5 +852,5 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
                 )
-
         return results.json(), reasoning, None, counter_callback
+
