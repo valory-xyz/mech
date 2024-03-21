@@ -504,3 +504,4 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             )
         
         return response.choices[0].message.content, prediction_prompt, None, counter_callback
+
