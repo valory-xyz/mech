@@ -208,7 +208,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
         return result_str, prompt_used, generated_tx, counter_callback
     ```
 
-    - INPUT: Keyword arguments (`**kwargs`). The `kwargs` object is guaranteed to contain the following keys:
+    - **Input**: Keyword arguments (`**kwargs`). The `kwargs` object is guaranteed to contain the following keys:
         - `tool` (`kwargs["tool"]`): A string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
         - `prompt` (`kwargs["prompt"]`): A string containing the user prompt.
         - `api_keys` (`kwargs["api_keys"]`): A dictionary containing the API keys required by your tool:
@@ -217,13 +217,23 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
             <api_key>=kwargs["api_keys"][<api_key_id>].
             ```
 
-    - OUTPUT: It must **always** return a tuple (`Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]`):
+    - **Output**: It must **always** return a tuple (`Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]`):
         - `result_str`: A string-serialized JSON object containing the result of the tool execution (custom format).
         - `prompt_used`: A string representing the prompt used internally by the tool. This output is only used for analytics and it can be set to `None`.
-        - `generated_tx`: A dictionary containing the fields of a generated transaction to be submitted following the execution of the tool (e.g., a token transfer). It can be set to `None`.
+        - `generated_tx`: A dictionary containing the fields of a generated transaction to be submitted following the execution of the tool (e.g., a token transfer). It can be set to `None`. Template of a generated transaction:
+
+            ```json
+          {
+              "to": TARGET_ADDRESS,       # must be provided
+              "value": VALUE_TO_TRANSFER, # default value is 0
+              "data": TX_DATA,            # default value is b' '
+              "operation": CALL_OR_DELEGATE_CALL, # default value is CALL
+          }
+          ```
+
         - `counter_callback`: Object to be called for calculating the cost when making requests to this tool. It can be set to `None`.
 
-    - EXCEPTIONS: The `run` function must not raise any exception. If exceptions occur inside the function, they must be processed and returned appropriately, for example as an error code in `result_str`.
+    - **Exceptions**: A compliant implementation of the `run` function must capture any exception raised during its execution and return it appropriately, for example as an error code in `result_str`. If `run` raises an exception the Mech will capture and output an `Invalid response` string.
 
 2. **Upload the tool file to IPFS.** You can push your tool to IPFS like the other packages:
 
