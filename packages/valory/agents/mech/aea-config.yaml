@@ -42,7 +42,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeif3ln6eg53ebrfe6uicjew4uqp2ynyrcxkw5wi4jm3ixqv3ykte4a
 - valory/reset_pause_abci:0.1.0:bafybeicm7onl72rfnn33pbvzwjpkl5gafeieyobfcnyresxz7kunjwmqea
 - valory/subscription_abci:0.1.0:bafybeiclwa2u24nv4yzke6s24qxz2uxc6tpniyjxzprlb7oinkiijdhlgy
-- valory/task_execution:0.1.0:bafybeidp6ae2noa7wpklelyu5y3yuxpmw2q4e62rfdgohvuqalln74pmce
+- valory/task_execution:0.1.0:bafybeigt2yb6t7cglwqnpefsiuhzlxq6746e7m2bwm4niej23ptcduplqq
 - valory/task_submission_abci:0.1.0:bafybeib6yijhh5ss7mufpjghjwobxjynuaz2mf52jo54dtpyer4ovowei4
 - valory/termination_abci:0.1.0:bafybeie6h7j4hyhgj2wte64n3xyudxq4pgqcqjmslxi5tff4mb6vce2tay
 - valory/transaction_settlement_abci:0.1.0:bafybeid57tozt5f3kgzmu22nbr3c3oy4p7bi2bu66rqsgnlylq6xgh2ixe
