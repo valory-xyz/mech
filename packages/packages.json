@@ -1,7 +1,7 @@
 {
     "dev": {
         "custom/valory/native_transfer_request/0.1.0": "bafybeihugaylajwh2fgypxatcw5qrw5qxadtrsi2h2s2246442wlvjirtm",
-        "custom/valory/prediction_request_claude/0.1.0": "bafybeibokfnyaxvkmjrp35floetx7hmqnzcklvph4rswid57t42b2incce",
+        "custom/valory/prediction_request_claude/0.1.0": "bafybeigqvnbnzpmpmvwp7a5qfqihlphfkgabzt2qg2vwm3lzkzvfyjudwe",
         "custom/valory/openai_request/0.1.0": "bafybeibdcttrlgp5udygntka5fofi566pitkxhquke37ng7csvndhy4s2i",
         "custom/valory/prediction_request_embedding/0.1.0": "bafybeieyebiw4vedicpkyibj4zqtcnqp2i3kvk7vpn35psud4ujmrknux4",
         "custom/valory/resolve_market/0.1.0": "bafybeih3a4n3fnx4qmy3lpp4paat4wqvpgjyd5emot37cs4i5p6ii672bm",
