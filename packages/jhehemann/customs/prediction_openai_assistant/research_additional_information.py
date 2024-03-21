@@ -134,36 +134,9 @@ OUTPUT_FORMAT:
 # Select those web pages that are likely to contain relevant and current information to answer the question. \
 # ... return ... only for the selected relevant web pages.
 
-URL_RERANKING_PROMPT = """
-I will present you with a collection of web pages along with their titles, descriptions, release dates and publishers. \
-These web pages were preselected for probably containing relevant information to answer the question: {market_question}. \
-
-The web pages are divided by '---web_page---'
-
-Evaluate the web pages details (publication dates, titles, descriptions and publishers) for relevance to answer the question. \
-Consider content, recency of information and publisher in your relevance evaluation. \
-Content can be considered relevant if it contains information that could help answer the question. \
-Recent information can be considered more relevant than older information. For this consider that the current date is {current_date} \
-A reputable publisher can be considered more relevant than a less reputable or unknown publisher. \
-
-Rank the web pages in descending order of relevance and return the ranked list of its web page IDs. \
-
-WEB_PAGES:
-{web_pages_info}
-
-OUTPUT_FORMAT:
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* The JSON must contain two fields: "explanation" and "ranked_web_page_ids"
-    - "relevance_evaluation": A dict of web page IDs along with their evaluated relevance a scale between 1 and 10 and a one sentence explanation
-    - "ranked_web_page_ids": A list of web page IDs ranked by relevance of their corresponding web pages
-* Include only the JSON object in your output
-* Do not include any formatting characters in your response!
-* Do not include any other contents or explanations in your response!
-"""
-
 
 SUMMARIZE_PROMPT = """
-You are a Large Language Model in a multi-agent system. Your task is to summarize chunks in 'SEARCH_OUTPUT' \
+You are a Large Language Model in a multi-agent system. Your task is to summarize relevant information in 'SEARCH_OUTPUT' \
 The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
 
 INSTRUCTIONS:
@@ -186,8 +159,9 @@ SEARCH_OUTPUT:
 OUTPUT_FORMAT:
 * Only output the summary containing the relevant information from 'SEARCH_OUTPUT' with respect to the search query.
 * The summary must be structured in bullet points.
+* Respond solely with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
 * Do not include any other contents in your response!
-* If there is no relevant information at all that could be useful with respect to the search query, respond solely with the word "Error".
+
 """
 
 
