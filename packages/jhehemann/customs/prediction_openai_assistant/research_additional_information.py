@@ -1072,7 +1072,6 @@ def format_additional_information(web_pages: List[WebPage]) -> str:
 def research_additional_information(
     input_query: str,
     client: OpenAI,
-    thread_id: str,
     google_api_key: str,
     google_engine_id: str,
     engine: str,
@@ -1105,8 +1104,8 @@ def research_additional_information(
     # Initialize Tokenizer
     enc = tiktoken.get_encoding("cl100k_base") 
     
-    text_chunks_embedded = get_embeddings(client, text_chunks, enc)
-    text_chunks_sorted = sort_text_chunks(client, input_query, text_chunks_embedded)
+    text_chunks_embedded = get_embeddings(client, text_chunks, enc) if text_chunks else []
+    text_chunks_sorted = sort_text_chunks(client, input_query, text_chunks_embedded) if text_chunks_embedded else []
     # print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
     # for chunk in text_chunks_sorted:
     #     print(f"Similarity: {chunk.similarity}")

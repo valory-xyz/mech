@@ -258,17 +258,19 @@ JSON_ASSISTANT_TOOLS = [
     }
 ]
 
+
 ### Functions that can be called by an assistant
+
 
 def format_prediction_values(p_yes, p_no, confidence, info_utility):
     """Format the prediction values and return them in JSON format"""
 
     # Construct a dictionary with the prediction values
     prediction_values = {
-        "p_yes": p_yes,
-        "p_no": p_no,
-        "confidence": confidence,
-        "info_utility": info_utility
+        "p_yes": float(p_yes),
+        "p_no": float(p_no),
+        "confidence": float(confidence),
+        "info_utility": float(info_utility)
     }
 
     # Convert the dictionary to a JSON-formatted string
@@ -282,6 +284,49 @@ OPENAI_TOOLS_FUNCTIONS = {
     "research_additional_information": research_additional_information,
     "format_prediction_values": format_prediction_values,
 }
+
+
+### Regular functions
+
+
+def is_valid_json_with_fields_and_values(json_string):
+    """
+    Check if the input string is valid JSON, contains the required fields,
+    and adheres to the value constraints for each field.
+
+    Parameters:
+    - json_string (str): The string to be checked.
+
+    Returns:
+    - bool: True if the string meets all criteria, False otherwise.
+    """
+    required_fields = ["p_yes", "p_no", "confidence", "info_utility"]
+
+    try:
+        # Attempt to parse the JSON string
+        data = json.loads(json_string)
+
+        # Check if all required fields are present
+        if not all(field in data for field in required_fields):
+            return False
+
+        # Check if 'p_yes' and 'p_no' are floats within [0, 1] and their sum equals 1
+        if not all(isinstance(data[field], float) and 0 <= data[field] <= 1 for field in ["p_yes", "p_no"]):
+            return False
+        if data["p_yes"] + data["p_no"] != 1:
+            return False
+
+        # Check if 'confidence' and 'info_utility' are floats within [0, 1]
+        if not all(isinstance(data[field], float) and 0 <= data[field] <= 1 for field in ["confidence", "info_utility"]):
+            return False
+
+        return True
+
+    except json.JSONDecodeError:
+        # If json_string is not valid JSON, return False
+        return False
+
+
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
@@ -521,7 +566,7 @@ def adjust_additional_information(
     return additional_information
 
 
-def execute_function(tool_call, client, thread_id=None, google_api_key=None, google_engine_id=None, engine=None):
+def execute_function(tool_call, client, google_api_key=None, google_engine_id=None, engine=None):
     function_name = tool_call.function.name
     function_to_call = OPENAI_TOOLS_FUNCTIONS[function_name]
     function_args = json.loads(tool_call.function.arguments)
@@ -532,7 +577,6 @@ def execute_function(tool_call, client, thread_id=None, google_api_key=None, goo
         return function_to_call(
             **function_args,
             client=client,
-            thread_id=thread_id,
             google_api_key=google_api_key,
             google_engine_id=google_engine_id,
             engine=engine,
@@ -580,6 +624,36 @@ def wait_for_run(
         time.sleep(0.1)
 
 
+def call_tools(
+    run,
+    google_api_key=None,
+    google_engine_id=None,
+    engine=None,
+):
+    print(f"Required action:\n {run.required_action}\n")
+
+    # List to store futures
+    futures_dict = {}
+
+    # Outer ThreadPoolExecutor to manage parallel execution of all functions
+    with ThreadPoolExecutor(max_workers=len(run.required_action.submit_tool_outputs.tool_calls)) as executor:
+        for tool_call in run.required_action.submit_tool_outputs.tool_calls:
+            # Submit each function execution as a separate task to the executor
+            future = executor.submit(execute_function, tool_call, client, google_api_key, google_engine_id, engine)
+            futures_dict[future] = tool_call.id
+
+        tool_outputs = []
+        # Wait for all futures to complete and print their results
+        for future in as_completed(futures_dict):
+            result = future.result()
+            tool_call_id = futures_dict[future]
+            tool_outputs.append({
+                "tool_call_id": tool_call_id,
+                "output": result
+            })
+    return tool_outputs
+
+
 def wait_for_run_termination(
     client: OpenAI,
     thread_id,
@@ -587,42 +661,34 @@ def wait_for_run_termination(
     google_api_key=None,
     google_engine_id=None,
     engine=None,
+    return_tool_outputs_only=False,
+    current_iteration=0,
+    max_iterations=3,
 ):
+    # Termination condition for recursion
+    if current_iteration >= max_iterations:
+        print(f"Reached maximum number of iterations: {max_iterations}")
+        return None # Stop the recursion
+    
     run = wait_for_run(client, thread_id, run_id)
 
-    if run.status in RUN_ACTION_REQUIRED_STATES:
-        print(f"Required action:\n {run.required_action}\n")
-
-        # List to store futures
-        futures_dict = {}
-
-        # Outer ThreadPoolExecutor to manage parallel execution of all functions
-        with ThreadPoolExecutor(max_workers=len(run.required_action.submit_tool_outputs.tool_calls)) as executor:
-            for tool_call in run.required_action.submit_tool_outputs.tool_calls:
-                # Submit each function execution as a separate task to the executor
-                future = executor.submit(execute_function, tool_call, client, thread_id, google_api_key, google_engine_id, engine)
-                futures_dict[future] = tool_call.id
-
-            tool_outputs = []
-            # Wait for all futures to complete and print their results
-            for future in as_completed(futures_dict):
-                result = future.result()
-                tool_call_id = futures_dict[future]
-                tool_outputs.append({
-                    "tool_call_id": tool_call_id,
-                    "output": result
-                })
-        
+    if run and run.status in RUN_ACTION_REQUIRED_STATES:
+        tool_outputs = call_tools(run, google_api_key, google_engine_id, engine)
         for tool_output in tool_outputs:
             print(f"TOOL OUTPUT:\n{tool_output['output']}\n\n")
-
+        
+        if return_tool_outputs_only:
+            client.beta.threads.runs.cancel(thread_id=thread_id, run_id=run.id)
+            return tool_outputs
+        
         run = client.beta.threads.runs.submit_tool_outputs(
             thread_id=thread_id,
             run_id=run.id,
             tool_outputs=tool_outputs,
         )
-        run = wait_for_run(client, thread_id, run.id)
-        print(f"Run status: {run.status}\n")
+
+        run = wait_for_run_termination(client, thread_id, run.id)
+        # print(f"Run status: {run.status}\n")
 
         thread_messages = client.beta.threads.messages.list(thread_id)
         response = thread_messages.data[0].content[0].text.value
@@ -663,6 +729,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             raise ValueError(f"Tool {tool} is not supported.")
 
         engine = TOOL_TO_ENGINE[tool]
+        run_ids = []
 
         try:
             # Create an openai assistant
@@ -680,11 +747,12 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 ]
             )
 
-            # Create a run by applying the assistant to the thread
+            # Apply the prediction assistant to the thread
             run = client.beta.threads.runs.create(
                 thread_id=thread.id,
                 assistant_id=assistant.id,
             )
+            run_ids.append(run.id)
 
             # Wait until run is in one of the terminal states
             run = wait_for_run_termination(
@@ -695,34 +763,48 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 google_engine_id=google_engine_id,
                 engine=engine,
             )
-
-            thread_message = client.beta.threads.messages.create(
-                thread.id,
-                role="user",
-                content="Output your answer in JSON format.",
-            )
-
-            # update assistant
-            assistant = client.beta.assistants.update(
-                assistant.id,
-                tools=JSON_ASSISTANT_TOOLS,
-            )
-
-            run = client.beta.threads.runs.create(
-                thread_id=thread.id,
-                assistant_id=assistant.id,
-            )
-
-            run = wait_for_run_termination(
-                client,
-                thread.id,
-                run.id,
-                google_api_key=google_api_key,
-                google_engine_id=google_engine_id,
-                engine=engine,
-            )
-
+            response = client.beta.threads.messages.list(thread.id).data[0].content[0].text.value
             
+            if not is_valid_json_with_fields_and_values(response):
+                client.beta.threads.messages.create(
+                    thread.id,
+                    role="user",
+                    content="Output your answer in JSON format.",
+                )
+
+                # update assistant and replace the tools with the JSON assistant tool
+                assistant = client.beta.assistants.update(
+                    assistant.id,
+                    tools=JSON_ASSISTANT_TOOLS,
+                )
+
+                run = client.beta.threads.runs.create(
+                    thread_id=thread.id,
+                    assistant_id=assistant.id,
+                )
+                run_ids.append(run.id)
+
+                tool_outputs = wait_for_run_termination(
+                    client,
+                    thread.id,
+                    run.id,
+                    google_api_key=google_api_key,
+                    google_engine_id=google_engine_id,
+                    engine=engine,
+                    return_tool_outputs_only=True,
+                )
+
+                if isinstance(tool_outputs, list):
+                    prediction = tool_outputs[0]["output"]
+                    # Print the type of the prediction variable. 
+                    print(f"Type of prediction: {type(prediction)}")
+                    # Convert the prediction variable to string 
+                    prediction = str(prediction)
+                    # Print the prediction variable.
+                    print(f"Type of prediction: {type(prediction)}")
+                else:
+                    prediction = None
+
             # print()
             # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
             # print()
@@ -745,7 +827,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             # for message in thread_messages:
             #     print(f"{message.role}: {message.content[0].text.value}")
             #     print("\n----------------------------------------------------\n")
-            prediction = thread_messages.data[0].content[0].text.value
             
             # # Create an openai assistant
             # assistant = client.beta.assistants.create(
@@ -758,12 +839,22 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
 
 
 
-            print(f"Prediction: {prediction}")
+            print(f"FINAL OUTPUT:\n{prediction}")
+            print(f"\nIS VALID RESPONSE: {is_valid_json_with_fields_and_values(prediction)}\n")
 
             return prediction, prompt, None, counter_callback
         
         finally:
+            # For later:
+            # Update assistant and replace JSON tool with the prediction assistant tools for next run
+            client.beta.assistants.update(
+                assistant.id,
+                tools=PREDICTION_ASSISTANT_TOOLS,
+            )
+            # Delete run, thread and assistant
+            run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run_ids[0])
             if run and not is_terminated(run):
+                print(f"Run found with status: {run.status}")
                 client.beta.threads.runs.cancel(thread_id=thread.id, run_id=run.id)
                 print(f"Run cancelled: {run.id}")
                 if thread:
