@@ -860,7 +860,8 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, nlp: Language) -> 
                 # print()
 
                 if len(scraped_text) < 300:
-                    print(f"\nScraped text for {web_page.url} is quite short. Trying a different approach.\n")
+                    print(f"\nScraped text for {web_page.url} has less than 300 characters: {len(scraped_text)}.")
+                    print("Trying a different approach...")
                     # print()
                     # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
                     # print()
@@ -876,6 +877,14 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, nlp: Language) -> 
                     # print()
                     # print(scraped_text)
                     # print()
+
+                    if len(scraped_text) < 300 and not (web_page.title == "n/a" and web_page.description == "n/a"):
+                        prefix = f"{web_page.title}. {web_page.description}."
+                        scraped_text = prefix + scraped_text
+                        print(f"Scraped text still less than 300 characters. Added title and description to the text.")
+                    else:
+                        scraped_text = None
+                        print("Scraped text has still less than 300 characters and no title and description. Skipping...")
                 
                 web_page.scraped_text = scraped_text
                 
@@ -949,7 +958,7 @@ def get_urls_from_queries(
         raise ValueError(f"The maximum number of URLs per query is {max_num_fetch}.")
 
     
-    with ThreadPoolExecutor(max_workers=15) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(search_google, query, api_key, engine, max_num_fetch) for query in queries}
         for future in as_completed(futures):
             result = future.result()
@@ -1124,5 +1133,8 @@ def research_additional_information(
     web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
 
     additional_information = format_additional_information(web_pages)
-  
+    if additional_information:
+        additional_information += (
+            f"Disclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y, %I:%M %p')} and does not claim to be exhaustive or definitive."
+        )
     return additional_information

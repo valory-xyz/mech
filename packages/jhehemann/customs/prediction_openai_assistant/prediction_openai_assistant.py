@@ -630,11 +630,24 @@ def call_tools(
     google_engine_id=None,
     engine=None,
 ):
-    print(f"Required action:\n {run.required_action}\n")
-
-    # List to store futures
+    # print(f"Required action:\n {run.required_action}\n")
+    tool_calls = run.required_action.submit_tool_outputs.tool_calls
+    print(f"Number of tools to call: {len(tool_calls)}")
+    for tool_call in tool_calls:
+        tool_call_type = tool_call.type
+        function_name = tool_call.function.name
+        try:
+            function_arguments = json.loads(tool_call.function.arguments)
+        except json.JSONDecodeError as e:
+            print(f"Error parsing function arguments: {e}")
+            function_arguments = {}  # Use an empty dict or handle the error as needed
+        print(f"Tool Call Type: {tool_call_type}, Function Name: {function_name}, Arguments: {function_arguments}")
+    
+    if len(tool_calls) > 3:
+        print("Too many tools to call. Limiting to 3.")
+        tool_calls = tool_calls[:3]
+    
     futures_dict = {}
-
     # Outer ThreadPoolExecutor to manage parallel execution of all functions
     with ThreadPoolExecutor(max_workers=len(run.required_action.submit_tool_outputs.tool_calls)) as executor:
         for tool_call in run.required_action.submit_tool_outputs.tool_calls:
@@ -674,12 +687,13 @@ def wait_for_run_termination(
 
     if run and run.status in RUN_ACTION_REQUIRED_STATES:
         tool_outputs = call_tools(run, google_api_key, google_engine_id, engine)
-        for tool_output in tool_outputs:
-            print(f"TOOL OUTPUT:\n{tool_output['output']}\n\n")
-        
+
         if return_tool_outputs_only:
             client.beta.threads.runs.cancel(thread_id=thread_id, run_id=run.id)
             return tool_outputs
+        
+        for tool_output in tool_outputs:
+            print(f"TOOL OUTPUT:\n{tool_output['output']}\n\n")
         
         run = client.beta.threads.runs.submit_tool_outputs(
             thread_id=thread_id,
@@ -687,12 +701,19 @@ def wait_for_run_termination(
             tool_outputs=tool_outputs,
         )
 
-        run = wait_for_run_termination(client, thread_id, run.id)
+        run = wait_for_run_termination(
+            client,
+            thread_id,
+            run.id,
+            google_api_key=google_api_key,
+            google_engine_id=google_engine_id,
+            engine=engine,
+        )
         # print(f"Run status: {run.status}\n")
 
         thread_messages = client.beta.threads.messages.list(thread_id)
         response = thread_messages.data[0].content[0].text.value
-        print(f"Assistant message added to thread:\n{thread_id}: {response}\n")
+        print(f"Assistant message added to thread {thread_id}:\n{response}\n")
 
     return run
 
@@ -796,48 +817,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
 
                 if isinstance(tool_outputs, list):
                     prediction = tool_outputs[0]["output"]
-                    # Print the type of the prediction variable. 
-                    print(f"Type of prediction: {type(prediction)}")
-                    # Convert the prediction variable to string 
-                    prediction = str(prediction)
-                    # Print the prediction variable.
-                    print(f"Type of prediction: {type(prediction)}")
                 else:
                     prediction = None
-
-            # print()
-            # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-            # print()
-            
-            # runs = client.beta.threads.runs.list(thread_id=thread.id)
-            # for r in runs:
-            #     print(f"RUN: {r.id}")
-            #     steps = client.beta.threads.runs.steps.list(thread_id=thread.id, run_id=r.id)
-            #     for s in steps:
-            #         print(f"STEP: {s.id}")
-            #         print(s)
-            #         print("\n----------------------------------------------------\n")
-            
-            # print()
-            # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-            # print()
-
-            # Print all the thread messages
-            thread_messages = client.beta.threads.messages.list(thread.id)
-            # for message in thread_messages:
-            #     print(f"{message.role}: {message.content[0].text.value}")
-            #     print("\n----------------------------------------------------\n")
-            
-            # # Create an openai assistant
-            # assistant = client.beta.assistants.create(
-            #     name="JSON Agent",
-            #     instructions=JSON_AGENT_INSTRUCTIONS,
-            #     model=engine,
-            # )
-            
-            # Add the response to the thread as a message. 
-
-
 
             print(f"FINAL OUTPUT:\n{prediction}")
             print(f"\nIS VALID RESPONSE: {is_valid_json_with_fields_and_values(prediction)}\n")
@@ -852,25 +833,31 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 tools=PREDICTION_ASSISTANT_TOOLS,
             )
             # Delete run, thread and assistant
-            run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run_ids[0])
-            if run and not is_terminated(run):
-                print(f"Run found with status: {run.status}")
-                client.beta.threads.runs.cancel(thread_id=thread.id, run_id=run.id)
-                print(f"Run cancelled: {run.id}")
-                if thread:
-                    client.beta.threads.delete(thread.id)
-                    print(f"Thread deleted: {thread.id}")
-                    if assistant:
-                        client.beta.assistants.delete(assistant.id)
-                        print(f"Assistant deleted: {assistant.id}")
+            if run_ids:
+                for id in run_ids:
+                    run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=id)
+                    if run and not is_terminated(run):
+                        print(f"Run {run.id} found with status: {run.status}")
+                        client.beta.threads.runs.cancel(thread_id=thread.id, run_id=run.id)
+                        print(f"Run cancelled: {run.id}")
+                    elif is_terminated(run):
+                        print(f"Run already terminated: {run.id}")
                     else:
-                        print("Assistant not found.")
-                else:
-                    print("Thread not found.")
-            elif is_terminated(run):
-                print(f"Run successfully terminated: {run.id}")
+                        print("Run not found.")
+
+            if thread:
+                client.beta.threads.delete(thread.id)
+                print(f"Thread deleted: {thread.id}")
             else:
-                print("Run not found.")
+                print("Thread not found.")
+
+            if assistant:
+                client.beta.assistants.delete(assistant.id)
+                print(f"Assistant deleted: {assistant.id}")
+            else:
+                print("Assistant not found.")
+              
+
                 
 
 
