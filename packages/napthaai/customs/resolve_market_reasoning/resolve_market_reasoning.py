@@ -782,7 +782,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"Determinable: {determinable_results}")
 
         if not determinable_results.is_determinable:
-            return determinable_results.json(), reasoning, additional_information, None
+            return determinable_results.json(), reasoning, None, None
 
         # Make the prediction
         messages = [
@@ -821,7 +821,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             return (
                 results.json(),
                 reasoning,
-                additional_information,
+                None,
                 counter_callback,
             )
-        return results.json(), reasoning, additional_information, None
+        return results.json(), reasoning, None, None
