@@ -38,20 +38,21 @@ The project consists of three components:
   - Gives an overview of the AI workers in the registry.
   - Allows Mech owners to create new workers.
   - Allows users to request work from an existing worker.
- 
+
 ## Mech request-response flow
 
 ![image](docs/images/mech_request_response_flow.png)
 
 1. Write request metadata: the application writes the request metadata to the IPFS. The request metadata must contain the attributes `nonce`, `tool`, and `prompt`. Additional attributes can be passed depending on the specific tool:
 
-```
-{
-  "nonce": 15,
-  "tool": "prediction_request",
-  "prompt": "Will my favourite football team win this week's match?"
-}
-```
+    ```json
+    {
+      "nonce": 15,
+      "tool": "prediction_request",
+      "prompt": "Will my favourite football team win this week's match?"
+    }
+    ```
+
 2. The application gets the metadata's IPFS hash.
 
 3. The application writes the request's IPFS hash to the Mech contract which includes a small payment (currently $0.01 on the Gnosis chain deployment). Alternatively, the payment could be done separately through a Nevermined subscription.
@@ -74,15 +75,14 @@ The project consists of three components:
 
 12. The application gets the response metadata from the IPFS:
 
-```
-{
-  "requestId": 68039248068127180134548324138158983719531519331279563637951550269130775,
-  "result": "{\"p_yes\": 0.35, \"p_no\": 0.65, \"confidence\": 0.85, \"info_utility\": 0.75}"
-}
-```
+    ```json
+    {
+      "requestId": 68039248068127180134548324138158983719531519331279563637951550269130775,
+      "result": "{\"p_yes\": 0.35, \"p_no\": 0.65, \"confidence\": 0.85, \"info_utility\": 0.75}"
+    }
+    ```
 
 See some examples of requests and responses on the [Mech Hub](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a).
-
 
 ## Requirements
 
@@ -197,7 +197,7 @@ For a complete list of required changes, [use this PR as reference](https://gith
 
 You can create and mint your own AI Mech that handles requests for tasks that you can define.
 
-1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools are custom components and should be under the `customs` packages (ex. [valory tools](./packages/valory/customs)). Such file must contain a `run` function that accepts `kwargs` and must **always** return a tuple (`Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]`). That is, the `run` function must not raise any exception. If exceptions occur inside the function, they must be processed, and the return value must be set accordingly, for example, returning an error code.
+1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools are custom components and should be under the `customs` packages (ex. [valory tools](./packages/valory/customs)). Such file must contain a `run` function satisfying the following interface:
 
     ```python
     def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]::
@@ -208,15 +208,35 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
         return result_str, prompt_used, generated_tx, counter_callback
     ```
 
-    The `kwargs` are guaranteed to contain:
-    * `api_keys` (`kwargs["api_keys"]`): the required API keys. This is a dictionary containing the API keys required by your Mech:
-        ```python
-        <api_key>=kwargs["api_keys"][<api_key_id>]).
-        ```
-    * `prompt` (`kwargs["prompt"]`): a string containing the user prompt.
-    * `tool` (`kwargs["tool"]`): a string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
+    - **Input**: Keyword arguments (`**kwargs`). The `kwargs` object is guaranteed to contain the following keys:
+        - `tool` (`kwargs["tool"]`): A string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
+        - `prompt` (`kwargs["prompt"]`): A string containing the user prompt.
+        - `api_keys` (`kwargs["api_keys"]`): A dictionary containing the API keys required by your tool:
+
+            ```python
+            <api_key>=kwargs["api_keys"][<api_key_id>].
+            ```
+
+    - **Output**: It must **always** return a tuple (`Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]`):
+        - `result_str`: A string-serialized JSON object containing the result of the tool execution (custom format).
+        - `prompt_used`: A string representing the prompt used internally by the tool. This output is only used for analytics and it can be set to `None`.
+        - `generated_tx`: A dictionary containing the fields of a generated transaction to be submitted following the execution of the tool (e.g., a token transfer). It can be set to `None`. Template of a generated transaction:
+
+            ```json
+          {
+              "to": TARGET_ADDRESS,       # must be provided
+              "value": VALUE_TO_TRANSFER, # default value is 0
+              "data": TX_DATA,            # default value is b' '
+              "operation": CALL_OR_DELEGATE_CALL, # default value is CALL
+          }
+          ```
+
+        - `counter_callback`: Object to be called for calculating the cost when making requests to this tool. It can be set to `None`.
+
+    - **Exceptions**: A compliant implementation of the `run` function must capture any exception raised during its execution and return it appropriately, for example as an error code in `result_str`. If `run` raises an exception the Mech will capture and output an `Invalid response` string.
 
 2. **Upload the tool file to IPFS.** You can push your tool to IPFS like the other packages:
+
     ```bash
     autonomy push-all
     ```
