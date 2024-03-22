@@ -40,10 +40,9 @@ SYSTEM_PROMPT = """You are a world class algorithm for generating structured out
 
 INFER_RULES_PROMPT = """
 You are a Large Language Model in a multi-agent system. Your task is to infer the rules for a prediction market question. \
-You are assisting an agent that generates predictions for the outcome of the market question. For this, the agent needs reliable \
-and well-structured rules for when the prediction market question will be resolved as 'Yes' and 'No'. To predict the outcome \
-the agent can use a search engine to find relevant information. The rules that you create should be based on information that can be found \
-on the internet. Find the market question under 'MARKET_QUESTION' and adhere to the following 'INSTRUCTIONS'.
+Provide reliable and well-structured rules for when the prediction market question will be resolved as 'Yes' and 'No'. The rules that \
+you define should be based on information that can be found on the internet. Find the market question under 'MARKET_QUESTION' and \
+adhere to the following 'INSTRUCTIONS'.
 
 INSTRUCTIONS:
 * Carefully read the market question

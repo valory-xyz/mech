@@ -28,8 +28,9 @@ from heapq import nlargest
 from itertools import islice
 from string import punctuation
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
-from packages.jhehemann.customs.prediction_openai_assistant.infer_rules import get_market_rules
-from packages.jhehemann.customs.prediction_openai_assistant.research_additional_information import research
+from packages.jhehemann.customs.tool_get_market_rules.infer_rules import get_market_rules
+from packages.jhehemann.customs.tool_research.research_additional_information import research
+from packages.jhehemann.customs.tool_format_prediction_values.format_prediction_values import format_prediction_values
 
 from openai import OpenAI
 
@@ -47,7 +48,6 @@ from tiktoken import encoding_for_model
 
 
 client: Optional[OpenAI] = None
-
 
 
 class OpenAIClientManager:
@@ -105,34 +105,6 @@ RUN_ACTION_REQUIRED_STATES = ["requires_action"]
 
 # * Use the current date and time ({timestamp}) as a reference to understand the context of the market question, but focus primarily on the market question's specified date to guide your answer.
 
-
-# ASSISTANT_INSTRUCTIONS_OLD = """
-# You are an autonomous AI agent that gathers highly reliable and valid information from different sources. You are provided with \
-# a market question that is currently open to bet on on a prediction market. Your task is to gather current and highly reliable \
-# information and make a probability estimation for the market question. You have access to an agent ecosystem that provides you with \
-# a vast amount of tools and information to help you make the estimation.
-
-# INSTRUCTIONS:
-# * Examine the market question labeled 'MARKET_QUESTION'.
-# * The probability estimations of the market question outcomes must be as accurate as possible, as an inaccurate estimation will lead to financial loss for the user.
-# * Utilize your training data and the tools provided to make your estimations
-# * The specified date in the user question is the key determinant for your response
-# * Carefully evaluate when events or information are reported to occur in relation to the market question's specified date.
-# * If a search generates relevant information, indicating towards one of the two outcomes, but does not seem to guarantee the outcome by the specified date, you should estimate the probability of the outcome happening within the time frame from the current date to the specified date
-# * You must provide a response in the format specified under "OUTPUT_FORMAT"
-# * Do not include any other contents in your response
-
-# OUTPUT_FORMAT:
-# * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-# * The JSON must contain four fields: "p_yes", "p_no", "confidence", "info_utility"
-# * Each item in the JSON must have a value between 0 and 1
-#     - "p_yes": Probability that the market question's outcome will be `Yes`
-#     - "p_no": Probability that the usmarketer question's outcome will be `No`
-#     - "confidence": Your confidence (value between 0 and 1) in your estimated probabilities
-#     - "info_utility": Utility of the information provided by the agents that helped you make the estimation. 0 indicates lowest utility; 1 maximum utility.
-# Do not include any other contents except for the JSON object in your outputs.
-# """
-
 ASSISTANT_INSTRUCTIONS_REPORT = """
 You are an autonomous AI agent that gathers highly reliable and valid information from different sources. You are provided with a prediction market question. \
 Your task is to gather current and highly reliable information and write a comprehensive report that provides relevant information to make an accurate and robust \
@@ -153,62 +125,6 @@ Your response must be structured in the following format:
     - "confidence": Your confidence (value between 0 and 1) in your estimated probabilities
     - "info_utility": Utility of the information provided by the agents that helped you make the estimation. 0 indicates lowest utility; 1 maximum utility.
 Do not include any other contents except for the JSON object in your outputs.
-"""
-
-
-REPORT_PROMPT_TEMPLATE_5 = """
-Compile a comprehensive report aimed at enabling an informed prediction regarding the market question: '{market_question}'. This report should meticulously incorporate specific dates, timelines, and nuanced language found in the relevant information. Ensure the report contains:
-
-Introduction: Present the market question, stressing the necessity of including detailed dates and the importance of nuanced language that matches the question's intent.
-Background: Provide a historical overview, noting any date-related trends.
-Findings and Analysis: Thoroughly present and analyze the selected data, focusing on critical dates, precise timelines, and the exact phrasing that aligns with the market question. Highlight the relevance of each piece of information to the market question, ensuring it's comprehensive enough for prediction without direct access to the original data sources.
-Conclusion: Summarize the findings, emphasizing the role of specific dates and linguistic nuances in shaping the market prediction.
-Caveats: Identify any potential limitations due to the timing of information or the interpretation of nuanced language.
-
-The report should be detailed and structured using markdown, designed to include all necessary details for making a prediction, with a clear focus on the importance of timing and language precision.
-"""
-
-
-REPORT_PROMPT_TEMPLATE_4 = """
-Prepare a detailed report that offers crucial insights to predict the outcome of the MARKET QUESTION: '{market_question}'. The report should consist of:
-
-Introduction: Briefly introduce the market question, highlighting the need for attention to both relevant dates and the exact phrasing of information.
-Background: Examine the historical context, focusing on patterns related to timelines and the specificity of language that aligns with the market question. State the rules for the market question.
-Findings and Analysis: Analyze current data with a focus on publication dates and language, ensuring the information directly addresses the market question. Differentiate between similar but irrelevant information and data that precisely answers the question.
-Conclusion: Summarize insights, underlining the timing and language.
-Caveats: Note any limitations due to timing or challenges in distinguishing relevant from near-relevant information.
-
-Use markdown for clarity and structure, ensuring a focus on timely and accurately phrased information.
-"""
-
-
-REPORT_PROMPT_TEMPLATE_3 = """
-Construct an exhaustive analysis report aimed at delivering strategic insights for forecasting the resolution of the market query: '{market_question}'. This task requires a dual focus: the critical role of timing and dates, and the precision of language used in relevant information, ensuring it directly addresses the market question's specific phrasing and the underlying intent for information.
-
-Organize the report into these key sections:
-
-Introduction: Set the stage by explaining the market question, with an emphasis on the dual importance of exact timing and the precise alignment of information phrasing with the question's intent.
-Background: Explore the historical backdrop and relevant precedents, paying special attention to date-related patterns and the specific language that has historically aligned with similar market inquiries.
-Findings and Analysis: Scrutinize the selected data meticulously, prioritizing the examination of publication dates, crucial deadlines, and timelines, alongside evaluating the exactitude of phrasing in the information. Assess how well the information's phrasing matches the market question, discerning between closely related yet non-relevant data and directly applicable insights.
-Conclusion: Draw together the insights, emphasizing the interplay between the chronological factors and the precision of language in shaping the forecast for the market question.
-Caveats: Highlight any limitations in the analysis, particularly those arising from timing discrepancies or the challenge of filtering out information that, despite seeming relevant due to similar phrasing, does not contribute to answering the market question.
-
-The report should delve deeply into each point, eschewing summaries in favor of detailed exploration, and employ markdown syntax for structured presentation. Prioritize information that is not only timely but also directly responsive to the market question, carefully distinguishing it from seemingly relevant but ultimately off-target data.
-"""
-
-
-REPORT_PROMPT_TEMPLATE_2="""
-Your primary objective is to compile an in-depth report that offers crucial insights to accurately forecast the outcome of the market inquiry: '{market_question}'. It is essential that the chronological aspect is emphasized, with the date of the market question serving as a pivotal factor in shaping the analysis and conclusions.
-
-The report should be meticulously organized into the following segments:
-
-Introduction: Offer an overview of the market question, underlining the significance of timing and dates in its context.
-Background: Delve into the historical context and precedents, highlighting any date-specific trends or patterns that could influence the market question.
-Findings and Analysis: Present a detailed examination of the current data, with a laser focus on publication dates, relevant deadlines, and timelines that could impact the outcome. Analyze the temporal dimensions thoroughly, considering both the immediate and long-term implications.
-Conclusion: Capture the market question and its rules and synthesize the findings from the previous section, stressing how the dates and timelines contribute to the prediction of the market question's outcome.
-Caveats: Identify any potential limitations or uncertainties in the data, particularly those related to timing or the availability of up-to-date information.
-
-Ensure the report is rich in detail, avoiding summaries and instead offering expansive analyses of each point. Employ markdown syntax for clarity and structure, and prioritize the inclusion of all pertinent information, especially that which pertains to dates and timelines.
 """
 
 
@@ -239,7 +155,6 @@ Each item in the JSON must have a value between 0 and 1. Do not include any othe
 
 MARKET_QUESTION: {market_question}
 """
-
 
 
 RESEARCH_ASSISTANT_TOOLS = [
@@ -295,34 +210,11 @@ PREDICTION_ASSISTANT_TOOLS = [
 ]
 
 
-### Functions that can be called by an assistant
-
-
-def format_prediction_values(p_yes, p_no, confidence, info_utility):
-    """Format the prediction values and return them in JSON format"""
-
-    # Construct a dictionary with the prediction values
-    prediction_values = {
-        "p_yes": float(p_yes),
-        "p_no": float(p_no),
-        "confidence": float(confidence),
-        "info_utility": float(info_utility)
-    }
-
-    # Convert the dictionary to a JSON-formatted string
-    json_output = json.dumps(prediction_values, indent=4)
-
-    return json_output
-
-
 OPENAI_TOOLS_FUNCTIONS = {
     "get_market_rules": get_market_rules,
     "research": research,
     "format_prediction_values": format_prediction_values,
 }
-
-
-### Regular functions
 
 
 def trim_json_formatting(output_string):
@@ -425,13 +317,6 @@ def wait_for_run(
     start_time = time.time()
     thread_id = thread_id
     run_id = run_id
-
-    # print(f"Thread ID: {thread_id}\n")
-    # print(f"Run ID: {run_id}\n")
-
-    run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
-    # print(f"Run retrieved:\n{run}\n")
-    # print(f"Run status: {run.status}\n")
 
     while True:
         run = client.beta.threads.runs.retrieve(thread_id=thread_id, run_id=run_id)
@@ -582,6 +467,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
 
         engine = TOOL_TO_ENGINE[tool]
         run_ids = []
+        assistant_ids = []
+        thread_ids = []
 
         try:
             # Create an openai assistant
@@ -591,13 +478,16 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 tools=RESEARCH_ASSISTANT_TOOLS,
                 model=engine,
             )
+            assistant_ids.append(assistant_report.id)
+
             # Create an openai assistant
             assistant_prediction = client.beta.assistants.create(
                 name="Prediction Agent",
                 instructions=ASSISTANT_INSTRUCTIONS_PREDICTION,
-                tools=RESEARCH_ASSISTANT_TOOLS,
                 model=engine,
             )
+            assistant_ids.append(assistant_prediction.id)
+
             market_question = extract_question(prompt)
             if market_question is None:
                 return None, None, "Market question not found in prompt", None
@@ -610,6 +500,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                     {"role": "user", "content": report_prompt},
                 ]
             )
+            thread_ids.append(thread.id)
 
             # Apply the prediction assistant to the thread
             run = client.beta.threads.runs.create(
@@ -654,7 +545,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
 
                 run = client.beta.threads.runs.create(
                     thread_id=thread.id,
-                    assistant_id=assistant_report.id,
+                    assistant_id=assistant_prediction.id,
                 )
                 run_ids.append(run.id)
 
@@ -693,37 +584,30 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             return response, prompt, None, counter_callback
         
         finally:
-            # For later:
-            # Update assistant and replace JSON tool with the prediction assistant tools for next run
-            # client.beta.assistants.update(
-            #     assistant.id,
-            #     tools=RESEARCH_ASSISTANT_TOOLS,
-            # )
+            # Delete runs, threads and assistants
+            if thread_ids:
+                for id in thread_ids:
+                    runs = client.beta.threads.runs.list(id)
+                    for run in runs.data:
+                        if not is_terminated(run):
+                            print(f"Cancelling {run.id}")
+                            client.beta.threads.runs.cancel(thread_id=thread.id, run_id=run.id)
+                            run = wait_for_run_termination(client, id, run.id)
+                        else:
+                            print(f"Run already terminated: {run.id}")
+                    client.beta.threads.delete(id)
 
-            # Delete run, thread and assistant
-            if run_ids:
-                for id in run_ids:
-                    run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=id)
-                    if run and not is_terminated(run):
-                        print(f"Run {run.id} found with status: {run.status}")
-                        client.beta.threads.runs.cancel(thread_id=thread.id, run_id=run.id)
-                        print(f"Run cancelled: {run.id}")
-                    elif is_terminated(run):
-                        print(f"Run already terminated: {run.id}")
-                    else:
-                        print("Run not found.")
+            if assistant_ids:
+                for id in assistant_ids:
+                    client.beta.assistants.delete(id)
+                    print(f"Assistant deleted: {id}")
 
-            if thread:
-                client.beta.threads.delete(thread.id)
-                print(f"Thread deleted: {thread.id}")
-            else:
-                print("Thread not found.")
-
-            if assistant_report:
-                client.beta.assistants.delete(assistant_report.id)
-                print(f"Assistant deleted: {assistant_report.id}")
-            else:
-                print("Assistant not found.")
+            my_assistants = client.beta.assistants.list(
+                order="desc",
+            )
+            for assistant in my_assistants.data:
+                print(f"Assistant ID: {assistant.id}, Assistant Name: {assistant.name}")
+                client.beta.assistants.delete(assistant.id)
               
 
                 

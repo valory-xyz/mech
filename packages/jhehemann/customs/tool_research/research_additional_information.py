@@ -80,6 +80,7 @@ NUM_URLS_PER_QUERY = 3
 TEXT_CHUNK_LENGTH = 300
 TEXT_CHUNK_OVERLAP = 50
 MAX_CHUNKS_TOKENS_TO_SUMMARIZE = 1000
+MAX_TEXT_CHUNKS_TOTAL = 50
 EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_BATCH_SIZE = 1000
@@ -938,6 +939,7 @@ def research(
     
     text_chunks_embedded = get_embeddings(client, text_chunks, enc) if text_chunks else []
     text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
+    text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
     # print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
     # for chunk in text_chunks_sorted:
     #     print(f"Similarity: {chunk.similarity}")
@@ -947,7 +949,7 @@ def research(
     # Create a dictionary mapping URLs to WebPage objects for quicker lookups
     web_pages_dict = {web_page.url: web_page for web_page in web_pages}
 
-    for text_chunk in text_chunks_sorted:
+    for text_chunk in text_chunks_limited:
         if text_chunk.url in web_pages_dict:
             web_pages_dict[text_chunk.url].chunks_sorted.append(text_chunk.text)
 
