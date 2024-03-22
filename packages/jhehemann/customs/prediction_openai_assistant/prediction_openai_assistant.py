@@ -130,7 +130,8 @@ Do not include any other contents except for the JSON object in your outputs.
 
 REPORT_PROMPT_TEMPLATE= """
 Your goal is to provide a relevant information report that offers crucial insights in order to make an informed prediction for the MARKET QUESTION: '{market_question}'. \
-It is essential that the chronological aspect is emphasized, with the date of the market question serving as a pivotal factor in shaping the analysis and conclusions.
+It is essential that the chronological aspect is emphasized, with the date of the market question serving as a pivotal factor in shaping the analysis and conclusions. \
+For reference, use the current date {timestamp} to understand the timeline of the market question.
 
 Prepare a full comprehensive report that provides relevant information to answer the aforementioned question. Consider publication dates and timelines stated in gathered inforamtion as determininants for the outcome of the market question.
 If that is not possible, state why.
@@ -162,7 +163,7 @@ RESEARCH_ASSISTANT_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_market_rules",
-            "description": "Get current state and rules for a prediction market question. Must be called in parallel with research tool",
+            "description": "Get current state and rules for a prediction market question. Must NOT be called in parallel with research tool. You can only call this tool once.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -413,6 +414,7 @@ def wait_for_run_termination(
         for tool_output in tool_outputs:
             print(f"TOOL OUTPUT:\n{tool_output['output']}\n\n")
         
+
         run = client.beta.threads.runs.submit_tool_outputs(
             thread_id=thread_id,
             run_id=run.id,
@@ -491,8 +493,10 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             market_question = extract_question(prompt)
             if market_question is None:
                 return None, None, "Market question not found in prompt", None
-
-            report_prompt = REPORT_PROMPT_TEMPLATE.format(market_question=market_question)
+            
+            # Get the current date and time
+            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            report_prompt = REPORT_PROMPT_TEMPLATE.format(market_question=market_question, timestamp=timestamp)
             
             # Create a thread
             thread = client.beta.threads.create(
@@ -530,35 +534,21 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 # )
                 prediction_prompt = PREDICTION_PROMPT_TEMPLATE.format(market_question=market_question)
 
+                # Append the prediction prompt as a message to the thread
                 client.beta.threads.messages.create(
                     thread.id,
                     role="user",
                     content=prediction_prompt,
                 )
 
-
-                # update assistant and replace the tools with the JSON assistant tool
-                # assistant = client.beta.assistants.update(
-                #     assistant.id,
-                #     tools=PREDICTION_ASSISTANT_TOOLS,
-                # )
-
+                # Apply the prediction assistant to the thread with the new message
                 run = client.beta.threads.runs.create(
                     thread_id=thread.id,
                     assistant_id=assistant_prediction.id,
                 )
                 run_ids.append(run.id)
 
-                # tool_outputs = wait_for_run_termination(
-                #     client,
-                #     thread.id,
-                #     run.id,
-                #     google_api_key=google_api_key,
-                #     google_engine_id=google_engine_id,
-                #     engine=engine,
-                #     return_tool_outputs_only=True,
-                # )
-
+                # Wait until run is in one of the terminal states
                 run = wait_for_run_termination(
                     client,
                     thread.id,
@@ -567,15 +557,13 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                     google_engine_id=google_engine_id,
                     engine=engine,
                 )
+
+                # Get the final message from the thread
                 thread_messages = client.beta.threads.messages.list(thread.id)
                 response = thread_messages.data[0].content[0].text.value
                 print(f"Assistant message added to thread {thread.id}:\n{response}\n")
-
-                # if isinstance(tool_outputs, list):
-                #     prediction = tool_outputs[0]["output"]
-                # else:
-                #     prediction = None
             
+            # Trim JSON formatting characters if present
             response = trim_json_formatting(response)
 
             print(f"FINAL OUTPUT:\n{response}")
@@ -584,7 +572,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             return response, prompt, None, counter_callback
         
         finally:
-            # Delete runs, threads and assistants
+            # Clean the client: Cancel runs and delete threads and assistants
             if thread_ids:
                 for id in thread_ids:
                     runs = client.beta.threads.runs.list(id)
@@ -601,13 +589,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 for id in assistant_ids:
                     client.beta.assistants.delete(id)
                     print(f"Assistant deleted: {id}")
-
-            my_assistants = client.beta.assistants.list(
-                order="desc",
-            )
-            for assistant in my_assistants.data:
-                print(f"Assistant ID: {assistant.id}, Assistant Name: {assistant.name}")
-                client.beta.assistants.delete(assistant.id)
               
 
                 
