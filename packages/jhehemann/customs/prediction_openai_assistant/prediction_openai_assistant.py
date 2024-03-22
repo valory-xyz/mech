@@ -29,7 +29,7 @@ from itertools import islice
 from string import punctuation
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from packages.jhehemann.customs.prediction_openai_assistant.infer_rules import get_market_rules
-from packages.jhehemann.customs.prediction_openai_assistant.research_additional_information import research_additional_information
+from packages.jhehemann.customs.prediction_openai_assistant.research_additional_information import research
 
 from openai import OpenAI
 
@@ -136,8 +136,8 @@ RUN_ACTION_REQUIRED_STATES = ["requires_action"]
 ASSISTANT_INSTRUCTIONS_REPORT = """
 You are an autonomous AI agent that gathers highly reliable and valid information from different sources. You are provided with a prediction market question. \
 Your task is to gather current and highly reliable information and write a comprehensive report that provides relevant information to make an accurate and robust \
-probability estimation for the outcome of the market question. You have access to an agent ecosystem that provides you with a vast amount of \
-tools and information to help you make the estimation.
+probability estimation for the outcome of the market question. You have access to two tools that can help you gather information and structure your report. \
+You cannot call each tool more than once.
 """
 
 ASSISTANT_INSTRUCTIONS_PREDICTION = """
@@ -156,10 +156,67 @@ Do not include any other contents except for the JSON object in your outputs.
 """
 
 
-REPORT_PROMPT_TEMPLATE = """
-Your goal is to provide a relevant information report in order to make an informed prediction for the market question: '{market_question}'.
+REPORT_PROMPT_TEMPLATE_5 = """
+Compile a comprehensive report aimed at enabling an informed prediction regarding the market question: '{market_question}'. This report should meticulously incorporate specific dates, timelines, and nuanced language found in the relevant information. Ensure the report contains:
 
-Prepare a full comprehensive report that provides relevant information to answer the aforementioned question.
+Introduction: Present the market question, stressing the necessity of including detailed dates and the importance of nuanced language that matches the question's intent.
+Background: Provide a historical overview, noting any date-related trends.
+Findings and Analysis: Thoroughly present and analyze the selected data, focusing on critical dates, precise timelines, and the exact phrasing that aligns with the market question. Highlight the relevance of each piece of information to the market question, ensuring it's comprehensive enough for prediction without direct access to the original data sources.
+Conclusion: Summarize the findings, emphasizing the role of specific dates and linguistic nuances in shaping the market prediction.
+Caveats: Identify any potential limitations due to the timing of information or the interpretation of nuanced language.
+
+The report should be detailed and structured using markdown, designed to include all necessary details for making a prediction, with a clear focus on the importance of timing and language precision.
+"""
+
+
+REPORT_PROMPT_TEMPLATE_4 = """
+Prepare a detailed report that offers crucial insights to predict the outcome of the MARKET QUESTION: '{market_question}'. The report should consist of:
+
+Introduction: Briefly introduce the market question, highlighting the need for attention to both relevant dates and the exact phrasing of information.
+Background: Examine the historical context, focusing on patterns related to timelines and the specificity of language that aligns with the market question. State the rules for the market question.
+Findings and Analysis: Analyze current data with a focus on publication dates and language, ensuring the information directly addresses the market question. Differentiate between similar but irrelevant information and data that precisely answers the question.
+Conclusion: Summarize insights, underlining the timing and language.
+Caveats: Note any limitations due to timing or challenges in distinguishing relevant from near-relevant information.
+
+Use markdown for clarity and structure, ensuring a focus on timely and accurately phrased information.
+"""
+
+
+REPORT_PROMPT_TEMPLATE_3 = """
+Construct an exhaustive analysis report aimed at delivering strategic insights for forecasting the resolution of the market query: '{market_question}'. This task requires a dual focus: the critical role of timing and dates, and the precision of language used in relevant information, ensuring it directly addresses the market question's specific phrasing and the underlying intent for information.
+
+Organize the report into these key sections:
+
+Introduction: Set the stage by explaining the market question, with an emphasis on the dual importance of exact timing and the precise alignment of information phrasing with the question's intent.
+Background: Explore the historical backdrop and relevant precedents, paying special attention to date-related patterns and the specific language that has historically aligned with similar market inquiries.
+Findings and Analysis: Scrutinize the selected data meticulously, prioritizing the examination of publication dates, crucial deadlines, and timelines, alongside evaluating the exactitude of phrasing in the information. Assess how well the information's phrasing matches the market question, discerning between closely related yet non-relevant data and directly applicable insights.
+Conclusion: Draw together the insights, emphasizing the interplay between the chronological factors and the precision of language in shaping the forecast for the market question.
+Caveats: Highlight any limitations in the analysis, particularly those arising from timing discrepancies or the challenge of filtering out information that, despite seeming relevant due to similar phrasing, does not contribute to answering the market question.
+
+The report should delve deeply into each point, eschewing summaries in favor of detailed exploration, and employ markdown syntax for structured presentation. Prioritize information that is not only timely but also directly responsive to the market question, carefully distinguishing it from seemingly relevant but ultimately off-target data.
+"""
+
+
+REPORT_PROMPT_TEMPLATE_2="""
+Your primary objective is to compile an in-depth report that offers crucial insights to accurately forecast the outcome of the market inquiry: '{market_question}'. It is essential that the chronological aspect is emphasized, with the date of the market question serving as a pivotal factor in shaping the analysis and conclusions.
+
+The report should be meticulously organized into the following segments:
+
+Introduction: Offer an overview of the market question, underlining the significance of timing and dates in its context.
+Background: Delve into the historical context and precedents, highlighting any date-specific trends or patterns that could influence the market question.
+Findings and Analysis: Present a detailed examination of the current data, with a laser focus on publication dates, relevant deadlines, and timelines that could impact the outcome. Analyze the temporal dimensions thoroughly, considering both the immediate and long-term implications.
+Conclusion: Capture the market question and its rules and synthesize the findings from the previous section, stressing how the dates and timelines contribute to the prediction of the market question's outcome.
+Caveats: Identify any potential limitations or uncertainties in the data, particularly those related to timing or the availability of up-to-date information.
+
+Ensure the report is rich in detail, avoiding summaries and instead offering expansive analyses of each point. Employ markdown syntax for clarity and structure, and prioritize the inclusion of all pertinent information, especially that which pertains to dates and timelines.
+"""
+
+
+REPORT_PROMPT_TEMPLATE= """
+Your goal is to provide a relevant information report that offers crucial insights in order to make an informed prediction for the MARKET QUESTION: '{market_question}'. \
+It is essential that the chronological aspect is emphasized, with the date of the market question serving as a pivotal factor in shaping the analysis and conclusions.
+
+Prepare a full comprehensive report that provides relevant information to answer the aforementioned question. Consider publication dates and timelines stated in gathered inforamtion as determininants for the outcome of the market question.
 If that is not possible, state why.
 You will structure your report in the following sections:
 
@@ -190,11 +247,11 @@ RESEARCH_ASSISTANT_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_market_rules",
-            "description": "Request an assumption of the current state and rules for a prediction market question that defines under which conditions the market question will be resolved as 'Yes' and 'No'",
+            "description": "Get current state and rules for a prediction market question. Must be called in parallel with research tool",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "market_question": {"type": "string", "description": "The market question to infer the rules for"},
+                    "market_question": {"type": "string", "description": "The MARKET QUESTION to infer the rules for"},
                 },
                 "required": ["market_question"],
             }
@@ -203,12 +260,12 @@ RESEARCH_ASSISTANT_TOOLS = [
     {
         "type": "function",
         "function": {
-            "name": "research_additional_information",
-            "description": "A search engine optimized for comprehensive, accurate, and trusted information to help you make a probability estimation for a prediction market question. You can only use this tool once.",
+            "name": "research",
+            "description": "A search engine. Must be called in parallel with get_market_rules tool.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "market_question": {"type": "string", "description": "The prediction market question must be the input here"},
+                    "market_question": {"type": "string", "description": "The prediction MARKET QUESTION word by word"},
                 },
                 "required": ["market_question"],
             }
@@ -260,7 +317,7 @@ def format_prediction_values(p_yes, p_no, confidence, info_utility):
 
 OPENAI_TOOLS_FUNCTIONS = {
     "get_market_rules": get_market_rules,
-    "research_additional_information": research_additional_information,
+    "research": research,
     "format_prediction_values": format_prediction_values,
 }
 
@@ -341,7 +398,7 @@ def execute_function(tool_call, client, google_api_key=None, google_engine_id=No
 
     if function_name == "get_market_rules":
         return function_to_call(**function_args, client=client)
-    elif function_name == "research_additional_information":
+    elif function_name == "research":
         return function_to_call(
             **function_args,
             client=client,

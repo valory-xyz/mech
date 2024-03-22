@@ -901,7 +901,7 @@ def format_additional_information(web_pages: List[WebPage]) -> str:
     return formatted_information
 
 
-def research_additional_information(
+def research(
     market_question: str,
     client: OpenAI,
     google_api_key: str,
@@ -922,7 +922,7 @@ def research_additional_information(
     web_pages = [WebPage(url) for url in urls]
     web_pages = extract_html_texts(web_pages)
 
-    week_interval = 5
+    week_interval = 4
     # Scrape text from web pages not older <week_interval> weeks
     web_pages = scrape_web_pages(web_pages, week_interval)
 
