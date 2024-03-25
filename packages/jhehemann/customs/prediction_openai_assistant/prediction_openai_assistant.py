@@ -105,7 +105,9 @@ RUN_ACTION_REQUIRED_STATES = ["requires_action"]
 
 # * Use the current date and time ({timestamp}) as a reference to understand the context of the market question, but focus primarily on the market question's specified date to guide your answer.
 
-ASSISTANT_INSTRUCTIONS_REPORT = """
+ASSISTANT_INSTRUCTIONS_REPORT = """You are an expert in research and summarizing the most relevant information."""
+
+ASSISTANT_INSTRUCTIONS_REPORT_LONG = """
 You are an autonomous AI agent that gathers highly reliable and valid information from different sources. You are provided with a prediction market question. \
 Your task is to gather current and highly reliable information and write a comprehensive report that provides relevant information to make an accurate and robust \
 probability estimation for the outcome of the market question. You have access to two tools that can help you gather information and structure your report. \
@@ -128,12 +130,42 @@ Do not include any other contents except for the JSON object in your outputs.
 """
 
 
+
+REPORT_PROMPT_TEMPLATE_OLD= """
+Prepare a detailed report on the market question: '{market_question}', focusing on the specified date's impact on the event's likelihood. Use all available tools for research; if unable, explain why. Organize your report with markdown into:
+
+    Introduction: Summarize the market question and its significance.
+    Background: Provide essential context, including historical data and relevant trends.
+    Findings and Analysis: Analyze each finding in relation to the market question's date, current date, and research dates. Discuss the event's probability by the specified date, supported by data and expert insights.
+    Conclusion: Highlight key findings and their implications for the market question.
+    Caveats: Note any limitations or assumptions and their potential effects.
+
+Your report should not predict but analyze the event's timing and rationale. Cite all sources for credibility. If the tools provide insufficient or irrelevant information, state why.
+"""
+
 REPORT_PROMPT_TEMPLATE= """
+Your goal is to provide a relevant information report that offers crucial insights in order to make an informed prediction for the MARKET QUESTION: '{market_question}'.
+
+Prepare a full comprehensive report that provides relevant information to answer the aforementioned question.
+If that is not possible, state why.
+You will structure your report in the following sections:
+
+- Introduction and Background
+- Findings and Analysis
+- Conclusion
+- Caveats
+
+Don't limit yourself to just stating each finding; provide a thorough, full and comprehensive analysis of each finding.
+Use markdown syntax. Include as much relevant information as possible and try not to summarize.
+"""
+
+
+REPORT_PROMPT_TEMPLATE_OLD= """
 Your goal is to provide a relevant information report that offers crucial insights in order to make an informed prediction for the MARKET QUESTION: '{market_question}'. \
 It is essential that the chronological aspect is emphasized, with the date of the market question serving as a pivotal factor in shaping the analysis and conclusions. \
 For reference, use the current date {timestamp} to understand the timeline of the market question.
 
-Prepare a full comprehensive report that provides relevant information to answer the aforementioned question. Consider publication dates and timelines stated in gathered inforamtion as determininants for the outcome of the market question.
+Prepare a full comprehensive report that provides relevant information to answer the aforementioned question. Consider publication dates and timelines stated in gathered inforamtion for the outcome of the market question.
 If that is not possible, state why.
 You will structure your report in the following sections:
 
@@ -163,7 +195,7 @@ RESEARCH_ASSISTANT_TOOLS = [
         "type": "function",
         "function": {
             "name": "get_market_rules",
-            "description": "Get current state and rules for a prediction market question. Must NOT be called in parallel with research tool. You can only call this tool once.",
+            "description": "Get current state and rules for a prediction market question. Must be called in parallel with research tool.",
             "parameters": {
                 "type": "object",
                 "properties": {

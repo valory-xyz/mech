@@ -44,14 +44,21 @@ INFER_RULES_PROMPT = """
 
 You are a Large Language Model in a multi-agent system. Your task is to infer the rules for a prediction market question. \
 Provide reliable and well-structured rules for when the prediction market question will be resolved as 'Yes' and 'No'. The rules that \
-you define should be based on information that can be found on the internet. You are provided with some examples of how the rules should be structured.
+you define should be based on information that can be found on the internet. You are provided with some examples below. You must adhere to the instructions.
+
+INSTRUCTIONS:
+* Carefully read the market question
+* Pay detailled attention on the phrasing of the market question
+* Analyze what the phrasing implies about the current status, who the involved parties are and what the conditions are
+* Define measurable and verifiable rules for when the market question will be resolved as 'Yes' and when it will be resolved as 'No'
+
 
 EXAMPLES:
 ```
 Question: "Will the new climate bill be passed by both the Senate and the House before the end of the fiscal year on 30 September 2024?"
 Answer:
     Rules:
-    'Yes': The question resolves as 'Yes' if there exists a climate bill and it is passed by both the Senate, the upper chamber, and the House, the lower chamber of the United States Congress on or before 30 September 2024.
+    'Yes': The question resolves as 'Yes' if there exists a climate bill and it is passed by both the Senate, which is the upper chamber, and the House, which is the lower chamber of the United States Congress on or before 30 September 2024.
     'No': The question resolves as 'No' if there exists no bill or it isn't passed by both chambers by 30 September 2024, or only one chamber passes it by this date. The market also resolves as 'No' if both chambers pass a different bill and not a new climate bill by this date.
 
 Question: "Will Tesla successfully launch its new electric vehicle, Model Z, on 30 June 2024?"
@@ -61,6 +68,7 @@ Answer:
     'No': The question resolves as 'No' if Tesla, an influential electric vehicle manufacturer, does not release a Model Z on 30 June 2024. This includes any release occurring before or after this date, or the absence of any official announcement, public event, press release, or significant media coverage confirming a release on 30 June 2024. The market also resolves as 'No' if Company Y releases a different vehicle Model W on this date.
 
 Market Question: "Will FIFA fund the construction of new football stadiums for local clubs in England by the end of 2024?"
+Answer:
     Rules:
     'Yes': The question resolves as 'Yes' if, by 31 December 2024, there is an official announcement or credible documentation confirming that FIFA, the international governing body of football, has directly allocated funds for the construction of new football stadiums specifically for local clubs in England.
     'No': The question resolves as 'No' if, by 31 December 2024, there is no official announcement or credible documentation confirming that FIFA, the international governing body of football, has directly funded the construction of new football stadiums for local clubs in England. It also resolves as 'No' if a different entity, other than FIFA, funds the construction of these stadiums.

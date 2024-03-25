@@ -76,7 +76,7 @@ from dateutil import parser
 
 
 #NUM_URLS_EXTRACT = 5
-NUM_URLS_PER_QUERY = 3
+NUM_URLS_PER_QUERY = 6
 TEXT_CHUNK_LENGTH = 300
 TEXT_CHUNK_OVERLAP = 50
 MAX_CHUNKS_TOKENS_TO_SUMMARIZE = 1000
@@ -104,9 +104,25 @@ TOOL_TO_ENGINE = {
 }
 
 
+SUB_QUERIES_PROMPT = """
+Your goal is to prepare a research plan for {input_query}.
+
+The plan will consist of multiple web searches that cover a variety of perspectives and sources.
+Think about additional information that needs to be gathered to answer the question comprehensively.
+Formulate 5 unique search queries that will help you find relevant information about the event and its date.
+
+
+OUTPUT_FORMAT:
+* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
+* Limit your searches to 6.
+* The JSON must contain one field: "queries"
+    - "queries": A 6 item array of the generated search engine queries
+* Include only the JSON object in your output
+"""
+
+
 QUERIES_PROMPT = """
-You are a Large Language Model in a multi-agent system. Your task is to formulate search engine queries based on \
-an input query, which specifies an event and any accompanying conditions. Find the input query \
+You are a Large Language Model in a multi-agent system. Your task is to formulate search engine queries. Find the input query \
 under 'INPUT_QUERY' and adhere to the 'INSTRUCTIONS'.
 
 INSTRUCTIONS:
@@ -923,7 +939,7 @@ def research(
     web_pages = [WebPage(url) for url in urls]
     web_pages = extract_html_texts(web_pages)
 
-    week_interval = 4
+    week_interval = 5
     # Scrape text from web pages not older <week_interval> weeks
     web_pages = scrape_web_pages(web_pages, week_interval)
 
