@@ -43,5 +43,3 @@ dependencies:
     version: ==4.12.2
   spacy:
     version: ==3.7.2
-  chromadb:
-    version: ==0.4.13
