@@ -31,7 +31,6 @@
         "service/valory/mech/0.1.0": "bafybeicpthl4524tdqcek5qfuof552ibbagz4jipczimi6c2osmyfxmnm4"
     },
     "third_party": {
-        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeih27hz7gkqb5wr46ipz74nkf7kzsxhdutih6ucwsfveku2mqzheve",
         "protocol/valory/default/1.0.0": "bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq",
         "protocol/open_aea/signing/1.0.0": "bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi",
         "protocol/valory/abci/0.1.0": "bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u",
