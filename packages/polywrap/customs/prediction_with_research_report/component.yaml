@@ -12,4 +12,19 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: prediction_with_research_report.py
 callable: run
-dependencies: {}
+dependencies:
+  langchain:
+    version: ==0.0.303
+  requests: {}
+  tiktoken:
+    version: ==0.5.1
+  tavily-python:
+    version: ==0.3.0
+  pydantic:
+    version: '>=1.9.0,<3'
+  beautifulsoup4:
+    version: ==4.12.2
+  markdownify:
+    version: ==0.11.6
+  openai:
+    version: ==1.11.0

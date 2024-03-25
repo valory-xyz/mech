@@ -12,4 +12,9 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: sme_generation_request.py
 callable: run
-dependencies: {}
+dependencies:
+  openai:
+    version: ==1.11.0
+  requests: {}
+  tiktoken:
+    version: ==0.5.1

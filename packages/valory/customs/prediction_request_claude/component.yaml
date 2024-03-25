@@ -11,4 +11,15 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_claude.py
 callable: run
-dependencies: {}
+dependencies:
+  google-api-python-client:
+    version: ==2.95.0
+  googlesearch-python:
+    version: ==1.2.3
+  requests: {}
+  markdownify:
+    version: ==0.11.6
+  readability-lxml:
+    version: ==0.8.1
+  anthropic:
+    version: ==0.3.11
