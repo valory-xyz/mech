@@ -38,7 +38,7 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihat4giyc4bz6zopvahcj4iw53356pbtwfn7p4d5yflwly2qhahum
 - valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeicfqyuqwklklqgyj7733t4wasea5jxbmb5kjdwyyva5dlporkmr5y
+- valory/mech_abci:0.1.0:bafybeicpuwyiiivolhfs3w6iwcx5gpcxtsf273ay7nch7f2ocxm7fd6bqm
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/subscription_abci:0.1.0:bafybeidoqeznyhbh3znaqbfdnftzq6fdh77m35qgftdwz46nz2iwda4yam
@@ -190,6 +190,10 @@ models:
       multisend_address: ${str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
       service_registry_address: ${str:0x9338b5153AE39BB89f50468E608eD9d764B755fD}
       service_endpoint_base: ${str:https://dummy_service.autonolas.tech/}
+      gas_params:
+        gas_price: ${int:null}
+        max_fee_per_gas: ${int:null}
+        max_priority_fee_per_gas: ${int:null}
       init_fallback_gas: ${int:500000}
       manual_gas_limit: ${int:1000000}
       service_owner_share: ${float:0.1}

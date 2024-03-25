@@ -129,6 +129,10 @@ models:
       request_timeout: 10.0
       reset_pause_duration: 10
       reset_period_count: 100
+      gas_params:
+        gas_price: null
+        max_fee_per_gas: null
+        max_priority_fee_per_gas: null
       reset_tendermint_after: 10
       retry_attempts: 400
       retry_timeout: 3
