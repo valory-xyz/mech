@@ -351,3 +351,6 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 | Gnosis | https://registry.olas.network/gnosis/services/3 |
 | Arbitrum | https://registry.olas.network/arbitrum/services/1 |
 | Polygon | https://registry.olas.network/polygon/services/3 |
+| Base | https://registry.olas.network/base/services/1 |
+| Celo | https://registry.olas.network/celo/services/1 |
+| Optimism | https://registry.olas.network/optimism/services/1 |
