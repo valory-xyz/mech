@@ -11,4 +11,8 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: native_transfer_request.py
 callable: run
-dependencies: {}
+dependencies:
+  tiktoken:
+    version: ==0.5.1
+  openai:
+    version: ==1.11.0

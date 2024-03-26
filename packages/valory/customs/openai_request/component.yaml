@@ -11,4 +11,8 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: openai_request.py
 callable: run
-dependencies: {}
+dependencies:
+  openai:
+    version: ==1.11.0
+  tiktoken:
+    version: ==0.5.1
