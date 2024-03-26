@@ -80,7 +80,7 @@ NUM_URLS_PER_QUERY = 5
 TEXT_CHUNK_LENGTH = 300
 TEXT_CHUNK_OVERLAP = 50
 MAX_CHUNKS_TOKENS_TO_SUMMARIZE = 1000
-MAX_TEXT_CHUNKS_TOTAL = 100
+MAX_TEXT_CHUNKS_TOTAL = 50
 EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_BATCH_SIZE = 1000
@@ -106,9 +106,10 @@ TOOL_TO_ENGINE = {
 
 FINAL_SUMMARY_PROMPT = """
 You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
-query: "{search_query}". Your task is to select only the most relevant information from the articles. If there are no \
-relevant results in one of the articles, you can skip it. Return the selected relevant articles only with the relevant information \
-for answering the search query. The headers of each article must remain the same.
+query: "{search_query}". Your task is to select only the most relevant bulletpoints from the articles. If there are no \
+relevant results in one of the articles, you can skip it. Return the selected relevant articles only with the relevant bulletpoints \
+for answering the search query. The headers of each article must remain the same, including publication dates.
+If there are redundant bulletpoints across articles you must remove them but only from the older articles or the ones that have no publication date.
 
 SEARCH_OUTPUT:
 ```
@@ -133,7 +134,7 @@ Your goal is to prepare a research plan for {query}.
 
 The plan must consist of {search_limit} search engine queries separated by commas.
 Return ONLY the queries, separated by commas and without quotes.
-The queries must be phrased as questions.
+The queries must be phrased as concise, but descriptive questions that will help you find relevant information about the event and its date.
 """
 
 
@@ -615,7 +616,7 @@ def embed_batch(client: OpenAI, batch):
     Helper function to process a single batch of texts and return the embeddings.
     """
     response = client.embeddings.create(
-        model="text-embedding-ada-002",
+        model=EMBEDDING_MODEL,
         input=[text_chunk.text for text_chunk in batch]
     )
 
@@ -892,6 +893,8 @@ def fetch_queries(
                 temperature=temperature,
             )
             search_plan = response.choices[0].message.content
+            print("\nSEARCH PLAN:")
+            print(search_plan)
             messages = [
                 {"role": "system", "content": "You are a professional researcher."},
                 {"role": "user", "content": research_plan_prompt},
@@ -1048,11 +1051,11 @@ def research(
     text_chunks_embedded = get_embeddings(client, text_chunks, enc) if text_chunks else []
     text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
     text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
-    # print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-    # for chunk in text_chunks_sorted:
-    #     print(f"Similarity: {chunk.similarity}")
-    #     print(chunk.text)
-    #     print()
+    print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
+    for chunk in text_chunks_sorted:
+        print(f"Similarity: {chunk.similarity}")
+        print(chunk.text)
+        print()
 
     # Create a dictionary mapping URLs to WebPage objects for quicker lookups
     web_pages_dict = {web_page.url: web_page for web_page in web_pages}

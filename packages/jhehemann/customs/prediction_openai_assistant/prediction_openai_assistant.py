@@ -132,10 +132,12 @@ Do not include any other contents except for the JSON object in your outputs.
 REPORT_PROMPT_TEMPLATE = """
 Take only the market question as a search query and conduct a search using the research tool. Prepare a detailed evaluation report that discusses the outcome of the market question '{market_question}' based on the market rules and the search output. Structure your report in the following sections:
 
-- Search output
+- Findings and Analysis
 - Market rules
 - Evaluation
 - Caveats
+
+Note: The specified date in the market question is an arbitrary date in the future and does not result from public or insider information. However, it is essential for the market question's outcome.
 """
 
 REPORT_PROMPT_TEMPLATE_ONLY = """
@@ -436,7 +438,7 @@ def wait_for_run(
     client: OpenAI,
     thread_id: str,
     run_id: str,
-    timeout=100,
+    timeout=120,
 ):
     timeout = timeout
     start_time = time.time()
@@ -606,7 +608,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 tools=RESEARCH_ASSISTANT_TOOLS,
                 model=engine,
             )
-            assistant_ids.append(assistant_report.id)
+            assistant_report_id = assistant_report.id
+            assistant_ids.append(assistant_report_id)
 
             # Create an openai assistant
             assistant_prediction = client.beta.assistants.create(
@@ -634,7 +637,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             # Apply the research assistant to the thread
             run = client.beta.threads.runs.create(
                 thread_id=thread.id,
-                assistant_id=assistant_report.id,
+                assistant_id=assistant_report_id,
             )
             # Wait until run is in one of the terminal states
             run = wait_for_run_termination(
@@ -720,7 +723,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             # Apply the research assistant to the thread
             run = client.beta.threads.runs.create(
                 thread_id=thread.id,
-                assistant_id=assistant_report.id,
+                assistant_id=assistant_report_id,
             )
             # Wait until run is in one of the terminal states
             run = wait_for_run_termination(
