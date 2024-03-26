@@ -1,15 +1,15 @@
-name: prediction_request_rag
+name: prediction_request_reasoning
 author: napthaai
 version: 0.1.0
 type: custom
-description: A tool for making binary predictions on markets using RAG.
+description: A tool that reasons over extracted information.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeibt7f7crtwvmkg7spy3jhscmlqltvyblzp32g6gj44v7tlo5lycuq
-  prediction_request_rag.py: bafybeihpyddw5tctvvsr6fbwlbenkgkdz4n5ieyngt246idtxjgfrwn2ke
+  __init__.py: bafybeib36ew6vbztldut5xayk5553rylrq7yv4cpqyhwc5ktvd4cx67vwu
+  prediction_request_reasoning.py: bafybeien7m2b5ejuvxtrkl32ws5tkrek2jfcksxxf7tawo2hh4lhbmagee
 fingerprint_ignore_patterns: []
-entry_point: prediction_request_rag.py
+entry_point: prediction_request_reasoning.py
 callable: run
 dependencies:
   google-api-python-client:

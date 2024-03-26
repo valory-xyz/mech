@@ -29,9 +29,11 @@ class TokenCounterCallback:
     """Callback to count the number of tokens used in a generation."""
 
     TOKEN_PRICES = {
-        "gpt-3.5-turbo": {"input": 0.001, "output": 0.002},
+        "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
+        "gpt-3.5-turbo-0125": {"input": 0.0005, "output": 0.0015},
         "gpt-4": {"input": 0.03, "output": 0.06},
-        "gpt-4-turbo": {"input": 0.01, "output": 0.03},
+        "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
+        "gpt-4-0125-preview": {"input": 0.01, "output": 0.03},
         "claude-2": {"input": 0.008, "output": 0.024},
     }
 

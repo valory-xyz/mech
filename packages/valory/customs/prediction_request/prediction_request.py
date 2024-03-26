@@ -73,7 +73,7 @@ ScoresType = Dict[Span, float]
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
-    "temperature": 0.7,
+    "temperature": 0.,
 }
 ALLOWED_TOOLS = [
     "prediction-offline",
@@ -417,7 +417,7 @@ def adjust_additional_information(
     return additional_information
 
 
-def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]

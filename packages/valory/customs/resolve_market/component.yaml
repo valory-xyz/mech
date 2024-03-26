@@ -11,4 +11,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: resolve_market.py
 callable: run
-dependencies: {}
+dependencies:
+  openai:
+    version: ==1.11.0
+  requests: {}
