@@ -130,7 +130,12 @@ Do not include any other contents except for the JSON object in your outputs.
 """
 
 REPORT_PROMPT_TEMPLATE = """
-Take only the market question as a search query and conduct a search using the research tool. Prepare a detailed evaluation report that discusses the outcome of the market question '{market_question}' based on the market rules and the search output.
+Take only the market question as a search query and conduct a search using the research tool. Prepare a detailed evaluation report that discusses the outcome of the market question '{market_question}' based on the market rules and the search output. Structure your report in the following sections:
+
+- Search output
+- Market rules
+- Evaluation
+- Caveats
 """
 
 REPORT_PROMPT_TEMPLATE_ONLY = """
@@ -402,7 +407,7 @@ def load_model(vocab: str) -> Language:
         return spacy.load(vocab)
 
 
-def execute_function(tool_call, client, google_api_key=None, google_engine_id=None, engine=None):
+def execute_function(tool_call, client, google_api_key=None, google_engine_id=None, engine=None, market_rules=None):
     function_name = tool_call.function.name
     function_to_call = OPENAI_TOOLS_FUNCTIONS[function_name]
     function_args = json.loads(tool_call.function.arguments)
@@ -416,6 +421,7 @@ def execute_function(tool_call, client, google_api_key=None, google_engine_id=No
             google_api_key=google_api_key,
             google_engine_id=google_engine_id,
             engine=engine,
+            market_rules=market_rules
         )
     else:
         return function_to_call(**function_args)
@@ -458,6 +464,7 @@ def call_tools(
     google_api_key=None,
     google_engine_id=None,
     engine=None,
+    market_rules=None,
 ):
     # print(f"Required action:\n {run.required_action}\n")
     tool_calls = run.required_action.submit_tool_outputs.tool_calls
@@ -489,7 +496,7 @@ def call_tools(
     with ThreadPoolExecutor(max_workers=len(run.required_action.submit_tool_outputs.tool_calls)) as executor:
         for tool_call in tool_calls:
             # Submit each function execution as a separate task to the executor
-            future = executor.submit(execute_function, tool_call, client, google_api_key, google_engine_id, engine)
+            future = executor.submit(execute_function, tool_call, client, google_api_key, google_engine_id, engine, market_rules)
             futures_dict[future] = tool_call.id
 
         # Wait for all futures to complete and print their results
@@ -513,6 +520,7 @@ def wait_for_run_termination(
     return_tool_outputs_only=False,
     current_iteration=0,
     max_iterations=3,
+    market_rules=None,
 ):
     # Termination condition for recursion
     if current_iteration >= max_iterations:
@@ -522,7 +530,7 @@ def wait_for_run_termination(
     run = wait_for_run(client, thread_id, run_id)
 
     if run and run.status in RUN_ACTION_REQUIRED_STATES:
-        tool_outputs = call_tools(run, google_api_key, google_engine_id, engine)
+        tool_outputs = call_tools(run, google_api_key, google_engine_id, engine, market_rules)
 
         if return_tool_outputs_only:
             client.beta.threads.runs.cancel(thread_id=thread_id, run_id=run.id)
@@ -545,6 +553,7 @@ def wait_for_run_termination(
             google_api_key=google_api_key,
             google_engine_id=google_engine_id,
             engine=engine,
+            market_rules=market_rules,
         )
 
     return run
@@ -639,6 +648,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             thread_messages = client.beta.threads.messages.list(thread.id)
             response = thread_messages.data[0].content[0].text.value
             print(f"Assistant message added to thread {thread.id}:\n{response}\n")
+            market_rules = response
 
             # ### Generate search queries based on the market rules
             # search_plan_prompt = RESEARCH_PLAN_PROMPT_TEMPLATE.format(query=market_question, search_limit="twelve")
@@ -720,6 +730,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 google_api_key=google_api_key,
                 google_engine_id=google_engine_id,
                 engine=engine,
+                market_rules=market_rules,
             )
             thread_messages = client.beta.threads.messages.list(thread.id)
             response = thread_messages.data[0].content[0].text.value

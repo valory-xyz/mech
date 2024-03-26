@@ -80,7 +80,7 @@ NUM_URLS_PER_QUERY = 5
 TEXT_CHUNK_LENGTH = 300
 TEXT_CHUNK_OVERLAP = 50
 MAX_CHUNKS_TOKENS_TO_SUMMARIZE = 1000
-MAX_TEXT_CHUNKS_TOTAL = 50
+MAX_TEXT_CHUNKS_TOTAL = 100
 EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_BATCH_SIZE = 1000
@@ -869,6 +869,7 @@ def fetch_queries(
     client: OpenAI,
     input_query: str,
     model="gpt-3.5-turbo",
+    market_rules = None,
     temperature=1.0,
     max_attempts=2,
 ) -> List[str]:
@@ -878,7 +879,9 @@ def fetch_queries(
         try:
             research_plan_prompt = RESEARCH_PLAN_PROMPT_TEMPLATE.format(query=input_query, search_limit="12")
             messages = [
-                {"role": "system", "content": "You are a professional researcher and expert for prediction markets."},
+                {"role": "system", "content": "You are a professional researcher."},
+                {"role": "user", "content": f"Get the market rules for the prediction market question {input_query}"},
+                {"role": "assistant", "content": market_rules},
                 {"role": "user", "content": research_plan_prompt},
             ]
             
@@ -890,7 +893,7 @@ def fetch_queries(
             )
             search_plan = response.choices[0].message.content
             messages = [
-                {"role": "system", "content": "You are a professional researcher and expert for prediction markets."},
+                {"role": "system", "content": "You are a professional researcher."},
                 {"role": "user", "content": research_plan_prompt},
                 {"role": "assistant", "content": search_plan},
                 {"role": "user", "content": QUERY_RERANKING_PROMPT_TEMPLATE},
@@ -1011,11 +1014,12 @@ def research(
     google_api_key: str,
     google_engine_id: str,
     engine: str,
+    market_rules: str,
 ):
     """Research additional information based on a prediction market question"""
     
     # Generate a list of sub-queries
-    queries = fetch_queries(client, market_question, engine)
+    queries = fetch_queries(client, market_question, engine, market_rules)
     
     # Get URLs from sub-queries
     urls = get_urls_from_queries(
