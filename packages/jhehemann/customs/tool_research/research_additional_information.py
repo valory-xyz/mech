@@ -76,7 +76,7 @@ from dateutil import parser
 
 
 #NUM_URLS_EXTRACT = 5
-NUM_URLS_PER_QUERY = 6
+NUM_URLS_PER_QUERY = 5
 TEXT_CHUNK_LENGTH = 300
 TEXT_CHUNK_OVERLAP = 50
 MAX_CHUNKS_TOKENS_TO_SUMMARIZE = 1000
@@ -104,6 +104,51 @@ TOOL_TO_ENGINE = {
 }
 
 
+FINAL_SUMMARY_PROMPT = """
+You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
+query: "{search_query}". Your task is to select only the most relevant information from the articles. If there are no \
+relevant results in one of the articles, you can skip it. Return the selected relevant articles only with the relevant information \
+for answering the search query. The headers of each article must remain the same.
+
+SEARCH_OUTPUT:
+```
+{additional_information}
+```
+"""
+
+FINAL_SUMMARY_CONTINUOUS_TEXT_PROMPT = """
+You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
+query: "{search_query}". Your task is to summarize only the concrete relevant results from the search outputs. If there are dates \
+mentioned in the search outputs, ensure to include them in the summary. It must be concise and informative.
+
+SEARCH_OUTPUT:
+```
+{additional_information}
+```
+"""
+
+
+RESEARCH_PLAN_PROMPT_TEMPLATE = """
+Your goal is to prepare a research plan for {query}.
+
+The plan must consist of {search_limit} search engine queries separated by commas.
+Return ONLY the queries, separated by commas and without quotes.
+The queries must be phrased as questions.
+"""
+
+
+QUERY_RERANKING_PROMPT_TEMPLATE = """
+Evaluate the queries and decide which ones will provide the best and wholesome data to answer the question. Do not modify the queries.
+Select only the best five queries, in order of relevance.
+
+OUTPUT_FORMAT:
+* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
+* The JSON must contain one field: "queries"
+    - "queries": A 5 item array of the generated search engine queries
+* Include only the JSON object in your output
+"""
+
+
 SUB_QUERIES_PROMPT = """
 Your goal is to prepare a research plan for {input_query}.
 
@@ -114,9 +159,9 @@ Formulate 5 unique search queries that will help you find relevant information a
 
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* Limit your searches to 6.
+* Limit your searches to 5.
 * The JSON must contain one field: "queries"
-    - "queries": A 6 item array of the generated search engine queries
+    - "queries": A 5 item array of the generated search engine queries
 * Include only the JSON object in your output
 """
 
@@ -127,7 +172,7 @@ under 'INPUT_QUERY' and adhere to the 'INSTRUCTIONS'.
 
 INSTRUCTIONS:
 * Carefully read the input query under 'USER_PROMPT', enclosed by triple backticks.
-* Create a list of 5 unique search queries likely to yield relevant and contemporary information about the event.
+* Create a list of 4 unique search queries likely to yield relevant and contemporary information about the event.
 * Each query must be unique, and they should not overlap or yield the same set of results.
 * One query must be phrased exactly as the input query itself.
 * The two queries should be phrased as negations of the input query and two other queries should be phrased as affirmations.
@@ -142,7 +187,7 @@ INPUT_QUERY:
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
 * The JSON must contain one field: "queries"
-   - "queries": A 5 item array of the generated search engine queries
+   - "queries": A 4 item array of the generated search engine queries
 * Include only the JSON object in your output
 * Do not include any formatting characters in your response!
 * Do not include any other contents or explanations in your response!
@@ -311,7 +356,7 @@ class WebPage:
                 if date:
                     return format_date(date)
             except json.JSONDecodeError as e:
-                print(f"Error decoding JSON: {e}")
+                print(f"Error decoding JSON: {e}\nScript: {script}")
                 continue
 
         # If not found, then look for release or publication date
@@ -831,10 +876,10 @@ def fetch_queries(
     attempts = 0
     while attempts < max_attempts:
         try:
-            queries_prompt = QUERIES_PROMPT.format(input_query=input_query)
+            research_plan_prompt = RESEARCH_PLAN_PROMPT_TEMPLATE.format(query=input_query, search_limit="12")
             messages = [
-                {"role": "system", "content": "You are a helpful assistant."},
-                {"role": "user", "content": queries_prompt},
+                {"role": "system", "content": "You are a professional researcher and expert for prediction markets."},
+                {"role": "user", "content": research_plan_prompt},
             ]
             
             # Fetch queries from the OpenAI engine
@@ -843,7 +888,27 @@ def fetch_queries(
                 messages=messages,
                 temperature=temperature,
             )
+            search_plan = response.choices[0].message.content
+            messages = [
+                {"role": "system", "content": "You are a professional researcher and expert for prediction markets."},
+                {"role": "user", "content": research_plan_prompt},
+                {"role": "assistant", "content": search_plan},
+                {"role": "user", "content": QUERY_RERANKING_PROMPT_TEMPLATE},
+            ]
+            
+            # Fetch reranked and selected queries from the OpenAI engine
+            response = client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=0.0,
+            )
             output = response.choices[0].message.content
+
+
+
+
+
+
             # Parse the response content
             trimmed_output = trim_json_formatting(output)
             print(trimmed_output)
@@ -918,6 +983,28 @@ def format_additional_information(web_pages: List[WebPage]) -> str:
     return formatted_information
 
 
+def final_summary(
+    client: OpenAI,
+    additional_information: str,
+    search_query: str,
+    engine: str = "gpt-3.5-turbo",
+    temperature: float = 0.0
+) -> str:
+    prompt = FINAL_SUMMARY_PROMPT.format(additional_information=additional_information, search_query=search_query)
+    messages = [
+            {"role": "system", "content": "You are an expert in summarizing information most relevant information from articles with respect to a web search query."},
+            {"role": "user", "content": prompt},
+        ]
+    response = client.chat.completions.create(
+        model=engine,
+        messages=messages,
+        temperature=temperature,
+    )
+    output = response.choices[0].message.content
+    return output
+
+
+
 def research(
     market_question: str,
     client: OpenAI,
@@ -926,6 +1013,7 @@ def research(
     engine: str,
 ):
     """Research additional information based on a prediction market question"""
+    
     # Generate a list of sub-queries
     queries = fetch_queries(client, market_question, engine)
     
@@ -978,4 +1066,8 @@ def research(
         additional_information += (
             f"Disclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y, %I:%M %p')} and does not claim to be exhaustive or definitive."
         )
+    print(f"\nADDITIONAL INFORMATION for SEARCH QUERY {market_question}")
+    print(additional_information)
+    print()
+    additional_information = final_summary(client, additional_information, market_question, engine)
     return additional_information

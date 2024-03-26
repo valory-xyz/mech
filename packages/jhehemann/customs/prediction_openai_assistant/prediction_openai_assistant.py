@@ -105,7 +105,7 @@ RUN_ACTION_REQUIRED_STATES = ["requires_action"]
 
 # * Use the current date and time ({timestamp}) as a reference to understand the context of the market question, but focus primarily on the market question's specified date to guide your answer.
 
-ASSISTANT_INSTRUCTIONS_REPORT = """You are an expert in research and summarizing the most relevant information."""
+ASSISTANT_INSTRUCTIONS_REPORT = """You are a professional researcher and expert for prediction markets."""
 
 ASSISTANT_INSTRUCTIONS_REPORT_LONG = """
 You are an autonomous AI agent that gathers highly reliable and valid information from different sources. You are provided with a prediction market question. \
@@ -129,15 +129,45 @@ Your response must be structured in the following format:
 Do not include any other contents except for the JSON object in your outputs.
 """
 
+REPORT_PROMPT_TEMPLATE = """
+Take only the market question as a search query and conduct a search using the research tool. Prepare a detailed evaluation report that discusses the outcome of the market question '{market_question}' based on the market rules and the search output.
+"""
+
+REPORT_PROMPT_TEMPLATE_ONLY = """
+Take only the selected relevant search queries and conduct separate researches using the research tool. Prepare a detailed evaluation report that discusses the outcome of the market question '{market_question}' based on the market rules and the search output.
+"""
 
 
-REPORT_PROMPT_TEMPLATE= """
-Prepare a detailed report on the market question: '{market_question}', focusing on the specified date's impact on the event's likelihood. Use all available tools for research; if unable, explain why. Organize your report with markdown into:
+REPORT_PROMPT_TEMPLATE_THREAD_FLOW_DETAILED = """
+Take only the selected relevant search queries and conduct separate researches using the research tool. Prepare a detailed report on the market question: '{market_question}', if unable, explain why.
+The report will be used as a basis for placing a bet on a prediction market, whose rules you can find in our conversation history. It is important to provide a report that specifically addresses all aspects of the market question.
+If the report does not consider all aspects of the market question, it probably will result in financial loss. your report with markdown into:
+
+- Introduction & Background
+- Findings and Analysis
+- Conclusion and evaluation of the market question's outcome
+- Caveats
+
+Don't limit yourself to just stating each finding; provide a thorough, full and comprehensive analysis of each finding.
+Use markdown syntax. Include as much relevant information as possible and try not to summarize.
+"""
+
+
+REPORT_PROMPT_TEMPLATE_OK= """
+Prepare a detailed report on the market question: '{market_question}', if unable, explain why. 
+Use all available tools for research; Think of additional information that could be relevant to the market question and search for it.
+
+Instructions:
+- Analyze the market question and information that you need to provide a reliable probability estimation.
+- Use the tools provided to gather relevant information. You can use the research tool up to three times.
+- Use the information gathered to structure a comprehensive report that provides relevant information to answer the market question.
+
+Organize your report with markdown into:
 
     Introduction: Summarize the market question and its significance.
     Background: Provide essential context, including historical data and relevant trends.
-    Findings and Analysis: Analyze each finding in relation to the market question's date, current date, and research dates. Discuss the event's probability by the specified date, supported by data and expert insights.
-    Conclusion: Highlight key findings and their implications for the market question.
+    Findings and Analysis: Analyze each finding in relation to the market question's date, current date, and search output dates. Discuss the event's probability occurring by the specified date in the market question.
+    Rules and Conclusion: Highlight the market rules and key findings and their implications for the outcome of the market question.
     Caveats: Note any limitations or assumptions and their potential effects.
 
 Your report should not predict but analyze the event's timing and rationale. Cite all sources for credibility. If the tools provide insufficient or irrelevant information, state why.
@@ -198,13 +228,46 @@ Each item in the JSON must have a value between 0 and 1. Do not include any othe
 MARKET_QUESTION: {market_question}
 """
 
+RESEARCH_PLAN_PROMPT_TEMPLATE = """
+Your goal is to prepare a research plan for {query}.
+
+The plan must consist of {search_limit} search engine queries separated by commas.
+Return ONLY the queries, separated by commas and without quotes.
+The queries must be phrased as questions.
+"""
+
+RESEARCH_PLAN_PROMPT_TEMPLATE_COMPLEX = """
+Your only task is to generate standard search engine queries. Analyze the prediction market question to identify the core topic and contextual factors. Craft search queries that not only focus on the main subject but also explore its \
+geographical, temporal, or domain-specific contexts. Include perspectives from various stakeholders and investigate related subjects for broader insights. \
+Ensure to cover the latest developments and alternative viewpoints in the search queries that might provide a search output that gives a comprehensive understanding of the market question.
+
+PREDICTION_MARKET_QUESTION: {query}
+
+OUTPUT FORMAT:
+* Return ONLY the queries, separated by commas and without quotes or search engine syntax.
+* Limit the number of queries to {search_limit}.
+"""
+
+
+QUERY_RERANKING_PROMPT_TEMPLATE = """
+Evaluate the queries and decide which ones will provide the best and wholesome data to answer the question. Do not modify the queries.
+
+OUTPUT FORMAT:
+Return only the best three queries, in order of relevance as a comma separated list of strings with no quotes.
+"""
+
+
+GET_MARKET_RULES_PROMPT = """
+Get the current state and rules for the prediction market question: '{query}'.
+"""
+
 
 RESEARCH_ASSISTANT_TOOLS = [
     {
         "type": "function",
         "function": {
             "name": "get_market_rules",
-            "description": "Get current state and rules for a prediction market question. Must be called in parallel with research tool.",
+            "description": "Get current state and rules for a prediction market question.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -218,16 +281,30 @@ RESEARCH_ASSISTANT_TOOLS = [
         "type": "function",
         "function": {
             "name": "research",
-            "description": "A search engine. Must be called in parallel with get_market_rules tool.",
+            "description": "A search engine tool. You can only call this tool once.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "market_question": {"type": "string", "description": "The prediction MARKET QUESTION word by word"},
+                    "market_question": {"type": "string", "description": "The exactly phrased prediction market question."},
                 },
                 "required": ["market_question"],
             }
         }
-    }
+    },
+    # {
+    #     "type": "function",
+    #     "function": {
+    #         "name": "create_search_plan",
+    #         "description": "Get a research plan for a prediction market question containing the most relevant search queries.",
+    #         "parameters": {
+    #             "type": "object",
+    #             "properties": {
+    #                 "market_question": {"type": "string", "description": "The exact prediction market question."},
+    #             },
+    #             "required": ["market_question"],
+    #         }
+    #     }
+    # },
 ]
 
 
@@ -353,7 +430,7 @@ def wait_for_run(
     client: OpenAI,
     thread_id: str,
     run_id: str,
-    timeout=60,
+    timeout=100,
 ):
     timeout = timeout
     start_time = time.time()
@@ -398,14 +475,13 @@ def call_tools(
 
     tool_outputs = []
     if len(tool_calls) > 2:
-        #print("Too many tools to call. Limiting to 2.")
-        dropped_tool_calls = tool_calls[2:]
-        tool_calls = tool_calls[:2]
+        dropped_tool_calls = tool_calls[3:]
+        tool_calls = tool_calls[:3]
         for tool_call in dropped_tool_calls:
             print(f"ID of tool_call that was dropped: {tool_call.id}")
             tool_outputs.append({
                 "tool_call_id": tool_call.id,
-                "output": "Too many tools to call. Limiting to 2."
+                "output": "Too many tools to call. Limiting to 3."
             })
     
     futures_dict = {}
@@ -531,29 +607,26 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             )
             assistant_ids.append(assistant_prediction.id)
 
+            # Extract the market question from the prompt delimited by escaped quotation marks
             market_question = extract_question(prompt)
             if market_question is None:
                 return None, None, "Market question not found in prompt", None
             
-            # Get the current date and time
-            timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
-            report_prompt = REPORT_PROMPT_TEMPLATE.format(market_question=market_question, timestamp=timestamp)
-            
-            # Create a thread
+
+            ### Create a thread with the initial prompt (get the market rules)
+            get_market_rules_prompt = GET_MARKET_RULES_PROMPT.format(query=market_question)
             thread = client.beta.threads.create(
                 messages=[
-                    {"role": "user", "content": report_prompt},
+                    {"role": "user", "content": get_market_rules_prompt},
                 ]
             )
             thread_ids.append(thread.id)
 
-            # Apply the prediction assistant to the thread
+            # Apply the research assistant to the thread
             run = client.beta.threads.runs.create(
                 thread_id=thread.id,
                 assistant_id=assistant_report.id,
             )
-            run_ids.append(run.id)
-
             # Wait until run is in one of the terminal states
             run = wait_for_run_termination(
                 client,
@@ -566,6 +639,133 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             thread_messages = client.beta.threads.messages.list(thread.id)
             response = thread_messages.data[0].content[0].text.value
             print(f"Assistant message added to thread {thread.id}:\n{response}\n")
+
+            # ### Generate search queries based on the market rules
+            # search_plan_prompt = RESEARCH_PLAN_PROMPT_TEMPLATE.format(query=market_question, search_limit="twelve")
+            # client.beta.threads.messages.create(
+            #         thread.id,
+            #         role="user",
+            #         content=search_plan_prompt,
+            # )
+            # # Apply the research assistant to the thread
+            # run = client.beta.threads.runs.create(
+            #     thread_id=thread.id,
+            #     assistant_id=assistant_report.id,
+            # )
+            # # Wait until run is in one of the terminal states
+            # run = wait_for_run_termination(
+            #     client,
+            #     thread.id,
+            #     run.id,
+            #     google_api_key=google_api_key,
+            #     google_engine_id=google_engine_id,
+            #     engine=engine,
+            # )
+            # thread_messages = client.beta.threads.messages.list(thread.id)
+            # response = thread_messages.data[0].content[0].text.value
+            # print(f"Assistant message added to thread {thread.id}:\n{response}\n")
+
+            # ### Sort the search queries based on relevance
+            # # Add prompt for query reranking to the thread
+            # client.beta.threads.messages.create(
+            #         thread.id,
+            #         role="user",
+            #         content=QUERY_RERANKING_PROMPT_TEMPLATE,
+            # )
+            # # Apply the research assistant to the thread
+            # run = client.beta.threads.runs.create(
+            #     thread_id=thread.id,
+            #     assistant_id=assistant_report.id,
+            # )
+            # # Wait until run is in one of the terminal states
+            # run = wait_for_run_termination(
+            #     client,
+            #     thread.id,
+            #     run.id,
+            #     google_api_key=google_api_key,
+            #     google_engine_id=google_engine_id,
+            #     engine=engine,
+            # )
+            # thread_messages = client.beta.threads.messages.list(thread.id)
+            # response = thread_messages.data[0].content[0].text.value
+            # print(f"Assistant message added to thread {thread.id}:\n{response}\n")
+
+
+            # for message in thread_messages.data:
+            #     print(f"Message content:\n{message}\n")
+
+
+            # assistant_report_tools = client.beta.assistants.update(
+            #     assistant_report.id,
+            #     tools=RESEARCH_ASSISTANT_TOOLS,
+            # )
+
+            ### Generate research report with the search queries as tool inputs
+            report_prompt = REPORT_PROMPT_TEMPLATE.format(market_question=market_question)
+            client.beta.threads.messages.create(
+                    thread.id,
+                    role="user",
+                    content=report_prompt,
+            )
+            # Apply the research assistant to the thread
+            run = client.beta.threads.runs.create(
+                thread_id=thread.id,
+                assistant_id=assistant_report.id,
+            )
+            # Wait until run is in one of the terminal states
+            run = wait_for_run_termination(
+                client,
+                thread.id,
+                run.id,
+                google_api_key=google_api_key,
+                google_engine_id=google_engine_id,
+                engine=engine,
+            )
+            thread_messages = client.beta.threads.messages.list(thread.id)
+            response = thread_messages.data[0].content[0].text.value
+            print(f"Assistant message added to thread {thread.id}:\n{response}\n")
+
+            
+
+
+
+
+
+
+            
+            
+            
+            
+            # # Get the current date and time
+            # timestamp = time.strftime("%Y-%m-%d %H:%M:%S")
+            # # report_prompt = REPORT_PROMPT_TEMPLATE.format(market_question=market_question, timestamp=timestamp)
+            
+            
+            # client.beta.threads.messages.create(
+            #         thread.id,
+            #         role="user",
+            #         content=prediction_prompt,
+            # )
+
+            # # Apply the prediction assistant to the thread
+            # run = client.beta.threads.runs.create(
+            #     thread_id=thread.id,
+            #     assistant_id=assistant_report.id,
+            # )
+            # run_ids.append(run.id)
+
+            # # Wait until run is in one of the terminal states
+            # run = wait_for_run_termination(
+            #     client,
+            #     thread.id,
+            #     run.id,
+            #     google_api_key=google_api_key,
+            #     google_engine_id=google_engine_id,
+            #     engine=engine,
+            # )
+            # thread_messages = client.beta.threads.messages.list(thread.id)
+            # response = thread_messages.data[0].content[0].text.value
+            # print(f"Assistant message added to thread {thread.id}:\n{response}\n")
             
             if not is_valid_json_with_fields_and_values(response):
                 # client.beta.threads.messages.create(
