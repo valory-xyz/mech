@@ -131,7 +131,7 @@ Do not include any other contents except for the JSON object in your outputs.
 
 
 
-REPORT_PROMPT_TEMPLATE_OLD= """
+REPORT_PROMPT_TEMPLATE= """
 Prepare a detailed report on the market question: '{market_question}', focusing on the specified date's impact on the event's likelihood. Use all available tools for research; if unable, explain why. Organize your report with markdown into:
 
     Introduction: Summarize the market question and its significance.
@@ -143,7 +143,7 @@ Prepare a detailed report on the market question: '{market_question}', focusing 
 Your report should not predict but analyze the event's timing and rationale. Cite all sources for credibility. If the tools provide insufficient or irrelevant information, state why.
 """
 
-REPORT_PROMPT_TEMPLATE= """
+REPORT_PROMPT_TEMPLATE_WITH_EXAMPLES= """
 Your goal is to provide a relevant information report that offers crucial insights in order to make an informed prediction for the MARKET QUESTION: '{market_question}'.
 
 Prepare a full comprehensive report that provides relevant information to answer the aforementioned question.
@@ -157,8 +157,18 @@ You will structure your report in the following sections:
 
 Don't limit yourself to just stating each finding; provide a thorough, full and comprehensive analysis of each finding.
 Use markdown syntax. Include as much relevant information as possible and try not to summarize.
-"""
 
+Here you can find much simplified examples of a report conclusion:
+<Starting part of Report 1>
+Conclusion: The research output strongly suggest that the new Tesla Cyber Truck will be released by the end of November 2023. This is supported by the announcement from Tesla CEO Elon Musk stating "the first deliveries will be made by the end of November".
+However, the market question asks if the release will happen by 30 October 2023. This is one month earlier than the expected release date. Thus, it is highly unlikely that the market question will resolve as 'Yes'.
+</Ending part of Report 1>
+
+<Starting part of Report 2>
+Conclustion: The research output suggests that Rafael Nadal has made significant progress in his recovery from injury. This is supported by a TennisPoint article stating that he has started training again. However, the market question asks if he will return to competitive tennis by 21 March 2024. As the 
+current date is 19 March 2024, and the search results do not provide a specific return date or timeline, it is unlikely that he will return to competitive tennis by the specified date.
+</Ending part of Report 2>
+"""
 
 REPORT_PROMPT_TEMPLATE_OLD= """
 Your goal is to provide a relevant information report that offers crucial insights in order to make an informed prediction for the MARKET QUESTION: '{market_question}'. \
@@ -178,7 +188,6 @@ You will structure your report in the following sections:
 Don't limit yourself to just stating each finding; provide a thorough, full and comprehensive analysis of each finding.
 Use markdown syntax. Include as much relevant information as possible and try not to summarize.
 """
-
 
 PREDICTION_PROMPT_TEMPLATE = """
 Given the market question, its rules and the research report your task is to make a probability estimation for the outcome of the market question. \
