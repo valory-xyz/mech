@@ -114,6 +114,12 @@ probability estimation for the outcome of the market question. You have access t
 You cannot call each tool more than once.
 """
 
+ASSISTANT_INSTRUCTIONS_PREDICTION_NEW = """
+You are a highly advanced data scientist and reasoning expert. Your task is to provide accurate and robust probability estimations for the outcome of a prediction market question. \
+You source all your knowledge from training and available information to perform this task.
+"""
+
+
 ASSISTANT_INSTRUCTIONS_PREDICTION = """
 You are a highly advanced data scientist and reasoning expert. Your task is to provide accurate and robust probability estimations for the outcome of a prediction market question. \
 You source all your knowledge from training and objectively analyze all information that is provided.
@@ -158,6 +164,44 @@ If the report does not consider all aspects of the market question, it probably 
 Don't limit yourself to just stating each finding; provide a thorough, full and comprehensive analysis of each finding.
 Use markdown syntax. Include as much relevant information as possible and try not to summarize.
 """
+
+# Prepare a detailed evaluation report that discusses the potential outcome of the market question based \
+# on the market rules and the search output.
+
+REPORT_PROMPT_NEW = """
+Prepare a concise but very informative evaluation report that discusses the potential outcome of the market question based \
+on the additional information and the market rules.
+
+MARKET_QUESTION:
+```
+{market_question}
+```
+
+MARKET_RULES:
+```
+{market_rules}
+```
+
+ADDITIONAL_INFORMATION:
+```
+{additional_information}
+```
+
+Structure your report in the following sections:
+
+- Introduction and Background
+- Findings and Analysis (event)
+- Findings and Analysis (dates, including the additional information dates in relation to the market question's date)
+- Evaluation
+- Caveats
+
+Note: The specified date in the market question is an arbitrary date of personal interest only for the market creator and does not result from public \
+or insider information. However, it is essential for the market question's outcome. Pay close attention if the additional information provide \
+information that indicate if and when the event will happen.
+"""
+
+# Note: The specified date in the market question is an arbitrary date in the future and does not result from public \
+# or insider information. However, it is essential for the market question's outcome.
 
 
 REPORT_PROMPT_TEMPLATE_OK= """
@@ -235,6 +279,12 @@ Each item in the JSON must have a value between 0 and 1. Do not include any othe
 MARKET_QUESTION: {market_question}
 """
 
+PREDICTION_PROMPT_TEMPLATE_NEW = """
+Given the previous answer, provide an estimated probability that the market resolves as 'Yes' and 'No' along with your confidence \
+and the utility of the information provided. Output your answer in a single JSON object that contains four fields: "p_yes", "p_no", "confidence", "info_utility". \
+Each item in the JSON must have a value between 0 and 1. Do not include any other contents in your response. Do not use formatting characters in your response.
+"""
+
 RESEARCH_PLAN_PROMPT_TEMPLATE = """
 Your goal is to prepare a research plan for {query}.
 
@@ -267,73 +317,6 @@ Return only the best three queries, in order of relevance as a comma separated l
 GET_MARKET_RULES_PROMPT = """
 Get the current state and rules for the prediction market question: '{query}'.
 """
-
-
-RESEARCH_ASSISTANT_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "get_market_rules",
-            "description": "Get current state and rules for a prediction market question.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "market_question": {"type": "string", "description": "The MARKET QUESTION to infer the rules for"},
-                },
-                "required": ["market_question"],
-            }
-        }
-    },
-    {
-        "type": "function",
-        "function": {
-            "name": "research",
-            "description": "A search engine tool. You can only call this tool once.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "market_question": {"type": "string", "description": "The exactly phrased prediction market question."},
-                },
-                "required": ["market_question"],
-            }
-        }
-    },
-    # {
-    #     "type": "function",
-    #     "function": {
-    #         "name": "create_search_plan",
-    #         "description": "Get a research plan for a prediction market question containing the most relevant search queries.",
-    #         "parameters": {
-    #             "type": "object",
-    #             "properties": {
-    #                 "market_question": {"type": "string", "description": "The exact prediction market question."},
-    #             },
-    #             "required": ["market_question"],
-    #         }
-    #     }
-    # },
-]
-
-
-PREDICTION_ASSISTANT_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": "format_prediction_values",
-            "description": "Format the prediction values and return them in JSON format. You must NOT use this tool before you have made the prediction.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "p_yes": {"type": "string", "description": "The estimated probability that the market resolves as 'Yes'"},
-                    "p_no": {"type": "string", "description": "The estimated probability that the market resolves as 'No'"},
-                    "confidence": {"type": "string", "description": "Confidence in the prediction"},
-                    "info_utility": {"type": "string", "description": "Utility of the information provided"},
-                },
-                "required": ["p_yes", "p_no", "confidence", "info_utility"],
-            }
-        }
-    }
-]
 
 
 OPENAI_TOOLS_FUNCTIONS = {
@@ -600,6 +583,55 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         assistant_ids = []
         thread_ids = []
 
+        # Extract the market question from the prompt delimited by escaped quotation marks
+        market_question = extract_question(prompt)
+        if market_question is None:
+            return None, None, "Market question not found in prompt", None
+
+        market_rules = get_market_rules(market_question, client)
+        print(f"Market rules:\n{market_rules}\n")
+        additional_inforamtion = research(market_question, client, google_api_key, google_engine_id, engine, market_rules)
+        print(f"Additional information:\n{additional_inforamtion}\n")
+
+        report_prompt_new = REPORT_PROMPT_NEW.format(
+            market_question=market_question,
+            market_rules=market_rules,
+            additional_information=additional_inforamtion
+        )
+        
+        messages = [
+            {"role": "system", "content": "You are a professional researcher"},
+            {"role": "user", "content": report_prompt_new},
+        ]
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=0.0,
+        )
+        output = response.choices[0].message.content
+        print(f"Output:\n{output}\n")
+
+
+        messages = [
+            {"role": "system", "content": ASSISTANT_INSTRUCTIONS_PREDICTION_NEW},
+            {"role": "assistant", "content": output},
+            {"role": "user", "content": PREDICTION_PROMPT_TEMPLATE_NEW,}
+        ]
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=0.0,
+        )
+        output = response.choices[0].message.content
+        print(f"Output:\n{output}\n")
+
+        exit()
+
+
+
+
+        ##############################################################################
+
         try:
             # Create an openai assistant
             assistant_report = client.beta.assistants.create(
@@ -619,10 +651,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             )
             assistant_ids.append(assistant_prediction.id)
 
-            # Extract the market question from the prompt delimited by escaped quotation marks
-            market_question = extract_question(prompt)
-            if market_question is None:
-                return None, None, "Market question not found in prompt", None
+            
             
 
             ### Create a thread with the initial prompt (get the market rules)

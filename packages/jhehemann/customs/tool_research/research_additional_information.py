@@ -106,15 +106,18 @@ TOOL_TO_ENGINE = {
 
 FINAL_SUMMARY_PROMPT = """
 You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
-query: "{search_query}". Your task is to select only the most relevant bulletpoints from the articles. If there are no \
+query: "{search_query}". Your task is to select the most relevant bulletpoints from the articles that may help to answer the search query. If there are no \
 relevant results in one of the articles, you can skip it. Return the selected relevant articles only with the relevant bulletpoints \
 for answering the search query. The headers of each article must remain the same, including publication dates.
-If there are redundant bulletpoints across articles you must remove them but only from the older articles or the ones that have no publication date.
 
 SEARCH_OUTPUT:
 ```
 {additional_information}
 ```
+
+If there are redundant bulletpoints across articles you must remove them but only from the older articles or the ones that have no publication date. \
+Regarding redundant bulletpoints, you must favor those mentioning specific dates and those that have publication dates and are more recent. \
+
 """
 
 FINAL_SUMMARY_CONTINUOUS_TEXT_PROMPT = """
@@ -205,9 +208,10 @@ The summary must only contain relevant information with respect to the SEARCH_QU
 INSTRUCTIONS:
 * Carefully read the search query under 'SEARCH_QUERY'
 * Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant with respect to the search query
-* A chunk can be considered relevant if it contains information that might support or refute the event question
+* A chunk can be considered relevant if it contains information that might support or refute the search query
 * Summarize the relevant information in a way that is concise and informative
 * You must not infer or add any new information, but only summarize the existing statements in an unbiased way
+* If there is conflicting information, you must include both sides of the argument in the summary
 * You must provide your response in the format specified under "OUTPUT_FORMAT"
 * Do not include any other contents in your response.
 
@@ -946,13 +950,18 @@ def summarize_relevant_chunks(
 ) -> List[WebPage]:
     def summarize_for_web_page(web_page: WebPage) -> None:
         chunks_string = ""
-        for i, chunk in enumerate(web_page.chunks_sorted):
-            chunks_string += f"\n…{chunk}…\n"
+        if web_page.chunks_sorted:
+            for chunk in web_page.chunks_sorted:
+                chunks_string += f"\n…{chunk}…\n"
+        else:
+            web_page.relevant_chunks_summary = "Error"
+            return
+        
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
         summarize_prompt = SUMMARIZE_PROMPT.format(input_query=input_query, chunks=trimmed_chunks)
-        # print()
-        # print(summarize_prompt)
-        # print()
+        print()
+        print(summarize_prompt)
+        print()
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": summarize_prompt},
