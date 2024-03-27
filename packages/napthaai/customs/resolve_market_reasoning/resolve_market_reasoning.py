@@ -69,16 +69,16 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0,
 }
 MAX_TOKENS = {
-    "gpt-3.5-turbo": 4096,
-    "gpt-4": 8192,
+    "gpt-3.5-turbo-0125": 4096,
+    "gpt-4-0125-preview": 8192,
 }
 ALLOWED_TOOLS = [
     "resolve-market-reasoning-gpt-3.5-turbo",
     "resolve-market-reasoning-gpt-4",
 ]
 TOOL_TO_ENGINE = {
-    "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo",
-    "resolve-market-reasoning-gpt-4": "gpt-4",
+    "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo-0125",
+    "resolve-market-reasoning-gpt-4": "gpt-4-0125-preview",
 }
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 NUM_QUERIES = 3
@@ -403,7 +403,7 @@ def get_dates(
 ):
     """Get the date from the extracted text"""
     adjusted_text = adjust_additional_information(
-        prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo"
+        prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo-0125"
     )
     get_date_prompt = GET_DATE_PROMPT.format(extracted_text=adjusted_text)
     messages = [
@@ -411,7 +411,7 @@ def get_dates(
         {"role": "user", "content": get_date_prompt},
     ]
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-3.5-turbo-0125",
         messages=messages,
         temperature=0,
         n=1,
@@ -426,7 +426,7 @@ def get_dates(
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
-                model="gpt-3.5-turbo",
+                model="gpt-3.5-turbo-0125",
                 token_counter=count_tokens,
             )
             return f"{date.year}-{date.month}-{date.day}", counter_callback
@@ -689,7 +689,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
 
         # Check if question is valid
         messages = [

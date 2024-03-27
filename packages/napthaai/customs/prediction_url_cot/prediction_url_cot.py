@@ -41,12 +41,12 @@ DEFAULT_OPENAI_SETTINGS = {
 }
 MAX_TOKENS = {
     "gpt-3.5-turbo-0125": 16385,
-    "gpt-4": 8192,
+    "gpt-4-0125-preview": 8192,
 }
 ALLOWED_TOOLS = [
     "prediction-url-cot",
 ]
-TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo-0125" for tool in ALLOWED_TOOLS}
+TOOL_TO_ENGINE = {tool: "gpt-4-0125-preview" for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
 NUM_URLS_PER_QUERY = 5
@@ -429,7 +429,7 @@ def fetch_additional_information(
 def adjust_doc_tokens(
     doc: Document, 
     max_tokens: int, 
-    engine: str = "gpt-3.5-turbo"
+    engine: str = "gpt-4-0125-preview"
 ) -> Document:
     """Adjust the number of tokens in the document."""
     if count_tokens(doc.text, engine) > max_tokens:
@@ -532,8 +532,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
-        engine = TOOL_TO_ENGINE[tool]
-
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
         # fetch additional information from the web
         additional_information, counter_callback = fetch_additional_information(
             client=client,

@@ -528,8 +528,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"TOOL {tool} is not supported.")
     
-    model = TOOL_TO_ENGINE[tool]
-    
+    model = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    print(f"ENGINE: {model}")
     queries, counter_callback = generate_subqueries(query=prompt, limit=initial_subqueries_limit, api_key=openai_api_key, model=model, counter_callback=counter_callback)
     queries, counter_callback = rerank_subqueries(queries=queries, goal=prompt, api_key=openai_api_key, model=model, counter_callback=counter_callback)
     queries = queries[:subqueries_limit]

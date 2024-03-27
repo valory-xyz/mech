@@ -81,8 +81,8 @@ ALLOWED_TOOLS = [
     "prediction-online-sum-url-content",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-offline-sum-url-content": "gpt-4",
-    "prediction-online-sum-url-content": "gpt-4",
+    "prediction-offline-sum-url-content": "gpt-4-0125-preview",
+    "prediction-online-sum-url-content": "gpt-4-0125-preview",
 }
 
 
@@ -977,7 +977,7 @@ def fetch_additional_information(
     google_api_key: str,
     google_engine: str,
     nlp,
-    engine: str = "gpt-3.5-turbo",
+    engine: str = "gpt-4-0125-preview",
     temperature: float = 1.0,
     max_compl_tokens: int = 500,
 ) -> str:
@@ -1092,7 +1092,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         nlp = spacy.load("en_core_web_sm")
 
         # Get the LLM engine to be used
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")
 
         # Extract the event question from the prompt
