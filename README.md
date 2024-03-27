@@ -363,7 +363,7 @@ Make sure you don't have any extra characters in the file, like newlines or spac
     - `0x9e65d59eca2157eb87f95e41baaea57d647b0260`
     - `0x4e87bcea7108feae8d28c6117f30d552bae683f3`
     - `0x77af31de935740567cf4ff1986d04b2c964a786a`
-- **Arbitrum (Arbi)**: `0x0eA6B3137f294657f0E854390bb2F607e315B82c`
+- **Arbitrum**: `0x0eA6B3137f294657f0E854390bb2F607e315B82c`
 - **Polygon**: `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188`
 - **Base**: `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA`
 - **Celo**: `0xeC20694b7BD7870d2dc415Af3b349360A6183245`
