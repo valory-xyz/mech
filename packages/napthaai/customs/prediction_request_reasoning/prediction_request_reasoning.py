@@ -691,8 +691,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         google_engine_id = api_keys.get("google_engine_id", None)
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-        engine = TOOL_TO_ENGINE[tool]
-
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 

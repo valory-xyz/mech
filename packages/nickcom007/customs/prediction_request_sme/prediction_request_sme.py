@@ -68,16 +68,16 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0.,
 }
 MAX_TOKENS = {
-    "gpt-3.5-turbo": 4096,
-    "gpt-4": 8192,
+    "gpt-3.5-turbo-0125": 4096,
+    "gpt-4-0125-preview": 8192,
 }
 ALLOWED_TOOLS = [
     "prediction-offline-sme",
     "prediction-online-sme",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-offline-sme": "gpt-3.5-turbo",
-    "prediction-online-sme": "gpt-3.5-turbo",
+    "prediction-offline-sme": "gpt-4-0125-preview",
+    "prediction-online-sme": "gpt-4-0125-preview",
 }
 
 PREDICTION_PROMPT = """
@@ -435,7 +435,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
 
         try:
             sme, sme_introduction, counter_callback = get_sme_role(

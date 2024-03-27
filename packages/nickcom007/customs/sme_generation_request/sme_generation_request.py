@@ -62,8 +62,8 @@ ALLOWED_TOOLS = [
 ]
 
 TOOL_TO_ENGINE = {
-    "strong-sme-generator": "gpt-4",
-    "normal-sme-generator": "gpt-3.5-turbo",
+    "strong-sme-generator": "gpt-4-0125-preview",
+    "normal-sme-generator": "gpt-3.5-turbo-0125",
 }
 
 SME_GENERATION_SYSTEM_PROMPT = """
@@ -125,7 +125,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"tool must be one of {ALLOWED_TOOLS}")
 
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
 
         market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
         system_prompt = SME_GENERATION_SYSTEM_PROMPT

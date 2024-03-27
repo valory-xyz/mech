@@ -80,8 +80,8 @@ ALLOWED_TOOLS = [
     "prediction-sentence-embedding-bold",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-sentence-embedding-conservative": "gpt-3.5-turbo",
-    "prediction-sentence-embedding-bold": "gpt-4",
+    "prediction-sentence-embedding-conservative": "gpt-3.5-turbo-0125",
+    "prediction-sentence-embedding-bold": "gpt-4-0125-preview",
 }
 
 
@@ -1040,7 +1040,7 @@ def fetch_additional_information(
     google_api_key: str,
     google_engine: str,
     nlp,
-    engine: str = "gpt-3.5-turbo",
+    engine: str = "gpt-4-0125-preview",
     temperature: float = 0.5,
     max_compl_tokens: int = 500,
 ) -> str:
@@ -1053,7 +1053,7 @@ def fetch_additional_information(
         google_api_key (str): The API key for the Google service.
         google_engine (str): The Google engine to be used.
         temperature (float): The temperature parameter for the engine.
-        engine (str): The openai engine. Defaults to "gpt-3.5-turbo".
+        engine (str): The openai engine. Defaults to "gpt-4-0125-preview".
         temperature (float): The temperature parameter for the engine. Defaults to 1.0.
         max_compl_tokens (int): The maximum number of tokens for the engine's response.
 
@@ -1142,7 +1142,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         nlp = spacy.load("en_core_web_md")
 
         # Get the LLM engine to be used
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
 
         # Extract the event question from the prompt
         event_question = re.search(r"\"(.+?)\"", prompt).group(1)
@@ -1163,7 +1164,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         # Fetch additional information
         additional_information = fetch_additional_information(
             event_question=event_question,
-            engine="gpt-3.5-turbo",
+            engine="gpt-4-0125-preview",
             temperature=0.5,
             max_compl_tokens=max_compl_tokens,
             nlp=nlp,

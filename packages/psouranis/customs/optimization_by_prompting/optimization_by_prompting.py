@@ -83,8 +83,8 @@ ALLOWED_TOOLS = [
     "deepmind-optimization",
 ]
 TOOL_TO_ENGINE = {
-    "deepmind-optimization-strong": "gpt-4",
-    "deepmind-optimization": "gpt-3.5-turbo",
+    "deepmind-optimization-strong": "gpt-4-0125-preview",
+    "deepmind-optimization": "gpt-3.5-turbo-0125",
 }
 
 PREDICTION_PROMPT_INSTRUCTIONS = """
@@ -222,7 +222,7 @@ def prompt_engineer(
     init_instructions,
     instructions_format,
     iterations=3,
-    model_name="gpt-3.5-turbo",
+    model_name="gpt-4-0125-preview",
 ):
 
     llm = OpenAILLM(model_name=model_name, openai_api_key=openai_api_key)
@@ -402,7 +402,8 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
         additional_information = fetch_additional_information(
             prompt=prompt,
             engine=engine,
