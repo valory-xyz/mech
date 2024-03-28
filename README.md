@@ -347,7 +347,7 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 
 | Network   | Service                                            | Mech Instance (Nevermined) - Agent Id       |
 |:---------:|----------------------------------------------------|-------------------------------------------------|
-| Ethereum  | https://registry.olas.network/ethereum/services/21 | -                                               |
+| Ethereum  | https://registry.olas.network/ethereum/services/21 | n/a                                              |
 | Gnosis    | https://registry.olas.network/gnosis/services/3    | -                                               |
 | Arbitrum  | https://registry.olas.network/arbitrum/services/1  | `0x0eA6B3137f294657f0E854390bb2F607e315B82c`  - 1  |
 | Polygon   | https://registry.olas.network/polygon/services/3   | `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188`  - 1  |
