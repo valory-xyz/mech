@@ -169,8 +169,16 @@ Use markdown syntax. Include as much relevant information as possible and try no
 # on the market rules and the search output.
 
 REPORT_PROMPT_NEW = """
-Prepare a concise but very informative evaluation report that discusses the potential outcome of the market question based \
+Prepare a concise but informative evaluation report that discusses the potential outcome of the market question based \
 on the additional information and the market rules.
+
+Structure your report in the following sections:
+
+- Introduction and Background
+- Findings and Analysis (event)
+- Findings and Analysis (dates, including the additional information dates in relation to the market question's date)
+- Evaluation
+- Caveats
 
 MARKET_QUESTION:
 ```
@@ -187,21 +195,14 @@ ADDITIONAL_INFORMATION:
 {additional_information}
 ```
 
-Structure your report in the following sections:
-
-- Introduction and Background
-- Findings and Analysis (event)
-- Findings and Analysis (dates, including the additional information dates in relation to the market question's date)
-- Evaluation
-- Caveats
-
 Note: The specified date in the market question is an arbitrary date of personal interest only for the market creator and does not result from public \
 or insider information. However, it is essential for the market question's outcome. Pay close attention if the additional information provide \
 information that indicate if and when the event will happen.
 """
 
-# Note: The specified date in the market question is an arbitrary date in the future and does not result from public \
-# or insider information. However, it is essential for the market question's outcome.
+# Note: The specified date in the market question is an arbitrary date of personal interest only for the market creator and does not result from public \
+# or insider information. However, it is essential for the market question's outcome. Pay close attention if the additional information provide \
+# information that indicate if and when the event will happen.
 
 
 REPORT_PROMPT_TEMPLATE_OK= """
@@ -600,7 +601,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         )
         
         messages = [
-            {"role": "system", "content": "You are a professional researcher"},
+            {"role": "system", "content": "You are a professional journalist"},
             {"role": "user", "content": report_prompt_new},
         ]
         response = client.chat.completions.create(
