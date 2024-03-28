@@ -345,26 +345,12 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 
 ## Examples of deployed Mechs
 
-| Network | Service |
-| :---:   | :---: |
-| Ethereum | https://registry.olas.network/ethereum/services/21 |
-| Gnosis | https://registry.olas.network/gnosis/services/3 |
-| Arbitrum | https://registry.olas.network/arbitrum/services/1 |
-| Polygon | https://registry.olas.network/polygon/services/3 |
-| Base | https://registry.olas.network/base/services/1 |
-| Celo | https://registry.olas.network/celo/services/1 |
-| Optimism | https://registry.olas.network/optimism/services/1 |
-
-### Mech Service IDs of the deployed Mechs
-- **Gnosis**: 
-    - `0x3504fb5053ec12f748017248a395b4ed31739705`
-    - `0x80f8cba027c830e06316e8d1fd9eb770772e3172`
-    - `0xff82123dfb52ab75c417195c5fdb87630145ae81`
-    - `0x9e65d59eca2157eb87f95e41baaea57d647b0260`
-    - `0x4e87bcea7108feae8d28c6117f30d552bae683f3`
-    - `0x77af31de935740567cf4ff1986d04b2c964a786a`
-- **Arbitrum**: `0x0eA6B3137f294657f0E854390bb2F607e315B82c`
-- **Polygon**: `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188`
-- **Base**: `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA`
-- **Celo**: `0xeC20694b7BD7870d2dc415Af3b349360A6183245`
-- **Optimism**: `0xbA4491C86705e8f335Ceaa8aaDb41361b2F82498`
+| Network   | Service                                            | Mech Service ID                                 |
+|:---------:|----------------------------------------------------|-------------------------------------------------|
+| Ethereum  | https://registry.olas.network/ethereum/services/21 | -                                               |
+| Gnosis    | https://registry.olas.network/gnosis/services/3    | -                                               |
+| Arbitrum  | https://registry.olas.network/arbitrum/services/1  | `0x0eA6B3137f294657f0E854390bb2F607e315B82c`    |
+| Polygon   | https://registry.olas.network/polygon/services/3   | `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188`    |
+| Base      | https://registry.olas.network/base/services/1      | `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA`    |
+| Celo      | https://registry.olas.network/celo/services/1      | `0xeC20694b7BD7870d2dc415Af3b349360A6183245`    |
+| Optimism  | https://registry.olas.network/optimism/services/1) | `0xbA4491C86705e8f335Ceaa8aaDb41361b2F82498`    |
