@@ -352,5 +352,5 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 | Arbitrum  | https://registry.olas.network/arbitrum/services/1  | `0x0eA6B3137f294657f0E854390bb2F607e315B82c`  - 1  | `0x1FDAD3a5af5E96e5a64Fc0662B1814458F114597` - 2   |
 | Polygon   | https://registry.olas.network/polygon/services/3   | `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188`  - 1  | `0xbF92568718982bf65ee4af4F7020205dE2331a8a` - 2  |
 | Base      | https://registry.olas.network/base/services/1      | `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA`  - 1  | `0x111D7DB1B752AB4D2cC0286983D9bd73a49bac6c` - 2  |
-| Celo      | https://registry.olas.network/celo/services/1      | `0xeC20694b7BD7870d2dc415Af3b349360A6183245`  - 1  | tbd                                                |
+| Celo      | https://registry.olas.network/celo/services/1      | `0xeC20694b7BD7870d2dc415Af3b349360A6183245`  - 1  | `0x230eD015735c0D01EA0AaD2786Ed6Bd3C6e75912` - 2  |
 | Optimism  | https://registry.olas.network/optimism/services/1) | `0xbA4491C86705e8f335Ceaa8aaDb41361b2F82498`  - 1  | tbd                                                |
