@@ -1,0 +1,14 @@
+name: prepare_tx
+author: valory
+version: 0.1.0
+type: custom
+description: A tool to prepare a transaction.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+  prepare_tx.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+fingerprint_ignore_patterns: []
+entry_point: prepare_tx.py
+callable: run
+dependencies: {}
