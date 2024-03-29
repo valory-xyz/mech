@@ -1,34 +1,10 @@
-# -*- coding: utf-8 -*-
-# ------------------------------------------------------------------------------
-#
-#   Copyright 2024 Valory AG
-#
-#   Licensed under the Apache License, Version 2.0 (the "License");
-#   you may not use this file except in compliance with the License.
-#   You may obtain a copy of the License at
-#
-#       http://www.apache.org/licenses/LICENSE-2.0
-#
-#   Unless required by applicable law or agreed to in writing, software
-#   distributed under the License is distributed on an "AS IS" BASIS,
-#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-#   See the License for the specific language governing permissions and
-#   limitations under the License.
-#
-# ------------------------------------------------------------------------------
-
-"""This module implements a Mech tool for binary predictions."""
-
-import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from docstring_parser import parse
-import faiss
 from googleapiclient.discovery import build
 from itertools import islice
 import json
-import numpy as np
-import tiktoken
+import re
 from io import BytesIO
 import PyPDF2
 from openai import OpenAI
@@ -41,7 +17,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
-
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
@@ -69,64 +44,24 @@ MAX_TOKENS = {
     "gpt-4-0125-preview": 8192,
 }
 ALLOWED_TOOLS = [
-    "prediction-request-rag",
+    "prediction-url-cot",
 ]
 TOOL_TO_ENGINE = {tool: "gpt-4-0125-preview" for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
 NUM_URLS_PER_QUERY = 5
-SPLITTER_CHUNK_SIZE = 1800
-SPLITTER_OVERLAP = 50
-EMBEDDING_MODEL = "text-embedding-ada-002"
+SPLITTER_CHUNK_SIZE = 1800*2
+SPLITTER_OVERLAP = 50*4
+EMBEDDING_MODEL = "text-embedding-3-large"
 EMBEDDING_BATCH_SIZE = 1000
-EMBEDDING_SIZE = 1536
+EMBEDDING_SIZE = 3072
 SPLITTER_MAX_TOKENS = 1800
 SPLITTER_OVERLAP = 50
 NUM_NEIGHBORS = 4
 HTTP_TIMEOUT = 20
 HTTP_MAX_REDIRECTS = 5
 HTTP_MAX_RETIES = 2
-
-PREDICTION_PROMPT = """
-INSTRUCTIONS
-* You are an expert data analyst. 
-* You are provided with the input question about an event under the label "USER_PROMPT". 
-* Your task is to predict the probability of the event in the USER_PROMPT occurring.
-* ADDITIONAL_INFORMATION is the information that you can use to make your prediction.
-* Think through your answer before making the prediction.
-* ONLY function calls are allowed in the response.
-
-USER_PROMPT:
-```
-{user_prompt}
-```
-
-ADDITIONAL_INFORMATION: 
-```{additional_information}```
-"""
-
-URL_QUERY_PROMPT = """
- You are an expert fact checker in a team tasked with determining whether an event will happen before a given date. 
-* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event will occur. 
-* You are provided with the input question about the event under the label "USER_PROMPT". 
-* You must follow the instructions under the label "INSTRUCTIONS". 
-
-INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" is a question about whether an event will happen before a given date.
-* The event will only have two possible outcomes: either the event will happen or the event will not happen.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event will occur. 
-* Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
-* ONLY function calls are allowed in the response.
-
-USER_PROMPT:
-```
-{user_prompt}
-```
-"""
-
-SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
+MAX_DOC_TOKENS = 10000
 
 
 class OpenAISchema(BaseModel):  # type: ignore[misc]
@@ -187,73 +122,57 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
             message.function_call.arguments,
         )
 
-class Results(OpenAISchema):
-    p_yes: float =  Field(description="Estimated probability that the event in the USER_QUESTION occurs.")
-    p_no: float = Field(description="Estimated probability that the event in the USER_QUESTION does not occur.")
-    confidence: float = Field(description="A value between 0 and 1 indicating the confidence in the prediction. 0 indicates lowest confidence value; 1 maximum confidence value.")
-    info_utility: float = Field(description="Utility of the information provided in ADDITIONAL_INFORMATION to help you make the prediction. 0 indicates lowest utility; 1 maximum utility.")
-
-
-class Queries(OpenAISchema):
-    queries: List[str]
-
 class Document(BaseModel):
     text: str
     url: str
     embedding: Optional[List[float]] = None
 
-def multi_queries(
-    client: OpenAI,
-    prompt: str,
-    engine: str,
-    num_queries: int,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = DEFAULT_OPENAI_SETTINGS["temperature"],
-    max_tokens: Optional[int] = DEFAULT_OPENAI_SETTINGS["max_tokens"],
-) -> List[str]:
-    """Generate multiple queries for fetching information from the web."""
 
-    url_query_prompt = URL_QUERY_PROMPT.format(
-        user_prompt=prompt, num_queries=num_queries
-    )
+class Queries(OpenAISchema):
+    queries: List[str]
 
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": url_query_prompt},
-    ]
+class Results(OpenAISchema):
+    p_yes: float =  Field(description="Estimated probability that the event in the USER_QUESTION occurs.")
+    p_no: float = Field(description="Estimated probability that the event in the USER_QUESTION does not occur.")
+    confidence: float = Field(description="A value between 0 and 1 indicating the confidence in the prediction. 0 indicates lowest confidence value; 1 maximum confidence value.")
+    info_utility: float = Field(description="Utility of the information provided in ADDITIONAL_INFORMATION to help you make the prediction. 0 indicates lowest utility; 1 maximum utility.")
+    prediction: Optional[str] = Field(description="The predicted outcome of the event in the USER_QUESTION. Can be 'yes', 'no', or 'I don't know'.")
 
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=150,
-        stop=None,
-        functions=[Queries.openai_schema],
-    )
-    queries = Queries.from_response(response)
 
-    # append the user's question to the list of queries
-    queries.queries.append(prompt)
+PREDICTION_PROMPT = """
+You are an AI expert in predicting events.
+You are given a question and a document.
+Your task is to predict whether the event in the question occurs based on the information in the document.
+Only use the information in the document to make your prediction.
+If you are not confident in your prediction, you can say "I don't know" in the prediction.
+Please think step by step before your response.
 
-    if counter_callback:
-        counter_callback(
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=engine,
-            token_counter=count_tokens,
-        )
-        return queries.queries, counter_callback
-    return queries.queries, None
+USER_QUESTION:
+```
+{user_question}
+```
 
-def search_google(
-    query: str, 
-    api_key: str, 
-    engine: str, 
-    num: int
-) -> List[str]:
-    """Search Google for the given query."""
+DOCUMENT:
+```
+{document}
+```
+"""
+
+URL_QUERY_PROMPT = """
+You are an AI language model assistant. 
+Your task is to generate {num_queries} different queries to retrieve relevant documents from the web.
+Your response will be used to fetch information from the web to help you make a prediction about the event in the USER_PROMPT.
+Please think step by step before your response.
+
+USER_PROMPT:
+```
+{user_prompt}
+```
+"""
+
+SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
+
+def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
         service.cse()
@@ -293,44 +212,14 @@ def get_urls_from_queries(
     return unique_results
 
 
-def find_similar_chunks(
-    query: str, 
-    docs_with_embeddings: List[Document], 
-    k: int = 4
-) -> List:
-    """Similarity search to find similar chunks to a query"""
+def extract_question(prompt: str) -> str:
+    pattern = r'\"(.*?)\"'
+    try:
+        question = re.findall(pattern, prompt)[0]
+    except Exception as e:
+        question = prompt
 
-    query_embedding = (
-        client.embeddings.create(
-            model=EMBEDDING_MODEL,
-            input=query,
-        )
-        .data[0]
-        .embedding
-    )
-
-    index = faiss.IndexFlatIP(EMBEDDING_SIZE)
-    index.add(np.array([doc.embedding for doc in docs_with_embeddings]))
-    D, I = index.search(np.array([query_embedding]), k)
-
-    return [docs_with_embeddings[i] for i in I[0]]
-
-
-def get_embeddings(split_docs: List[Document]) -> List[Document]:
-    """Get embeddings for the split documents."""
-    for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
-        batch_end = batch_start + EMBEDDING_BATCH_SIZE
-        batch = [doc.text for doc in split_docs[batch_start:batch_end]]
-        response = client.embeddings.create(
-            model=EMBEDDING_MODEL,
-            input=batch,
-        )
-        for i, be in enumerate(response.data):
-            assert i == be.index
-        batch_embeddings = [e.embedding for e in response.data]
-        for i, doc in enumerate(split_docs[batch_start:batch_end]):
-            doc.embedding = batch_embeddings[i]
-    return split_docs
+    return question
 
 
 def extract_text(
@@ -431,11 +320,50 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
     return extracted_texts
 
 
-def recursive_character_text_splitter(text, max_tokens, overlap):
-    if len(text) <= max_tokens:
-        return [text]
-    else:
-        return [text[i:i+max_tokens] for i in range(0, len(text), max_tokens - overlap)]
+def multi_queries(
+    client: OpenAI,
+    prompt: str,
+    engine: str,
+    num_queries: int,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    temperature: int = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
+) -> List[str]:
+    """Generate multiple queries for fetching information from the web."""
+
+    url_query_prompt = URL_QUERY_PROMPT.format(
+        user_prompt=prompt, num_queries=num_queries
+    )
+
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": url_query_prompt},
+    ]
+
+    response = client.chat.completions.create(
+        model=engine,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        n=1,
+        timeout=150,
+        stop=None,
+        functions=[Queries.openai_schema],
+    )
+    queries = Queries.from_response(response)
+
+    # append the user's question to the list of queries
+    queries.queries.append(prompt)
+
+    if counter_callback:
+        counter_callback(
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            model=engine,
+            token_counter=count_tokens,
+        )
+        return queries.queries, counter_callback
+    return queries.queries, None
 
 
 def fetch_additional_information(
@@ -449,8 +377,8 @@ def fetch_additional_information(
     num_words: Optional[int] = None,
     num_urls: Optional[int] = None,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = DEFAULT_OPENAI_SETTINGS["temperature"],
-    max_tokens: Optional[int] = DEFAULT_OPENAI_SETTINGS["max_tokens"],
+    temperature: int = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
 ) -> Tuple:
     """Fetch additional information from the web."""
 
@@ -495,88 +423,95 @@ def fetch_additional_information(
     # remove empty documents ""
     filtered_docs = [doc for doc in docs if hasattr(doc, 'text') and doc.text != ""]
 
-    # Chunk the documents
-    split_docs = []
-    for doc in filtered_docs:
-        try:
-            t = recursive_character_text_splitter(
-                doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
-            )
-            split_docs.extend(
-                [Document(text=chunk, url=doc.url) for chunk in t]
-            )
-        except Exception as e:
-            print(f"Error splitting document: {e}")
-            continue
-    print(f"Split Docs: {len(split_docs)}")
+    return filtered_docs, counter_callback
 
-    # Remove None values from the list
-    split_docs = [doc for doc in split_docs if doc]
 
-    # Embed the documents
-    docs_with_embeddings = get_embeddings(split_docs)
-    print(f"Docs with embeddings: {len(docs_with_embeddings)}")
+def adjust_doc_tokens(
+    doc: Document, 
+    max_tokens: int, 
+    engine: str = "gpt-4-0125-preview"
+) -> Document:
+    """Adjust the number of tokens in the document."""
+    if count_tokens(doc.text, engine) > max_tokens:
+        doc.text = " ".join(doc.text.split()[:max_tokens])
+    return doc
 
-    # Find similar chunks
-    similar_chunks = find_similar_chunks(
-        query=prompt,
-        docs_with_embeddings=docs_with_embeddings,
-        k=NUM_NEIGHBORS,
+
+def get_answer_from_doc(
+    client: OpenAI,
+    prompt: str,
+    engine: str,
+    doc: Document,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
+    temperature: int = DEFAULT_OPENAI_SETTINGS["temperature"],
+):
+    """Get an answer from the document."""
+    # length of the document
+    print(f"Length of the document before: {count_tokens(doc.text, engine)}")
+    # Make sure each doc is with the max tokens
+    doc = adjust_doc_tokens(
+        doc=doc,
+        max_tokens=MAX_DOC_TOKENS,
+        engine=engine,
     )
-    print(f"Similar Chunks: {len(similar_chunks)}")
+    print(f"Length of the document after: {count_tokens(doc.text, engine)}")
 
-    # Format the additional information
-    additional_information = "\n".join(
-        [
-            f"ARTICLE {i}, URL: {doc.url}, CONTENT: {doc.text}\n"
-            for i, doc in enumerate(similar_chunks)
-        ]
+    #Get the answer from the document
+    messages = [
+        {"role": "system", "content": SYSTEM_PROMPT},
+        {"role": "user", "content": PREDICTION_PROMPT.format(user_question=prompt, document=doc.text)},
+    ]
+
+    response = client.chat.completions.create(
+        model=engine,
+        messages=messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        n=1,
+        timeout=150,
+        stop=None,
+        functions=[Results.openai_schema],
+        function_call={'name': 'Results'}
     )
 
-    return additional_information, counter_callback
+    if counter_callback:
+        counter_callback(
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            model=engine,
+            token_counter=count_tokens,
+        )
+
+    return Results.from_response(response), counter_callback, PREDICTION_PROMPT.format(user_question=prompt, document=doc.text)    
 
 
-def adjust_additional_information(
-    prompt: str, 
-    prompt_template:str, 
-    additional_information: str, 
-    model: str
-) -> str:
-    """Adjust the additional_information to fit within the token budget"""
+def get_answer(
+    client: OpenAI,
+    prompt: str,
+    engine: str,
+    additional_information: List[Document],
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
+    temperature: int = DEFAULT_OPENAI_SETTINGS["temperature"],
+):
+    """Get an answer from the document."""
 
-    # Initialize tiktoken encoder for the specified model
-    enc = tiktoken.encoding_for_model(model)
-    
-    # Encode the user prompt to calculate its token count
-    prompt = prompt_template.format(user_prompt=prompt, additional_information="")
-    prompt_tokens = len(enc.encode(prompt))
-    
-    # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"] - 150 # for function calls
-    available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
-    
-    # Encode the additional_information
-    additional_info_tokens = enc.encode(additional_information)
-    
-    # If additional_information exceeds available tokens, truncate it
-    if len(additional_info_tokens) > available_tokens:
-        truncated_info_tokens = additional_info_tokens[:available_tokens]
-        # Decode tokens back to text, ensuring the output fits within the budget
-        additional_information = enc.decode(truncated_info_tokens)
-    
-    return additional_information
-
-
-def extract_question(prompt: str) -> str:
-    pattern = r'\"(.*?)\"'
-    try:
-        question = re.findall(pattern, prompt)[0]
-    except Exception as e:
-        print(f"Error extracting question: {e}")
-        question = prompt
-
-    return question
-
+    for doc in additional_information:
+        answer, counter_callback, prediction_prompt = get_answer_from_doc(
+            client=client,
+            prompt=prompt,
+            engine=engine,
+            doc=doc,
+            counter_callback=counter_callback,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+        
+        if answer.prediction in ["yes", "no"]:
+            return answer, counter_callback, prediction_prompt
+        
+    return Results(p_yes=0.5, p_no=0.5, confidence=0.5, info_utility=0.5, prediction="I don't know"), counter_callback, prediction_prompt
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
@@ -593,11 +528,13 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
+        
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
         engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")
+        # fetch additional information from the web
         additional_information, counter_callback = fetch_additional_information(
             client=client,
             prompt=prompt,
@@ -612,46 +549,26 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             temperature=temperature,
             max_tokens=max_tokens,
         )
-        additional_information = adjust_additional_information(
-            prompt,
-            PREDICTION_PROMPT,
-            additional_information,
-            engine
-        )
-        prediction_prompt = PREDICTION_PROMPT.format(
-            user_prompt=prompt, 
-            additional_information=additional_information
-        )
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prediction_prompt},
-        ]
-        response = client.chat.completions.create(
-            model=engine,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            n=1,
-            timeout=150,
-            stop=None,
-            functions=[Results.openai_schema],
-            function_call={'name': 'Results'}
-        )
-        results = str(Results.from_response(response))
 
+        # get answer from the doc
+        results, counter_callback, prediction_prompt = get_answer(
+            client=client,
+            prompt=prompt,
+            engine=engine,
+            additional_information=additional_information,
+            counter_callback=counter_callback,
+            max_tokens=max_tokens,
+            temperature=temperature,
+        )
+
+        # convert the results to a dictionary
         pairs = str(results).split()
         result_dict = {}
         for pair in pairs:
             key, value = pair.split("=")
-            result_dict[key] = float(value)  # Convert value to float
+            if key != "prediction":
+                result_dict[key] = float(value)
+
         results = result_dict
         results = json.dumps(results)
-        if counter_callback is not None:
-            counter_callback(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
-                model=engine,
-                token_counter=count_tokens,
-            )
-
-    return results, prediction_prompt, None, counter_callback
+        return results, prediction_prompt, None, counter_callback

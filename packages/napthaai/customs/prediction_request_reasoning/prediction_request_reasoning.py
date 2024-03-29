@@ -19,30 +19,27 @@
 
 """This module implements a Mech tool for binary predictions."""
 
-from io import BytesIO
 import PyPDF2
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
-from pydantic import BaseModel, Field
 from docstring_parser import parse
-import tiktoken
+from googleapiclient.discovery import build
+from io import BytesIO
+from itertools import islice
+import re
+import json
 from openai import OpenAI
+from pydantic import BaseModel, Field
 import numpy as np
 import faiss
 import requests
 from readability import Document as ReadabilityDocument
 from markdownify import markdownify as md
-from googleapiclient.discovery import build
+import tiktoken
 from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
-
-
-def count_tokens(text: str, model: str) -> int:
-    """Count the number of tokens in a text."""
-    enc = encoding_for_model(model)
-    return len(enc.encode(text))
 
 
 class OpenAIClientManager:
@@ -69,26 +66,23 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0,
 }
 MAX_TOKENS = {
-    "gpt-3.5-turbo-0125": 4096,
+    "gpt-3.5-turbo-0125": 16385,
     "gpt-4-0125-preview": 8192,
 }
 ALLOWED_TOOLS = [
-    "resolve-market-reasoning-gpt-3.5-turbo",
-    "resolve-market-reasoning-gpt-4",
+    "prediction-request-reasoning",
 ]
-TOOL_TO_ENGINE = {
-    "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo-0125",
-    "resolve-market-reasoning-gpt-4": "gpt-4-0125-preview",
-}
+TOOL_TO_ENGINE = {tool: "gpt-4-0125-preview" for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
+DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 NUM_QUERIES = 3
 NUM_URLS_PER_QUERY = 3
-SPLITTER_CHUNK_SIZE = 1800
+SPLITTER_CHUNK_SIZE = 300
 SPLITTER_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-3-large"
 EMBEDDING_BATCH_SIZE = 1000
 EMBEDDING_SIZE = 3072
-NUM_NEIGHBORS = 4
+NUM_NEIGHBORS = 3
 BUFFER_TOKENS = 250
 
 
@@ -110,7 +104,7 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
         }
         for param in docstring.params:
             if (name := param.arg_name) in parameters["properties"] and (
-                    description := param.description
+                description := param.description
             ):
                 if "description" not in parameters["properties"][name]:
                     parameters["properties"][name]["description"] = description
@@ -144,7 +138,7 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
             OpenAISchema: The instance of the class
         """
 
-        message = completion.choices[0].message
+        message = completion.choices[0].message        
 
         return cls.model_validate_json(
             message.function_call.arguments,
@@ -155,49 +149,38 @@ class Queries(OpenAISchema):
     queries: List[str]
 
 
-class Date(OpenAISchema):
-    date_available: bool = Field(..., description="Whether the date is available")
-    year: Optional[int] = Field(..., description="The year the article was published")
-    month: Optional[str] = Field(..., description="The month the article was published")
-    day: Optional[int] = Field(..., description="The day the article was published")
+class MultiQuestions(OpenAISchema):
+    questions: List[str]
 
 
 class Results(OpenAISchema):
-    has_occurred: bool = Field(..., description="Whether the event has occurred.")
-
+    p_yes: float =  Field(description="Estimated probability that the event in the USER_QUESTION occurs.")
+    p_no: float = Field(description="Estimated probability that the event in the USER_QUESTION does not occur.")
+    confidence: float = Field(description="A value between 0 and 1 indicating the confidence in the prediction. 0 indicates lowest confidence value; 1 maximum confidence value.")
+    info_utility: float = Field(description="Utility of the information provided in ADDITIONAL_INFORMATION to help you make the prediction. 0 indicates lowest utility; 1 maximum utility.")
 
 class Valid(OpenAISchema):
     is_valid: bool = Field(..., description="Whether the question is valid.")
     reason: Optional[str] = Field(..., description="Reason that the question is invalid.")
 
-
 class Determinable(OpenAISchema):
-    is_determinable: bool = Field(...,
-                                  description="Whether it is possible to answer the question based on the information provided and reasoning.")
-
+    is_determinable: bool = Field(..., description="Whether it is possible to answer the question based on the information provided and reasoning.")
 
 class Document(BaseModel):
     text: str
-    date: str
     url: str
     embedding: Optional[List[float]] = None
 
 
 URL_QUERY_PROMPT = """
- You are an expert fact checker in a team tasked with determining whether an event happened before a given date in the past. 
-* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event occured. 
-* You are provided with the input question about the event under the label "USER_PROMPT". 
-* You must follow the instructions under the label "INSTRUCTIONS". 
+ You are an expert fact checker in a team tasked with determining whether an event will happen before a given date. 
+* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event will occur. 
 
 INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" is a question about whether an event happened.
-* The "USER_PROMPT" will contain a date which in the past.
-* The event will only have has two possible outcomes: either the event has happened or the event has not happened.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event occured. 
+* You are provided with the input question about the event under the label "USER_PROMPT" delimited by three backticks, which is a question about whether an event will happen before a given date.
+* The event will only have two possible outcomes: either the event will happen or the event will not happen.
+* You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event will occur. 
 * Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
-* Make sure the queries are in past tense and are in the form of a question.
 * ONLY function calls are allowed in the response.
 
 USER_PROMPT:
@@ -206,26 +189,13 @@ USER_PROMPT:
 ```
 """
 
-GET_DATE_PROMPT = """
-INSTRUCTIONS
-* You are an expert data analyst that takes in extracted text from a web search result. 
-* You are provided with text extracted from a relevant web page under the label "EXTRACTED_TEXT" delimited by three backticks.
-* Your task is to extract the date that the web page was published. 
-* If there is no date information available, you should not try to guess. Instead indicate that it is not available.
-* Your response should only be a function call with the extracted date information as arguments.
-
-EXTRACTED_TEXT:
-```
-{extracted_text}
-```
-"""
 
 PREDICTION_PROMPT = """
 INSTRUCTIONS
 * You are an expert data analyst. 
 * You are provided with the input question about the event under the label "USER_PROMPT". 
-* You are provided with a colleague's reasoning as to whether the event occurred based on online research under the label "REASONING" delimited by three backticks.
-* Your task is to parse the decision on whether an event occurred.
+* You are provided with a colleague's reasoning as to whether the event will occur based on online research under the label "REASONING" delimited by three backticks.
+* Your task is to predict the probability of the event in the USER_PROMPT occurring.
 * The answer that you give should match the answer that you come to in the reasoning field
 * ONLY function calls are allowed in the response.
 
@@ -242,28 +212,18 @@ REASONING:
 
 REASONING_PROMPT = """
 You are an expert fact checker that takes in a question asking whether an event will happen before a given date. 
-That date has now passed and your role is to determine whether the event actually happened before the date.
-You are provided with the input question about the event under the label "USER_PROMPT". You must follow the instructions
-under the label "INSTRUCTIONS".
+Your role is to determine whether the event will happen before the date.
 
 INSTRUCTIONS
-* Read the input question under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" specifies a question about whether an event happened before a certain date.
-* The date will has already passed, so you need to determine whether the event did or did not happen. There are only two
-possible answers: either the event did happen or it did not happen.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION" delimited by three backticks.
-* The items in "ADDITIONAL_INFORMATION" "ARTICLE (N), DATE: (MONTH/YEAR), URL: (URL), CONTENT: (CONTENT)"
-* You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data.
-* If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
+* You are provided with the input question about the event under the label "USER_PROMPT" delimited by three backticks, which is a question about whether an event will happen before a certain date.
+* You need to determine whether the event will or will not happen. There are only two possible answers: either the event will happen or it will not happen.
+* You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION" delimited by three backticks, with format "ARTICLE (N), URL: (URL), CONTENT: (CONTENT)"
 * Ideally, these will be news articles about the event in question.
-* Pay special attention to the date of the article if it is available.
-* You should show your process of thinking through the problem step by step, taking the date and information of the various articles into consideration, and explain your reasoning for your decision as to whether an event occurred by the specified date. 
-* The articles will not always explicitly contain all the information needed to determine the answer. In this case, you may need to make an educated guess based on certain assumptions. If you need to do this, please provide your assumptions in your explanation.
-
-Here are some examples of how you can figure out whether an event occurred by the date:
-* If an article says that the event did happen and the date of the article is before the question date, then it is likely that the event did occur before the question date.
-* If an article is talking about whether an event will happen and the date of the article is after the question date, then it is likely that the event did not happen before the question date.
+* If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
+* You should show your process of thinking through the problem step by step, taking the information of the various articles into consideration, and explain your reasoning for your decision as to whether an event will occur by the specified date. 
+* The articles will not contain all the information needed to determine the answer. In this case, you may need to make an educated guess based on certain assumptions. If you need to do this, please provide your assumptions in your explanation.
+* Try to be concise in your reasoning, providing only information that is important for making a decision (aim for a response of about 100 words)
+* Do not repeat the task or instructions in the response
 
 USER_PROMPT:
 ```
@@ -276,54 +236,26 @@ ADDITIONAL_INFORMATION:
 ```
 """
 
-VALID_PROMPT = """
-* You are an expert data analyst. 
-* You are provided with a question about an event (submitted to a prediction market) under "USER_PROMPT" delimited by three backticks.
-* Your task is to determine whether the question is valid.
-* You are provided with rules that determine whether a question is invalid (as well as examples) under the label "RULES".
-* Your response should only be a function call with the information about whether a question is valid and reason as arguments.
 
-RULES
-* Questions with relative dates should be marked as invalid. E.g. Invalid: Who will be the president of the United States in 6 months? (“in 6 months depends on the current time”).
-* Questions about moral values and not facts should be marked as invalid. E.g. Invalid: “Is it ethical to eat meat?”.
-* Questions in which none of the answers are valid should be marked as invalid. E.g. Invalid: “What is the result of 1+1?” with the outcomes “0” and “1”.
-* Questions in which multiple answers are valid should be marked as invalid. E.g. Invalid: “Who will be the Time person of the year 1937?” with answers “Chiang Kai-shek” and “Soong Mei-ling” (they got the prize jointly).
+MULTI_QUESTIONS_PROMPT = """
+You are an AI language model assistant. Your task is to generate 3 
+different versions of the given user question to retrieve relevant documents from a vector 
+database. By generating multiple perspectives on the user question, your goal is to help
+the user overcome some of the limitations of the distance-based similarity search. 
+Provide these alternative questions separated by newlines. Original question: {question}"""
 
-USER_PROMPT:
-```
-{user_prompt}
-```
-"""
-
-DETERMINABLE_PROMPT = """
-* You are an expert data analyst. 
-* You are provided with a question about an event (submitted to a prediction market) under "USER_PROMPT" delimited by three backticks.
-* You are provided with a colleague's reasoning as to whether the event occurred based on online research under the label "REASONING" delimited by three backticks.
-* Your task is to determine whether it is possible to answer whether the event actually happened before the date based on the content of this reasoning. 
-* The answer that you give should reflect the opinion in the reasoning field.
-* Your response should only be a function call with the information about whether a question is valid and reason as arguments.
-
-USER_PROMPT:
-```
-{user_prompt}
-```
-
-REASONING:
-```
-{reasoning}
-```
-
-"""
 
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
 
 def multi_queries(
-        client: OpenAI,
-        prompt: str,
-        engine: str,
-        num_queries: int,
-        counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    client: OpenAI,
+    prompt: str,
+    engine: str,
+    num_queries: int,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    temperature: float = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
 
@@ -339,13 +271,13 @@ def multi_queries(
     response = client.chat.completions.create(
         model=engine,
         messages=messages,
-        temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-        max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+        temperature=temperature,
+        max_tokens=max_tokens,
         n=1,
         timeout=150,
         stop=None,
         functions=[Queries.openai_schema],
-        function_call={'name': 'Queries'}
+        function_call={'name':'Queries'}
     )
     queries = Queries.from_response(response)
 
@@ -359,7 +291,8 @@ def multi_queries(
             model=engine,
             token_counter=count_tokens,
         )
-    return queries.queries, counter_callback
+        return queries.queries, counter_callback
+    return queries.queries, None
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
@@ -377,61 +310,20 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
 
 
 def get_urls_from_queries(
-        queries: List[str], api_key: str, engine: str, num: int
+    queries: List[str], api_key: str, engine: str, num: int
 ) -> List[str]:
     """Get URLs from search engine queries"""
     results = []
     for query in queries:
-        try:
-            for url in search_google(
-                query=query,
-                api_key=api_key,
-                engine=engine,
-                num=num,
-            ):
-                results.append(url)
-        except Exception as e:
-            print(f"An error occurred: {e}")
+        for url in search_google(
+            query=query,
+            api_key=api_key,
+            engine=engine,
+            num=num,
+        ):
+            results.append(url)
     unique_results = list(set(results))
     return unique_results
-
-
-def get_dates(
-        client: OpenAI,
-        text: str,
-        counter_callback: Optional[Callable[[int, int, str], None]] = None,
-):
-    """Get the date from the extracted text"""
-    adjusted_text = adjust_additional_information(
-        prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo-0125"
-    )
-    get_date_prompt = GET_DATE_PROMPT.format(extracted_text=adjusted_text)
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": get_date_prompt},
-    ]
-    response = client.chat.completions.create(
-        model="gpt-3.5-turbo-0125",
-        messages=messages,
-        temperature=0,
-        n=1,
-        timeout=90,
-        stop=None,
-        functions=[Date.openai_schema],
-        function_call={'name': 'Date'}
-    )
-    date = Date.from_response(response)
-    if date.date_available:
-        if counter_callback:
-            counter_callback(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
-                model="gpt-3.5-turbo-0125",
-                token_counter=count_tokens,
-            )
-            return f"{date.year}-{date.month}-{date.day}", counter_callback
-        return f"{date.year}-{date.month}-{date.day}", None
-    return "Date not available", None
 
 
 def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
@@ -449,7 +341,7 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
             for page in reader.pages:
                 text += page.extract_text()
 
-        doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
+        doc = Document(text=text[:num_words] if num_words else text, url=url)
 
         return doc
     except Exception as e:
@@ -458,25 +350,24 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
 
 
 def extract_text(
-        client: OpenAI,
-        html: str,
-        num_words: Optional[int] = None,
-        counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    client: OpenAI,
+    engine: str,
+    html: str,
+    num_words: Optional[int] = None,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> str:
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
     text = text = md(text, heading_style="ATX")
-    date, counter_callback = get_dates(
-        client=client, text=text, counter_callback=counter_callback
-    )
-    doc = Document(text=text[:num_words] if num_words else text, date=date, url="")
+    doc = Document(text=text[:num_words] if num_words else text, url="")
     return doc, counter_callback
 
 
 def extract_texts(
-        urls: List[str],
-        client: OpenAI,
-        counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    urls: List[str],
+    client: OpenAI,
+    engine: str,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> Tuple[List[str], Dict[str, str]]:
     """Extract texts from URLs"""
     extracted_texts = []
@@ -498,7 +389,10 @@ def extract_texts(
                         extracted_texts.append(result)
                     continue
                 doc, counter_callback = extract_text(
-                    html=result.text, client=client, counter_callback=counter_callback
+                    html=result.text, 
+                    client=client, 
+                    counter_callback=counter_callback,
+                    engine=engine
                 )
                 doc.url = url
                 extracted_texts.append(doc)
@@ -510,12 +404,12 @@ def extract_texts(
 
 
 def process_in_batches(
-        urls: List[str], window: int = 5, timeout: int = 50
+    urls: List[str], window: int = 5, timeout: int = 50
 ) -> Generator[None, None, List[Tuple[Future, str]]]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
-            batch = urls[i: i + window]
+            batch = urls[i : i + window]
             futures = [
                 (executor.submit(requests.get, url, timeout=timeout), url)
                 for url in batch
@@ -528,7 +422,7 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
         return [text]
     else:
         return [
-            text[i: i + max_tokens] for i in range(0, len(text), max_tokens - overlap)
+            text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)
         ]
 
 
@@ -550,7 +444,7 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
 
 
 def find_similar_chunks(
-        query: str, docs_with_embeddings: List[Document], k: int = 4
+    query: str, docs_with_embeddings: List[Document], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
 
@@ -570,13 +464,82 @@ def find_similar_chunks(
     return [docs_with_embeddings[i] for i in I[0]]
 
 
+def multi_questions_response(
+    prompt:str, 
+    engine:str,
+    temperature:float = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens:int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> List[str]:
+    """Generate multiple questions for fetching information from the web."""
+    try:
+        multi_questions_prompt = MULTI_QUESTIONS_PROMPT.format(question=prompt)
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": multi_questions_prompt},
+        ]
+
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            n=1,
+            timeout=150,
+            stop=None,
+            functions=[MultiQuestions.openai_schema],
+            function_call={"name": "MultiQuestions"}
+        )
+        multi_questions = MultiQuestions.from_response(response)
+
+        if counter_callback:
+            counter_callback(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+                model=engine,
+                token_counter=count_tokens,
+            )
+
+        # append the user's question to the list of questions
+        multi_questions.questions.append(prompt)
+
+        return multi_questions.questions, counter_callback
+
+    except Exception as e:
+        return [prompt], counter_callback
+    
+
+def reciprocal_rank_refusion(similar_chunks: List[Document], k: int) -> List[Document]:
+    """Reciprocal rank refusion to re-rank the similar chunks based on the text."""
+    fused_chunks = {}
+    for rank, doc in enumerate(similar_chunks):
+        doc_text = doc.text
+        if doc_text not in fused_chunks:
+            fused_chunks[doc_text] = (doc, 0)
+        fused_chunks[doc_text] = (doc, fused_chunks[doc_text][1] + 1 / (rank + 60))
+    
+    sorted_fused_chunks = sorted(fused_chunks.values(), key=lambda x: x[1], reverse=True)
+
+    return [doc for doc, _ in sorted_fused_chunks[:k]]
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
+
+
 def fetch_additional_information(
-        client: OpenAI,
-        prompt: str,
-        engine: str,
-        google_api_key: Optional[str],
-        google_engine_id: Optional[str],
-        counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    client: OpenAI,
+    prompt: str,
+    engine: str,
+    google_api_key: Optional[str],
+    google_engine_id: Optional[str],
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    source_links: Optional[List[str]] = None,
+    num_urls: Optional[int] = None,
+    temperature: float = DEFAULT_OPENAI_SETTINGS["temperature"],
+    max_tokens: int = DEFAULT_OPENAI_SETTINGS["max_tokens"],
 ) -> Tuple:
     """Fetch additional information from the web."""
 
@@ -587,37 +550,56 @@ def fetch_additional_information(
         engine=engine,
         num_queries=NUM_QUERIES,
         counter_callback=counter_callback,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
     print(f"Queries: {queries}")
 
     # get the top URLs for the queries
-    urls = get_urls_from_queries(
-        queries=queries,
-        api_key=google_api_key,
-        engine=google_engine_id,
-        num=NUM_URLS_PER_QUERY,
-    )
-    print(f"URLs: {urls}")
+    if not source_links:
+        urls = get_urls_from_queries(
+            queries=queries,
+            api_key=google_api_key,
+            engine=google_engine_id,
+            num=NUM_URLS_PER_QUERY,
+        )
+        print(f"URLs: {urls}")
 
-    # Extract text and dates from the URLs
-    docs, counter_callback = extract_texts(
-        urls=urls, client=client, counter_callback=counter_callback
-    )
+        # Extract text from the URLs
+        docs, counter_callback = extract_texts(
+            urls=urls, 
+            client=client, 
+            counter_callback=counter_callback,
+            engine=engine
+        )
+    else:
+        docs = []
+        for url, content in islice(source_links.items(), num_urls or len(source_links)):
+            doc, counter_callback = extract_text(
+                html=content, 
+                client=client, 
+                counter_callback=counter_callback,
+                engine=engine
+            )
+            doc.url = url
+            docs.append(doc)
 
     # Remove None values from the list
     docs = [doc for doc in docs if doc]
 
-    # remove doc with ""
+    # remove empty documents with ""
     docs = [doc for doc in docs if hasattr(doc, "text") and doc.text != ""]
 
     # Chunk the documents
     split_docs = []
     for doc in docs:
         t = recursive_character_text_splitter(
-            doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
+            doc.text, 
+            SPLITTER_CHUNK_SIZE, 
+            SPLITTER_OVERLAP
         )
         split_docs.extend(
-            [Document(text=chunk, date=doc.date, url=doc.url) for chunk in t]
+            [Document(text=chunk, url=doc.url) for chunk in t]
         )
     print(f"Split Docs: {len(split_docs)}")
 
@@ -628,18 +610,29 @@ def fetch_additional_information(
     docs_with_embeddings = get_embeddings(split_docs)
     print(f"Docs with embeddings: {len(docs_with_embeddings)}")
 
-    # Find similar chunks
-    similar_chunks = find_similar_chunks(
-        query=prompt,
-        docs_with_embeddings=docs_with_embeddings,
-        k=NUM_NEIGHBORS,
+    # multi questions prompt
+    questions, counter_callback = multi_questions_response(
+        prompt=prompt, 
+        engine=engine, 
+        counter_callback=counter_callback,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
-    print(f"Similar Chunks: {len(similar_chunks)}")
+    print(f"Questions: {questions}")
 
+    similar_chunks = []
+    for question in questions:
+        similar_chunks.extend(find_similar_chunks(question, docs_with_embeddings, k=NUM_NEIGHBORS))
+    print(f"Similar Chunks before refusion: {len(similar_chunks)}")
+
+    # Reciprocal rank refusion
+    similar_chunks = reciprocal_rank_refusion(similar_chunks, NUM_NEIGHBORS)
+    print(f"Similar Chunks after refusion: {len(similar_chunks)}")
+    
     # Format the additional information
     additional_information = "\n".join(
         [
-            f"ARTICLE {i}, URL: {doc.url}, DATE: {doc.date}, CONTENT: {doc.text}\n"
+            f"ARTICLE {i}, URL: {doc.url}, CONTENT: {doc.text}\n"
             for i, doc in enumerate(similar_chunks)
         ]
     )
@@ -648,7 +641,7 @@ def fetch_additional_information(
 
 
 def adjust_additional_information(
-        prompt: str, additional_information: str, model: str
+    prompt: str, additional_information: str, model: str
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
@@ -660,7 +653,7 @@ def adjust_additional_information(
 
     # Calculate available tokens for additional_information
     MAX_PREDICTION_PROMPT_TOKENS = (
-            MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+        MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
     )
     available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens - BUFFER_TOKENS
 
@@ -676,50 +669,32 @@ def adjust_additional_information(
     return additional_information
 
 
+def extract_question(prompt: str) -> str:
+    pattern = r'\"(.*?)\"'
+    try:
+        question = re.findall(pattern, prompt)[0]
+    except Exception as e:
+        question = prompt
+
+    return question
+
+
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
-        prompt = kwargs["prompt"]
+        prompt = extract_question(kwargs["prompt"])
+        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
-
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"Tool {tool} is not supported.")
-
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")
-
-        # Check if question is valid
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": VALID_PROMPT.format(
-                    user_prompt=prompt
-                ),
-            },
-        ]
-
-        response_valid = client.chat.completions.create(
-            model=engine,
-            messages=messages,
-            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
-            n=1,
-            timeout=150,
-            stop=None,
-            functions=[Valid.openai_schema],
-            function_call={'name': 'Valid'}
-        )
-
-        valid_results = Valid.from_response(response_valid)
-        print(f"Valid: {valid_results}")
-
-        if not valid_results.is_valid:
-            return valid_results.json(), None, None, None
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"Tool {tool} is not supported.")
 
         (
             additional_information,
@@ -732,6 +707,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             google_api_key=google_api_key,
             google_engine_id=google_engine_id,
             counter_callback=counter_callback,
+            source_links=kwargs.get("source_links", None),
+            num_urls=num_urls,
+            temperature=temperature,
+            max_tokens=max_tokens,
         )
 
         # Adjust the additional_information to fit within the token budget
@@ -741,117 +720,75 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
         )
 
+        # Reasoning prompt
+        reasoning_prompt = REASONING_PROMPT.format(
+            user_prompt=prompt, formatted_docs=adjusted_info
+        )
+
         # Do reasoning
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": REASONING_PROMPT.format(
-                    user_prompt=prompt, formatted_docs=adjusted_info
-                ),
+                "content": reasoning_prompt,
             },
         ]
 
+        # Reasoning
         response_reasoning = client.chat.completions.create(
             model=engine,
             messages=messages,
-            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            temperature=temperature,
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
         )
 
+        # Extract the reasoning
         reasoning = response_reasoning.choices[0].message.content
 
-        # Check if question is determinable
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": DETERMINABLE_PROMPT.format(
-                    user_prompt=prompt, reasoning=reasoning
-                ),
-            },
-        ]
-
-        response_determinable = client.chat.completions.create(
-            model=engine,
-            messages=messages,
-            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
-            n=1,
-            timeout=150,
-            stop=None,
-            functions=[Determinable.openai_schema],
-            function_call={'name': 'Determinable'}
+        # Prediction prompt
+        prediction_prompt = PREDICTION_PROMPT.format(
+            user_prompt=prompt, reasoning=reasoning
         )
-
-        determinable_results = Determinable.from_response(response_determinable)
-        print(f"Determinable: {determinable_results}")
-
-        if not determinable_results.is_determinable:
-            return determinable_results.json(), reasoning, None, None
 
         # Make the prediction
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": PREDICTION_PROMPT.format(
-                    user_prompt=prompt, reasoning=reasoning
-                ),
+                "content": prediction_prompt,
             },
         ]
 
-        response_prediction = client.chat.completions.create(
+        response = client.chat.completions.create(
             model=engine,
             messages=messages,
-            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            temperature=temperature,
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
             functions=[Results.openai_schema],
-            function_call={'name': 'Results'}
+            function_call={'name':'Results'}
         )
+        results = str(Results.from_response(response))
 
-        results = Results.from_response(response_prediction)
-        print(f"Results: {results}")
-
-        # Make the prediction
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": PREDICTION_PROMPT.format(
-                    user_prompt=prompt, reasoning=reasoning
-                ),
-            },
-        ]
-
-        response_prediction = client.chat.completions.create(
-            model=engine,
-            messages=messages,
-            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
-            n=1,
-            timeout=150,
-            stop=None,
-            functions=[Results.openai_schema],
-        )
-
-        results = Results.from_response(response_prediction)
-        print(f"Results: {results}")
-
+        pairs = str(results).split()
+        result_dict = {}
+        for pair in pairs:
+            key, value = pair.split("=")
+            result_dict[key] = float(value)  # Convert value to float
+        results = result_dict
+        results = json.dumps(results)
         if counter_callback is not None:
             counter_callback(
                 input_tokens=response_reasoning.usage.prompt_tokens
-                             + response_prediction.usage.prompt_tokens,
+                + response.usage.prompt_tokens,
                 output_tokens=response_reasoning.usage.completion_tokens
-                              + response_prediction.usage.completion_tokens,
+                + response.usage.completion_tokens,
                 model=engine,
                 token_counter=count_tokens,
-                )
-        return results.json(), reasoning, None, counter_callback
-
+            )
+        return results, reasoning_prompt + "////" + prediction_prompt, None, counter_callback

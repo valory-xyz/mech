@@ -35,7 +35,7 @@ NUM_URLS_EXTRACT = 5
 DEFAULT_NUM_WORDS = 300
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
-    "temperature": 0.7,
+    "temperature": 0.,
 }
 ALLOWED_TOOLS = [
     "claude-prediction-offline",
@@ -278,7 +278,7 @@ def fetch_additional_information(
     return additional_information, counter_callback
 
 
-def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]

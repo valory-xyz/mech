@@ -15,11 +15,11 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 - valory/websocket_client:0.1.0:bafybeiflmystocxaqblhpzqlcop2vkhsknpzjx2jomohomaxamwskeokzm
 contracts:
-- valory/agent_mech:0.1.0:bafybeicbhvrlug56qvwlh6b4y35xg6fytvtahhaae7xm7jssecbie576mu
+- valory/agent_mech:0.1.0:bafybeidsau5x2vjofpcdzxkg7airwkrdag65ohtxcby2ut27tfjizgnrnm
 - valory/agent_registry:0.1.0:bafybeiargayav6yiztdnwzejoejstcx4idssch2h4f5arlgtzj3tgsgfmu
 - valory/gnosis_safe:0.1.0:bafybeictjc7saviboxbsdcey3trvokrgo7uoh76mcrxecxhlvcrp47aqg4
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeie6ynnoavvk2fpbn426nlp32sxrj7pz5esgebtlezy4tmx5gjretm
-- valory/hash_checkpoint:0.1.0:bafybeianr3zy3bb464jwlwwxtk2daeeh4cefy7ihw5bfn7zrn7vjs3fyga
+- valory/hash_checkpoint:0.1.0:bafybeigv2bceirhy72yajxzibi4a5wrcfptfbkjbzzko6pqdq2f4dzr3xa
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeiby5x4wfdywlenmoudbykdxohpq2nifqxfep5niqgxrjyrekyahzy
 protocols:
@@ -38,12 +38,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihljirk3d4rgvmx2nmz3p2mp27iwh2o5euce5gccwjwrpawyjzuaq
 - valory/abstract_round_abci:0.1.0:bafybeigjrepaqpb3m7zunmt4hryos4vto4yyj3u6iyofdb2fotwho3bqvm
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeiagit2v4swvgwsulrqpr75qgkxhzjjkyc7yevqkggb3jblcjymytq
+- valory/mech_abci:0.1.0:bafybeihzip2inpeeygbqexpx4gcjwoiteqhytlmcu7funrfil4bhdgpb74
 - valory/registration_abci:0.1.0:bafybeif3ln6eg53ebrfe6uicjew4uqp2ynyrcxkw5wi4jm3ixqv3ykte4a
 - valory/reset_pause_abci:0.1.0:bafybeicm7onl72rfnn33pbvzwjpkl5gafeieyobfcnyresxz7kunjwmqea
-- valory/subscription_abci:0.1.0:bafybeiclwa2u24nv4yzke6s24qxz2uxc6tpniyjxzprlb7oinkiijdhlgy
-- valory/task_execution:0.1.0:bafybeidp6ae2noa7wpklelyu5y3yuxpmw2q4e62rfdgohvuqalln74pmce
-- valory/task_submission_abci:0.1.0:bafybeib6yijhh5ss7mufpjghjwobxjynuaz2mf52jo54dtpyer4ovowei4
+- valory/subscription_abci:0.1.0:bafybeicsxdt3mv6idkn5gyaqljvgywgbo57zim6jlpip55fqqlr5rzhsxq
+- valory/task_execution:0.1.0:bafybeihfusmz5vrtgsbveh3hvlgsrmrfyumcxulrnrcfmoraifwr3dzxhy
+- valory/task_submission_abci:0.1.0:bafybeiedymlwwaipot4za5bqp7wyu5izj2t3o5gwy3mzsbywtioapc75ni
 - valory/termination_abci:0.1.0:bafybeie6h7j4hyhgj2wte64n3xyudxq4pgqcqjmslxi5tff4mb6vce2tay
 - valory/transaction_settlement_abci:0.1.0:bafybeid57tozt5f3kgzmu22nbr3c3oy4p7bi2bu66rqsgnlylq6xgh2ixe
 - valory/websocket_client:0.1.0:bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta
@@ -92,7 +92,7 @@ dependencies:
   langchain:
     version: ==0.0.303
   open-aea-ledger-ethereum:
-    version: ==1.48.0
+    version: ==1.50.0
   pandas:
     version: ==2.1.1
   python-dateutil:
@@ -190,6 +190,10 @@ models:
       multisend_address: ${str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
       service_registry_address: ${str:0x9338b5153AE39BB89f50468E608eD9d764B755fD}
       service_endpoint_base: ${str:https://dummy_service.autonolas.tech/}
+      gas_params:
+        gas_price: ${int:null}
+        max_fee_per_gas: ${int:null}
+        max_priority_fee_per_gas: ${int:null}
       init_fallback_gas: ${int:500000}
       manual_gas_limit: ${int:1000000}
       service_owner_share: ${float:0.1}
