@@ -73,8 +73,8 @@ Market Question: "Will FIFA fund the construction of new football stadiums for l
 Answer:
     Status: The question implies that FIFA, the international governing body of football, is considering funding the construction of new football stadiums specifically for local clubs in England. The question suggests that FIFA has not yet allocated funds for this purpose.
     Rules:
-    'Yes': The question resolves as 'Yes' if, by 31 December 2024, there is an official announcement or credible documentation confirming that FIFA, the international governing body of football, has directly allocated funds for the construction of new football stadiums specifically for local clubs in England.
-    'No': The question resolves as 'No' if, by 31 December 2024, there is no official announcement or credible documentation confirming that FIFA, the international governing body of football, has directly funded the construction of new football stadiums for local clubs in England. It also resolves as 'No' if a different entity, other than FIFA, funds the construction of these stadiums.
+    'Yes': The question resolves as 'Yes' if FIFA, the international governing body of football, has directly allocated funds for the construction of new football stadiums specifically for local clubs in England by 31 December 2024. This allocation must be evidenced by an official announcement, press release, or documented agreement confirming the funding by this specific date.
+    'No': The question resolves as 'No' if FIFA, the international governing body of football, has not allocated funds for the construction of new football stadiums for local clubs in England by 31 December 2024. This includes any funding allocated after this date, the absence of any official announcement, press release, or documented agreement confirming the allocation by this date. The market also resolves as 'No' if FIFA allocates funds for stadium construction in a different country or for a different purpose by the end of 2024.
 ```
 
 Question: "{market_question}"

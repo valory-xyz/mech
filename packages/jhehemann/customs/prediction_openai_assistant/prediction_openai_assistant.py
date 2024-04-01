@@ -177,7 +177,7 @@ Structure your report in the following sections and sub-sections:
 
 - Introduction and Background
 - Findings and Analysis (search output)
-    - Will the event happen? (no focus on the date)
+    - Will the event happen? (do not refer to any date here)
     - When will the event happen? (focus on the date in the search output)
     - Calculate the difference between the actual event date and the date specified in the market question.
 - Market rules
