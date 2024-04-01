@@ -19,6 +19,7 @@
 
 """This module implements a Mech tool for binary predictions."""
 
+from datetime import datetime
 import json
 import re
 import time
@@ -169,14 +170,17 @@ Use markdown syntax. Include as much relevant information as possible and try no
 # on the market rules and the search output.
 
 REPORT_PROMPT_NEW = """
-Prepare a concise but informative evaluation report that discusses the potential outcome of the market question based \
+Imagine today is {current_date} and someone on the street asks you the market question specified under MARKET_QUESTION. Prepare a concise but informative evaluation report that discusses the potential outcome of the market question based \
 on the additional information and the market rules.
 
-Structure your report in the following sections:
+Structure your report in the following sections and sub-sections:
 
 - Introduction and Background
-- Findings and Analysis (event)
-- Findings and Analysis (dates, including the additional information dates in relation to the market question's date)
+- Findings and Analysis (search output)
+    - Will the event happen? (no focus on the date)
+    - When will the event happen? (focus on the date in the search output)
+    - Calculate the difference between the actual event date and the date specified in the market question.
+- Market rules
 - Evaluation
 - Caveats
 
@@ -195,10 +199,43 @@ ADDITIONAL_INFORMATION:
 {additional_information}
 ```
 
-Note: The specified date in the market question is an arbitrary date of personal interest only for the market creator and does not result from public \
-or insider information. However, it is essential for the market question's outcome. Pay close attention if the additional information provide \
-information that indicate if and when the event will happen.
+Output only the raw report without any additional information or formatting.
 """
+
+
+REPORT_PROMPT_NEW_BEST = """
+Imagine today is {current_date} and someone on the street asks you the question specified under MARKET_QUESTION. Prepare a concise but informative evaluation report that discusses the potential outcome of the market question based \
+on the additional information and the market rules.
+
+Structure your report in the following sections:
+
+- Introduction and Background
+- Findings and Analysis (event)
+- Findings and Analysis (dates)
+- Evaluation
+- Caveats
+
+MARKET_QUESTION:
+```
+{market_question}
+```
+
+MARKET_RULES:
+```
+{market_rules}
+```
+
+ADDITIONAL_INFORMATION:
+```
+{additional_information}
+```
+
+Output only the raw report without any additional information or formatting.
+Note: The outcome of the market question is based on the event happening specified by the market question date.
+"""
+
+# Note that the event, specified in the market question and the market question itself are different things. The market question's outcome is not \
+# based on the event happening but on the event happening specified by the market question date.
 
 # Note: The specified date in the market question is an arbitrary date of personal interest only for the market creator and does not result from public \
 # or insider information. However, it is essential for the market question's outcome. Pay close attention if the additional information provide \
@@ -281,9 +318,21 @@ MARKET_QUESTION: {market_question}
 """
 
 PREDICTION_PROMPT_TEMPLATE_NEW = """
-Given the previous answer, provide an estimated probability that the market resolves as 'Yes' and 'No' along with your confidence \
+Use the research report from the previous answer and provide an estimated probability how the market question will resolve along with your confidence \
 and the utility of the information provided. Output your answer in a single JSON object that contains four fields: "p_yes", "p_no", "confidence", "info_utility". \
 Each item in the JSON must have a value between 0 and 1. Do not include any other contents in your response. Do not use formatting characters in your response.
+
+Use the market rules as the basis for your probability estimation.
+MARKET_RULES:
+{market_rules_part}
+"""
+
+PREDICTION_PROMPT_TEMPLATE_BEST = """
+Given the previous answer, provide an estimated probability how the market question will resolve along with your confidence \
+and the utility of the information provided. Output your answer in a single JSON object that contains four fields: "p_yes", "p_no", "confidence", "info_utility". \
+Each item in the JSON must have a value between 0 and 1. Do not include any other contents in your response. Do not use formatting characters in your response.
+
+MARKET_QUESTION: {market_question}
 """
 
 RESEARCH_PLAN_PROMPT_TEMPLATE = """
@@ -588,17 +637,28 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         market_question = extract_question(prompt)
         if market_question is None:
             return None, None, "Market question not found in prompt", None
+        
+        print(f"MARKET QUESTION:\n{market_question}\n")
 
         market_rules = get_market_rules(market_question, client)
-        print(f"Market rules:\n{market_rules}\n")
+        print(f"MARKET RULES:\n{market_rules}\n")
         additional_inforamtion = research(market_question, client, google_api_key, google_engine_id, engine, market_rules)
-        print(f"Additional information:\n{additional_inforamtion}\n")
+        #print(f"ADDITIONAL INFORMATION:\n{additional_inforamtion}\n")
 
+        current_date = datetime.now().strftime('%B %d, %Y')
         report_prompt_new = REPORT_PROMPT_NEW.format(
             market_question=market_question,
             market_rules=market_rules,
-            additional_information=additional_inforamtion
+            additional_information=additional_inforamtion,
+            current_date=current_date
         )
+
+        
+        # report_prompt_new = report_prompt_new + f"\nFor reference, the current date is: {current_date}"
+
+        print(f"REPORT PROMPT NEW:\n{report_prompt_new}\n")
+
+        
         
         messages = [
             {"role": "system", "content": "You are a professional journalist"},
@@ -612,11 +672,17 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         output = response.choices[0].message.content
         print(f"Output:\n{output}\n")
 
+        market_rules_part = market_rules.split("Rules:", 1)[1]
+        market_rules_part = "Rules:" + market_rules_part
 
+        prediction_prompt_template_new = PREDICTION_PROMPT_TEMPLATE_NEW.format(market_question=market_question, market_rules_part=market_rules_part)
+        print(f"PREDICTION PROMPT NEW:\n{prediction_prompt_template_new}")
+        
         messages = [
             {"role": "system", "content": ASSISTANT_INSTRUCTIONS_PREDICTION_NEW},
+            # {"role": "user", "content": report_prompt_new},
             {"role": "assistant", "content": output},
-            {"role": "user", "content": PREDICTION_PROMPT_TEMPLATE_NEW,}
+            {"role": "user", "content": prediction_prompt_template_new},
         ]
         response = client.chat.completions.create(
             model=engine,

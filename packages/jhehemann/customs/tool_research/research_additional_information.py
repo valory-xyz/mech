@@ -142,13 +142,13 @@ The queries must be phrased as concise, but descriptive questions that will help
 
 
 QUERY_RERANKING_PROMPT_TEMPLATE = """
-Evaluate the queries and decide which ones will provide the best and wholesome data to answer the question. Do not modify the queries.
-Select only the best five queries, in order of relevance.
+Evaluate the queries and decide which ones will provide the best data to answer the question. Do not modify the queries.
+Select only the best seven queries, in order of relevance.
 
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
 * The JSON must contain one field: "queries"
-    - "queries": A 5 item array of the generated search engine queries
+    - "queries": A 7 item array of the generated search engine queries
 * Include only the JSON object in your output
 """
 
@@ -391,7 +391,7 @@ class WebPage:
                 else:
                     raise ValueError(f"Invalid attribute: {attribute_name}")
         else:
-            raise ValueError("No HTML content to extract page attributes from.")
+            print("No HTML content to extract page attributes from.\nURL: {self.url}\nHTML: {self.html}")
         
         return self
 
@@ -536,7 +536,7 @@ def find_release_date_in_data(data):
 
 def format_date(date_string) -> str:
     # Desired format "February 16, 2024, 3:30 PM"
-    format_str = "%B %d, %Y, %I:%M %p"
+    format_str = "%B %d, %Y"
 
     # Handle the case where the date string is "unknown"
     if date_string.lower() == "unknown":
@@ -555,7 +555,7 @@ def format_date(date_string) -> str:
 
 def parse_date_str(date_str: str) -> datetime:
     # Desired format "February 16, 2024, 3:30 PM"
-    datetime_format = "%B %d, %Y, %I:%M %p"
+    datetime_format = "%B %d, %Y"
     try:
         return datetime.strptime(date_str, datetime_format)
     except (ValueError, TypeError):
@@ -1080,10 +1080,20 @@ def research(
     additional_information = format_additional_information(web_pages)
     if additional_information:
         additional_information += (
-            f"Disclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y, %I:%M %p')} and does not claim to be exhaustive or definitive."
+            f"Disclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y')} and does not claim to be exhaustive or definitive."
         )
-    print(f"\nADDITIONAL INFORMATION for SEARCH QUERY {market_question}")
+
+    print(f"\nADDITIONAL INFORMATION for SEARCH QUERY {market_question} PREFINAL:")
     print(additional_information)
     print()
+
     additional_information = final_summary(client, additional_information, market_question, engine)
+
+    if additional_information:
+        additional_information += (
+            f"\n\nDisclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y')} and does not claim to be exhaustive or definitive."
+        )
+
+    
+
     return additional_information
