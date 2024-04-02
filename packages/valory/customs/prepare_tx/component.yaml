@@ -11,4 +11,6 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: prepare_tx.py
 callable: run
-dependencies: {}
+dependencies:
+  openai:
+    version: ==1.11.0
