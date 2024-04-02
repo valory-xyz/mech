@@ -479,6 +479,12 @@ class TextChunk(BaseModel):
     similarity: Optional[float] = None
 
 
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
+
+
 def load_model(vocab: str) -> Language:
     """Utilize spaCy to load the model and download it if it is not already available."""
     try:
@@ -741,6 +747,7 @@ def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.E
 
             except Exception as e:
                 print(f"Exception: {e}")
+    print("Embeddings processed.")
 
     return text_chunks
 
@@ -908,8 +915,10 @@ def fetch_queries(
     input_query: str,
     model="gpt-3.5-turbo",
     market_rules = None,
+    counter_callback=None,
     temperature=1.0,
     max_attempts=2,
+
 ) -> List[str]:
     """Fetch queries from the OpenAI engine"""
     attempts = 0
@@ -930,6 +939,15 @@ def fetch_queries(
                 temperature=temperature,
             )
             search_plan = response.choices[0].message.content
+
+            if counter_callback is not None:
+                counter_callback(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                    model="gpt-3.5-turbo",
+                    token_counter=count_tokens,
+                )
+
             print("\nSEARCH PLAN:")
             print(search_plan)
             messages = [
@@ -947,17 +965,20 @@ def fetch_queries(
             )
             output = response.choices[0].message.content
 
-
-
-
-
+            if counter_callback is not None:
+                counter_callback(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                    model="gpt-3.5-turbo",
+                    token_counter=count_tokens,
+                )
 
             # Parse the response content
             trimmed_output = trim_json_formatting(output)
             print(trimmed_output)
             json_data = json.loads(trimmed_output)
             queries = json_data["queries"]
-            return queries  # Return the parsed data if successful
+            return queries, counter_callback  # Return the parsed data if successful
         except Exception as e:
             print(f"Attempt {attempts + 1} failed with error: {e}")
             attempts += 1
@@ -978,8 +999,9 @@ def summarize_relevant_chunks(
         input_query: str,
         client: OpenAI,
         enc: tiktoken.Encoding,
-        model = "gpt-3.5-turbo",
-        temperature = 0.0
+        counter_callback,
+        model="gpt-3.5-turbo",
+        temperature=0.0,
 ) -> List[WebPage]:
     def summarize_for_web_page(web_page: WebPage) -> None:
         chunks_string = ""
@@ -1006,6 +1028,14 @@ def summarize_relevant_chunks(
             messages=messages,
             temperature=temperature,
         )
+        if counter_callback is not None:
+            counter_callback(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+                model="gpt-3.5-turbo",
+                token_counter=count_tokens,
+            )
+
         output = response.choices[0].message.content
         web_page.relevant_chunks_summary = output
 
@@ -1021,7 +1051,8 @@ def summarize_relevant_chunks(
                 future.result()
             except Exception as e:
                 print(f'Web page {web_page.url} generated an exception: {e}')
-    return [web_page for web_page in web_pages if "Error" not in web_page.relevant_chunks_summary]
+    web_pages = [web_page for web_page in web_pages if "Error" not in web_page.relevant_chunks_summary]
+    return web_pages, counter_callback
 
 
 def format_additional_information(web_pages: List[WebPage]) -> str:
@@ -1038,6 +1069,7 @@ def final_summary(
     additional_information: str,
     search_query: str,
     engine: str = "gpt-3.5-turbo",
+    counter_callback=None,
     temperature: float = 0.0
 ) -> str:
     prompt = FINAL_SUMMARY_PROMPT.format(additional_information=additional_information, search_query=search_query)
@@ -1050,10 +1082,17 @@ def final_summary(
         messages=messages,
         temperature=temperature,
     )
+
+
+    if counter_callback is not None:
+        counter_callback(
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            model=engine,
+            token_counter=count_tokens,
+        )
     output = response.choices[0].message.content
-    return output
-
-
+    return output, counter_callback
 
 def research(
     market_question: str,
@@ -1062,11 +1101,12 @@ def research(
     google_engine_id: str,
     engine: str,
     market_rules: str,
+    counter_callback,
 ):
     """Research additional information based on a prediction market question"""
     
     # Generate a list of sub-queries
-    queries = fetch_queries(client, market_question, engine, market_rules)
+    queries, counter_callback = fetch_queries(client, market_question, engine, market_rules, counter_callback)
     
     # Get URLs from sub-queries
     urls = get_urls_from_queries(
@@ -1096,10 +1136,10 @@ def research(
     text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
     text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-    for chunk in text_chunks_sorted:
-        print(f"Similarity: {chunk.similarity}")
-        print(chunk.text)
-        print()
+    # for chunk in text_chunks_sorted:
+    #     print(f"Similarity: {chunk.similarity}")
+    #     print(chunk.text)
+    #     print()
 
     # Create a dictionary mapping URLs to WebPage objects for quicker lookups
     web_pages_dict = {web_page.url: web_page for web_page in web_pages}
@@ -1109,7 +1149,7 @@ def research(
             web_pages_dict[text_chunk.url].chunks_sorted.append(text_chunk.text)
 
     web_pages = list(web_pages_dict.values())
-    web_pages = summarize_relevant_chunks(web_pages, market_question, client, enc)
+    web_pages, counter_callback = summarize_relevant_chunks(web_pages, market_question, client, enc, counter_callback)
     web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
 
     additional_information = format_additional_information(web_pages)
@@ -1122,13 +1162,11 @@ def research(
     print(additional_information)
     print()
 
-    additional_information = final_summary(client, additional_information, market_question, engine)
+    additional_information, counter_callback = final_summary(client, additional_information, market_question, engine, counter_callback)
 
     if additional_information:
         additional_information += (
             f"\n\nDisclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y')} and does not claim to be exhaustive or definitive."
         )
 
-    
-
-    return additional_information
+    return additional_information, counter_callback

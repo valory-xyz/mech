@@ -34,6 +34,8 @@ from typing import Dict
 # from tqdm import tqdm
 
 from openai import OpenAI
+from tiktoken import encoding_for_model
+
 
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
@@ -184,9 +186,16 @@ OUTPUT_FORMAT:
 """
 
 
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
+
+
 def get_market_rules(
     market_question: str,
     client: OpenAI,
+    counter_callback,
 ):
     """Infer market rules for a prediction market question."""
     
@@ -211,4 +220,12 @@ def get_market_rules(
     )
     response_message = response.choices[0].message.content 
 
-    return response_message
+    if counter_callback is not None:
+        counter_callback(
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            model="gpt-3.5-turbo",
+            token_counter=count_tokens,
+        )
+
+    return response_message, counter_callback
