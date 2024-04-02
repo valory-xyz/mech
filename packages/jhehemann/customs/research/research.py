@@ -1,34 +1,22 @@
 """This module implements a research agent for extracting relevant information from URLs."""
 
-from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 import re
 from bs4 import BeautifulSoup, NavigableString
-from docstring_parser import parse
 import faiss
 from googleapiclient.discovery import build
-from itertools import islice
 import json
 import numpy as np
 import tiktoken
-from io import BytesIO
-import PyPDF2
 from openai import OpenAI
 from pydantic import BaseModel, Field
 import requests
 from requests import Session
-from requests.exceptions import RequestException, TooManyRedirects
-# from requests.packages.urllib3.util.retry import Retry
-from markdownify import markdownify as md
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from tiktoken import encoding_for_model
 import html2text
 from readability import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-import spacy
-from spacy import Language
-from spacy.cli import download
 
 import logging
 
@@ -39,41 +27,6 @@ from tqdm import tqdm
 from dateutil import parser
 
 #logging.basicConfig(level=logging.DEBUG)
-
-# from typing import Any, Dict, Generator, List, Optional, Tuple
-# from datetime import datetime, timezone, timedelta
-# import time
-# import json
-# import re
-# import os
-# #import html2text
-# from readability import Document
-# from concurrent.futures import Future, ThreadPoolExecutor
-# from itertools import groupby
-# from operator import itemgetter
-
-# from bs4 import BeautifulSoup, NavigableString
-# from googleapiclient.discovery import build
-# from langchain.llms import Ollama
-# from langchain.pydantic_v1 import BaseModel, Field
-# from langchain.tools import BaseTool, StructuredTool, tool
-# # from langchain_core.callbacks import (
-# #     AsyncCallbackManagerForToolRun,
-# #     CallbackManagerForToolRun,
-# # )
-
-
-# from urllib.parse import urlparse
-# from typing import Optional, Type
-# import requests
-# from requests import Session
-
-# import spacy.util
-# import tiktoken
-
-# from dateutil import parser
-# from tqdm import tqdm
-
 
 #NUM_URLS_EXTRACT = 5
 NUM_URLS_PER_QUERY = 5
@@ -94,16 +47,6 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0,
 }
 
-ALLOWED_TOOLS = [
-    "prediction-sentence-embedding-conservative",
-    "prediction-sentence-embedding-bold",
-]
-TOOL_TO_ENGINE = {
-    "prediction-sentence-embedding-conservative": "gpt-3.5-turbo",
-    "prediction-sentence-embedding-bold": "gpt-4",
-}
-
-
 FINAL_SUMMARY_PROMPT = """
 You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
 query: "{search_query}". Your task is to select the most relevant bulletpoints from the articles that may help to answer the search query. If there are no \
@@ -116,21 +59,8 @@ SEARCH_OUTPUT:
 ```
 
 If there are redundant bulletpoints across articles you must remove them but only from the older articles or the ones that have no publication date. \
-Regarding redundant bulletpoints, you must favor those mentioning specific dates and those that have publication dates and are more recent. \
-
+Regarding redundant bulletpoints, you must favor those mentioning specific dates and those that have publication dates and are more recent.
 """
-
-FINAL_SUMMARY_CONTINUOUS_TEXT_PROMPT = """
-You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
-query: "{search_query}". Your task is to summarize only the concrete relevant results from the search outputs. If there are dates \
-mentioned in the search outputs, ensure to include them in the summary. It must be concise and informative.
-
-SEARCH_OUTPUT:
-```
-{additional_information}
-```
-"""
-
 
 RESEARCH_PLAN_PROMPT_TEMPLATE = """
 Your goal is to prepare a research plan for {query}.
@@ -139,7 +69,6 @@ The plan must consist of {search_limit} search engine queries separated by comma
 Return ONLY the queries, separated by commas and without quotes.
 The queries must be phrased as concise, but descriptive questions that will help you find relevant information about the event and its date.
 """
-
 
 QUERY_RERANKING_PROMPT_TEMPLATE = """
 Evaluate the queries and decide which ones will provide the best data to answer the question. Do not modify the queries.
@@ -152,56 +81,8 @@ OUTPUT_FORMAT:
 * Include only the JSON object in your output
 """
 
-
-SUB_QUERIES_PROMPT = """
-Your goal is to prepare a research plan for {input_query}.
-
-The plan will consist of multiple web searches that cover a variety of perspectives and sources.
-Think about additional information that needs to be gathered to answer the question comprehensively.
-Formulate 5 unique search queries that will help you find relevant information about the event and its date.
-
-
-OUTPUT_FORMAT:
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* Limit your searches to 5.
-* The JSON must contain one field: "queries"
-    - "queries": A 5 item array of the generated search engine queries
-* Include only the JSON object in your output
-"""
-
-
-QUERIES_PROMPT = """
-You are a Large Language Model in a multi-agent system. Your task is to formulate search engine queries. Find the input query \
-under 'INPUT_QUERY' and adhere to the 'INSTRUCTIONS'.
-
-INSTRUCTIONS:
-* Carefully read the input query under 'USER_PROMPT', enclosed by triple backticks.
-* Create a list of 4 unique search queries likely to yield relevant and contemporary information about the event.
-* Each query must be unique, and they should not overlap or yield the same set of results.
-* One query must be phrased exactly as the input query itself.
-* The two queries should be phrased as negations of the input query and two other queries should be phrased as affirmations.
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response.
-
-INPUT_QUERY:
-```
-{input_query}
-```
-
-OUTPUT_FORMAT:
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* The JSON must contain one field: "queries"
-   - "queries": A 4 item array of the generated search engine queries
-* Include only the JSON object in your output
-* Do not include any formatting characters in your response!
-* Do not include any other contents or explanations in your response!
-"""
-
-# Select those web pages that are likely to contain relevant and current information to answer the question. \
-# ... return ... only for the selected relevant web pages.
-
 SUMMARIZE_PROMPT = """
-Your task is to summarize relevant information in 'SEARCH_OUTPUT' \
+Your task is to summarize relevant information in 'SEARCH_OUTPUT'. \
 The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
 
 INSTRUCTIONS:
@@ -229,88 +110,176 @@ OUTPUT_FORMAT:
 * Do not include any other contents in your response!
 """
 
-SUMMARIZE_PROMPT_BEST = """
-You are a Large Language Model in a multi-agent system. Your task is to summarize relevant information in 'SEARCH_OUTPUT' \
-The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
-
-INSTRUCTIONS:
-* Carefully read the search query under 'SEARCH_QUERY'
-* Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant and could help answering the search query
-* A chunk can be considered relevant if it contains information that might support or refute the search query
-* Summarize the relevant information in a way that is concise and informative
-* You must not infer or add any new information, but only summarize the existing statements in an unbiased way
-* If there is conflicting information, you must include both sides of the argument in the summary
-* You must provide your response in the format specified under "OUTPUT_FORMAT"
-* Do not include any other contents in your response.
-
-SEARCH_QUERY:
-{input_query}
-
-SEARCH_OUTPUT:
-```
-{chunks}
-```
-
-OUTPUT_FORMAT:
-* Only output the summary containing the relevant information from 'SEARCH_OUTPUT' with respect to the search query.
-* The summary must be structured in bullet points.
-* Respond solely with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
-* Do not include any other contents in your response!
-"""
-
-
 # Global constants for possible attribute names for release and update dates
 RELEASE_DATE_NAMES = [
-    'date', 'pubdate', 'publishdate', 'OriginalPublicationDate', 'dateCreated',
-    'article:published_time', 'sailthru.date', 'article.published',
-    'published-date', 'og:published_time', 'publication_date',
-    'publishedDate', 'dc.date', 'DC.date', 'article:published',
-    'article_date_original', 'cXenseParse:recs:publishtime', 'DATE_PUBLISHED',
-    'pub-date', 'pub_date', 'datePublished', 'date_published', 'ArticleDate'
-    'time_published', 'article:published_date', 'parsely-pub-date',
-    'publish-date', 'pubdatetime', 'published_time', 'publishedtime',
-    'article_date', 'created_date', 'published_at', 'lastPublishedDate'
-    'og:published_time', 'og:release_date', 'article:published_time',
-    'og:publication_date', 'og:pubdate', 'article:publication_date',
-    'product:availability_starts', 'product:release_date', 'event:start_date',
-    'event:release_date', 'og:time_published', 'og:start_date', 'og:created',
-    'og:creation_date', 'og:launch_date', 'og:first_published',
-    'og:original_publication_date', 'article:published', 'article:pub_date',
-    'news:published_time', 'news:publication_date', 'blog:published_time',
-    'blog:publication_date', 'report:published_time', 'report:publication_date',
-    'webpage:published_time', 'webpage:publication_date', 'post:published_time',
-    'post:publication_date', 'item:published_time', 'item:publication_date'
+    'date',
+    'pubdate',
+    'publishdate',
+    'OriginalPublicationDate',
+    'dateCreated',
+    'article:published_time',
+    'sailthru.date',
+    'article.published',
+    'published-date',
+    'og:published_time',
+    'publication_date',
+    'publishedDate',
+    'dc.date',
+    'DC.date',
+    'article:published',
+    'article_date_original',
+    'cXenseParse:recs:publishtime',
+    'DATE_PUBLISHED',
+    'pub-date',
+    'datePublished',
+    'date_published',
+    'ArticleDate',
+    'time_published',
+    'article:published_date',
+    'parsely-pub-date',
+    'publish-date',
+    'pubdatetime',
+    'published_time',
+    'publishedtime',
+    'article_date',
+    'created_date',
+    'published_at',
+    'lastPublishedDate',
+    'og:published_time',
+    'og:release_date',
+    'article:published_time',
+    'og:publication_date',
+    'og:pubdate',
+    'article:publication_date',
+    'product:availability_starts',
+    'product:release_date',
+    'event:start_date',
+    'event:release_date',
+    'og:time_published',
+    'og:start_date',
+    'og:created',
+    'og:creation_date',
+    'og:launch_date',
+    'og:first_published',
+    'og:original_publication_date',
+    'article:published',
+    'article:pub_date',
+    'news:published_time',
+    'news:publication_date',
+    'blog:published_time',
+    'blog:publication_date',
+    'report:published_time',
+    'report:publication_date',
+    'webpage:published_time',
+    'webpage:publication_date',
+    'post:published_time',
+    'post:publication_date',
+    'item:published_time',
+    'item:publication_date'
 ]
 
 UPDATE_DATE_NAMES = [
-    'lastmod', 'lastmodified', 'last-modified', 'updated',
-    'dateModified', 'article:modified_time', 'modified_date',
-    'article:modified', 'og:updated_time', 'mod_date',
-    'modifiedDate', 'lastModifiedDate', 'lastUpdate', 'last_updated',
-    'LastUpdated', 'UpdateDate', 'updated_date', 'revision_date',
-    'sentry:revision', 'article:modified_date', 'date_updated',
-    'time_updated', 'lastUpdatedDate', 'last-update-date', 'lastupdate',
-    'dateLastModified', 'article:update_time', 'modified_time',
-    'last_modified_date', 'date_last_modified',
-    'og:updated_time', 'og:modified_time', 'article:modified_time',
-    'og:modification_date', 'og:mod_time', 'article:modification_date',
-    'product:availability_ends', 'product:modified_date', 'event:end_date',
-    'event:updated_date', 'og:time_modified', 'og:end_date', 'og:last_modified',
-    'og:modification_date', 'og:revision_date', 'og:last_updated',
-    'og:most_recent_update', 'article:updated', 'article:mod_date',
-    'news:updated_time', 'news:modification_date', 'blog:updated_time',
-    'blog:modification_date', 'report:updated_time', 'report:modification_date',
-    'webpage:updated_time', 'webpage:modification_date', 'post:updated_time',
-    'post:modification_date', 'item:updated_time', 'item:modification_date'
+    'lastmod',
+    'lastmodified',
+    'last-modified',
+    'updated',
+    'dateModified',
+    'article:modified_time',
+    'modified_date',
+    'article:modified',
+    'og:updated_time',
+    'mod_date',
+    'modifiedDate',
+    'lastModifiedDate',
+    'lastUpdate',
+    'last_updated',
+    'LastUpdated',
+    'UpdateDate',
+    'updated_date',
+    'revision_date',
+    'sentry:revision',
+    'article:modified_date',
+    'date_updated',
+    'time_updated',
+    'lastUpdatedDate',
+    'last-update-date',
+    'lastupdate',
+    'dateLastModified',
+    'article:update_time',
+    'modified_time',
+    'last_modified_date',
+    'date_last_modified',
+    'og:updated_time',
+    'og:modified_time',
+    'article:modified_time',
+    'og:modification_date',
+    'og:mod_time',
+    'article:modification_date',
+    'product:availability_ends',
+    'product:modified_date',
+    'event:end_date',
+    'event:updated_date',
+    'og:time_modified',
+    'og:end_date',
+    'og:last_modified',
+    'og:modification_date',
+    'og:revision_date',
+    'og:last_updated',
+    'og:most_recent_update',
+    'article:updated',
+    'article:mod_date',
+    'news:updated_time',
+    'news:modification_date',
+    'blog:updated_time',
+    'blog:modification_date',
+    'report:updated_time',
+    'report:modification_date',
+    'webpage:updated_time',
+    'webpage:modification_date',
+    'post:updated_time',
+    'post:modification_date',
+    'item:updated_time',
+    'item:modification_date'
 ]
 
 # Global constant for HTML tags to remove
 HTML_TAGS_TO_REMOVE = [
-    "script", "style", "header", "footer", "aside", "nav", "form", "button",
-    "iframe", "input", "textarea", "select", "option", "label", "fieldset",
-    "legend", "img", "audio", "video", "source", "track", "canvas", "svg",
-    "object", "param", "embed", "link", ".breadcrumb", ".pagination", ".nav",
-    ".ad", ".sidebar", ".popup", ".modal", ".social-icons", ".hamburger-menu",
+    "script",
+    "style",
+    "header",
+    "footer",
+    "aside",
+    "nav",
+    "form",
+    "button",
+    "iframe",
+    "input",
+    "textarea",
+    "select",
+    "option",
+    "label",
+    "fieldset",
+    "legend",
+    "img",
+    "audio",
+    "video",
+    "source",
+    "track",
+    "canvas",
+    "svg",
+    "object",
+    "param",
+    "embed",
+    "link",
+    ".breadcrumb",
+    ".pagination",
+    ".nav",
+    ".ad",
+    ".sidebar",
+    ".popup",
+    ".modal",
+    ".social-icons",
+    ".hamburger-menu",
 ]
 
  
@@ -478,49 +447,9 @@ class TextChunk(BaseModel):
     embedding: Optional[List[float]] = None
     similarity: Optional[float] = None
 
-
-def count_tokens(text: str, model: str) -> int:
-    """Count the number of tokens in a text."""
-    enc = encoding_for_model(model)
-    return len(enc.encode(text))
-
-
-def load_model(vocab: str) -> Language:
-    """Utilize spaCy to load the model and download it if it is not already available."""
-    try:
-        return spacy.load(vocab)
-    except OSError:
-        print("Downloading language model...")
-        download(vocab)
-        return spacy.load(vocab)
-
-
-def get_first_dict_from_list(data):
-    """Returns the first item if data is a list of dictionaries"""
-    if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
-        return data[0]
-    else:
-        return data  # or raise an appropriate exception
-
-
-def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
-    """Search Google using a custom search engine."""
-    service = build("customsearch", "v1", developerKey=api_key)
-    search = (
-        service.cse()
-        .list(
-            q=query,
-            cx=engine,
-            num=num,
-        )
-        .execute()
-    )
-    return [result["link"] for result in search.get("items", [])]
-
     
 def trim_json_formatting(output_string):
-    # Define a regular expression pattern that matches the start and end markers
-    # with optional newline characters
+    # Regular expression pattern that matches the start and end markers with optional newline characters
     pattern = r'^```json\n?\s*({.*?})\n?```$'
     
     # Use re.DOTALL to make '.' match newlines as well
@@ -536,34 +465,16 @@ def trim_json_formatting(output_string):
         return output_string
 
 
-def truncate_additional_information(
-    self,
-    additional_informations: str,
-    max_add_tokens: int,
+def trim_chunks_string(
+    chunks_string: str,
     enc: tiktoken.Encoding,
+    max_tokens=MAX_CHUNKS_TOKENS_TO_SUMMARIZE
 ) -> str:
-    """
-    Truncates additional information string to a specified number of tokens using tiktoken encoding.
-
-    Args:
-        additional_informations (str): The additional information string to be truncated.
-        max_add_tokens (int): The maximum number of tokens allowed for the additional information string.
-        enc (tiktoken.Encoding): The tiktoken encoding to be used.
-
-    Returns:
-    - str: The truncated additional information string.
-    """
-
-    # Encode the string into tokens
-    add_enc = enc.encode(additional_informations)
-    len_add_enc = len(add_enc)
-    
-    # Truncate additional information string if token sum exceeds maximum allowed
-    if len_add_enc <= max_add_tokens:
-        return additional_informations
-    else:
-        add_trunc_enc = add_enc[:-int(len_add_enc - max_add_tokens)]
-        return enc.decode(add_trunc_enc)
+    """Trim a string to a maximum number of tokens for summarization"""
+    encoding = enc.encode(chunks_string)
+    if len(encoding) > max_tokens:
+        encoding = encoding[:max_tokens]
+    return enc.decode(encoding)
 
 
 def find_release_date_in_data(data):
@@ -599,6 +510,51 @@ def parse_date_str(date_str: str) -> datetime:
         return datetime.strptime(date_str, datetime_format)
     except (ValueError, TypeError):
         return datetime.min
+    
+
+def recursive_character_text_splitter(text, max_tokens, overlap):
+    if len(text) <= max_tokens:
+        return [text]
+    else:
+        return [text[i:i+max_tokens] for i in range(0, len(text), max_tokens - overlap)]
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
+
+
+def get_first_dict_from_list(data):
+    """Returns the first item if data is a list of dictionaries"""
+    if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+        return data[0]
+    else:
+        return data  # or raise an appropriate exception
+    
+
+def format_additional_information(web_pages: List[WebPage]) -> str:
+    """Format the additional information from the web pages"""
+    formatted_information = ""
+    for i, web_page in enumerate(web_pages):
+        formatted_information += f"ARTICLE {i+1}: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
+        formatted_information += f"{web_page.relevant_chunks_summary}\n\n"
+    return formatted_information
+
+
+def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
+    """Search Google using a custom search engine."""
+    service = build("customsearch", "v1", developerKey=api_key)
+    search = (
+        service.cse()
+        .list(
+            q=query,
+            cx=engine,
+            num=num,
+        )
+        .execute()
+    )
+    return [result["link"] for result in search.get("items", [])]
 
 
 def process_in_batches(
@@ -647,13 +603,6 @@ def process_in_batches(
             yield get_futures
 
 
-def recursive_character_text_splitter(text, max_tokens, overlap):
-    if len(text) <= max_tokens:
-        return [text]
-    else:
-        return [text[i:i+max_tokens] for i in range(0, len(text), max_tokens - overlap)]
-
-
 def embed_batch(client: OpenAI, batch):
     """
     Helper function to process a single batch of texts and return the embeddings.
@@ -669,7 +618,6 @@ def embed_batch(client: OpenAI, batch):
 
     # Return the embeddings
     return [data.embedding for data in response.data]
-
 
 
 def sort_text_chunks(
@@ -701,9 +649,6 @@ def sort_text_chunks(
     print()
     for i, sim in enumerate(D[0]):
         text_chunks_embedded[I[0][i]].similarity = sim
-        # print(f"SIMILARITY: {sim}, INDEX: {I[0][i]}")
-        # print(text_chunks_embedded[I[0][i]].text)
-        # print()
     return [text_chunks_embedded[i] for i in I[0]]
 
 
@@ -784,18 +729,14 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
                 scraped_text = h.handle(doc_sum)
                 scraped_text = "  ".join([x.strip() for x in scraped_text.split("\n")])
                 scraped_text = re.sub(r'\s+', ' ', scraped_text)
-                # print()
-                # print(scraped_text)
-                # print()
-
+                
+                # If the scraped text is too short, try a manual scraping approach with BeautifulSoup
                 if len(scraped_text) < 300:
                     print(f"\nScraped text for {web_page.url} has less than 300 characters: {len(scraped_text)}.")
                     print("Trying a different approach...")
-                    # print()
-                    # print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-                    # print()
                     soup = BeautifulSoup(web_page.html, "lxml")
-                    #Remove unnecessary tags to clean up html
+                    
+                    # Remove unnecessary tags to clean up html
                     for element in soup(HTML_TAGS_TO_REMOVE):
                         element.replace_with(NavigableString(' '))
 
@@ -803,9 +744,6 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
                     text = "  ".join([x.strip() for x in text.split("\n")])
                     text = re.sub(r'\s+', ' ', text)
                     scraped_text = text
-                    # print()
-                    # print(scraped_text)
-                    # print()
 
                     if len(scraped_text) < 300 and not (web_page.title == "n/a" and web_page.description == "n/a"):
                         prefix = f"{web_page.title}. {web_page.description}."
@@ -818,12 +756,6 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
                 if scraped_text:
                     web_page.scraped_text = scraped_text[:max_num_char]
                 
-                # # The pattern matches either a bracketed prefix followed by an "https" URL
-                # # or an "https" URL directly.
-                # pattern = r'(?:\[\d+\]\s*)?(https?://\S+)'
-                # # Remove the matched "https" URLs, with or without bracketed prefixes
-                # web_page.scraped_text = re.sub(pattern, '', web_page.scraped_text)
-
                 filtered_web_pages.append(web_page)
 
             else:
@@ -887,7 +819,6 @@ def get_urls_from_queries(
     if num > max_num_fetch:
         raise ValueError(f"The maximum number of URLs per query is {max_num_fetch}.")
 
-    
     with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {executor.submit(search_google, query, api_key, engine, max_num_fetch) for query in queries}
         for future in as_completed(futures):
@@ -900,7 +831,6 @@ def get_urls_from_queries(
                     if count >= num:
                         break
                 else:
-                    # print(f"URL {url} already in results or omitting keyword found, skipping...")
                     continue
 
     print("\nget_urls_from_queries result:")
@@ -987,13 +917,6 @@ def fetch_queries(
                 return []
 
 
-def trim_chunks_string(chunks_string: str, enc: tiktoken.Encoding) -> str:
-    encoding = enc.encode(chunks_string)
-    if len(encoding) > MAX_CHUNKS_TOKENS_TO_SUMMARIZE:
-        encoding = encoding[:MAX_CHUNKS_TOKENS_TO_SUMMARIZE]
-    return enc.decode(encoding)
-
-
 def summarize_relevant_chunks(
         web_pages: List[WebPage],
         input_query: str,
@@ -1047,21 +970,12 @@ def summarize_relevant_chunks(
         for future in as_completed(future_to_web_page):
             web_page = future_to_web_page[future]
             try:
-                # Result is None, as we're modifying web_page objects in-place
+                # Result is None, as web_page objects are modified in-place
                 future.result()
             except Exception as e:
                 print(f'Web page {web_page.url} generated an exception: {e}')
     web_pages = [web_page for web_page in web_pages if "Error" not in web_page.relevant_chunks_summary]
     return web_pages, counter_callback
-
-
-def format_additional_information(web_pages: List[WebPage]) -> str:
-    """Format the additional information from the web pages"""
-    formatted_information = ""
-    for i, web_page in enumerate(web_pages):
-        formatted_information += f"ARTICLE {i+1}: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
-        formatted_information += f"{web_page.relevant_chunks_summary}\n\n"
-    return formatted_information
 
 
 def final_summary(
@@ -1074,15 +988,15 @@ def final_summary(
 ) -> str:
     prompt = FINAL_SUMMARY_PROMPT.format(additional_information=additional_information, search_query=search_query)
     messages = [
-            {"role": "system", "content": "You are an expert in summarizing information most relevant information from articles with respect to a web search query."},
-            {"role": "user", "content": prompt},
-        ]
+        {"role": "system", "content": "You are an expert in summarizing the most relevant information from articles with respect to a web search query."},
+        {"role": "user", "content": prompt},
+    ]
     response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
     )
-
+    print(response.choices[0].finish_reason)
 
     if counter_callback is not None:
         counter_callback(
@@ -1092,7 +1006,12 @@ def final_summary(
             token_counter=count_tokens,
         )
     output = response.choices[0].message.content
+    if output.startswith("```") and output.endswith("```"):
+        # Remove the first 3 and the last 3 characters
+        output = output[3:-3].strip()
+
     return output, counter_callback
+
 
 def research(
     market_question: str,

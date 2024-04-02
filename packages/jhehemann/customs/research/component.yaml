@@ -1,0 +1,14 @@
+name: research
+author: jhehemann
+version: 0.1.0
+type: custom
+description: A tool for web research given an input query
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybei
+  prediction_request_rag.py: bafybei
+fingerprint_ignore_patterns: []
+entry_point: research.py
+callable: run
+dependencies: {}

@@ -1,49 +1,30 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2024 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
 """This module implements a research agent for extracting relevant information from URLs."""
-
-# from typing import Any, Dict, Generator, List, Optional, Tuple
-# from datetime import datetime, timezone
-import json
-from typing import Dict
-# import re
-#import os
-# from concurrent.futures import Future, ThreadPoolExecutor
-# from itertools import groupby
-# from operator import itemgetter
-
-# from bs4 import BeautifulSoup, NavigableString
-# from googleapiclient.discovery import build
-# from langchain.pydantic_v1 import BaseModel, Field
-# from langchain.tools import BaseTool
-# # from langchain_core.callbacks import (
-# #     AsyncCallbackManagerForToolRun,
-# #     CallbackManagerForToolRun,
-# # )
-# # from langchain_openai import OpenAI, ChatOpenAI
-# from langchain.schema import HumanMessage, SystemMessage
-
-# # from urllib.parse import urlparse
-# from typing import Optional, Type
-# import requests
-# from requests import Session
-# import spacy
-# import spacy.util
-# import spacy_universal_sentence_encoder
-# import tiktoken
-
-# from dateutil import parser
-# from tqdm import tqdm
 
 from openai import OpenAI
 from tiktoken import encoding_for_model
 
-
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
-#It is important to differentiate between the implied facts of the market question and the question itself. Taking the previous example, while the question may be misleading in implying that there is a planned test flight on that specific date, the rules can and must be formulated as definitive and
-
-
 INFER_RULES_PROMPT = """
-
 You are a Large Language Model in a multi-agent system. Your task is to infer the current status and rules for a prediction market question. \
 Provide reliable and well-structured rules for when the prediction market question will be resolved as 'Yes' and 'No'. The rules that \
 you define should be based on information that can be found on the internet. You are provided with some examples below. You must adhere to the instructions.
@@ -54,9 +35,7 @@ INSTRUCTIONS:
 * Analyze what the phrasing implies about the current status, who the involved parties are and what the conditions are
 * Define measurable and verifiable rules for when the market question will be resolved as 'Yes' and when it will be resolved as 'No'
 
-
 EXAMPLES:
-```
 Question: "Will the new climate bill be passed by both the Senate and the House by 30 September 2024?"
 Answer:
     Status: The question implies that a new climate bill is under consideration by the United States Congress, which consists of two chambers: the Senate and the House of Representatives. If there exists such a bill, the question suggests that it has not yet been passed by both chambers.
@@ -77,7 +56,6 @@ Answer:
     Rules:
     'Yes': The question resolves as 'Yes' if FIFA, the international governing body of football, will directly allocate funds for the construction of new football stadiums specifically for local clubs in England on or before 31 December 2024. This allocation must be evidenced by an official announcement, press release, or documented agreement confirming that the funding will happen on or before this specific date.
     'No': The question resolves as 'No' if FIFA, the international governing body of football, will not allocate funds for the construction of new football stadiums for local clubs in England on or before 31 December 2024. This includes any funding allocated after this date, the absence of any official announcement, press release, or documented agreement confirming that the allocation will happen on or before this date. The market also resolves as 'No' if FIFA allocates funds for stadium construction in a different country or for a different purpose on or before 31 December 2024.
-```
 
 Question: "{market_question}"
 Answer:
@@ -89,101 +67,6 @@ Answer:
 #     Rules:
 #     'Yes': The question resolves as 'Yes' if, exactly on 15 July 2024, Julia Roberts makes an official announcement declaring her retirement from acting after her next film. This must be evidenced by a public statement, press release, or significant media coverage confirming that, exactly on 15 July 2024, Julia Roberts herself has declared her retirement from acting after her next film.
 #     'No': The question resolves as 'No' if, on 15 July 2024, Julia Roberts does not make an official announcement regarding her retirement from acting. This includes any announcements made before or after 15 July 2024, or the absence of any public statement, press release, or significant media coverage confirming such an announcement exactly on 15 July 2024.
-
-
-
-INFER_RULES_PROMPT_NICE = """
-Assume the role of a Logical Analyst tasked with distilling the essence of the 'MARKET_QUESTION' into two clear, overarching rules. Your objective is to formulate a single, encompassing rule that, if met, decisively indicates a 'Yes' outcome, and another that, if met, indicates a 'No' outcome. These rules should capture the entirety of the market question's conditions and implications.
-
-Instructions:
-* Analyze the 'MARKET_QUESTION' thoroughly, identifying its core components and implications.
-* Formulate Two Key Rules:
-    - Craft one rule that fully encapsulates the scenario leading to a 'Yes' resolution. This rule should consider all necessary conditions described in the market question.
-    - Develop one rule that fully represents the conditions under which the question would resolve as 'No', capturing all critical aspects that would lead to this outcome.
-
-MARKET_QUESTION:
-{market_question}
-
-OUTPUT_FORMAT:
-* Status: Briefly summarize the market question's context and implications.
-* Comprehensive Rules:
-    - 'Yes' Rule: [Your single, all-encompassing rule for a 'Yes' outcome.]
-    - 'No' Rule: [Your single, all-encompassing rule for a 'No' outcome.]
-
-Ensure each rule is self-contained and thoroughly addresses the market question, enabling clear and decisive resolution based on its fulfillment.
-"""
-
-
-INFER_RULES_PROMPT_BREAK_DOWN = """
-Your role is to act as a Logical Analyst, tasked with formulating rules for a given prediction market question. Each rule should be comprehensive, directly responding to the market question in its entirety.
-
-Key Instructions:
-First, identify the key components of the 'MARKET_QUESTION'. Next, for each component, create a rule that would indicate a 'Yes' outcome and a rule for a 'No' outcome. Finally, combine these rules into comprehensive guidelines for resolving the entire market question.
-
-MARKET_QUESTION:
-{market_question}
-
-OUTPUT_FORMAT:
-* Status: Summarize the essence of the market question.
-* Rules: Comprehensive guidelines.
-"""
-
-
-INFER_RULES_PROMPT_LONG = """
-Assume the role of a Logical Analyst within a sophisticated multi-agent system, tasked with formulating definitive \
-rules for a prediction market question. Your objective is to apply logical reasoning to establish clear, standalone \
-conditions that individually suffice to resolve the market question as 'Yes' or 'No'
-
-Focus on the following guidelines:
-
-* Logical Analysis: Conduct a thorough examination of the 'MARKET_QUESTION'. Apply logical reasoning to deconstruct \
-and understand every aspect and implied condition of the question.
-* Critical Interpretation:  Scrutinize the phrasing of the market question with an analytical mindset. Identify and \
-interpret the explicit and implicit logical premises suggested by the question.
-* Independent Rule Formulation: Construct rules using logical principles, where each bullet point under 'Yes' and 'No' \
-represents a complete, independently sufficient condition for resolving the market question accordingly. Think of \
-each bullet point as an individual logical statement that, if true, conclusively determines the outcome.
-
-MARKET_QUESTION: {market_question}
-
-OUTPUT_FORMAT:
-* Begin with a 'Status' section that provides a concise overview of the situation and the market question's implications.
-* Proceed to 'Rules', segmented into:
-    - 'Yes': List bullet points, each representing a complete and independent criterion. The fulfillment of any one of \
-these criteria is sufficient for the market question to resolve as 'Yes'.
-    - 'No':  List bullet points, each outlining a standalone condition. Meeting any one of these conditions alone is \
-enough for the market question to resolve as 'No'.
-
-Ensure that each rule is self-contained, reflecting all necessary information to support decisive action in the prediction market.
-"""
-
-
-INFER_RULES_PROMPT_OLD = """
-You are a Large Language Model in a multi-agent system. Your task is to infer the rules for a prediction market question. \
-Provide reliable and well-structured rules for when the prediction market question will be resolved as 'Yes' and 'No'. The rules that \
-you define should be based on information that can be found on the internet. Find the market question under 'MARKET_QUESTION' and \
-adhere to the following 'INSTRUCTIONS'.
-
-INSTRUCTIONS:
-* Carefully read the market question
-* Pay detailled attention on the phrasing of the market question
-* Analyze what the phrasing implies about the current status
-* Define measurable and verifiable rules for when the market question will be resolved as 'Yes' and when it will be resolved as 'No'
-* You must provide your response in the format specified under "OUTPUT_FORMAT"
-* Do not include any other contents in your response.
-
-
-MARKET_QUESTION:
-```
-{market_question}
-```
-
-OUTPUT_FORMAT:
-* Output two paragraphs, the status paragraph describing the current status and facts that the market question's phrasing implies, and the rules paragraph describing when the market question will be resolved as 'Yes' and 'No'.
-* The second paragraph must contain two sub-paragraphs that contain bulletpoints with the rules for when the market question will be resolved as 'Yes' and 'No'.
-* Do not include any formatting characters in your response!
-* Do not include any other contents or explanations in your response!
-"""
 
 
 def count_tokens(text: str, model: str) -> int:
@@ -201,8 +84,6 @@ def get_market_rules(
 ):
     """Infer market rules for a prediction market question."""
     
-    
-
     # Remove double quotes from the input query to avoid issues with react agent execution
     market_question = market_question.replace('"', "'") 
 
@@ -220,8 +101,12 @@ def get_market_rules(
         messages=messages,
         temperature=temperature,
     )
-    response_message = response.choices[0].message.content 
+    response_message = response.choices[0].message.content
 
+    if "Answer:" in response_message:
+        market_rules = response_message.split("Answer:", 1)[1]
+    else:
+        market_rules = response_message
     if counter_callback is not None:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
@@ -230,4 +115,4 @@ def get_market_rules(
             token_counter=count_tokens,
         )
 
-    return response_message, counter_callback
+    return market_rules, counter_callback

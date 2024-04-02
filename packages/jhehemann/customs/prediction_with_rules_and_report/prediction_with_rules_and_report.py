@@ -22,13 +22,11 @@
 from datetime import datetime
 import json
 import re
-import time
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional, Tuple
-from packages.jhehemann.customs.tool_get_market_rules.infer_rules import get_market_rules
-from packages.jhehemann.customs.tool_research.research_additional_information import research
-from packages.jhehemann.customs.tool_format_prediction_values.format_prediction_values import format_prediction_values
+from packages.jhehemann.customs.infer_market_rules.infer_market_rules import get_market_rules
+from packages.jhehemann.customs.research.research import research
 
 from openai import OpenAI
 
@@ -88,10 +86,6 @@ DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 DEFAULT_COMPRESSION_FACTOR = 0.05
 # the vocabulary to use for the summarization
 DEFAULT_VOCAB = "en_core_web_sm"
-RUN_TERMINATED_STATES = ["expired", "completed", "failed", "cancelled"]
-RUN_RUNNING_STATES = ["queued", "in_progress"]
-RUN_ACTION_REQUIRED_STATES = ["requires_action"]
-
 
 ASSISTANT_INSTRUCTIONS_PREDICTION = """
 You are a highly advanced data scientist and reasoning expert. Your task is to provide accurate and robust probability estimations for the outcome of a prediction market question. \
@@ -104,14 +98,14 @@ on the additional information and the market rules.
 
 Structure your report in the following sections and sub-sections:
 
-- Introduction and Background
-- Findings and Analysis (search output)
+* Introduction and Background
+* Findings (from search output) and Analysis
     - Will the event happen? (do not refer to any date here)
     - When will the event happen? (focus on the date in the search output)
     - Calculate the difference between the actual event date and the date specified in the market question.
-- Market rules
-- Evaluation
-- Caveats
+* Market rules
+* Evaluation
+*Caveats
 
 MARKET_QUESTION:
 ```
@@ -130,14 +124,6 @@ ADDITIONAL_INFORMATION:
 
 Output only the raw report without any additional information or formatting.
 """
-
-# Note that the event, specified in the market question and the market question itself are different things. The market question's outcome is not \
-# based on the event happening but on the event happening specified by the market question date.
-
-# Note: The specified date in the market question is an arbitrary date of personal interest only for the market creator and does not result from public \
-# or insider information. However, it is essential for the market question's outcome. Pay close attention if the additional information provide \
-# information that indicate if and when the event will happen.
-
 
 PREDICTION_PROMPT_TEMPLATE = """
 Use the research report from the previous answer and the market rules below to provide an estimated probability how the market question will resolve along with your confidence \
@@ -168,16 +154,10 @@ def trim_json_formatting(output_string):
         return output_string
 
 
-def is_valid_json_with_fields_and_values(json_string):
+def is_valid_json_with_fields_and_values(json_string) -> bool:
     """
-    Check if the input string is valid JSON, contains the required fields,
-    and adheres to the value constraints for each field.
-
-    Parameters:
-    - json_string (str): The string to be checked.
-
-    Returns:
-    - bool: True if the string meets all criteria, False otherwise.
+    Check if a string is valid JSON, contains the required fields, 
+    and adheres to the value constraints for each field
     """
     required_fields = ["p_yes", "p_no", "confidence", "info_utility"]
 
@@ -202,7 +182,6 @@ def is_valid_json_with_fields_and_values(json_string):
         return True
 
     except json.JSONDecodeError:
-        # If json_string is not valid JSON, return False
         return False
 
 
@@ -263,7 +242,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"MARKET RULES:\n{market_rules}\n")
         
         # Get additional information from the Research tool
-        additional_inforamtion = research(market_question, client, google_api_key, google_engine_id, engine, market_rules, counter_callback)
+        additional_inforamtion, counter_callback = research(market_question, client, google_api_key, google_engine_id, engine, market_rules, counter_callback)
 
         # Generate a report prompt based on the market question, market rules, additional information and the current date
         current_date = datetime.now().strftime('%B %d, %Y')
@@ -302,7 +281,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         
         # Generate a prediction prompt based on the market question and the "Rules" part of the market rules
         prediction_prompt = PREDICTION_PROMPT_TEMPLATE.format(market_question=market_question, market_rules_part=market_rules_part)
-        print(f"PREDICTION PROMPT:\n{prediction_prompt}")
+        print(f"PREDICTION PROMPT:{prediction_prompt}")
         
         messages_prediction = [
             {"role": "system", "content": ASSISTANT_INSTRUCTIONS_PREDICTION},
@@ -310,13 +289,13 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             {"role": "assistant", "content": output},
             {"role": "user", "content": prediction_prompt},
         ]
+
         thread_history = [
             {"role": "user", "content": report_prompt},
             {"role": "assistant", "content": output},
             {"role": "user", "content": prediction_prompt},
         ]
         thread_history_string = json.dumps(thread_history, indent=4)
-        #print(f"THREAD HISTORY:\n{thread_history_string}\n")
 
         # Generate a prediction based on the messages
         response = client.chat.completions.create(
