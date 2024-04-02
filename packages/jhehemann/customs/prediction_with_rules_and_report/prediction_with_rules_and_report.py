@@ -264,9 +264,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             messages=messages_report,
             temperature=temperature,
         )
-        output = response.choices[0].message.content
-        print(f"OUTPUT:\n{output}\n")
-
         if counter_callback is not None:
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
@@ -274,6 +271,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
+        output = response.choices[0].message.content
+        print(f"OUTPUT:\n{output}\n")
 
         # Split the "Rules" part from the "Status" part of the market rules
         market_rules_part = market_rules.split("Rules:", 1)[1]
@@ -303,10 +302,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             messages=messages_prediction,
             temperature=temperature,
         )
-        output = response.choices[0].message.content
-        output = trim_json_formatting(output)
-        print(f"OUTPUT:\n{output}\n")
-
         if counter_callback is not None:
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
@@ -314,6 +309,9 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
+        output = response.choices[0].message.content
+        output = trim_json_formatting(output)
+        print(f"OUTPUT:\n{output}\n")
 
         return response, thread_history_string, None, counter_callback
               

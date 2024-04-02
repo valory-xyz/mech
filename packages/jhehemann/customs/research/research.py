@@ -868,8 +868,6 @@ def fetch_queries(
                 messages=messages,
                 temperature=temperature,
             )
-            search_plan = response.choices[0].message.content
-
             if counter_callback is not None:
                 counter_callback(
                     input_tokens=response.usage.prompt_tokens,
@@ -877,9 +875,10 @@ def fetch_queries(
                     model=engine,
                     token_counter=count_tokens,
                 )
-
+            search_plan = response.choices[0].message.content
             print("\nSEARCH PLAN:")
             print(search_plan)
+            
             messages = [
                 {"role": "system", "content": "You are a professional researcher."},
                 {"role": "user", "content": research_plan_prompt},
@@ -893,8 +892,6 @@ def fetch_queries(
                 messages=messages,
                 temperature=0.0,
             )
-            output = response.choices[0].message.content
-
             if counter_callback is not None:
                 counter_callback(
                     input_tokens=response.usage.prompt_tokens,
@@ -902,6 +899,7 @@ def fetch_queries(
                     model=engine,
                     token_counter=count_tokens,
                 )
+            output = response.choices[0].message.content
 
             # Parse the response content
             trimmed_output = trim_json_formatting(output)
@@ -958,7 +956,6 @@ def summarize_relevant_chunks(
                 model=engine,
                 token_counter=count_tokens,
             )
-
         output = response.choices[0].message.content
         web_page.relevant_chunks_summary = output
 
@@ -996,8 +993,6 @@ def final_summary(
         messages=messages,
         temperature=temperature,
     )
-    print(response.choices[0].finish_reason)
-
     if counter_callback is not None:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,

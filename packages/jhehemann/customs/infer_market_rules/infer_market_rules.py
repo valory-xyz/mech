@@ -101,12 +101,6 @@ def get_market_rules(
         messages=messages,
         temperature=temperature,
     )
-    response_message = response.choices[0].message.content
-
-    if "Answer:" in response_message:
-        market_rules = response_message.split("Answer:", 1)[1]
-    else:
-        market_rules = response_message
     if counter_callback is not None:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
@@ -114,5 +108,11 @@ def get_market_rules(
             model=engine,
             token_counter=count_tokens,
         )
+    response_message = response.choices[0].message.content
 
+    if "Answer:" in response_message:
+        market_rules = response_message.split("Answer:", 1)[1]
+    else:
+        market_rules = response_message
+    
     return market_rules, counter_callback
