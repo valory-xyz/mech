@@ -913,7 +913,7 @@ def get_urls_from_queries(
 def fetch_queries(
     client: OpenAI,
     input_query: str,
-    model="gpt-3.5-turbo",
+    engine="gpt-3.5-turbo",
     market_rules = None,
     counter_callback=None,
     temperature=1.0,
@@ -934,7 +934,7 @@ def fetch_queries(
             
             # Fetch queries from the OpenAI engine
             response = client.chat.completions.create(
-                model=model,
+                model=engine,
                 messages=messages,
                 temperature=temperature,
             )
@@ -944,7 +944,7 @@ def fetch_queries(
                 counter_callback(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
-                    model="gpt-3.5-turbo",
+                    model=engine,
                     token_counter=count_tokens,
                 )
 
@@ -959,7 +959,7 @@ def fetch_queries(
             
             # Fetch reranked and selected queries from the OpenAI engine
             response = client.chat.completions.create(
-                model=model,
+                model=engine,
                 messages=messages,
                 temperature=0.0,
             )
@@ -969,7 +969,7 @@ def fetch_queries(
                 counter_callback(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
-                    model="gpt-3.5-turbo",
+                    model=engine,
                     token_counter=count_tokens,
                 )
 
@@ -1000,7 +1000,7 @@ def summarize_relevant_chunks(
         client: OpenAI,
         enc: tiktoken.Encoding,
         counter_callback,
-        model="gpt-3.5-turbo",
+        engine="gpt-3.5-turbo",
         temperature=0.0,
 ) -> List[WebPage]:
     def summarize_for_web_page(web_page: WebPage) -> None:
@@ -1024,7 +1024,7 @@ def summarize_relevant_chunks(
             {"role": "user", "content": summarize_prompt},
         ]
         response = client.chat.completions.create(
-            model=model,
+            model=engine,
             messages=messages,
             temperature=temperature,
         )
@@ -1032,7 +1032,7 @@ def summarize_relevant_chunks(
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
-                model="gpt-3.5-turbo",
+                model=engine,
                 token_counter=count_tokens,
             )
 

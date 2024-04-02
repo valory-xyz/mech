@@ -196,10 +196,12 @@ def get_market_rules(
     market_question: str,
     client: OpenAI,
     counter_callback,
+    temperature=0.0,
+    engine="gpt-3.5-turbo",
 ):
     """Infer market rules for a prediction market question."""
     
-    temperature=0
+    
 
     # Remove double quotes from the input query to avoid issues with react agent execution
     market_question = market_question.replace('"', "'") 
@@ -214,7 +216,7 @@ def get_market_rules(
     ]
 
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model=engine,
         messages=messages,
         temperature=temperature,
     )
@@ -224,7 +226,7 @@ def get_market_rules(
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
-            model="gpt-3.5-turbo",
+            model=engine,
             token_counter=count_tokens,
         )
 
