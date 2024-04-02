@@ -200,14 +200,42 @@ OUTPUT_FORMAT:
 # Select those web pages that are likely to contain relevant and current information to answer the question. \
 # ... return ... only for the selected relevant web pages.
 
-
 SUMMARIZE_PROMPT = """
+Your task is to summarize relevant information in 'SEARCH_OUTPUT' \
+The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
+
+INSTRUCTIONS:
+* Carefully read the 'SEARCH_QUERY'
+* Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant and could help answering the search query
+* An information can be considered relevant if it might support or refute the search query
+* Summarize the relevant information in a way that is concise and informative
+* You must not infer or add any new information, but only summarize the existing statements in an unbiased way
+* If there is conflicting information, you must include both sides of the argument in the summary
+* You must provide your response in the format specified under "OUTPUT_FORMAT"
+* Do not include any other contents in your response.
+
+SEARCH_QUERY:
+{input_query}
+
+SEARCH_OUTPUT:
+```
+{chunks}
+```
+
+OUTPUT_FORMAT:
+* Only output the summary containing the relevant information from 'SEARCH_OUTPUT' with respect to the search query.
+* The summary must be structured in bullet points.
+* Respond solely with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
+* Do not include any other contents in your response!
+"""
+
+SUMMARIZE_PROMPT_BEST = """
 You are a Large Language Model in a multi-agent system. Your task is to summarize relevant information in 'SEARCH_OUTPUT' \
 The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
 
 INSTRUCTIONS:
 * Carefully read the search query under 'SEARCH_QUERY'
-* Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant with respect to the search query
+* Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant and could help answering the search query
 * A chunk can be considered relevant if it contains information that might support or refute the search query
 * Summarize the relevant information in a way that is concise and informative
 * You must not infer or add any new information, but only summarize the existing statements in an unbiased way
@@ -228,7 +256,6 @@ OUTPUT_FORMAT:
 * The summary must be structured in bullet points.
 * Respond solely with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
 * Do not include any other contents in your response!
-
 """
 
 
@@ -315,13 +342,19 @@ class WebPage:
 
 
     def get_title(self, soup, scripts):
-        title = soup.title
-        if title:
-            return title.string.strip()
-        else:
-            title = soup.find("meta", attrs={"name": "title"}) or soup.find("meta", attrs={"property": "title"})
-            if title and title.get("content"):
-                return title["content"].strip()
+        try:
+            title = soup.title
+            if title:
+                return title.string.strip()
+        except AttributeError:
+            pass
+
+        # If the title was not found or an AttributeError was caught, attempt to find the title using meta tags.
+        title = soup.find("meta", attrs={"name": "title"}) or soup.find("meta", attrs={"property": "title"})
+        if title and title.get("content"):
+            return title["content"].strip()
+
+        # If no title was found return "n/a".
         return "n/a"
 
 
@@ -957,13 +990,15 @@ def summarize_relevant_chunks(
             web_page.relevant_chunks_summary = "Error"
             return
         
+        article_header = f"ARTICLE TITLE: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
+        chunks_string = article_header + chunks_string
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
         summarize_prompt = SUMMARIZE_PROMPT.format(input_query=input_query, chunks=trimmed_chunks)
         print()
         print(summarize_prompt)
         print()
         messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": "You are a professional journalist and researcher."},
             {"role": "user", "content": summarize_prompt},
         ]
         response = client.chat.completions.create(

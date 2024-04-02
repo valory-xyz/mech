@@ -318,7 +318,7 @@ MARKET_QUESTION: {market_question}
 """
 
 PREDICTION_PROMPT_TEMPLATE_NEW = """
-Use the research report from the previous answer and provide an estimated probability how the market question will resolve along with your confidence \
+Use the research report from the previous answer and the market rules below to provide an estimated probability how the market question will resolve along with your confidence \
 and the utility of the information provided. Output your answer in a single JSON object that contains four fields: "p_yes", "p_no", "confidence", "info_utility". \
 Each item in the JSON must have a value between 0 and 1. Do not include any other contents in your response. Do not use formatting characters in your response.
 
