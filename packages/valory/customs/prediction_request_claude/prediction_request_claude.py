@@ -247,7 +247,14 @@ def fetch_additional_information(
         prompt=url_query_prompt,
         stop_sequences=STOP_SEQUENCES,
     )
-    json_data = json.loads(completion.completion)
+    try:
+        json_data = json.loads(completion.completion)
+    except json.JSONDecodeError:
+        json_data = {}
+        
+    if "queries" not in json_data:
+        json_data["queries"] = [prompt]
+    
     if not source_links:
         urls = get_urls_from_queries(
             json_data["queries"],
