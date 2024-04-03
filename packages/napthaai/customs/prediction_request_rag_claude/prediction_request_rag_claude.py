@@ -195,6 +195,9 @@ def parser_query_response(response: str, num_queries: int = 5) -> List[str]:
     # Remove doubel quotes from the queries
     final_queries = [query.replace('"', '') for query in enhanced_queries]
 
+    # if there are any xml tags in the queries, remove them
+    final_queries = [re.sub(r'<[^>]*>', '', query) for query in final_queries]
+    
     return final_queries
 
 
