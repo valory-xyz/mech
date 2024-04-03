@@ -520,16 +520,20 @@ def fetch_additional_information(
     """Fetch additional information from the web."""
 
     # generate multiple queries for fetching information from the web
-    queries, counter_callback = multi_queries(
-        client=client,
-        prompt=prompt,
-        engine=engine,
-        num_queries=num_queries,
-        counter_callback=counter_callback,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
-    print(f"Queries: {queries}")
+    try:
+        queries, counter_callback = multi_queries(
+            client=client,
+            prompt=prompt,
+            engine=engine,
+            num_queries=num_queries,
+            counter_callback=counter_callback,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        print(f"Queries: {queries}")
+    except Exception as e:
+        print(f"Error generating queries: {e}")
+        queries = [prompt]
 
     # get the top URLs for the queries
     if not source_links:
