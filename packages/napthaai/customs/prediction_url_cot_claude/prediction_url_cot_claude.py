@@ -32,7 +32,11 @@ ALLOWED_TOOLS = [
     "prediction-url-cot-claude",
 ]
 ALLOWED_MODELS = [
+    "claude-2",
+    "claude-2.1",
     "claude-3-haiku-20240307",
+    "claude-3-sonnet-20240229",
+    "claude-3-opus-20240229",
 ]
 TOOL_TO_ENGINE = {tool: "claude-3-haiku-20240307" for tool in ALLOWED_TOOLS}
 NUM_QUERIES = 5
