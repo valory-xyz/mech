@@ -253,19 +253,24 @@ def fetch_additional_information(
     num_urls: Optional[int],
     num_words: Optional[int],
     counter_callback: Optional[Callable] = None,
+    temperature: Optional[float] = DEFAULT_CLAUDE_SETTINGS["temperature"],
+    max_tokens: Optional[int] = DEFAULT_CLAUDE_SETTINGS["max_tokens"],
     source_links: Optional[List[str]] = None,
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
-    url_query_prompt = f"{HUMAN_PROMPT}{url_query_prompt}{AI_PROMPT}{ASSISTANT_TEXT}"
-    completion = anthropic.completions.create(
+    messages = [
+        {"role": "user", "content": url_query_prompt},
+    ]
+    response = client.messages.create(
         model=engine,
-        max_tokens_to_sample=300,
-        prompt=url_query_prompt,
-        stop_sequences=STOP_SEQUENCES,
+        messages=messages,
+        system=SYSTEM_PROMPT,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
     try:
-        json_data = json.loads(completion.completion)
+        json_data = json.loads(response.content[0].text)
     except json.JSONDecodeError:
         json_data = {}
         
