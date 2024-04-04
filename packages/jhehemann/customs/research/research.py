@@ -1,3 +1,22 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2023-2024 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
 """This module implements a research agent for extracting relevant information from URLs."""
 
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
@@ -48,8 +67,26 @@ DEFAULT_OPENAI_SETTINGS = {
 }
 
 FINAL_SUMMARY_PROMPT = """
-You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
-query: "{search_query}". Your task is to select the most relevant bulletpoints from the articles that may help to answer the search query. If there are no \
+You are provided with search outputs from multiple sources. These search outputs were received in response to a search \
+query. Your task is to select the most relevant bulletpoints from the articles that may help to answer the search query. If there are no \
+relevant results in one of the articles, you can skip it. Return the selected relevant articles only with the relevant bulletpoints \
+for answering the search query. The headers of each article must remain the same, including publication dates.
+
+SEARCH_OUTPUT:
+```
+{additional_information}
+```
+
+SEARCH_QUERY: {search_query}
+
+If there are redundant bulletpoints across articles you must remove them but only from the older articles or the ones that have no publication date. \
+Regarding redundant bulletpoints, you must favor those mentioning specific dates and those that have publication dates and are more recent.
+"""
+
+
+FINAL_SUMMARY_PROMPT_OLD = """
+You are provided with search outputs from multiple sources. These search outputs were received in response to a search \
+query. Your task is to select the most relevant bulletpoints from the articles that may help to answer the search query. If there are no \
 relevant results in one of the articles, you can skip it. Return the selected relevant articles only with the relevant bulletpoints \
 for answering the search query. The headers of each article must remain the same, including publication dates.
 
@@ -61,6 +98,12 @@ SEARCH_OUTPUT:
 If there are redundant bulletpoints across articles you must remove them but only from the older articles or the ones that have no publication date. \
 Regarding redundant bulletpoints, you must favor those mentioning specific dates and those that have publication dates and are more recent.
 """
+
+# If there are redundant bulletpoints across articles you must remove them. Adhere to the following removal instructions:
+# * Remove the redundant information from 
+#     - older articles over newer articles
+#     - articles that have no publication date over articles that have a publication date
+# * Remove redundant bullet points that have relative dates over absolute dates
 
 RESEARCH_PLAN_PROMPT_TEMPLATE = """
 Your goal is to prepare a research plan for {query}.
@@ -107,6 +150,37 @@ OUTPUT_FORMAT:
 * Only output the summary containing the relevant information from 'SEARCH_OUTPUT' with respect to the search query.
 * The summary must be structured in bullet points.
 * Respond solely with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
+* Do not include any other contents in your response!
+"""
+
+
+SUMMARIZE_PROMPT_WITH_DATE = """
+Your task is to summarize relevant information in 'SEARCH_OUTPUT'. \
+The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
+
+INSTRUCTIONS:
+* Carefully read the 'SEARCH_QUERY'
+* Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant and could help answering the search query
+* An information can be considered relevant if it might support or refute the search query
+* If there is no relevant information in 'SEARCH_OUTPUT', respond with "Error".
+* Summarize the relevant information in a way that is concise and informative and include the dates mentioned in the relevant information
+* You must not infer or add any new information, but only summarize the existing statements in an unbiased way
+* If there is conflicting information, you must include both sides of the argument in the summary
+* If there are dates mentioned in the relevant information, you must include them in the summary.
+* You must provide your response in the format specified under "OUTPUT_FORMAT"
+* Do not include any other contents in your response.
+
+SEARCH_QUERY:
+{input_query}
+
+SEARCH_OUTPUT:
+```
+{chunks}
+```
+
+OUTPUT_FORMAT:
+* Only output the summary containing the relevant information from 'SEARCH_OUTPUT' with respect to the search query.
+* The summary must be structured in bullet points.
 * Do not include any other contents in your response!
 """
 
@@ -365,6 +439,8 @@ class WebPage:
             except json.JSONDecodeError as e:
                 print(f"Error decoding JSON: {e}\nScript: {script}")
                 continue
+            except Exception as e:
+                raise Exception(f"Error extracting publisher for webpage {self.url}") from e
 
         # If not found, then look for release or publication date
         for name in RELEASE_DATE_NAMES:
@@ -511,6 +587,12 @@ def parse_date_str(date_str: str) -> datetime:
     except (ValueError, TypeError):
         return datetime.min
     
+def remove_date_from_query(query: str) -> str:
+    # Define a regex pattern to match dates
+    date_pattern = r"\b( on or before | by | on )?\d{1,2} (January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b"
+    new_query = re.sub(date_pattern, "", query)
+    return new_query
+
 
 def recursive_character_text_splitter(text, max_tokens, overlap):
     if len(text) <= max_tokens:
@@ -936,7 +1018,9 @@ def summarize_relevant_chunks(
         article_header = f"ARTICLE TITLE: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
         chunks_string = article_header + chunks_string
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
-        summarize_prompt = SUMMARIZE_PROMPT.format(input_query=input_query, chunks=trimmed_chunks)
+
+        input_query_no_date = remove_date_from_query(input_query)
+        summarize_prompt = SUMMARIZE_PROMPT_WITH_DATE.format(input_query=input_query_no_date, chunks=trimmed_chunks)
         print()
         print(summarize_prompt)
         print()
@@ -1008,6 +1092,35 @@ def final_summary(
     return output, counter_callback
 
 
+# def convert_relative_to_absolute_dates(
+#     client: OpenAI,
+#     additional_information: str,
+#     counter_callback,
+#     engine="gpt-3.5-turbo",
+#     temperature=0.0,
+# ) -> str:
+    
+#     prompt = CONVERT_RELATIVE_DATES_PROMPT.format(additional_information=additional_information)
+#     messages = [
+#         {"role": "system", "content": "You are a professional journalist."},
+#         {"role": "user", "content": additional_information},
+#     ]
+#     response = client.chat.completions.create(
+#         model=engine,
+#         messages=messages,
+#         temperature=temperature,
+#     )
+#     if counter_callback is not None:
+#         counter_callback(
+#             input_tokens=response.usage.prompt_tokens,
+#             output_tokens=response.usage.completion_tokens,
+#             model=engine,
+#             token_counter=count_tokens,
+#         )
+#     output = response.choices[0].message.content
+#     return output, counter_callback
+
+
 def research(
     market_question: str,
     client: OpenAI,
@@ -1077,6 +1190,8 @@ def research(
     print()
 
     additional_information, counter_callback = final_summary(client, additional_information, market_question, engine, counter_callback)
+
+    #additional_information, counter_callback = convert_relative_to_absolute_dates(client, additional_information, counter_callback)
 
     if additional_information:
         additional_information += (

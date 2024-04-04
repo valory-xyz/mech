@@ -94,18 +94,18 @@ You source all your knowledge from training and available information to perform
 
 REPORT_PROMPT = """
 Imagine today is {current_date} and someone on the street asks you the market question specified under MARKET_QUESTION. Prepare a concise but informative evaluation report that discusses the potential outcome of the market question based \
-on the additional information and the market rules.
+on the search output and the market rules.
 
 Structure your report in the following sections and sub-sections:
 
 * Introduction and Background
-* Findings (from search output) and Analysis
-    - Will the event happen? (do not refer to any date here)
-    - When will the event happen? (focus on the date in the search output)
+* Findings (in search output) and Analysis
+    - Will the event in the market question happen? (Do NOT mention any date here)
+    - When will it happen? (Name the date in the search output here)
     - Calculate the difference between the actual event date and the date specified in the market question.
-* Market rules
-* Evaluation
-*Caveats
+* Outcome Evaluation (Event and Date) with common knowledge
+* Conclusion
+* Caveats
 
 MARKET_QUESTION:
 ```
@@ -117,7 +117,7 @@ MARKET_RULES:
 {market_rules}
 ```
 
-ADDITIONAL_INFORMATION:
+SEARCH_OUTPUT:
 ```
 {additional_information}
 ```
