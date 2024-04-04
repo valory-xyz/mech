@@ -19,6 +19,7 @@
 
 """This module implements a research agent for extracting relevant information from URLs."""
 
+from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 import re
@@ -65,6 +66,34 @@ DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 500,
     "temperature": 0,
 }
+
+
+PREVIOUS_SUMMARY_PROMPT = """
+You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
+query found below. Your task is to select a collection of diverse and relevant bulletpoints that may help to answer the search query and indicate \
+on which date the event is expected to occur.
+
+INSTRUCTIONS:
+* Carefully read the search query
+* Select only the relevant bulletpoints from the search outputs that are useful and relevant and could help answering the search query
+* An information can be considered relevant if it might support or refute the search query
+* An information must also be considered relevant if it indicates a specific date or time frame for the search query
+* If there are redundant bulletpoints you must select the most relevant by two criteria:
+    - Firstly: Select the one that mentiones specific dates over the ones that mention relative dates or week days
+    - Secondly: Select the one that is listed more to the bottom of the search output
+* Give your response in the format specified under "OUTPUT_FORMAT"
+
+SEARCH_OUTPUT:
+```
+{chunks}
+```
+
+SEARCH_QUERY: {input_query}
+
+OUTPUT_FORMAT:
+* Only output the collection of the selected relevant bulletpoints with the corresponding numbers in parentheses.
+"""
+
 
 FINAL_SUMMARY_PROMPT = """
 You are provided with search outputs from multiple sources. These search outputs were received in response to a search \
@@ -369,6 +398,7 @@ class WebPage:
     publication_date: Optional[str] = None
     chunks_sorted: List[str] = Field(default_factory=list)
     relevant_chunks_summary: Optional[str] = None
+    final_output: Optional[str] = None
 
     def __init__(self, url, html=None, title=None, description=None, publication_date=None, publisher=None):
         type(self)._id_counter += 1
@@ -620,7 +650,7 @@ def format_additional_information(web_pages: List[WebPage]) -> str:
     formatted_information = ""
     for i, web_page in enumerate(web_pages):
         formatted_information += f"ARTICLE {i+1}: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
-        formatted_information += f"{web_page.relevant_chunks_summary}\n\n"
+        formatted_information += f"{web_page.final_output}\n\n"
     return formatted_information
 
 
@@ -879,8 +909,8 @@ def extract_html_texts(
             except requests.exceptions.Timeout:
                 print(f"Request for {web_page.url} timed out.")
             
-            # except Exception as e:
-            #     print(f"An error occurred in extract_html_texts: {e}")
+            except Exception as e:
+                print(f"An error occurred in extract_html_texts: {e}")
 
     print("Web pages parsed successfully.\n")
 
@@ -1121,6 +1151,90 @@ def final_summary(
 #     return output, counter_callback
 
 
+def summarize_over_summarized_chunks(
+    web_pages: List[WebPage],
+    input_query: str,
+    client: OpenAI,
+    enc: tiktoken.Encoding,
+    counter_callback,
+    engine="gpt-3.5-turbo",
+    temperature=0.0,
+) -> List[WebPage]:
+    
+
+    # Add WebPage ID after each line in relevant_chunks_summary
+    # Initialize an empty list to hold all modified lines
+    all_lines_with_id = []
+
+    for web_page in web_pages:
+        if web_page.relevant_chunks_summary:
+            # Split the summary into lines
+            lines = web_page.relevant_chunks_summary.split('\n')
+            
+            # Append the web page ID to each line and add it to the list
+            all_lines_with_id.extend([line + f" ({web_page.id})" for line in lines if line.strip() != ''])
+
+    # Join all modified lines into a single string
+    all_relevant_chunks_summary = '\n'.join(all_lines_with_id)
+
+    prompt = PREVIOUS_SUMMARY_PROMPT.format(input_query=input_query, chunks=all_relevant_chunks_summary)
+
+    print(f"\nPREVIOUS SUMMARY PROMPT:")
+    print(prompt)
+    print()
+
+    messages = [
+        {"role": "system", "content": "You are a professional journalist."},
+        {"role": "user", "content": prompt},
+    ]
+    response = client.chat.completions.create(
+        model=engine,
+        messages=messages,
+        temperature=temperature,
+    )
+    if counter_callback is not None:
+        counter_callback(
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
+            model=engine,
+            token_counter=count_tokens,
+        )
+    output = response.choices[0].message.content
+    print("\nSUMMARIZE OVER SUMMARIZED CHUNKS OUTPUT:")
+    print(output)
+    
+    
+    # Split the combined string into individual lines
+    lines = output.strip().split('\n')
+
+    # Mapping of web_page.id to web_page object for quick access
+    web_pages_dict = {str(web_page.id): web_page for web_page in web_pages}
+
+    # Initialize a set to track modified web_page IDs
+    modified_ids = set()
+
+    # Process each line to extract the web_page.id and content, then update the relevant web page
+    for line in lines:
+        match = re.match(r"^(.*) \((\d+)\)$", line)
+        if match:
+            content, web_page_id = match.groups()
+            # Check if this web_page_id is in our dictionary of web pages
+            if web_page_id in web_pages_dict:
+                # Update the relevant_chunks_summary of the corresponding web page
+                web_page = web_pages_dict[web_page_id]
+                if web_page.final_output:
+                    web_page.final_output += '\n' + content
+                else:
+                    web_page.final_output = content
+                # Mark this ID as modified
+                modified_ids.add(web_page_id)
+
+    # Collect modified web_page objects based on modified_ids
+    modified_web_pages = [web_pages_dict[web_page_id] for web_page_id in modified_ids]
+
+    return modified_web_pages, counter_callback
+
+
 def research(
     market_question: str,
     client: OpenAI,
@@ -1179,23 +1293,26 @@ def research(
     web_pages, counter_callback = summarize_relevant_chunks(web_pages, market_question, client, enc, counter_callback)
     web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
 
+    web_pages, counter_callback = summarize_over_summarized_chunks(web_pages, market_question, client, enc, counter_callback)
+
+
     additional_information = format_additional_information(web_pages)
     if additional_information:
         additional_information += (
             f"Disclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y')} and does not claim to be exhaustive or definitive."
         )
 
-    print(f"\nADDITIONAL INFORMATION for SEARCH QUERY {market_question} PREFINAL:")
-    print(additional_information)
-    print()
+    # print(f"\nADDITIONAL INFORMATION for SEARCH QUERY {market_question} PREFINAL:")
+    # print(additional_information)
+    # print()
 
-    additional_information, counter_callback = final_summary(client, additional_information, market_question, engine, counter_callback)
+    # additional_information, counter_callback = final_summary(client, additional_information, market_question, engine, counter_callback)
 
     #additional_information, counter_callback = convert_relative_to_absolute_dates(client, additional_information, counter_callback)
 
-    if additional_information:
-        additional_information += (
-            f"\n\nDisclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y')} and does not claim to be exhaustive or definitive."
-        )
+    # if additional_information:
+    #     additional_information += (
+    #         f"\n\nDisclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y')} and does not claim to be exhaustive or definitive."
+    #     )
 
     return additional_information, counter_callback
