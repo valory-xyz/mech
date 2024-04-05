@@ -41,6 +41,7 @@ Answer:
     Status: The question implies that a new climate bill is under consideration by the United States Congress, which consists of two chambers: the Senate and the House of Representatives. If there exists such a bill, the question suggests that it has not yet been passed by both chambers.
     Rules:
     'Yes': The question resolves as 'Yes' if there exists a climate bill and it is passed by both the Senate, which is the upper chamber, and the House, which is the lower chamber of the United States Congress on or before 30 September 2024.
+    
     'No': The question resolves as 'No' if there exists no bill or it isn't passed by both chambers on or before 30 September 2024, or only one chamber passes it on or before this date. The market also resolves as 'No' if both chambers pass a different bill and not a new climate bill on or before this date.
 
 Question: "Will Tesla successfully launch its new electric vehicle, Model Z, on 30 June 2024?"
@@ -48,6 +49,7 @@ Answer:
     Status: The question implies that, exactly on 30 June 2024, Tesla, an influential electric vehicle manufacturer, is planning to release a new electric vehicle, which is called Model Z. Furthermore, the question suggests that up to today, the release has not yet occurred.
     Rules:
     'Yes': The question resolves as 'Yes' if, exactly on 30 June 2024, Tesla, an influential electric vehicle manufacturer, officially releases a Model Z. This must be evidenced by a public event, press release, or substantial media coverage that confirms the release will occur specifically on 30 June 2024.
+    
     'No': The question resolves as 'No' if, on 30 June 2024, Tesla, an influential electric vehicle manufacturer, does not release a Model Z. This includes any release occurring before or after this date, or the absence of any official announcement, public event, press release, or significant media coverage confirming a release exactly on 30 June 2024. The market also resolves as 'No' if Company Y releases a different vehicle Model W exactly on 30 June 2024.
 
 Question: "Will FIFA fund the construction of new football stadiums for local clubs in England by the end of 2024?"
@@ -55,6 +57,7 @@ Answer:
     Status: The question implies that FIFA, the international governing body of football, is considering funding the construction of new football stadiums specifically for local clubs in England. The question suggests that FIFA has not yet allocated funds for this purpose.
     Rules:
     'Yes': The question resolves as 'Yes' if FIFA, the international governing body of football, will directly allocate funds for the construction of new football stadiums specifically for local clubs in England on or before 31 December 2024. This allocation must be evidenced by an official announcement, press release, or documented agreement confirming that the funding will happen on or before this specific date.
+    
     'No': The question resolves as 'No' if FIFA, the international governing body of football, will not allocate funds for the construction of new football stadiums for local clubs in England on or before 31 December 2024. This includes any funding allocated after this date, the absence of any official announcement, press release, or documented agreement confirming that the allocation will happen on or before this date. The market also resolves as 'No' if FIFA allocates funds for stadium construction in a different country or for a different purpose on or before 31 December 2024.
 
 Question: "{market_question}"

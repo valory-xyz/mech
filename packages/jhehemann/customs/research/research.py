@@ -70,17 +70,18 @@ DEFAULT_OPENAI_SETTINGS = {
 
 PREVIOUS_SUMMARY_PROMPT = """
 You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
-query found below. Your task is to select a collection of diverse and relevant bulletpoints that may help to answer the search query and indicate \
-on which date the event is expected to occur.
+query found below. Your task is to select a collection of diverse and relevant bulletpoints that may help to answer the search query and reveal \
+if the event happens and on which date the event is expected to occur. 
 
 INSTRUCTIONS:
 * Carefully read the search query
 * Select only the relevant bulletpoints from the search outputs that are useful and relevant and could help answering the search query
 * An information can be considered relevant if it might support or refute the search query
-* An information must also be considered relevant if it indicates a specific date or time frame for the search query
+* An information must also be considered relevant if it reveals a specific date or time frame when the event is expected to occur
 * If there are redundant bulletpoints you must select the most relevant by two criteria:
     - Firstly: Select the one that mentiones specific dates over the ones that mention relative dates or week days
     - Secondly: Select the one that is listed more to the bottom of the search output
+* If there are conflicting information, you must include both sides of the argument in the selected bulletpoints
 * Give your response in the format specified under "OUTPUT_FORMAT"
 
 SEARCH_OUTPUT:
@@ -89,9 +90,13 @@ SEARCH_OUTPUT:
 ```
 
 SEARCH_QUERY: {input_query}
+SUB_QUERIES:
+- Will the event happen?
+- On what date will the event happen? (DD/MM/YYYY)
+- Has the event happened already?
 
 OUTPUT_FORMAT:
-* Only output the collection of the selected relevant bulletpoints with the corresponding numbers in parentheses.
+* Only output the collection of five to ten selected relevant bulletpoints with the corresponding numbers in parentheses.
 """
 
 
@@ -107,6 +112,7 @@ SEARCH_OUTPUT:
 ```
 
 SEARCH_QUERY: {search_query}
+
 
 If there are redundant bulletpoints across articles you must remove them but only from the older articles or the ones that have no publication date. \
 Regarding redundant bulletpoints, you must favor those mentioning specific dates and those that have publication dates and are more recent.
@@ -167,8 +173,11 @@ INSTRUCTIONS:
 * You must provide your response in the format specified under "OUTPUT_FORMAT"
 * Do not include any other contents in your response.
 
-SEARCH_QUERY:
-{input_query}
+SEARCH_QUERY: {input_query}
+SUB_QUERIES:
+- Will the event happen?
+- On what date will the event happen?
+- Has the event happened already?
 
 SEARCH_OUTPUT:
 ```
@@ -192,7 +201,7 @@ INSTRUCTIONS:
 * Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant and could help answering the search query
 * An information can be considered relevant if it might support or refute the search query
 * If there is no relevant information in 'SEARCH_OUTPUT', respond with "Error".
-* Summarize the relevant information in a way that is concise and informative and include the dates mentioned in the relevant information
+* Summarize the relevant information in a way that is concise and informative and include the dates mentioned
 * You must not infer or add any new information, but only summarize the existing statements in an unbiased way
 * If there is conflicting information, you must include both sides of the argument in the summary
 * If there are dates mentioned in the relevant information, you must include them in the summary.
@@ -649,7 +658,8 @@ def format_additional_information(web_pages: List[WebPage]) -> str:
     """Format the additional information from the web pages"""
     formatted_information = ""
     for i, web_page in enumerate(web_pages):
-        formatted_information += f"ARTICLE {i+1}: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
+        # formatted_information += f"ARTICLE {i+1}: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
+        formatted_information += f"ARTICLE {i+1}: PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
         formatted_information += f"{web_page.final_output}\n\n"
     return formatted_information
 
@@ -1045,8 +1055,8 @@ def summarize_relevant_chunks(
             web_page.relevant_chunks_summary = "Error"
             return
         
-        article_header = f"ARTICLE TITLE: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
-        chunks_string = article_header + chunks_string
+        # article_header = f"ARTICLE TITLE: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
+        # chunks_string = article_header + chunks_string
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
 
         input_query_no_date = remove_date_from_query(input_query)
@@ -1167,6 +1177,8 @@ def summarize_over_summarized_chunks(
     all_lines_with_id = []
 
     for web_page in web_pages:
+        # print publication date
+        print(f"Publication date: {web_page.publication_date}")
         if web_page.relevant_chunks_summary:
             # Split the summary into lines
             lines = web_page.relevant_chunks_summary.split('\n')
@@ -1277,10 +1289,10 @@ def research(
     text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
     text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-    # for chunk in text_chunks_sorted:
-    #     print(f"Similarity: {chunk.similarity}")
-    #     print(chunk.text)
-    #     print()
+    for chunk in text_chunks_sorted:
+        print(f"Similarity: {chunk.similarity}")
+        print(chunk.text)
+        print()
 
     # Create a dictionary mapping URLs to WebPage objects for quicker lookups
     web_pages_dict = {web_page.url: web_page for web_page in web_pages}
@@ -1294,6 +1306,7 @@ def research(
     web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
 
     web_pages, counter_callback = summarize_over_summarized_chunks(web_pages, market_question, client, enc, counter_callback)
+    web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
 
 
     additional_information = format_additional_information(web_pages)
