@@ -24,7 +24,7 @@ import json
 import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Callable
 from packages.jhehemann.customs.infer_market_rules.infer_market_rules import get_market_rules
 from packages.jhehemann.customs.research.research import research
 
@@ -69,7 +69,7 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0.0,
 }
 ALLOWED_TOOLS = [
-    "prediction-openai-assistant"
+    "prediction-with-rules-and-report"
 ]
 MAX_TOKENS = {
     "gpt-3.5-turbo": 4096,
@@ -78,7 +78,7 @@ MAX_TOKENS = {
 TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
-DEFAULT_NUM_URLS["prediction-openai-assistant"] = 3
+DEFAULT_NUM_URLS["prediction-with-rules-and-report"] = 3
 # the default number of words to fetch online information for
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 
@@ -88,13 +88,8 @@ DEFAULT_COMPRESSION_FACTOR = 0.05
 DEFAULT_VOCAB = "en_core_web_sm"
 
 
-ASSISTANT_INSTRUCTIONS_PREDICTION = """
-You are a data scientist and reasoning expert. Your task is to provide accurate and robust probability estimations for the outcome of a prediction market question. \
-You source all your knowledge from training and available information to perform this task.
-"""
-
 REPORT_PROMPT = """
-Your task is to prepare a detailed and informative evaluation report that discusses the potential outcome of the QUESTION found below. Your evaluation must be based \
+Your task is to prepare a concise and informative evaluation report that discusses the potential outcome of the QUESTION found below. Your evaluation must be based \
 on the SEARCH_OUTPUT and your domain expertise.
 Adhere to the following instructions:
 
@@ -121,135 +116,12 @@ TODAYS_DATE: {current_date}
 OUTPUT_FORMAT:
 * Introduction and Context
 * Findings and Analysis
-    - Will the event happen?
+    - Will the event specified in the question happen?
     - On what date will the event actually happen? Has the event already happened? You must provide a specific date. If you are uncertain, provide a range of dates.
-* Conclusion
+* Conclusion with common sense reasoning
 * Caveats
 Output only the raw report without any additional information or formatting.
 """
-
-
-REPORT_PROMPT_EXPERIMENT = """
-Your task is to prepare a detailed and informative evaluation report that discusses the potential outcome of the QUESTION found below. The conditions for the outcome \
-are specified in the RESOLUTION_RULES. Your evaluation must be based on the SEARCH_OUTPUT and your domain expertise.
-Adhere to the following instructions:
-
-INSTRUCTIONS:
-* Carefully read the QUESTION
-* Separate the QUESTION into its components
-* Carefully read the search output provided.
-* Analyze the search output and evaluate the likelihood of the event specified in the QUESTION happening or not happening
-* Analyze the search output and evaluate the date when the event will actually happen
-* Calculate and explain the difference between the actual event date and the date specified in the QUESTION. Use common sense reasoning and the publication dates of the articles as a reference.
-* Evaluate and explain the final outcome adhering to the RESOLUTION_RULES. Only if the event and the time frame are met as per the market question, the outcome will be 'Yes'.
-* Source your domain expertise to provide caveats
-* Give your response in the format specified under "OUTPUT_FORMAT"
-
-QUESTION:
-```
-{market_question}
-```
-
-SEARCH_OUTPUT:
-```
-{additional_information}
-```
-
-RESOLUTION_RULES:
-```
-{market_rules}
-```
-
-OUTPUT_FORMAT:
-* Introduction and Context (QUESTION and RESOLUTION_RULES)
-* Findings and Analysis (SEARCH_OUTPUT)
-    - Will the event happen? (Do NOT mention any date here)
-    - When will the event actually happen?
-    - Difference between the actual event date and the date specified in the QUESTION
-* Evaluation
-* Caveats
-Output only the raw report without any additional information or formatting.
-"""
-
-
-REPORT_PROMPT_BEST = """
-Imagine some unexperienced person asks you the question specified under QUESTION.
-Your task is to prepare a detailed and informative evaluation report that discusses the potential outcome of the question based \
-on the search output and your domain expertise. 
-
-Structure your report in the following sections and sub-sections:
-
-* Introduction and Context
-* Findings (in search output)
-    - Will the event in the question happen? (Do NOT mention any date here)
-    - On what date will the event actually happen? May the event have already happened? (Analyze the search output)
-    - Calculate the difference between the actual event date and the date specified in the question. Use common sense reasoning and the publication dates of the articles as a reference.
-* Outcome Evaluation (Event and Date) with common knowledge and domain expertise
-* Given the market rules, conclude the likelihood of the event happening or not happening
-* Caveats
-
-MARKET_RULES:
-```
-{market_rules}
-```
-
-QUESTION:
-```
-{market_question}
-```
-
-SEARCH_OUTPUT:
-```
-{additional_information}
-```
-
-Output only the raw report without any additional information or formatting.
-"""
-# Note it may be possible that the event in the question has already happened or will not happen.
-# - Will the event in the question happen? (Do NOT mention any date here)
-# - On what date will it happen? (Be unbiased and only use the information provided in the search output)
-
-
-# QUESTION_STATUS:
-# ```
-# {question_status}
-# ```
-
-# MARKET_RULES:
-# ```
-# {market_rules}
-# ```
-
-# REPORT_PROMPT_PART_2 = """
-# Imagine today is {current_date} and someone on the street asks you the market question specified under MARKET_QUESTION. Prepare a concise but informative evaluation report that discusses the potential outcome of the market question based \
-# on the additional information and the market rules. Adhere to the following instructions:
-# * Carefully read the market question and the market rules.
-# * Analyze the additional information provided.
-# * It is very important to check the additional information for the event date as it is crucial for the outcome evaluation.
-
-# Structure your report in the following sections and sub-sections:
-
-# * Outcome Evaluation (Event and Date) with common knowledge
-# * Conclusion
-# * Caveats
-
-# MARKET_QUESTION:
-# ```
-# {market_question}
-# ```
-
-# MARKET_RULES:
-# ```
-# {market_rules}
-# ```
-
-# ADDITONAL_INFORMATION:
-# ```
-# {additional_information}
-# ```
-
-# Output only the raw report without any additional information or formatting.
-# """
 
 
 SME_GENERATION_MARKET_PROMPT = """
@@ -322,112 +194,64 @@ OUTPUT_FORMAT:
 """
 
 
-def trim_json_formatting(output_string):
-    # Define a regular expression pattern that matches the start and end markers
-    # with optional newline characters
+def trim_json_formatting(text) -> str:
+    """Trim the JSON formatting characters from string."""
+    # Regex pattern that matches the start and end markers with optional newline characters
     pattern = r'^```json\n?\s*({.*?})\n?```$'
-    
+
     # Use re.DOTALL to make '.' match newlines as well
-    match = re.match(pattern, output_string, re.DOTALL)
-    
+    match = re.match(pattern, text, re.DOTALL)
     if match:
-        # Extract the JSON part from the matched pattern
-        print("JSON formatting characters found and removed")
         formatted_json = match.group(1)
         return formatted_json
     else:
-        # Return the original string if no match is found
-        return output_string
+        return text
 
 
-def is_valid_json_with_fields_and_values(json_string) -> bool:
-    """
-    Check if a string is valid JSON, contains the required fields, 
-    and adheres to the value constraints for each field
-    """
-    required_fields = ["p_yes", "p_no", "confidence", "info_utility"]
-
-    try:
-        # Attempt to parse the JSON string
-        data = json.loads(json_string)
-
-        # Check if all required fields are present
-        if not all(field in data for field in required_fields):
-            return False
-
-        # Check if 'p_yes' and 'p_no' are floats within [0, 1] and their sum equals 1
-        if not all(isinstance(data[field], float) and 0 <= data[field] <= 1 for field in ["p_yes", "p_no"]):
-            return False
-        if data["p_yes"] + data["p_no"] != 1:
-            return False
-
-        # Check if 'confidence' and 'info_utility' are floats within [0, 1]
-        if not all(isinstance(data[field], float) and 0 <= data[field] <= 1 for field in ["confidence", "info_utility"]):
-            return False
-
-        return True
-
-    except json.JSONDecodeError:
-        return False
+def remove_conclusion_field(json_str) -> str:
+    """Remove the 'conclusion' field from a JSON string."""
+    data = json.loads(json_str)
+    if 'conclusion' in data:
+        del data['conclusion']
+    modified_json_str = json.dumps(data, indent=4)    
+    return modified_json_str
 
 
-def load_model(vocab: str) -> Language:
-    """Utilize spaCy to load the model and download it if it is not already available."""
-    try:
-        return spacy.load(vocab)
-    except OSError:
-        print("Downloading language model...")
-        download(vocab)
-        return spacy.load(vocab)
-
-
-def extract_question(text):
-    # Pattern to match a question enclosed in escaped quotation marks
+def extract_question(text) -> str:
+    """Extract the question from prompt enclosed in escaped quotation marks."""
     pattern = r'\"(.*?)\"'
-    
-    # Search for the pattern in the text
     match = re.search(pattern, text)
-    
-    # If a match is found, return the first group (the content within the quotation marks)
-    if match:
-        return match.group(1)
-    else:
-        # If no match is found, return an informative message or handle it as needed
-        return None
+    return match.group(1) if match else ""
 
 
 def remove_date_from_query(query: str) -> str:
-    # Define a regex pattern to match dates
+    """Remove time-related information from query"""
     date_pattern = r"\b( on or before | by | on )?\d{1,2} (January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
 
 
-def split_before_evaluation(text):
-    # Find the last occurrence of "Evaluation"
+def split_before_evaluation(text) -> Tuple[str, str]:
+    """Split string at last occurrence of 'Evaluation'"""
     eval_index = text.rfind("Evaluation")
-    
     if eval_index == -1:
-        # "Evaluation" not found in the text
         return text, ""
     
     # Find the last newline character before "Evaluation"
     newline_index = text.rfind("\n", 0, eval_index)
-    
     if newline_index == -1:
-        # Newline not found before "Evaluation", no splitting
         return text, ""
     
     # Split the string at the found newline index
-    part1 = text[:newline_index]  # Part before the newline
-    part2 = text[newline_index + 1:]  # Part after the newline, including "Evaluation"
+    part1 = text[:newline_index]
+    part2 = text[newline_index + 1:]
     
     return part1, part2
 
 
 def get_sme_role(
     engine, temperature, max_tokens, prompt, counter_callback=None
-) -> Tuple[str, str]:
+) -> Tuple[str, str, Optional[Callable]]:
     """Get SME title and introduction"""
     market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
     system_prompt = SME_GENERATION_SYSTEM_PROMPT
@@ -459,7 +283,6 @@ def get_sme_role(
     return sme["sme"], sme["sme_introduction"], None
 
 
-
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
@@ -483,8 +306,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
  
         # Extract the market question from the prompt delimited by escaped quotation marks
         market_question = extract_question(prompt)
-        if market_question is None:
-            return None, None, "Market question not found in prompt", None
+        if not market_question:
+            return "Market question not found in prompt", None, None, None
         print(f"MARKET QUESTION:\n{market_question}\n")
 
         # Get the market rules from the Infer Rules tool
@@ -531,7 +354,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"SME INTRODUCTION: {sme_introduction}")
         print()
 
-        
         messages_report = [
             {"role": "system", "content": sme_introduction},
             {"role": "user", "content": report_prompt},
@@ -551,40 +373,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             )
         output = response.choices[0].message.content
         print(f"OUTPUT:\n{output}\n")
-
-
-        # # Split the first part of the output at the last newline character before "Evaluation"
-        # part_1, part_2 = split_before_evaluation(output)
-
-        # prompt_part_2 = REPORT_PROMPT_PART_2.format(
-        #     market_question=market_question,
-        #     market_rules=market_rules,
-        #     additional_information=part_1,
-        #     current_date=current_date
-        # )
-        # print(f"REPORT PROMPT PART 2:\n{prompt_part_2}\n")
-
-        # messages_report_part_2 = [
-        #     {"role": "system", "content": "You are a professional journalist"},
-        #     {"role": "user", "content": output},
-        # ]
-        # # Generate a report based on the messages
-        # response_part_2 = client.chat.completions.create(
-        #     model=engine,
-        #     messages=messages_report_part_2,
-        #     temperature=temperature,
-        # )
-        # if counter_callback is not None:
-        #     counter_callback(
-        #         input_tokens=response_part_2.usage.prompt_tokens,
-        #         output_tokens=response_part_2.usage.completion_tokens,
-        #         model=engine,
-        #         token_counter=count_tokens,
-        #     )
-        # output_part_2 = response_part_2.choices[0].message.content
-        # print(f"OUTPUT PART 2:\n{output_part_2}\n")
-
-
 
         # Split the "Rules" part from the "Status" part of the market rules
         market_rules_part = market_rules.split("Rules:", 1)[1]
@@ -625,7 +413,10 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         output = trim_json_formatting(output)
         print(f"OUTPUT:\n{output}\n")
 
-        return response, thread_history_string, None, counter_callback
+        # Remove conclusion field from the JSON string
+        output = remove_conclusion_field(output)
+        
+        return output, thread_history_string, None, counter_callback
               
 
                 
