@@ -26,24 +26,38 @@ from itertools import islice
 
 import anthropic
 import requests
-from anthropic import Anthropic, HUMAN_PROMPT, AI_PROMPT
 from readability import Document
+from tiktoken import encoding_for_model
 from markdownify import markdownify as md
 from googleapiclient.discovery import build
 
 NUM_URLS_EXTRACT = 5
 DEFAULT_NUM_WORDS = 300
-DEFAULT_OPENAI_SETTINGS = {
-    "max_tokens": 500,
-    "temperature": 0.,
+DEFAULT_CLAUDE_SETTINGS = {
+    "max_tokens": 1000,
+    "temperature": 0,
+}
+MAX_TOKENS = {
+    'claude-2': 200_0000,
+    'claude-2.1': 200_0000,
+    'claude-3-haiku-20240307': 200_0000,
+    'claude-3-sonnet-20240229': 200_0000,
+    'claude-3-opus-20240229': 200_0000,
 }
 ALLOWED_TOOLS = [
     "claude-prediction-offline",
     "claude-prediction-online",
 ]
+ALLOWED_MODELS = [
+    "claude-2",
+    "claude-2.1",
+    "claude-3-haiku-20240307",
+    "claude-3-sonnet-20240229",
+    "claude-3-opus-20240229",
+]
 TOOL_TO_ENGINE = {
-    "claude-prediction-offline": "claude-2",
-    "claude-prediction-online": "claude-2",
+    "claude-prediction-offline": "claude-3-sonnet-20240229",
+    "claude-prediction-online": "claude-3-sonnet-20240229",
 }
 
 PREDICTION_PROMPT = """
@@ -124,13 +138,16 @@ OUTPUT_FORMAT
 * This is correct:"{{\n  \"queries\": [\"term1\", \"term2\"]}}"
 """
 
+SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
+
 ASSISTANT_TEXT = "```json"
 STOP_SEQUENCES = ["```"]
 
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    return anthropic.Anthropic().count_tokens(text)
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     service = build("customsearch", "v1", developerKey=api_key)
@@ -177,10 +194,10 @@ def extract_text(
 
     if num_words:
         return " ".join(text.split()[:num_words])
-
+    
     # remove newlines and extra spaces
     text = " ".join(text.split())
-
+    
     return text
 
 
@@ -228,27 +245,32 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
 
 
 def fetch_additional_information(
+    client: anthropic.Anthropic,
     prompt: str,
     engine: str,
-    anthropic: Anthropic,
     google_api_key: Optional[str],
     google_engine: Optional[str],
     num_urls: Optional[int],
     num_words: Optional[int],
     counter_callback: Optional[Callable] = None,
+    temperature: Optional[float] = DEFAULT_CLAUDE_SETTINGS["temperature"],
+    max_tokens: Optional[int] = DEFAULT_CLAUDE_SETTINGS["max_tokens"],
     source_links: Optional[List[str]] = None,
 ) -> str:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
-    url_query_prompt = f"{HUMAN_PROMPT}{url_query_prompt}{AI_PROMPT}{ASSISTANT_TEXT}"
-    completion = anthropic.completions.create(
+    messages = [
+        {"role": "user", "content": url_query_prompt},
+    ]
+    response = client.messages.create(
         model=engine,
-        max_tokens_to_sample=300,
-        prompt=url_query_prompt,
-        stop_sequences=STOP_SEQUENCES,
+        messages=messages,
+        system=SYSTEM_PROMPT,
+        temperature=temperature,
+        max_tokens=max_tokens,
     )
     try:
-        json_data = json.loads(completion.completion)
+        json_data = json.loads(response.content[0].text)
     except json.JSONDecodeError:
         json_data = {}
 
@@ -287,55 +309,71 @@ def fetch_additional_information(
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    try:
-        tool = kwargs["tool"]
-        prompt = kwargs["prompt"]
-        anthropic = Anthropic(api_key=kwargs["api_keys"]["anthropic"])
-        num_urls = kwargs.get("num_urls", NUM_URLS_EXTRACT)
-        num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS)
-        counter_callback = kwargs.get("counter_callback", None)
-        api_keys = kwargs.get("api_keys", {})
-        google_api_key = api_keys.get("google_api_key", None)
-        google_engine_id = api_keys.get("google_engine_id", None)
+    tool = kwargs["tool"]
+    model = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    prompt = kwargs["prompt"]
+    max_tokens = kwargs.get("max_tokens", DEFAULT_CLAUDE_SETTINGS["max_tokens"])
+    temperature = kwargs.get("temperature", DEFAULT_CLAUDE_SETTINGS["temperature"])
+    num_urls = kwargs.get("num_urls", NUM_URLS_EXTRACT)
+    num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS)
+    counter_callback = kwargs.get("counter_callback", None)
+    api_keys = kwargs.get("api_keys", {})
+    google_api_key = api_keys.get("google_api_key", None)
+    google_engine_id = api_keys.get("google_engine_id", None)
+    client = anthropic.Anthropic(api_key=api_keys["anthropic"])
 
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"Tool {tool} is not supported.")
+    # Make sure the model is supported
+    if model not in ALLOWED_MODELS:
+        raise ValueError(f"Model {model} not supported.")
 
-        engine = TOOL_TO_ENGINE[tool]
+    if tool not in ALLOWED_TOOLS:
+        raise ValueError(f"Tool {tool} is not supported.")
 
-        if tool == "claude-prediction-online":
-            additional_information, counter_callback = fetch_additional_information(
-                prompt=prompt,
-                engine=engine,
-                anthropic=anthropic,
-                google_api_key=google_api_key,
-                google_engine=google_engine_id,
-                num_urls=num_urls,
-                num_words=num_words,
-                counter_callback=counter_callback,
-                source_links=kwargs.get("source_links", None),
-            )
-        else:
-            additional_information = ""
-        prediction_prompt = PREDICTION_PROMPT.format(
-            user_prompt=prompt, additional_information=additional_information
+    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    print(f"ENGINE: {engine}")
+
+    if tool == "claude-prediction-online":
+        additional_information, counter_callback = fetch_additional_information(
+            client=client,
+            prompt=prompt,
+            engine=engine,
+            google_api_key=google_api_key,
+            google_engine=google_engine_id,
+            num_urls=num_urls,
+            num_words=num_words,
+            counter_callback=counter_callback,
+            source_links=kwargs.get("source_links", None),
         )
-        prediction_prompt = f"{HUMAN_PROMPT}{prediction_prompt}{AI_PROMPT}{ASSISTANT_TEXT}"
+    else:
+        additional_information = ""
 
-        completion = anthropic.completions.create(
+    # Make the prediction
+    prediction_prompt = PREDICTION_PROMPT.format(
+        user_prompt=prompt, additional_information=additional_information
+    )
+
+    messages = [
+        {
+            "role": "user",
+            "content": prediction_prompt,
+        },
+    ]
+
+    response_prediction = client.messages.create(
+        model=engine,
+        messages=messages,
+        system=SYSTEM_PROMPT,
+        temperature=temperature,
+        max_tokens=max_tokens,
+    )
+    prediction = response_prediction.content[0].text
+
+    if counter_callback:
+        counter_callback(
+            input_tokens=response_prediction.usage.input_tokens,
+            output_tokens=response_prediction.usage.output_tokens,
             model=engine,
-            max_tokens_to_sample=300,
-            prompt=prediction_prompt,
-            stop_sequences=STOP_SEQUENCES,
+            token_counter=count_tokens,
         )
-        if counter_callback is not None:
-            counter_callback(
-                model=engine,
-                input_prompt=prediction_prompt,
-                output_prompt=completion.completion,
-                token_counter=count_tokens,
-            )
 
-        return completion.completion, prediction_prompt, None, counter_callback
-    except Exception as e:
-        return f"Invalid response. The following issue was encountered: {str(e)}", "", None, None
+    return prediction, prediction_prompt, None, counter_callback

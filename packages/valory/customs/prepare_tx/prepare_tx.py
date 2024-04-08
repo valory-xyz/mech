@@ -44,7 +44,7 @@ User Prompt: {user_prompt}
 
 only respond with the format below using curly brackets to encapsulate the variables within a json dictionary object and no other text:
 
-"to": recipient_address,
+"to_address": recipient_address,
 "value": value,
 "wei_value": wei_value
 
@@ -115,10 +115,10 @@ def native_transfer(
 
     # build the transaction object, unknowns are referenced from parsed_txs
     transaction = {
-        "to": str(parsed_txs["to"]),
+        "to_address": str(parsed_txs["to_address"]),
         "value": int(parsed_txs["wei_value"]),
     }
-    return json.dumps(transaction), prompt, None, None
+    return response, prompt, None, None
 
 
 AVAILABLE_TOOLS = {
