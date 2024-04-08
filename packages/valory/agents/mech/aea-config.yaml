@@ -38,12 +38,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihat4giyc4bz6zopvahcj4iw53356pbtwfn7p4d5yflwly2qhahum
 - valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
 - valory/contract_subscription:0.1.0:bafybeicyugrkx5glat4p4ezwf6i7oduh26eycfie6ftd4uxrknztzl3ik4
-- valory/mech_abci:0.1.0:bafybeidzygcyammwwc3pnz2u3674elumbctsrzcvecov7h2gkk2espvtv4
+- valory/mech_abci:0.1.0:bafybeighsfwef33msfzkxbkkikfyvt3beijqlua37x667a6kfjcwzfug3u
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/subscription_abci:0.1.0:bafybeidoqeznyhbh3znaqbfdnftzq6fdh77m35qgftdwz46nz2iwda4yam
 - valory/task_execution:0.1.0:bafybeiapj6qhwzqrr7biebnwn2e2ugqsby2ml7z25fbhmdjnf3u4yp6bem
-- valory/task_submission_abci:0.1.0:bafybeics3r7mll4wamkqmpdqfsn6g5oilo46ol4kr2unob4kae6f33bpz4
+- valory/task_submission_abci:0.1.0:bafybeidmkzpqpvyol3636eeprkloy3z3t2nipmwvu6da3dtk2q4tjlab6u
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
 - valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 - valory/websocket_client:0.1.0:bafybeidwntmkk4b2ixq5454ycbkknclqx7a6vpn7aqpm2nw3duszqrxvta
