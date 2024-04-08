@@ -273,10 +273,10 @@ def fetch_additional_information(
         json_data = json.loads(response.content[0].text)
     except json.JSONDecodeError:
         json_data = {}
-        
+
     if "queries" not in json_data:
         json_data["queries"] = [prompt]
-    
+
     if not source_links:
         urls = get_urls_from_queries(
             json_data["queries"],

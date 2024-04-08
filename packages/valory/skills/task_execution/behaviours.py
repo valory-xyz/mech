@@ -396,6 +396,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
         executing_task["tool"] = task_data["tool"]
+        executing_task["model"] = task_data.get("model", None)
         self._async_result = cast(Optional[Future], future)
 
     def _build_ipfs_message(

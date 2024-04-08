@@ -21,6 +21,7 @@
 This module implements a tool which prepares a transaction for the transaction settlement skill.
 Please note that the gnosis safe parameters are missing from the payload, e.g., `safe_tx_hash`, `safe_tx_gas`, etc.
 """
+import json
 
 from openai import OpenAI
 from typing import Any, Dict, Optional, Tuple
@@ -117,7 +118,7 @@ def native_transfer(
         "to_address": str(parsed_txs["to_address"]),
         "value": int(parsed_txs["wei_value"]),
     }
-    return response, prompt, transaction, None
+    return response, prompt, None, None
 
 
 AVAILABLE_TOOLS = {

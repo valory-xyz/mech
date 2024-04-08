@@ -1,15 +1,15 @@
-name: prediction_request_claude
-author: valory
+name: prediction_url_cot_claude
+author: napthaai
 version: 0.1.0
 type: custom
 description: A tool for making binary predictions on markets using claude.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_request_claude.py: bafybeiaibfrbouduwuzqlx4fa6qwsgwikfa2jilihsbnv3mtb5dy4y4peu
+  __init__.py: bafybeicctw7lsy7tuykskh3elqprgswn3hyivjpvlj7l33pj7imvgyc2ma
+  prediction_url_cot_claude.py: bafybeif3xiehvlodmuolwoobrqtliqhmpcaao5zyynkbawivmarnif3esi
 fingerprint_ignore_patterns: []
-entry_point: prediction_request_claude.py
+entry_point: prediction_url_cot_claude.py
 callable: run
 dependencies:
   google-api-python-client:
@@ -25,3 +25,9 @@ dependencies:
     version: ==0.21.3
   tiktoken:
     version: ==0.5.1
+  pypdf2:
+    version: ==3.0.1
+  numpy:
+    version: '>=1.19.0'
+  pydantic:
+    version: '>=1.9.0,<3'

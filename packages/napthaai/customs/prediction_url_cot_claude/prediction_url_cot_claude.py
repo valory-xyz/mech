@@ -1,21 +1,19 @@
-from collections import defaultdict
-from concurrent.futures import Future, ThreadPoolExecutor
-from docstring_parser import parse
-from googleapiclient.discovery import build
-from itertools import islice
 import json
 import re
+from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
+from itertools import islice
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+
 import PyPDF2
 import anthropic
-from pydantic import BaseModel, Field
-from readability import Document as ReadabilityDocument
 import requests
-from requests.exceptions import RequestException, TooManyRedirects
+from googleapiclient.discovery import build
 from markdownify import markdownify as md
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from pydantic import BaseModel
+from readability import Document as ReadabilityDocument
+from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import encoding_for_model
-
 
 DEFAULT_CLAUDE_SETTINGS = {
     "max_tokens": 1000,
