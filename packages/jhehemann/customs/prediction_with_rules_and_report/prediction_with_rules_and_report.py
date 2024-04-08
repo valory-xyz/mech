@@ -89,38 +89,41 @@ DEFAULT_VOCAB = "en_core_web_sm"
 
 
 REPORT_PROMPT = """
-Your task is to prepare a concise and informative evaluation report that discusses the potential outcome of the QUESTION found below. Your evaluation must be based \
+Your task is to write a detailed evaluation report that discusses the potential outcome of the QUESTION found below. Your evaluation must be based \
 on the SEARCH_OUTPUT and your domain expertise.
 Adhere to the following instructions:
 
 INSTRUCTIONS:
 * Carefully read the QUESTION
-* Separate the QUESTION into its components
-* Carefully read the search output provided.
-* Analyze the search output and evaluate the date when the event will actually happen
-* Source your domain expertise to provide caveats
+* Analyze the SEARCH_OUTPUT and evaluate the date when the event will actually happen
+* Source your domain expertise to provide a comprehensive evaluation
 * Give your response in the format specified under "OUTPUT_FORMAT"
 
-SEARCH_OUTPUT:
-```
-{additional_information}
-```
+OUTPUT_FORMAT:
+* Introduction and Context
+* QUESTION
+* Findings and Analysis
+    - Will the exact event specified in the QUESTION happen?
+    - On what date will the event actually happen? You must provide a specific date on what you believe the event will happen. If you are uncertain, provide a range of dates. Use your domain knowledge.
+* Conclusion (use domain knowledge)
+* Caveats
 
 QUESTION:
 ```
 {market_question}
 ```
 
-TODAYS_DATE: {current_date}
+QUESTION_STATUS:
+```
+{question_status}
+```
 
-OUTPUT_FORMAT:
-* Introduction and Context
-* Findings and Analysis
-    - Will the event specified in the question happen?
-    - On what date will the event actually happen? Has the event already happened? You must provide a specific date. If you are uncertain, provide a range of dates.
-* Conclusion with common sense reasoning
-* Caveats
-Output only the raw report without any additional information or formatting.
+SEARCH_OUTPUT:
+```
+{additional_information}
+```
+
+Output only the report without any additional information or formatting.
 """
 
 
@@ -180,7 +183,9 @@ MARKET_QUESTION:
 {market_question}
 
 MARKET_RULES:
+```
 {market_rules_part}
+```
 
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
@@ -197,7 +202,7 @@ OUTPUT_FORMAT:
 def trim_json_formatting(text) -> str:
     """Trim the JSON formatting characters from string."""
     # Regex pattern that matches the start and end markers with optional newline characters
-    pattern = r'^```json\n?\s*({.*?})\n?```$'
+    pattern = r'^\n?```\n?json\n?\s*({.*?})\n?```\n?$'
 
     # Use re.DOTALL to make '.' match newlines as well
     match = re.match(pattern, text, re.DOTALL)
@@ -311,13 +316,14 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"MARKET QUESTION:\n{market_question}\n")
 
         # Get the market rules from the Infer Rules tool
-        market_rules, counter_callback = get_market_rules(market_question, client, counter_callback)
+        market_status, market_rules, counter_callback = get_market_rules(market_question, client, counter_callback)
+        print(f"MARKET STATUS: {market_status}\n")
         print(f"MARKET RULES:\n{market_rules}\n")
         
         # Get additional information from the Research tool
-        additional_inforamtion, counter_callback = research(market_question, client, google_api_key, google_engine_id, engine, market_rules, counter_callback)
+        additional_inforamtion, counter_callback = research(market_question, client, google_api_key, google_engine_id, engine, market_status, market_rules, counter_callback)
 
-        question_status = market_rules.split("\nRules:", 1)[0]
+        # question_status = market_rules.split("\nRules:", 1)[0]
 
         market_question_no_date = remove_date_from_query(market_question)
         market_question_when = f"When {market_question_no_date}"
@@ -329,11 +335,13 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             market_rules=market_rules,
             additional_information=additional_inforamtion,
             current_date=current_date,
-            question_status=question_status
+            question_status=market_status
         )
         print(f"REPORT PROMPT:\n{report_prompt}\n")
         
         # Get the subject matter expert role and introduction
+        sme = ""
+        sme_introduction = ""
         try:
             sme, sme_introduction, counter_callback = get_sme_role(
                 engine,
@@ -375,11 +383,11 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"OUTPUT:\n{output}\n")
 
         # Split the "Rules" part from the "Status" part of the market rules
-        market_rules_part = market_rules.split("Rules:", 1)[1]
-        market_rules_part = "Rules:" + market_rules_part
+        # market_rules_part = market_rules.split("Rules:", 1)[1]
+        # market_rules_part = "Rules:" + market_rules_part
         
         # Generate a prediction prompt based on the market question and the "Rules" part of the market rules
-        prediction_prompt = PREDICTION_PROMPT_TEMPLATE.format(market_question=market_question, market_rules_part=market_rules_part, current_date=current_date)
+        prediction_prompt = PREDICTION_PROMPT_TEMPLATE.format(market_question=market_question, market_rules_part=market_rules, current_date=current_date)
         print(f"PREDICTION PROMPT:{prediction_prompt}")
         
         messages_prediction = [
