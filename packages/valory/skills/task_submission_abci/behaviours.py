@@ -771,12 +771,11 @@ class TransactionPreparationBehaviour(
                 all_txs.append(response_tx)
 
         update_usage_tx = yield from self.get_update_usage_tx()
-        if update_usage_tx is None:
+        if update_usage_tx is not None:
             # something went wrong, respond with ERROR payload for now
             # in case we cannot update the usage, we should not proceed with the rest of the txs
-            return TransactionPreparationRound.ERROR_PAYLOAD
+            all_txs.append(update_usage_tx)
 
-        all_txs.append(update_usage_tx)
         multisend_tx_str = yield from self._to_multisend(all_txs)
         if multisend_tx_str is None:
             # something went wrong, respond with ERROR payload for now

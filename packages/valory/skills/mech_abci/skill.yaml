@@ -20,13 +20,13 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeigjrepaqpb3m7zunmt4hryos4vto4yyj3u6iyofdb2fotwho3bqvm
-- valory/registration_abci:0.1.0:bafybeif3ln6eg53ebrfe6uicjew4uqp2ynyrcxkw5wi4jm3ixqv3ykte4a
-- valory/reset_pause_abci:0.1.0:bafybeicm7onl72rfnn33pbvzwjpkl5gafeieyobfcnyresxz7kunjwmqea
-- valory/task_submission_abci:0.1.0:bafybeiedymlwwaipot4za5bqp7wyu5izj2t3o5gwy3mzsbywtioapc75ni
-- valory/termination_abci:0.1.0:bafybeie6h7j4hyhgj2wte64n3xyudxq4pgqcqjmslxi5tff4mb6vce2tay
-- valory/transaction_settlement_abci:0.1.0:bafybeid57tozt5f3kgzmu22nbr3c3oy4p7bi2bu66rqsgnlylq6xgh2ixe
-- valory/subscription_abci:0.1.0:bafybeicsxdt3mv6idkn5gyaqljvgywgbo57zim6jlpip55fqqlr5rzhsxq
+- valory/abstract_round_abci:0.1.0:bafybeieehcc2jqker6jmflxc4nnfcdc7k3s5zs2zbruwenb363dgt4xhai
+- valory/registration_abci:0.1.0:bafybeigpv56crn7hz6cqpicou7ulpz3by5uphcy6vm2rkqe5gkwuybcpe4
+- valory/reset_pause_abci:0.1.0:bafybeiatxhn6r7wd35frh4h4i4twkpk5kkadbbnfgwnz6vampsspt5yy2i
+- valory/task_submission_abci:0.1.0:bafybeicjy2saxrlg5ezeissbccb57mt3jfxmn3oli754hipm5mo4nra5ri
+- valory/termination_abci:0.1.0:bafybeiejcthb2uvpjxgon5wxdzua3tm6ud66nrbrctzocwmbjuwwwx2rg4
+- valory/transaction_settlement_abci:0.1.0:bafybeibnsqrkzfm2sbjvtn7a7bsv7irikqv653nn7lfpc7mi43zijrhvom
+- valory/subscription_abci:0.1.0:bafybeihn6lbkxemurkiefbequprq5u5zzef77wleyjs7zzpf4aq3dtf4vm
 behaviours:
   main:
     args: {}
@@ -133,7 +133,7 @@ models:
         gas_price: null
         max_fee_per_gas: null
         max_priority_fee_per_gas: null
-      reset_tendermint_after: 10
+      reset_tendermint_after: 100
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0

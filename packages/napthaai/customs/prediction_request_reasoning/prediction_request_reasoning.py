@@ -681,114 +681,117 @@ def extract_question(prompt: str) -> str:
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
-        tool = kwargs["tool"]
-        prompt = extract_question(kwargs["prompt"])
-        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
-        counter_callback = kwargs.get("counter_callback", None)
-        api_keys = kwargs.get("api_keys", {})
-        google_api_key = api_keys.get("google_api_key", None)
-        google_engine_id = api_keys.get("google_engine_id", None)
-        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
-        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-        print(f"ENGINE: {engine}")
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"Tool {tool} is not supported.")
+    try:
+        with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+            tool = kwargs["tool"]
+            prompt = extract_question(kwargs["prompt"])
+            num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
+            counter_callback = kwargs.get("counter_callback", None)
+            api_keys = kwargs.get("api_keys", {})
+            google_api_key = api_keys.get("google_api_key", None)
+            google_engine_id = api_keys.get("google_engine_id", None)
+            temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+            max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+            engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+            print(f"ENGINE: {engine}")
+            if tool not in ALLOWED_TOOLS:
+                raise ValueError(f"Tool {tool} is not supported.")
 
-        (
-            additional_information,
-            queries,
-            counter_callback,
-        ) = fetch_additional_information(
-            client=client,
-            prompt=prompt,
-            engine=engine,
-            google_api_key=google_api_key,
-            google_engine_id=google_engine_id,
-            counter_callback=counter_callback,
-            source_links=kwargs.get("source_links", None),
-            num_urls=num_urls,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        # Adjust the additional_information to fit within the token budget
-        adjusted_info = adjust_additional_information(
-            prompt=PREDICTION_PROMPT,
-            additional_information=additional_information,
-            model=engine,
-        )
-
-        # Reasoning prompt
-        reasoning_prompt = REASONING_PROMPT.format(
-            user_prompt=prompt, formatted_docs=adjusted_info
-        )
-
-        # Do reasoning
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": reasoning_prompt,
-            },
-        ]
-
-        # Reasoning
-        response_reasoning = client.chat.completions.create(
-            model=engine,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            n=1,
-            timeout=150,
-            stop=None,
-        )
-
-        # Extract the reasoning
-        reasoning = response_reasoning.choices[0].message.content
-
-        # Prediction prompt
-        prediction_prompt = PREDICTION_PROMPT.format(
-            user_prompt=prompt, reasoning=reasoning
-        )
-
-        # Make the prediction
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": prediction_prompt,
-            },
-        ]
-
-        response = client.chat.completions.create(
-            model=engine,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            n=1,
-            timeout=150,
-            stop=None,
-            functions=[Results.openai_schema],
-            function_call={'name':'Results'}
-        )
-        results = str(Results.from_response(response))
-
-        pairs = str(results).split()
-        result_dict = {}
-        for pair in pairs:
-            key, value = pair.split("=")
-            result_dict[key] = float(value)  # Convert value to float
-        results = result_dict
-        results = json.dumps(results)
-        if counter_callback is not None:
-            counter_callback(
-                input_tokens=response_reasoning.usage.prompt_tokens
-                + response.usage.prompt_tokens,
-                output_tokens=response_reasoning.usage.completion_tokens
-                + response.usage.completion_tokens,
-                model=engine,
-                token_counter=count_tokens,
+            (
+                additional_information,
+                queries,
+                counter_callback,
+            ) = fetch_additional_information(
+                client=client,
+                prompt=prompt,
+                engine=engine,
+                google_api_key=google_api_key,
+                google_engine_id=google_engine_id,
+                counter_callback=counter_callback,
+                source_links=kwargs.get("source_links", None),
+                num_urls=num_urls,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
-        return results, reasoning_prompt + "////" + prediction_prompt, None, counter_callback
+
+            # Adjust the additional_information to fit within the token budget
+            adjusted_info = adjust_additional_information(
+                prompt=PREDICTION_PROMPT,
+                additional_information=additional_information,
+                model=engine,
+            )
+
+            # Reasoning prompt
+            reasoning_prompt = REASONING_PROMPT.format(
+                user_prompt=prompt, formatted_docs=adjusted_info
+            )
+
+            # Do reasoning
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": reasoning_prompt,
+                },
+            ]
+
+            # Reasoning
+            response_reasoning = client.chat.completions.create(
+                model=engine,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+            )
+
+            # Extract the reasoning
+            reasoning = response_reasoning.choices[0].message.content
+
+            # Prediction prompt
+            prediction_prompt = PREDICTION_PROMPT.format(
+                user_prompt=prompt, reasoning=reasoning
+            )
+
+            # Make the prediction
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {
+                    "role": "user",
+                    "content": prediction_prompt,
+                },
+            ]
+
+            response = client.chat.completions.create(
+                model=engine,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+                functions=[Results.openai_schema],
+                function_call={'name':'Results'}
+            )
+            results = str(Results.from_response(response))
+
+            pairs = str(results).split()
+            result_dict = {}
+            for pair in pairs:
+                key, value = pair.split("=")
+                result_dict[key] = float(value)  # Convert value to float
+            results = result_dict
+            results = json.dumps(results)
+            if counter_callback is not None:
+                counter_callback(
+                    input_tokens=response_reasoning.usage.prompt_tokens
+                    + response.usage.prompt_tokens,
+                    output_tokens=response_reasoning.usage.completion_tokens
+                    + response.usage.completion_tokens,
+                    model=engine,
+                    token_counter=count_tokens,
+                )
+            return results, reasoning_prompt + "////" + prediction_prompt, None, counter_callback
+    except Exception as e:
+        return f"Invalid response. The following issue was encountered: {str(e)}", "", None, None

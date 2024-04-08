@@ -177,10 +177,10 @@ def extract_text(
 
     if num_words:
         return " ".join(text.split()[:num_words])
-    
+
     # remove newlines and extra spaces
     text = " ".join(text.split())
-    
+
     return text
 
 
@@ -247,7 +247,14 @@ def fetch_additional_information(
         prompt=url_query_prompt,
         stop_sequences=STOP_SEQUENCES,
     )
-    json_data = json.loads(completion.completion)
+    try:
+        json_data = json.loads(completion.completion)
+    except json.JSONDecodeError:
+        json_data = {}
+
+    if "queries" not in json_data:
+        json_data["queries"] = [prompt]
+
     if not source_links:
         urls = get_urls_from_queries(
             json_data["queries"],
@@ -280,52 +287,55 @@ def fetch_additional_information(
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    tool = kwargs["tool"]
-    prompt = kwargs["prompt"]
-    anthropic = Anthropic(api_key=kwargs["api_keys"]["anthropic"])
-    num_urls = kwargs.get("num_urls", NUM_URLS_EXTRACT)
-    num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS)
-    counter_callback = kwargs.get("counter_callback", None)
-    api_keys = kwargs.get("api_keys", {})
-    google_api_key = api_keys.get("google_api_key", None)
-    google_engine_id = api_keys.get("google_engine_id", None)
+    try:
+        tool = kwargs["tool"]
+        prompt = kwargs["prompt"]
+        anthropic = Anthropic(api_key=kwargs["api_keys"]["anthropic"])
+        num_urls = kwargs.get("num_urls", NUM_URLS_EXTRACT)
+        num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS)
+        counter_callback = kwargs.get("counter_callback", None)
+        api_keys = kwargs.get("api_keys", {})
+        google_api_key = api_keys.get("google_api_key", None)
+        google_engine_id = api_keys.get("google_engine_id", None)
 
-    if tool not in ALLOWED_TOOLS:
-        raise ValueError(f"Tool {tool} is not supported.")
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"Tool {tool} is not supported.")
 
-    engine = TOOL_TO_ENGINE[tool]
+        engine = TOOL_TO_ENGINE[tool]
 
-    if tool == "claude-prediction-online":
-        additional_information, counter_callback = fetch_additional_information(
-            prompt=prompt,
-            engine=engine,
-            anthropic=anthropic,
-            google_api_key=google_api_key,
-            google_engine=google_engine_id,
-            num_urls=num_urls,
-            num_words=num_words,
-            counter_callback=counter_callback,
-            source_links=kwargs.get("source_links", None),
+        if tool == "claude-prediction-online":
+            additional_information, counter_callback = fetch_additional_information(
+                prompt=prompt,
+                engine=engine,
+                anthropic=anthropic,
+                google_api_key=google_api_key,
+                google_engine=google_engine_id,
+                num_urls=num_urls,
+                num_words=num_words,
+                counter_callback=counter_callback,
+                source_links=kwargs.get("source_links", None),
+            )
+        else:
+            additional_information = ""
+        prediction_prompt = PREDICTION_PROMPT.format(
+            user_prompt=prompt, additional_information=additional_information
         )
-    else:
-        additional_information = ""
-    prediction_prompt = PREDICTION_PROMPT.format(
-        user_prompt=prompt, additional_information=additional_information
-    )
-    prediction_prompt = f"{HUMAN_PROMPT}{prediction_prompt}{AI_PROMPT}{ASSISTANT_TEXT}"
+        prediction_prompt = f"{HUMAN_PROMPT}{prediction_prompt}{AI_PROMPT}{ASSISTANT_TEXT}"
 
-    completion = anthropic.completions.create(
-        model=engine,
-        max_tokens_to_sample=300,
-        prompt=prediction_prompt,
-        stop_sequences=STOP_SEQUENCES,
-    )
-    if counter_callback is not None:
-        counter_callback(
+        completion = anthropic.completions.create(
             model=engine,
-            input_prompt=prediction_prompt,
-            output_prompt=completion.completion,
-            token_counter=count_tokens,
+            max_tokens_to_sample=300,
+            prompt=prediction_prompt,
+            stop_sequences=STOP_SEQUENCES,
         )
+        if counter_callback is not None:
+            counter_callback(
+                model=engine,
+                input_prompt=prediction_prompt,
+                output_prompt=completion.completion,
+                token_counter=count_tokens,
+            )
 
-    return completion.completion, prediction_prompt, None, counter_callback
+        return completion.completion, prediction_prompt, None, counter_callback
+    except Exception as e:
+        return f"Invalid response. The following issue was encountered: {str(e)}", "", None, None
