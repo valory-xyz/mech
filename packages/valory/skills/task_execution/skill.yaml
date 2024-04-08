@@ -115,7 +115,7 @@ dependencies:
   tiktoken:
     version: ==0.5.1
   anthropic:
-    version: ==0.3.11
+    version: ==0.21.3
   eth-abi:
     version: ==4.0.0
 is_abstract: false
