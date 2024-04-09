@@ -36,14 +36,14 @@ INSTRUCTIONS:
 * Define measurable and verifiable rules for when the market question will be resolved as 'Yes' and when it will be resolved as 'No'
 
 EXAMPLES:
-Question: "Will a another new climate bill be passed by both the Senate and the House by 30 September 2024?"
+Question: "Will another climate bill be passed by both the Senate and the House by 30 September 2024?"
 Answer:
     Rules:
-    'Yes': The question resolves as 'Yes' if there exists a climate bill and it is passed by both the Senate, which is the upper chamber, and the House, which is the lower chamber of the United States Congress on or before 30 September 2024.
+    'Yes': The question resolves as 'Yes' if there exists a another climate bill and it is passed by both the Senate, which is the upper chamber, and the House, which is the lower chamber of the United States Congress on or before 30 September 2024.
     
-    'No': The question resolves as 'No' if there exists no bill or it isn't passed by both chambers on or before 30 September 2024, or only one chamber passes it on or before this date. The market also resolves as 'No' if both chambers pass a different bill and not a new climate bill on or before this date.
+    'No': The question resolves as 'No' if there does not exist another bill or it isn't passed by both chambers on or before 30 September 2024, or only one chamber passes it on or before this date. The market also resolves as 'No' if both chambers pass a different bill and not another climate bill on or before this date.
 
-Question: "Will Tesla successfully launch its new electric vehicle, Model Z, on 30 June 2024?"
+Question: "Will Tesla successfully launch its electric vehicle, Model Z, on 30 June 2024?"
 Answer:
     Rules:
     'Yes': The question resolves as 'Yes' if, exactly on 30 June 2024, Tesla, an influential electric vehicle manufacturer, officially releases a Model Z. This must be evidenced by a public event, press release, or substantial media coverage that confirms the release will occur specifically on 30 June 2024.
@@ -103,7 +103,7 @@ def count_tokens(text: str, model: str) -> int:
 
 def remove_date_from_query(query: str) -> str:
     """Remove time-related information from query"""
-    date_pattern = r"\b( on or before | by | on )?\d{1,2} (January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b"
+    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
 

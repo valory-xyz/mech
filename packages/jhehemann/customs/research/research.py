@@ -64,50 +64,50 @@ DEFAULT_OPENAI_SETTINGS = {
 }
 
 
-SUMMARIZE_CHUNKS_PARAGRAPH = """
-You are provided with text chunks containing core information from a news article. Your task is to summarize the text chunks into a \
-minimalistic paragraph. Adhere to the following 'INSTRUCTIONS'.
+# SUMMARIZE_CHUNKS_PARAGRAPH = """
+# You are provided with text chunks containing core information from a news article. Your task is to summarize the text chunks into a \
+# minimalistic paragraph. Adhere to the following 'INSTRUCTIONS'.
 
-INSTRUCTIONS:
-* Carefully read the chunks
-* Summarize the chunks into a very concise paragraph
-* The summary must contain all key information from the chunks
-* If there are specific dates mentioned in the bulletpoints, you must include them in the summary.
-* Do not infer or add any new information, but only summarize the existing statements in an unbiased way
-* Give your response in the format specified under "OUTPUT_FORMAT"
+# INSTRUCTIONS:
+# * Carefully read the chunks
+# * Summarize the chunks into a very concise paragraph
+# * The summary must contain all key information from the chunks
+# * If there are specific dates mentioned in the bulletpoints, you must include them in the summary.
+# * Do not infer or add any new information, but only summarize the existing statements in an unbiased way
+# * Give your response in the format specified under "OUTPUT_FORMAT"
 
-CHUNKS:
-```
-{chunks}
-```
+# CHUNKS:
+# ```
+# {chunks}
+# ```
 
-OUTPUT_FORMAT:
-* Only output the concise paragraph containing the summarized information from the chunks.
-* Do not include any other contents in your response!
-"""
+# OUTPUT_FORMAT:
+# * Only output the concise paragraph containing the summarized information from the chunks.
+# * Do not include any other contents in your response!
+# """
 
 
-SUMMARIZE_CHUNKS_BULLETPOINTS = """
-You are provided with bulletpoints containing core information from a news article. Your task is to summarize the bulletpoints into a \
-minimalistic paragraph. Adhere to the following 'INSTRUCTIONS'.
+# SUMMARIZE_CHUNKS_BULLETPOINTS = """
+# You are provided with bulletpoints containing core information from a news article. Your task is to summarize the bulletpoints into a \
+# minimalistic paragraph. Adhere to the following 'INSTRUCTIONS'.
 
-INSTRUCTIONS:
-* Carefully read the BULLETPOINTS
-* Summarize the BULLETPOINTS into a very concise paragraph
-* The summary must contain all key information from the bulletpoints
-* If there are specific dates mentioned in the bulletpoints, you must include them in the summary.
-* Do not infer or add any new information, but only summarize the existing statements in an unbiased way
-* Give your response in the format specified under "OUTPUT_FORMAT"
+# INSTRUCTIONS:
+# * Carefully read the BULLETPOINTS
+# * Summarize the BULLETPOINTS into a very concise paragraph
+# * The summary must contain all key information from the bulletpoints
+# * If there are specific dates mentioned in the bulletpoints, you must include them in the summary.
+# * Do not infer or add any new information, but only summarize the existing statements in an unbiased way
+# * Give your response in the format specified under "OUTPUT_FORMAT"
 
-BULLETPOINTS:
-```
-{bullet_points}
-```
+# BULLETPOINTS:
+# ```
+# {bullet_points}
+# ```
 
-OUTPUT_FORMAT:
-* Only output the concise paragraph containing the summarized information from the bulletpoints.
-* Do not include any other contents in your response!
-"""
+# OUTPUT_FORMAT:
+# * Only output the concise paragraph containing the summarized information from the bulletpoints.
+# * Do not include any other contents in your response!
+# """
 
 
 # PREVIOUS_SUMMARY_PROMPT = """
@@ -311,7 +311,7 @@ INSTRUCTIONS:
 * If there are dates mentioned along with the relevant information, you must include them.
 * Do not try to answer or reference the search query, but only summarize the relevant information from 'SEARCH_OUTPUT' in an unbiased way.
 * You must not infer or add any new information.
-* Do not modify the information in 'SEARCH_OUTPUT'.
+* Do not modify the information in 'SEARCH_OUTPUT' with respect to the search query.
 * You must provide your response in the format specified under "OUTPUT_FORMAT"
 
 OUTPUT_FORMAT:
@@ -365,14 +365,17 @@ SEARCH_OUTPUT:
 
 
 SUMMARIZE_PROMPT_WITH_DATE_3 = """
-Your task is to summarize relevant information in 'SEARCH_OUTPUT'. You must adhere to the following 'INSTRUCTIONS'.
+Your task is to summarize relevant information from 'SEARCH_OUTPUT'. The SEARCH_OUTPUT contains bulletpoints that you must \
+combine and summarize into a single new bulletpoint. You must adhere to the following 'INSTRUCTIONS'.
 
 INSTRUCTIONS:
-* Select only the most relevant information from 'SEARCH_OUTPUT' that may help answering the search query
+* Carefully read the 'SEARCH_QUERY'
+* Select a combination of only the most relevant information from 'SEARCH_OUTPUT' that may help answering the search query
 * An information can be considered relevant if it might support or refute the search query
-* Summarize the most relevant information in a way that is concise and informative and include the dates mentioned
+* Summarize the selected information in a way that is concise and informative and include the dates mentioned
+* Do not try to answer or reference the search query, but only summarize the relevant information from 'SEARCH_OUTPUT' in an unbiased way.
 * You must not infer or add any new information.
-* Do not modify the content and meaning of 'SEARCH_OUTPUT'.
+* Do not modify the information in 'SEARCH_OUTPUT' with respect to the search query.
 * If there are dates mentioned along with the relevant information, you must include them.
 
 QUESTION: {input_query}
@@ -383,10 +386,40 @@ SEARCH_OUTPUT:
 ```
 
 OUTPUT_FORMAT:
-* Only output the summary containing the most relevant information from 'SEARCH_OUTPUT'.
+* Only output the summary containing the combination of the most relevant information from 'SEARCH_OUTPUT'.
 * The summary must be formatted into a single concise and informative bulletpoint.
 * Solely respond with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
-* You must not make references to the search query and its outcome.
+* Do not include any other contents in your response!
+"""
+
+# * After summarizing, review the summary and evaluate if it could help answering the search query. If not, delete everything and respond with "Error".
+
+
+SUMMARIZE_PROMPT_WITH_DATE_4 = """
+Your task is to summarize relevant information from 'SEARCH_OUTPUT'. The SEARCH_OUTPUT contains bulletpoints that you must \
+combine and summarize into a single paragraph. You must adhere to the following 'INSTRUCTIONS'.
+
+INSTRUCTIONS:
+* Carefully read the 'QUESTION'
+* Select a combination of only the most relevant information from 'SEARCH_OUTPUT' that may help answering the QUESTION
+* An information can be considered relevant if it might support or refute the QUESTION
+* Summarize the selected information in a way that is concise and informative and include the dates mentioned
+* Do not try to answer or reference the QUESTION, but only summarize the relevant information from 'SEARCH_OUTPUT' in an unbiased way.
+* You must not infer or add any new information.
+* Do not modify the information in 'SEARCH_OUTPUT' with respect to the QUESTION.
+* If there are dates or timeframes mentioned along with the relevant information, you must include them.
+
+QUESTION: {input_query}
+
+SEARCH_OUTPUT:
+```
+{chunks}
+```
+
+OUTPUT_FORMAT:
+* Only output the summary containing the combination of the most relevant information from 'SEARCH_OUTPUT'.
+* The summary must be a single very concise and informative paragraph.
+* Solely respond with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
 * Do not include any other contents in your response!
 """
 
@@ -735,7 +768,7 @@ class TextChunk(BaseModel):
     
 def trim_json_formatting(output_string):
     # Regular expression pattern that matches the start and end markers with optional newline characters
-    pattern = r'^\n?```\n?json\n?\s*({.*?})\n?```\n?$'
+    pattern = r'^\s*```\s*json\s*({.*?})\s*```\s*$'
     
     # Use re.DOTALL to make '.' match newlines as well
     match = re.match(pattern, output_string, re.DOTALL)
@@ -798,7 +831,7 @@ def parse_date_str(date_str: str) -> datetime:
     
 def remove_date_from_query(query: str) -> str:
     # Define a regex pattern to match dates
-    date_pattern = r"\b( on or before | by | on )?\d{1,2} (January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b"
+    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
 
@@ -1229,9 +1262,13 @@ def summarize_relevant_chunks(
         # chunks_string = article_header + chunks_string
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
 
-        input_query_no_date = remove_date_from_query(input_query)
-        summarize_prompt = SUMMARIZE_PROMPT_WITH_DATE.format(input_query=input_query_no_date, chunks=trimmed_chunks)
+        market_question_no_date = remove_date_from_query(input_query)
+        market_question_when = f"When {market_question_no_date}"
+        summarize_prompt = SUMMARIZE_PROMPT_WITH_DATE_4.format(input_query=market_question_when, chunks=trimmed_chunks)
         print()
+        print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
+        print(web_page.publication_date)
+        print("SUMMARIZE RELEVANT CHUNKS PROMPT:")
         print(summarize_prompt)
         print()
         messages = [
@@ -1242,6 +1279,7 @@ def summarize_relevant_chunks(
             model=engine,
             messages=messages,
             temperature=temperature,
+            max_tokens=100,
         )
         if counter_callback is not None:
             counter_callback(
@@ -1250,36 +1288,40 @@ def summarize_relevant_chunks(
                 model=engine,
                 token_counter=count_tokens,
             )
+
         output = response.choices[0].message.content
         print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
         print(web_page.publication_date)
         print("SUMMARIZE RELEVANT CHUNKS OUTPUT:")
         print(output)
         print()
-
-        prompt = SUMMARIZE_PROMPT_WITH_DATE_3.format(input_query=input_query_no_date, chunks=output)
-        messages = [
-            {"role": "system", "content": "You are a professional journalist."},
-            {"role": "user", "content": prompt},
-        ]
-        response = client.chat.completions.create(
-            model=engine,
-            messages=messages,
-            temperature=temperature,
-        )
-        if counter_callback is not None:
-            counter_callback(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
-                model=engine,
-                token_counter=count_tokens,
-            )
-        output = response.choices[0].message.content
-        print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
-        print(web_page.publication_date)
-        print("SUMMARIZE CHUNKS BULLETPOINTS OUTPUT:")
-        print(output)
+        print("OUTPUT TOKENS:", response.usage.completion_tokens)
+        print("STOP REASON:", response.choices[0].finish_reason)
         print()
+
+        # prompt = SUMMARIZE_PROMPT_WITH_DATE_4.format(input_query=input_query_no_date, chunks=output)
+        # messages = [
+        #     {"role": "system", "content": "You are a professional journalist."},
+        #     {"role": "user", "content": prompt},
+        # ]
+        # response = client.chat.completions.create(
+        #     model=engine,
+        #     messages=messages,
+        #     temperature=temperature,
+        # )
+        # if counter_callback is not None:
+        #     counter_callback(
+        #         input_tokens=response.usage.prompt_tokens,
+        #         output_tokens=response.usage.completion_tokens,
+        #         model=engine,
+        #         token_counter=count_tokens,
+        #     )
+        # output = response.choices[0].message.content
+        # print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
+        # print(web_page.publication_date)
+        # print("SUMMARIZE CHUNKS BULLETPOINTS OUTPUT:")
+        # print(output)
+        # print()
 
         web_page.relevant_chunks_summary = output
 
@@ -1315,11 +1357,14 @@ def summarize_over_summarized_chunks(
 
     for web_page in web_pages:
         if web_page.chunks_final:
-            # Split the summary into lines
+            # Split the summary into lines and align bulletpoints to "-"
             lines = web_page.relevant_chunks_summary.split('\n')
+            for i, line in enumerate(lines):
+                if line.startswith("*"):
+                    lines[i] = "-" + line[1:]                  
             
             # Append the web page ID to each line and add it to the list
-            all_lines_with_id.extend([line + f" ({web_page.id})" for line in lines if line.strip() != ''])
+            all_lines_with_id.extend([line + f" ({web_page.id})\n" for line in lines if line.strip() != ''])
 
     # Join all modified lines into a single string
     all_relevant_chunks_summary = '\n'.join(all_lines_with_id)
@@ -1360,7 +1405,9 @@ def summarize_over_summarized_chunks(
     modified_ids = set()
 
     # Process each line to extract the web_page.id and content, then update the relevant web page
-    for line in lines:
+
+    
+    for line in lines:      
         match = re.match(r"^(.*) \((\d+)\)$", line)
         if match:
             content, web_page_id = match.groups()
@@ -1381,24 +1428,6 @@ def summarize_over_summarized_chunks(
     return modified_web_pages, counter_callback
 
 
-# def summarize_chunks_bulletpoints(
-#     web_pages: List[WebPage],
-#     input_query: str,
-#     client: OpenAI,
-#     enc: tiktoken.Encoding,
-#     counter_callback,
-#     engine="gpt-3.5-turbo",
-#     temperature=0.0,
-# ) -> List[WebPage]:
-#     """Summarize the relevant bullet points into a paragraph."""
-#     for web_page in web_pages:
-#         if web_page.relevant_chunks_summary:
-#             prompt
-
-#     SUMMARIZE_CHUNKS_BULLETPOINTS
-#     return web_pages, counter_callback
-
-
 def research(
     market_question: str,
     client: OpenAI,
@@ -1411,9 +1440,6 @@ def research(
     num_urls: int = NUM_URLS_PER_QUERY,
 ):
     """Research additional information based on a prediction market question"""
-    """Research additional information based on a prediction market question"""
-    
-    """Research additional information based on a prediction market question"""    
     
     # Generate a list of sub-queries
     queries, counter_callback = fetch_queries(client, market_question, engine, market_rules, counter_callback)
@@ -1446,7 +1472,9 @@ def research(
     text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
     text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
     print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-    for chunk in text_chunks_sorted:
+    for i, chunk in enumerate(text_chunks_sorted):
+        if i >= 50:
+            break
         print(f"Similarity: {chunk.similarity}")
         print(chunk.text)
         print()

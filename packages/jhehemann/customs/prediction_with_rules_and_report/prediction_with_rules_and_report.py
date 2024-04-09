@@ -102,10 +102,10 @@ INSTRUCTIONS:
 OUTPUT_FORMAT:
 * Introduction and Context
 * QUESTION
-* Findings and Analysis
+* Findings and Analysis (Use domain expertise to justify your answers)
     - Will the exact event specified in the QUESTION happen?
-    - On what date will the event actually happen? You must provide a specific date on what you believe the event will happen. If you are uncertain, provide a range of dates. Use your domain knowledge.
-* Conclusion (use domain knowledge)
+    - On what date will the event actually happen? You must provide a specific date on what you believe the event will happen. If you are uncertain, provide a range of dates.
+* Conclusion with common sense reasoning
 * Caveats
 
 QUESTION:
@@ -126,6 +126,41 @@ SEARCH_OUTPUT:
 Output only the report without any additional information or formatting.
 """
 
+
+REPORT_PROMPT_OLDER_BUT_MAYBE_BETTER = """
+Your task is to prepare a concise and informative evaluation report that discusses the potential outcome of the QUESTION found below. Your evaluation must be based \
+on the SEARCH_OUTPUT and your domain expertise.
+Adhere to the following instructions:
+
+INSTRUCTIONS:
+* Carefully read the QUESTION
+* Separate the QUESTION into its components
+* Carefully read the search output provided.
+* Analyze the search output and evaluate the date when the event will actually happen
+* Source your domain expertise to provide caveats
+* Give your response in the format specified under "OUTPUT_FORMAT"
+
+SEARCH_OUTPUT:
+```
+{additional_information}
+```
+
+QUESTION:
+```
+{market_question}
+```
+
+TODAYS_DATE: {current_date}
+
+OUTPUT_FORMAT:
+* Introduction and Context
+* Findings and Analysis
+    - Will the event specified in the question happen?
+    - On what date will the event actually happen? Has the event already happened? You must provide a specific date. If you are uncertain, provide a range of dates. Use domain expertise to justify your answer.
+* Conclusion with common sense reasoning
+* Caveats
+Output only the report without any additional information or formatting.
+"""
 
 SME_GENERATION_MARKET_PROMPT = """
 task question: "{question}"
@@ -179,14 +214,6 @@ INSTRUCTIONS:
 * Provide your confidence in the estimation and the utility of the information in the report
 * Give your response in the format specified under "OUTPUT_FORMAT"
 
-MARKET_QUESTION:
-{market_question}
-
-MARKET_RULES:
-```
-{market_rules_part}
-```
-
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
 * The JSON must contain five fields: "conclusion", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1
@@ -196,13 +223,22 @@ OUTPUT_FORMAT:
     - "confidence": Your confidence in the probability estimation
     - "info_utility": Your assessment of the utility of the information provided in the report
 * Include only the JSON object in your output
+
+MARKET_QUESTION:
+{market_question}
+
+MARKET_RULES:
+```
+{market_rules_part}
+```
 """
+
 
 
 def trim_json_formatting(text) -> str:
     """Trim the JSON formatting characters from string."""
     # Regex pattern that matches the start and end markers with optional newline characters
-    pattern = r'^\n?```\n?json\n?\s*({.*?})\n?```\n?$'
+    pattern = r'^\s*```\s*json\s*({.*?})\s*```\s*$'
 
     # Use re.DOTALL to make '.' match newlines as well
     match = re.match(pattern, text, re.DOTALL)
@@ -213,7 +249,7 @@ def trim_json_formatting(text) -> str:
         return text
 
 
-def remove_conclusion_field(json_str) -> str:
+def remove_eval_field(json_str) -> str:
     """Remove the 'conclusion' field from a JSON string."""
     data = json.loads(json_str)
     if 'conclusion' in data:
@@ -231,7 +267,7 @@ def extract_question(text) -> str:
 
 def remove_date_from_query(query: str) -> str:
     """Remove time-related information from query"""
-    date_pattern = r"\b( on or before | by | on )?\d{1,2} (January|February|March|April|May|June|July|August|September|October|November|December) \d{4}\b"
+    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
 
@@ -347,7 +383,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 engine,
                 temperature,
                 max_tokens,
-                prompt,
+                market_question,
                 counter_callback=counter_callback,
             )
         except Exception as e:
@@ -381,10 +417,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             )
         output = response.choices[0].message.content
         print(f"OUTPUT:\n{output}\n")
-
-        # Split the "Rules" part from the "Status" part of the market rules
-        # market_rules_part = market_rules.split("Rules:", 1)[1]
-        # market_rules_part = "Rules:" + market_rules_part
         
         # Generate a prediction prompt based on the market question and the "Rules" part of the market rules
         prediction_prompt = PREDICTION_PROMPT_TEMPLATE.format(market_question=market_question, market_rules_part=market_rules, current_date=current_date)
@@ -422,7 +454,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"OUTPUT:\n{output}\n")
 
         # Remove conclusion field from the JSON string
-        output = remove_conclusion_field(output)
+        output = remove_eval_field(output)
         
         return output, thread_history_string, None, counter_callback
               
