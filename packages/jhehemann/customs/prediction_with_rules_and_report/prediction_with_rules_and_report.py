@@ -117,10 +117,10 @@ OUTPUT_FORMAT:
 * Introduction and Context
 * Findings and Analysis
     - Will the event specified in the question happen?
-    - On what date will the event actually happen? Has the event already happened? You must provide a specific date. If you are uncertain, provide a range of dates.
+    - On what date will the event actually happen? Has the event already happened? You must provide a specific date. If you are uncertain, provide a range of dates. Use domain expertise to justify your answer.
 * Conclusion with common sense reasoning
 * Caveats
-Output only the raw report without any additional information or formatting.
+Output only the report without any additional information or formatting.
 """
 
 
@@ -197,7 +197,7 @@ OUTPUT_FORMAT:
 def trim_json_formatting(text) -> str:
     """Trim the JSON formatting characters from string."""
     # Regex pattern that matches the start and end markers with optional newline characters
-    pattern = r'^```json\n?\s*({.*?})\n?```$'
+    pattern = r'^\n?```\n?json\n?\s*({.*?})\n?```\n?$'
 
     # Use re.DOTALL to make '.' match newlines as well
     match = re.match(pattern, text, re.DOTALL)
