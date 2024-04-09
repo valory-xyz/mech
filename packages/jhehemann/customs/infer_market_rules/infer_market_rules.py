@@ -36,7 +36,7 @@ INSTRUCTIONS:
 * Define measurable and verifiable rules for when the market question will be resolved as 'Yes' and when it will be resolved as 'No'
 
 EXAMPLES:
-Question: "Will the new climate bill be passed by both the Senate and the House by 30 September 2024?"
+Question: "Will another new climate bill be passed by both the Senate and the House by 30 September 2024?"
 Answer:
     Status: The question implies that a new climate bill is under consideration by the United States Congress, which consists of two chambers: the Senate and the House of Representatives. If there exists such a bill, the question suggests that it has not yet been passed by both chambers.
     Rules:

@@ -56,6 +56,7 @@ MAX_TEXT_CHUNKS_TOTAL = 50
 EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_SIZE = 1536
+WEEKS_TO_SCRAPE_NEWS = 4
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 500,
@@ -593,7 +594,7 @@ class TextChunk(BaseModel):
     
 def trim_json_formatting(output_string):
     # Regular expression pattern that matches the start and end markers with optional newline characters
-    pattern = r'^```json\n?\s*({.*?})\n?```$'
+    pattern = r'^\n?```\n?json\n?\s*({.*?})\n?```\n?$'
     
     # Use re.DOTALL to make '.' match newlines as well
     match = re.match(pattern, output_string, re.DOTALL)
@@ -866,7 +867,7 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
     for web_page in web_pages:
         if web_page.html:
             date_parsed = parse_date_str(web_page.publication_date)
-            if date_parsed > datetime.now() - timedelta(weeks=5) or date_parsed == datetime.min:
+            if date_parsed > datetime.now() - timedelta(weeks=week_interval) or date_parsed == datetime.min:
                 if web_page.url in investigate_urls:
                     print(web_page.html)
                 # Clean the text
@@ -1258,7 +1259,7 @@ def research(
     web_pages = [WebPage(url) for url in urls]
     web_pages = extract_html_texts(web_pages)
 
-    week_interval = 5
+    week_interval = WEEKS_TO_SCRAPE_NEWS
     # Scrape text from web pages not older <week_interval> weeks
     web_pages = scrape_web_pages(web_pages, week_interval)
 
