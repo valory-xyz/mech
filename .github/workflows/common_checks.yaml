@@ -180,7 +180,7 @@ jobs:
           pip install tomte[tox,cli]==0.2.15
           pip install --user --upgrade setuptools
       - name: Tool unit tests
-        env: # Or as an environment variable
+        env:
           OPENAI_SECRET_KEY: ${{ secrets.OPENAI_API_KEY }}
           STABILITY_API_KEY: ${{ secrets.STABILITY_AI_KEY }}
           GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
@@ -188,4 +188,6 @@ jobs:
           CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
           REPLICATE_API_KEY: ${{ secrets.REPLICATE_API_KEY }}
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-        run: tox -e check-tools
+        run: |
+          printenv
+          tox -e check-tools
