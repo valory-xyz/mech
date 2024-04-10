@@ -156,6 +156,7 @@ jobs:
           gitleaks detect --report-format json --report-path leak_report -v
 
   tools_checks:
+    environment: 'ci'
     continue-on-error: False
     runs-on: ${{ matrix.os }}
 
