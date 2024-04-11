@@ -37,16 +37,18 @@ from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
-from tiktoken import encoding_for_model
+from tiktoken import encoding_for_model, get_encoding
+
 
 class LLMClientManager:
     """Client context manager for LLMs."""
+
     def __init__(self, api_keys: List, llm_provider: str = None):
         self.api_keys = api_keys
         self.llm_provider = llm_provider
 
     def __enter__(self):
-        global client 
+        global client
         if client is None:
             client = LLMClient(self.api_keys, self.llm_provider)
         return client
@@ -57,29 +59,44 @@ class LLMClientManager:
             client.client.close()
             client = None
 
+
 class Usage:
     """Usage class."""
+
     def __init__(self, prompt_tokens=None, completion_tokens=None):
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
 
+
 class LLMResponse:
     """Response class."""
-    def __init__(self, content: Optional[str] = None, usage : Optional[Usage] = None):
+
+    def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
         self.content = content
         self.usage = Usage()
 
+
 class LLMClient:
     """Client for LLMs."""
+
     def __init__(self, api_keys: List, llm_provider: str = None):
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
             import anthropic
+
             self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
         if self.llm_provider == "openai":
             import openai
+
             self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+        if self.llm_provider == "openrouter":
+            import openai
+
+            self.client = openai.OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=self.api_keys["openrouter"],
+            )
 
     def completions(
         self,
@@ -96,8 +113,8 @@ class LLMClient:
             # anthropic can't take system prompt in messages
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]["role"] == "system":
-                    system_prompt =  messages[i]["content"]
-                    del messages[i]  
+                    system_prompt = messages[i]["content"]
+                    del messages[i]
 
             response_provider = self.client.messages.create(
                 model=model,
@@ -111,23 +128,44 @@ class LLMClient:
             response.usage.prompt_tokens = response_provider.usage.input_tokens
             response.usage.completion_tokens = response_provider.usage.output_tokens
             return response
-        elif self.llm_provider == "openai":
-            response_provider= self.client.chat.completions.create(
-                            model=model,
-                            messages=messages,
-                            temperature=temperature,
-                            max_tokens=max_tokens,
-                            n=1,
-                            timeout=150,
-                            stop=None,
-                        )
+
+        if self.llm_provider == "openai":
+            response_provider = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+            )
             response = LLMResponse()
             response.content = response_provider.choices[0].message.content
             response.usage.prompt_tokens = response_provider.usage.prompt_tokens
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
+        if self.llm_provider == "openrouter":
+            # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
+            # transform = [] # to desactivate prompt compression
+            response_provider = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+            )
+            response = LLMResponse()
+            response.content = response_provider.choices[0].message.content
+            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
+            response.usage.completion_tokens = response_provider.usage.completion_tokens
+            return response
+
+
 client: Optional[LLMClient] = None
+
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
@@ -163,6 +201,21 @@ LLM_SETTINGS = {
     "claude-3-opus-20240229": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
+    "cohere/command-r-plus": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
+    "mistralai/mistral-medium": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 8192,
+        "temperature": 0,
+    },
+    "mistralai/mixtral-8x22b": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 4096,
         "temperature": 0,
     },
 }
@@ -304,10 +357,10 @@ def extract_text(
 
     if num_words:
         return " ".join(text.split()[:num_words])
-    
+
     # remove newlines and extra spaces
     text = " ".join(text.split())
-    
+
     return text
 
 
@@ -338,8 +391,8 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
                 if result.status_code != 200:
                     continue
                 doc = {}
-                doc['text'] = extract_text(html=result.text, num_words=num_words)
-                doc['url'] = url
+                doc["text"] = extract_text(html=result.text, num_words=num_words)
+                doc["url"] = url
                 extracted_texts.append(doc)
                 count += 1
                 if count >= max_allowed:
@@ -394,7 +447,10 @@ def fetch_additional_information(
         texts = []
         for url, content in islice(source_links.items(), 3):
             doc = {}
-            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+            doc["text"], doc["url"] = (
+                extract_text(html=content, num_words=num_words),
+                url,
+            )
             texts.append(doc)
     # Format the additional information
     additional_information = "\n".join(
@@ -473,33 +529,33 @@ def summarize(text: str, compression_factor: float, vocab: str) -> str:
 
 
 def adjust_additional_information(
-    prompt: str, 
-    prompt_template:str, 
-    additional_information: str, 
-    model: str
+    prompt: str, prompt_template: str, additional_information: str, model: str
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
     # Initialize tiktoken encoder for the specified model
     enc = tiktoken.encoding_for_model(model)
-    
+
     # Encode the user prompt to calculate its token count
     prompt = prompt_template.format(user_prompt=prompt, additional_information="")
     prompt_tokens = len(enc.encode(prompt))
-    
+
     # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = LLM_SETTINGS[model]["limit_max_tokens"] - LLM_SETTINGS[model]["default_max_tokens"]
+    MAX_PREDICTION_PROMPT_TOKENS = (
+        LLM_SETTINGS[model]["limit_max_tokens"]
+        - LLM_SETTINGS[model]["default_max_tokens"]
+    )
     available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
-    
+
     # Encode the additional_information
     additional_info_tokens = enc.encode(additional_information)
-    
+
     # If additional_information exceeds available tokens, truncate it
     if len(additional_info_tokens) > available_tokens:
         truncated_info_tokens = additional_info_tokens[:available_tokens]
         # Decode tokens back to text, ensuring the output fits within the budget
         additional_information = enc.decode(truncated_info_tokens)
-    
+
     return additional_information
 
 
@@ -508,12 +564,17 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     with LLMClientManager(kwargs["api_keys"], kwargs["llm_provider"]):
         tool = kwargs["tool"]
         prompt = kwargs["prompt"]
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool]); print(f"ENGINE: {engine}")
-        max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[engine]["default_max_tokens"])
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
+        max_tokens = kwargs.get(
+            "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
+        )
         temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
-        compression_factor = kwargs.get("compression_factor", DEFAULT_COMPRESSION_FACTOR)
+        compression_factor = kwargs.get(
+            "compression_factor", DEFAULT_COMPRESSION_FACTOR
+        )
         vocab = kwargs.get("vocab", DEFAULT_VOCAB)
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
