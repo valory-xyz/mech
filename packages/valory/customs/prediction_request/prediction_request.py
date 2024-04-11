@@ -150,16 +150,6 @@ LLM_SETTINGS = {
         "limit_max_tokens": 8192,
         "temperature": 0,
     },
-    "claude-2": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
-        "temperature": 0,
-    },
-    "claude-2.1": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
-        "temperature": 0,
-    },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_0000,
@@ -181,6 +171,7 @@ ALLOWED_TOOLS = [
     "prediction-online",
     "prediction-online-summarized-info",
 ]
+ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 DEFAULT_MODEL = "gpt-4-0125-preview"
 TOOL_TO_ENGINE = {tool: DEFAULT_MODEL for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
