@@ -19,11 +19,14 @@
 """This module contains constants."""
 
 import os
+from dotenv import load_dotenv
 
-OPENAI_SECRET_KEY = os.getenv("OPENAI_SECRET_KEY")
-STABILITY_API_KEY = os.getenv("STABILITY_API_KEY")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GOOGLE_ENGINE_ID = os.getenv("GOOGLE_ENGINE_ID")
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
-REPLICATE_API_KEY = os.getenv("REPLICATE_API_KEY")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")
+load_dotenv()
+
+OPENAI_SECRET_KEY = os.environ("OPENAI_SECRET_KEY")
+STABILITY_API_KEY = os.environ("STABILITY_API_KEY")
+GOOGLE_API_KEY = os.environ("GOOGLE_API_KEY")
+GOOGLE_ENGINE_ID = os.environ("GOOGLE_ENGINE_ID")
+CLAUDE_API_KEY = os.environ("CLAUDE_API_KEY")
+REPLICATE_API_KEY = os.environ("REPLICATE_API_KEY")
+NEWS_API_KEY = os.environ("NEWS_API_KEY")
