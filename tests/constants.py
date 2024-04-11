@@ -19,6 +19,9 @@
 """This module contains constants."""
 
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 OPENAI_SECRET_KEY = os.getenv("OPENAI_SECRET_KEY")
 STABILITY_API_KEY = os.getenv("STABILITY_API_KEY")
