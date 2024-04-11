@@ -25,9 +25,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
-
-from openai import OpenAI
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 
 import requests
 import spacy
@@ -41,25 +39,95 @@ from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
 from tiktoken import encoding_for_model
 
-client: Optional[OpenAI] = None
+class LLMClientManager:
+    """Client context manager for LLMs."""
+    def __init__(self, api_keys: List, llm_provider: str = None):
+        self.api_keys = api_keys
+        self.llm_provider = llm_provider
 
-
-class OpenAIClientManager:
-    """Client context manager for OpenAI."""
-    def __init__(self, api_key: str):
-        self.api_key = api_key
-
-    def __enter__(self) -> OpenAI:
-        global client
+    def __enter__(self):
+        global client 
         if client is None:
-            client = OpenAI(api_key=self.api_key)
+            client = LLMClient(self.api_keys, self.llm_provider)
         return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         global client
         if client is not None:
-            client.close()
+            client.client.close()
             client = None
+
+class Usage:
+    """Usage class."""
+    def __init__(self, prompt_tokens=None, completion_tokens=None):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+class LLMResponse:
+    """Response class."""
+    def __init__(self, content: Optional[str] = None, usage : Optional[Usage] = None):
+        self.content = content
+        self.usage = Usage()
+
+class LLMClient:
+    """Client for LLMs."""
+    def __init__(self, api_keys: List, llm_provider: str = None):
+        self.api_keys = api_keys
+        self.llm_provider = llm_provider
+        if self.llm_provider == "anthropic":
+            import anthropic
+            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
+        if self.llm_provider == "openai":
+            import openai
+            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+
+    def completions(
+        self,
+        model: str,
+        messages: List = [],
+        timeout: Optional[Union[float, int]] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        n: Optional[int] = None,
+        stop=None,
+        max_tokens: Optional[float] = None,
+    ):
+        if self.llm_provider == "anthropic":
+            # anthropic can't take system prompt in messages
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]["role"] == "system":
+                    system_prompt =  messages[i]["content"]
+                    del messages[i]  
+
+            response_provider = self.client.messages.create(
+                model=model,
+                messages=messages,
+                system=system_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            response = LLMResponse()
+            response.content = response_provider.content[0].text
+            response.usage.prompt_tokens = response_provider.usage.input_tokens
+            response.usage.completion_tokens = response_provider.usage.output_tokens
+            return response
+        elif self.llm_provider == "openai":
+            response_provider= self.client.chat.completions.create(
+                            model=model,
+                            messages=messages,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            n=1,
+                            timeout=150,
+                            stop=None,
+                        )
+            response = LLMResponse()
+            response.content = response_provider.choices[0].message.content
+            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
+            response.usage.completion_tokens = response_provider.usage.completion_tokens
+            return response
+
+client: Optional[LLMClient] = None
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
@@ -71,20 +139,50 @@ FrequenciesType = Dict[str, float]
 ScoresType = Dict[Span, float]
 
 
-DEFAULT_OPENAI_SETTINGS = {
-    "max_tokens": 500,
-    "temperature": 0.,
+LLM_SETTINGS = {
+    "gpt-3.5-turbo-0125": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
+    "gpt-4-0125-preview": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 8192,
+        "temperature": 0,
+    },
+    "claude-2": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
+    "claude-2.1": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
+    "claude-3-haiku-20240307": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
+    "claude-3-sonnet-20240229": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
+    "claude-3-opus-20240229": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
 }
 ALLOWED_TOOLS = [
     "prediction-offline",
     "prediction-online",
     "prediction-online-summarized-info",
 ]
-MAX_TOKENS = {
-    "gpt-3.5-turbo-0125": 4096,
-    "gpt-4-0125-preview": 8192,
-}
-TOOL_TO_ENGINE = {tool: "gpt-4-0125-preview" for tool in ALLOWED_TOOLS}
+DEFAULT_MODEL = "gpt-4-0125-preview"
+TOOL_TO_ENGINE = {tool: DEFAULT_MODEL for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_URLS["prediction-online-summarized-info"] = 7
@@ -279,14 +377,11 @@ def fetch_additional_information(
 ) -> Tuple[str, Any]:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
-    moderation_result = client.moderations.create(input=url_query_prompt)
-    if moderation_result.results[0].flagged:
-        return ""
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": url_query_prompt},
     ]
-    response = client.chat.completions.create(
+    response = client.completions(
         model=engine,
         messages=messages,
         temperature=temperature,
@@ -295,7 +390,7 @@ def fetch_additional_information(
         timeout=90,
         stop=None,
     )
-    json_data = json.loads(response.choices[0].message.content)
+    json_data = json.loads(response.content)
     if not source_links:
         urls = get_urls_from_queries(
             json_data["queries"],
@@ -402,7 +497,7 @@ def adjust_additional_information(
     prompt_tokens = len(enc.encode(prompt))
     
     # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+    MAX_PREDICTION_PROMPT_TOKENS = LLM_SETTINGS[model]["limit_max_tokens"] - LLM_SETTINGS[model]["default_max_tokens"]
     available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
     
     # Encode the additional_information
@@ -419,11 +514,12 @@ def adjust_additional_information(
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+    with LLMClientManager(kwargs["api_keys"], kwargs["llm_provider"]):
         tool = kwargs["tool"]
         prompt = kwargs["prompt"]
-        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool]); print(f"ENGINE: {engine}")
+        max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[engine]["default_max_tokens"])
+        temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
         compression_factor = kwargs.get("compression_factor", DEFAULT_COMPRESSION_FACTOR)
@@ -435,9 +531,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
-
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-        print(f"ENGINE: {engine}")
 
         if tool.startswith("prediction-online"):
             additional_information, counter_callback = fetch_additional_information(
@@ -459,20 +552,18 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             additional_information = summarize(
                 additional_information, compression_factor, vocab
             )
-        additional_information = adjust_additional_information(
-            prompt, PREDICTION_PROMPT, additional_information, engine
-        )
+        # TODO: Get adjust_additional_information working for Claude
+        # additional_information = adjust_additional_information(
+        #     prompt, PREDICTION_PROMPT, additional_information, engine
+        # )
         prediction_prompt = PREDICTION_PROMPT.format(
             user_prompt=prompt, additional_information=additional_information
         )
-        moderation_result = client.moderations.create(input=prediction_prompt)
-        if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None, None
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
         ]
-        response = client.chat.completions.create(
+        response = client.completions(
             model=engine,
             messages=messages,
             temperature=temperature,
@@ -488,4 +579,4 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-        return response.choices[0].message.content, prediction_prompt, None, counter_callback
+        return response.content, prediction_prompt, None, counter_callback

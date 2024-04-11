@@ -22,10 +22,8 @@ import json
 import faiss
 import PyPDF2
 import requests
-import anthropic
 import numpy as np
 from io import BytesIO
-from openai import OpenAI
 from itertools import islice
 from pydantic import BaseModel
 from collections import defaultdict
@@ -34,33 +32,161 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from markdownify import markdownify as md
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 from tiktoken import encoding_for_model
 
+class LLMClientManager:
+    """Client context manager for LLMs."""
+    def __init__(self, api_keys: List, llm_provider: str = None, embedding_provider: str = None):
+        self.api_keys = api_keys
+        self.llm_provider = llm_provider
+        self.embedding_provider = embedding_provider
 
-DEFAULT_CLAUDE_SETTINGS = {
-    "max_tokens": 1000,
-    "temperature": 0,
-}
-MAX_TOKENS = {
-    'claude-2': 200_0000,
-    'claude-2.1': 200_0000,
-    'claude-3-haiku-20240307': 200_0000,
-    'claude-3-sonnet-20240229': 200_0000,
-    'claude-3-opus-20240229': 200_0000,
+    def __enter__(self):
+        clients = []
+        global client 
+        if self.llm_provider and client is None:
+            client = LLMClient(self.api_keys, self.llm_provider)
+            clients.append(client)
+        global client_embedding
+        if self.embedding_provider and client_embedding is None:
+            client_embedding = LLMClient(self.api_keys, self.embedding_provider)
+            clients.append(client_embedding)
+        return clients
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.client.close()
+            client = None
+
+class Usage:
+    """Usage class."""
+    def __init__(self, prompt_tokens=None, completion_tokens=None):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+class LLMResponse:
+    """Response class."""
+    def __init__(self, content: Optional[str] = None, usage : Optional[Usage] = None):
+        self.content = content
+        self.usage = Usage()
+
+class LLMClient:
+    """Client for LLMs."""
+    def __init__(self, api_keys: Dict, llm_provider: str):
+        self.api_keys = api_keys
+        self.llm_provider = llm_provider
+        if self.llm_provider == "anthropic":
+            import anthropic
+            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
+        if self.llm_provider == "openai":
+            import openai
+            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+
+    def completions(
+        self,
+        model: str,
+        messages: List = [],
+        timeout: Optional[Union[float, int]] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        n: Optional[int] = None,
+        stop=None,
+        max_tokens: Optional[float] = None,
+    ):
+        if self.llm_provider == "anthropic":
+            # anthropic can't take system prompt in messages
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]["role"] == "system":
+                    system_prompt =  messages[i]["content"]
+                    del messages[i]  
+
+            response_provider = self.client.messages.create(
+                model=model,
+                messages=messages,
+                system=system_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            response = LLMResponse()
+            response.content = response_provider.content[0].text
+            response.usage.prompt_tokens = response_provider.usage.input_tokens
+            response.usage.completion_tokens = response_provider.usage.output_tokens
+            return response
+        elif self.llm_provider == "openai":
+            response_provider= self.client.chat.completions.create(
+                            model=model,
+                            messages=messages,
+                            temperature=temperature,
+                            max_tokens=max_tokens,
+                            n=1,
+                            timeout=150,
+                            stop=None,
+                        )
+            response = LLMResponse()
+            response.content = response_provider.choices[0].message.content
+            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
+            response.usage.completion_tokens = response_provider.usage.completion_tokens
+            return response
+
+    def embeddings(self, model, input):
+        if self.llm_provider == "openai":
+            response = self.client.embeddings.create(
+                    model=EMBEDDING_MODEL,
+                    input=input,
+                )
+            return response
+        else:
+            print("Only OpenAI embeddings supported currently.")
+            return None
+
+client: Optional[LLMClient] = None
+client_embedding: Optional[LLMClient] = None
+
+LLM_SETTINGS = {
+    "gpt-3.5-turbo-0125": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
+    "gpt-4-0125-preview": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 8192,
+        "temperature": 0,
+    },
+    "claude-2": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
+    "claude-2.1": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
+    "claude-3-haiku-20240307": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
+    "claude-3-sonnet-20240229": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
+    "claude-3-opus-20240229": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_0000,
+        "temperature": 0,
+    },
 }
 ALLOWED_TOOLS = [
     "prediction-request-rag-claude",
 ]
-ALLOWED_MODELS = [
-    "claude-2",
-    "claude-2.1",
-    "claude-3-haiku-20240307",
-    "claude-3-sonnet-20240229",
-    "claude-3-opus-20240229",
-]
-TOOL_TO_ENGINE = {tool: "claude-3-haiku-20240307" for tool in ALLOWED_TOOLS}
-
+ALLOWED_MODELS = list(LLM_SETTINGS.keys())
+DEFAULT_MODEL = "claude-3-haiku-20240307"
+TOOL_TO_ENGINE = {tool: DEFAULT_MODEL for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
 NUM_URLS_PER_QUERY = 5
@@ -140,13 +266,12 @@ def count_tokens(text: str, model: str) -> int:
 
 
 def multi_queries(
-    client: anthropic.Anthropic,
     prompt: str,
     engine: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = DEFAULT_CLAUDE_SETTINGS["temperature"],
-    max_tokens: Optional[int] = DEFAULT_CLAUDE_SETTINGS["max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -155,23 +280,23 @@ def multi_queries(
 
     messages = [
         {"role": "user", "content": url_query_prompt},
+        {"role": "system", "content": SYSTEM_PROMPT},
     ]
 
-    response = client.messages.create(
+    response = client.completions(
         model=engine,
         messages=messages,
-        system=SYSTEM_PROMPT,
         temperature=temperature,
         max_tokens=max_tokens,
     )
     if counter_callback:
         counter_callback(
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
             model=engine,
             token_counter=count_tokens,
         )
-    queries = parser_query_response(response.content[0].text, num_queries=num_queries)
+    queries = parser_query_response(response.content, num_queries=num_queries)
     queries.append(prompt)
 
     return queries, counter_callback
@@ -340,14 +465,13 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
 
 
 def find_similar_chunks(
-    client: OpenAI,
     query: str, 
     docs_with_embeddings: List[Document], 
     k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
     query_embedding = (
-        client.embeddings.create(
+        client_embedding.embeddings(
             model=EMBEDDING_MODEL,
             input=query,
         )
@@ -363,14 +487,13 @@ def find_similar_chunks(
 
 
 def get_embeddings(
-    client: OpenAI,
     split_docs: List[Document]
 ) -> List[Document]:
     """Get embeddings for the split documents."""
     for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
         batch_end = batch_start + EMBEDDING_BATCH_SIZE
         batch = [doc.text for doc in split_docs[batch_start:batch_end]]
-        response = client.embeddings.create(
+        response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
             input=batch,
         )
@@ -390,8 +513,6 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
     
 
 def fetch_additional_information(
-    client: anthropic.Anthropic,
-    client_openai: OpenAI,
     prompt: str,
     engine: str,
     google_api_key: Optional[str],
@@ -400,8 +521,8 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = DEFAULT_CLAUDE_SETTINGS["temperature"],
-    max_tokens: Optional[int] = DEFAULT_CLAUDE_SETTINGS["max_tokens"]
+    temperature: Optional[float] = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"]
 ) -> Tuple[str, Callable[[int, int, str], None]]:
     
     """Fetch additional information to help answer the user prompt."""
@@ -410,7 +531,6 @@ def fetch_additional_information(
     
     try:
         queries, counter_callback = multi_queries(
-            client=client,
             prompt=prompt,
             engine=engine,
             num_queries=num_queries,
@@ -471,12 +591,11 @@ def fetch_additional_information(
     split_docs = [doc for doc in split_docs if doc]
 
     # Embed the documents
-    docs_with_embeddings = get_embeddings(client_openai, split_docs)
+    docs_with_embeddings = get_embeddings(split_docs)
     print(f"Docs with embeddings: {len(docs_with_embeddings)}")
     
     # Find similar chunks
     similar_chunks = find_similar_chunks(
-        client_openai,
         query=prompt,
         docs_with_embeddings=docs_with_embeddings,
         k=NUM_NEIGHBORS,
@@ -523,74 +642,69 @@ def parser_prediction_response(response: str) -> str:
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
+    with LLMClientManager(kwargs["api_keys"], kwargs["llm_provider"], embedding_provider="openai"):
+        tool = kwargs["tool"]
+        model = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        prompt = extract_question(kwargs["prompt"])
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool]); print(f"ENGINE: {engine}")
+        max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[engine]["default_max_tokens"])
+        temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
+        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
+        num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
+        counter_callback = kwargs.get("counter_callback", None)
+        api_keys = kwargs.get("api_keys", {})
+        google_api_key = api_keys.get("google_api_key", None)
+        google_engine_id = api_keys.get("google_engine_id", None)
 
-    tool = kwargs["tool"]
-    model = kwargs.get("model", TOOL_TO_ENGINE[tool])
-    prompt = extract_question(kwargs["prompt"])
-    max_tokens = kwargs.get("max_tokens", DEFAULT_CLAUDE_SETTINGS["max_tokens"])
-    temperature = kwargs.get("temperature", DEFAULT_CLAUDE_SETTINGS["temperature"])
-    num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
-    num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
-    counter_callback = kwargs.get("counter_callback", None)
-    api_keys = kwargs.get("api_keys", {})
-    google_api_key = api_keys.get("google_api_key", None)
-    google_engine_id = api_keys.get("google_engine_id", None)
-    client = anthropic.Anthropic(api_key=api_keys["anthropic"])
-    client_openai = OpenAI(api_key=api_keys["openai"])
+        # Make sure the model is supported
+        if model not in ALLOWED_MODELS:
+            raise ValueError(f"Model {model} not supported.")
+        
+        # make sure the tool is supported
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"Tool {tool} not supported.")
 
-    # Make sure the model is supported
-    if model not in ALLOWED_MODELS:
-        raise ValueError(f"Model {model} not supported.")
-    
-    # make sure the tool is supported
-    if tool not in ALLOWED_TOOLS:
-        raise ValueError(f"Tool {tool} not supported.")
-    
-    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-    print(f"ENGINE: {engine}")
-    
-    additional_information, counter_callback = fetch_additional_information(
-        client=client,
-        client_openai=client_openai,
-        prompt=prompt,
-        engine=engine,
-        google_api_key=google_api_key,
-        google_engine_id=google_engine_id,
-        counter_callback=counter_callback,
-        source_links=kwargs.get("source_links", None),
-        num_urls=num_urls,
-        num_queries=num_queries,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+        
+        additional_information, counter_callback = fetch_additional_information(
+            prompt=prompt,
+            engine=engine,
+            google_api_key=google_api_key,
+            google_engine_id=google_engine_id,
+            counter_callback=counter_callback,
+            source_links=kwargs.get("source_links", None),
+            num_urls=num_urls,
+            num_queries=num_queries,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
-    # Generate the prediction prompt
-    prediction_prompt = PREDICTION_PROMPT.format(
-        ADDITIONAL_INFORMATION=additional_information,
-        USER_PROMPT=prompt,
-    )
+        # Generate the prediction prompt
+        prediction_prompt = PREDICTION_PROMPT.format(
+            ADDITIONAL_INFORMATION=additional_information,
+            USER_PROMPT=prompt,
+        )
 
-    # Generate the prediction
-    messages = [
-        {"role": "user", "content": prediction_prompt},
-    ]
+        # Generate the prediction
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prediction_prompt},
+        ]
 
-    response = client.messages.create(
-        model=engine,
-        messages=messages,
-        system=SYSTEM_PROMPT,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
-
-    if counter_callback:
-        counter_callback(
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+        response = client.completions(
             model=engine,
-            token_counter=count_tokens,
-        )   
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
-    results = parser_prediction_response(response.content[0].text)
-    
-    return results, prediction_prompt, None, counter_callback
+        if counter_callback:
+            counter_callback(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+                model=engine,
+                token_counter=count_tokens,
+            )   
+
+        results = parser_prediction_response(response.content)
+        
+        return results, prediction_prompt, None, counter_callback
