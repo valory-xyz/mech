@@ -35,8 +35,8 @@ import requests
 from requests import Session
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from tiktoken import encoding_for_model
-import html2text
 from readability import Document
+from markdownify import markdownify as md
 
 import logging
 
@@ -52,7 +52,7 @@ NUM_URLS_PER_QUERY = 4
 TEXT_CHUNK_LENGTH = 300
 TEXT_CHUNK_OVERLAP = 50
 MAX_CHUNKS_TOKENS_TO_SUMMARIZE = 500
-MAX_TEXT_CHUNKS_TOTAL = 50
+MAX_TEXT_CHUNKS_TOTAL = 30
 EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_SIZE = 1536
@@ -555,45 +555,45 @@ UPDATE_DATE_NAMES = [
     'item:modification_date'
 ]
 
-# Global constant for HTML tags to remove
-HTML_TAGS_TO_REMOVE = [
-    "script",
-    "style",
-    "header",
-    "footer",
-    "aside",
-    "nav",
-    "form",
-    "button",
-    "iframe",
-    "input",
-    "textarea",
-    "select",
-    "option",
-    "label",
-    "fieldset",
-    "legend",
-    "img",
-    "audio",
-    "video",
-    "source",
-    "track",
-    "canvas",
-    "svg",
-    "object",
-    "param",
-    "embed",
-    "link",
-    ".breadcrumb",
-    ".pagination",
-    ".nav",
-    ".ad",
-    ".sidebar",
-    ".popup",
-    ".modal",
-    ".social-icons",
-    ".hamburger-menu",
-]
+# # Global constant for HTML tags to remove
+# HTML_TAGS_TO_REMOVE = [
+#     "script",
+#     "style",
+#     "header",
+#     "footer",
+#     "aside",
+#     "nav",
+#     "form",
+#     "button",
+#     "iframe",
+#     "input",
+#     "textarea",
+#     "select",
+#     "option",
+#     "label",
+#     "fieldset",
+#     "legend",
+#     "img",
+#     "audio",
+#     "video",
+#     "source",
+#     "track",
+#     "canvas",
+#     "svg",
+#     "object",
+#     "param",
+#     "embed",
+#     "link",
+#     ".breadcrumb",
+#     ".pagination",
+#     ".nav",
+#     ".ad",
+#     ".sidebar",
+#     ".popup",
+#     ".modal",
+#     ".social-icons",
+#     ".hamburger-menu",
+# ]
 
  
 class WebPage:
@@ -831,7 +831,7 @@ def parse_date_str(date_str: str) -> datetime:
     
 def remove_date_from_query(query: str) -> str:
     # Define a regex pattern to match dates
-    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
+    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
 
@@ -1047,39 +1047,25 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
                 # Clean the text
                 doc_html2str = Document(web_page.html)
                 doc_sum = doc_html2str.summary()
-                h = html2text.HTML2Text()
-                h.ignore_links = True
-                h.ignore_images = True
-                h.ignore_emphasis = True
-                scraped_text = h.handle(doc_sum)
-                scraped_text = "  ".join([x.strip() for x in scraped_text.split("\n")])
-                scraped_text = re.sub(r'\s+', ' ', scraped_text)
-                
-                # If the scraped text is too short, try a manual scraping approach with BeautifulSoup
+                text = md(doc_sum, strip=['a', 'b', 'strong', 'em', 'img', 'i', 'mark', 'small', 'u'], heading_style="ATX")
+                text = "  ".join([x.strip() for x in text.split("\n")])
+                text = re.sub(r'\s+', ' ', text)
+                scraped_text = text
+
                 if len(scraped_text) < 300:
-                    print(f"\nScraped text for {web_page.url} has less than 300 characters: {len(scraped_text)}.")
-                    print("Trying a different approach...")
-                    soup = BeautifulSoup(web_page.html, "lxml")
-                    
-                    # Remove unnecessary tags to clean up html
-                    for element in soup(HTML_TAGS_TO_REMOVE):
-                        element.replace_with(NavigableString(' '))
-
-                    text = h.handle(soup.prettify())
-                    text = "  ".join([x.strip() for x in text.split("\n")])
-                    text = re.sub(r'\s+', ' ', text)
-                    scraped_text = text
-
-                    if len(scraped_text) < 300 and not (web_page.title == "n/a" and web_page.description == "n/a"):
+                    if not (web_page.title == "n/a" and web_page.description == "n/a"):
                         prefix = f"{web_page.title}. {web_page.description}."
                         scraped_text = prefix + scraped_text
-                        print(f"Scraped text still less than 300 characters. Added title and description to the text.")
+                        print(f"Scraped text has less than 300 characters. Added title and description to the text.")
                     else:
                         scraped_text = None
-                        print("Scraped text has still less than 300 characters and no title and description. Skipping...")
-                
-                if scraped_text:
+                        print("Scraped text has less than 300 characters and no title and description. Skipping...")
+                        continue
+
                     web_page.scraped_text = scraped_text[:max_num_char]
+                    web_page.scraped_text = scraped_text[:max_num_char]
+                
+                web_page.scraped_text = scraped_text[:max_num_char]
                 
                 filtered_web_pages.append(web_page)
 
@@ -1265,12 +1251,6 @@ def summarize_relevant_chunks(
         market_question_no_date = remove_date_from_query(input_query)
         market_question_when = f"When {market_question_no_date}"
         summarize_prompt = SUMMARIZE_PROMPT_WITH_DATE_4.format(input_query=market_question_when, chunks=trimmed_chunks)
-        print()
-        print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
-        print(web_page.publication_date)
-        print("SUMMARIZE RELEVANT CHUNKS PROMPT:")
-        print(summarize_prompt)
-        print()
         messages = [
             {"role": "system", "content": "You are a professional journalist and researcher."},
             {"role": "user", "content": summarize_prompt},
@@ -1288,11 +1268,17 @@ def summarize_relevant_chunks(
                 model=engine,
                 token_counter=count_tokens,
             )
+        print("#########################################################################################")
+        print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
+        print(web_page.publication_date)
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> SUMMARIZE RELEVANT CHUNKS PROMPT <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
+        print(summarize_prompt)
+        print()
 
         output = response.choices[0].message.content
         print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
         print(web_page.publication_date)
-        print("SUMMARIZE RELEVANT CHUNKS OUTPUT:")
+        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> SUMMARIZE RELEVANT CHUNKS OUTPUT <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
         print(output)
         print()
         print("OUTPUT TOKENS:", response.usage.completion_tokens)
@@ -1371,7 +1357,7 @@ def summarize_over_summarized_chunks(
 
     prompt = PREVIOUS_SUMMARY_PROMPT.format(input_query=input_query, chunks=all_relevant_chunks_summary)
 
-    print(f"\nPREVIOUS SUMMARY PROMPT:")
+    print(f"\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PREVIOUS SUMMARY PROMPT <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
     print(prompt)
     print()
 
@@ -1392,7 +1378,7 @@ def summarize_over_summarized_chunks(
             token_counter=count_tokens,
         )
     output = response.choices[0].message.content
-    print("\nSUMMARIZE OVER SUMMARIZED CHUNKS OUTPUT:")
+    print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> SUMMARIZE OVER SUMMARIZED CHUNKS OUTPUT <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
     print(output)
     
     # Split the combined string into individual lines

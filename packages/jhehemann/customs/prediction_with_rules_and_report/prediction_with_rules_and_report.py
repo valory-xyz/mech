@@ -103,7 +103,7 @@ OUTPUT_FORMAT:
 * Introduction and Context
 * QUESTION
 * Findings and Analysis (Use domain expertise to justify your answers)
-    - Will the exact event specified in the QUESTION happen?
+    - Will the exact event specified in the QUESTION happen? Has it already happened? Will it happen again?
     - On what date will the event actually happen? You must provide a specific date on what you believe the event will happen. If you are uncertain, provide a range of dates.
 * Conclusion with common sense reasoning
 * Caveats
@@ -201,6 +201,90 @@ task question: "Will the air strike conflict in Sudan be resolved by 13 Septembe
 
 
 PREDICTION_PROMPT_TEMPLATE = """
+You are an expert data analyst. Your task is to write a detailed evaluation and make probability estimations for the outcomes 'Yes' and 'No'.
+You must adhere to the following instructions:
+
+INSTRUCTIONS:
+* You are provided with the prediction market question under the label "USER_PROMPT". 
+* You are provided with the market rules that define the conditions for the resolution of the market question under the label "MARKET_RULES".
+* You are provided with a report under the label "REPORT" that contains additional information and analysis if and when the event specified in the market question could happen.
+* Note: Today's date is {current_date}
+* Write an evaluation paragraph that addresses the following points:
+    - Calculate the difference between the date specified in the market question and the date stated in the report
+    - Use the market rules to evaluate the likelihood of the market question resolving as 'Yes' or 'No' by referring to the report from your previous answer.
+    - Use your domain expertise and justify your answer
+* Make probability estimations for the market questions outcomes 'Yes' and 'No' taking the market rules and the report into account
+* Provide your confidence in the estimation and the utility of the information in the report
+* Give your response in the format specified under "OUTPUT FORMAT"
+
+REPORT:
+```
+{report}
+```
+
+MARKET_RULES:
+```
+{market_rules_part}
+```
+
+OUTPUT FORMAT:
+* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
+* The JSON must contain five fields: "outcome_evaluation", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1, except "outcome_evaluation" which is a string
+    - "outcome_evaluation": Evaluation paragraph
+    - "p_yes"
+    - "p_no"
+    - "confidence"
+    - "info_utility"
+* Include only the JSON object in your output
+
+USER_PROMPT:
+```
+{market_question}
+```
+"""
+
+#     - Evaluate the likelihood of the market question resolving as 'Yes' or 'No' based on the market rules and the report from your previous answer
+# Select from the following terms: 'almost certain', 'high likelihood', 'moderately high likelihood', 'moderate likelihood', 'moderately low likelihood', 'low likelihood', 'very low likelihood' to describe the likelihood.
+# by selecting from the following terms: 'almost certain', 'high likelihood', 'moderately high likelihood', 'moderate likelihood', 'moderately low likelihood', 'low likelihood', 'very low likelihood'.
+# * Calculate the difference between the date stated in the report and the date specified in the market question.
+
+PREDICTION_PROMPT_TEMPLATE_NOT_TOO_OLD = """
+Given your previous answer your task is to write an analysis and give a probability estimation how the market question will resolve. You are provided with the market rules that define the conditions for the resolution of the market question.
+You must adhere to the following instructions:
+
+INSTRUCTIONS:
+* Carefully read the market rules
+* Analyze the report from your previous answer
+* Note: Today's date is {current_date}
+* Write a detailed analysis of the report from your previous answer and evaluate the likelihood of the market question resolving as 'Yes' or 'No' taking the market rules into account
+* Calculate the difference between the date for the market question stated in the report and the date specified in the market question.
+* Make a probability estimation based on the analysis and the market rules
+* Provide your confidence in the estimation and the utility of the information in the report
+* Give your response in the format specified under "OUTPUT FORMAT"
+
+OUTPUT FORMAT:
+* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
+* The JSON must contain five fields: "analysis", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1
+    - "analysis": Analysis of the potential outcomes of the market question and conclusion with the likelihood of the market question resolving as 'Yes' or 'No' taking the market rules and the report into account. Use your domain expertise to justify your answer use the words 'very high', 'high', 'higher', 'equal', 'lower', 'low', 'very low' to describe the likelihood.
+    - "p_yes": The estimated probability that the market question will resolve as 'Yes'
+    - "p_no": The estimated probability that the market question will resolve as 'No'
+    - "confidence": Your confidence in the probability estimation
+    - "info_utility": Your assessment of the utility of the information provided in the report
+* Include only the JSON object in your output
+
+MARKET QUESTION:
+```
+{market_question}
+```
+
+MARKET RULES:
+```
+{market_rules_part}
+```
+"""
+
+
+PREDICTION_PROMPT_TEMPLATE_OLDEST = """
 Given your previous answer your task is to provide a probability estimation how the market question will eventually resolve. You are provided with the MARKET_RULES for the resolution of the MARKET_QUESTION.
 You must adhere to the following instructions:
 
@@ -249,12 +333,20 @@ def trim_json_formatting(text) -> str:
         return text
 
 
-def remove_eval_field(json_str) -> str:
-    """Remove the 'conclusion' field from a JSON string."""
+def remove_unwanted_fields(json_str) -> str:
+    """Remove all fields from a JSON string except 'p_yes', 'p_no', 'confidence', and 'info_utility'."""
+    # Load the JSON string into a Python dictionary
     data = json.loads(json_str)
-    if 'conclusion' in data:
-        del data['conclusion']
-    modified_json_str = json.dumps(data, indent=4)    
+    
+    # Define the keys that you want to keep
+    keys_to_keep = {'p_yes', 'p_no', 'confidence', 'info_utility'}
+    
+    # Use dictionary comprehension to keep only the desired keys
+    filtered_data = {k: v for k, v in data.items() if k in keys_to_keep}
+    
+    # Convert the filtered dictionary back into a JSON string
+    modified_json_str = json.dumps(filtered_data, indent=4)
+    
     return modified_json_str
 
 
@@ -267,7 +359,7 @@ def extract_question(text) -> str:
 
 def remove_date_from_query(query: str) -> str:
     """Remove time-related information from query"""
-    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
+    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
 
@@ -351,6 +443,33 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             return "Market question not found in prompt", None, None, None
         print(f"MARKET QUESTION:\n{market_question}\n")
 
+
+        # # Get the subject matter expert role and introduction
+        # sme = ""
+        # sme_introduction = ""
+        # try:
+        #     sme, sme_introduction, counter_callback = get_sme_role(
+        #         engine,
+        #         temperature,
+        #         max_tokens,
+        #         market_question,
+        #         counter_callback=counter_callback,
+        #     )
+        # except Exception as e:
+        #     print(f"An error occurred during SME role creation: {e}")
+        #     print("Using default SME introduction.")
+        #     sme_introduction = "You are a professional journalist."
+        
+        # if sme:
+        #     print(f"SME ROLE: {sme}")
+        # else:
+        #     print("SME role not found.")
+        # print(f"SME INTRODUCTION: {sme_introduction}")
+        # print()
+
+        # exit()
+
+
         # Get the market rules from the Infer Rules tool
         market_status, market_rules, counter_callback = get_market_rules(market_question, client, counter_callback)
         print(f"MARKET STATUS: {market_status}\n")
@@ -419,13 +538,16 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"OUTPUT:\n{output}\n")
         
         # Generate a prediction prompt based on the market question and the "Rules" part of the market rules
-        prediction_prompt = PREDICTION_PROMPT_TEMPLATE.format(market_question=market_question, market_rules_part=market_rules, current_date=current_date)
+        prediction_prompt = PREDICTION_PROMPT_TEMPLATE.format(market_question=market_question, market_rules_part=market_rules, current_date=current_date, report=output)
         print(f"PREDICTION PROMPT:{prediction_prompt}")
-        
+
+        # system_prediction_prompt = "You are a seasoned market analyst with a deep understanding of prediction markets and consider the factors that influence their outcomes. Your goal is to provide a well-reasoned analysis based on data, trends, and expert knowledge to help individuals make informed decisions when betting on prediction market outcomes."
+        system_prediction_prompt = "You are a seasoned prediction market analyst with a deep understanding of how prediction markets work and how to assess the likelihood of different outcomes. Your goal is to provide a well-reasoned analysis and probability estimations for the outcomes of the question based on your expertise in prediction markets and relevant domain knowledge."
+
         messages_prediction = [
-            {"role": "system", "content": sme_introduction},
+            {"role": "system", "content": system_prediction_prompt},
             # {"role": "user", "content": report_prompt}, # Uncomment this line to include the report prompt for more context
-            {"role": "assistant", "content": output},
+            # {"role": "assistant", "content": output},
             {"role": "user", "content": prediction_prompt},
         ]
 
@@ -439,6 +561,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         # Generate a prediction based on the messages
         response = client.chat.completions.create(
             model=engine,
+            response_format={ "type": "json_object" },
             messages=messages_prediction,
             temperature=temperature,
         )
@@ -454,7 +577,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"OUTPUT:\n{output}\n")
 
         # Remove conclusion field from the JSON string
-        output = remove_eval_field(output)
+        output = remove_unwanted_fields(output)
         
         return output, thread_history_string, None, counter_callback
               

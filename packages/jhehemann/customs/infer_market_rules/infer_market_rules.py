@@ -39,23 +39,77 @@ EXAMPLES:
 Question: "Will another climate bill be passed by both the Senate and the House by 30 September 2024?"
 Answer:
     Rules:
-    'Yes': The question resolves as 'Yes' if there exists a another climate bill and it is passed by both the Senate, which is the upper chamber, and the House, which is the lower chamber of the United States Congress on or before 30 September 2024.
+    'Yes': The question resolves as 'Yes' if there exists a another climate bill and it is passed by both the Senate, which is the upper chamber, and the House, which is the lower chamber of the United States Congress ON OR BEFORE 30 September 2024.
     
-    'No': The question resolves as 'No' if there does not exist another bill or it isn't passed by both chambers on or before 30 September 2024, or only one chamber passes it on or before this date. The market also resolves as 'No' if both chambers pass a different bill and not another climate bill on or before this date.
+    'No': The question resolves as 'No' if there does not exist another bill or it isn't passed by both chambers ON OR BEFORE 30 September 2024, or only one chamber passes it ON OR BEFORE 30 September 2024. The market also resolves as 'No' if both chambers pass a different bill and not another climate bill ON OR BEFORE 30 September 2024.
 
-Question: "Will Tesla successfully launch its electric vehicle, Model Z, on 30 June 2024?"
+Question: "Will Tesla successfully launch its electric vehicle, Model Z, on 14 June 2024?"
 Answer:
     Rules:
-    'Yes': The question resolves as 'Yes' if, exactly on 30 June 2024, Tesla, an influential electric vehicle manufacturer, officially releases a Model Z. This must be evidenced by a public event, press release, or substantial media coverage that confirms the release will occur specifically on 30 June 2024.
+    'Yes': The question resolves as 'Yes' if, exactly ON 14 June 2024, Tesla, an influential electric vehicle manufacturer, officially releases a Model Z. This must be evidenced by a public event, press release, or substantial media coverage that confirms the release will occur specifically ON 14 June 2024.
 
-    'No': The question resolves as 'No' if, on 30 June 2024, Tesla, an influential electric vehicle manufacturer, does not release a Model Z. This includes any release occurring before or after this date, or the absence of any official announcement, public event, press release, or significant media coverage confirming a release exactly on 30 June 2024. The market also resolves as 'No' if Company Y releases a different vehicle Model W exactly on 30 June 2024.
+    'No': The question resolves as 'No' if, ON 14 June 2024, Tesla, an influential electric vehicle manufacturer, does not release a Model Z. This includes any release occurring BEFORE OR AFTER 14 June 2024, or the absence of any official announcement, public event, press release, or significant media coverage confirming a release exactly ON 14 June 2024. The market also resolves as 'No' if Company Y releases a different vehicle Model W exactly ON 14 June 2024.
 
 Question: "Will FIFA fund the construction of new football stadiums for local clubs in England by the end of 2024?"
 Answer:
     Rules:
-    'Yes': The question resolves as 'Yes' if FIFA, the international governing body of football, will directly allocate funds for the construction of new football stadiums specifically for local clubs in England on or before 31 December 2024. This allocation must be evidenced by an official announcement, press release, or documented agreement confirming that the funding will happen on or before this specific date.
+    'Yes': The question resolves as 'Yes' if FIFA, the international governing body of football, will directly allocate funds for the construction of new football stadiums specifically for local clubs in England ON OR BEFORE 31 December 2024. This allocation must be evidenced by an official announcement, press release, or documented agreement confirming that the funding will happen ON OR BEFORE 31 December 2024.
     
-    'No': The question resolves as 'No' if FIFA, the international governing body of football, will not allocate funds for the construction of new football stadiums for local clubs in England on or before 31 December 2024. This includes any funding allocated after this date, the absence of any official announcement, press release, or documented agreement confirming that the allocation will happen on or before this date. The market also resolves as 'No' if FIFA allocates funds for stadium construction in a different country or for a different purpose on or before 31 December 2024.
+    'No': The question resolves as 'No' if FIFA, the international governing body of football, will not allocate funds for the construction of new football stadiums for local clubs in England ON OR BEFORE 31 December 2024. This includes any funding allocated after 31 December 2024, the absence of any official announcement, press release, or documented agreement confirming that the allocation will happen ON OR BEFORE 31 December 2024. The market also resolves as 'No' if FIFA allocates funds for stadium construction in a different country or for a different purpose ON OR BEFORE 31 December 2024.
+
+Question: "{market_question}"
+Answer:
+"""
+
+INFER_RULES_PROMPT_EXPANDED = """
+You are a Large Language Model in a multi-agent system. Your task is to infer the rules for a prediction market question. \
+Provide reliable and well-structured rules for when the prediction market question will be resolved as 'Yes' and 'No'. The rules that \
+you define should be based on information that can be found on the internet. You are provided with some examples below. You must adhere to the instructions.
+
+INSTRUCTIONS:
+* Carefully read the market question
+* Pay detailled attention on the phrasing of the market question
+* Define measurable and verifiable rules for when the market question will be resolved as 'Yes' and when it will be resolved as 'No'
+
+EXAMPLES:
+Question: "Will another climate bill be passed by both the Senate and the House by 30 September 2024?"
+Answer:
+    Rules:
+    'Yes': The question resolves as 'Yes' if there exists a another climate bill and it is passed by both the Senate, which is the upper chamber, and the House, which is the lower chamber of the United States Congress ON OR BEFORE 30 September 2024.
+    
+    'No': The question resolves as 'No' if there does not exist another bill or it isn't passed by both chambers ON OR BEFORE 30 September 2024, or only one chamber passes it ON OR BEFORE 30 September 2024. The market also resolves as 'No' if both chambers pass a different bill and not another climate bill ON OR BEFORE 30 September 2024.
+
+EXAMPLES:
+Question: "Will another climate bill be passed by both the Senate and the House by 30 September 2024?"
+Answer:
+    Rules:
+    'Yes': The question resolves as 'Yes' if there exists a another climate bill and it is passed by both the Senate, which is the upper chamber, and the House, which is the lower chamber of the United States Congress ON OR BEFORE 30 September 2024.
+    
+    'No': The question resolves as 'No' if there does not exist another bill or it isn't passed by both chambers ON OR BEFORE 30 September 2024, or only one chamber passes it ON OR BEFORE 30 September 2024. The market also resolves as 'No' if both chambers pass a different bill and not another climate bill ON OR BEFORE 30 September 2024.
+
+EXAMPLES:
+Question: "Will another climate bill be passed by both the Senate and the House by 30 September 2024?"
+Answer:
+    Rules:
+    'Yes': The question resolves as 'Yes' if there exists a another climate bill and it is passed by both the Senate, which is the upper chamber, and the House, which is the lower chamber of the United States Congress ON OR BEFORE 30 September 2024.
+    
+    'No': The question resolves as 'No' if there does not exist another bill or it isn't passed by both chambers ON OR BEFORE 30 September 2024, or only one chamber passes it ON OR BEFORE 30 September 2024. The market also resolves as 'No' if both chambers pass a different bill and not another climate bill ON OR BEFORE 30 September 2024.
+
+
+    
+Question: "Will Tesla successfully launch its electric vehicle, Model Z, on 14 June 2024?"
+Answer:
+    Rules:
+    'Yes': The question resolves as 'Yes' if, exactly ON 14 June 2024, Tesla, an influential electric vehicle manufacturer, officially releases a Model Z. This must be evidenced by a public event, press release, or substantial media coverage that confirms the release will occur specifically ON 14 June 2024.
+
+    'No': The question resolves as 'No' if, ON 14 June 2024, Tesla, an influential electric vehicle manufacturer, does not release a Model Z. This includes any release occurring BEFORE OR AFTER 14 June 2024, or the absence of any official announcement, public event, press release, or significant media coverage confirming a release exactly ON 14 June 2024. The market also resolves as 'No' if Company Y releases a different vehicle Model W exactly ON 14 June 2024.
+
+Question: "Will FIFA fund the construction of new football stadiums for local clubs in England by the end of 2024?"
+Answer:
+    Rules:
+    'Yes': The question resolves as 'Yes' if FIFA, the international governing body of football, will directly allocate funds for the construction of new football stadiums specifically for local clubs in England ON OR BEFORE 31 December 2024. This allocation must be evidenced by an official announcement, press release, or documented agreement confirming that the funding will happen ON OR BEFORE 31 December 2024.
+    
+    'No': The question resolves as 'No' if FIFA, the international governing body of football, will not allocate funds for the construction of new football stadiums for local clubs in England ON OR BEFORE 31 December 2024. This includes any funding allocated after 31 December 2024, the absence of any official announcement, press release, or documented agreement confirming that the allocation will happen ON OR BEFORE 31 December 2024. The market also resolves as 'No' if FIFA allocates funds for stadium construction in a different country or for a different purpose ON OR BEFORE 31 December 2024.
 
 Question: "{market_question}"
 Answer:
@@ -71,7 +125,7 @@ INSTRUCTIONS:
 * Analyze what the phrasing implies about the current status, who the involved parties are and what the conditions are.
 
 EXAMPLES:
-Question: "Will a another new climate bill be passed by both the Senate and the House by 30 September 2024?"
+Question: "Will another new climate bill be passed by both the Senate and the House by 30 September 2024?"
 Answer:
     Status: The question implies that there already exists a climate bill. It pertains to a new climate bill under consideration by the United States Congress, which consists of two chambers: the Senate and the House of Representatives. If a new bill is under consideration, the question suggests that it has not yet been passed by both chambers yet.
 
@@ -103,7 +157,7 @@ def count_tokens(text: str, model: str) -> int:
 
 def remove_date_from_query(query: str) -> str:
     """Remove time-related information from query"""
-    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2}) (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
+    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
 
