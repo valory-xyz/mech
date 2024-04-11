@@ -7,9 +7,9 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeicctw7lsy7tuykskh3elqprgswn3hyivjpvlj7l33pj7imvgyc2ma
-  prediction_url_cot_claude.py: bafybeif3xiehvlodmuolwoobrqtliqhmpcaao5zyynkbawivmarnif3esi
+  prediction_url_cot_claude.py: bafybeigykbw4fw5z5tfufsx6rq4eywsgv6qv5b67gvcqn35brou6tzj2ry
 fingerprint_ignore_patterns: []
-entry_point: prediction_request_reasoning_claude.py
+entry_point: prediction_url_cot_claude.py
 callable: run
 dependencies:
   google-api-python-client:
