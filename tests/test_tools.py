@@ -22,7 +22,9 @@ from typing import List, Any
 
 from packages.valory.customs.prediction_request import prediction_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
-from packages.napthaai.customs.prediction_request_reasoning import prediction_request_reasoning
+from packages.napthaai.customs.prediction_request_reasoning import (
+    prediction_request_reasoning,
+)
 
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from tests.constants import (
@@ -33,11 +35,13 @@ from tests.constants import (
     CLAUDE_API_KEY,
     REPLICATE_API_KEY,
     NEWS_API_KEY,
+    OPENROUTER_API_KEY,
 )
 
 
 class BaseToolTest:
     """Base tool test class."""
+
     keys = {
         "openai": OPENAI_SECRET_KEY,
         "stabilityai": STABILITY_API_KEY,
@@ -46,6 +50,7 @@ class BaseToolTest:
         "anthropic": CLAUDE_API_KEY,
         "replicate": REPLICATE_API_KEY,
         "newsapi": NEWS_API_KEY,
+        "openrouter": OPENROUTER_API_KEY,
     }
     models: List = [None]
     tools: List[str]
@@ -59,8 +64,12 @@ class BaseToolTest:
         assert len(response) == 4, "Response must have 4 elements."
         assert type(response[0]) == str, "Response[0] must be a string."
         assert type(response[1]) == str, "Response[1] must be a string."
-        assert type(response[2]) == dict or response[2] is None, "Response[2] must be a dictionary or None."
-        assert type(response[3]) == TokenCounterCallback or response[3] is None, "Response[3] must be a TokenCounterCallback or None."
+        assert (
+            type(response[2]) == dict or response[2] is None
+        ), "Response[2] must be a dictionary or None."
+        assert (
+            type(response[3]) == TokenCounterCallback or response[3] is None
+        ), "Response[3] must be a TokenCounterCallback or None."
 
     def test_run(self) -> None:
         """Test run method."""
@@ -71,7 +80,12 @@ class BaseToolTest:
         for model in self.models:
             for tool in self.tools:
                 for prompt in self.prompts:
-                    llm_provider = "openai" if "gpt" in model else "anthropic"
+                    if "gpt" in model:
+                        llm_provider = "openai"
+                    elif "claude" in model:
+                        llm_provider = "anthropic"
+                    else:
+                        llm_provider = "openrouter"
                     kwargs = dict(
                         prompt=prompt,
                         tool=tool,
@@ -91,9 +105,10 @@ class TestPredictionOnline(BaseToolTest):
     tools = prediction_request.ALLOWED_TOOLS
     models = prediction_request.ALLOWED_MODELS
     prompts = [
-        "Please take over the role of a Data Scientist to evaluate the given question. With the given question \"Will Apple release iPhone 17 by March 2025?\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
     tool_module = prediction_request
+
 
 class TestPredictionRAG(BaseToolTest):
     """Test Prediction RAG."""
@@ -101,9 +116,10 @@ class TestPredictionRAG(BaseToolTest):
     tools = prediction_request_rag.ALLOWED_TOOLS
     models = prediction_request_rag.ALLOWED_MODELS
     prompts = [
-        "Please take over the role of a Data Scientist to evaluate the given question. With the given question \"Will Apple release iPhone 17 by March 2025?\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
     tool_module = prediction_request_rag
+
 
 class TestPredictionReasoning(BaseToolTest):
     """Test Prediction Reasoning."""
@@ -111,6 +127,6 @@ class TestPredictionReasoning(BaseToolTest):
     tools = prediction_request_reasoning.ALLOWED_TOOLS
     models = prediction_request_reasoning.ALLOWED_MODELS
     prompts = [
-        "Please take over the role of a Data Scientist to evaluate the given question. With the given question \"Will Apple release iPhone 17 by March 2025?\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
     tool_module = prediction_request_reasoning
