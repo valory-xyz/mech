@@ -37,16 +37,20 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from requests.exceptions import RequestException, TooManyRedirects
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 
+
 class LLMClientManager:
     """Client context manager for LLMs."""
-    def __init__(self, api_keys: List, llm_provider: str = None, embedding_provider: str = None):
+
+    def __init__(
+        self, api_keys: List, llm_provider: str = None, embedding_provider: str = None
+    ):
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         self.embedding_provider = embedding_provider
 
     def __enter__(self):
         clients = []
-        global client 
+        global client
         if self.llm_provider and client is None:
             client = LLMClient(self.api_keys, self.llm_provider)
             clients.append(client)
@@ -62,29 +66,44 @@ class LLMClientManager:
             client.client.close()
             client = None
 
+
 class Usage:
     """Usage class."""
+
     def __init__(self, prompt_tokens=None, completion_tokens=None):
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
 
+
 class LLMResponse:
     """Response class."""
-    def __init__(self, content: Optional[str] = None, usage : Optional[Usage] = None):
+
+    def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
         self.content = content
         self.usage = Usage()
 
+
 class LLMClient:
     """Client for LLMs."""
+
     def __init__(self, api_keys: Dict, llm_provider: str):
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
             import anthropic
+
             self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
         if self.llm_provider == "openai":
             import openai
+
             self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+        if self.llm_provider == "openrouter":
+            import openai
+
+            self.client = openai.OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=self.api_keys["openrouter"],
+            )
 
     def completions(
         self,
@@ -101,8 +120,8 @@ class LLMClient:
             # anthropic can't take system prompt in messages
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]["role"] == "system":
-                    system_prompt =  messages[i]["content"]
-                    del messages[i]  
+                    system_prompt = messages[i]["content"]
+                    del messages[i]
 
             response_provider = self.client.messages.create(
                 model=model,
@@ -116,16 +135,35 @@ class LLMClient:
             response.usage.prompt_tokens = response_provider.usage.input_tokens
             response.usage.completion_tokens = response_provider.usage.output_tokens
             return response
-        elif self.llm_provider == "openai":
-            response_provider= self.client.chat.completions.create(
-                            model=model,
-                            messages=messages,
-                            temperature=temperature,
-                            max_tokens=max_tokens,
-                            n=1,
-                            timeout=150,
-                            stop=None,
-                        )
+
+        if self.llm_provider == "openai":
+            response_provider = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+            )
+            response = LLMResponse()
+            response.content = response_provider.choices[0].message.content
+            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
+            response.usage.completion_tokens = response_provider.usage.completion_tokens
+            return response
+
+        if self.llm_provider == "openrouter":
+            # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
+            # transform = [] # to desactivate prompt compression
+            response_provider = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+            )
             response = LLMResponse()
             response.content = response_provider.choices[0].message.content
             response.usage.prompt_tokens = response_provider.usage.prompt_tokens
@@ -133,15 +171,16 @@ class LLMClient:
             return response
 
     def embeddings(self, model, input):
-        if self.llm_provider == "openai":
+        if self.llm_provider == "openai" or self.llm_provider == "openrouter":
             response = self.client.embeddings.create(
-                    model=EMBEDDING_MODEL,
-                    input=input,
-                )
+                model=EMBEDDING_MODEL,
+                input=input,
+            )
             return response
         else:
             print("Only OpenAI embeddings supported currently.")
             return None
+
 
 client: Optional[LLMClient] = None
 client_embedding: Optional[LLMClient] = None
@@ -172,6 +211,16 @@ LLM_SETTINGS = {
         "limit_max_tokens": 200_0000,
         "temperature": 0,
     },
+    "cohere/command-r-plus": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
+    "mistralai/mixtral-8x22b": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
 }
 ALLOWED_TOOLS = [
     "prediction-request-reasoning",
@@ -191,6 +240,7 @@ BUFFER_TOKENS = 250
 HTTP_TIMEOUT = 20
 HTTP_MAX_REDIRECTS = 5
 HTTP_MAX_RETIES = 2
+
 
 class Document(BaseModel):
     text: str
@@ -267,7 +317,7 @@ Please provide your output in the following XML tags:
 <multiple_questions>
 [First question version]
 [Second question version]
-[Third question version] 
+[Third question version]
 </multiple_questions>
 
 Each question version should aim to surface different keywords, concepts or aspects of the original question while still being relevant to answering the user's core information need. Vary the phrasing and terminology used in each question. However, do not introduce any information that is not implied by the original question.
@@ -287,24 +337,28 @@ def parser_query_response(response: str, num_queries: int = 5) -> List[str]:
     for query in parsed_queries:
         if query[0].isdigit():
             query = ". ".join(query.split(". ")[1:])
-        query = query.replace('"', '')
+        query = query.replace('"', "")
         enhanced_queries.append(query)
 
     if len(enhanced_queries) == num_queries * 2:
         enhanced_queries = enhanced_queries[::2]
 
     # Remove doubel quotes from the queries
-    final_queries = [query.replace('"', '') for query in enhanced_queries]
+    final_queries = [query.replace('"', "") for query in enhanced_queries]
 
     # if there are any xml tags in the queries, remove them
-    final_queries = [re.sub(r'<[^>]*>', '', query) for query in final_queries]
-    
+    final_queries = [re.sub(r"<[^>]*>", "", query) for query in final_queries]
+
     return final_queries
 
 
 def parser_multi_questions_response(response: str) -> List[str]:
     """Parse the response from the multi questions generation model."""
-    questions = response.split("<multiple_questions>")[1].split("</multiple_questions>")[0].split("\n")
+    questions = (
+        response.split("<multiple_questions>")[1]
+        .split("</multiple_questions>")[0]
+        .split("\n")
+    )
     return [question.strip() for question in questions if question.strip()]
 
 
@@ -317,6 +371,11 @@ def parser_reasoning_response(response: str) -> str:
 def parser_prediction_response(response: str) -> str:
     """Parse the response from the prediction model."""
     results = {}
+    if "p_yes" not in response:
+        print("Not a valid answer from the model")
+        print(f"response = {response.content}")
+        return results
+
     for key in ["p_yes", "p_no", "info_utility", "confidence"]:
         try:
             value = response.split(f"<{key}>")[1].split(f"</{key}>")[0].strip()
@@ -367,12 +426,7 @@ def multi_queries(
     return queries, counter_callback
 
 
-def search_google(
-    query: str, 
-    api_key: str, 
-    engine: str, 
-    num: int
-) -> List[str]:
+def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     """Search Google for the given query."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
@@ -425,7 +479,7 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
         doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
         print(f"Using PDF: {url}: {doc.text[:300]}...")
         return doc
-    
+
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
@@ -464,7 +518,7 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
                 result = future.result()
                 if result.status_code == 200:
                     # Check if URL ends with .pdf or content starts with %PDF
-                    if url.endswith('.pdf') or result.content[:4] == b'%PDF':
+                    if url.endswith(".pdf") or result.content[:4] == b"%PDF":
                         doc = extract_text_from_pdf(url, num_words=num_words)
                     else:
                         doc = extract_text(html=result.text, num_words=num_words)
@@ -477,8 +531,8 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
 
 
 def process_in_batches(
-    urls: List[str], 
-    window: int = 5, 
+    urls: List[str],
+    window: int = 5,
     timeout: int = HTTP_TIMEOUT,
     max_redirects: int = HTTP_MAX_REDIRECTS,
     retries: int = HTTP_MAX_RETIES,
@@ -495,7 +549,7 @@ def process_in_batches(
                 while attempt < retries:
                     try:
                         future = executor.submit(session.get, url, timeout=timeout)
-                        break  
+                        break
                     except (TooManyRedirects, RequestException) as e:
                         print(f"Attempt {attempt + 1} failed for {url}: {e}")
                         attempt += 1
@@ -514,9 +568,7 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
         ]
 
 
-def get_embeddings(
-    split_docs: List[Document]
-) -> List[Document]:
+def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents."""
     for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
         batch_end = batch_start + EMBEDDING_BATCH_SIZE
@@ -534,9 +586,7 @@ def get_embeddings(
 
 
 def find_similar_chunks(
-    query: str, 
-    docs_with_embeddings: List[Document], 
-    k: int = 4
+    query: str, docs_with_embeddings: List[Document], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
     query_embedding = (
@@ -556,10 +606,10 @@ def find_similar_chunks(
 
 
 def multi_questions_response(
-    prompt:str, 
-    engine:str,
-    temperature:float = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
-    max_tokens:int = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
+    prompt: str,
+    engine: str,
+    temperature: float = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
+    max_tokens: int = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[str]:
     """Generate multiple questions for fetching information from the web."""
@@ -594,7 +644,7 @@ def multi_questions_response(
     except Exception as e:
         print(f"Error generating multiple questions: {e}")
         return [prompt], counter_callback
-    
+
 
 def reciprocal_rank_refusion(similar_chunks: List[Document], k: int) -> List[Document]:
     """Reciprocal rank refusion to re-rank the similar chunks based on the text."""
@@ -604,8 +654,10 @@ def reciprocal_rank_refusion(similar_chunks: List[Document], k: int) -> List[Doc
         if doc_text not in fused_chunks:
             fused_chunks[doc_text] = (doc, 0)
         fused_chunks[doc_text] = (doc, fused_chunks[doc_text][1] + 1 / (rank + 60))
-    
-    sorted_fused_chunks = sorted(fused_chunks.values(), key=lambda x: x[1], reverse=True)
+
+    sorted_fused_chunks = sorted(
+        fused_chunks.values(), key=lambda x: x[1], reverse=True
+    )
 
     return [doc for doc, _ in sorted_fused_chunks[:k]]
 
@@ -626,7 +678,7 @@ def fetch_additional_information(
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
     temperature: Optional[float] = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"]
+    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
 ) -> Tuple[str, List[str], Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information from the web."""
 
@@ -681,9 +733,7 @@ def fetch_additional_information(
             t = recursive_character_text_splitter(
                 doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
             )
-            split_docs.extend(
-                [Document(text=chunk, url=doc.url) for chunk in t]
-            )
+            split_docs.extend([Document(text=chunk, url=doc.url) for chunk in t])
         except Exception as e:
             print(f"Error splitting document: {e}")
             continue
@@ -698,8 +748,8 @@ def fetch_additional_information(
 
     # multi questions prompt
     questions, counter_callback = multi_questions_response(
-        prompt=prompt, 
-        engine=engine, 
+        prompt=prompt,
+        engine=engine,
         counter_callback=counter_callback,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -708,17 +758,19 @@ def fetch_additional_information(
 
     similar_chunks = []
     for question in questions:
-        similar_chunks.extend(find_similar_chunks(
-            query=question,
-            docs_with_embeddings=docs_with_embeddings,
-            k=NUM_NEIGHBORS,
-        ))
+        similar_chunks.extend(
+            find_similar_chunks(
+                query=question,
+                docs_with_embeddings=docs_with_embeddings,
+                k=NUM_NEIGHBORS,
+            )
+        )
     print(f"Similar Chunks before refusion: {len(similar_chunks)}")
 
     # Reciprocal rank refusion
     similar_chunks = reciprocal_rank_refusion(similar_chunks, NUM_NEIGHBORS)
     print(f"Similar Chunks after refusion: {len(similar_chunks)}")
-    
+
     # Format the additional information
     additional_information = "\n".join(
         [
@@ -731,7 +783,7 @@ def fetch_additional_information(
 
 
 def extract_question(prompt: str) -> str:
-    pattern = r'\"(.*?)\"'
+    pattern = r"\"(.*?)\""
     try:
         question = re.findall(pattern, prompt)[0]
     except Exception as e:
@@ -743,12 +795,17 @@ def extract_question(prompt: str) -> str:
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    with LLMClientManager(kwargs["api_keys"], kwargs["llm_provider"], embedding_provider="openai"):
+    with LLMClientManager(
+        kwargs["api_keys"], kwargs["llm_provider"], embedding_provider="openai"
+    ):
         tool = kwargs["tool"]
         model = kwargs.get("model", TOOL_TO_ENGINE[tool])
         prompt = extract_question(kwargs["prompt"])
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool]); print(f"ENGINE: {engine}")
-        max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[engine]["default_max_tokens"])
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
+        max_tokens = kwargs.get(
+            "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
+        )
         temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
@@ -757,11 +814,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
 
-
         # Make sure the model is supported
         if model not in ALLOWED_MODELS:
             raise ValueError(f"Model {model} not supported.")
-        
+
         # make sure the tool is supported
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} not supported.")
@@ -808,7 +864,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 output_tokens=response_reasoning.usage.completion_tokens,
                 model=engine,
                 token_counter=count_tokens,
-            )           
+            )
 
         # Extract the reasoning
         reasoning = parser_reasoning_response(response_reasoning.content)
@@ -838,6 +894,11 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 output_tokens=response_prediction.usage.completion_tokens,
                 model=engine,
                 token_counter=count_tokens,
-            )   
+            )
 
-        return prediction, reasoning_prompt + "////" + prediction_prompt, None, counter_callback
+        return (
+            prediction,
+            reasoning_prompt + "////" + prediction_prompt,
+            None,
+            counter_callback,
+        )

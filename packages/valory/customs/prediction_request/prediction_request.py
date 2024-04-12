@@ -29,7 +29,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 
 import requests
 import spacy
-import tiktoken
 from markdownify import markdownify as md
 from readability import Document
 from googleapiclient.discovery import build
@@ -37,7 +36,7 @@ from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
-from tiktoken import encoding_for_model, get_encoding
+from tiktoken import encoding_for_model
 
 
 class LLMClientManager:
@@ -534,7 +533,7 @@ def adjust_additional_information(
     """Adjust the additional_information to fit within the token budget"""
 
     # Initialize tiktoken encoder for the specified model
-    enc = tiktoken.encoding_for_model(model)
+    enc = encoding_for_model(model)
 
     # Encode the user prompt to calculate its token count
     prompt = prompt_template.format(user_prompt=prompt, additional_information="")
