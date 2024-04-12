@@ -474,6 +474,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         market_status, market_rules, counter_callback = get_market_rules(market_question, client, counter_callback)
         print(f"MARKET STATUS: {market_status}\n")
         print(f"MARKET RULES:\n{market_rules}\n")
+
+        # exit()
         
         # Get additional information from the Research tool
         additional_inforamtion, counter_callback = research(market_question, client, google_api_key, google_engine_id, engine, market_status, market_rules, counter_callback)
