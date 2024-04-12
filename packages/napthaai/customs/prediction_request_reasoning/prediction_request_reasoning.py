@@ -373,7 +373,7 @@ def parser_prediction_response(response: str) -> str:
     results = {}
     if "p_yes" not in response:
         print("Not a valid answer from the model")
-        print(f"response = {response.content}")
+        print(f"response = {response}")
         return results
 
     for key in ["p_yes", "p_no", "info_utility", "confidence"]:
