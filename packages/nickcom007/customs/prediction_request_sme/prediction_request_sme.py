@@ -482,6 +482,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 "Moderation flagged the prompt as in violation of terms.",
                 prediction_prompt,
                 None,
+                counter_callback,
             )
         messages = [
             {"role": "system", "content": sme_introduction},

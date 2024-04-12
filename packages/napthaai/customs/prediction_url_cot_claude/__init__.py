@@ -17,4 +17,4 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the prediction url cot tool."""
+"""This module contains the prediction url cot claude tool."""
