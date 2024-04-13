@@ -103,8 +103,8 @@ OUTPUT_FORMAT:
 * Introduction and Context
 * QUESTION
 * Findings and Analysis (Use domain expertise to justify your answers)
-    - Will the exact event specified in the QUESTION happen? Has it already happened? Will it happen again?
-    - On what date will the event actually happen? You must provide a specific date on what you believe the event will happen. If you are uncertain, provide a range of dates.
+    * Will the exact event specified in the QUESTION happen? Has it already happened?
+    * On what date will the event specified in the QUESTION happen? You must provide a specific date on what you believe the event will happen. If you are uncertain, provide a range of dates.
 * Conclusion with common sense reasoning
 * Caveats
 
@@ -217,14 +217,14 @@ INSTRUCTIONS:
 * Provide your confidence in the estimation and the utility of the information in the report
 * Give your response in the format specified under "OUTPUT FORMAT"
 
+USER_PROMPT:
+```
+{market_question}
+```
+
 REPORT:
 ```
 {report}
-```
-
-MARKET_RULES:
-```
-{market_rules_part}
 ```
 
 OUTPUT FORMAT:
@@ -237,9 +237,9 @@ OUTPUT FORMAT:
     - "info_utility"
 * Include only the JSON object in your output
 
-USER_PROMPT:
+MARKET_RULES:
 ```
-{market_question}
+{market_rules_part}
 ```
 """
 
@@ -474,8 +474,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         market_status, market_rules, counter_callback = get_market_rules(market_question, client, counter_callback)
         print(f"MARKET STATUS: {market_status}\n")
         print(f"MARKET RULES:\n{market_rules}\n")
-
-        # exit()
         
         # Get additional information from the Research tool
         additional_inforamtion, counter_callback = research(market_question, client, google_api_key, google_engine_id, engine, market_status, market_rules, counter_callback)
@@ -488,7 +486,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         # Generate a report prompt based on the market question, market rules, additional information and the current date
         current_date = datetime.now().strftime('%B %d, %Y')
         report_prompt = REPORT_PROMPT.format(
-            market_question=market_question_when,
+            market_question=market_question_no_date,
             market_rules=market_rules,
             additional_information=additional_inforamtion,
             current_date=current_date,
@@ -544,7 +542,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"PREDICTION PROMPT:{prediction_prompt}")
 
         # system_prediction_prompt = "You are a seasoned market analyst with a deep understanding of prediction markets and consider the factors that influence their outcomes. Your goal is to provide a well-reasoned analysis based on data, trends, and expert knowledge to help individuals make informed decisions when betting on prediction market outcomes."
-        system_prediction_prompt = "You are a seasoned prediction market analyst with a deep understanding of how prediction markets work and how to assess the likelihood of different outcomes. Your goal is to provide a well-reasoned analysis and probability estimations for the outcomes of the question based on your expertise in prediction markets and relevant domain knowledge."
+        system_prediction_prompt = "You are a seasoned prediction market analyst with a deep understanding of how prediction markets work and how to assess the likelihood of different outcomes. Your goal is to provide a well-reasoned analysis and probability estimations for the outcomes of the question based on your expertise in prediction markets and relevant domain knowledge. Carefully consider the market rules and the report provided to make your evaluation."
 
         messages_prediction = [
             {"role": "system", "content": system_prediction_prompt},

@@ -56,7 +56,7 @@ MAX_TEXT_CHUNKS_TOTAL = 30
 EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_SIZE = 1536
-WEEKS_TO_SCRAPE_NEWS = 4
+WEEKS_TO_SCRAPE_NEWS = 5
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 500,
@@ -711,7 +711,7 @@ class WebPage:
                 else:
                     raise ValueError(f"Invalid attribute: {attribute_name}")
         else:
-            print("No HTML content to extract page attributes from.\nURL: {self.url}\nHTML: {self.html}")
+            print(f"No HTML content to extract page attributes from.\nURL: {self.url}\nHTML: {self.html}")
         
         return self
 
