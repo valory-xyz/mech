@@ -63,120 +63,54 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0,
 }
 
+RESEARCH_PLAN_PROMPT_TEMPLATE = """
+Your goal is to prepare a research plan for {query}.
 
-# SUMMARIZE_CHUNKS_PARAGRAPH = """
-# You are provided with text chunks containing core information from a news article. Your task is to summarize the text chunks into a \
-# minimalistic paragraph. Adhere to the following 'INSTRUCTIONS'.
+The plan must consist of {search_limit} search engine queries separated by commas.
+Return ONLY the queries, separated by commas and without quotes.
+The queries must be phrased as concise, but descriptive questions that will help you find relevant information about the event and its date.
+"""
 
-# INSTRUCTIONS:
-# * Carefully read the chunks
-# * Summarize the chunks into a very concise paragraph
-# * The summary must contain all key information from the chunks
-# * If there are specific dates mentioned in the bulletpoints, you must include them in the summary.
-# * Do not infer or add any new information, but only summarize the existing statements in an unbiased way
-# * Give your response in the format specified under "OUTPUT_FORMAT"
+QUERY_RERANKING_PROMPT_TEMPLATE = """
+Evaluate the queries and decide which ones will provide the best data to answer the question. Do not modify the queries.
+Select only the best seven queries, in order of relevance.
 
-# CHUNKS:
-# ```
-# {chunks}
-# ```
+OUTPUT_FORMAT:
+* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
+* The JSON must contain one field: "queries"
+    - "queries": A 7 item array of the generated search engine queries
+* Include only the JSON object in your output
+"""
 
-# OUTPUT_FORMAT:
-# * Only output the concise paragraph containing the summarized information from the chunks.
-# * Do not include any other contents in your response!
-# """
+SUMMARIZE_PROMPT = """
+Your task is to summarize relevant information from 'SEARCH_OUTPUT'. The SEARCH_OUTPUT contains bulletpoints that you must \
+combine and summarize into a single paragraph. You must adhere to the following 'INSTRUCTIONS'.
 
+INSTRUCTIONS:
+* Carefully read the 'QUESTION'
+* Select a combination of only the most relevant information from 'SEARCH_OUTPUT' that may help answering the QUESTION
+* An information can be considered relevant if it might support or refute the QUESTION
+* Summarize the selected information in a way that is concise and informative and include the dates mentioned
+* Do not try to answer or reference the QUESTION, but only summarize the relevant information from 'SEARCH_OUTPUT' in an unbiased way.
+* You must not infer or add any new information.
+* Do not modify the information in 'SEARCH_OUTPUT' with respect to the QUESTION.
+* If there are dates or timeframes mentioned along with the relevant information, you must include them.
 
-# SUMMARIZE_CHUNKS_BULLETPOINTS = """
-# You are provided with bulletpoints containing core information from a news article. Your task is to summarize the bulletpoints into a \
-# minimalistic paragraph. Adhere to the following 'INSTRUCTIONS'.
+QUESTION: {input_query}
 
-# INSTRUCTIONS:
-# * Carefully read the BULLETPOINTS
-# * Summarize the BULLETPOINTS into a very concise paragraph
-# * The summary must contain all key information from the bulletpoints
-# * If there are specific dates mentioned in the bulletpoints, you must include them in the summary.
-# * Do not infer or add any new information, but only summarize the existing statements in an unbiased way
-# * Give your response in the format specified under "OUTPUT_FORMAT"
+SEARCH_OUTPUT:
+```
+{chunks}
+```
 
-# BULLETPOINTS:
-# ```
-# {bullet_points}
-# ```
+OUTPUT_FORMAT:
+* Only output the summary containing the combination of the most relevant information from 'SEARCH_OUTPUT'.
+* The summary must be a single very concise and informative paragraph.
+* Solely respond with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
+* Do not include any other contents in your response!
+"""
 
-# OUTPUT_FORMAT:
-# * Only output the concise paragraph containing the summarized information from the bulletpoints.
-# * Do not include any other contents in your response!
-# """
-
-
-# PREVIOUS_SUMMARY_PROMPT = """
-# You are provided with information structured in bulletpoints. These bulletpoints were extracted from search outputs in response to a QUESTION \
-# found below. Each bulletpoint has its corresponding article number in parentheses.
-# Your task is to drop the redundant bulletpoints and output only unique ones. Adhere to the following 'INSTRUCTIONS'.
-
-# INSTRUCTIONS:
-# * Carefully read the QUESTION
-# * Examine the bulletpoints in SEARCH_OUTPUT for redundancy
-# * A bulletpoint can be considered redundant if it repeats the same information as another bulletpoint
-# * Drop bulletpoints that are redundant and keep only the unique ones
-# * If you are unsure, select the ones to keep by these criteria:
-#     - Firstly: Keep the one that mentiones specific dates over the ones that mention relative dates or week days
-#     - Secondly: Keep the one that is listed more to the bottom of the search output
-# * Give your response in the format specified under "OUTPUT_FORMAT"
-
-# SEARCH_OUTPUT:
-# ```
-# {chunks}
-# ```
-
-# QUESTION: {input_query}
-
-# OUTPUT_FORMAT:
-# * Only output only unique bulletpoints from 'SEARCH_OUTPUT'
-# * Each bullet point must have its corresponding article number in parentheses
-# * Do not include any other contents in your response!
-# """
-
-
-# PREVIOUS_SUMMARY_PROMPT_TRY = """
-# You are provided with search outputs from multiple sources. Each bulletpoint in search output has a number in parentheses which represents the article number it belongs to.
-# These search outputs were received in response to the QUESTION \
-# found below. The QUESTION asks if a specific event is expected to occur within a certain timeframe. Your task is to select a collection of unique and most relevant bulletpoints that may help to answer the search query and reveal \
-# if the event happens and on which date the event is expected to occur. 
-
-# INSTRUCTIONS:
-# * Carefully read the QUESTION
-# * Examine the information in SEARCH_OUTPUT line by line
-# * Sort the bulletpoints by relevance in descending order
-# * An information can be considered relevant
-#     - if it might support or refute the QUESTION
-#     - if it reveals a specific date or time frame when the event in the QUESTION is expected to occur
-#     - if it contradicts another relevant bulletpoint
-# * If there are relevant bulletpoints that have redundant content, you must sort these to the end exept for one. Select the most relevant one by two criteria and sort it to the more relevant position it belongs to:
-#     - Firstly: Select the one that mentiones specific dates over the ones that mention relative dates or week days
-#     - Secondly: Select the one that is listed more to the bottom of the SEARCH_OUTPUT
-# * If there are conflicting information, you must include both sides of the argument in the selected bulletpoints
-# * Give your response in the format specified under "OUTPUT_FORMAT"
-
-# SEARCH_OUTPUT:
-# ```
-# {chunks}
-# ```
-
-# QUESTION: {input_query}
-# SUB_QUESTIONS:
-# - Will the event happen?
-# - On what date will the event happen? (DD/MM/YYYY)
-# - Has the event happened already?
-
-# OUTPUT_FORMAT:
-# * Output the sorted bulletpoints with the corresponding article numbers in parentheses
-# * Sort the bulletpoints by relevance in descending order
-# """
-
-
-PREVIOUS_SUMMARY_PROMPT = """
+FINAL_SUMMARY_PROMPT = """
 You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
 query found below. Your task is to select a collection of unique and most relevant bulletpoints that may help to answer the search query and reveal \
 if the event happens and on which date the event is expected to occur. 
@@ -206,221 +140,6 @@ SUB_QUERIES:
 OUTPUT_FORMAT:
 * Only output the collection of five selected unique and relevant bulletpoints with the corresponding numbers in parentheses.
 * The bulletpoints should be useful and relevant and help answering the search query and sub-queries.
-"""
-
-
-RESEARCH_PLAN_PROMPT_TEMPLATE = """
-Your goal is to prepare a research plan for {query}.
-
-The plan must consist of {search_limit} search engine queries separated by commas.
-Return ONLY the queries, separated by commas and without quotes.
-The queries must be phrased as concise, but descriptive questions that will help you find relevant information about the event and its date.
-"""
-
-QUERY_RERANKING_PROMPT_TEMPLATE = """
-Evaluate the queries and decide which ones will provide the best data to answer the question. Do not modify the queries.
-Select only the best seven queries, in order of relevance.
-
-OUTPUT_FORMAT:
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* The JSON must contain one field: "queries"
-    - "queries": A 7 item array of the generated search engine queries
-* Include only the JSON object in your output
-"""
-
-# SUMMARIZE_PROMPT = """
-# Your task is to summarize relevant information in 'SEARCH_OUTPUT'. \
-# The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
-
-# INSTRUCTIONS:
-# * Carefully read the 'SEARCH_QUERY'
-# * Select only the relevant information from 'SEARCH_OUTPUT' that is useful and relevant and could help answering the search query
-# * An information can be considered relevant if it might support or refute the search query
-# * Summarize the relevant information in a way that is concise and informative
-# * You must not infer or add any new information, but only summarize the existing statements in an unbiased way
-# * If there is conflicting information, you must include both sides of the argument in the summary
-# * You must provide your response in the format specified under "OUTPUT_FORMAT"
-# * Do not include any other contents in your response.
-
-# SEARCH_QUERY: {input_query}
-# SUB_QUERIES:
-# - Will the event happen?
-# - On what date will the event happen?
-# - Has the event happened already?
-
-# SEARCH_OUTPUT:
-# ```
-# {chunks}
-# ```
-
-# OUTPUT_FORMAT:
-# * Only output the summary containing the relevant information from 'SEARCH_OUTPUT' with respect to the search query.
-# * The summary must be structured in bullet points
-# * Respond solely with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
-# * Do not include any other contents in your response!
-# """
-
-
-# SUMMARIZE_PROMPT_WITH_DATE_AND_PARAGRAPH = """
-# You are provided with text chunks from a search output. These search output was received in response to the search \
-# query found below. Your task is to summarize the chunks into a minimalistic paragraph containing only the most relevant information. Adhere to the following 'INSTRUCTIONS'.
-
-# INSTRUCTIONS:
-# * Carefully read the 'SEARCH_QUERY'
-# * Select only the most relevant information from 'SEARCH_OUTPUT' that is useful and relevant and could help answering the search query
-# * An information can be considered relevant if it might support or refute the search query
-# * If there is no relevant information in 'SEARCH_OUTPUT', solely respond with the word "Error".
-# * Summarize the relevant chunks into one very concise paragraph that may help to answer the search query and reveal if the event happens and on which date the event is expected to occur
-# * You must not infer or add any new information, but only summarize the existing statements in an unbiased way
-# * If there is conflicting information, you must include both sides of the argument in the summary
-# * If there are dates mentioned in the relevant information, you must include them in the summary.
-# * You must provide your response in the format specified under "OUTPUT_FORMAT"
-# * Do not include any other contents in your response.
-
-# SEARCH_QUERY:
-# {input_query}
-# SUB_QUERIES:
-# - Will the event happen?
-# - On what date will the event happen? (DD/MM/YYYY)
-# - Has the event happened already?
-
-# SEARCH_OUTPUT:
-# ```
-# {chunks}
-# ```
-
-# OUTPUT_FORMAT:
-# * Only output the summary containing the most relevant information from 'SEARCH_OUTPUT' that may help to answer the search query and reveal if the event happens and on which date the event is expected to occur.
-# * The summary must be an informative but very concise paragraph.
-# * Respond solely with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
-# * You must not make references to the search query and its outcome, but only summarize the relevant information from 'SEARCH_OUTPUT'.
-# * Do not include any other contents in your response!
-# """
-
-
-SUMMARIZE_PROMPT_WITH_DATE = """
-Your task is to summarize relevant information in 'SEARCH_OUTPUT'. \
-The summary must only contain relevant information relating to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
-
-INSTRUCTIONS:
-* Select only the most relevant information from 'SEARCH_OUTPUT' that may help answering the search query
-* An information can be considered relevant if it might support or refute the search query
-* Summarize the most relevant information in a way that is concise and informative and include the dates mentioned
-* You must not infer or add any new information, but only summarize the existing statements in an unbiased way
-* If there is conflicting information, you must include both sides of the argument in the summary
-* If there are dates mentioned along with the relevant information, you must include them.
-* Do not try to answer or reference the search query, but only summarize the relevant information from 'SEARCH_OUTPUT' in an unbiased way.
-* You must not infer or add any new information.
-* Do not modify the information in 'SEARCH_OUTPUT' with respect to the search query.
-* You must provide your response in the format specified under "OUTPUT_FORMAT"
-
-OUTPUT_FORMAT:
-* Only output the summary containing the most relevant information from 'SEARCH_OUTPUT' 
-* The summary must be structured in comprehensive bulletpoints.
-* Solely respond with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
-* Do not include any other contents in your response!
-
-SEARCH_QUERY:
-{input_query}
-
-SEARCH_OUTPUT:
-```
-{chunks}
-```
-"""
-
-# SUMMARIZE_PROMPT_WITH_DATE_2 = """
-# Your task is to summarize relevant information in 'SEARCH_OUTPUT'. \
-# The summary must only contain relevant information with respect to the SEARCH_QUERY. You must adhere to the following 'INSTRUCTIONS'. 
-
-# INSTRUCTIONS:
-# * Carefully read the 'SEARCH_QUERY'
-# * Select only the most relevant information from 'SEARCH_OUTPUT' that is useful and relevant and could help answering the search query
-# * An information can be considered relevant if it might support or refute the search query
-# * Examine if the information in search output relates to the search query or not
-# * Solely respond with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
-# * Summarize the most relevant information in a way that is concise and informative and include the dates mentioned
-# * You must not infer or add any new information, but only summarize the existing statements in an unbiased way
-# * If there is conflicting information, you must include both sides of the argument in the summary
-# * If there are dates mentioned along with the relevant information, you must include them.
-# * You must provide your response in the format specified under "OUTPUT_FORMAT"
-# * Do not include any other contents in your response.
-
-# SEARCH_QUERY:
-# {input_query}
-
-# SEARCH_OUTPUT:
-# ```
-# {chunks}
-# ```
-
-# OUTPUT_FORMAT:
-# * Only output the summary containing the most relevant information from 'SEARCH_OUTPUT' that may help to answer the search query and reveal if the event happens and on what date the event is expected to occur.
-# * You must not make references to the search query and its outcome, but only summarize the most relevant information from 'SEARCH_OUTPUT'.
-# * The summary must be one single comprehensive bulletpoint.
-# * Solely respond with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
-# * You must not make references to the search query and its outcome, but only summarize the relevant information from 'SEARCH_OUTPUT'.
-# * Do not include any other contents in your response!
-# """
-
-
-SUMMARIZE_PROMPT_WITH_DATE_3 = """
-Your task is to summarize relevant information from 'SEARCH_OUTPUT'. The SEARCH_OUTPUT contains bulletpoints that you must \
-combine and summarize into a single new bulletpoint. You must adhere to the following 'INSTRUCTIONS'.
-
-INSTRUCTIONS:
-* Carefully read the 'SEARCH_QUERY'
-* Select a combination of only the most relevant information from 'SEARCH_OUTPUT' that may help answering the search query
-* An information can be considered relevant if it might support or refute the search query
-* Summarize the selected information in a way that is concise and informative and include the dates mentioned
-* Do not try to answer or reference the search query, but only summarize the relevant information from 'SEARCH_OUTPUT' in an unbiased way.
-* You must not infer or add any new information.
-* Do not modify the information in 'SEARCH_OUTPUT' with respect to the search query.
-* If there are dates mentioned along with the relevant information, you must include them.
-
-QUESTION: {input_query}
-
-SEARCH_OUTPUT:
-```
-{chunks}
-```
-
-OUTPUT_FORMAT:
-* Only output the summary containing the combination of the most relevant information from 'SEARCH_OUTPUT'.
-* The summary must be formatted into a single concise and informative bulletpoint.
-* Solely respond with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
-* Do not include any other contents in your response!
-"""
-
-# * After summarizing, review the summary and evaluate if it could help answering the search query. If not, delete everything and respond with "Error".
-
-
-SUMMARIZE_PROMPT_WITH_DATE_4 = """
-Your task is to summarize relevant information from 'SEARCH_OUTPUT'. The SEARCH_OUTPUT contains bulletpoints that you must \
-combine and summarize into a single paragraph. You must adhere to the following 'INSTRUCTIONS'.
-
-INSTRUCTIONS:
-* Carefully read the 'QUESTION'
-* Select a combination of only the most relevant information from 'SEARCH_OUTPUT' that may help answering the QUESTION
-* An information can be considered relevant if it might support or refute the QUESTION
-* Summarize the selected information in a way that is concise and informative and include the dates mentioned
-* Do not try to answer or reference the QUESTION, but only summarize the relevant information from 'SEARCH_OUTPUT' in an unbiased way.
-* You must not infer or add any new information.
-* Do not modify the information in 'SEARCH_OUTPUT' with respect to the QUESTION.
-* If there are dates or timeframes mentioned along with the relevant information, you must include them.
-
-QUESTION: {input_query}
-
-SEARCH_OUTPUT:
-```
-{chunks}
-```
-
-OUTPUT_FORMAT:
-* Only output the summary containing the combination of the most relevant information from 'SEARCH_OUTPUT'.
-* The summary must be a single very concise and informative paragraph.
-* Solely respond with "Error", if there is no relevant information in 'SEARCH_OUTPUT'.
-* Do not include any other contents in your response!
 """
 
 # Global constants for possible attribute names for release and update dates
@@ -555,47 +274,6 @@ UPDATE_DATE_NAMES = [
     'item:modification_date'
 ]
 
-# # Global constant for HTML tags to remove
-# HTML_TAGS_TO_REMOVE = [
-#     "script",
-#     "style",
-#     "header",
-#     "footer",
-#     "aside",
-#     "nav",
-#     "form",
-#     "button",
-#     "iframe",
-#     "input",
-#     "textarea",
-#     "select",
-#     "option",
-#     "label",
-#     "fieldset",
-#     "legend",
-#     "img",
-#     "audio",
-#     "video",
-#     "source",
-#     "track",
-#     "canvas",
-#     "svg",
-#     "object",
-#     "param",
-#     "embed",
-#     "link",
-#     ".breadcrumb",
-#     ".pagination",
-#     ".nav",
-#     ".ad",
-#     ".sidebar",
-#     ".popup",
-#     ".modal",
-#     ".social-icons",
-#     ".hamburger-menu",
-# ]
-
- 
 class WebPage:
     _id_counter = 0
     id: int
@@ -831,7 +509,7 @@ def parse_date_str(date_str: str) -> datetime:
     
 def remove_date_from_query(query: str) -> str:
     # Define a regex pattern to match dates
-    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
+    date_pattern = r"\b(?:on or by |on or before |before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
 
@@ -1244,13 +922,11 @@ def summarize_relevant_chunks(
             web_page.relevant_chunks_summary = "Error"
             return
         
-        # article_header = f"ARTICLE TITLE: {web_page.title}, PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
-        # chunks_string = article_header + chunks_string
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
 
         market_question_no_date = remove_date_from_query(input_query)
         market_question_when = f"When {market_question_no_date}"
-        summarize_prompt = SUMMARIZE_PROMPT_WITH_DATE_4.format(input_query=market_question_when, chunks=trimmed_chunks)
+        summarize_prompt = SUMMARIZE_PROMPT.format(input_query=market_question_when, chunks=trimmed_chunks)
         messages = [
             {"role": "system", "content": "You are a professional journalist and researcher."},
             {"role": "user", "content": summarize_prompt},
@@ -1284,30 +960,6 @@ def summarize_relevant_chunks(
         print("OUTPUT TOKENS:", response.usage.completion_tokens)
         print("STOP REASON:", response.choices[0].finish_reason)
         print()
-
-        # prompt = SUMMARIZE_PROMPT_WITH_DATE_4.format(input_query=input_query_no_date, chunks=output)
-        # messages = [
-        #     {"role": "system", "content": "You are a professional journalist."},
-        #     {"role": "user", "content": prompt},
-        # ]
-        # response = client.chat.completions.create(
-        #     model=engine,
-        #     messages=messages,
-        #     temperature=temperature,
-        # )
-        # if counter_callback is not None:
-        #     counter_callback(
-        #         input_tokens=response.usage.prompt_tokens,
-        #         output_tokens=response.usage.completion_tokens,
-        #         model=engine,
-        #         token_counter=count_tokens,
-        #     )
-        # output = response.choices[0].message.content
-        # print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
-        # print(web_page.publication_date)
-        # print("SUMMARIZE CHUNKS BULLETPOINTS OUTPUT:")
-        # print(output)
-        # print()
 
         web_page.relevant_chunks_summary = output
 
@@ -1355,7 +1007,7 @@ def summarize_over_summarized_chunks(
     # Join all modified lines into a single string
     all_relevant_chunks_summary = '\n'.join(all_lines_with_id)
 
-    prompt = PREVIOUS_SUMMARY_PROMPT.format(input_query=input_query, chunks=all_relevant_chunks_summary)
+    prompt = FINAL_SUMMARY_PROMPT.format(input_query=input_query, chunks=all_relevant_chunks_summary)
 
     print(f"\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PREVIOUS SUMMARY PROMPT <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
     print(prompt)
@@ -1391,8 +1043,6 @@ def summarize_over_summarized_chunks(
     modified_ids = set()
 
     # Process each line to extract the web_page.id and content, then update the relevant web page
-
-    
     for line in lines:      
         match = re.match(r"^(.*) \((\d+)\)$", line)
         if match:
@@ -1426,7 +1076,6 @@ def research(
     num_urls: int = NUM_URLS_PER_QUERY,
 ):
     """Research additional information based on a prediction market question"""
-    
     # Generate a list of sub-queries
     queries, counter_callback = fetch_queries(client, market_question, engine, market_rules, counter_callback)
     
@@ -1477,28 +1126,15 @@ def research(
     web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
 
     relevant_summarized_chunks = []
-
     relevant_summarized_chunks.extend(TextChunk(text=page.relevant_chunks_summary, url=page.url) for page in web_pages)
-    # relevant_summarized_chunks = [page.relevant_chunks_summary for page in web_pages if page.relevant_chunks_summary]
-
-    embedded_summaries = get_embeddings(client, relevant_summarized_chunks, enc) if relevant_summarized_chunks else []
-    sorted_summaries = sort_text_chunks(client, market_question, embedded_summaries) if text_chunks_embedded else []
-
-    print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-    for chunk in sorted_summaries:
-        print(f"URL: {chunk.url}")
-        print(f"Similarity: {chunk.similarity}")
-        print(chunk.text)
-        print()
 
     # Create a dictionary mapping URLs to WebPage objects for quicker lookups
-    for sum in sorted_summaries:
+    for sum in relevant_summarized_chunks:
         if sum.url in web_pages_dict:
             web_pages_dict[sum.url].chunks_final.append(sum.text)
 
     web_pages = list(web_pages_dict.values())
     
-    #web_pages, counter_callback = summarize_chunks_bulletpoints(web_pages, market_question, client, enc, counter_callback)
     web_pages, counter_callback = summarize_over_summarized_chunks(web_pages, market_question, client, counter_callback)
     web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
 

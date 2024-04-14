@@ -201,21 +201,21 @@ task question: "Will the air strike conflict in Sudan be resolved by 13 Septembe
 
 
 PREDICTION_PROMPT_TEMPLATE = """
-You are an expert data analyst. Your task is to write a detailed evaluation and make probability estimations for the outcomes 'Yes' and 'No'.
+You are an expert data analyst. Your task is to write a detailed evaluation and make probability estimations for the market resolutions 'Yes' and 'No'.
 You must adhere to the following instructions:
 
 INSTRUCTIONS:
-* You are provided with the prediction market question under the label "USER_PROMPT". 
-* You are provided with the market rules that define the conditions for the resolution of the market question under the label "MARKET_RULES".
-* You are provided with a report under the label "REPORT" that contains additional information and analysis if and when the event specified in the market question could happen.
-* Note: Today's date is {current_date}
+* You are provided with the prediction market under the label "USER_PROMPT". 
+* You are provided with the market rules that define the conditions for the resolution of the market under the label "MARKET_RULES".
+* You are provided with a report under the label "REPORT" that contains additional information and analysis if and when the event specified in the market could happen.
+* Take into account that today's date is {current_date}
 * Write an evaluation paragraph that addresses the following points:
-    - Calculate the difference between the date specified in the market question and the date stated in the report
-    - Use the market rules to evaluate the likelihood of the market question resolving as 'Yes' or 'No' by referring to the report from your previous answer.
+    - alculate the difference between the date specified in the market question and the date stated in the report
+    - Use the market rules to evaluate the likelihood of the market resolving as 'Yes' or 'No' by referring to the report from your previous answer.
     - Use your domain expertise and justify your answer
-* Make probability estimations for the market questions outcomes 'Yes' and 'No' taking the market rules and the report into account
+* Make probability estimations for the market's outcomes 'Yes' and 'No' taking the market rules and the report into account
 * Provide your confidence in the estimation and the utility of the information in the report
-* Give your response in the format specified under "OUTPUT FORMAT"
+* Give your response in the format specified under "OUTPUT_FORMAT"
 
 USER_PROMPT:
 ```
@@ -227,10 +227,10 @@ REPORT:
 {report}
 ```
 
-OUTPUT FORMAT:
+OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* The JSON must contain five fields: "outcome_evaluation", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1, except "outcome_evaluation" which is a string
-    - "outcome_evaluation": Evaluation paragraph
+* The JSON must contain five fields: "market_resolution_evaluation", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1, except "market_resolution_evaluation" which is a string
+    - "market_resolution_evaluation": Evaluation paragraph
     - "p_yes"
     - "p_no"
     - "confidence"
@@ -242,81 +242,54 @@ MARKET_RULES:
 {market_rules_part}
 ```
 """
-
-#     - Evaluate the likelihood of the market question resolving as 'Yes' or 'No' based on the market rules and the report from your previous answer
-# Select from the following terms: 'almost certain', 'high likelihood', 'moderately high likelihood', 'moderate likelihood', 'moderately low likelihood', 'low likelihood', 'very low likelihood' to describe the likelihood.
-# by selecting from the following terms: 'almost certain', 'high likelihood', 'moderately high likelihood', 'moderate likelihood', 'moderately low likelihood', 'low likelihood', 'very low likelihood'.
-# * Calculate the difference between the date stated in the report and the date specified in the market question.
-
-PREDICTION_PROMPT_TEMPLATE_NOT_TOO_OLD = """
-Given your previous answer your task is to write an analysis and give a probability estimation how the market question will resolve. You are provided with the market rules that define the conditions for the resolution of the market question.
-You must adhere to the following instructions:
-
-INSTRUCTIONS:
-* Carefully read the market rules
-* Analyze the report from your previous answer
-* Note: Today's date is {current_date}
-* Write a detailed analysis of the report from your previous answer and evaluate the likelihood of the market question resolving as 'Yes' or 'No' taking the market rules into account
-* Calculate the difference between the date for the market question stated in the report and the date specified in the market question.
-* Make a probability estimation based on the analysis and the market rules
-* Provide your confidence in the estimation and the utility of the information in the report
-* Give your response in the format specified under "OUTPUT FORMAT"
-
-OUTPUT FORMAT:
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* The JSON must contain five fields: "analysis", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1
-    - "analysis": Analysis of the potential outcomes of the market question and conclusion with the likelihood of the market question resolving as 'Yes' or 'No' taking the market rules and the report into account. Use your domain expertise to justify your answer use the words 'very high', 'high', 'higher', 'equal', 'lower', 'low', 'very low' to describe the likelihood.
-    - "p_yes": The estimated probability that the market question will resolve as 'Yes'
-    - "p_no": The estimated probability that the market question will resolve as 'No'
-    - "confidence": Your confidence in the probability estimation
-    - "info_utility": Your assessment of the utility of the information provided in the report
-* Include only the JSON object in your output
-
-MARKET QUESTION:
-```
-{market_question}
-```
-
-MARKET RULES:
-```
-{market_rules_part}
-```
-"""
+# 
+# - Analyze the time-related inforamtion in both the USER_PROMPT the REPORT and the MARKET_RULES Consider the market rules as the ultimate source of truth for the resolution of the market.
 
 
-PREDICTION_PROMPT_TEMPLATE_OLDEST = """
-Given your previous answer your task is to provide a probability estimation how the market question will eventually resolve. You are provided with the MARKET_RULES for the resolution of the MARKET_QUESTION.
-You must adhere to the following instructions:
+# PREDICTION_PROMPT_TEMPLATE = """
+# You are an expert data analyst. Your task is to write a detailed evaluation and make probability estimations for the market resolutions 'Yes' and 'No'.
+# You must adhere to the following instructions:
 
-INSTRUCTIONS:
-* Carefully read the MARKET_RULES
-* Analyze the report from your previous answer
-* Note: Today's date is {current_date}
-* Write a detailed conclusion of the report from your previous answer and evaluate the likelihood of the MARKET_QUESTION resolving as 'Yes' or 'No' by referring to the conditions in the MARKET_RULES.
-* Is there a discrepancy between the actual event date and the date specified in the MARKET_QUESTION? If yes, consider this in your evaluation.
-* Make a probability estimation based on the conclusion
-* Provide your confidence in the estimation and the utility of the information in the report
-* Give your response in the format specified under "OUTPUT_FORMAT"
+# INSTRUCTIONS:
+# * You are provided with the prediction market under the label "USER_PROMPT". 
+# * You are provided with the market rules that define the conditions for the resolution of the market under the label "MARKET_RULES".
+# * You are provided with a report under the label "REPORT" that contains additional information and analysis if and when the event specified in the market could happen.
+# * Take into account that today's date is {current_date}
+# * Write an evaluation paragraph that addresses the following points:
+#     - Calculate the difference between the dates:
+#         - What does the report say about the date when the event will happen?
+#         - What do the market rules say about dates and conditions for the resolution of the market?
+#     - Use the market rules to evaluate the likelihood of the market resolving as 'Yes' or 'No' by referring to the report from your previous answer.
+#     - Use your domain expertise and justify your answer
+# * Make probability estimations for the market's outcomes 'Yes' and 'No' taking the market rules and the report into account
+# * Provide your confidence in the estimation and the utility of the information in the report
+# * Give your response in the format specified under "OUTPUT_FORMAT"
 
-OUTPUT_FORMAT:
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* The JSON must contain five fields: "conclusion", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1
-    - "conclusion": A detailed analysis of the report from the previous answer evaluating the likelihood of the MARKET_QUESTION resolving as 'Yes' or 'No'
-    - "p_yes": The estimated probability that the market question will resolve as 'Yes'
-    - "p_no": The estimated probability that the market question will resolve as 'No'
-    - "confidence": Your confidence in the probability estimation
-    - "info_utility": Your assessment of the utility of the information provided in the report
-* Include only the JSON object in your output
+# USER_PROMPT:
+# ```
+# {market_question}
+# ```
 
-MARKET_QUESTION:
-{market_question}
+# REPORT:
+# ```
+# {report}
+# ```
 
-MARKET_RULES:
-```
-{market_rules_part}
-```
-"""
+# OUTPUT_FORMAT:
+# * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
+# * The JSON must contain five fields: "market_resolution_evaluation", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1, except "market_resolution_evaluation" which is a string
+#     - "market_resolution_evaluation": Evaluation paragraph
+#     - "p_yes"
+#     - "p_no"
+#     - "confidence"
+#     - "info_utility"
+# * Include only the JSON object in your output
 
+# MARKET_RULES:
+# ```
+# {market_rules_part}
+# ```
+# """
 
 
 def trim_json_formatting(text) -> str:
@@ -359,7 +332,7 @@ def extract_question(text) -> str:
 
 def remove_date_from_query(query: str) -> str:
     """Remove time-related information from query"""
-    date_pattern = r"\b(?:on or by |on or before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
+    date_pattern = r"\b(?:on or by |on or before |before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
 
@@ -443,33 +416,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             return "Market question not found in prompt", None, None, None
         print(f"MARKET QUESTION:\n{market_question}\n")
 
-
-        # # Get the subject matter expert role and introduction
-        # sme = ""
-        # sme_introduction = ""
-        # try:
-        #     sme, sme_introduction, counter_callback = get_sme_role(
-        #         engine,
-        #         temperature,
-        #         max_tokens,
-        #         market_question,
-        #         counter_callback=counter_callback,
-        #     )
-        # except Exception as e:
-        #     print(f"An error occurred during SME role creation: {e}")
-        #     print("Using default SME introduction.")
-        #     sme_introduction = "You are a professional journalist."
-        
-        # if sme:
-        #     print(f"SME ROLE: {sme}")
-        # else:
-        #     print("SME role not found.")
-        # print(f"SME INTRODUCTION: {sme_introduction}")
-        # print()
-
-        # exit()
-
-
         # Get the market rules from the Infer Rules tool
         market_status, market_rules, counter_callback = get_market_rules(market_question, client, counter_callback)
         print(f"MARKET STATUS: {market_status}\n")
@@ -477,8 +423,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         
         # Get additional information from the Research tool
         additional_inforamtion, counter_callback = research(market_question, client, google_api_key, google_engine_id, engine, market_status, market_rules, counter_callback)
-
-        # question_status = market_rules.split("\nRules:", 1)[0]
 
         market_question_no_date = remove_date_from_query(market_question)
         market_question_when = f"When {market_question_no_date}"
@@ -542,7 +486,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"PREDICTION PROMPT:{prediction_prompt}")
 
         # system_prediction_prompt = "You are a seasoned market analyst with a deep understanding of prediction markets and consider the factors that influence their outcomes. Your goal is to provide a well-reasoned analysis based on data, trends, and expert knowledge to help individuals make informed decisions when betting on prediction market outcomes."
-        system_prediction_prompt = "You are a seasoned prediction market analyst with a deep understanding of how prediction markets work and how to assess the likelihood of different outcomes. Your goal is to provide a well-reasoned analysis and probability estimations for the outcomes of the question based on your expertise in prediction markets and relevant domain knowledge. Carefully consider the market rules and the report provided to make your evaluation."
+        system_prediction_prompt = "You are a seasoned prediction market analyst with a deep understanding of how prediction markets work and how to assess the likelihood of different market resolutions. Your goal is to provide a well-reasoned analysis and probability estimations for the resolution of the prediction market based on your expertise in prediction markets and relevant domain knowledge. Carefully consider the market rules and the report provided to make your evaluation."
 
         messages_prediction = [
             {"role": "system", "content": system_prediction_prompt},
