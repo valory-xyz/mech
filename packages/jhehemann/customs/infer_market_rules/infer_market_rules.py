@@ -175,13 +175,13 @@ Answer:
 
 Question: "Will Disney Plus implement its password-sharing crackdown by August 25, 2024?"
 Answer:
-    The question will resolve as 'Yes' if:
-        - Disney Plus officially implements its password-sharing crackdown policy on or before 25 August 2024.
+    The market will resolve as 'Yes' if:
+        - Disney Plus implements its password-sharing crackdown policy on or before 25 August 2024.
         - Disney Plus has already implemented the password-sharing crackdown recently.
 
-    The question will resolve as 'No' if:
+    The market will resolve as 'No' if:
         - Disney Plus does not implement its password-sharing crackdown policy by 25 August 2024.
-        - The implementation of the password-sharing crackdown policy by Disney Plus occurs after 25 August 2024.
+        - Disney Plus implements a password-sharing crackdown policy after 25 August 2024.
     
     Additional Notes:
         Definition of 'password-sharing crackdown': The enforcement of measures to restrict or prevent the sharing of login credentials among multiple users.
@@ -191,6 +191,170 @@ Question: "{market_question}"
 Answer:
 """
 
+INFER_RULES_PROMPT_BY_REDUCED_HEADINGS = """
+You are a Large Language Model in a multi-agent system. Your task is to infer the rules for a prediction market question. \
+Provide reliable and well-structured rules for when the prediction market question will be resolved as 'Yes' and 'No'. \
+You are provided with some examples below. You must adhere to the instructions.
+
+INSTRUCTIONS:
+* Carefully read the market question
+* Examine the EXAMPLES provided to understand the structure of the rules you need to define
+* Define measurable and verifiable rules for when the market question will be resolved as 'Yes' and when it will be resolved as 'No'
+
+EXAMPLES:
+Question: "Will Beyoncé release a full album for her 'country era' on or before 9th January 2025?"
+Answer:
+    'Yes':
+        - Beyoncé officially releases a full music album for her 'country era' on or before 9 January 2025.
+        - Beyoncé has already released such an album recently.
+
+    'No':
+        - Beyoncé does not release a full album for her 'country era' by 9 January 2025.
+        - Beyoncé releases a 'country era' album after 9 January 2025.
+    
+    Additional Notes:
+        Definition of 'full album': An album containing multiple tracks recognized as a complete album, not singles or EPs.
+        Definition of 'album for her country era': An album that predominantly features songs in the country music genre.
+
+Question: "Will there be another case of H5N1 bird flu in Texas by 11 November 2024?"
+Answer:
+    'Yes':
+        - A new case of H5N1 bird flu occurs in the state of Texas on or before 11 November 2024.
+        - A new case of H5N1 bird flu has recently occurred in Texas.
+
+    'No':
+        - No new case of H5N1 bird flu is confirmed in Texas on or before 11 November 2024.
+        - The next new case of H5N1 occurs after 11 November 2024.
+
+    Additional Notes:
+        Definition of 'new case': A new occurrence of H5N1 bird flu that is confirmed and is at least the second case in Texas.
+
+Question: "Will an arrest be made in the alleged arson at Sen. Bernie Sanders' Vermont office on or before May 7, 2024?"
+Answer:
+    'Yes':
+        - An arrest is made in connection with the alleged arson at Senator Bernie Sanders' Vermont office on or before 7 May 2026.
+        - An arrest has already been made recently in relation to the arson case.
+
+    'No':
+        - No arrest is made in connection with the alleged arson at Senator Bernie Sanders' Vermont office by 7 May 2026.
+        - The arrest related to the arson case occurs after 7 May 2026.
+    
+    Additional Notes:
+        Definition of 'arrest': The detention of an individual by law enforcement.
+
+Question: "Will FIFA fund the construction of new football stadiums for local clubs in England by 31 December 2024?"
+Answer:
+    'Yes':
+        - FIFA officially funds or begins disbursing funds for the construction of new football stadiums for local clubs in England on or before 31 December 2024.
+        - FIFA has already begun funding these projects recently.
+
+    'No':
+        - FIFA does not fund nor begin disbursing funds for the construction of new football stadiums for local clubs in England on or before 31 December 2024.
+        - FIFA allocates funds after 31 December 2024.
+    
+    Additional Notes:
+        Definition of 'new football stadiums for local clubs': Stadiums that are newly constructed for football clubs that are not part of the professional league system.
+        Definition of 'fund': Actively disbursing financial resources.
+
+Question: "Will a new climate bill be passed by both the Senate and the House on or by 22 October 2024?"
+Answer:
+    'Yes':
+        - Both the Senate and the House of Representatives officially pass a new climate bill on or by before 22 October 2024.
+        - Both chambers have already passed a new climate bill recently.
+
+    'No':
+        - A new climate bill does not exist, or one of the two chambers does not pass it on or before 22 October 2024.
+        - The Senate and the House pass the bill after 22 October 2024.
+        - Congress does not convene a session to vote on the bill on or before 22 October 2024.
+    
+    Additional Notes:
+        Definition of 'pass': Official approval of the bill by both chambers of the United States Congress.
+        Definition of 'new climate bill': A bill that addresses climate-related issues and is distinct from an existing bill or legislation.
+
+Question: "Will Microsoft announce a significant AI-related takeover by 16 April 2024?"
+Answer:
+    'Yes':
+        - Microsoft officially announces a significant acquisition or takeover related to artificial intelligence (AI) on or before 16 April 2024.
+        - Microsoft has recently announced a significant AI-related takeover.
+
+    'No':
+        - Microsoft does not announce any significant AI-related takeover by 16 April 2024.
+        - Microsoft announces an AI-related takeover after 16 April 2024.
+
+    Additional Notes:
+        Definition of 'significant AI-related takeover': An acquisition or takeover that involves a substantial investment in AI technology or companies.
+        Definition of 'announcement': Public declaration or disclosure made by Microsoft regarding the takeover.
+
+Question: "Will Samsung replace its voice assistant Bixby by 7 April 2024?"
+Answer:
+    'Yes':
+        - Samsung replaces its voice assistant Bixby with a new voice assistant on or before 7 April 2024.
+        - Samsung has recently replaced Bixby with a new voice assistant.
+
+    'No':
+        - Samsung does not replace its voice assistant Bixby by 7 April 2024.
+        - Samsumg replaces Bixby after 7 April 2024.
+
+    Additional Notes:
+        Definition of 'replace': The discontinuation of Bixby as the primary voice assistant and the implementation of a new voice assistant.
+
+Question: "Will Google destroy all browsing data collected in Incognito mode by 2 October 2022?"
+Answer:
+    'Yes':
+        - Google officially destroys all browsing data collected in Incognito mode on or before 2 October 2022.
+        - Google has already completed the destruction of all such data recently.
+        
+    'No':
+        - Google does not destroy all browsing data collected in Incognito mode on or before 2 October 2022.
+        - Google completes the destruction of the data after 2 October 2022.
+    
+    Additional Notes:
+        Definition of 'all browsing data': The entirety of data collected during the browsing session in Incognito mode and not just a portion of it.
+
+Question: "Will President Joe Biden make another visit to Baltimore over the Francis Scott Key Bridge collapse by 16 June 2024?
+Answer:
+    'Yes':
+        - Joe Biden makes another official visit to Baltimore in relation to the Francis Scott Key Bridge collapse on or before 16 June 2024.
+        - Joe Biden has recently visited Baltimore over the bridge collapse incident another time.
+
+    'No':
+        - Joe Biden does not make another visit to Baltimore regarding the Francis Scott Key Bridge collapse by 16 June 2024.
+        - Joe Bidens next visit related to the bridge collapse occurs after 16 June 2024.
+
+    Additional Notes:
+        Definition of 'visit': President Biden physically travels to Baltimore for the purpose of addressing or inspecting the Francis Scott Key Bridge collapse.
+        Definition of 'Francis Scott Key Bridge collapse': A specific incident involving the structural failure or damage to the Francis Scott Key Bridge in Baltimore.
+
+Question: "Will Gilberto Ramirez defend his WBA (Super) cruiserweight title successfully by 19 February 2021?"
+Answer:
+    'Yes':
+        - Gilberto Ramirez successfully defends his WBA (Super) cruiserweight title in a bout on or before 19 February 2021.
+        - Gilberto Ramirez has already successfully defended his title recently.
+
+    'No':
+        - Gilberto Ramirez does not successfully defend his title on or before 19 February 2021.
+        - The defense match occurs after 19 February 2021.
+    
+    Additional Notes:
+        Definition of 'successfully defend': Ramirez must be the reigning titleholder and emerge victorious against a contender to retain his title.
+
+Question: "Will Disney Plus implement its password-sharing crackdown by August 25, 2024?"
+Answer:
+    'Yes':
+        - Disney Plus implements its password-sharing crackdown policy on or before 25 August 2024.
+        - Disney Plus has already implemented the password-sharing crackdown recently.
+
+    'No':
+        - Disney Plus does not implement its password-sharing crackdown policy by 25 August 2024.
+        - Disney Plus implements a password-sharing crackdown policy after 25 August 2024.
+    
+    Additional Notes:
+        Definition of 'password-sharing crackdown': The enforcement of measures to restrict or prevent the sharing of login credentials among multiple users.
+        Definition of 'implement': The policy is put into effect and actively enforced by Disney Plus.
+
+Question: "{market_question}"
+Answer:
+"""
 
 # Prompt template for inferring rules for a question that asks for an event to happen "on" a specific date
 INFER_RULES_PROMPT_ON = """
@@ -369,52 +533,94 @@ Answer:
 """
 
 # Prompt template for inferring the status of a prediction market question
+# 
+# INSTRUCTIONS:
+# * Carefully read the market question.
+# * Pay detailled attention on the phrasing of the market question.
+# * Analyze what the question implies and asks for, who the involved parties are and what the conditions are.
+# * Do not mention the date specified in the question in your response.
+
 INFER_STATUS_PROMPT = """
 You are a Large Language Model in a multi-agent system. Your task is to infer the status for a prediction market question. \
-You are provided with some examples below. You must adhere to the instructions.
-
-INSTRUCTIONS:
-* Carefully read the market question.
-* Pay detailled attention on the phrasing of the market question.
-* Analyze what the question implies and asks for, who the involved parties are and what the conditions are.
-* Do not use the date specified in the question in your response.
+You are provided with some examples below.
 
 EXAMPLES:
-Question: "Will there be another case of H5N1 bird flu in Texas by 10 April 2024?"
+Question: "Will there be another case of H5N1 bird flu in Texas ?"
 Answer:
-    Status: The question implies that there have been one or more confirmed cases of H5N1 bird flu in the state of Texas. The question focuses on another new case occurring.
+    Status: The question implies that there have been one or more confirmed cases of H5N1 bird flu in the state of Texas. The question focuses on another new case occurring in the future.
+    Definitions:
+        'new case': A newly confirmed occurrence of H5N1 bird flu that is distinct from previous cases.
 
-Question: "Will Beyoncé release a full album for her 'country era' by 9th January 2025?"
+Question: "Will Samsung replace its voice assistant Bixby ?"
+Answer:
+    Status: The question implies that Samsung is considering replacing its voice assistant, Bixby, with a new voice assistant. The question focuses on the timing of this potential replacement.
+    Definitions:
+        'replace': The discontinuation of Bixby as the primary voice assistant and the implementation of a new voice assistant.
+    
+Question: "Will Beyoncé release a full album for her 'country era' ?"
 Answer:
     Status: The question implies that Beyoncé is potentially exploring country music as a new musical direction referred to as her 'country era'. It focuses on the release date of a full album within this thematic context.
+    Definitions:
+        'full album': An album containing multiple tracks recognized as a complete album, not singles or EPs.
+        'album for her country era': An album that predominantly features songs in the country music genre.
 
-Question: "Will President Biden post into the fediverse on 23 September 2024?"
+Question: "Will Gilberto Ramirez defend his WBA (Super) cruiserweight title successfully on 26 November 2020?"
 Answer:
-    Status: The question implies that Joe Biden, the 46th president of the United States, has an account on the fediverse, a decentralized networking protocol and potentially has made posts in the past. The question focuses on his future posting activities on the fediverse.
-
-Question: "Will Saudi Arabia successfully host the WTA Finals by 16 April 2024?"
+    Status: The question implies that Gilberto Ramirez is the current titleholder of the WBA (Super) cruiserweight title. The question focuses on the outcome and timing of a potential title defense match.    
+    Definitions:
+        'successfully defend': Ramirez must be the reigning titleholder and emerge victorious in a defense match against a contender to retain his title.
+    
+Question: "Will Saudi Arabia successfully host the WTA Finals ?"
 Answer:
     Status: The question implies that Saudi Arabia is in consideration to host the WTA Finals, a prestigious women's tennis event. The focus is on the successful execution of the event by Saudi Arabia.
+    Definitions:
+        'successfully host': Saudi Arabia carries out the event to its conclusion without significant disruptions.
     
-Question: "Will Prince William and Prince Harry appear separately at the event honoring Princess Diana on 13 April 2024?"
-Answer:
-    Status: Status: The question implies that there is an upcoming event honoring Princess Diana where both Prince William and Prince Harry are expected to attend. The question focuses on the manner of their attendance and the specific date of the event.
-
-Question: "Will Xiaomi's SU7 electric vehicle still have a waiting list in China on 9 April 2024?"
+Question: "Will Xiaomi's SU7 electric vehicle still have a waiting list in China ?"
 Answer:
     Status: The question implies that Xiaomi has introduced an electric vehicle model named SU7 in China, with a current waiting list of potential buyers. The question focuses on the duration of this waiting list and how long it will persist.
+    Definitions:
+        'waiting list': A list of customers waiting to purchase the SU7 electric vehicle in China.
 
-Question: "Will a new climate bill be passed by both the Senate and the House by 30 September 2024?"
+Question: "Will a new climate bill be passed by both the Senate and the House ?"
 Answer:
-    Status: The question implies that a climate bill already exists and that a new climate bill is currently under consideration by the United States Congress, which consists of two chambers: the Senate and the House of Representatives. The question focuses on whether this new bill will be passed by both chambers and on the timeline for this legislative action.
+    Status: The question implies that a climate bill already exists and that a new climate bill is currently under consideration by the United States Congress, which consists of two chambers: the Senate and the House of Representatives. The question focuses on the timeline for this new bill being passed by both chambers.
+    Definitions:
+       'pass': Official approval of the bill by both chambers of the United States Congress.
+       'new climate bill': A bill that addresses climate-related issues and is distinct from an existing bill or legislation.
 
-Question: "Will Tesla successfully launch its new electric vehicle, Model Z, on 29 June 2024?"
+Question: "Will Tesla successfully launch its new electric vehicle, Model Z ?"
 Answer:
     Status: The question implies that Tesla is currently working on a new electric vehicle, which is called Model Z. The question focuses on its release date.
+    Definitions:
+        'launch': The public release and availability of the vehicle for purchase or use.
+        'electric vehicle': A vehicle powered by an electric motor.
    
-Question: "Will FIFA fund the construction of new football stadiums for local clubs in England by 31 December 2024?"
+Question: "Will FIFA fund the construction of new football stadiums for local clubs in England ?"
 Answer:
     Status: The question implies that local football clubs in England are in need of new stadiums. The question focuses on whether FIFA, the international governing body of football, will fund the construction of these new stadiums and the timeline for this funding.
+    Definitions:
+        'new football stadiums for local clubs': Stadiums that are newly constructed for football clubs that are not part of the professional league system.
+        'fund': Actively disbursing financial resources.
+
+Question: "Will Prince William and Prince Harry appear separately at the event honoring Princess Diana ?"
+Answer:
+    Status: Status: The question implies that there is an upcoming event honoring Princess Diana where both Prince William and Prince Harry are expected to attend. The question focuses on the manner of their attendance.
+    Definitions:
+        'appear separately': The princes attend the event at different times or locations without being present together. This includes virtual appearances.
+
+Question: "Will Disney Plus implement its password-sharing crackdown ?"
+Answer:
+    Status: The question implies that Disney Plus is considering implementing a policy to prevent the sharing of login credentials among multiple users. The question focuses on the potential implementation of this policy in the future.
+    Definitions:
+        'password-sharing crackdown': The enforcement of measures to restrict or prevent the sharing of login credentials among multiple users.
+        'implement': The policy is put into effect and actively enforced by Disney Plus.
+
+Question: "Will Google destroy all browsing data collected in Incognito mode by 2 October 2022?"
+Answer:
+    Status: The question implies that Google has collected browsing data in Incognito mode and is expected to destroy this data. The question focuses on the timeline for the data destruction.
+    Definitions:
+        'all browsing data': The entirety of data collected during the browsing session in Incognito mode and not just a portion of it.
 
 Question: "{market_question}"
 Answer:
@@ -443,7 +649,7 @@ def get_prompt_template_by_timing(query: str) -> str:
         return INFER_RULES_PROMPT_ON
     elif re.search(date_pattern_by, query):
         match = re.search(date_pattern_by, query)
-        return INFER_RULES_PROMPT_BY
+        return INFER_RULES_PROMPT_BY_REDUCED_HEADINGS
     else:
         return "No time-related information found in query."
 

@@ -113,11 +113,12 @@ OUTPUT_FORMAT:
 FINAL_SUMMARY_PROMPT = """
 You are provided with search outputs from multiple sources. These search outputs were received in response to the search \
 query found below. Your task is to select a collection of unique and most relevant bulletpoints that may help to answer the search query and reveal \
-if the event happens and on which date the event is expected to occur. 
+if the event happens and on which date the event is expected to occur.
 
 INSTRUCTIONS:
-* Carefully read the search query
-* Select only the relevant bulletpoints from the search outputs that are useful and relevant and could help answering the search query
+* Carefully read the search query.
+* Select only the relevant bulletpoints from the search outputs that are useful and relevant and could help answering the search query.
+* Each bullet point must always include the number in parentheses that is assigned to it at the end.
 * An information can be considered relevant if it might support or refute the search query
 * An information must also be considered relevant if it reveals a specific date or time frame when the event is expected to occur
 * If there are redundant bulletpoints, you must drop all exept for one. Select the most relevant by two criteria:
@@ -1044,7 +1045,7 @@ def summarize_over_summarized_chunks(
 
     # Process each line to extract the web_page.id and content, then update the relevant web page
     for line in lines:      
-        match = re.match(r"^(.*) \((\d+)\)$", line)
+        match = re.match(r"^(.*) \((\d+)\)\.?$", line)
         if match:
             content, web_page_id = match.groups()
             # Check if this web_page_id is in our dictionary of web pages
