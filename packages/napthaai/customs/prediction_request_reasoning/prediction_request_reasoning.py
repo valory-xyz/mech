@@ -198,27 +198,27 @@ LLM_SETTINGS = {
     },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
+        "limit_max_tokens": 2_000_000,
         "temperature": 0,
     },
     "claude-3-sonnet-20240229": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
+        "limit_max_tokens": 2_000_000,
         "temperature": 0,
     },
     "claude-3-opus-20240229": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
+        "limit_max_tokens": 2_000_000,
         "temperature": 0,
     },
-    "cohere/command-r-plus": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 4096,
+    "databricks/dbrx-instruct:nitro": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 32_768,
         "temperature": 0,
     },
-    "mistralai/mixtral-8x22b": {
+    "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 4096,
+        "limit_max_tokens": 32_000,
         "temperature": 0,
     },
 }
@@ -271,7 +271,7 @@ The user's question is: <user_input> {USER_INPUT} </user_input>
 
 The reasoning from the other AI is: {REASONING}
 
-Carefully consider the user's question and the provided reasoning. Then, in a , think through the following:
+Carefully consider the user's question and the provided reasoning. Then, think through the following:
  - The probability that the event specified in the user's question will happen (p_yes)
  - The probability that the event will not happen (p_no)
  - Your confidence level in your prediction

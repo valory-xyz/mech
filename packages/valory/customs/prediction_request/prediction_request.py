@@ -32,6 +32,7 @@ import spacy
 from markdownify import markdownify as md
 from readability import Document
 from googleapiclient.discovery import build
+import re
 from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
@@ -189,17 +190,17 @@ LLM_SETTINGS = {
     },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
+        "limit_max_tokens": 2_000_000,
         "temperature": 0,
     },
     "claude-3-sonnet-20240229": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
+        "limit_max_tokens": 2_000_000,
         "temperature": 0,
     },
     "claude-3-opus-20240229": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
+        "limit_max_tokens": 2_000_000,
         "temperature": 0,
     },
     "cohere/command-r-plus": {
@@ -207,14 +208,14 @@ LLM_SETTINGS = {
         "limit_max_tokens": 4096,
         "temperature": 0,
     },
-    "mistralai/mistral-medium": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 8192,
+    "databricks/dbrx-instruct:nitro": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 32_768,
         "temperature": 0,
     },
-    "mistralai/mixtral-8x22b": {
+    "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 4096,
+        "limit_max_tokens": 32_000,
         "temperature": 0,
     },
 }
@@ -405,6 +406,12 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
             break
     return extracted_texts
 
+def extract_json_string(text):
+    # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
+    print('AAAAAAAA', text)
+    pattern = r"(\{[^}]*\})"
+    matches = re.findall(pattern, text)
+    return matches[0].replace("json", "")
 
 def fetch_additional_information(
     prompt: str,
@@ -630,4 +637,5 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-        return response.content, prediction_prompt, None, counter_callback
+        extracted_block = extract_json_string(response.content)
+        return extracted_block, prediction_prompt, None, counter_callback
