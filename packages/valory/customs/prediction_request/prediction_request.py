@@ -410,6 +410,7 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
             break
     return extracted_texts
 
+
 def extract_json_string(text):
     # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
     print('AAAAAAAA', text)
@@ -417,7 +418,8 @@ def extract_json_string(text):
     matches = re.findall(pattern, text)
     return matches[0].replace("json", "")
 
-def extract_multi_queries(text: str) -> List[str]:
+
+def extract_multi_queries(text: str) -> Any:
     """Extract multiple queries from the given text"""
     # strip empty whitespace
     text = text.strip()
@@ -469,6 +471,7 @@ def fetch_multi_queries_with_retry(
             attempt += 1
     raise Exception("Failed to fetch multi-queries after retries")
 
+
 def generate_prediction_with_retry(
     client: LLMClient,
     model: str,
@@ -508,6 +511,7 @@ def generate_prediction_with_retry(
             time.sleep(delay)
             attempt += 1
     raise Exception("Failed to generate prediction after retries")
+
 
 def fetch_additional_information(
     prompt: str,
