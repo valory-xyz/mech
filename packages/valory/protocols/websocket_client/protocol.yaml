@@ -15,7 +15,7 @@ fingerprint:
   tests/test_websocket_client_dialogues.py: bafybeig7cd7mllqmk6w4oaz7wqwubueaa4hpofgplhzeivqtwihalhpnne
   tests/test_websocket_client_messages.py: bafybeibboz4j4itkwjh5ahza53v4d4dew3qxqq6fsbzragz76wnjin254u
   websocket_client.proto: bafybeifqkmkqzbepxkj56o45ljysxujmoftjlm6pkllj7t4tbryqt42ql4
-  websocket_client_pb2.py: bafybeickjzx5ikfg5hwisfiypifzvnp4dxecqrqf6op2gzcaojmuvkcdlq
+  websocket_client_pb2.py: bafybeicov77amgzltypi7ncgy32pigh7zwlluzcbrbwjtr6q4jpvqgowg4
 fingerprint_ignore_patterns: []
 dependencies:
   protobuf: {}
