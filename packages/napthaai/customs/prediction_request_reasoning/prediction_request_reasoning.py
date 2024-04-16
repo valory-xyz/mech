@@ -24,6 +24,7 @@ import json
 import faiss
 import PyPDF2
 import requests
+import time
 import numpy as np
 from io import BytesIO
 from itertools import islice
@@ -240,7 +241,8 @@ BUFFER_TOKENS = 250
 HTTP_TIMEOUT = 20
 HTTP_MAX_REDIRECTS = 5
 HTTP_MAX_RETIES = 2
-
+DEFAULT_RETRIES = 3
+DEFAULT_DELAY = 2
 
 class Document(BaseModel):
     text: str
@@ -662,6 +664,45 @@ def reciprocal_rank_refusion(similar_chunks: List[Document], k: int) -> List[Doc
     return [doc for doc, _ in sorted_fused_chunks[:k]]
 
 
+def do_reasoning_with_retry(
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    retries: int = DEFAULT_RETRIES,
+    delay: int = DEFAULT_DELAY,
+    counter_callback: Optional[Callable] = None,
+):
+    """Attempt to do reasoning with retries on failure."""
+    attempt = 0
+    while attempt < retries:
+        try:
+            response_reasoning = client.completions(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=90,
+                stop=None,
+            )
+
+            if counter_callback is not None:
+                counter_callback(
+                    input_tokens=response_reasoning.usage.prompt_tokens,
+                    output_tokens=response_reasoning.usage.completion_tokens,
+                    model=model,
+                    token_counter=count_tokens,
+                )
+            reasoning = parser_reasoning_response(response_reasoning.content)
+
+            return reasoning, counter_callback
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            time.sleep(delay)
+            attempt += 1
+    raise Exception("Failed to generate prediction after retries")
+
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
@@ -849,25 +890,15 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": reasoning_prompt},
         ]
-
-        # Reasoning
-        response_reasoning = client.completions(
+        reasoning, counter_callback = do_reasoning_with_retry(
             model=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            retries=DEFAULT_RETRIES,
+            delay=DEFAULT_DELAY,
+            counter_callback=counter_callback,
         )
-
-        if counter_callback:
-            counter_callback(
-                input_tokens=response_reasoning.usage.prompt_tokens,
-                output_tokens=response_reasoning.usage.completion_tokens,
-                model=engine,
-                token_counter=count_tokens,
-            )
-
-        # Extract the reasoning
-        reasoning = parser_reasoning_response(response_reasoning.content)
 
         # Prediction prompt
         prediction_prompt = PREDICTION_PROMPT.format(

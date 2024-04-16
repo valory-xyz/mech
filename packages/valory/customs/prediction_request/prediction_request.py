@@ -426,7 +426,6 @@ def extract_multi_queries(text: str) -> Any:
 
 
 def fetch_multi_queries_with_retry(
-    client: LLMClient,
     model: str,
     messages: List[Dict[str, str]],
     temperature: float,
@@ -467,7 +466,6 @@ def fetch_multi_queries_with_retry(
 
 
 def generate_prediction_with_retry(
-    client: LLMClient,
     model: str,
     messages: List[Dict[str, str]],
     temperature: float,
@@ -527,7 +525,6 @@ def fetch_additional_information(
     ]
     try:
         json_data, counter_callback = fetch_multi_queries_with_retry(
-            client=client,
             model=engine,
             messages=messages,
             temperature=temperature,
@@ -717,7 +714,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             {"role": "user", "content": prediction_prompt},
         ]
         extracted_block, counter_callback = generate_prediction_with_retry(
-            client=client,
             model=engine,
             messages=messages,
             temperature=temperature,
