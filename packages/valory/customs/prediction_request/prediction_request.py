@@ -191,22 +191,17 @@ LLM_SETTINGS = {
     },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 2_000_000,
+        "limit_max_tokens": 200_000,
         "temperature": 0,
     },
     "claude-3-sonnet-20240229": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 2_000_000,
+        "limit_max_tokens": 200_000,
         "temperature": 0,
     },
     "claude-3-opus-20240229": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 2_000_000,
-        "temperature": 0,
-    },
-    "cohere/command-r-plus": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 4096,
+        "limit_max_tokens": 200_000,
         "temperature": 0,
     },
     "databricks/dbrx-instruct:nitro": {
@@ -223,7 +218,7 @@ LLM_SETTINGS = {
 ALLOWED_TOOLS = [
     "prediction-offline",
     "prediction-online",
-    "prediction-online-summarized-info",
+    # "prediction-online-summarized-info",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 DEFAULT_MODEL = "gpt-4-0125-preview"
@@ -413,7 +408,6 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
 
 def extract_json_string(text):
     # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
-    print('AAAAAAAA', text)
     pattern = r"(\{[^}]*\})"
     matches = re.findall(pattern, text)
     return matches[0].replace("json", "")
@@ -540,6 +534,7 @@ def fetch_additional_information(
             max_tokens=max_tokens,
             retries=COMPLETION_RETRIES,
             delay=COMPLETION_DELAY,
+            counter_callback=counter_callback,
         )
     except Exception as e:
         json_data = {
