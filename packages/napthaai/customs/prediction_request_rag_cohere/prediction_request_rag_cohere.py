@@ -219,7 +219,7 @@ LLM_SETTINGS = {
     },
 }
 ALLOWED_TOOLS = [
-    "prediction-request-rag",
+    "prediction-request-rag-cohere",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 DEFAULT_MODEL = "claude-3-haiku-20240307"
@@ -248,11 +248,14 @@ A user has asked the following:
 
 <user_prompt> {USER_PROMPT} </user_prompt>
 
-Carefully consider the user's question and the additional information provided. Think through the likelihood of the event the user asked about actually happening in the future, based on the details given. Write out your reasoning and analysis in a section.
+Carefully consider the user's question and the additional information provided. Think through the likelihood of the event the user asked about actually happening in the future, based on the details given. Write out your reasoning and analysis in a section named analysis.
 
-Now, based on your analysis above, provide a prediction of the probability the event will happen, as p_yes between 0 and 1. Also provide the probability it will not happen, as p_no between 0 and 1. The two probabilities should sum to 1.
+analysis:
 
-p_yes: p_no:
+Now, based on your analysis above, provide a prediction of the probability that the event will happen, named p_yes, as a number between 0 and 1. Also provide the probability it will not happen, named p_no, as a number between 0 and 1. The sum of the two probabilities, p_yes and p_no, should be 1.
+
+p_yes: 
+p_no:
 
 How useful was the additional information in allowing you to make a prediction? Provide your rating as info_utility, a number between 0 and 1.
 
@@ -262,14 +265,10 @@ Finally, considering everything, what is your overall confidence in your predict
 
 confidence:
 
-Make sure the values you provide are between 0 and 1. And p_yes and p_no should sum to 1.
+Make sure the numeric values you provide are between 0 and 1. And p_yes and p_no should sum to 1.
 
-Your response should be structured as follows:
-<p_yes></p_yes>
-<p_no></p_no>
-<info_utility></info_utility>
-<confidence></confidence>
-<analysis></analysis>
+Your response should be structured as a json with all the described fields. This is an example of a valid response:
+{{"p_yes": 0.7, "p_no": 0.3, "info_utility": 0.6, "confidence": 0.5, "analysis": "this is a sample analysis to define the valid template of a response"}}
 """
 
 URL_QUERY_PROMPT = """
@@ -654,24 +653,16 @@ def extract_question(prompt: str) -> str:
 
 def parser_prediction_response(response: str) -> str:
     """Parse the response from the prediction model."""
-    results = {}
-    if "p_yes" not in response:
-        print("Not a valid answer from the model")
-        print(f"response = {response}")
-        return results
-
-    for key in ["p_yes", "p_no", "info_utility", "confidence"]:
-        try:
-            value = response.split(f"<{key}>")[1].split(f"</{key}>")[0].strip()
-            if key in ["p_yes", "p_no", "info_utility", "confidence"]:
-                value = float(value)
-            results[key] = value
-        except Exception as e:
-            print(e)
-            raise ValueError(f"Error parsing {key}")
-
-    results = json.dumps(results)
-    return results
+    parsed_results={}
+    try:
+        results = re.findall(f'```json(.*?)```',response,re.DOTALL)
+        print(f"results after parsing={results}")
+        parsed_results = json.loads(results[0])
+    except Exception as e:
+        print(e)
+        print(f"response of the model={response}")
+        raise ValueError("Error parsing the response of the model")
+    return parsed_results
 
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:

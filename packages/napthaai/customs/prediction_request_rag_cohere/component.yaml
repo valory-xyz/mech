@@ -1,15 +1,16 @@
-name: prediction_request_reasoning
+name: prediction_request_rag_cohere
 author: napthaai
 version: 0.1.0
 type: custom
-description: A tool for making binary predictions on markets.
+description: A tool for making binary predictions on markets using rag technique with
+  cohere models.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeib36ew6vbztldut5xayk5553rylrq7yv4cpqyhwc5ktvd4cx67vwu
-  prediction_request_reasoning.py: bafybeih6bdy2g2drub7b4dtlak4msvitehb4c34hfemr7icpwbvgc7fh2q
+  __init__.py: bafybeiekjzoy2haayvkiwhb2u2epflpqxticud34mma3gdhfzgu36lxwiq
+  prediction_request_rag_cohere.py: bafybeibz7rb4slg4se57zfir7mtqhy2gf5kndgoq5idy7ctobt6gjb7teu
 fingerprint_ignore_patterns: []
-entry_point: prediction_request_reasoning.py
+entry_point: prediction_request_rag_cohere.py
 callable: run
 dependencies:
   google-api-python-client:
@@ -21,19 +22,19 @@ dependencies:
     version: ==0.11.6
   readability-lxml:
     version: ==0.8.1
-  openai:
-    version: ==1.11.0
+  anthropic:
+    version: ==0.21.3
   tiktoken:
     version: ==0.5.1
-  pypdf2:
-    version: ==3.0.1
-  numpy:
-    version: '>=1.19.0'
   pydantic:
     version: '>=1.9.0,<3'
   faiss-cpu:
     version: ==1.7.4
+  openai:
+    version: ==1.11.0
   docstring-parser:
     version: ==0.15
-  anthropic:
-    version: ==0.21.3
+  pypdf2:
+    version: ==3.0.1
+  numpy:
+    version: '>=1.19.0'
