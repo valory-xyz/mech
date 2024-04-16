@@ -16,5 +16,4 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
-"""This module contains the prediction url cot claude tool."""
+"""This module contains tests."""

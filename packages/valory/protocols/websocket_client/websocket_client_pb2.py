@@ -122,7 +122,6 @@ _sym_db.RegisterMessage(WebsocketClientMessage.Recv_Performative)
 _sym_db.RegisterMessage(WebsocketClientMessage.Error_Performative)
 
 if _descriptor._USE_C_DESCRIPTORS == False:
-
     DESCRIPTOR._options = None
     _WEBSOCKETCLIENTMESSAGE._serialized_start = 63
     _WEBSOCKETCLIENTMESSAGE._serialized_end = 1386

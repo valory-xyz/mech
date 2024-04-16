@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiflni5dkn5fqe7fnu4lgbqxzfrgochhqfbgzwz3vlf5grijp3nkpm
-  prediction_url_cot.py: bafybeiczvut645b7xma2x6ivadhdbbqrvwusjoczidv2bwfbhidazshlfu
+  prediction_url_cot.py: bafybeihaa7esode4aqin3eqjdko2gr7ctlzqemivovukesnuov36l5dta4
 fingerprint_ignore_patterns: []
 entry_point: prediction_url_cot.py
 callable: run
@@ -31,7 +31,3 @@ dependencies:
     version: '>=1.19.0'
   pydantic:
     version: '>=1.9.0,<3'
-  openai:
-    version: ==1.11.0
-  docstring-parser:
-    version: ==0.15
