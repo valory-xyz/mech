@@ -164,16 +164,6 @@ client: Optional[LLMClient] = None
 client_embedding: Optional[LLMClient] = None
 
 LLM_SETTINGS = {
-    "gpt-3.5-turbo-0125": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 4096,
-        "temperature": 0,
-    },
-    "gpt-4-0125-preview": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 8192,
-        "temperature": 0,
-    },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
@@ -187,16 +177,6 @@ LLM_SETTINGS = {
     "claude-3-opus-20240229": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "databricks/dbrx-instruct:nitro": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 32_768,
-        "temperature": 0,
-    },
-    "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 32_000,
         "temperature": 0,
     },
 }
