@@ -20,6 +20,7 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+import time
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
@@ -237,6 +238,9 @@ DEFAULT_NUM_WORDS["prediction-online-summarized-info"] = None
 DEFAULT_COMPRESSION_FACTOR = 0.05
 # the vocabulary to use for the summarization
 DEFAULT_VOCAB = "en_core_web_sm"
+# number of retries and delay for completion
+COMPLETION_RETRIES = 3
+COMPLETION_DELAY = 2
 
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -413,6 +417,98 @@ def extract_json_string(text):
     matches = re.findall(pattern, text)
     return matches[0].replace("json", "")
 
+def extract_multi_queries(text: str) -> List[str]:
+    """Extract multiple queries from the given text"""
+    # strip empty whitespace
+    text = text.strip()
+
+    # check if line starts with ````json
+    if not text.startswith("```json"):
+        text = extract_json_string(text)
+
+    return json.loads(text)
+
+
+def fetch_multi_queries_with_retry(
+    client: LLMClient,
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    retries: int = COMPLETION_RETRIES,
+    delay: int = COMPLETION_DELAY,
+    counter_callback: Optional[Callable] = None,
+):
+    """Attempt to fetch multi-queries with retries on failure."""
+    attempt = 0
+    while attempt < retries:
+        try:
+            response = client.completions(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=90,
+                stop=None,
+            )
+            # Attempt to extract JSON data from the response
+            json_data = extract_multi_queries(response.content)
+
+            if counter_callback:
+                counter_callback(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                    model=model,
+                    token_counter=count_tokens,
+                )
+            return json_data, counter_callback
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            time.sleep(delay)
+            attempt += 1
+    raise Exception("Failed to fetch multi-queries after retries")
+
+def generate_prediction_with_retry(
+    client: LLMClient,
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    retries: int = COMPLETION_RETRIES,
+    delay: int = COMPLETION_DELAY,
+    counter_callback: Optional[Callable] = None,
+):
+    """Attempt to generate a prediction with retries on failure."""
+    attempt = 0
+    while attempt < retries:
+        try:
+            response = client.completions(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=90,
+                stop=None,
+            )
+
+            if counter_callback is not None:
+                counter_callback(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                    model=model,
+                    token_counter=count_tokens,
+                )
+            extracted_block = extract_json_string(response.content)
+
+            return extracted_block, counter_callback
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            time.sleep(delay)
+            attempt += 1
+    raise Exception("Failed to generate prediction after retries")
+
 def fetch_additional_information(
     prompt: str,
     engine: str,
@@ -431,16 +527,23 @@ def fetch_additional_information(
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": url_query_prompt},
     ]
-    response = client.completions(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=90,
-        stop=None,
-    )
-    json_data = json.loads(response.content)
+    try:
+        json_data, counter_callback = fetch_multi_queries_with_retry(
+            client=client,
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            retries=COMPLETION_RETRIES,
+            delay=COMPLETION_DELAY,
+        )
+    except Exception as e:
+        json_data = {
+            "queries": [
+                prompt
+            ]
+        }
+
     if not source_links:
         urls = get_urls_from_queries(
             json_data["queries"],
@@ -465,13 +568,6 @@ def fetch_additional_information(
             for i, doc in enumerate(texts)
         ]
     )
-    if counter_callback:
-        counter_callback(
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=engine,
-            token_counter=count_tokens,
-        )
     return additional_information, counter_callback
 
 
@@ -621,21 +717,15 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
         ]
-        response = client.completions(
+        extracted_block, counter_callback = generate_prediction_with_retry(
+            client=client,
             model=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            n=1,
-            timeout=150,
-            stop=None,
+            retries=COMPLETION_RETRIES,
+            delay=COMPLETION_DELAY,
+            counter_callback=counter_callback,
         )
-        if counter_callback is not None:
-            counter_callback(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
-                model=engine,
-                token_counter=count_tokens,
-            )
-        extracted_block = extract_json_string(response.content)
+            
         return extracted_block, prediction_prompt, None, counter_callback
