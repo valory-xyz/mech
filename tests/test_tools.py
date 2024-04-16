@@ -132,6 +132,7 @@ class TestPredictionReasoning(BaseToolTest):
     ]
     tool_module = prediction_request_reasoning
 
+
 class TestPredictionCOT(BaseToolTest):
     """Test Prediction RAG."""
 

@@ -534,11 +534,7 @@ def fetch_additional_information(
             counter_callback=counter_callback,
         )
     except Exception as e:
-        json_data = {
-            "queries": [
-                prompt
-            ]
-        }
+        json_data = {"queries": [prompt]}
 
     if not source_links:
         urls = get_urls_from_queries(
@@ -722,5 +718,5 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             delay=COMPLETION_DELAY,
             counter_callback=counter_callback,
         )
-            
+
         return extracted_block, prediction_prompt, None, counter_callback

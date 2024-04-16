@@ -29,8 +29,10 @@ from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
+
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -51,7 +53,6 @@ def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
     return len(enc.encode(text))
-
 
 
 ENGINE = "gpt-3.5-turbo"
@@ -137,7 +138,6 @@ AVAILABLE_TOOLS = {
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
-
         prompt = kwargs["prompt"]
         api_key = kwargs["api_keys"]["openai"]
         tool = cast(str, kwargs["tool"]).replace(TOOL_PREFIX, "")

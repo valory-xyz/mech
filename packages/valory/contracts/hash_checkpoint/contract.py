@@ -103,9 +103,7 @@ class HashCheckpointContract(Contract):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="checkpoint", args=[data]
-        )
+        data = contract_instance.encodeABI(fn_name="checkpoint", args=[data])
         return {"data": data}
 
     @classmethod

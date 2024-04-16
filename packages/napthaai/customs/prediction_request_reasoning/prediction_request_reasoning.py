@@ -244,6 +244,7 @@ HTTP_MAX_RETIES = 2
 DEFAULT_RETRIES = 3
 DEFAULT_DELAY = 2
 
+
 class Document(BaseModel):
     text: str
     url: str
@@ -702,6 +703,7 @@ def do_reasoning_with_retry(
             time.sleep(delay)
             attempt += 1
     raise Exception("Failed to generate prediction after retries")
+
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""

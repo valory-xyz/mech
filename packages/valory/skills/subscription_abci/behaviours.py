@@ -99,7 +99,7 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
             contract_callable="get_subscription",
         )
         if (
-                contract_api_msg.performative != ContractApiMessage.Performative.STATE
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
         ):  # pragma: nocover
             self.context.logger.warning(
                 f"get_subscription unsuccessful!: {contract_api_msg}"
@@ -108,7 +108,10 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
 
         actual_subscription_address = cast(str, contract_api_msg.state.body["nft"])
         actual_token_id = cast(int, contract_api_msg.state.body["token_id"])
-        return actual_subscription_address != expected_subscription or actual_token_id != expected_token_id
+        return (
+            actual_subscription_address != expected_subscription
+            or actual_token_id != expected_token_id
+        )
 
     def _get_subscription_update_tx(
         self,
@@ -140,7 +143,9 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
             "data": data,
         }
 
-    def get_subscription_update_txs(self) -> Generator[None, None, List[Dict[str, Any]]]:
+    def get_subscription_update_txs(
+        self,
+    ) -> Generator[None, None, List[Dict[str, Any]]]:
         """Get the mech update hash tx."""
         txs = []
         for mech_address, subscription in self.params.mech_to_subscription.items():
@@ -150,17 +155,25 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
             )
             if should_update is None:
                 # something went wrong
-                self.context.logger.warning(f"Could not check if subscription should be updated for {mech_address}.")
+                self.context.logger.warning(
+                    f"Could not check if subscription should be updated for {mech_address}."
+                )
                 continue
             if not should_update:
                 # no need to update
-                self.context.logger.info(f"No need to update subscription for {mech_address}.")
+                self.context.logger.info(
+                    f"No need to update subscription for {mech_address}."
+                )
                 continue
 
-            tx = yield from self._get_subscription_update_tx(mech_address, subscription_address, token_id)
+            tx = yield from self._get_subscription_update_tx(
+                mech_address, subscription_address, token_id
+            )
             if tx is None:
                 # something went wrong
-                self.context.logger.warning(f"Could not get subscription update tx for {mech_address}.")
+                self.context.logger.warning(
+                    f"Could not get subscription update tx for {mech_address}."
+                )
 
             txs.append(tx)
 

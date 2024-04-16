@@ -25,8 +25,10 @@ from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
+
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -70,12 +72,22 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         tool = kwargs["tool"]
         counter_callback = kwargs.get("counter_callback", None)
         if tool not in ALLOWED_TOOLS:
-            return f"Tool {tool} is not in the list of supported tools.", None, None, None
+            return (
+                f"Tool {tool} is not in the list of supported tools.",
+                None,
+                None,
+                None,
+            )
 
         engine = tool.replace(PREFIX, "")
         moderation_result = client.moderations.create(input=prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None, None
+            return (
+                "Moderation flagged the prompt as in violation of terms.",
+                None,
+                None,
+                None,
+            )
 
         if engine in ENGINES["chat"]:
             messages = [

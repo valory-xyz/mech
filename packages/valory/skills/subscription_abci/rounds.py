@@ -88,13 +88,17 @@ class UpdateSubscriptionRound(CollectSameUntilThresholdRound):
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
-            return self.synchronized_data, Event.NO_MAJORITY,
+            return (
+                self.synchronized_data,
+                Event.NO_MAJORITY,
+            )
 
         return None
 
 
 class FinishedWithTxRound(DegenerateRound):
     """FinishedWithTxRound"""
+
 
 class FinishedWithoutTxRound(DegenerateRound):
     """FinishedWithoutTxRound"""

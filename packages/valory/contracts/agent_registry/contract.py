@@ -128,7 +128,9 @@ class AgentRegistryContract(Contract):
         if len(hash_updates) > 0:  # pragma: nocover
             *_, latest_hash = hash_updates
             return dict(data=latest_hash.hex())
-        _logger.warning(f"No metadata hash updates found for {token_id} on {contract_address}.")
+        _logger.warning(
+            f"No metadata hash updates found for {token_id} on {contract_address}."
+        )
         return dict(data=None)
 
     @classmethod

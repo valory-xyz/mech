@@ -53,8 +53,10 @@ Do not respond with anything else other than the transaction object you construc
 
 client: Optional[OpenAI] = None
 
+
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
