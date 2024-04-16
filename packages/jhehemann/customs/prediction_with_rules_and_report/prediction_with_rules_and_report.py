@@ -73,8 +73,18 @@ ALLOWED_TOOLS = [
 ]
 MAX_TOKENS = {
     "gpt-3.5-turbo": 4096,
-    "gpt-4": 8192,
+    "gpt-4-turbo": 8192,
 }
+
+ALLOWED_TOOLS = [
+    "prediction-with-rules-and-report-gpt-3.5-turbo",
+    "prediction-with-research-gpt-4-turbo",
+]
+TOOL_TO_ENGINE = {
+    "prediction-with-rules-and-report-gpt-3.5-turbo": "gpt-3.5-turbo",
+    "prediction-with-research-gpt-4-turbo": "gpt-4-turbo",
+}
+
 TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
@@ -373,34 +383,34 @@ Show your process of thinking through the problem step by step.
 #     - Use your domain expertise and justify your answer
 
 PREDICTION_PROMPT_TEMPLATE_TRY_OUT = """
-You are a detective and an expert in solving complicated problems with logical conclusions. Your task is to provide an outcome evaluation and make probability estimations for the outcomes of a market question.
+You are a detective and an expert in solving complicated problems with logical conclusions. Your task is to provide an evaluation and make probability estimations for the outcomes 'Yes' and 'No' of a market question.
 
 INSTRUCTIONS:
-* You are provided with the market question under the label "MARKET_QUESTION".
-* This market question consists of an event and a specific date. It is yet uncertain whether the event will happen aligning with the questioned date in the market question.
-* There are only two outcomes possible for the market question: 'Yes' and 'No'.
-* You are also provided with a colleague's reasoning, under the label "REASONING", as to whether the event specified in the question will occur based on online research and also importantly when it will occur.
-* You are provided with the market rules that define conditions to help you evaluate the likelihood of the outcomes 'Yes' and 'No' under the label "MARKET_RULES".
-* The market rules also define specific key terms from the market question that you must consider in your evaluation.
+* You are provided with the MARKET_QUESTION under the label "MARKET_QUESTION".
+* This MARKET_QUESTION consists of an event and a specific date. It is yet uncertain whether the event will happen aligning with the questioned date in the MARKET_QUESTION.
+* There are only two outcomes possible for the MARKET_QUESTION: 'Yes' and 'No'.
+* Under which conditions the MARKET_QUESTION's outcome will be 'Yes' and under which it will be 'No' are defined in the OUTCOME_RULES.
+* You are also provided with a colleague's REASONING, under the label "REASONING", as to whether the event specified in the question will occur based on online research and also importantly when it will occur.
+* You are provided with the OUTCOME_RULES that define conditions to help you evaluate the likelihood of the outcomes 'Yes' and 'No' under the label "OUTCOME_RULES".
 * Your task splits into the following parts:
-    - outcome evaluation (about 300 words)
-        - Start with the definitions provided in the market rules.
-        - Summarize the reasoning provided by your colleague under the label "REASONING"
+    - outcome evaluation
+        - Start with the definitions provided in the OUTCOME_RULES.
+        - Summarize the REASONING provided by your colleague under the label "REASONING"
         - Evaluate whether the event will happen and when it will happen.
-        - Calculate the difference between the date in the reasoning and the date in the market rules and determine if the event will happen before, on, or after the market question's date or if it has already happened.
-        - Compare the reasoning with the market rules to evaluate the likelihood of the market question's outcomes 'Yes' and 'No'.
-    - Make probability estimations for the market's outcomes 'Yes' and 'No' taking the market rules and the REASONING into account.
+        - Calculate the difference between the date in the REASONING and the date in the OUTCOME_RULES and determine if the event will happen before, on, or after the MARKET_QUESTION's date or if it has already happened.
+        - Compare the REASONING with the OUTCOME_RULES to evaluate the likelihood of the MARKET_QUESTION's outcomes 'Yes' and 'No'. Use terms like 'almost certain', 'likely', 'moderate', 'unlikely', 'almost impossible'. 
+    - Make probability estimations for the market's outcomes 'Yes' and 'No' taking the OUTCOME_RULES and the REASONING into account.
 * Provide your evaluation process step by step and conclude with your likelihood estimation.
 * For reference, today's date is {current_date}. Use this information to determine timelines.
 
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
 * The JSON must contain five fields: "outcome_evaluation", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1, except "outcome_evaluation" which is a string
-    - "outcome_evaluation": Your output of the first task parts executed in order
-    - "p_yes": Probability of the market question's outcome being 'Yes' according to the market rules
-    - "p_no": Probability of the market question's outcome being 'No' according to the market rules
+    - "outcome_evaluation": Your output of the first parts of your task executed in order (aim for a response of about 200 words)
+    - "p_yes": Probability of the MARKET_QUESTION's outcome being 'Yes' according to the OUTCOME_RULES
+    - "p_no": Probability of the MARKET_QUESTION's outcome being 'No' according to the OUTCOME_RULES
     - "confidence": Your confidence in the estimation
-    - "info_utility": Utility of the information in the SEARCH_OUTPUT
+    - "info_utility": Utility of the information in the REASONING
 * Include only the JSON object in your output
 
 REASONING:
@@ -408,7 +418,7 @@ REASONING:
 {report}
 ```
 
-MARKET_RULES:
+OUTCOME_RULES:
 ```
 {market_rules}
 ```
@@ -548,24 +558,6 @@ def remove_date_from_query(query: str) -> str:
     date_pattern = r"\b(?:on or by |on or before |before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
-
-
-def split_before_evaluation(text) -> Tuple[str, str]:
-    """Split string at last occurrence of 'Evaluation'"""
-    eval_index = text.rfind("Evaluation")
-    if eval_index == -1:
-        return text, ""
-    
-    # Find the last newline character before "Evaluation"
-    newline_index = text.rfind("\n", 0, eval_index)
-    if newline_index == -1:
-        return text, ""
-    
-    # Split the string at the found newline index
-    part1 = text[:newline_index]
-    part2 = text[newline_index + 1:]
-    
-    return part1, part2
 
 
 def get_sme_role(
