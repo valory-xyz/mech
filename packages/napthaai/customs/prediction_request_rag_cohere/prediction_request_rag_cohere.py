@@ -182,31 +182,6 @@ client: Optional[LLMClient] = None
 client_embedding: Optional[LLMClient] = None
 
 LLM_SETTINGS = {
-    "gpt-3.5-turbo-0125": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 4096,
-        "temperature": 0,
-    },
-    "gpt-4-0125-preview": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 8192,
-        "temperature": 0,
-    },
-    "claude-3-haiku-20240307": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "claude-3-sonnet-20240229": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "claude-3-opus-20240229": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
     "cohere/command-r-plus": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 4096,
@@ -645,19 +620,26 @@ def extract_question(prompt: str) -> str:
 
     return question
 
-
 def parser_prediction_response(response: str) -> str:
     """Parse the response from the prediction model."""
-    parsed_results={}
     try:
-        results = re.findall(f'```json(.*?)```',response,re.DOTALL)
-        print(f"results after parsing={results}")
-        parsed_results = json.loads(results[0])
+        # check if line starts with ````json
+        if response.startswith("```json"):
+            results = re.findall(f'```json(.*?)```',response,re.DOTALL)
+            print(f"results after parsing={results}")
+            results_as_dict = json.loads(results[0]) # it returns the dictionary
+            return json.dumps(results_as_dict) 
+
+        extracted_text = ''.join([line.strip() for line in response.splitlines()])
+        # remove the last comma
+        extracted_text = extracted_text.rstrip(",")
+        print(f"extracted text= {extracted_text}")
+        
+        return json.dumps(extracted_text)
     except Exception as e:
         print(e)
         print(f"response of the model={response}")
-        raise ValueError("Error parsing the response of the model")
-    return parsed_results
+        raise ValueError(f"Error parsing the response of the model {response}")
 
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
