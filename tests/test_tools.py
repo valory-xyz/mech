@@ -25,7 +25,7 @@ from packages.napthaai.customs.prediction_request_rag import prediction_request_
 from packages.napthaai.customs.prediction_request_reasoning import (
     prediction_request_reasoning,
 )
-
+from packages.napthaai.customs.prediction_request_rag_cohere import prediction_request_rag_cohere
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from tests.constants import (
     OPENAI_SECRET_KEY,
@@ -120,6 +120,15 @@ class TestPredictionRAG(BaseToolTest):
     ]
     tool_module = prediction_request_rag
 
+class TestPredictionRAGCohere(BaseToolTest):
+    """Test Prediction RAG using cohere model."""
+
+    tools = prediction_request_rag_cohere.ALLOWED_TOOLS
+    models = prediction_request_rag_cohere.ALLOWED_MODELS
+    prompts = [
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
+    ]
+    tool_module = prediction_request_rag_cohere
 
 class TestPredictionReasoning(BaseToolTest):
     """Test Prediction Reasoning."""

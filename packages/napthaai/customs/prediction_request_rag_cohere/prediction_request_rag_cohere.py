@@ -222,7 +222,7 @@ ALLOWED_TOOLS = [
     "prediction-request-rag-cohere",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
-DEFAULT_MODEL = "claude-3-haiku-20240307"
+DEFAULT_MODEL = "cohere/command-r-plus"
 TOOL_TO_ENGINE = {tool: DEFAULT_MODEL for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
