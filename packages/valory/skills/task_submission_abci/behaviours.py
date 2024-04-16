@@ -76,6 +76,7 @@ ZERO_IPFS_HASH = (
     "f017012200000000000000000000000000000000000000000000000000000000000000000"
 )
 FILENAME = "usage"
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
@@ -515,6 +516,17 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             )
             return None
 
+        # in case an agent maps to an operator that is the zero address
+        # we need to remove it from the list of addresses that will receive funds
+        # this can happen in case of changing agent instances in the service registry
+        # old agent instances will map to the zero address, because they are still part of
+        # usage history
+        invalid_operator_reqs = accumulated_reqs_by_operator.pop(ZERO_ADDRESS, 0)
+
+        # remove the invalid operator reqs from the total reqs,
+        # so that we share 100% of the funds among the valid operators
+        total_reqs -= invalid_operator_reqs
+
         for agent, reqs in accumulated_reqs_by_operator.items():
             accumulated_reqs_by_operator[agent] = int(
                 operator_share * (reqs / total_reqs)
@@ -529,7 +541,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         agent_instances = list(reqs_by_agent.keys())
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
+            contract_address=self.params.service_registry_address,
             contract_id=str(ServiceRegistryContract.contract_id),
             contract_callable="get_operators_mapping",
             agent_instances=agent_instances,
