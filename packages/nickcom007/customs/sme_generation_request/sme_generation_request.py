@@ -30,6 +30,7 @@ client: Optional[OpenAI] = None
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -44,6 +45,7 @@ class OpenAIClientManager:
         if client is not None:
             client.close()
             client = None
+
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
@@ -150,6 +152,11 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         try:
             generated_sme_roles = json.loads(generated_sme_roles)
         except json.decoder.JSONDecodeError as e:
-            return f"Failed to generate SME roles due to {e}", json.dumps(messages), None, None
+            return (
+                f"Failed to generate SME roles due to {e}",
+                json.dumps(messages),
+                None,
+                None,
+            )
 
         return response.choices[0].message.content, json.dumps(messages), None, None

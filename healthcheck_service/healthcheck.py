@@ -43,18 +43,22 @@ class MechContract:
 
     def _get_abi(self) -> Dict[str, Any]:
         """Get the abi of the contract."""
-        path = Path(__file__).parent / 'web3' / 'abi.json'
+        path = Path(__file__).parent / "web3" / "abi.json"
         with open(str(path)) as f:
             abi = json.load(f)
         return abi
 
     def get_deliver_events(self, from_block: BlockIdentifier) -> List[Dict[str, Any]]:
         """Get the deliver events."""
-        return self.contract.events.Deliver.create_filter(fromBlock=from_block).get_all_entries()
+        return self.contract.events.Deliver.create_filter(
+            fromBlock=from_block
+        ).get_all_entries()
 
-    def get_request_events(self,  from_block: BlockIdentifier) -> List[Dict[str, Any]]:
+    def get_request_events(self, from_block: BlockIdentifier) -> List[Dict[str, Any]]:
         """Get the request events."""
-        return self.contract.events.Request.create_filter(fromBlock=from_block).get_all_entries()
+        return self.contract.events.Request.create_filter(
+            fromBlock=from_block
+        ).get_all_entries()
 
     def get_unfulfilled_request(self) -> List[Dict[str, Any]]:
         """Get the unfulfilled events."""
@@ -78,7 +82,10 @@ class MechContract:
         unfulfilled_requests = self.get_unfulfilled_request()
         earliest_request = None
         for request in unfulfilled_requests:
-            if earliest_request is None or request["blockNumber"] < earliest_request["blockNumber"]:
+            if (
+                earliest_request is None
+                or request["blockNumber"] < earliest_request["blockNumber"]
+            ):
                 earliest_request = request
         if earliest_request is not None:
             timestamp = self.get_block_timestamp(earliest_request["blockNumber"])
@@ -115,7 +122,7 @@ class HealthCheckHandler(http.server.SimpleHTTPRequestHandler):
         is_healthy = self.is_healthy()
         code, message = (200, "OK") if is_healthy else (500, "NOT OK")
         self.send_response(code)
-        self.send_header('Content-type', 'text/plain')
+        self.send_header("Content-type", "text/plain")
         self.end_headers()
         self.wfile.write(message.encode())
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2022-2023 Valory AG
+#   Copyright 2022-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -128,7 +128,9 @@ class AgentRegistryContract(Contract):
         if len(hash_updates) > 0:  # pragma: nocover
             *_, latest_hash = hash_updates
             return dict(data=latest_hash.hex())
-        _logger.warning(f"No metadata hash updates found for {token_id} on {contract_address}.")
+        _logger.warning(
+            f"No metadata hash updates found for {token_id} on {contract_address}."
+        )
         return dict(data=None)
 
     @classmethod

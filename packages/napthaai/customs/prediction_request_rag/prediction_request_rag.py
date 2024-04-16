@@ -194,27 +194,27 @@ LLM_SETTINGS = {
     },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
+        "limit_max_tokens": 200_000,
         "temperature": 0,
     },
     "claude-3-sonnet-20240229": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
+        "limit_max_tokens": 200_000,
         "temperature": 0,
     },
     "claude-3-opus-20240229": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 200_0000,
+        "limit_max_tokens": 200_000,
         "temperature": 0,
     },
-    "cohere/command-r-plus": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 4096,
+    "databricks/dbrx-instruct:nitro": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 32_768,
         "temperature": 0,
     },
-    "mistralai/mixtral-8x22b": {
+    "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
         "default_max_tokens": 1000,
-        "limit_max_tokens": 4096,
+        "limit_max_tokens": 32_000,
         "temperature": 0,
     },
 }
@@ -241,28 +241,22 @@ HTTP_MAX_RETIES = 2
 
 
 PREDICTION_PROMPT = """
-Here is some additional background information that may be relevant to the question:
+You will be evaluating the likelihood of an event based on a user's question and additional information from search results.
+The user's question is: <user_prompt> {USER_PROMPT} </user_prompt>
+
+The additional background information that may be relevant to the question is:
 <additional_information> {ADDITIONAL_INFORMATION} </additional_information>
 
-A user has asked the following:
+Carefully consider the user's question and the additional information provided. Then, think through the following:
+- The probability that the event specified in the user's question will happen (p_yes)
+- The probability that the event will not happen (p_no)
+- Your confidence level in your prediction
+- How useful was the additional information in allowing you to make a prediction (info_utility)
 
-<user_prompt> {USER_PROMPT} </user_prompt>
+Provide your final scores in the following format: <p_yes>probability between 0 and 1</p_yes> <p_no>probability between 0 and 1</p_no>
+your confidence level between 0 and 1 <info_utility>utility of the additional information between 0 and 1</info_utility>
 
-Carefully consider the user's question and the additional information provided. Think through the likelihood of the event the user asked about actually happening in the future, based on the details given. Write out your reasoning and analysis in a section.
-
-Now, based on your analysis above, provide a prediction of the probability the event will happen, as p_yes between 0 and 1. Also provide the probability it will not happen, as p_no between 0 and 1. The two probabilities should sum to 1.
-
-p_yes: p_no:
-
-How useful was the additional information in allowing you to make a prediction? Provide your rating as info_utility, a number between 0 and 1.
-
-info_utility:
-
-Finally, considering everything, what is your overall confidence in your prediction? Provide your confidence as a number between 0 and 1.
-
-confidence:
-
-Make sure the values you provide are between 0 and 1. And p_yes and p_no should sum to 1.
+Remember, p_yes and p_no should add up to 1.
 
 Your response should be structured as follows:
 <p_yes></p_yes>

@@ -26,6 +26,8 @@ from packages.napthaai.customs.prediction_request_reasoning import (
     prediction_request_reasoning,
 )
 from packages.napthaai.customs.prediction_request_rag_cohere import prediction_request_rag_cohere
+from packages.napthaai.customs.prediction_url_cot import prediction_url_cot
+
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from tests.constants import (
     OPENAI_SECRET_KEY,
@@ -139,3 +141,14 @@ class TestPredictionReasoning(BaseToolTest):
         'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
     tool_module = prediction_request_reasoning
+
+
+class TestPredictionCOT(BaseToolTest):
+    """Test Prediction RAG."""
+
+    tools = prediction_url_cot.ALLOWED_TOOLS
+    models = prediction_url_cot.ALLOWED_MODELS
+    prompts = [
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
+    ]
+    tool_module = prediction_url_cot
