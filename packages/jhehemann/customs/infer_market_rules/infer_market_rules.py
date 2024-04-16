@@ -343,18 +343,30 @@ Answer:
     'Yes':
         - Disney Plus implements its password-sharing crackdown policy on or before 25 August 2024.
         - Disney Plus has already implemented the password-sharing crackdown recently.
-
+    
     'No':
-        - Disney Plus does not implement its password-sharing crackdown policy by 25 August 2024.
+        - Disney Plus does not implement its password-sharing crackdown policy on or before 25 August 2024.
         - Disney Plus implements a password-sharing crackdown policy after 25 August 2024.
     
     Additional Notes:
         Definition of 'password-sharing crackdown': The enforcement of measures to restrict or prevent the sharing of login credentials among multiple users.
         Definition of 'implement': The policy is put into effect and actively enforced by Disney Plus.
-
+        
 Question: "{market_question}"
 Answer:
 """
+
+# Question: "Will Disney Plus implement its password-sharing crackdown by August 25, 2024?"
+# Answer:
+#         - If Disney Plus implements its password-sharing crackdown policy on or before 25 August 2024 the market will resolve as 'Yes'.
+#         - Also the market will resolve as 'Yes' if Disney Plus has already implemented the password-sharing crackdown recently.
+#         - If Disney Plus does not implement its password-sharing crackdown policy by 25 August 2024 the market will resolve as 'No'.
+#         - The market will also resolve as 'No' if Disney Plus implements a password-sharing crackdown policy after 25 August 2024.
+   
+#     Definitions:
+#         Definition of 'password-sharing crackdown': The enforcement of measures to restrict or prevent the sharing of login credentials among multiple users.
+#         Definition of 'implement': The policy is put into effect and actively enforced by Disney Plus.
+
 
 # Prompt template for inferring rules for a question that asks for an event to happen "on" a specific date
 INFER_RULES_PROMPT_ON = """
@@ -370,11 +382,11 @@ INSTRUCTIONS:
 EXAMPLES:
 Question: "Will the Powerball jackpot reach $1 billion by the drawing on 9th January 2024?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - The Powerball jackpot amount reaches or exceeds $1 billion on or before 9 January 2024, and a drawing takes place on 9 January 2024.
         - The Powerball jackpot has already exceeded $1 billion and maintains this amount until a drawing on 9 January 2024.
 
-    The question will resolve as 'No' if:
+    'No':
         - No Powerball drawing takes place on 9 January 2024.
         - The Powerball drawing takes place before or after 9 January 2024.
         - The Powerball jackpot amount is less than $1 billion on 9 January 2024.
@@ -386,10 +398,10 @@ Answer:
 
 Question: "Will Tesla successfully launch its electric vehicle, Model Z, on 14 June 2024?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Tesla officially releases an electric vehicle named Model Z on 14 June 2024.
     
-    The question will resolve as 'No' if:
+    'No':
         - Tesla does not release an electric vehicle named Model Z on 14 June 2024.
         - Tesla releases a Model Z before or after 14 June 2024.
 
@@ -399,10 +411,10 @@ Answer:
 
 Question: "Will Prince William and Prince Harry appear separately at the event honoring Princess Diana on 16 September 2025?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Both Prince William and Prince Harry make individual appearances at an event honoring Princess Diana on 16 September 2025 without appearing together.
 
-    The question will resolve as 'No' if:
+    'No':
         - There is no event scheduled honoring Princess Diana on 16 September 2025.
         - The event honoring Princess Diana takes place before or after 16 September 2025.
         - Prince William and Prince Harry do not appear separately at an event honoring Princess Diana on 16 September 2025.
@@ -413,10 +425,10 @@ Answer:
 
 Question: "Will Xiaomi's SU7 electric vehicle still have a waiting list in China on April 18, 2024?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Xiaomi's SU7 electric vehicle continues to have an active waiting list in China on 18 April 2024.
     
-    The question will resolve as 'No' if:
+    'No':
         - Xiaomi's SU7 electric vehicle does not have a waiting list in China on 18 April 2024.
         - Xiaomi cleares or discontinues the waiting list for the SU7 electric vehicle before 18 April 2024.
     
@@ -425,10 +437,10 @@ Answer:
 
 Question: "Will Gilberto Ramirez defend his WBA (Super) cruiserweight title successfully on 26 November 2020?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Gilberto Ramirez successfully defends his WBA (Super) cruiserweight title in a bout on 26 November 2020.
     
-    The question will resolve as 'No' if:
+    'No':
         - There is no defense match scheduled for Gilberto Ramirez on 26 November 2020.
         - The defense match occurs before or after 26 November 2020.
         - Gilberto Ramirez participates in a title defense bout on 26 November 2020 but does not emerge victorious, thereby losing his WBA (Super) cruiserweight title.
@@ -439,10 +451,10 @@ Answer:
     
 Question: "Will there be another case of H5N1 bird flu in Texas on 11 November 2024?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - A new case of H5N1 bird flu occurs in the state of Texas on 11 November 2024.
     
-    The question will resolve as 'No' if:
+    'No':
         - No new case of H5N1 bird flu occurs in Texas on 11 November 2024.
         - The next case of H5N1 bird flu in Texas occurs before or after 11 November 2024.
 
@@ -451,10 +463,10 @@ Answer:
     
 Question: "Will a new climate bill be passed by both the Senate and the House on 30 September 2024?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Both the Senate and the House of Representatives officially pass a new climate bill on 30 September 2024.
 
-    The question will resolve as 'No' if:
+    'No':
         - Congress does not convene a session to vote on the bill on 30 September 2024.
         - A new climate bill does not exist, or one of the two chambers does not pass it on 30 September 2024.
         - Only one chamber passes the bill on 30 September 2024.
@@ -466,10 +478,10 @@ Answer:
 
 Question: "Will Google destroy all browsing data collected in Incognito mode on 2nd October 2022?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Google destroys all browsing data collected in Incognito mode on 2 October 2022.
 
-    The question will resolve as 'No' if:
+    'No':
         - Google does not destroy all browsing data collected in Incognito mode on 2 October 2022.
         - Google destroys the Incognito browsing data before or after 2 October 2022.
 
@@ -478,10 +490,10 @@ Answer:
 
 Question: "Will Samsung replace its voice assistant Bixby on 7 April 2024?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Samsung replaces its voice assistant Bixby with a new voice assistant on 7 April 2024.
 
-    The question will resolve as 'No' if:
+    'No':
         - Samsung does not replace its voice assistant Bixby on 7 April 2024.
         - Samsung replaces Bixby before or after 7 April 2024.
 
@@ -490,10 +502,10 @@ Answer:
 
 Question: "Will Beyoncé release a full album for her 'country era' on 12 July 2025?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Beyoncé officially releases a full music album for her 'country era' on 12 July 2025.
     
-    The question will resolve as 'No' if:
+    'No':
         - Beyoncé does not release a full album for her 'country era' on 12 July 2025.
         - Beyoncé releases a 'country era' album before or after 12 July 2025.
 
@@ -503,10 +515,10 @@ Answer:
 
 Question: "Will Disney Plus implement its password-sharing crackdown on 7 February 2025?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Disney Plus officially implements a password-sharing crackdown policy on 7 February 2025.
 
-    The question will resolve as 'No' if:
+    'No':
         - Disney Plus does not implement a password-sharing crackdown policy by 7 February 2025.
         - Disney Plus implements a password-sharing crackdown policy before or after 7 February 2025.
     
@@ -516,10 +528,10 @@ Answer:
 
 Question: "Will the Royals and Chiefs relocate from Kansas City following the rejection of the stadium tax on 24 June 2024?"
 Answer:
-    The question will resolve as 'Yes' if:
+    'Yes':
         - Both the Royals and Chiefs relocate from Kansas City following the rejection of the stadium tax on 24 June 2024.
 
-    The question will resolve as 'No' if:
+    'No':
         - Either the Royals or the Chiefs do not complete the relocation from Kansas City following the rejection of the stadium tax on 24 June 2024.
         - The rejection of the stadium tax does not lead to the relocation of both teams from Kansas City on 24 June 2024.
         - The Royals and the Chiefs complete relocation before or after 24 June 2024.

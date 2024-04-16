@@ -118,8 +118,8 @@ if the event happens and on which date the event is expected to occur.
 INSTRUCTIONS:
 * Carefully read the search query.
 * Select only the relevant bulletpoints from the search outputs that are useful and relevant and could help answering the search query.
-* Each bullet point must always include the number in parentheses that is assigned to it at the end.
-* An information can be considered relevant if it might support or refute the search query
+* Each bullet includes its article number in parentheses at the end. This number is crucial for identifying the information and must be included at the end of each bullet.
+* An information can be considered relevant if it might support or refute the search query.
 * An information must also be considered relevant if it reveals a specific date or time frame when the event is expected to occur
 * If there are redundant bulletpoints, you must drop all exept for one. Select the most relevant by two criteria:
     - Firstly: Select the one that mentiones specific dates over the ones that mention relative dates or week days
@@ -139,7 +139,7 @@ SUB_QUERIES:
 - Has the event happened already?
 
 OUTPUT_FORMAT:
-* Only output the collection of five selected unique and relevant bulletpoints with the corresponding numbers in parentheses.
+* Only output the collection of five selected unique and relevant bulletpoints with the corresponding article numbers in parentheses.
 * The bulletpoints should be useful and relevant and help answering the search query and sub-queries.
 """
 

@@ -88,7 +88,7 @@ DEFAULT_COMPRESSION_FACTOR = 0.05
 DEFAULT_VOCAB = "en_core_web_sm"
 
 
-REPORT_PROMPT = """
+REPORT_PROMPT_BEST = """
 Your task is to write a concise evaluation report that discusses the potential outcome of the QUESTION found below. Your evaluation must be based \
 on the SEARCH_OUTPUT and your domain expertise.
 Adhere to the following instructions:
@@ -96,8 +96,9 @@ Adhere to the following instructions:
 INSTRUCTIONS:
 * Carefully read the QUESTION
 * Analyze the SEARCH_OUTPUT and evaluate the date when the event will actually happen
+* For reference, today's date is {current_date}. Use this information to determine timelines.
 * Source your domain expertise
-* Give your response in the format specified under "OUTPUT_FORMAT"
+* Give your response in the format specified under "OUTPUT_FORMAT". Aim for a response of about 200 words.
 
 OUTPUT_FORMAT:
 * Introduction and Context
@@ -105,6 +106,43 @@ OUTPUT_FORMAT:
     * Event (Will the exact event specified in the QUESTION happen? Has it already happened?)
     * Date (On what date will the event specified in the QUESTION happen? You must provide a specific date on what you believe the event will happen. If you are uncertain, provide a range of dates.)
 
+
+QUESTION:
+```
+{market_question}
+```
+
+QUESTION_STATUS:
+```
+{question_status}
+```
+
+SEARCH_OUTPUT:
+```
+{additional_information}
+```
+
+Output only the report without any additional information or formatting.
+"""
+
+REPORT_PROMPT = """
+Your task is to write a concise evaluation report that discusses the potential outcome of the QUESTION found below. Your evaluation must be based \
+on the SEARCH_OUTPUT and your domain expertise.
+
+INSTRUCTIONS:
+* Carefully read the QUESTION
+* Examine the definitions in QUESTION_STATUS
+* Analyze the SEARCH_OUTPUT and evaluate the date when the event will actually happen
+* For reference, today's date is {current_date}. Use this information to determine timelines.
+* Source your domain expertise and write a concise evaluation report that discusses the potential outcome of the QUESTION
+* Give your response in the format specified under "OUTPUT_FORMAT". Aim for a response of about 200 words.
+
+OUTPUT_FORMAT:
+* Introduction and Context (including definitions from QUESTION_STATUS)
+* QUESTION
+* Findings and Analysis (Use domain expertise to justify your answers)
+    * Event (Will the exact event specified in the QUESTION happen? Has it already happened?)
+    * Date (On what date will the event specified in the QUESTION happen? You must provide a specific date on what you believe the event will happen. If you are uncertain, provide a range of dates.)
 
 QUESTION:
 ```
@@ -200,7 +238,7 @@ task question: "Will the air strike conflict in Sudan be resolved by 13 Septembe
 """
 
 
-PREDICTION_PROMPT_TEMPLATE_TRY = """
+PREDICTION_PROMPT_TEMPLATE_BEST = """
 You are an expert data analyst. Your task is to write a detailed evaluation and make probability estimations for the outcomes 'Yes' and 'No' of a prediction market question.
 You must adhere to the following instructions:
 
@@ -279,8 +317,11 @@ DECISION_GUIDELINES:
 ```
 """
 
-PREDICTION_PROMPT_TEMPLATE = """
-You are an expert data analyst. Your task is to write a detailed evaluation and make probability estimations for the market resolving as 'Yes'.
+
+
+
+PREDICTION_PROMPT_TEMPLATE_TRY = """
+You are an expert data analyst. Your task is to write a detailed evaluation and make a probability estimation for the market resolving as 'Yes'.
 You must adhere to the following instructions:
 
 INSTRUCTIONS:
@@ -291,6 +332,7 @@ INSTRUCTIONS:
 * Take into account that today's date is {current_date}
 * Imagine you have a machine that outputs the truth about the prediction market. This machine is the market rules. The machine can receive input in form of the SEARCH_OUTPUT. The machine then uses its definedd rules for the market to output the resolution of the market as 'Yes' or 'No'.
 * Write an evaluation paragraph that addresses the hidden process inside the machine
+* The answer that you give should align with the answer that you come to in the search output field
 * Make probability estimations for the market's outcome being 'Yes' taking the market rules and the SEARCH_OUTPUT into account
 * Provide your confidence in the estimation and the utility of the information in the SEARCH_OUTPUT
 * Give your response in the format specified under "OUTPUT_FORMAT"
@@ -298,6 +340,11 @@ INSTRUCTIONS:
 USER_PROMPT:
 ```
 {market_question}
+```
+
+MARKET_RULES:
+```
+{market_rules}
 ```
 
 SEARCH_OUTPUT:
@@ -325,25 +372,38 @@ Show your process of thinking through the problem step by step.
 #     - Use the market rules to evaluate the likelihood of the market resolving as 'Yes' by referring to the SEARCH_OUTPUT.
 #     - Use your domain expertise and justify your answer
 
-PREDICTION_PROMPT_TEMPLATE_TRY = """
-You are a detective and an expert in solving complicated problems with logical conclusions. Your task is to provide a logical reasoning and make probability estimations for a prediction market resolving as 'Yes' or 'No'.
+PREDICTION_PROMPT_TEMPLATE_TRY_OUT = """
+You are a detective and an expert in solving complicated problems with logical conclusions. Your task is to provide an outcome evaluation and make probability estimations for the outcomes of a market question.
 
 INSTRUCTIONS:
-* You are provided with a market question under the label "USER_PROMPT".
-* This market question consists of an event and a specific date. When evaluating the resolution of the market, both the event and the date must meet the conditions specified in the market rules.
-* You are provided with the market rules that define the conditions for the resolution of the market under the label "MARKET_RULES".
+* You are provided with the market question under the label "MARKET_QUESTION".
+* This market question consists of an event and a specific date. It is yet uncertain whether the event will happen aligning with the questioned date in the market question.
+* There are only two outcomes possible for the market question: 'Yes' and 'No'.
+* You are also provided with a colleague's reasoning, under the label "REASONING", as to whether the event specified in the question will occur based on online research and also importantly when it will occur.
+* You are provided with the market rules that define conditions to help you evaluate the likelihood of the outcomes 'Yes' and 'No' under the label "MARKET_RULES".
+* The market rules also define specific key terms from the market question that you must consider in your evaluation.
+* Your task splits into the following parts:
+    - outcome evaluation (about 300 words)
+        - Start with the definitions provided in the market rules.
+        - Summarize the reasoning provided by your colleague under the label "REASONING"
+        - Evaluate whether the event will happen and when it will happen.
+        - Calculate the difference between the date in the reasoning and the date in the market rules and determine if the event will happen before, on, or after the market question's date or if it has already happened.
+        - Compare the reasoning with the market rules to evaluate the likelihood of the market question's outcomes 'Yes' and 'No'.
+    - Make probability estimations for the market's outcomes 'Yes' and 'No' taking the market rules and the REASONING into account.
+* Provide your evaluation process step by step and conclude with your likelihood estimation.
+* For reference, today's date is {current_date}. Use this information to determine timelines.
 
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* The JSON must contain five fields: "market_resolution_evaluation", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1, except "market_resolution_evaluation" which is a string
-    - "market_resolution_evaluation": Evaluation paragraph where the search output is analyzed and the likelihood of the market resolving as 'Yes' is assessed according to the market rules (about 100 words)
-    - "p_yes": Probability of the market resolving as 'Yes' according to the market rules
-    - "p_no": Probability of the market resolving as 'No' according to the market rules
+* The JSON must contain five fields: "outcome_evaluation", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1, except "outcome_evaluation" which is a string
+    - "outcome_evaluation": Your output of the first task parts executed in order
+    - "p_yes": Probability of the market question's outcome being 'Yes' according to the market rules
+    - "p_no": Probability of the market question's outcome being 'No' according to the market rules
     - "confidence": Your confidence in the estimation
     - "info_utility": Utility of the information in the SEARCH_OUTPUT
 * Include only the JSON object in your output
 
-SIDE_INFORMATION:
+REASONING:
 ```
 {report}
 ```
@@ -353,11 +413,12 @@ MARKET_RULES:
 {market_rules}
 ```
 
-USER_PROMPT:
+MARKET_QUESTION:
 ```
 {market_question}
 ```
 """
+# Use the market rules to evaluate the likelihood of the market resolving as 'Yes' and 'No'.
 
 # REASONING_PROMPT_BY = """
 # You are an expert fact checker that takes in a question asking whether an event will happen on or before a given date. 
@@ -396,9 +457,12 @@ USER_PROMPT:
 PREDICTION_PROMPT = """
 INSTRUCTIONS
 * You are an expert data analyst. 
-* You are provided with the input question about the event under the label "USER_PROMPT". 
+* You are provided with the prediction market question about the event under the label "USER_PROMPT".
+* A prediction market question consists of an event and a specific date. The market will resolve at the specified date based on the outcome of the event.
+* The prediction market question and the event in the question are two different things. The event can happen on a different date than the market question specifies. So the event can resolve as 'Yes' while the market question resolves as 'No' if the event does not happen conforming to the date in the market question.
+* You are provided with market rules that define the conditions for the resolution of the market under the label "MARKET_RULES" delimited by three backticks.
 * You are provided with a colleague's reasoning as to whether the event will occur based on online research under the label "REASONING" delimited by three backticks.
-* Your task is to predict the probability of the event in the USER_PROMPT occurring.
+* Your task is to predict the probability of the market question resolving as 'Yes', not the event happening.
 * The answer that you give should match the answer that you come to in the reasoning field
 * Give your response in the format specified under "OUTPUT_FORMAT"
 
@@ -412,9 +476,15 @@ REASONING:
 {reasoning}
 ```
 
+MARKET_RULES:
+```
+{market_rules}
+```
+
 OUTPUT_FORMAT:
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()"
-* The JSON must contain five fields: "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1
+* The JSON must contain five fields: "market_resolution_evaluation", "p_yes", "p_no", "confidence", "info_utility" each ranging from 0 to 1, except "market_resolution_evaluation" which is a string
+    - "market_resolution_evaluation"
     - "p_yes"
     - "p_no"
     - "confidence"
@@ -623,8 +693,9 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             )
         output = response.choices[0].message.content
         print(f"OUTPUT:\n{output}\n")
-        
-        prediction_prompt = PREDICTION_PROMPT_TEMPLATE.format(market_question=market_question, market_rules=market_rules, current_date=current_date, report=output)
+
+        prediction_prompt = PREDICTION_PROMPT_TEMPLATE_TRY_OUT.format(market_question=market_question, market_rules=market_rules, current_date=current_date, report=output)
+        # prediction_prompt = PREDICTION_PROMPT.format(user_prompt=market_question, market_rules=market_rules, current_date=current_date, reasoning=output)
         print(f"PREDICTION PROMPT:{prediction_prompt}")
 
         # system_prediction_prompt = "You are a seasoned market analyst with a deep understanding of prediction markets and consider the factors that influence their outcomes. Your goal is to provide a well-reasoned analysis based on data, trends, and expert knowledge to help individuals make informed decisions when betting on prediction market outcomes."
