@@ -144,7 +144,7 @@ class TestPredictionReasoning(BaseToolTest):
 
 
 class TestPredictionCOT(BaseToolTest):
-    """Test Prediction RAG."""
+    """Test Prediction COT."""
 
     tools = prediction_url_cot.ALLOWED_TOOLS
     models = prediction_url_cot.ALLOWED_MODELS
