@@ -40,6 +40,7 @@ class TokenCounterCallback:
         "claude-3-haiku-20240307": {"input": 0.00025, "output": 0.00125},
         "claude-3-sonnet-20240229": {"input": 0.003, "output": 0.015},
         "claude-3-opus-20240229": {"input": 0.015, "output": 0.075},
+        "cohere/command-r-plus": {"input": 0.003, "output": 0.015},
         "databricks/dbrx-instruct:nitro": {"input": 0.0009, "output": 0.0009},
         "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
             "input": 0.00054,
