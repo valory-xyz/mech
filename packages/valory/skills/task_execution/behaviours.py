@@ -285,6 +285,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         request_id_nonce = executing_task.get("requestIdWithNonce", None)
         mech_address = executing_task.get("contract_address", None)
         tool = executing_task.get("tool", None)
+        model = executing_task.get("model", None)
         response = {"requestId": req_id, "result": "Invalid response"}
         task_executor = self.context.agent_address
         self._done_task = {
@@ -300,11 +301,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             cost_dict = {}
             if counter_callback is not None:
                 cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
+            metadata = {
+                "model": model,
+                "tool": tool,
+            }
             response = {
                 **response,
                 "result": deliver_msg,
                 "prompt": prompt,
                 "cost_dict": cost_dict,
+                "metadata": metadata,
             }
             self._done_task["transaction"] = transaction
 
@@ -390,6 +396,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
         executing_task["tool"] = task_data["tool"]
+        executing_task["model"] = task_data.get("model", None)
         self._async_result = cast(Optional[Future], future)
 
     def _build_ipfs_message(

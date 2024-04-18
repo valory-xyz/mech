@@ -64,7 +64,7 @@ DEFAULT_OPENAI_SETTINGS = {
 ALLOWED_TOOLS = [
     "close_market",
 ]
-TOOL_TO_ENGINE = {tool: "gpt-4" for tool in ALLOWED_TOOLS}
+TOOL_TO_ENGINE = {tool: "gpt-4-0125-preview" for tool in ALLOWED_TOOLS}
 
 NEWSAPI_ENDPOINT = "https://newsapi.org/v2"
 TOP_HEADLINES = "top-headlines"
@@ -221,7 +221,8 @@ class CloseMarketBehaviourMock:
                 "temperature", DEFAULT_OPENAI_SETTINGS["temperature"]
             )
             prompt = kwargs.get("prompt")
-            engine = TOOL_TO_ENGINE.get(kwargs["tool"])
+            engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+            print(f"ENGINE: {engine}")
             moderation_result = client.moderations.create(input=prompt)
             if moderation_result.results[0].flagged:
                 return (

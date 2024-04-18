@@ -46,6 +46,7 @@ client: Optional[OpenAI] = None
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -81,8 +82,8 @@ ALLOWED_TOOLS = [
     "prediction-online-sum-url-content",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-offline-sum-url-content": "gpt-4",
-    "prediction-online-sum-url-content": "gpt-4",
+    "prediction-offline-sum-url-content": "gpt-4-0125-preview",
+    "prediction-online-sum-url-content": "gpt-4-0125-preview",
 }
 
 
@@ -977,11 +978,10 @@ def fetch_additional_information(
     google_api_key: str,
     google_engine: str,
     nlp,
-    engine: str = "gpt-3.5-turbo",
+    engine: str = "gpt-4-0125-preview",
     temperature: float = 1.0,
     max_compl_tokens: int = 500,
 ) -> str:
-
     """
     Get urls from a web search and extract relevant information based on an event question.
 
@@ -1092,7 +1092,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         nlp = spacy.load("en_core_web_sm")
 
         # Get the LLM engine to be used
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")
 
         # Extract the event question from the prompt
@@ -1138,7 +1138,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         # Get the current utc timestamp
         current_time_utc = datetime.now(timezone.utc)
-        formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        formatted_time_utc = (
+            current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        )
 
         # Extract event date and format it to ISO 8601 with UTC timezone and 23:59:59 time
         doc_question = nlp(event_question)
@@ -1147,7 +1149,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         final_event_date = parsed_event_date.replace(
             hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc
         )
-        formatted_event_date = final_event_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        formatted_event_date = (
+            final_event_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        )
 
         # Generate the prediction prompt
         prediction_prompt = PREDICTION_PROMPT.format(
@@ -1162,7 +1166,12 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         # Perform moderation
         moderation_result = client.moderations.create(input=prediction_prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None, None
+            return (
+                "Moderation flagged the prompt as in violation of terms.",
+                None,
+                None,
+                None,
+            )
 
         # Create messages for the OpenAI engine
         messages = [

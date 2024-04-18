@@ -41,8 +41,10 @@ from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
 
+
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -57,6 +59,7 @@ class OpenAIClientManager:
         if client is not None:
             client.close()
             client = None
+
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
@@ -83,8 +86,8 @@ ALLOWED_TOOLS = [
     "deepmind-optimization",
 ]
 TOOL_TO_ENGINE = {
-    "deepmind-optimization-strong": "gpt-4",
-    "deepmind-optimization": "gpt-3.5-turbo",
+    "deepmind-optimization-strong": "gpt-4-0125-preview",
+    "deepmind-optimization": "gpt-3.5-turbo-0125",
 }
 
 PREDICTION_PROMPT_INSTRUCTIONS = """
@@ -211,7 +214,6 @@ def calculate_score(df, answer_key="event", prob_key="probability"):
 
 
 def create_new_instructions(llm, instructions, score):
-
     chain = LLMChain(llm=llm, prompt=PROMPT_INSTRUCTOR)
     evaluations = chain.run({"instructions": instructions, "score": score})
     return evaluations
@@ -222,9 +224,8 @@ def prompt_engineer(
     init_instructions,
     instructions_format,
     iterations=3,
-    model_name="gpt-3.5-turbo",
+    model_name="gpt-4-0125-preview",
 ):
-
     llm = OpenAILLM(model_name=model_name, openai_api_key=openai_api_key)
     score_template = {"template": init_instructions, "score": 0.0}
 
@@ -402,7 +403,8 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
         additional_information = fetch_additional_information(
             prompt=prompt,
             engine=engine,
@@ -422,7 +424,12 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
 
         moderation_result = client.moderations.create(input=prediction_prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None, None
+            return (
+                "Moderation flagged the prompt as in violation of terms.",
+                None,
+                None,
+                None,
+            )
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},

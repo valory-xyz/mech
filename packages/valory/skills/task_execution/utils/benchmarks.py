@@ -29,10 +29,23 @@ class TokenCounterCallback:
     """Callback to count the number of tokens used in a generation."""
 
     TOKEN_PRICES = {
-        "gpt-3.5-turbo": {"input": 0.001, "output": 0.002},
+        "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
+        "gpt-3.5-turbo-0125": {"input": 0.0005, "output": 0.0015},
+        "gpt-3.5-turbo-1106": {"input": 0.001, "output": 0.002},
         "gpt-4": {"input": 0.03, "output": 0.06},
-        "gpt-4-turbo": {"input": 0.01, "output": 0.03},
+        "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
+        "gpt-4-0125-preview": {"input": 0.01, "output": 0.03},
+        "gpt-4-1106-preview": {"input": 0.01, "output": 0.03},
         "claude-2": {"input": 0.008, "output": 0.024},
+        "claude-3-haiku-20240307": {"input": 0.00025, "output": 0.00125},
+        "claude-3-sonnet-20240229": {"input": 0.003, "output": 0.015},
+        "claude-3-opus-20240229": {"input": 0.015, "output": 0.075},
+        "cohere/command-r-plus": {"input": 0.003, "output": 0.015},
+        "databricks/dbrx-instruct:nitro": {"input": 0.0009, "output": 0.0009},
+        "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
+            "input": 0.00054,
+            "output": 0.00054,
+        },
     }
 
     def __init__(self) -> None:

@@ -8,8 +8,23 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_sentence_embedding.py: bafybeibkvssrbpgd7zend6jk3hlcpdkw7owlxrtefvuulpczrpinwtazti
+  prediction_sentence_embedding.py: bafybeiaubyrxsrv2b5rpvmh4ncr3b53i6nbrieepcir23pwzmogaj3u3pm
 fingerprint_ignore_patterns: []
 entry_point: prediction_sentence_embedding.py
 callable: run
-dependencies: {}
+dependencies:
+  openai:
+    version: ==1.11.0
+  tiktoken:
+    version: ==0.5.1
+  requests: {}
+  google-api-python-client:
+    version: ==2.95.0
+  googlesearch-python:
+    version: ==1.2.3
+  python-dateutil:
+    version: ==2.8.2
+  beautifulsoup4:
+    version: ==4.12.2
+  spacy:
+    version: ==3.7.2

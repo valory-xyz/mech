@@ -30,6 +30,7 @@ client: Optional[OpenAI] = None
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -44,6 +45,7 @@ class OpenAIClientManager:
         if client is not None:
             client.close()
             client = None
+
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
@@ -62,8 +64,8 @@ ALLOWED_TOOLS = [
 ]
 
 TOOL_TO_ENGINE = {
-    "strong-sme-generator": "gpt-4",
-    "normal-sme-generator": "gpt-3.5-turbo",
+    "strong-sme-generator": "gpt-4-0125-preview",
+    "normal-sme-generator": "gpt-3.5-turbo-0125",
 }
 
 SME_GENERATION_SYSTEM_PROMPT = """
@@ -125,7 +127,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"tool must be one of {ALLOWED_TOOLS}")
 
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
 
         market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
         system_prompt = SME_GENERATION_SYSTEM_PROMPT
@@ -149,6 +152,11 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         try:
             generated_sme_roles = json.loads(generated_sme_roles)
         except json.decoder.JSONDecodeError as e:
-            return f"Failed to generate SME roles due to {e}", json.dumps(messages), None, None
+            return (
+                f"Failed to generate SME roles due to {e}",
+                json.dumps(messages),
+                None,
+                None,
+            )
 
         return response.choices[0].message.content, json.dumps(messages), None, None

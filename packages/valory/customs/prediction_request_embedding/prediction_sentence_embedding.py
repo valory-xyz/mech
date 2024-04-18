@@ -45,6 +45,7 @@ client: Optional[OpenAI] = None
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -60,11 +61,11 @@ class OpenAIClientManager:
             client.close()
             client = None
 
+
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
     return len(enc.encode(text))
-
 
 
 NUM_URLS_EXTRACT = 5
@@ -80,8 +81,8 @@ ALLOWED_TOOLS = [
     "prediction-sentence-embedding-bold",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-sentence-embedding-conservative": "gpt-3.5-turbo",
-    "prediction-sentence-embedding-bold": "gpt-4",
+    "prediction-sentence-embedding-conservative": "gpt-3.5-turbo-0125",
+    "prediction-sentence-embedding-bold": "gpt-4-0125-preview",
 }
 
 
@@ -1040,7 +1041,7 @@ def fetch_additional_information(
     google_api_key: str,
     google_engine: str,
     nlp,
-    engine: str = "gpt-3.5-turbo",
+    engine: str = "gpt-4-0125-preview",
     temperature: float = 0.5,
     max_compl_tokens: int = 500,
 ) -> str:
@@ -1053,7 +1054,7 @@ def fetch_additional_information(
         google_api_key (str): The API key for the Google service.
         google_engine (str): The Google engine to be used.
         temperature (float): The temperature parameter for the engine.
-        engine (str): The openai engine. Defaults to "gpt-3.5-turbo".
+        engine (str): The openai engine. Defaults to "gpt-4-0125-preview".
         temperature (float): The temperature parameter for the engine. Defaults to 1.0.
         max_compl_tokens (int): The maximum number of tokens for the engine's response.
 
@@ -1142,7 +1143,8 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         nlp = spacy.load("en_core_web_md")
 
         # Get the LLM engine to be used
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
 
         # Extract the event question from the prompt
         event_question = re.search(r"\"(.+?)\"", prompt).group(1)
@@ -1163,7 +1165,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         # Fetch additional information
         additional_information = fetch_additional_information(
             event_question=event_question,
-            engine="gpt-3.5-turbo",
+            engine="gpt-4-0125-preview",
             temperature=0.5,
             max_compl_tokens=max_compl_tokens,
             nlp=nlp,
@@ -1181,7 +1183,9 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
 
         # Get the current utc timestamp
         current_time_utc = datetime.now(timezone.utc)
-        formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        formatted_time_utc = (
+            current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        )
 
         # Generate the prediction prompt
         prediction_prompt = PREDICTION_PROMPT.format(
@@ -1194,7 +1198,12 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         # Perform moderation
         moderation_result = client.moderations.create(input=prediction_prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None, None
+            return (
+                "Moderation flagged the prompt as in violation of terms.",
+                None,
+                None,
+                None,
+            )
 
         # Create messages for the OpenAI engine
         messages = [

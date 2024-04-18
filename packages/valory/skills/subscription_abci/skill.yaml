@@ -8,25 +8,25 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeih2y4s3vu6xleujurx5mihfmzaxubeubykopyftjgklbwtfn6m5yu
-  behaviours.py: bafybeihzleoe6al33gy4nhjc3dpcdx5xm7nf4mfypdgmyr2tdqb745blj4
+  behaviours.py: bafybeieegpu4ofx3npoofnzqc6mm7ncz6hfv56i6ih52haf46l2gdzel4y
   dialogues.py: bafybeif2euu7wehnyr2r6efrbk6jh757dvbbnb3m7v5gxfdc4qzr3fnd74
   fsm_specification.yaml: bafybeia77avtbeclmr4lil2hvjrxk4unstxb4fyvdmbpdgocn3ebs2hcdi
   handlers.py: bafybeiegulbnno4efmaqmsuvjo4vrhcwcrg3faeryjjhwyabpywzty5m2u
-  models.py: bafybeies5ej7gbm3kuyky4gn5gouyubbmsdaqxcnycdleaddstzppsenta
+  models.py: bafybeia6ast2b5vckmoipidlaxzc77wokzaa3e6sb4zmbk5bw63x3fxlrq
   payloads.py: bafybeidqcjuyceawnzf2dkeoro2geivfeqrh34h6a7lkxvfqcl62d4hyuy
-  rounds.py: bafybeihrq5aswsgbzxn3ftq7tcqncmfkizo5zirna7zml6miebjqqzu2hq
+  rounds.py: bafybeigyyo3ztnqoolbrbz3cjq6vssedua7qawbemrp3mc6owqrpmew5wu
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeicbhvrlug56qvwlh6b4y35xg6fytvtahhaae7xm7jssecbie576mu
-- valory/gnosis_safe:0.1.0:bafybeictjc7saviboxbsdcey3trvokrgo7uoh76mcrxecxhlvcrp47aqg4
+- valory/agent_mech:0.1.0:bafybeidsau5x2vjofpcdzxkg7airwkrdag65ohtxcby2ut27tfjizgnrnm
+- valory/gnosis_safe:0.1.0:bafybeibq77mgzhyb23blf2eqmia3kc6io5karedfzhntvpcebeqdzrgyqa
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeigjrepaqpb3m7zunmt4hryos4vto4yyj3u6iyofdb2fotwho3bqvm
-- valory/transaction_settlement_abci:0.1.0:bafybeid57tozt5f3kgzmu22nbr3c3oy4p7bi2bu66rqsgnlylq6xgh2ixe
+- valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
+- valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 behaviours:
   main:
     args: {}

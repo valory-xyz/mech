@@ -27,7 +27,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from pydantic import BaseModel, Field
 from docstring_parser import parse
 import tiktoken
-import json
 from openai import OpenAI
 import numpy as np
 import faiss
@@ -35,8 +34,15 @@ import requests
 from readability import Document as ReadabilityDocument
 from markdownify import markdownify as md
 from googleapiclient.discovery import build
+from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
 
 
 class OpenAIClientManager:
@@ -63,16 +69,16 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0,
 }
 MAX_TOKENS = {
-    "gpt-3.5-turbo": 4096,
-    "gpt-4": 8192,
+    "gpt-3.5-turbo-0125": 4096,
+    "gpt-4-0125-preview": 8192,
 }
 ALLOWED_TOOLS = [
     "resolve-market-reasoning-gpt-3.5-turbo",
     "resolve-market-reasoning-gpt-4",
 ]
 TOOL_TO_ENGINE = {
-    "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo",
-    "resolve-market-reasoning-gpt-4": "gpt-4",
+    "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo-0125",
+    "resolve-market-reasoning-gpt-4": "gpt-4-0125-preview",
 }
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 NUM_QUERIES = 3
@@ -159,12 +165,20 @@ class Date(OpenAISchema):
 class Results(OpenAISchema):
     has_occurred: bool = Field(..., description="Whether the event has occurred.")
 
+
 class Valid(OpenAISchema):
     is_valid: bool = Field(..., description="Whether the question is valid.")
-    reason: Optional[str] = Field(..., description="Reason that the question is invalid.")
+    reason: Optional[str] = Field(
+        ..., description="Reason that the question is invalid."
+    )
+
 
 class Determinable(OpenAISchema):
-    is_determinable: bool = Field(..., description="Whether it is possible to answer the question based on the information provided and reasoning.")
+    is_determinable: bool = Field(
+        ...,
+        description="Whether it is possible to answer the question based on the information provided and reasoning.",
+    )
+
 
 class Document(BaseModel):
     text: str
@@ -196,7 +210,6 @@ USER_PROMPT:
 ```
 """
 
-
 GET_DATE_PROMPT = """
 INSTRUCTIONS
 * You are an expert data analyst that takes in extracted text from a web search result. 
@@ -210,7 +223,6 @@ EXTRACTED_TEXT:
 {extracted_text}
 ```
 """
-
 
 PREDICTION_PROMPT = """
 INSTRUCTIONS
@@ -337,6 +349,7 @@ def multi_queries(
         timeout=150,
         stop=None,
         functions=[Queries.openai_schema],
+        function_call={"name": "Queries"},
     )
     queries = Queries.from_response(response)
 
@@ -348,9 +361,9 @@ def multi_queries(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
             model=engine,
+            token_counter=count_tokens,
         )
-        return queries.queries, counter_callback
-    return queries.queries, None
+    return queries.queries, counter_callback
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
@@ -373,13 +386,16 @@ def get_urls_from_queries(
     """Get URLs from search engine queries"""
     results = []
     for query in queries:
-        for url in search_google(
-            query=query,
-            api_key=api_key,
-            engine=engine,
-            num=num,
-        ):
-            results.append(url)
+        try:
+            for url in search_google(
+                query=query,
+                api_key=api_key,
+                engine=engine,
+                num=num,
+            ):
+                results.append(url)
+        except Exception as e:
+            print(f"An error occurred: {e}")
     unique_results = list(set(results))
     return unique_results
 
@@ -391,7 +407,7 @@ def get_dates(
 ):
     """Get the date from the extracted text"""
     adjusted_text = adjust_additional_information(
-        prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo"
+        prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo-0125"
     )
     get_date_prompt = GET_DATE_PROMPT.format(extracted_text=adjusted_text)
     messages = [
@@ -399,13 +415,14 @@ def get_dates(
         {"role": "user", "content": get_date_prompt},
     ]
     response = client.chat.completions.create(
-        model="gpt-3.5-turbo",
+        model="gpt-3.5-turbo-0125",
         messages=messages,
         temperature=0,
         n=1,
         timeout=90,
         stop=None,
         functions=[Date.openai_schema],
+        function_call={"name": "Date"},
     )
     date = Date.from_response(response)
     if date.date_available:
@@ -413,7 +430,8 @@ def get_dates(
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
-                model="gpt-3.5-turbo",
+                model="gpt-3.5-turbo-0125",
+                token_counter=count_tokens,
             )
             return f"{date.year}-{date.month}-{date.day}", counter_callback
         return f"{date.year}-{date.month}-{date.day}", None
@@ -593,6 +611,9 @@ def fetch_additional_information(
     # Remove None values from the list
     docs = [doc for doc in docs if doc]
 
+    # remove doc with ""
+    docs = [doc for doc in docs if hasattr(doc, "text") and doc.text != ""]
+
     # Chunk the documents
     split_docs = []
     for doc in docs:
@@ -659,7 +680,7 @@ def adjust_additional_information(
     return additional_information
 
 
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
@@ -672,16 +693,15 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
-        engine = TOOL_TO_ENGINE[tool]
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
 
         # Check if question is valid
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": VALID_PROMPT.format(
-                    user_prompt=prompt
-                ),
+                "content": VALID_PROMPT.format(user_prompt=prompt),
             },
         ]
 
@@ -694,127 +714,145 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
             timeout=150,
             stop=None,
             functions=[Valid.openai_schema],
+            function_call={"name": "Valid"},
         )
 
         valid_results = Valid.from_response(response_valid)
         print(f"Valid: {valid_results}")
 
         if not valid_results.is_valid:
-            return valid_results.json(), None, None, None, None
+            return valid_results.json(), None, None, None
 
-        try:
-            (
-                additional_information,
-                queries,
-                counter_callback,
-            ) = fetch_additional_information(
-                client=client,
-                prompt=prompt,
-                engine=engine,
-                google_api_key=google_api_key,
-                google_engine_id=google_engine_id,
-                counter_callback=counter_callback,
-            )
+        (
+            additional_information,
+            queries,
+            counter_callback,
+        ) = fetch_additional_information(
+            client=client,
+            prompt=prompt,
+            engine=engine,
+            google_api_key=google_api_key,
+            google_engine_id=google_engine_id,
+            counter_callback=counter_callback,
+        )
 
-            # Adjust the additional_information to fit within the token budget
-            adjusted_info = adjust_additional_information(
-                prompt=PREDICTION_PROMPT,
-                additional_information=additional_information,
+        # Adjust the additional_information to fit within the token budget
+        adjusted_info = adjust_additional_information(
+            prompt=PREDICTION_PROMPT,
+            additional_information=additional_information,
+            model=engine,
+        )
+
+        # Do reasoning
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": REASONING_PROMPT.format(
+                    user_prompt=prompt, formatted_docs=adjusted_info
+                ),
+            },
+        ]
+
+        response_reasoning = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            n=1,
+            timeout=150,
+            stop=None,
+        )
+
+        reasoning = response_reasoning.choices[0].message.content
+
+        # Check if question is determinable
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": DETERMINABLE_PROMPT.format(
+                    user_prompt=prompt, reasoning=reasoning
+                ),
+            },
+        ]
+
+        response_determinable = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            n=1,
+            timeout=150,
+            stop=None,
+            functions=[Determinable.openai_schema],
+            function_call={"name": "Determinable"},
+        )
+
+        determinable_results = Determinable.from_response(response_determinable)
+        print(f"Determinable: {determinable_results}")
+
+        if not determinable_results.is_determinable:
+            return determinable_results.json(), reasoning, None, None
+
+        # Make the prediction
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": PREDICTION_PROMPT.format(
+                    user_prompt=prompt, reasoning=reasoning
+                ),
+            },
+        ]
+
+        response_prediction = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            n=1,
+            timeout=150,
+            stop=None,
+            functions=[Results.openai_schema],
+            function_call={"name": "Results"},
+        )
+
+        results = Results.from_response(response_prediction)
+        print(f"Results: {results}")
+
+        # Make the prediction
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": PREDICTION_PROMPT.format(
+                    user_prompt=prompt, reasoning=reasoning
+                ),
+            },
+        ]
+
+        response_prediction = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
+            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            n=1,
+            timeout=150,
+            stop=None,
+            functions=[Results.openai_schema],
+        )
+
+        results = Results.from_response(response_prediction)
+        print(f"Results: {results}")
+
+        if counter_callback is not None:
+            counter_callback(
+                input_tokens=response_reasoning.usage.prompt_tokens
+                + response_prediction.usage.prompt_tokens,
+                output_tokens=response_reasoning.usage.completion_tokens
+                + response_prediction.usage.completion_tokens,
                 model=engine,
+                token_counter=count_tokens,
             )
-
-            # Do reasoning
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": REASONING_PROMPT.format(
-                        user_prompt=prompt, formatted_docs=adjusted_info
-                    ),
-                },
-            ]
-
-            response_reasoning = client.chat.completions.create(
-                model=engine,
-                messages=messages,
-                temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-                max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
-                n=1,
-                timeout=150,
-                stop=None,
-            )
-
-            reasoning = response_reasoning.choices[0].message.content
-
-            # Check if question is determinable
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": DETERMINABLE_PROMPT.format(
-                        user_prompt=prompt, reasoning=reasoning
-                    ),
-                },
-            ]
-
-            response_determinable = client.chat.completions.create(
-                model=engine,
-                messages=messages,
-                temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-                max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
-                n=1,
-                timeout=150,
-                stop=None,
-                functions=[Determinable.openai_schema],
-            )
-
-            determinable_results = Determinable.from_response(response_determinable)
-            print(f"Determinable: {determinable_results}")
-
-            if not determinable_results.is_determinable:
-                return determinable_results.json(), reasoning, additional_information, queries, None
-
-            # Make the prediction
-            messages = [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {
-                    "role": "user",
-                    "content": PREDICTION_PROMPT.format(
-                        user_prompt=prompt, reasoning=reasoning
-                    ),
-                },
-            ]
-
-            response_prediction = client.chat.completions.create(
-                model=engine,
-                messages=messages,
-                temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-                max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
-                n=1,
-                timeout=150,
-                stop=None,
-                functions=[Results.openai_schema],
-            )
-
-            results = Results.from_response(response_prediction)
-            print(f"Results: {results}")
-
-            if counter_callback is not None:
-                counter_callback(
-                    input_tokens=response_reasoning.usage.prompt_tokens
-                    + response_prediction.usage.prompt_tokens,
-                    output_tokens=response_reasoning.usage.completion_tokens
-                    + response_prediction.usage.completion_tokens,
-                    model=engine,
-                )
-                return (
-                    results.json(),
-                    reasoning,
-                    additional_information,
-                    queries,
-                    counter_callback,
-                )
-            return results.json(), reasoning, additional_information, queries, None
-
-        except Exception as e:
-            return None, None, None, None, e
+        return results.json(), reasoning, None, counter_callback

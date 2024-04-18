@@ -165,6 +165,7 @@ REPORT_PROMPT_TEMPLATE = """
     Use markdown syntax. Include as much relevant information as possible and try not to summarize.
     """
 
+
 class CustomOpenAIEmbeddingFunction(embedding_functions.OpenAIEmbeddingFunction):
     """Custom OpenAI embedding function"""
 
@@ -187,6 +188,8 @@ class CustomOpenAIEmbeddingFunction(embedding_functions.OpenAIEmbeddingFunction)
 
         # Return just the embeddings
         return [result.embedding for result in sorted_embeddings]
+
+
 # MODELS
 
 MAX_TEXT_LENGTH = 7500
@@ -198,10 +201,11 @@ class WebSearchResult(BaseModel):
     description: str
     relevancy: float
     query: str
-    
+
     def __getitem__(self, item):
         return getattr(self, item)
-    
+
+
 class WebScrapeResult(BaseModel):
     query: str
     url: str
@@ -233,22 +237,22 @@ def web_scrape(url: str, timeout: int = 10000) -> tuple[str, str]:
     try:
         response = fetch_html(url=url, timeout=timeout)
 
-        if 'text/html' in response.headers.get('Content-Type', ''):
+        if "text/html" in response.headers.get("Content-Type", ""):
             soup = BeautifulSoup(response.content, "html.parser")
-            
-            [x.extract() for x in soup.findAll('script')]
-            [x.extract() for x in soup.findAll('style')]
-            [x.extract() for x in soup.findAll('noscript')]
-            [x.extract() for x in soup.findAll('link')]
-            [x.extract() for x in soup.findAll('head')]
-            [x.extract() for x in soup.findAll('image')]
-            [x.extract() for x in soup.findAll('img')]
-            
+
+            [x.extract() for x in soup.findAll("script")]
+            [x.extract() for x in soup.findAll("style")]
+            [x.extract() for x in soup.findAll("noscript")]
+            [x.extract() for x in soup.findAll("link")]
+            [x.extract() for x in soup.findAll("head")]
+            [x.extract() for x in soup.findAll("image")]
+            [x.extract() for x in soup.findAll("img")]
+
             text = soup.get_text()
             text = markdownify(text)
             text = "  ".join([x.strip() for x in text.split("\n")])
             text = " ".join([x.strip() for x in text.split("  ")])
-            
+
             return (text, url)
         else:
             logging.warning("Non-HTML content received")
@@ -272,9 +276,9 @@ def scrape_results(results: list[WebSearchResult]) -> list[WebScrapeResult]:
                 query=websearch_result.query,
                 url=websearch_result.url,
                 title=websearch_result.title,
-                content=scraped_content
+                content=scraped_content,
             )
-            
+
             scraped.append(result)
 
     return scraped
@@ -290,19 +294,21 @@ def web_search(query: str, api_key: str, max_results=5) -> list[WebSearchResult]
 
     transformed_results = [
         WebSearchResult(
-            title=result['title'],
-            url=result['url'],
-            description=result['content'],
-            relevancy=result['score'],
-            query=query
+            title=result["title"],
+            url=result["url"],
+            description=result["content"],
+            relevancy=result["score"],
+            query=query,
         )
-        for result in response['results']
+        for result in response["results"]
     ]
 
     return transformed_results
 
 
-def search(queries: list[str], api_key: str, filter = lambda x: True) -> list[tuple[str, WebSearchResult]]:
+def search(
+    queries: list[str], api_key: str, filter=lambda x: True
+) -> list[tuple[str, WebSearchResult]]:
     results: list[list[WebSearchResult]] = []
     results_with_queries: list[tuple[str, WebSearchResult]] = []
 
@@ -315,23 +321,26 @@ def search(queries: list[str], api_key: str, filter = lambda x: True) -> list[tu
 
     for i in range(len(results)):
         for result in results[i]:
-            if result.url not in [existing_result.url for (_,existing_result) in results_with_queries]:
+            if result.url not in [
+                existing_result.url for (_, existing_result) in results_with_queries
+            ]:
                 if filter(result):
-                  results_with_queries.append((queries[i], result))
+                    results_with_queries.append((queries[i], result))
 
     return results_with_queries
 
 
-def create_embeddings_from_results(results: list[WebScrapeResult], text_splitter, api_key: str) -> Collection:
+def create_embeddings_from_results(
+    results: list[WebScrapeResult], text_splitter, api_key: str
+) -> Collection:
     client = EphemeralClient()
     openai_ef = CustomOpenAIEmbeddingFunction(
-                api_key=api_key,
-                model_name="text-embedding-ada-002"
-            )
+        api_key=api_key, model_name="text-embedding-ada-002"
+    )
     collection = client.create_collection(
         name=f"web_search_results_{random.randint(1, 100)}",
         embedding_function=openai_ef,
-        metadata={"hnsw:space": "cosine"}
+        metadata={"hnsw:space": "cosine"},
     )
     texts = []
     metadatas = []
@@ -340,12 +349,12 @@ def create_embeddings_from_results(results: list[WebScrapeResult], text_splitter
         text_splits = text_splitter.split_text(scrape_result.content)
         if not len(texts + text_splits) > MAX_TEXT_LENGTH:
             texts += text_splits
-        metadatas += [scrape_result.dict() for _ in text_splits]   
+        metadatas += [scrape_result.dict() for _ in text_splits]
 
     collection.add(
         documents=texts,
         metadatas=metadatas,  # type: ignore
-        ids=[f'id{i}' for i in range(len(texts))]
+        ids=[f"id{i}" for i in range(len(texts))],
     )
     return collection
 
@@ -358,18 +367,17 @@ def generate_subqueries(
     counter_callback: Optional[Callable] = None,
 ) -> tuple[list[str], Any]:
     client = OpenAI(api_key=api_key)
-    subquery_generation_prompt = SUBQUERIES_PROMPT_TEMPLATE.format(query=query, search_limit=limit)
-    
+    subquery_generation_prompt = SUBQUERIES_PROMPT_TEMPLATE.format(
+        query=query, search_limit=limit
+    )
+
     response = client.chat.completions.create(
         messages=[
-            {
-                "role": "system",
-                "content": "You are a professional researcher"
-            },
+            {"role": "system", "content": "You are a professional researcher"},
             {
                 "role": "user",
                 "content": subquery_generation_prompt,
-            }
+            },
         ],
         model=model,
         n=1,
@@ -378,7 +386,7 @@ def generate_subqueries(
     )
 
     subqueries_str = str(response.choices[0].message.content)
-    
+
     if counter_callback:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
@@ -386,8 +394,12 @@ def generate_subqueries(
             model=model,
             token_counter=count_tokens,
         )
-        return [query] + [subquery.strip('\"').strip() for subquery in subqueries_str.split(',')], counter_callback
-    return [query] + [subquery.strip('\"').strip() for subquery in subqueries_str.split(',')], None
+        return [query] + [
+            subquery.strip('"').strip() for subquery in subqueries_str.split(",")
+        ], counter_callback
+    return [query] + [
+        subquery.strip('"').strip() for subquery in subqueries_str.split(",")
+    ], None
 
 
 def rerank_subqueries(
@@ -395,24 +407,20 @@ def rerank_subqueries(
     goal: str,
     api_key: str,
     model: str,
-    counter_callback: Optional[Callable] = None
+    counter_callback: Optional[Callable] = None,
 ) -> tuple[list[str], Any]:
     client = OpenAI(api_key=api_key)
     rerank_results_prompt = QUERY_RERANKING_PROMPT_TEMPLATE.format(
-        goal=goal,
-        queries="\n---query---\n".join(queries)
+        goal=goal, queries="\n---query---\n".join(queries)
     )
 
     response = client.chat.completions.create(
         messages=[
-            {
-                "role": "system",
-                "content": "You are a professional researcher"
-            },
+            {"role": "system", "content": "You are a professional researcher"},
             {
                 "role": "user",
                 "content": rerank_results_prompt,
-            }
+            },
         ],
         model=model,
         n=1,
@@ -421,7 +429,7 @@ def rerank_subqueries(
     )
 
     subqueries_str = str(response.choices[0].message.content)
-    
+
     if counter_callback:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
@@ -429,8 +437,10 @@ def rerank_subqueries(
             model=model,
             token_counter=count_tokens,
         )
-        return [subquery.strip('\"').strip() for subquery in subqueries_str.split(',')], counter_callback
-    return [subquery.strip('\"').strip() for subquery in subqueries_str.split(',')], None
+        return [
+            subquery.strip('"').strip() for subquery in subqueries_str.split(",")
+        ], counter_callback
+    return [subquery.strip('"').strip() for subquery in subqueries_str.split(",")], None
 
 
 def prepare_report(
@@ -438,29 +448,26 @@ def prepare_report(
     scraped: list[str],
     model: str,
     api_key: str,
-    counter_callback: Optional[Callable] = None
+    counter_callback: Optional[Callable] = None,
 ) -> tuple[str, Any]:
     evaluation_prompt = REPORT_PROMPT_TEMPLATE.format(search_results=scraped, goal=goal)
-    
+
     client = OpenAI(api_key=api_key)
 
     response = client.chat.completions.create(
         messages=[
-            {
-                "role": "system",
-                "content": "You are a professional researcher"
-            },
+            {"role": "system", "content": "You are a professional researcher"},
             {
                 "role": "user",
                 "content": evaluation_prompt,
-            }
+            },
         ],
         model=model,
         n=1,
         timeout=90,
         stop=None,
     )
-    
+
     if counter_callback:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
@@ -478,7 +485,7 @@ def make_prediction(
     temperature: float,
     max_compl_tokens: int,
     openai_api_key: str,
-    counter_callback: Optional[Callable] = None
+    counter_callback: Optional[Callable] = None,
 ) -> tuple[str, Any]:
     client = OpenAI(api_key=openai_api_key)
 
@@ -492,9 +499,9 @@ def make_prediction(
         max_tokens=max_compl_tokens,
         n=1,
         timeout=150,
-        stop=None
+        stop=None,
     )
-    
+
     if counter_callback:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
@@ -514,39 +521,59 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     max_compl_tokens = kwargs.get(
         "max_tokens", DEFAULT_OPENAI_SETTINGS["max_compl_tokens"]
     )
-    
+
     openai_api_key = kwargs["api_keys"]["openai"]
     tavily_api_key = kwargs["api_keys"]["tavily"]
-    
-    initial_subqueries_limit = kwargs.get('initial_subqueries_limit', DEFAULT_RESEARCH_SETTINGS["initial_subqueries_limit"])
-    subqueries_limit = kwargs.get('subqueries_limit', DEFAULT_RESEARCH_SETTINGS["subqueries_limit"])
-    scrape_content_split_chunk_size = kwargs.get('scrape_content_split_chunk_size', DEFAULT_RESEARCH_SETTINGS["scrape_content_split_chunk_size"])
-    scrape_content_split_chunk_overlap = kwargs.get('scrape_content_split_chunk_overlap', DEFAULT_RESEARCH_SETTINGS["scrape_content_split_chunk_overlap"])
-    top_k_per_query = kwargs.get('top_k_per_query', DEFAULT_RESEARCH_SETTINGS["top_k_per_query"])
+
+    initial_subqueries_limit = kwargs.get(
+        "initial_subqueries_limit",
+        DEFAULT_RESEARCH_SETTINGS["initial_subqueries_limit"],
+    )
+    subqueries_limit = kwargs.get(
+        "subqueries_limit", DEFAULT_RESEARCH_SETTINGS["subqueries_limit"]
+    )
+    scrape_content_split_chunk_size = kwargs.get(
+        "scrape_content_split_chunk_size",
+        DEFAULT_RESEARCH_SETTINGS["scrape_content_split_chunk_size"],
+    )
+    scrape_content_split_chunk_overlap = kwargs.get(
+        "scrape_content_split_chunk_overlap",
+        DEFAULT_RESEARCH_SETTINGS["scrape_content_split_chunk_overlap"],
+    )
+    top_k_per_query = kwargs.get(
+        "top_k_per_query", DEFAULT_RESEARCH_SETTINGS["top_k_per_query"]
+    )
     counter_callback = kwargs.get("counter_callback", None)
-    
+
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"TOOL {tool} is not supported.")
-    
-    model = TOOL_TO_ENGINE[tool]
-    
-    queries, counter_callback = generate_subqueries(query=prompt, limit=initial_subqueries_limit, api_key=openai_api_key, model=model, counter_callback=counter_callback)
-    # print queries
-    print("\nInitial queries")
-    for query in queries:
-        print(query)
 
-    queries, counter_callback = rerank_subqueries(queries=queries, goal=prompt, api_key=openai_api_key, model=model, counter_callback=counter_callback)
-    print("\nReranked queries")
-    for query in queries:
-        print(query)
-
+    model = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    print(f"ENGINE: {model}")
+    queries, counter_callback = generate_subqueries(
+        query=prompt,
+        limit=initial_subqueries_limit,
+        api_key=openai_api_key,
+        model=model,
+        counter_callback=counter_callback,
+    )
+    queries, counter_callback = rerank_subqueries(
+        queries=queries,
+        goal=prompt,
+        api_key=openai_api_key,
+        model=model,
+        counter_callback=counter_callback,
+    )
     queries = queries[:subqueries_limit]
     print("\nFinal queries")
     for query in queries:
         print(query)
 
-    search_results_with_queries = search(queries, tavily_api_key, lambda result: not result["url"].startswith("https://www.youtube"))
+    search_results_with_queries = search(
+        queries,
+        tavily_api_key,
+        lambda result: not result["url"].startswith("https://www.youtube"),
+    )
 
     scrape_args = [result for (_, result) in search_results_with_queries]
     scraped = scrape_results(scrape_args)
@@ -559,19 +586,25 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     text_splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n", ". ", "  "],
         chunk_size=scrape_content_split_chunk_size,
-        chunk_overlap=scrape_content_split_chunk_overlap
+        chunk_overlap=scrape_content_split_chunk_overlap,
     )
-    collection = create_embeddings_from_results(scraped, text_splitter, api_key=openai_api_key)
+    collection = create_embeddings_from_results(
+        scraped, text_splitter, api_key=openai_api_key
+    )
 
     query_results = collection.query(query_texts=queries, n_results=top_k_per_query)
     vector_result_texts: list[str] = []
-    
-    for documents_list in query_results['documents']: # type: ignore
+
+    for documents_list in query_results["documents"]:  # type: ignore
         vector_result_texts += [x for x in documents_list]
 
-    research_report, counter_callback = prepare_report(prompt, vector_result_texts, api_key=openai_api_key, model=model, counter_callback=counter_callback)
-    print("\nResearch report: ")
-    print(research_report)
+    research_report, counter_callback = prepare_report(
+        prompt,
+        vector_result_texts,
+        api_key=openai_api_key,
+        model=model,
+        counter_callback=counter_callback,
+    )
 
     current_time_utc = datetime.now(timezone.utc)
     formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
@@ -579,7 +612,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     prediction_prompt = PREDICTION_PROMPT.format(
         user_prompt=prompt,
         additional_information=research_report,
-        timestamp=formatted_time_utc
+        timestamp=formatted_time_utc,
     )
     print("\nPrediction prompt: ")
     print(prediction_prompt)
@@ -589,9 +622,9 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         temperature=temperature,
         max_compl_tokens=max_compl_tokens,
         openai_api_key=openai_api_key,
-        counter_callback=counter_callback
+        counter_callback=counter_callback,
     )
-    
+
     if counter_callback is not None:
         return prediction, prediction_prompt, None, counter_callback
     return prediction, prediction_prompt, None, None

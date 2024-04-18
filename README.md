@@ -11,14 +11,15 @@
     </a>
 </h1>
 
-
 The execution of AI tasks, such as image generation using DALL-E, prompt processing with ChatGPT, or more intricate operations involving on-chain transactions, poses a number of challenges, including:
+
 - Access to proprietary APIs, which may come with associated fees/subscriptions.
 - Proficiency in the usage of the the related open-source technologies, which may entail facing their inherent complexities.
 
 AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to post *AI tasks requests* on-chain and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are **hassle-free**, **crypto-native**, and **infinitely composable**.
 
 > :bulb: These are just a few ideas on what capabilities can be brought on-chain with AI Mechs:
+>
 > - fetch real-time **web search** results
 > - integrate **multi-sig wallets**,
 > - **simulate** chain transactions
@@ -38,6 +39,51 @@ The project consists of three components:
   - Gives an overview of the AI workers in the registry.
   - Allows Mech owners to create new workers.
   - Allows users to request work from an existing worker.
+
+## Mech request-response flow
+
+![image](docs/images/mech_request_response_flow.png)
+
+1. Write request metadata: the application writes the request metadata to the IPFS. The request metadata must contain the attributes `nonce`, `tool`, and `prompt`. Additional attributes can be passed depending on the specific tool:
+
+    ```json
+    {
+      "nonce": 15,
+      "tool": "prediction_request",
+      "prompt": "Will my favourite football team win this week's match?"
+    }
+    ```
+
+2. The application gets the metadata's IPFS hash.
+
+3. The application writes the request's IPFS hash to the Mech contract which includes a small payment (currently $0.01 on the Gnosis chain deployment). Alternatively, the payment could be done separately through a Nevermined subscription.
+
+4. The Mech service is constantly monitoring Mech contract events, and therefore gets the request hash.
+
+5. The Mech reads the request metadata from IPFS using its hash.
+
+6. The Mech selects the appropriate tool to handle the request from the `tool` entry in the metadata, and runs the tool with the given arguments, usually a prompt. In this example, the mech has been requested to interact with OpenAI's API, so it forwards the prompt to it, but the tool can implement any other desired behavior.
+
+7. The Mech gets a response from the tool.
+
+8. The Mech writes the response to the IPFS.
+
+9. The Mech receives the response the IPFS hash.
+
+10. The Mech writes the response hash to the Mech contract.
+
+11. The application monitors for contract Deliver events and reads the response hash from the associated transaction.
+
+12. The application gets the response metadata from the IPFS:
+
+    ```json
+    {
+      "requestId": 68039248068127180134548324138158983719531519331279563637951550269130775,
+      "result": "{\"p_yes\": 0.35, \"p_no\": 0.65, \"confidence\": 0.85, \"info_utility\": 0.75}"
+    }
+    ```
+
+See some examples of requests and responses on the [Mech Hub](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a).
 
 ## Requirements
 
@@ -59,7 +105,7 @@ Follow these instructions to have your local environment prepared to run the dem
     poetry install && poetry shell
     ```
 
-2. Fetch the software packages using the [Open Autonomy](https://docs.autonolas.network/open-autonomy/) CLI 
+2. Fetch the software packages using the [Open Autonomy](https://docs.autonolas.network/open-autonomy/) CLI:
 
     ```bash
     autonomy packages sync --update-packages
@@ -92,16 +138,19 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 ### Option 1: Run the Mech as a standalone agent
 
 1. Ensure you have a file with a private key (`ethereum_private_key.txt`). You can generate a new private key file using the Open Autonomy CLI:
+
    ```bash
    autonomy generate-key ethereum 
    ```
 
 2. From one terminal, run the agent:
+
     ```bash
     bash run_agent.sh
     ```
 
 3. From another terminal, run the Tendermint node:
+
     ```bash
     bash run_tm.sh
     ```
@@ -109,28 +158,55 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 ### Option 2: Run the Mech as an agent service
 
 1. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
+
     ```bash
     autonomy generate-key ethereum -n 1
     ```
 
 2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`:
+
    ```bash
    ALL_PARTICIPANTS='["your_agent_address"]'
    ```
 
 3. Run, the service:
+
     ```bash
     bash run_service.sh
     ```
+
+## Integrating mechs into your application
+
+### For generic apps and scripts
+
+Use the [mech-client](https://github.com/valory-xyz/mech-client), which can be used either as a CLI or directly from a Python script.
+
+### For other autonomous services
+
+To perform mech requests from your service, use the [mech_interact_abci skill](https://github.com/valory-xyz/IEKit/tree/main/packages/valory/skills/mech_interact_abci). This skill abstracts away all the IPFS and contract interactions so you only need to care about the following:
+
+- Add the mech_interact_abci skill to your dependency list, both in `packages.json`, `aea-config.yaml` and any composed `skill.yaml`.
+
+- Import [MechInteractParams and MechResponseSpecs in your `models.py` file](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/models.py#L88). You will also need to copy [some dataclasses to your rounds.py](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L66-L97).
+
+- Add mech_requests and mech_responses to your skills' `SynchonizedData` class ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L181-193))
+
+- To send a request, [prepare the request metadata](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L857), write it to [`synchronized_data.mech_requests`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L535) and [transition into mech_interact](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L736).
+
+- You will need to appropriately chain the `mech_interact_abci` skill with your other skills ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/composition.py#L66)) and `transaction_settlement_abci`.
+
+- After the interaction finishes, the responses will be inside [`synchronized_data.mech_responses`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L903)
+
+For a complete list of required changes, [use this PR as reference](https://github.com/valory-xyz/market-creator/pull/91).
 
 ## Build your own
 
 You can create and mint your own AI Mech that handles requests for tasks that you can define.
 
-1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools are custom components and should be under the `customs` packages (ex. [valory tools](./packages/valory/customs)). Such file must contain a `run` function that accepts `kwargs` and must **always** return a tuple (`Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]`). That is, the `run` function must not raise any exception. If exceptions occur inside the function, they must be processed, and the return value must be set accordingly, for example, returning an error code.
+1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools are custom components and should be under the `customs` packages (ex. [valory tools](./packages/valory/customs)). Such file must contain a `run` function satisfying the following interface:
 
     ```python
-    def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]::
+    def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         """Run the task"""
 
         # Your code here
@@ -138,36 +214,59 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
         return result_str, prompt_used, generated_tx, counter_callback
     ```
 
-    The `kwargs` are guaranteed to contain:
-    * `api_keys` (`kwargs["api_keys"]`): the required API keys. This is a dictionary containing the API keys required by your Mech:
-        ```python
-        <api_key>=kwargs["api_keys"][<api_key_id>]).
-        ```
-    * `prompt` (`kwargs["prompt"]`): a string containing the user prompt.
-    * `tool` (`kwargs["tool"]`): a string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
+    - **Input**: Keyword arguments (`**kwargs`). The `kwargs` object is guaranteed to contain the following keys:
+        - `tool` (`kwargs["tool"]`): A string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
+        - `prompt` (`kwargs["prompt"]`): A string containing the user prompt.
+        - `api_keys` (`kwargs["api_keys"]`): A dictionary containing the API keys required by your tool:
+
+            ```python
+            <api_key>=kwargs["api_keys"][<api_key_id>].
+            ```
+
+    - **Output**: It must **always** return a tuple (`Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]`):
+        - `result_str`: A string-serialized JSON object containing the result of the tool execution (custom format).
+        - `prompt_used`: A string representing the prompt used internally by the tool. This output is only used for analytics and it can be set to `None`.
+        - `generated_tx`: A dictionary containing the fields of a generated transaction to be submitted following the execution of the tool (e.g., a token transfer). It can be set to `None`. Template of a generated transaction:
+
+            ```json
+          {
+              "to": TARGET_ADDRESS,       # must be provided
+              "value": VALUE_TO_TRANSFER, # default value is 0
+              "data": TX_DATA,            # default value is b' '
+              "operation": CALL_OR_DELEGATE_CALL, # default value is CALL
+          }
+          ```
+
+        - `counter_callback`: Object to be called for calculating the cost when making requests to this tool. It can be set to `None`.
+
+    - **Exceptions**: A compliant implementation of the `run` function must capture any exception raised during its execution and return it appropriately, for example as an error code in `result_str`. If `run` raises an exception the Mech will capture and output an `Invalid response` string.
 
 2. **Upload the tool file to IPFS.** You can push your tool to IPFS like the other packages:
+
     ```bash
     autonomy push-all
     ```
 
     You should see an output similar to this:
-    ```
+
+    ```text
         Pushing: /home/ardian/vlr/mech/packages/valory/customs/openai_request
         Pushed component with:
         PublicId: valory/openai_request:0.1.0
         Package hash: bafybeibdcttrlgp5udygntka5fofi566pitkxhquke37ng7csvndhy4s2i
     ```
+
     Your tool will be available on [packages.json](packages/packages.json).
 
-
 3. **Configure your service.** Edit the `.env` file. The demo service has this configuration:
+
     ```bash
     FILE_HASH_TO_TOOLS=[["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
     API_KEYS=[["openai","dummy_api_key"],["stabilityai","dummy_api_key"]]
     ```
 
     To add your new tool with hash `<your_tool_hash>` and sub-tool list `[a, b, c]` and API key `<your_api_key>` simply update the variables above to:
+
     ```bash
     FILE_HASH_TO_TOOLS=[[<your_tool_hash>, [a, b, c]],["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
     API_KEYS=[[openai, dummy_api_key],[<your_api_key_id>, <your_api_key>]]
@@ -179,6 +278,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
     > AI Mechs run on the [Gnosis chain](https://www.gnosis.io/). You must ensure that your wallet is connected to the [Gnosis chain](https://www.gnosis.io/) before using the [Autonolas Protocol](https://protocol.autonolas.network/services/mint) and [Mech Hub](https://aimechs.autonolas.network/factory).
 
     Here is an example of the agent NFT metadata once you create the Mech:
+
     ```json
     {
       "name": "Autonolas Mech III",
@@ -234,18 +334,23 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
   - `prediction-online`: In addition to training data, it also uses online information to improve the prediction.
 
 ## How key files look
+
 A keyfile is just a file with your ethereum private key as a hex-string, example:
-```
+
+```text
 0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd
 ```
 
 Make sure you don't have any extra characters in the file, like newlines or spaces.
 
-## Examples of deployed mechs
+## Examples of deployed Mechs
 
-| Network | Service |
-| :---:   | :---: |
-| Ethereum | https://registry.olas.network/ethereum/services/21 |
-| Gnosis | https://registry.olas.network/gnosis/services/3 |
-| Arbitrum | https://registry.olas.network/arbitrum/services/1 |
-| Polygon | https://registry.olas.network/polygon/services/3 |
+| Network   | Service                                            | Mech Instance (Nevermined Pricing) - Agent Id                                          | Mech Instance (Fixed Pricing) - Agent Id           |
+|:---------:|----------------------------------------------------|--------------------------------------------------|----------------------------------------------------|
+| Ethereum  | https://registry.olas.network/ethereum/services/21 | n/a                                                 | n/a                                                |
+| Gnosis    | https://registry.olas.network/gnosis/services/3    | `0x327E26bDF1CfEa50BFAe35643B23D5268E41F7F9`  - 3  | `0x77af31De935740567Cf4fF1986D04B2c964A786a` - 6   |
+| Arbitrum  | https://registry.olas.network/arbitrum/services/1  | `0x0eA6B3137f294657f0E854390bb2F607e315B82c`  - 1  | `0x1FDAD3a5af5E96e5a64Fc0662B1814458F114597` - 2   |
+| Polygon   | https://registry.olas.network/polygon/services/3   | `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188`  - 1  | `0xbF92568718982bf65ee4af4F7020205dE2331a8a` - 2  |
+| Base      | https://registry.olas.network/base/services/1      | `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA`  - 1  | `0x111D7DB1B752AB4D2cC0286983D9bd73a49bac6c` - 2  |
+| Celo      | https://registry.olas.network/celo/services/1      | `0xeC20694b7BD7870d2dc415Af3b349360A6183245`  - 1  | `0x230eD015735c0D01EA0AaD2786Ed6Bd3C6e75912` - 2  |
+| Optimism  | https://registry.olas.network/optimism/services/1  | `0xbA4491C86705e8f335Ceaa8aaDb41361b2F82498`  - 1  | `0xDd40E7D93c37eFD860Bd53Ab90b2b0a8D05cf71a` - 2  |

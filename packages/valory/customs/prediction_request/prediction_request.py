@@ -20,46 +20,153 @@
 """This module implements a Mech tool for binary predictions."""
 
 import json
+import time
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
-
-from openai import OpenAI
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 
 import requests
 import spacy
-import tiktoken
 from markdownify import markdownify as md
 from readability import Document
 from googleapiclient.discovery import build
+import re
 from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
 from tiktoken import encoding_for_model
 
-client: Optional[OpenAI] = None
 
+class LLMClientManager:
+    """Client context manager for LLMs."""
 
-class OpenAIClientManager:
-    """Client context manager for OpenAI."""
-    def __init__(self, api_key: str):
-        self.api_key = api_key
+    def __init__(self, api_keys: List, llm_provider: str = None):
+        self.api_keys = api_keys
+        self.llm_provider = llm_provider
 
-    def __enter__(self) -> OpenAI:
+    def __enter__(self):
         global client
         if client is None:
-            client = OpenAI(api_key=self.api_key)
+            client = LLMClient(self.api_keys, self.llm_provider)
         return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         global client
         if client is not None:
-            client.close()
+            client.client.close()
             client = None
+
+
+class Usage:
+    """Usage class."""
+
+    def __init__(self, prompt_tokens=None, completion_tokens=None):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+
+class LLMResponse:
+    """Response class."""
+
+    def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+        self.content = content
+        self.usage = Usage()
+
+
+class LLMClient:
+    """Client for LLMs."""
+
+    def __init__(self, api_keys: List, llm_provider: str = None):
+        self.api_keys = api_keys
+        self.llm_provider = llm_provider
+        if self.llm_provider == "anthropic":
+            import anthropic
+
+            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
+        if self.llm_provider == "openai":
+            import openai
+
+            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+        if self.llm_provider == "openrouter":
+            import openai
+
+            self.client = openai.OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=self.api_keys["openrouter"],
+            )
+
+    def completions(
+        self,
+        model: str,
+        messages: List = [],
+        timeout: Optional[Union[float, int]] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        n: Optional[int] = None,
+        stop=None,
+        max_tokens: Optional[float] = None,
+    ):
+        if self.llm_provider == "anthropic":
+            # anthropic can't take system prompt in messages
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]["role"] == "system":
+                    system_prompt = messages[i]["content"]
+                    del messages[i]
+
+            response_provider = self.client.messages.create(
+                model=model,
+                messages=messages,
+                system=system_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            response = LLMResponse()
+            response.content = response_provider.content[0].text
+            response.usage.prompt_tokens = response_provider.usage.input_tokens
+            response.usage.completion_tokens = response_provider.usage.output_tokens
+            return response
+
+        if self.llm_provider == "openai":
+            response_provider = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+            )
+            response = LLMResponse()
+            response.content = response_provider.choices[0].message.content
+            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
+            response.usage.completion_tokens = response_provider.usage.completion_tokens
+            return response
+
+        if self.llm_provider == "openrouter":
+            # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
+            # transform = [] # to desactivate prompt compression
+            response_provider = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+            )
+            response = LLMResponse()
+            response.content = response_provider.choices[0].message.content
+            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
+            response.usage.completion_tokens = response_provider.usage.completion_tokens
+            return response
+
+
+client: Optional[LLMClient] = None
+
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
@@ -71,20 +178,51 @@ FrequenciesType = Dict[str, float]
 ScoresType = Dict[Span, float]
 
 
-DEFAULT_OPENAI_SETTINGS = {
-    "max_tokens": 500,
-    "temperature": 0.7,
+LLM_SETTINGS = {
+    "gpt-3.5-turbo-0125": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
+    "gpt-4-0125-preview": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 8192,
+        "temperature": 0,
+    },
+    "claude-3-haiku-20240307": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
+    "claude-3-sonnet-20240229": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
+    "claude-3-opus-20240229": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
+    "databricks/dbrx-instruct:nitro": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 32_768,
+        "temperature": 0,
+    },
+    "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 32_000,
+        "temperature": 0,
+    },
 }
 ALLOWED_TOOLS = [
     "prediction-offline",
     "prediction-online",
-    "prediction-online-summarized-info",
+    # "prediction-online-summarized-info",
 ]
-MAX_TOKENS = {
-    "gpt-3.5-turbo": 4096,
-    "gpt-4": 8192,
-}
-TOOL_TO_ENGINE = {tool: "gpt-3.5-turbo" for tool in ALLOWED_TOOLS}
+ALLOWED_MODELS = list(LLM_SETTINGS.keys())
+DEFAULT_MODEL = "gpt-4-0125-preview"
+TOOL_TO_ENGINE = {tool: DEFAULT_MODEL for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_URLS["prediction-online-summarized-info"] = 7
@@ -95,6 +233,9 @@ DEFAULT_NUM_WORDS["prediction-online-summarized-info"] = None
 DEFAULT_COMPRESSION_FACTOR = 0.05
 # the vocabulary to use for the summarization
 DEFAULT_VOCAB = "en_core_web_sm"
+# number of retries and delay for completion
+COMPLETION_RETRIES = 3
+COMPLETION_DELAY = 2
 
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -215,10 +356,10 @@ def extract_text(
 
     if num_words:
         return " ".join(text.split()[:num_words])
-    
+
     # remove newlines and extra spaces
     text = " ".join(text.split())
-    
+
     return text
 
 
@@ -249,8 +390,8 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
                 if result.status_code != 200:
                     continue
                 doc = {}
-                doc['text'] = extract_text(html=result.text, num_words=num_words)
-                doc['url'] = url
+                doc["text"] = extract_text(html=result.text, num_words=num_words)
+                doc["url"] = url
                 extracted_texts.append(doc)
                 count += 1
                 if count >= max_allowed:
@@ -263,6 +404,105 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
         if stop:
             break
     return extracted_texts
+
+
+def extract_json_string(text):
+    # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
+    pattern = r"(\{[^}]*\})"
+    matches = re.findall(pattern, text)
+    return matches[0].replace("json", "")
+
+
+def extract_multi_queries(text: str) -> Any:
+    """Extract multiple queries from the given text"""
+    # strip empty whitespace
+    text = text.strip()
+
+    # check if line starts with ````json
+    if not text.startswith("```json"):
+        text = extract_json_string(text)
+
+    return json.loads(text)
+
+
+def fetch_multi_queries_with_retry(
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    retries: int = COMPLETION_RETRIES,
+    delay: int = COMPLETION_DELAY,
+    counter_callback: Optional[Callable] = None,
+):
+    """Attempt to fetch multi-queries with retries on failure."""
+    attempt = 0
+    while attempt < retries:
+        try:
+            response = client.completions(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=90,
+                stop=None,
+            )
+            # Attempt to extract JSON data from the response
+            json_data = extract_multi_queries(response.content)
+
+            if counter_callback:
+                counter_callback(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                    model=model,
+                    token_counter=count_tokens,
+                )
+            return json_data, counter_callback
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            time.sleep(delay)
+            attempt += 1
+    raise Exception("Failed to fetch multi-queries after retries")
+
+
+def generate_prediction_with_retry(
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    retries: int = COMPLETION_RETRIES,
+    delay: int = COMPLETION_DELAY,
+    counter_callback: Optional[Callable] = None,
+):
+    """Attempt to generate a prediction with retries on failure."""
+    attempt = 0
+    while attempt < retries:
+        try:
+            response = client.completions(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=90,
+                stop=None,
+            )
+
+            if counter_callback is not None:
+                counter_callback(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                    model=model,
+                    token_counter=count_tokens,
+                )
+            extracted_block = extract_json_string(response.content)
+
+            return extracted_block, counter_callback
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            time.sleep(delay)
+            attempt += 1
+    raise Exception("Failed to generate prediction after retries")
 
 
 def fetch_additional_information(
@@ -279,23 +519,23 @@ def fetch_additional_information(
 ) -> Tuple[str, Any]:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
-    moderation_result = client.moderations.create(input=url_query_prompt)
-    if moderation_result.results[0].flagged:
-        return ""
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": url_query_prompt},
     ]
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=90,
-        stop=None,
-    )
-    json_data = json.loads(response.choices[0].message.content)
+    try:
+        json_data, counter_callback = fetch_multi_queries_with_retry(
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            retries=COMPLETION_RETRIES,
+            delay=COMPLETION_DELAY,
+            counter_callback=counter_callback,
+        )
+    except Exception as e:
+        json_data = {"queries": [prompt]}
+
     if not source_links:
         urls = get_urls_from_queries(
             json_data["queries"],
@@ -308,7 +548,10 @@ def fetch_additional_information(
         texts = []
         for url, content in islice(source_links.items(), 3):
             doc = {}
-            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+            doc["text"], doc["url"] = (
+                extract_text(html=content, num_words=num_words),
+                url,
+            )
             texts.append(doc)
     # Format the additional information
     additional_information = "\n".join(
@@ -317,13 +560,6 @@ def fetch_additional_information(
             for i, doc in enumerate(texts)
         ]
     )
-    if counter_callback:
-        counter_callback(
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=engine,
-            token_counter=count_tokens,
-        )
     return additional_information, counter_callback
 
 
@@ -387,46 +623,52 @@ def summarize(text: str, compression_factor: float, vocab: str) -> str:
 
 
 def adjust_additional_information(
-    prompt: str, 
-    prompt_template:str, 
-    additional_information: str, 
-    model: str
+    prompt: str, prompt_template: str, additional_information: str, model: str
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
     # Initialize tiktoken encoder for the specified model
-    enc = tiktoken.encoding_for_model(model)
-    
+    enc = encoding_for_model(model)
+
     # Encode the user prompt to calculate its token count
     prompt = prompt_template.format(user_prompt=prompt, additional_information="")
     prompt_tokens = len(enc.encode(prompt))
-    
+
     # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+    MAX_PREDICTION_PROMPT_TOKENS = (
+        LLM_SETTINGS[model]["limit_max_tokens"]
+        - LLM_SETTINGS[model]["default_max_tokens"]
+    )
     available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
-    
+
     # Encode the additional_information
     additional_info_tokens = enc.encode(additional_information)
-    
+
     # If additional_information exceeds available tokens, truncate it
     if len(additional_info_tokens) > available_tokens:
         truncated_info_tokens = additional_info_tokens[:available_tokens]
         # Decode tokens back to text, ensuring the output fits within the budget
         additional_information = enc.decode(truncated_info_tokens)
-    
+
     return additional_information
 
 
-def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+    with LLMClientManager(kwargs["api_keys"], kwargs["llm_provider"]):
         tool = kwargs["tool"]
         prompt = kwargs["prompt"]
-        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
-        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
+        max_tokens = kwargs.get(
+            "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
+        )
+        temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
-        compression_factor = kwargs.get("compression_factor", DEFAULT_COMPRESSION_FACTOR)
+        compression_factor = kwargs.get(
+            "compression_factor", DEFAULT_COMPRESSION_FACTOR
+        )
         vocab = kwargs.get("vocab", DEFAULT_VOCAB)
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
@@ -436,7 +678,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
-        engine = TOOL_TO_ENGINE[tool]
         if tool.startswith("prediction-online"):
             additional_information, counter_callback = fetch_additional_information(
                 prompt,
@@ -457,33 +698,25 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             additional_information = summarize(
                 additional_information, compression_factor, vocab
             )
-        additional_information = adjust_additional_information(
-            prompt, PREDICTION_PROMPT, additional_information, engine
-        )
+        # TODO: Get adjust_additional_information working for Claude
+        # additional_information = adjust_additional_information(
+        #     prompt, PREDICTION_PROMPT, additional_information, engine
+        # )
         prediction_prompt = PREDICTION_PROMPT.format(
             user_prompt=prompt, additional_information=additional_information
         )
-        moderation_result = client.moderations.create(input=prediction_prompt)
-        if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None, None
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
         ]
-        response = client.chat.completions.create(
+        extracted_block, counter_callback = generate_prediction_with_retry(
             model=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
-            n=1,
-            timeout=150,
-            stop=None,
+            retries=COMPLETION_RETRIES,
+            delay=COMPLETION_DELAY,
+            counter_callback=counter_callback,
         )
-        if counter_callback is not None:
-            counter_callback(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
-                model=engine,
-                token_counter=count_tokens,
-            )
-        return response.choices[0].message.content, prediction_prompt, None, counter_callback
+
+        return extracted_block, prediction_prompt, None, counter_callback
