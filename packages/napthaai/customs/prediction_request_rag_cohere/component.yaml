@@ -1,15 +1,16 @@
-name: prediction_request_rag_claude
+name: prediction_request_rag_cohere
 author: napthaai
 version: 0.1.0
 type: custom
-description: A tool for making binary predictions on markets using claude.
+description: A tool for making binary predictions on markets using rag technique with
+  cohere models.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeihd72xjbjzbqcpm3qfaimqk3ts3qx2l4w2lhca2e4ruso7jngmmce
-  prediction_request_rag_claude.py: bafybeibxeaoizixha4po7apf4k7gix2hi7x54hwqx4oyp23bwdgao6fv2u
+  __init__.py: bafybeiekjzoy2haayvkiwhb2u2epflpqxticud34mma3gdhfzgu36lxwiq
+  prediction_request_rag_cohere.py: bafybeidt7vvlrapi2y4b4ytqqi2s2ro5oi5xfc62a2rftkwbat2fmw5hme
 fingerprint_ignore_patterns: []
-entry_point: prediction_request_rag_claude.py
+entry_point: prediction_request_rag_cohere.py
 callable: run
 params:
   default_model: claude-3-haiku-20240307

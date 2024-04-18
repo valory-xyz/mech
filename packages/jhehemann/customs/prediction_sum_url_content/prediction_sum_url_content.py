@@ -46,6 +46,7 @@ client: Optional[OpenAI] = None
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -981,7 +982,6 @@ def fetch_additional_information(
     temperature: float = 1.0,
     max_compl_tokens: int = 500,
 ) -> str:
-
     """
     Get urls from a web search and extract relevant information based on an event question.
 
@@ -1138,7 +1138,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         # Get the current utc timestamp
         current_time_utc = datetime.now(timezone.utc)
-        formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        formatted_time_utc = (
+            current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        )
 
         # Extract event date and format it to ISO 8601 with UTC timezone and 23:59:59 time
         doc_question = nlp(event_question)
@@ -1147,7 +1149,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         final_event_date = parsed_event_date.replace(
             hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc
         )
-        formatted_event_date = final_event_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        formatted_event_date = (
+            final_event_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        )
 
         # Generate the prediction prompt
         prediction_prompt = PREDICTION_PROMPT.format(
@@ -1162,7 +1166,12 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         # Perform moderation
         moderation_result = client.moderations.create(input=prediction_prompt)
         if moderation_result.results[0].flagged:
-            return "Moderation flagged the prompt as in violation of terms.", None, None, None
+            return (
+                "Moderation flagged the prompt as in violation of terms.",
+                None,
+                None,
+                None,
+            )
 
         # Create messages for the OpenAI engine
         messages = [

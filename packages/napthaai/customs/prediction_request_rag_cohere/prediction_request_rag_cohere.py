@@ -22,10 +22,8 @@ import json
 import faiss
 import PyPDF2
 import requests
-import anthropic
 import numpy as np
 from io import BytesIO
-from openai import OpenAI
 from itertools import islice
 from pydantic import BaseModel
 from collections import defaultdict
@@ -34,33 +32,168 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from markdownify import markdownify as md
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 from tiktoken import encoding_for_model
 
 
-DEFAULT_CLAUDE_SETTINGS = {
-    "max_tokens": 1000,
-    "temperature": 0,
-}
-MAX_TOKENS = {
-    'claude-2': 200_0000,
-    'claude-2.1': 200_0000,
-    'claude-3-haiku-20240307': 200_0000,
-    'claude-3-sonnet-20240229': 200_0000,
-    'claude-3-opus-20240229': 200_0000,
+class LLMClientManager:
+    """Client context manager for LLMs."""
+
+    def __init__(
+        self, api_keys: List, llm_provider: str = None, embedding_provider: str = None
+    ):
+        self.api_keys = api_keys
+        self.llm_provider = llm_provider
+        self.embedding_provider = embedding_provider
+
+    def __enter__(self):
+        clients = []
+        global client
+        if self.llm_provider and client is None:
+            client = LLMClient(self.api_keys, self.llm_provider)
+            clients.append(client)
+        global client_embedding
+        if self.embedding_provider and client_embedding is None:
+            client_embedding = LLMClient(self.api_keys, self.embedding_provider)
+            clients.append(client_embedding)
+        return clients
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.client.close()
+            client = None
+
+
+class Usage:
+    """Usage class."""
+
+    def __init__(self, prompt_tokens=None, completion_tokens=None):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+
+class LLMResponse:
+    """Response class."""
+
+    def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+        self.content = content
+        self.usage = Usage()
+
+
+class LLMClient:
+    """Client for LLMs."""
+
+    def __init__(self, api_keys: Dict, llm_provider: str):
+        self.api_keys = api_keys
+        self.llm_provider = llm_provider
+        if self.llm_provider == "anthropic":
+            import anthropic
+
+            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
+        if self.llm_provider == "openai":
+            import openai
+
+            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+        if self.llm_provider == "openrouter":
+            import openai
+
+            self.client = openai.OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=self.api_keys["openrouter"],
+            )
+
+    def completions(
+        self,
+        model: str,
+        messages: List = [],
+        timeout: Optional[Union[float, int]] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        n: Optional[int] = None,
+        stop=None,
+        max_tokens: Optional[float] = None,
+    ):
+        if self.llm_provider == "anthropic":
+            # anthropic can't take system prompt in messages
+            for i in range(len(messages) - 1, -1, -1):
+                if messages[i]["role"] == "system":
+                    system_prompt = messages[i]["content"]
+                    del messages[i]
+
+            response_provider = self.client.messages.create(
+                model=model,
+                messages=messages,
+                system=system_prompt,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            response = LLMResponse()
+            response.content = response_provider.content[0].text
+            response.usage.prompt_tokens = response_provider.usage.input_tokens
+            response.usage.completion_tokens = response_provider.usage.output_tokens
+            return response
+
+        if self.llm_provider == "openai":
+            response_provider = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+            )
+            response = LLMResponse()
+            response.content = response_provider.choices[0].message.content
+            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
+            response.usage.completion_tokens = response_provider.usage.completion_tokens
+            return response
+
+        if self.llm_provider == "openrouter":
+            response_provider = self.client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=150,
+                stop=None,
+            )
+            response = LLMResponse()
+            response.content = response_provider.choices[0].message.content
+            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
+            response.usage.completion_tokens = response_provider.usage.completion_tokens
+            return response
+
+    def embeddings(self, model, input):
+        if self.llm_provider == "openai" or self.llm_provider == "openrouter":
+            response = self.client.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=input,
+            )
+            return response
+        else:
+            print("Only OpenAI embeddings supported currently.")
+            return None
+
+
+client: Optional[LLMClient] = None
+client_embedding: Optional[LLMClient] = None
+
+LLM_SETTINGS = {
+    "cohere/command-r-plus": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
 }
 ALLOWED_TOOLS = [
-    "prediction-request-rag-claude",
+    "prediction-request-rag-cohere",
 ]
-ALLOWED_MODELS = [
-    "claude-2",
-    "claude-2.1",
-    "claude-3-haiku-20240307",
-    "claude-3-sonnet-20240229",
-    "claude-3-opus-20240229",
-]
-TOOL_TO_ENGINE = {tool: "claude-3-haiku-20240307" for tool in ALLOWED_TOOLS}
-
+ALLOWED_MODELS = list(LLM_SETTINGS.keys())
+DEFAULT_MODEL = "cohere/command-r-plus"
+TOOL_TO_ENGINE = {tool: DEFAULT_MODEL for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
 NUM_URLS_PER_QUERY = 5
@@ -85,11 +218,14 @@ A user has asked the following:
 
 <user_prompt> {USER_PROMPT} </user_prompt>
 
-Carefully consider the user's question and the additional information provided. Think through the likelihood of the event the user asked about actually happening in the future, based on the details given. Write out your reasoning and analysis in a section.
+Carefully consider the user's question and the additional information provided. Think through the likelihood of the event the user asked about actually happening in the future, based on the details given. Write out your reasoning and analysis in a section named analysis.
 
-Now, based on your analysis above, provide a prediction of the probability the event will happen, as p_yes between 0 and 1. Also provide the probability it will not happen, as p_no between 0 and 1. The two probabilities should sum to 1.
+analysis:
 
-p_yes: p_no:
+Now, based on your analysis above, provide a prediction of the probability that the event will happen, named p_yes, as a number between 0 and 1. Also provide the probability it will not happen, named p_no, as a number between 0 and 1. The sum of the two probabilities, p_yes and p_no, should be 1.
+
+p_yes: 
+p_no:
 
 How useful was the additional information in allowing you to make a prediction? Provide your rating as info_utility, a number between 0 and 1.
 
@@ -99,14 +235,10 @@ Finally, considering everything, what is your overall confidence in your predict
 
 confidence:
 
-Make sure the values you provide are between 0 and 1. And p_yes and p_no should sum to 1.
+Make sure the numeric values you provide are between 0 and 1. And p_yes and p_no should sum to 1.
 
-Your response should be structured as follows:
-<p_yes></p_yes>
-<p_no></p_no>
-<info_utility></info_utility>
-<confidence></confidence>
-<analysis></analysis>
+Your response should be structured as a json with all the described fields. This is an example of a valid response:
+{{"p_yes": 0.7, "p_no": 0.3, "info_utility": 0.6, "confidence": 0.5, "analysis": "this is a sample analysis to define the valid template of a response"}}
 """
 
 URL_QUERY_PROMPT = """
@@ -127,6 +259,7 @@ After you have written all {NUM_QUERIES} search queries, please submit your fina
 
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
+
 class Document(BaseModel):
     text: str
     url: str
@@ -140,13 +273,12 @@ def count_tokens(text: str, model: str) -> int:
 
 
 def multi_queries(
-    client: anthropic.Anthropic,
     prompt: str,
     engine: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = DEFAULT_CLAUDE_SETTINGS["temperature"],
-    max_tokens: Optional[int] = DEFAULT_CLAUDE_SETTINGS["max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -155,23 +287,23 @@ def multi_queries(
 
     messages = [
         {"role": "user", "content": url_query_prompt},
+        {"role": "system", "content": SYSTEM_PROMPT},
     ]
 
-    response = client.messages.create(
+    response = client.completions(
         model=engine,
         messages=messages,
-        system=SYSTEM_PROMPT,
         temperature=temperature,
         max_tokens=max_tokens,
     )
     if counter_callback:
         counter_callback(
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+            input_tokens=response.usage.prompt_tokens,
+            output_tokens=response.usage.completion_tokens,
             model=engine,
             token_counter=count_tokens,
         )
-    queries = parser_query_response(response.content[0].text, num_queries=num_queries)
+    queries = parser_query_response(response.content, num_queries=num_queries)
     queries.append(prompt)
 
     return queries, counter_callback
@@ -186,27 +318,22 @@ def parser_query_response(response: str, num_queries: int = 5) -> List[str]:
     for query in parsed_queries:
         if query[0].isdigit():
             query = ". ".join(query.split(". ")[1:])
-        query = query.replace('"', '')
+        query = query.replace('"', "")
         enhanced_queries.append(query)
 
     if len(enhanced_queries) == num_queries * 2:
         enhanced_queries = enhanced_queries[::2]
 
     # Remove doubel quotes from the queries
-    final_queries = [query.replace('"', '') for query in enhanced_queries]
+    final_queries = [query.replace('"', "") for query in enhanced_queries]
 
     # if there are any xml tags in the queries, remove them
-    final_queries = [re.sub(r'<[^>]*>', '', query) for query in final_queries]
-    
+    final_queries = [re.sub(r"<[^>]*>", "", query) for query in final_queries]
+
     return final_queries
 
 
-def search_google(
-    query: str, 
-    api_key: str, 
-    engine: str, 
-    num: int
-) -> List[str]:
+def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     """Search Google for the given query."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
@@ -281,15 +408,15 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
         doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
         print(f"Using PDF: {url}: {doc.text[:300]}...")
         return doc
-    
+
     except Exception as e:
         print(f"An error occurred: {e}")
         return None
-    
+
 
 def process_in_batches(
-    urls: List[str], 
-    window: int = 5, 
+    urls: List[str],
+    window: int = 5,
     timeout: int = HTTP_TIMEOUT,
     max_redirects: int = HTTP_MAX_REDIRECTS,
     retries: int = HTTP_MAX_RETIES,
@@ -306,7 +433,7 @@ def process_in_batches(
                 while attempt < retries:
                     try:
                         future = executor.submit(session.get, url, timeout=timeout)
-                        break  
+                        break
                     except (TooManyRedirects, RequestException) as e:
                         print(f"Attempt {attempt + 1} failed for {url}: {e}")
                         attempt += 1
@@ -327,7 +454,7 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
                 result = future.result()
                 if result.status_code == 200:
                     # Check if URL ends with .pdf or content starts with %PDF
-                    if url.endswith('.pdf') or result.content[:4] == b'%PDF':
+                    if url.endswith(".pdf") or result.content[:4] == b"%PDF":
                         doc = extract_text_from_pdf(url, num_words=num_words)
                     else:
                         doc = extract_text(html=result.text, num_words=num_words)
@@ -340,14 +467,11 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
 
 
 def find_similar_chunks(
-    client: OpenAI,
-    query: str, 
-    docs_with_embeddings: List[Document], 
-    k: int = 4
+    query: str, docs_with_embeddings: List[Document], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
     query_embedding = (
-        client.embeddings.create(
+        client_embedding.embeddings(
             model=EMBEDDING_MODEL,
             input=query,
         )
@@ -362,15 +486,12 @@ def find_similar_chunks(
     return [docs_with_embeddings[i] for i in I[0]]
 
 
-def get_embeddings(
-    client: OpenAI,
-    split_docs: List[Document]
-) -> List[Document]:
+def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents."""
     for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
         batch_end = batch_start + EMBEDDING_BATCH_SIZE
         batch = [doc.text for doc in split_docs[batch_start:batch_end]]
-        response = client.embeddings.create(
+        response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
             input=batch,
         )
@@ -386,12 +507,12 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
     if len(text) <= max_tokens:
         return [text]
     else:
-        return [text[i:i+max_tokens] for i in range(0, len(text), max_tokens - overlap)]
-    
+        return [
+            text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)
+        ]
+
 
 def fetch_additional_information(
-    client: anthropic.Anthropic,
-    client_openai: OpenAI,
     prompt: str,
     engine: str,
     google_api_key: Optional[str],
@@ -400,17 +521,15 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = DEFAULT_CLAUDE_SETTINGS["temperature"],
-    max_tokens: Optional[int] = DEFAULT_CLAUDE_SETTINGS["max_tokens"]
+    temperature: Optional[float] = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
 ) -> Tuple[str, Callable[[int, int, str], None]]:
-    
     """Fetch additional information to help answer the user prompt."""
 
     # generate multiple queries for fetching information from the web
-    
+
     try:
         queries, counter_callback = multi_queries(
-            client=client,
             prompt=prompt,
             engine=engine,
             num_queries=num_queries,
@@ -450,7 +569,7 @@ def fetch_additional_information(
     docs = [doc for doc in docs if doc]
 
     # remove empty documents ""
-    filtered_docs = [doc for doc in docs if hasattr(doc, 'text') and doc.text != ""]
+    filtered_docs = [doc for doc in docs if hasattr(doc, "text") and doc.text != ""]
 
     # Chunk the documents
     split_docs = []
@@ -459,9 +578,7 @@ def fetch_additional_information(
             t = recursive_character_text_splitter(
                 doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
             )
-            split_docs.extend(
-                [Document(text=chunk, url=doc.url) for chunk in t]
-            )
+            split_docs.extend([Document(text=chunk, url=doc.url) for chunk in t])
         except Exception as e:
             print(f"Error splitting document: {e}")
             continue
@@ -471,12 +588,11 @@ def fetch_additional_information(
     split_docs = [doc for doc in split_docs if doc]
 
     # Embed the documents
-    docs_with_embeddings = get_embeddings(client_openai, split_docs)
+    docs_with_embeddings = get_embeddings(split_docs)
     print(f"Docs with embeddings: {len(docs_with_embeddings)}")
-    
+
     # Find similar chunks
     similar_chunks = find_similar_chunks(
-        client_openai,
         query=prompt,
         docs_with_embeddings=docs_with_embeddings,
         k=NUM_NEIGHBORS,
@@ -495,7 +611,7 @@ def fetch_additional_information(
 
 
 def extract_question(prompt: str) -> str:
-    pattern = r'\"(.*?)\"'
+    pattern = r"\"(.*?)\""
     try:
         question = re.findall(pattern, prompt)[0]
     except Exception as e:
@@ -504,93 +620,96 @@ def extract_question(prompt: str) -> str:
 
     return question
 
-
 def parser_prediction_response(response: str) -> str:
     """Parse the response from the prediction model."""
-    results = {}
-    for key in ["p_yes", "p_no", "info_utility", "confidence"]:
-        try:
-            value = response.split(f"<{key}>")[1].split(f"</{key}>")[0].strip()
-            if key in ["p_yes", "p_no", "info_utility", "confidence"]:
-                value = float(value)
-            results[key] = value
-        except Exception:
-            raise ValueError(f"Error parsing {key}")
+    try:
+        # check if line starts with ````json
+        if response.startswith("```json"):
+            results = re.findall(f'```json(.*?)```',response,re.DOTALL)
+            print(f"results after parsing={results}")
+            results_as_dict = json.loads(results[0]) # it returns the dictionary
+            return json.dumps(results_as_dict) 
 
-    results = json.dumps(results)
-    return results
+        extracted_text = ''.join([line.strip() for line in response.splitlines()])
+        # remove the last comma
+        extracted_text = extracted_text.rstrip(",")
+        print(f"extracted text= {extracted_text}")
+        
+        return json.dumps(extracted_text)
+    except Exception as e:
+        print(e)
+        print(f"response of the model={response}")
+        raise ValueError(f"Error parsing the response of the model {response}")
 
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
+    with LLMClientManager(
+        kwargs["api_keys"], kwargs["llm_provider"], embedding_provider="openai"
+    ):
+        tool = kwargs["tool"]
+        model = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        prompt = extract_question(kwargs["prompt"])
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        print(f"ENGINE: {engine}")
+        max_tokens = kwargs.get(
+            "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
+        )
+        temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
+        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
+        num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
+        counter_callback = kwargs.get("counter_callback", None)
+        api_keys = kwargs.get("api_keys", {})
+        google_api_key = api_keys.get("google_api_key", None)
+        google_engine_id = api_keys.get("google_engine_id", None)
 
-    tool = kwargs["tool"]
-    model = kwargs.get("model", TOOL_TO_ENGINE[tool])
-    prompt = extract_question(kwargs["prompt"])
-    max_tokens = kwargs.get("max_tokens", DEFAULT_CLAUDE_SETTINGS["max_tokens"])
-    temperature = kwargs.get("temperature", DEFAULT_CLAUDE_SETTINGS["temperature"])
-    num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
-    num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
-    counter_callback = kwargs.get("counter_callback", None)
-    api_keys = kwargs.get("api_keys", {})
-    google_api_key = api_keys.get("google_api_key", None)
-    google_engine_id = api_keys.get("google_engine_id", None)
-    client = anthropic.Anthropic(api_key=api_keys["anthropic"])
-    client_openai = OpenAI(api_key=api_keys["openai"])
+        # Make sure the model is supported
+        if model not in ALLOWED_MODELS:
+            raise ValueError(f"Model {model} not supported.")
 
-    # Make sure the model is supported
-    if model not in ALLOWED_MODELS:
-        raise ValueError(f"Model {model} not supported.")
-    
-    # make sure the tool is supported
-    if tool not in ALLOWED_TOOLS:
-        raise ValueError(f"Tool {tool} not supported.")
-    
-    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-    print(f"ENGINE: {engine}")
-    
-    additional_information, counter_callback = fetch_additional_information(
-        client=client,
-        client_openai=client_openai,
-        prompt=prompt,
-        engine=engine,
-        google_api_key=google_api_key,
-        google_engine_id=google_engine_id,
-        counter_callback=counter_callback,
-        source_links=kwargs.get("source_links", None),
-        num_urls=num_urls,
-        num_queries=num_queries,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+        # make sure the tool is supported
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"Tool {tool} not supported.")
 
-    # Generate the prediction prompt
-    prediction_prompt = PREDICTION_PROMPT.format(
-        ADDITIONAL_INFORMATION=additional_information,
-        USER_PROMPT=prompt,
-    )
+        additional_information, counter_callback = fetch_additional_information(
+            prompt=prompt,
+            engine=engine,
+            google_api_key=google_api_key,
+            google_engine_id=google_engine_id,
+            counter_callback=counter_callback,
+            source_links=kwargs.get("source_links", None),
+            num_urls=num_urls,
+            num_queries=num_queries,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
-    # Generate the prediction
-    messages = [
-        {"role": "user", "content": prediction_prompt},
-    ]
+        # Generate the prediction prompt
+        prediction_prompt = PREDICTION_PROMPT.format(
+            ADDITIONAL_INFORMATION=additional_information,
+            USER_PROMPT=prompt,
+        )
 
-    response = client.messages.create(
-        model=engine,
-        messages=messages,
-        system=SYSTEM_PROMPT,
-        temperature=temperature,
-        max_tokens=max_tokens,
-    )
+        # Generate the prediction
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": prediction_prompt},
+        ]
 
-    if counter_callback:
-        counter_callback(
-            input_tokens=response.usage.input_tokens,
-            output_tokens=response.usage.output_tokens,
+        response = client.completions(
             model=engine,
-            token_counter=count_tokens,
-        )   
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
 
-    results = parser_prediction_response(response.content[0].text)
-    
-    return results, prediction_prompt, None, counter_callback
+        if counter_callback:
+            counter_callback(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+                model=engine,
+                token_counter=count_tokens,
+            )
+
+        results = parser_prediction_response(response.content)
+        return results, prediction_prompt, None, counter_callback
