@@ -17,13 +17,12 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module implements a research agent for extracting relevant information from URLs."""
+"""This module implements a research tool for extracting relevant information from URLs."""
 
-from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
 import re
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup
 import faiss
 from googleapiclient.discovery import build
 import json
@@ -33,20 +32,13 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 import requests
 from requests import Session
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from typing import Any, Dict, Generator, List, Optional, Tuple
 from tiktoken import encoding_for_model
 from readability import Document
 from markdownify import markdownify as md
-
-import logging
-
 from openai import OpenAI
 from tqdm import tqdm
-
-
 from dateutil import parser
-
-#logging.basicConfig(level=logging.DEBUG)
 
 NUM_URLS_PER_QUERY = 4
 TEXT_CHUNK_LENGTH = 300
@@ -56,7 +48,7 @@ MAX_TEXT_CHUNKS_TOTAL = 30
 EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_SIZE = 1536
-WEEKS_TO_SCRAPE_NEWS = 5
+WEEKS_TO_SCRAPE_NEWS = 4
 
 DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 500,
@@ -339,7 +331,8 @@ class WebPage:
                 print(f"Error decoding JSON: {e}")
                 continue
             except Exception as e:
-                raise Exception(f"Error extracting publisher for webpage {self.url}") from e
+                print(f"Error extracting publisher for webpage {self.url}")
+                continue
         
         publisher = soup.find("meta", attrs={"name": "publisher"}) or soup.find("meta", attrs={"property": "publisher"})
         
@@ -358,10 +351,11 @@ class WebPage:
                 if date:
                     return format_date(date)
             except json.JSONDecodeError as e:
-                print(f"Error decoding JSON: {e}\nScript: {script}")
+                print(f"Error decoding JSON: {e}")
                 continue
             except Exception as e:
-                raise Exception(f"Error extracting publisher for webpage {self.url}") from e
+                print(f"Error extracting publisher for webpage {self.url}")
+                continue
 
         # If not found, then look for release or publication date
         for name in RELEASE_DATE_NAMES:
@@ -390,7 +384,7 @@ class WebPage:
                 else:
                     raise ValueError(f"Invalid attribute: {attribute_name}")
         else:
-            print(f"No HTML content to extract page attributes from.\nURL: {self.url}\nHTML: {self.html}")
+            print(f"No HTML content to extract page attributes from.\nURL: {self.url}\n")
         
         return self
 
@@ -566,12 +560,7 @@ def process_in_batches(
     batch_size: int = 15,
     timeout: int = 10
 ) -> Generator[None, None, List[Tuple[Future, WebPage]]]:
-    if batch_size <= 0:
-        raise ValueError("The 'batch_size' size must be greater than zero.")
-    
-    if timeout <= 0:
-        raise ValueError("The 'timeout' must be greater than zero.")
-
+    """ Process URLs in batches and yield the results as they complete."""
     session = Session()
     session.max_redirects = 5
 
@@ -628,11 +617,6 @@ def sort_text_chunks(
     client: OpenAI, query: str, text_chunks_embedded: List[TextChunk]
 ) -> List[TextChunk]:
     """Similarity search to find similar chunks to a query"""
-
-    print("\nINPUT QUERY:")  
-    print(query)
-    print()
-
     query_embedding = (
         client.embeddings.create(
             model=EMBEDDING_MODEL,
@@ -645,21 +629,14 @@ def sort_text_chunks(
     index = faiss.IndexFlatIP(EMBEDDING_SIZE)
     index.add(np.array([text_chunk.embedding for text_chunk in text_chunks_embedded]))
     D, I = index.search(np.array([query_embedding]), len(text_chunks_embedded))
-    print("SIMILAR CHUNK INDICES (SORTED IN DESCENDING ORDER):")
-    print(I)
-    print()
-    print("SIMILARITY SCORES (SORTED IN DESCENDING ORDER):")
-    print(D)
-    print()
     for i, sim in enumerate(D[0]):
         text_chunks_embedded[I[0][i]].similarity = sim
+        
     return [text_chunks_embedded[i] for i in I[0]]
 
 
 def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.Encoding) -> List[TextChunk]:
-    """Get embeddings for the text chunks."""
-    print("Start getting embeddings ...")
-    
+    """Get embeddings for the text chunks."""  
     # Batch the text chunks that the sum of tokens is less than MAX_EMBEDDING_TOKEN_INPUT
     batches = []
     current_batch = []
@@ -696,7 +673,6 @@ def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.E
 
             except Exception as e:
                 print(f"Exception: {e}")
-    print("Embeddings processed.")
 
     return text_chunks
 
@@ -707,7 +683,6 @@ def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
     for web_page in web_pages:
         if web_page.scraped_text:
             chunks = recursive_character_text_splitter(web_page.scraped_text, TEXT_CHUNK_LENGTH, TEXT_CHUNK_OVERLAP)
-            # print the first three chunks
             text_chunks.extend(TextChunk(text=chunk, url=web_page.url) for chunk in chunks)
 
     return text_chunks
@@ -716,14 +691,10 @@ def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
 def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int = 10000) -> List[WebPage]:
     """Scrape text from web pages"""
     filtered_web_pages = []
-    investigate_urls = []
     for web_page in web_pages:
         if web_page.html:
             date_parsed = parse_date_str(web_page.publication_date)
             if date_parsed > datetime.now() - timedelta(weeks=week_interval) or date_parsed == datetime.min:
-                if web_page.url in investigate_urls:
-                    print(web_page.html)
-                # Clean the text
                 doc_html2str = Document(web_page.html)
                 doc_sum = doc_html2str.summary()
                 text = md(doc_sum, strip=['a', 'b', 'strong', 'em', 'img', 'i', 'mark', 'small', 'u'], heading_style="ATX")
@@ -790,8 +761,6 @@ def extract_html_texts(
             except Exception as e:
                 print(f"An error occurred in extract_html_texts: {e}")
 
-    print("Web pages parsed successfully.\n")
-
     return parsed_web_pages
 
 
@@ -823,7 +792,6 @@ def get_urls_from_queries(
                 else:
                     continue
 
-    print("\nget_urls_from_queries result:")
     for url in results:
         print(url)
 
@@ -866,8 +834,6 @@ def fetch_queries(
                     token_counter=count_tokens,
                 )
             search_plan = response.choices[0].message.content
-            print("\nSEARCH PLAN:")
-            print(search_plan)
             
             messages = [
                 {"role": "system", "content": "You are a professional researcher."},
@@ -925,8 +891,10 @@ def summarize_relevant_chunks(
         
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
 
+        # Transform the market question to a "When" question
         market_question_no_date = remove_date_from_query(input_query)
         market_question_when = f"When {market_question_no_date}"
+
         summarize_prompt = SUMMARIZE_PROMPT.format(input_query=market_question_when, chunks=trimmed_chunks)
         messages = [
             {"role": "system", "content": "You are a professional journalist and researcher."},
@@ -945,22 +913,7 @@ def summarize_relevant_chunks(
                 model=engine,
                 token_counter=count_tokens,
             )
-        print("#########################################################################################")
-        print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
-        print(web_page.publication_date)
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> SUMMARIZE RELEVANT CHUNKS PROMPT <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
-        print(summarize_prompt)
-        print()
-
         output = response.choices[0].message.content
-        print(f"\nPAGE ID: {web_page.id}, URL: {web_page.url}")
-        print(web_page.publication_date)
-        print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>> SUMMARIZE RELEVANT CHUNKS OUTPUT <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
-        print(output)
-        print()
-        print("OUTPUT TOKENS:", response.usage.completion_tokens)
-        print("STOP REASON:", response.choices[0].finish_reason)
-        print()
 
         web_page.relevant_chunks_summary = output
 
@@ -1009,10 +962,7 @@ def summarize_over_summarized_chunks(
     all_relevant_chunks_summary = '\n'.join(all_lines_with_id)
 
     prompt = FINAL_SUMMARY_PROMPT.format(input_query=input_query, chunks=all_relevant_chunks_summary)
-
-    print(f"\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> PREVIOUS SUMMARY PROMPT <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
-    print(prompt)
-    print()
+    print(f"\nPROMPT SUMMARIZE OVER WEBSITE SUMMARIES:\n########################\n{prompt}\n########################\n")
 
     messages = [
         {"role": "system", "content": "You are a professional journalist."},
@@ -1031,8 +981,6 @@ def summarize_over_summarized_chunks(
             token_counter=count_tokens,
         )
     output = response.choices[0].message.content
-    print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>> SUMMARIZE OVER SUMMARIZED CHUNKS OUTPUT <<<<<<<<<<<<<<<<<<<<<<<<<<<<")
-    print(output)
     
     # Split the combined string into individual lines
     lines = output.strip().split('\n')
@@ -1089,56 +1037,46 @@ def research(
     )
     web_pages = [WebPage(url) for url in urls]
     web_pages = extract_html_texts(web_pages)
-
+    
+    # Scrape text from web pages not older than <week_interval> weeks
     week_interval = WEEKS_TO_SCRAPE_NEWS
-    # Scrape text from web pages not older <week_interval> weeks
     web_pages = scrape_web_pages(web_pages, week_interval)
 
-    for page in web_pages:
-        if page.scraped_text:
-            print(f"\n{page.to_prompt()}")
-            print(f"Length of scraped text: {len(page.scraped_text)}\n")
-
+    # Get text chunks from web pages
     text_chunks = get_chunks(web_pages)
     
-    # Initialize Tokenizer
+    # Get embeddings for text chunks, sort and cap the number of text chunks 
     enc = tiktoken.get_encoding("cl100k_base") 
-    
     text_chunks_embedded = get_embeddings(client, text_chunks, enc) if text_chunks else []
     text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
     text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
-    print("\n>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n")
-    for i, chunk in enumerate(text_chunks_sorted):
-        if i >= 50:
-            break
-        print(f"Similarity: {chunk.similarity}")
-        print(chunk.text)
-        print()
 
     # Create a dictionary mapping URLs to WebPage objects for quicker lookups
     web_pages_dict = {web_page.url: web_page for web_page in web_pages}
 
+    # Assign the sorted text chunks to the corresponding WebPage objects
     for text_chunk in text_chunks_limited:
         if text_chunk.url in web_pages_dict:
             web_pages_dict[text_chunk.url].chunks_sorted.append(text_chunk.text)
 
+    # Summarize the relevant chunks from each web page 
     web_pages = list(web_pages_dict.values())
     web_pages, counter_callback = summarize_relevant_chunks(web_pages, market_question, client, enc, counter_callback)
     web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
 
+    # Create a list of TextChunk objects with the summarized chunks
     relevant_summarized_chunks = []
     relevant_summarized_chunks.extend(TextChunk(text=page.relevant_chunks_summary, url=page.url) for page in web_pages)
 
-    # Create a dictionary mapping URLs to WebPage objects for quicker lookups
+    # Append the summarized chunks to the corresponding WebPage object in the dictionary
     for sum in relevant_summarized_chunks:
         if sum.url in web_pages_dict:
             web_pages_dict[sum.url].chunks_final.append(sum.text)
 
+    # Summarize over all summarized chunks
     web_pages = list(web_pages_dict.values())
-    
     web_pages, counter_callback = summarize_over_summarized_chunks(web_pages, market_question, client, counter_callback)
     web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
-
 
     additional_information = format_additional_information(web_pages)
     if additional_information:
