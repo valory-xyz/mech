@@ -306,18 +306,6 @@ Question: "{market_question}"
 Answer:
 """
 
-# Question: "Will Disney Plus implement its password-sharing crackdown by August 25, 2024?"
-# Answer:
-#         - If Disney Plus implements its password-sharing crackdown policy on or before 25 August 2024 the market will resolve as 'Yes'.
-#         - Also the market will resolve as 'Yes' if Disney Plus has already implemented the password-sharing crackdown recently.
-#         - If Disney Plus does not implement its password-sharing crackdown policy by 25 August 2024 the market will resolve as 'No'.
-#         - The market will also resolve as 'No' if Disney Plus implements a password-sharing crackdown policy after 25 August 2024.
-   
-#     Definitions:
-#         Definition of 'password-sharing crackdown': The enforcement of measures to restrict or prevent the sharing of login credentials among multiple users.
-#         Definition of 'implement': The policy is put into effect and actively enforced by Disney Plus.
-
-
 # Prompt template for inferring rules for a question that asks for an event to happen "on" a specific date
 INFER_RULES_PROMPT_ON = """
 You are a Large Language Model in a multi-agent system. Your task is to infer the rules for a prediction market question. \

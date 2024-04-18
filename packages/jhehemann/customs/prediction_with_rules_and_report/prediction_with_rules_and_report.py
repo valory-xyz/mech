@@ -172,9 +172,6 @@ SEARCH_OUTPUT:
 Output only the report without any additional information or formatting.
 """
 
-# OUTPUT_FORMAT "* QUESTION"
-# * Conclusion with common sense reasoning
-# * Caveats
 
 REPORT_PROMPT_OLDER_BUT_MAYBE_BETTER = """
 Your task is to prepare a concise and informative evaluation report that discusses the potential outcome of the QUESTION found below. Your evaluation must be based \
@@ -326,8 +323,6 @@ DECISION_GUIDELINES:
 {market_rules}
 ```
 """
-
-
 
 
 PREDICTION_PROMPT_TEMPLATE_TRY = """
