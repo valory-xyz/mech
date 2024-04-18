@@ -24,11 +24,11 @@ import json
 import re
 from collections import defaultdict
 from typing import Any, Dict, List, Optional, Tuple, Callable
-from packages.jhehemann.customs.infer_market_rules.infer_market_rules import get_market_rules
-from packages.jhehemann.customs.research.research import research
 from openai import OpenAI
 from spacy.tokens import Span
 from tiktoken import encoding_for_model
+from packages.jhehemann.customs.infer_market_rules.infer_market_rules import get_market_rules
+from packages.jhehemann.customs.research.research import research
 
 
 client: Optional[OpenAI] = None
