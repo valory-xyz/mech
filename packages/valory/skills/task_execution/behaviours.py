@@ -399,7 +399,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
         executing_task["tool"] = task_data["tool"]
-        executing_task["model"] = task_data.get("model", tool_params.pop('default_model', None))
+        executing_task["model"] = task_data.get(
+            "model", tool_params.pop("default_model", None)
+        )
         executing_task["params"] = tool_params
         self._async_result = cast(Optional[Future], future)
 

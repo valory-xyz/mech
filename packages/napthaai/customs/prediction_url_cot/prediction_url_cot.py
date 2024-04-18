@@ -149,7 +149,7 @@ class LLMClient:
     def embeddings(self, model, input):
         if self.llm_provider == "openai" or self.llm_provider == "openrouter":
             response = self.client.embeddings.create(
-                model=EMBEDDING_MODEL,
+                model=model,
                 input=input,
             )
             return response

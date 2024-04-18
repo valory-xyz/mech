@@ -7,10 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiflni5dkn5fqe7fnu4lgbqxzfrgochhqfbgzwz3vlf5grijp3nkpm
-  prediction_url_cot.py: bafybeihyp5zsjsungb6kzqg3wo6fz3mx6h7u5u2xwbk73w7ly2frh7soga
+  prediction_url_cot.py: bafybeigx2rzp7hn72fp3zil6sk3ui76tuz3n5alzxohvu5sg2axxrv2ggq
 fingerprint_ignore_patterns: []
 entry_point: prediction_url_cot.py
 callable: run
+params:
+  default_model: claude-3-haiku-20240307
 dependencies:
   google-api-python-client:
     version: ==2.95.0
