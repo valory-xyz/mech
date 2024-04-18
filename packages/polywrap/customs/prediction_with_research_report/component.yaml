@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_with_research_report.py: bafybeidz5vr2e4diwajki46sbkgohyeaxcp25m2jo65vnd64kwhvdoccqu
+  prediction_with_research_report.py: bafybeia3s7w45ycbjlr2fo2gpado4qt5nc5dpnph5zsukzzuz2p7zlxafi
 fingerprint_ignore_patterns: []
 entry_point: prediction_with_research_report.py
 callable: run

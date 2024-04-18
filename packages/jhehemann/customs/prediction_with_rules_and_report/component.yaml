@@ -2,12 +2,13 @@ name: prediction_with_rules_and_report
 author: jhehemann
 version: 0.1.0
 type: custom
-description: A tool for making binary predictions on markets using infered market rules and a report.
+description: A tool for making binary predictions on markets using infered market
+  rules and a report.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybei
-  prediction_request_rag.py: bafybei
+  __init__.py: bafybeihe2ap6trblqpgxrs74whhorviollxuy74ptx2qjzizynimovsbda
+  prediction_with_rules_and_report.py: bafybeiado4vxwxd2yacq4aaa777dpqr66qhadqjprdt5cidxqzmk2fcg2u
 fingerprint_ignore_patterns: []
 entry_point: prediction_with_rules_and_report.py
 callable: run

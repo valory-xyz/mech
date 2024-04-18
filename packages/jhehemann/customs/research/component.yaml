@@ -6,8 +6,8 @@ description: A tool for web research given an input query
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybei
-  prediction_request_rag.py: bafybei
+  __init__.py: bafybeidpcd7b3qvijj5ucmjcxvya4o5hbgetndu3siny7itumlfeekkkam
+  research.py: bafybeihvjqtg4s7yr3smysbnjdgemlqhyckosx3vkhuyjj7wyzvi3sh2di
 fingerprint_ignore_patterns: []
 entry_point: research.py
 callable: run

@@ -27,7 +27,7 @@ from typing import Any, Dict, List, Optional, Tuple, Callable
 from openai import OpenAI
 from spacy.tokens import Span
 from tiktoken import encoding_for_model
-from packages.jhehemann.customs.infer_market_rules.infer_market_rules import get_market_rules
+from packages.jhehemann.customs.infer_rules.infer_market_rules import get_market_rules
 from packages.jhehemann.customs.research.research import research
 
 
