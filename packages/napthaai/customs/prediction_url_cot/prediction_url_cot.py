@@ -182,8 +182,6 @@ ALLOWED_TOOLS = [
     "prediction-url-cot",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
-DEFAULT_MODEL = "claude-3-haiku-20240307"
-TOOL_TO_ENGINE = {tool: DEFAULT_MODEL for tool in ALLOWED_TOOLS}
 NUM_QUERIES = 5
 NUM_URLS_PER_QUERY = 3
 HTTP_TIMEOUT = 20
@@ -253,11 +251,11 @@ def count_tokens(text: str, model: str) -> int:
 
 def multi_queries(
     prompt: str,
-    engine: str,
+    model: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"]["default_max_tokens"],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -270,7 +268,7 @@ def multi_queries(
     ]
 
     response = client.completions(
-        model=engine,
+        model=model,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -279,7 +277,7 @@ def multi_queries(
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
-            model=engine,
+            model=model,
             token_counter=count_tokens,
         )
     queries = parser_query_response(response.content, num_queries=num_queries)
@@ -493,15 +491,15 @@ def select_docs(
 
 def fetch_additional_information(
     prompt: str,
-    engine: str,
+    model: str,
     google_api_key: Optional[str],
     google_engine_id: Optional[str],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = NUM_URLS_PER_QUERY,
     num_queries: Optional[int] = NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"]["default_max_tokens"],
     n_docs: int = N_DOCS,
 ) -> Tuple[str, Callable[[int, int, str], None]]:
     """Fetch additional information from the web."""
@@ -510,7 +508,7 @@ def fetch_additional_information(
     try:
         queries, counter_callback = multi_queries(
             prompt=prompt,
-            engine=engine,
+            model=model,
             num_queries=num_queries,
             counter_callback=counter_callback,
             temperature=temperature,
@@ -587,14 +585,13 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with LLMClientManager(kwargs["api_keys"], kwargs["llm_provider"]):
         tool = kwargs["tool"]
-        model = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        model = kwargs.get("model")
         prompt = extract_question(kwargs["prompt"])
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-        print(f"ENGINE: {engine}")
+        print(f"MODEL: {model}")
         max_tokens = kwargs.get(
-            "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
+            "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
         )
-        temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
+        temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
         num_urls = kwargs.get("num_urls", NUM_URLS_PER_QUERY)
         num_queries = kwargs.get("num_queries", NUM_QUERIES)
         n_docs = kwargs.get("n_docs", N_DOCS)
@@ -613,7 +610,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
 
         additional_information, counter_callback = fetch_additional_information(
             prompt=prompt,
-            engine=engine,
+            model=model,
             google_api_key=google_api_key,
             google_engine_id=google_engine_id,
             counter_callback=counter_callback,
@@ -638,7 +635,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         ]
 
         response = client.completions(
-            model=engine,
+            model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -648,7 +645,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
-                model=engine,
+                model=model,
                 token_counter=count_tokens,
             )
 

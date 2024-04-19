@@ -12,7 +12,7 @@ fingerprint_ignore_patterns: []
 entry_point: prediction_request_reasoning.py
 callable: run
 params:
-  default_model: claude-3-haiku-20240307
+  default_model: claude-3-sonnet-20240229
 dependencies:
   google-api-python-client:
     version: ==2.95.0
