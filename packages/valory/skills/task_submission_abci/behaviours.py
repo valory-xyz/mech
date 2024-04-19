@@ -772,11 +772,20 @@ class TransactionPreparationBehaviour(
             all_txs.extend(split_profit_txs)
 
         for task in self.synchronized_data.done_tasks:
-            deliver_tx = yield from self._get_deliver_tx(task)
+            deliver_tx, simulation_ok = yield from self._get_deliver_tx(task)
             if deliver_tx is None:
                 # something went wrong, respond with ERROR payload for now
                 # nothing should proceed if this happens
                 return TransactionPreparationRound.ERROR_PAYLOAD
+            if not simulation_ok:
+                # the simulation failed, log a warning and skip this deliver
+                self.context.logger.warning(
+                    f"Deliver tx simulation failed for task {task}. Skipping this deliver."
+                )
+                # remove the task from the list of done tasks
+                self.remove_tasks([task])
+                continue
+
             all_txs.append(deliver_tx)
             response_tx = task.get("transaction", None)
             if response_tx is not None:
@@ -880,13 +889,14 @@ class TransactionPreparationBehaviour(
 
     def _get_deliver_tx(
         self, task_data: Dict[str, Any]
-    ) -> Generator[None, None, Optional[Dict]]:
+    ) -> Generator[None, None, Optional[Dict, bool]]:
         """Get the deliver tx."""
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=task_data["mech_address"],
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_data",
+            sender_address=self.synchronized_data.safe_contract_address,
             request_id=task_data["request_id"],
             data=task_data["task_result"],
             request_id_nonce=task_data["request_id_nonce"],
@@ -900,11 +910,12 @@ class TransactionPreparationBehaviour(
             return None
 
         data = cast(bytes, contract_api_msg.state.body["data"])
+        simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
         return {
             "to": task_data["mech_address"],
             "value": ZERO_ETHER_VALUE,
             "data": data,
-        }
+        }, simulation_ok
 
 
 class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
