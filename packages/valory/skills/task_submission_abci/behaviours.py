@@ -772,11 +772,13 @@ class TransactionPreparationBehaviour(
             all_txs.extend(split_profit_txs)
 
         for task in self.synchronized_data.done_tasks:
-            deliver_tx, simulation_ok = yield from self._get_deliver_tx(task)
+            deliver_tx = yield from self._get_deliver_tx(task)
             if deliver_tx is None:
                 # something went wrong, respond with ERROR payload for now
                 # nothing should proceed if this happens
                 return TransactionPreparationRound.ERROR_PAYLOAD
+
+            simulation_ok = deliver_tx.pop("simulation_ok", False)
             if not simulation_ok:
                 # the simulation failed, log a warning and skip this deliver
                 self.context.logger.warning(
@@ -889,7 +891,7 @@ class TransactionPreparationBehaviour(
 
     def _get_deliver_tx(
         self, task_data: Dict[str, Any]
-    ) -> Generator[None, None, Optional[Dict, bool]]:
+    ) -> Generator[None, None, Optional[Dict]]:
         """Get the deliver tx."""
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
@@ -915,7 +917,8 @@ class TransactionPreparationBehaviour(
             "to": task_data["mech_address"],
             "value": ZERO_ETHER_VALUE,
             "data": data,
-        }, simulation_ok
+            "simulation_ok": simulation_ok,
+        }
 
 
 class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):

@@ -105,14 +105,14 @@ class TaskPoolingRound(CollectionRound):
                     unique_ids.add(request_id)
                     unique_objects.append(obj)
 
-            all_done_tasks = sorted(all_done_tasks, key=lambda x: x["request_id"])
+            unique_done_tasks = sorted(unique_objects, key=lambda x: x["request_id"])
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
-                    get_name(SynchronizedData.done_tasks): all_done_tasks,
+                    get_name(SynchronizedData.done_tasks): unique_done_tasks,
                 }
             )
-            if len(all_done_tasks) > 0:
+            if len(unique_done_tasks) > 0:
                 return synchronized_data, Event.DONE
             return synchronized_data, Event.NO_TASKS
 

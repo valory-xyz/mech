@@ -265,7 +265,9 @@ class AgentMechContract(Contract):
                 fn_name="deliver", args=[request_id, bytes.fromhex(data)]
             )
 
-        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender_address, data).pop('data')
+        simulation_ok = cls.simulate_tx(
+            ledger_api, contract_address, sender_address, data
+        ).pop("data")
         return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
 
     @classmethod
