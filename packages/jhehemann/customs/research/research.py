@@ -40,6 +40,26 @@ from openai import OpenAI
 from tqdm import tqdm
 from dateutil import parser
 
+client: Optional[OpenAI] = None
+
+class OpenAIClientManager:
+    """Client context manager for OpenAI."""
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def __enter__(self) -> OpenAI:
+        global client
+        if client is None:
+            client = OpenAI(api_key=self.api_key)
+        return client
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.close()
+            client = None
+
+
 NUM_URLS_PER_QUERY = 4
 TEXT_CHUNK_LENGTH = 300
 TEXT_CHUNK_OVERLAP = 50
@@ -49,10 +69,32 @@ EMBEDDING_MODEL = "text-embedding-3-small"
 MAX_EMBEDDING_TOKEN_INPUT = 8192
 EMBEDDING_SIZE = 1536
 WEEKS_TO_SCRAPE_NEWS = 4
+DEFAULT_MARKET_RULES = ""
 
 DEFAULT_OPENAI_SETTINGS = {
-    "max_compl_tokens": 500,
-    "temperature": 0,
+    "max_tokens": 500,
+    "temperature": 0.0,
+}
+
+LLM_SETTINGS = {
+    "gpt-3.5-turbo": DEFAULT_OPENAI_SETTINGS,
+    "gpt-4-turbo": DEFAULT_OPENAI_SETTINGS,
+}
+
+ALLOWED_TOOLS = [
+    "research-gpt-3.5-turbo",
+    "research-gpt-4-turbo",
+]
+TOOL_TO_ENGINE = {
+    "research-gpt-3.5-turbo": "gpt-3.5-turbo",
+    "research-gpt-4-turbo": "gpt-4-turbo",
+}
+
+ALLOWED_MODELS = list(LLM_SETTINGS.keys())
+
+MAX_TOKENS = {
+    "gpt-3.5-turbo": 4096,
+    "gpt-4-turbo": 8192,
 }
 
 RESEARCH_PLAN_PROMPT_TEMPLATE = """
@@ -494,6 +536,13 @@ def format_date(date_string) -> str:
         return date_string
     
 
+def extract_question(text) -> str:
+    """Extract the question from prompt enclosed in escaped quotation marks."""
+    pattern = r'\"(.*?)\"'
+    match = re.search(pattern, text)
+    return match.group(1) if match else ""
+
+
 def parse_date_str(date_str: str) -> datetime:
     # Desired format "February 16, 2024, 3:30 PM"
     datetime_format = "%B %d, %Y"
@@ -768,7 +817,7 @@ def get_urls_from_queries(
     queries: List[str],
     api_key: str,
     engine: str,
-    num: int = 3
+    num: int = NUM_URLS_PER_QUERY
 ) -> List[str]:
     """Fetch unique URLs from search engine queries, limiting the number of URLs per query."""
     results = set()
@@ -799,10 +848,9 @@ def get_urls_from_queries(
 
 
 def fetch_queries(
-    client: OpenAI,
     input_query: str,
     engine="gpt-3.5-turbo",
-    market_rules = None,
+    market_rules = "",
     counter_callback=None,
     temperature=1.0,
     max_attempts=2,
@@ -868,13 +916,12 @@ def fetch_queries(
             attempts += 1
             if attempts == max_attempts:
                 print("Maximum attempts reached, returning an empty string.")
-                return []
+                return [], counter_callback
 
 
 def summarize_relevant_chunks(
         web_pages: List[WebPage],
         input_query: str,
-        client: OpenAI,
         enc: tiktoken.Encoding,
         counter_callback,
         engine="gpt-3.5-turbo",
@@ -937,7 +984,6 @@ def summarize_relevant_chunks(
 def summarize_over_summarized_chunks(
     web_pages: List[WebPage],
     input_query: str,
-    client: OpenAI,
     counter_callback,
     engine="gpt-3.5-turbo",
     temperature=0.0,
@@ -1013,75 +1059,90 @@ def summarize_over_summarized_chunks(
     return modified_web_pages, counter_callback
 
 
-def research(
-    market_question: str,
-    client: OpenAI,
-    google_api_key: str,
-    google_engine_id: str,
-    engine: str,
-    market_status: str,
-    market_rules: str,
-    counter_callback,
-    num_urls: int = NUM_URLS_PER_QUERY,
-):
-    """Research additional information based on a prediction market question"""
-    # Generate a list of sub-queries
-    queries, counter_callback = fetch_queries(client, market_question, engine, market_rules, counter_callback)
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+    """Run the task"""
+    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        tool = kwargs["tool"]
+        prompt = kwargs["prompt"]
+        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        num_urls = kwargs.get("num_urls", NUM_URLS_PER_QUERY)
+        market_rules = kwargs.get("market_rules", DEFAULT_MARKET_RULES)
+        counter_callback = kwargs.get("counter_callback", None)
+        api_keys = kwargs.get("api_keys", {})
+        google_api_key = api_keys.get("google_api_key", None)
+        google_engine_id = api_keys.get("google_engine_id", None)
+
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"Tool {tool} is not supported.")
+
+        engine = TOOL_TO_ENGINE[tool]
+
+        # Extract the market question from the prompt delimited by escaped quotation marks
+        market_question = extract_question(prompt)
+        if not market_question:
+            return "Market question not found in prompt", None, None, None
+        print(f"MARKET QUESTION:\n{market_question}\n")
     
-    # Get URLs from sub-queries
-    urls = get_urls_from_queries(
-        queries,
-        api_key=google_api_key,
-        engine=google_engine_id,
-        num=num_urls,
-    )
-    web_pages = [WebPage(url) for url in urls]
-    web_pages = extract_html_texts(web_pages)
-    
-    # Scrape text from web pages not older than <week_interval> weeks
-    week_interval = WEEKS_TO_SCRAPE_NEWS
-    web_pages = scrape_web_pages(web_pages, week_interval)
-
-    # Get text chunks from web pages
-    text_chunks = get_chunks(web_pages)
-    
-    # Get embeddings for text chunks, sort and cap the number of text chunks 
-    enc = tiktoken.get_encoding("cl100k_base") 
-    text_chunks_embedded = get_embeddings(client, text_chunks, enc) if text_chunks else []
-    text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
-    text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
-
-    # Create a dictionary mapping URLs to WebPage objects for quicker lookups
-    web_pages_dict = {web_page.url: web_page for web_page in web_pages}
-
-    # Assign the sorted text chunks to the corresponding WebPage objects
-    for text_chunk in text_chunks_limited:
-        if text_chunk.url in web_pages_dict:
-            web_pages_dict[text_chunk.url].chunks_sorted.append(text_chunk.text)
-
-    # Summarize the relevant chunks from each web page 
-    web_pages = list(web_pages_dict.values())
-    web_pages, counter_callback = summarize_relevant_chunks(web_pages, market_question, client, enc, counter_callback)
-    web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
-
-    # Create a list of TextChunk objects with the summarized chunks
-    relevant_summarized_chunks = []
-    relevant_summarized_chunks.extend(TextChunk(text=page.relevant_chunks_summary, url=page.url) for page in web_pages)
-
-    # Append the summarized chunks to the corresponding WebPage object in the dictionary
-    for sum in relevant_summarized_chunks:
-        if sum.url in web_pages_dict:
-            web_pages_dict[sum.url].chunks_final.append(sum.text)
-
-    # Summarize over all summarized chunks
-    web_pages = list(web_pages_dict.values())
-    web_pages, counter_callback = summarize_over_summarized_chunks(web_pages, market_question, client, counter_callback)
-    web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
-
-    additional_information = format_additional_information(web_pages)
-    if additional_information:
-        additional_information += (
-            f"Disclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y')} and does not claim to be exhaustive or definitive."
+        # Generate a list of sub-queries
+        queries, counter_callback = fetch_queries(market_question, engine, market_rules, counter_callback)
+        
+        # Get URLs from sub-queries
+        urls = get_urls_from_queries(
+            queries,
+            api_key=google_api_key,
+            engine=google_engine_id,
+            num=num_urls,
         )
+        web_pages = [WebPage(url) for url in urls]
+        web_pages = extract_html_texts(web_pages)
+        
+        # Scrape text from web pages not older than <week_interval> weeks
+        week_interval = WEEKS_TO_SCRAPE_NEWS
+        web_pages = scrape_web_pages(web_pages, week_interval)
 
-    return additional_information, counter_callback
+        # Get text chunks from web pages
+        text_chunks = get_chunks(web_pages)
+        
+        # Get embeddings for text chunks, sort and cap the number of text chunks 
+        enc = tiktoken.get_encoding("cl100k_base") 
+        text_chunks_embedded = get_embeddings(client, text_chunks, enc) if text_chunks else []
+        text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
+        text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
+
+        # Create a dictionary mapping URLs to WebPage objects for quicker lookups
+        web_pages_dict = {web_page.url: web_page for web_page in web_pages}
+
+        # Assign the sorted text chunks to the corresponding WebPage objects
+        for text_chunk in text_chunks_limited:
+            if text_chunk.url in web_pages_dict:
+                web_pages_dict[text_chunk.url].chunks_sorted.append(text_chunk.text)
+
+        # Summarize the relevant chunks from each web page 
+        web_pages = list(web_pages_dict.values())
+        web_pages, counter_callback = summarize_relevant_chunks(web_pages, market_question, enc, counter_callback, engine)
+        web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
+
+        # Create a list of TextChunk objects with the summarized chunks
+        relevant_summarized_chunks = []
+        relevant_summarized_chunks.extend(TextChunk(text=page.relevant_chunks_summary, url=page.url) for page in web_pages)
+
+        # Append the summarized chunks to the corresponding WebPage object in the dictionary
+        for sum in relevant_summarized_chunks:
+            if sum.url in web_pages_dict:
+                web_pages_dict[sum.url].chunks_final.append(sum.text)
+
+        # Summarize over all summarized chunks
+        web_pages = list(web_pages_dict.values())
+        web_pages, counter_callback = summarize_over_summarized_chunks(web_pages, market_question, counter_callback, engine)
+        web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
+
+        additional_information = format_additional_information(web_pages)
+        if additional_information:
+            additional_information += (
+                f"Disclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y')} and does not claim to be exhaustive or definitive."
+            )
+        
+        prompts = RESEARCH_PLAN_PROMPT_TEMPLATE + "\n\n////\n\n" + QUERY_RERANKING_PROMPT_TEMPLATE + "\n\n////\n\n" + SUMMARIZE_PROMPT + "\n\n////\n\n" + FINAL_SUMMARY_PROMPT
+
+        return additional_information, prompts, None, counter_callback

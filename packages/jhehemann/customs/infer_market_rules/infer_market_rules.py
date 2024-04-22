@@ -19,13 +19,61 @@
 
 """This module implements a tool that infers the market rules and status for a prediction market question"""
 
+import re
+from typing import Any, Dict, Optional, Tuple
+
 from openai import OpenAI
 from tiktoken import encoding_for_model
-import re
+
+client: Optional[OpenAI] = None
+
+class OpenAIClientManager:
+    """Client context manager for OpenAI."""
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def __enter__(self) -> OpenAI:
+        global client
+        if client is None:
+            client = OpenAI(api_key=self.api_key)
+        return client
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.close()
+            client = None
+
+
+DEFAULT_OPENAI_SETTINGS = {
+    "max_tokens": 500,
+    "temperature": 0.0,
+}
+
+LLM_SETTINGS = {
+    "gpt-3.5-turbo": DEFAULT_OPENAI_SETTINGS,
+    "gpt-4-turbo": DEFAULT_OPENAI_SETTINGS,
+}
+
+ALLOWED_TOOLS = [
+    "infer-market-rules-gpt-3.5-turbo",
+    "infer-market-rules-gpt-4-turbo",
+]
+TOOL_TO_ENGINE = {
+    "infer-market-rules-gpt-3.5-turbo": "gpt-3.5-turbo",
+    "infer-market-rules-gpt-4-turbo": "gpt-4-turbo",
+}
+
+ALLOWED_MODELS = list(LLM_SETTINGS.keys())
+
+MAX_TOKENS = {
+    "gpt-3.5-turbo": 4096,
+    "gpt-4-turbo": 8192,
+}
 
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
-# Prompt template for inferring rules for a question that asks for an event to happen "by" a specific date
+# Prompt template for infering rules for a question that asks for an event to happen "by" a specific date
 INFER_RULES_PROMPT_BY = """
 You are a Large Language Model in a multi-agent system. Your task is to infer the rules for a prediction market question. \
 Provide reliable and well-structured rules for when the prediction market question will be resolved as 'Yes' and 'No'. \
@@ -386,6 +434,11 @@ def count_tokens(text: str, model: str) -> int:
     enc = encoding_for_model(model)
     return len(enc.encode(text))
 
+def extract_question(text) -> str:
+    """Extract the question from prompt enclosed in escaped quotation marks."""
+    pattern = r'\"(.*?)\"'
+    match = re.search(pattern, text)
+    return match.group(1) if match else ""
 
 def remove_date_from_query(query: str) -> str:
     """Remove time-related information from query"""
@@ -407,7 +460,6 @@ def get_prompt_template_by_timing(query: str) -> str:
     else:
         return "No time-related information found in query."
 
-
 def extract_answer(response_message: str) -> str:
     """Extract the answer from the response message."""
     if "Answer:" in response_message:
@@ -417,66 +469,77 @@ def extract_answer(response_message: str) -> str:
     return answer
 
 
-def get_market_rules(
-    market_question: str,
-    client: OpenAI,
-    counter_callback,
-    temperature=0.0,
-    engine="gpt-3.5-turbo",
-):
-    """Infer market rules for a prediction market question."""
-    # Remove double quotes from the input query to avoid issues
-    market_question = market_question.replace('"', "'")
-    
-    # Get the prompt template based on the timing of the event in the query
-    infer_rules_template = get_prompt_template_by_timing(market_question)
-    infer_rules_prompt = infer_rules_template.format(market_question=market_question)
-    
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": infer_rules_prompt},
-    ]
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-    )
-    if counter_callback is not None:
-        counter_callback(
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=engine,
-            token_counter=count_tokens,
-        )
-    response_message = response.choices[0].message.content
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+    """Run the task"""
+    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        tool = kwargs["tool"]
+        prompt = kwargs["prompt"]
+        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        counter_callback = kwargs.get("counter_callback", None)
 
-    # Extract the market rules from the response message
-    market_rules = extract_answer(response_message)
-    
-    ## Infer the market status
-    # Remove the date from the query to avoid bias
-    market_question_no_date = remove_date_from_query(market_question)
-    infer_status_prompt = INFER_STATUS_PROMPT.format(market_question=market_question_no_date)
-    
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        {"role": "user", "content": infer_status_prompt},
-    ]
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-    )
-    if counter_callback is not None:
-        counter_callback(
-            input_tokens=response.usage.prompt_tokens,
-            output_tokens=response.usage.completion_tokens,
-            model=engine,
-            token_counter=count_tokens,
-        )
-    response_message = response.choices[0].message.content
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"Tool {tool} is not supported.")
 
-    # Extract the market status from the response message
-    market_status = extract_answer(response_message)
-    
-    return market_status, market_rules, counter_callback
+        engine = TOOL_TO_ENGINE[tool]
+
+        market_question = extract_question(prompt)
+        if not market_question:
+            return "Market question not found in prompt", None, None, None
+        print(f"MARKET QUESTION:\n{market_question}\n")
+        
+        # Remove double quotes from the input query to avoid issues
+        market_question = market_question.replace('"', "'")
+        
+        # Get the prompt template based on the timing of the event in the query
+        infer_rules_template = get_prompt_template_by_timing(market_question)
+        infer_rules_prompt = infer_rules_template.format(market_question=market_question)
+        
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": infer_rules_prompt},
+        ]
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+        )
+        if counter_callback is not None:
+            counter_callback(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+                model=engine,
+                token_counter=count_tokens,
+            )
+        response_message = response.choices[0].message.content
+
+        # Extract the market rules from the response message
+        market_rules = extract_answer(response_message)
+        
+        ## Infer the market status
+        # Remove the date from the query to avoid bias
+        market_question_no_date = remove_date_from_query(market_question)
+        infer_status_prompt = INFER_STATUS_PROMPT.format(market_question=market_question_no_date)
+        
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": infer_status_prompt},
+        ]
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+        )
+        if counter_callback is not None:
+            counter_callback(
+                input_tokens=response.usage.prompt_tokens,
+                output_tokens=response.usage.completion_tokens,
+                model=engine,
+                token_counter=count_tokens,
+            )
+        response_message = response.choices[0].message.content
+
+        # Extract the market status from the response message
+        market_status = extract_answer(response_message)
+        
+        return market_status + "\n\nRules:\n" + market_rules, infer_status_prompt + "\n////\n" + infer_rules_prompt, None, counter_callback
