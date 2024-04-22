@@ -63,6 +63,11 @@ DEFAULT_OPENAI_SETTINGS = {
     "temperature": 0.0,
 }
 
+LLM_SETTINGS = {
+    "gpt-3.5-turbo": DEFAULT_OPENAI_SETTINGS,
+    "gpt-4-turbo": DEFAULT_OPENAI_SETTINGS,
+}
+
 ALLOWED_TOOLS = [
     "prediction-with-rules-and-report-gpt-3.5-turbo",
     "prediction-with-rules-and-report-gpt-4-turbo",
@@ -71,6 +76,8 @@ TOOL_TO_ENGINE = {
     "prediction-with-rules-and-report-gpt-3.5-turbo": "gpt-3.5-turbo",
     "prediction-with-rules-and-report-gpt-4-turbo": "gpt-4-turbo",
 }
+
+ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 
 MAX_TOKENS = {
     "gpt-3.5-turbo": 4096,
