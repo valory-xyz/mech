@@ -68,7 +68,6 @@ readability-lxml = "0.8.1"
 docstring-parser = "0.15"
 faiss-cpu = "1.7.4"
 pypdf2 = "^3.0.1"
-python-dotenv = "<0.18.0"
 moviepy = "1.0.3"
 replicate = "0.15.7"
 lxml = {extras = ["html-clean"], version = "^5.1.0"}

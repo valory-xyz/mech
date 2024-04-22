@@ -390,7 +390,6 @@ def get_urls_from_queries(
         except Exception:
             pass
     unique_results = list(set(results))
-    print(f"\nUnique URLs: {unique_results}")
     return unique_results
 
 

@@ -565,9 +565,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         counter_callback=counter_callback,
     )
     queries = queries[:subqueries_limit]
-    print("\nFinal queries")
-    for query in queries:
-        print(query)
 
     search_results_with_queries = search(
         queries,
@@ -578,10 +575,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     scrape_args = [result for (_, result) in search_results_with_queries]
     scraped = scrape_results(scrape_args)
     scraped = [result for result in scraped if result.content != ""]
-    print("\nScraped content")
-    for result in scraped:
-        print(result.content)
-        print("--------------------------------------------------\n")
 
     text_splitter = RecursiveCharacterTextSplitter(
         separators=["\n\n", "\n", ". ", "  "],
@@ -614,8 +607,6 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         additional_information=research_report,
         timestamp=formatted_time_utc,
     )
-    print("\nPrediction prompt: ")
-    print(prediction_prompt)
     prediction, counter_callback = make_prediction(
         prompt=prediction_prompt,
         model=model,
