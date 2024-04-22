@@ -30,7 +30,6 @@ from openai import OpenAI
 from spacy.tokens import Span
 import tiktoken
 from tiktoken import encoding_for_model
-
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from bs4 import BeautifulSoup
 import faiss

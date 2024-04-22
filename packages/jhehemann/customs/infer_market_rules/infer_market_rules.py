@@ -21,7 +21,6 @@
 
 import re
 from typing import Any, Dict, Optional, Tuple
-
 from openai import OpenAI
 from tiktoken import encoding_for_model
 
