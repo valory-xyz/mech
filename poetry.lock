@@ -4145,17 +4145,17 @@ testing = ["argcomplete", "hypothesis (>=3.56)", "mock", "nose", "pygments (>=2.
 
 [[package]]
 name = "pytest-asyncio"
-version = "0.20.3"
+version = "0.21.1"
 description = "Pytest support for asyncio"
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "pytest-asyncio-0.20.3.tar.gz", hash = "sha256:83cbf01169ce3e8eb71c6c278ccb0574d1a7a3bb8eaaf5e50e0ad342afb33b36"},
-    {file = "pytest_asyncio-0.20.3-py3-none-any.whl", hash = "sha256:f129998b209d04fcc65c96fc85c11e5316738358909a8399e93be553d7656442"},
+    {file = "pytest-asyncio-0.21.1.tar.gz", hash = "sha256:40a7eae6dded22c7b604986855ea48400ab15b069ae38116e8c01238e9eeb64d"},
+    {file = "pytest_asyncio-0.21.1-py3-none-any.whl", hash = "sha256:8666c1c8ac02631d7c51ba282e0c69a8a452b211ffedf2599099845da5c5c37b"},
 ]
 
 [package.dependencies]
-pytest = ">=6.1.0"
+pytest = ">=7.0.0"
 
 [package.extras]
 docs = ["sphinx (>=5.3)", "sphinx-rtd-theme (>=1.0)"]
@@ -5302,19 +5302,19 @@ files = [
 
 [[package]]
 name = "tomte"
-version = "0.2.15"
+version = "0.2.16"
 description = "A library that wraps many useful tools (linters, analysers, etc) to keep Python code clean, secure, well-documented and optimised."
 optional = false
 python-versions = ">=3.8,<4"
 files = [
-    {file = "tomte-0.2.15-py3-none-any.whl", hash = "sha256:c1ec71bdb919290e42671d83098232bf7cf46cddf1a736c5d1c9f12ab1308c34"},
-    {file = "tomte-0.2.15.tar.gz", hash = "sha256:662f3cdd616347969c3fea557c47545b555f5f82798b978e78ade3d23d43c92d"},
+    {file = "tomte-0.2.16-py3-none-any.whl", hash = "sha256:08b6d10b56d205ea6dcbe0ea1d1f643e3e1214a80ca2d52a7eaf07c723f0f3b4"},
+    {file = "tomte-0.2.16.tar.gz", hash = "sha256:c1a6294897c7edd876c2f8f6ebd2e0618730eb52ed9c32fde288a1bcccc66197"},
 ]
 
 [package.dependencies]
 click = {version = "8.0.2", optional = true, markers = "extra == \"black\" or extra == \"cli\" or extra == \"docs\""}
 pytest = {version = "7.2.1", optional = true, markers = "extra == \"tests\""}
-pytest-asyncio = {version = "0.20.3", optional = true, markers = "extra == \"tests\""}
+pytest-asyncio = {version = ">=0.21.0,<0.22.0", optional = true, markers = "extra == \"tests\""}
 pytest-cov = {version = "4.0.0", optional = true, markers = "extra == \"tests\""}
 pytest-randomly = {version = "3.12.0", optional = true, markers = "extra == \"tests\""}
 pytest-rerunfailures = {version = "11.0", optional = true, markers = "extra == \"tests\""}
@@ -5333,7 +5333,7 @@ liccheck = ["liccheck (==0.8.3)"]
 mypy = ["mypy (==0.991)"]
 pylint = ["pylint (==2.13.9)"]
 safety = ["safety (==2.4.0b1)"]
-tests = ["pytest (==7.2.1)", "pytest-asyncio (==0.20.3)", "pytest-cov (==4.0.0)", "pytest-randomly (==3.12.0)", "pytest-rerunfailures (==11.0)"]
+tests = ["pytest (==7.2.1)", "pytest-asyncio (>=0.21.0,<0.22.0)", "pytest-cov (==4.0.0)", "pytest-randomly (==3.12.0)", "pytest-rerunfailures (==11.0)"]
 tox = ["tox (==3.28.0)"]
 vulture = ["vulture (==2.7)"]
 
@@ -6113,4 +6113,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.10"
-content-hash = "dcdebdfd85ff6a79c6012b5897dc76b6d6f4dac19b67df04875c286e2e286339"
+content-hash = "bd9653e1c25283bd38b2d40c4dbfa7d64335fa712aeb28a6aa42040abe6312dc"
