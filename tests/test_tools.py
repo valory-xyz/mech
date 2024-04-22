@@ -162,7 +162,7 @@ class TestPredictionWithRulesAndReport(BaseToolTest):
     tools = prediction_with_rules_and_report.ALLOWED_TOOLS
     models = prediction_with_rules_and_report.ALLOWED_MODELS
     prompts = [
-        "Please take over the role of a Data Scientist to evaluate the given question. With the given question \"Will Apple release iPhone 17 by March 2025?\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
+        "Please take over the role of a Data Scientist to evaluate the given question. With the given question \"Will Apple release iPhone 17 by 12 March 2025?\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
     ]
     tool_module = prediction_with_rules_and_report
 
@@ -172,7 +172,7 @@ class TestResearch(BaseToolTest):
     tools = research.ALLOWED_TOOLS
     models = research.ALLOWED_MODELS
     prompts = [
-        "Please take over the role of a Data Scientist to evaluate the given question. With the given question \"Will Apple release iPhone 17 by March 2025?\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
+        "Please take over the role of a Data Scientist to evaluate the given question. With the given question \"Will Apple release iPhone 17 by 12 March 2025?\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
     ]
     tool_module = research
 
@@ -182,6 +182,6 @@ class TestInferMarketRules(BaseToolTest):
     tools = infer_market_rules.ALLOWED_TOOLS
     models = infer_market_rules.ALLOWED_MODELS
     prompts = [
-        "Please take over the role of a Data Scientist to evaluate the given question. With the given question \"Will Apple release iPhone 17 by March 2025?\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
+        "Please take over the role of a Data Scientist to evaluate the given question. With the given question \"Will Apple release iPhone 17 by 12 March 2025?\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
     ]
     tool_module = infer_market_rules
