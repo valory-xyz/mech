@@ -461,7 +461,7 @@ class AgentMechContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
         sender_address: str,
-        data: bytes,
+        data: str,
     ) -> JSONLike:
         """Simulate the transaction."""
         try:
@@ -469,11 +469,11 @@ class AgentMechContract(Contract):
                 {
                     "from": ledger_api.api.to_checksum_address(sender_address),
                     "to": ledger_api.api.to_checksum_address(contract_address),
-                    "data": data.hex(),
+                    "data": data,
                 }
             )
             simulation_ok = True
-        except ValueError as e:
+        except Exception as e:
             _logger.info(f"Simulation failed: {str(e)}")
             simulation_ok = False
 
