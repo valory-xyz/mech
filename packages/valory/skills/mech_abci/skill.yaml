@@ -20,13 +20,13 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeieehcc2jqker6jmflxc4nnfcdc7k3s5zs2zbruwenb363dgt4xhai
-- valory/registration_abci:0.1.0:bafybeigpv56crn7hz6cqpicou7ulpz3by5uphcy6vm2rkqe5gkwuybcpe4
-- valory/reset_pause_abci:0.1.0:bafybeiatxhn6r7wd35frh4h4i4twkpk5kkadbbnfgwnz6vampsspt5yy2i
-- valory/task_submission_abci:0.1.0:bafybeid4bd2fewz5asqwnuhjujbbexyhd7f7ombijt6djovzyxdjh6ozj4
-- valory/termination_abci:0.1.0:bafybeiejcthb2uvpjxgon5wxdzua3tm6ud66nrbrctzocwmbjuwwwx2rg4
-- valory/transaction_settlement_abci:0.1.0:bafybeibnsqrkzfm2sbjvtn7a7bsv7irikqv653nn7lfpc7mi43zijrhvom
-- valory/subscription_abci:0.1.0:bafybeiaxfxg22ykz2pl5njbmfzdc7zdhbyv6h63t43wpv5mxj4dzwxiyu4
+- valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
+- valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
+- valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
+- valory/task_submission_abci:0.1.0:bafybeiaa6fby75jusdz55ufy6x3td7bz2feh5bpwyipfy2nrnzpzrqrb3y
+- valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
+- valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
+- valory/subscription_abci:0.1.0:bafybeig2vey5dxykpsojovlxw6f5o333f7kgmjyghmlu3yc5or5m4twqey
 behaviours:
   main:
     args: {}
