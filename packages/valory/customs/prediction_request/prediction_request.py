@@ -44,9 +44,14 @@ from tiktoken import encoding_for_model
 class LLMClientManager:
     """Client context manager for LLMs."""
 
-    def __init__(self, api_keys: List, llm_provider: str = None):
+    def __init__(self, api_keys: List, model: str = None):
         self.api_keys = api_keys
-        self.llm_provider = llm_provider
+        if "gpt" in model:
+            self.llm_provider = "openai"
+        elif "claude" in model:
+            self.llm_provider = "anthropic"
+        else:
+            self.llm_provider = "openrouter"
 
     def __enter__(self):
         global client
@@ -653,11 +658,11 @@ def adjust_additional_information(
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    with LLMClientManager(kwargs["api_keys"], kwargs["llm_provider"]):
+    engine = kwargs.get("model")
+    print(f"ENGINE: {engine}")
+    with LLMClientManager(kwargs["api_keys"], engine):
         tool = kwargs["tool"]
         prompt = kwargs["prompt"]
-        engine = kwargs.get("model")
-        print(f"ENGINE: {engine}")
         max_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
         )
