@@ -90,7 +90,11 @@ class LLMClient:
         if self.llm_provider == "openai":
             import openai
 
-            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+            self.client = openai.AzureOpenAI(
+                api_key=self.api_keys["openai"],
+                api_version="2023-12-01-preview",
+                azure_endpoint=self.api_keys["openai_endpoint"],
+            )
         if self.llm_provider == "openrouter":
             import openai
 

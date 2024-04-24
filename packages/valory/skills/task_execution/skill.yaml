@@ -7,11 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeibspx4pipgcy4jqum4mse74hc5b4bfmushhiijxtbr3etw6bpx5pe
+  behaviours.py: bafybeif5ldxbdc5mw3cv3i5cya464i6tgue2gj5ms4jreyc2ybxehm7jsm
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
   models.py: bafybeid6befxrrbiaw7nduz4zgbm5nfc246fn2eb6rfmja6v5hmq4wtcwe
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
+  utils/apis.py: bafybeicskk46wudomixcqhnkplsbhq4fjegf76etlzexd7h7z6pdv2nibi
   utils/benchmarks.py: bafybeic2jerkq6mzaxgnsgpwxvbl5jw7m7ilrc6i3htk23ord5nwqglewq
   utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
   utils/ipfs.py: bafybeic7cbuv3tomi2xv7h2qowrqnpoufpanngzlgzljl4ptimpss3meqm
@@ -70,9 +71,11 @@ models:
       - '0x9A676e781A523b5d0C0e43731313A708CB607508'
       api_keys_json:
       - - openai
-        - dummy_api_key
+        - - dummy_api_key_1
+          - dummy_api_key_2
       - - stabilityai
-        - dummy_api_key
+        - - dummy_api_key_1
+          - dummy_api_key_2
       file_hash_to_tools_json:
       - - bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4
         - - openai-gpt-3.5-turbo-instruct
