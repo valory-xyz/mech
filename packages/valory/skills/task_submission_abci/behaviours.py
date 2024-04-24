@@ -777,6 +777,17 @@ class TransactionPreparationBehaviour(
                 # something went wrong, respond with ERROR payload for now
                 # nothing should proceed if this happens
                 return TransactionPreparationRound.ERROR_PAYLOAD
+
+            simulation_ok = deliver_tx.pop("simulation_ok", False)
+            if not simulation_ok:
+                # the simulation failed, log a warning and skip this deliver
+                self.context.logger.warning(
+                    f"Deliver tx simulation failed for task {task}. Skipping this deliver."
+                )
+                # remove the task from the list of done tasks
+                self.remove_tasks([task])
+                continue
+
             all_txs.append(deliver_tx)
             response_tx = task.get("transaction", None)
             if response_tx is not None:
@@ -887,6 +898,7 @@ class TransactionPreparationBehaviour(
             contract_address=task_data["mech_address"],
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_data",
+            sender_address=self.synchronized_data.safe_contract_address,
             request_id=task_data["request_id"],
             data=task_data["task_result"],
             request_id_nonce=task_data["request_id_nonce"],
@@ -900,10 +912,12 @@ class TransactionPreparationBehaviour(
             return None
 
         data = cast(bytes, contract_api_msg.state.body["data"])
+        simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
         return {
             "to": task_data["mech_address"],
             "value": ZERO_ETHER_VALUE,
             "data": data,
+            "simulation_ok": simulation_ok,
         }
 
 
