@@ -7,10 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiflni5dkn5fqe7fnu4lgbqxzfrgochhqfbgzwz3vlf5grijp3nkpm
-  prediction_url_cot.py: bafybeihyp5zsjsungb6kzqg3wo6fz3mx6h7u5u2xwbk73w7ly2frh7soga
+  prediction_url_cot.py: bafybeifrkisrrphzyhqnvjqtwxynue7xlsmlqhggm5vcuceod2sl4td7ei
 fingerprint_ignore_patterns: []
 entry_point: prediction_url_cot.py
 callable: run
+params:
+  default_model: claude-3-sonnet-20240229
 dependencies:
   google-api-python-client:
     version: ==2.95.0

@@ -221,8 +221,6 @@ ALLOWED_TOOLS = [
     # "prediction-online-summarized-info",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
-DEFAULT_MODEL = "gpt-4-0125-preview"
-TOOL_TO_ENGINE = {tool: DEFAULT_MODEL for tool in ALLOWED_TOOLS}
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_URLS["prediction-online-summarized-info"] = 7
@@ -658,7 +656,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     with LLMClientManager(kwargs["api_keys"], kwargs["llm_provider"]):
         tool = kwargs["tool"]
         prompt = kwargs["prompt"]
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+        engine = kwargs.get("model")
         print(f"ENGINE: {engine}")
         max_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]

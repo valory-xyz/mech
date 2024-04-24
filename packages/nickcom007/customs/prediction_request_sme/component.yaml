@@ -12,6 +12,8 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_sme.py
 callable: run
+params:
+  default_model: gpt-4-0125-preview
 dependencies:
   requests: {}
   google-api-python-client:
