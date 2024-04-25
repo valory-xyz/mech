@@ -40,11 +40,16 @@ class LLMClientManager:
     """Client context manager for LLMs."""
 
     def __init__(
-        self, api_keys: List, llm_provider: str = None, embedding_provider: str = None
+        self, api_keys: List, model: str = None, embedding_provider: str = None
     ):
         self.api_keys = api_keys
-        self.llm_provider = llm_provider
         self.embedding_provider = embedding_provider
+        if "gpt" in model:
+            self.llm_provider = "openai"
+        elif "claude" in model:
+            self.llm_provider = "anthropic"
+        else:
+            self.llm_provider = "openrouter"
 
     def __enter__(self):
         clients = []
@@ -220,6 +225,9 @@ LLM_SETTINGS = {
 }
 ALLOWED_TOOLS = [
     "prediction-request-rag",
+
+    # LEGACY
+    "prediction-request-rag-claude",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
@@ -300,8 +308,8 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4-0125-preview"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4-0125-preview"]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"]["default_max_tokens"],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -544,8 +552,8 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4-0125-preview"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4-0125-preview"]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"]["default_max_tokens"],
 ) -> Tuple[str, Callable[[int, int, str], None]]:
     """Fetch additional information to help answer the user prompt."""
 
@@ -668,13 +676,15 @@ def parser_prediction_response(response: str) -> str:
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
+    tool = kwargs["tool"]
+    model = kwargs.get("model")
+    if "claude" in tool: # maintain backwards compatibility
+        model = "claude-3-sonnet-20240229" 
+    print(f"MODEL: {model}")
     with LLMClientManager(
-        kwargs["api_keys"], kwargs["llm_provider"], embedding_provider="openai"
+        kwargs["api_keys"], model, embedding_provider="openai"
     ):
-        tool = kwargs["tool"]
         prompt = extract_question(kwargs["prompt"])
-        model = kwargs.get("model")
-        print(f"MODEL: {model}")
         max_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
         )

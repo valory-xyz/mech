@@ -43,11 +43,16 @@ class LLMClientManager:
     """Client context manager for LLMs."""
 
     def __init__(
-        self, api_keys: List, llm_provider: str = None, embedding_provider: str = None
+        self, api_keys: List, model: str = None, embedding_provider: str = None
     ):
         self.api_keys = api_keys
-        self.llm_provider = llm_provider
         self.embedding_provider = embedding_provider
+        if "gpt" in model:
+            self.llm_provider = "openai"
+        elif "claude" in model:
+            self.llm_provider = "anthropic"
+        else:
+            self.llm_provider = "openrouter"
 
     def __enter__(self):
         clients = []
@@ -223,6 +228,9 @@ LLM_SETTINGS = {
 }
 ALLOWED_TOOLS = [
     "prediction-request-reasoning",
+
+    # LEGACY
+    "prediction-request-reasoning-claude",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
@@ -834,13 +842,15 @@ def extract_question(prompt: str) -> str:
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
+    tool = kwargs["tool"]
+    model = kwargs.get("model")
+    if "claude" in tool: # maintain backwards compatibility
+        model = "claude-3-sonnet-20240229" 
+    print(f"MODEL: {model}")
     with LLMClientManager(
-        kwargs["api_keys"], kwargs["llm_provider"], embedding_provider="openai"
+        kwargs["api_keys"], model, embedding_provider="openai"
     ):
-        tool = kwargs["tool"]
-        model = kwargs.get("model")
         prompt = extract_question(kwargs["prompt"])
-        print(f"MODEL: {model}")
         max_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
         )

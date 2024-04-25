@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibt7f7crtwvmkg7spy3jhscmlqltvyblzp32g6gj44v7tlo5lycuq
-  prediction_request_rag.py: bafybeibtvuddvbhjlyd4sbk7rwz4mcsr4hiigfgrpdhzwa6vn6bhb6fboy
+  prediction_request_rag.py: bafybeicllugnruskdj7ipmrj2vrtlxmjpqtwlk4c3cfjttfzuvkeldp3m4
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_rag.py
 callable: run
 params:
-  default_model: claude-3-sonnet-20240229
+  default_model: gpt-4-0125-preview
 dependencies:
   google-api-python-client:
     version: ==2.95.0

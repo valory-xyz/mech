@@ -44,9 +44,14 @@ from tiktoken import encoding_for_model
 class LLMClientManager:
     """Client context manager for LLMs."""
 
-    def __init__(self, api_keys: List, llm_provider: str = None):
+    def __init__(self, api_keys: List, model: str = None):
         self.api_keys = api_keys
-        self.llm_provider = llm_provider
+        if "gpt" in model:
+            self.llm_provider = "openai"
+        elif "claude" in model:
+            self.llm_provider = "anthropic"
+        else:
+            self.llm_provider = "openrouter"
 
     def __enter__(self):
         global client
@@ -219,6 +224,10 @@ ALLOWED_TOOLS = [
     "prediction-offline",
     "prediction-online",
     # "prediction-online-summarized-info",
+
+    # LEGACY
+    "claude-prediction-offline",
+    "claude-prediction-online",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 # the default number of URLs to fetch online information for
@@ -653,11 +662,13 @@ def adjust_additional_information(
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    with LLMClientManager(kwargs["api_keys"], kwargs["llm_provider"]):
-        tool = kwargs["tool"]
+    tool = kwargs["tool"]
+    engine = kwargs.get("model")
+    if "claude" in tool: # maintain backwards compatibility
+        engine = "claude-3-sonnet-20240229" 
+    print(f"ENGINE: {engine}")
+    with LLMClientManager(kwargs["api_keys"], engine):
         prompt = kwargs["prompt"]
-        engine = kwargs.get("model")
-        print(f"ENGINE: {engine}")
         max_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
         )
