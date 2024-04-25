@@ -224,6 +224,10 @@ ALLOWED_TOOLS = [
     "prediction-offline",
     "prediction-online",
     # "prediction-online-summarized-info",
+
+    # LEGACY
+    "claude-prediction-offline",
+    "claude-prediction-online",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 # the default number of URLs to fetch online information for
@@ -658,10 +662,12 @@ def adjust_additional_information(
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
+    tool = kwargs["tool"]
     engine = kwargs.get("model")
+    if "claude" in tool: # maintain backwards compatibility
+        engine = "claude-3-sonnet-20240229" 
     print(f"ENGINE: {engine}")
     with LLMClientManager(kwargs["api_keys"], engine):
-        tool = kwargs["tool"]
         prompt = kwargs["prompt"]
         max_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]

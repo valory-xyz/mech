@@ -228,6 +228,9 @@ LLM_SETTINGS = {
 }
 ALLOWED_TOOLS = [
     "prediction-request-reasoning",
+
+    # LEGACY
+    "prediction-request-reasoning-claude",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
@@ -839,12 +842,14 @@ def extract_question(prompt: str) -> str:
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
+    tool = kwargs["tool"]
     model = kwargs.get("model")
+    if "claude" in tool: # maintain backwards compatibility
+        model = "claude-3-sonnet-20240229" 
     print(f"MODEL: {model}")
     with LLMClientManager(
         kwargs["api_keys"], model, embedding_provider="openai"
     ):
-        tool = kwargs["tool"]
         prompt = extract_question(kwargs["prompt"])
         max_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
