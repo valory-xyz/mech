@@ -11,4 +11,25 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: research.py
 callable: run
-dependencies: {}
+dependencies:
+  requests: {}
+  google-api-python-client:
+    version: ==2.95.0
+  markdownify:
+    version: ==0.11.6
+  openai:
+    version: ==1.11.0
+  tiktoken:
+    version: ==0.5.1
+  readabliity-lxml:
+    version: ==0.8.1
+  python-dateutil:
+    version: ==2.8.2
+  pydantic:
+    version: ==2.7.1
+  beautifulsoup4:
+    version: ==4.12.2
+  faiss-cpu:
+    version: ==1.7.4
+  numpy:
+    version: ==1.26.4

@@ -12,4 +12,8 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: infer_market_rules.py
 callable: run
-dependencies: {}
+dependencies:
+  openai:
+    version: ==1.11.0
+  tiktoken:
+    version: ==0.5.1

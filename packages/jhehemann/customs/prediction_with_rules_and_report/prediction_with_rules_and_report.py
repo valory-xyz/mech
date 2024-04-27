@@ -27,7 +27,6 @@ from requests import Session
 from collections import defaultdict
 from typing import Any, Dict, List, Generator, Optional, Tuple, Callable
 from openai import OpenAI
-from spacy.tokens import Span
 import tiktoken
 from tiktoken import encoding_for_model
 from concurrent.futures import Future, ThreadPoolExecutor, as_completed
@@ -38,7 +37,6 @@ import numpy as np
 from pydantic import BaseModel, Field
 from readability import Document
 from markdownify import markdownify as md
-from tqdm import tqdm
 from dateutil import parser
 
 client: Optional[OpenAI] = None
@@ -1361,7 +1359,7 @@ def extract_html_texts(
 
     # Process URLs in batches
     for batch in process_in_batches(web_pages=web_pages):
-        for future, web_page in tqdm(batch, desc="Processing URLs"):
+        for future, web_page in batch:
             if future is None:
                 print(f"Future for {web_page.url} is None.")
                 continue
