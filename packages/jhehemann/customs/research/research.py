@@ -37,7 +37,6 @@ from tiktoken import encoding_for_model
 from readability import Document
 from markdownify import markdownify as md
 from openai import OpenAI
-from tqdm import tqdm
 from dateutil import parser
 
 client: Optional[OpenAI] = None
@@ -786,7 +785,7 @@ def extract_html_texts(
 
     # Process URLs in batches
     for batch in process_in_batches(web_pages=web_pages):
-        for future, web_page in tqdm(batch, desc="Processing URLs"):
+        for future, web_page in batch:
             if future is None:
                 print(f"Future for {web_page.url} is None.")
                 continue
