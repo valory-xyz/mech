@@ -8,10 +8,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiekjzoy2haayvkiwhb2u2epflpqxticud34mma3gdhfzgu36lxwiq
-  prediction_request_rag_cohere.py: bafybeidt7vvlrapi2y4b4ytqqi2s2ro5oi5xfc62a2rftkwbat2fmw5hme
+  prediction_request_rag_cohere.py: bafybeib4jviue2jqktqbxca4gtzxrvvxi5oihhsbvarymiqyp3xkee7soi
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_rag_cohere.py
 callable: run
+params:
+  default_model: cohere/command-r-plus
 dependencies:
   google-api-python-client:
     version: ==2.95.0

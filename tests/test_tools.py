@@ -85,19 +85,12 @@ class BaseToolTest:
         for model in self.models:
             for tool in self.tools:
                 for prompt in self.prompts:
-                    if "gpt" in model:
-                        llm_provider = "openai"
-                    elif "claude" in model:
-                        llm_provider = "anthropic"
-                    else:
-                        llm_provider = "openrouter"
                     kwargs = dict(
                         prompt=prompt,
                         tool=tool,
                         api_keys=self.keys,
                         counter_callback=TokenCounterCallback(),
                         model=model,
-                        llm_provider=llm_provider,
                     )
                     func = getattr(self.tool_module, self.tool_callable)
                     response = func(**kwargs)

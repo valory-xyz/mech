@@ -43,11 +43,16 @@ class LLMClientManager:
     """Client context manager for LLMs."""
 
     def __init__(
-        self, api_keys: List, llm_provider: str = None, embedding_provider: str = None
+        self, api_keys: List, model: str = None, embedding_provider: str = None
     ):
         self.api_keys = api_keys
-        self.llm_provider = llm_provider
         self.embedding_provider = embedding_provider
+        if "gpt" in model:
+            self.llm_provider = "openai"
+        elif "claude" in model:
+            self.llm_provider = "anthropic"
+        else:
+            self.llm_provider = "openrouter"
 
     def __enter__(self):
         clients = []
@@ -223,10 +228,11 @@ LLM_SETTINGS = {
 }
 ALLOWED_TOOLS = [
     "prediction-request-reasoning",
+
+    # LEGACY
+    "prediction-request-reasoning-claude",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
-DEFAULT_MODEL = "claude-3-haiku-20240307"
-TOOL_TO_ENGINE = {tool: DEFAULT_MODEL for tool in ALLOWED_TOOLS}
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
 SPLITTER_CHUNK_SIZE = 300
@@ -392,11 +398,11 @@ def parser_prediction_response(response: str) -> str:
 
 def multi_queries(
     prompt: str,
-    engine: str,
+    model: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["gpt-4-0125-preview"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4-0125-preview"]["default_max_tokens"],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -409,7 +415,7 @@ def multi_queries(
     ]
 
     response = client.completions(
-        model=engine,
+        model=model,
         messages=messages,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -418,7 +424,7 @@ def multi_queries(
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
-            model=engine,
+            model=model,
             token_counter=count_tokens,
         )
     queries = parser_query_response(response.content, num_queries=num_queries)
@@ -608,9 +614,9 @@ def find_similar_chunks(
 
 def multi_questions_response(
     prompt: str,
-    engine: str,
-    temperature: float = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
-    max_tokens: int = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
+    model: str,
+    temperature: float = LLM_SETTINGS["gpt-4-0125-preview"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["gpt-4-0125-preview"]["default_max_tokens"],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[str]:
     """Generate multiple questions for fetching information from the web."""
@@ -622,7 +628,7 @@ def multi_questions_response(
         ]
 
         response = client.completions(
-            model=engine,
+            model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -632,7 +638,7 @@ def multi_questions_response(
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
-                model=engine,
+                model=model,
                 token_counter=count_tokens,
             )
 
@@ -711,15 +717,15 @@ def count_tokens(text: str, model: str) -> int:
 
 def fetch_additional_information(
     prompt: str,
-    engine: str,
+    model: str,
     google_api_key: Optional[str],
     google_engine_id: Optional[str],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS[DEFAULT_MODEL]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS[DEFAULT_MODEL]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["gpt-4-0125-preview"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4-0125-preview"]["default_max_tokens"],
 ) -> Tuple[str, List[str], Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information from the web."""
 
@@ -727,7 +733,7 @@ def fetch_additional_information(
     try:
         queries, counter_callback = multi_queries(
             prompt=prompt,
-            engine=engine,
+            model=model,
             num_queries=num_queries,
             counter_callback=counter_callback,
             temperature=temperature,
@@ -790,7 +796,7 @@ def fetch_additional_information(
     # multi questions prompt
     questions, counter_callback = multi_questions_response(
         prompt=prompt,
-        engine=engine,
+        model=model,
         counter_callback=counter_callback,
         temperature=temperature,
         max_tokens=max_tokens,
@@ -836,18 +842,19 @@ def extract_question(prompt: str) -> str:
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
+    tool = kwargs["tool"]
+    model = kwargs.get("model")
+    if "claude" in tool: # maintain backwards compatibility
+        model = "claude-3-sonnet-20240229" 
+    print(f"MODEL: {model}")
     with LLMClientManager(
-        kwargs["api_keys"], kwargs["llm_provider"], embedding_provider="openai"
+        kwargs["api_keys"], model, embedding_provider="openai"
     ):
-        tool = kwargs["tool"]
-        model = kwargs.get("model", TOOL_TO_ENGINE[tool])
         prompt = extract_question(kwargs["prompt"])
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-        print(f"ENGINE: {engine}")
         max_tokens = kwargs.get(
-            "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
+            "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
         )
-        temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
+        temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
         counter_callback = kwargs.get("counter_callback", None)
@@ -869,7 +876,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             counter_callback,
         ) = fetch_additional_information(
             prompt=prompt,
-            engine=engine,
+            model=model,
             google_api_key=google_api_key,
             google_engine_id=google_engine_id,
             counter_callback=counter_callback,
@@ -891,7 +898,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             {"role": "user", "content": reasoning_prompt},
         ]
         reasoning, counter_callback = do_reasoning_with_retry(
-            model=engine,
+            model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -912,7 +919,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         ]
 
         response_prediction = client.completions(
-            model=engine,
+            model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
@@ -923,7 +930,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             counter_callback(
                 input_tokens=response_prediction.usage.prompt_tokens,
                 output_tokens=response_prediction.usage.completion_tokens,
-                model=engine,
+                model=model,
                 token_counter=count_tokens,
             )
 

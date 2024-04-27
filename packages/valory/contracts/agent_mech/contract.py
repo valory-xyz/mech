@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the dynamic_contribution contract definition."""
+import logging
 from enum import Enum
 from typing import Any, Dict, List, Optional, cast
 
@@ -29,6 +30,12 @@ from aea_ledger_ethereum import EthereumApi
 from web3 import Web3
 from web3.types import BlockIdentifier, TxReceipt
 
+
+PUBLIC_ID = PublicId.from_str("valory/agent_mech:0.1.0")
+
+_logger = logging.getLogger(
+    f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
+)
 
 partial_abis = [
     [
@@ -206,6 +213,7 @@ class AgentMechContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
+        sender_address: str,
         request_id: int,
         data: str,
         request_id_nonce: Optional[int],
@@ -215,6 +223,7 @@ class AgentMechContract(Contract):
 
         :param ledger_api: LedgerApi object
         :param contract_address: the address of the token to be used
+        :param sender_address: the address of the sender
         :param request_id: the id of the target request
         :param data: the response data
         :param request_id_nonce: request id with nonce, to ensure uniqueness on-chain.
@@ -255,7 +264,11 @@ class AgentMechContract(Contract):
             data = contract_instance.encodeABI(
                 fn_name="deliver", args=[request_id, bytes.fromhex(data)]
             )
-        return {"data": bytes.fromhex(data[2:])}  # type: ignore
+
+        simulation_ok = cls.simulate_tx(
+            ledger_api, contract_address, sender_address, data
+        ).pop("data")
+        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
 
     @classmethod
     def get_request_events(
@@ -441,3 +454,27 @@ class AgentMechContract(Contract):
             args=[Web3.to_checksum_address(subscription_address), token_id],
         )
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
+
+    @classmethod
+    def simulate_tx(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        sender_address: str,
+        data: str,
+    ) -> JSONLike:
+        """Simulate the transaction."""
+        try:
+            ledger_api.api.eth.call(
+                {
+                    "from": ledger_api.api.to_checksum_address(sender_address),
+                    "to": ledger_api.api.to_checksum_address(contract_address),
+                    "data": data,
+                }
+            )
+            simulation_ok = True
+        except Exception as e:
+            _logger.info(f"Simulation failed: {str(e)}")
+            simulation_ok = False
+
+        return dict(data=simulation_ok)

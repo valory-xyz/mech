@@ -93,14 +93,26 @@ class TaskPoolingRound(CollectionRound):
                 done_tasks_str = cast(TaskPoolingPayload, payload).content
                 done_tasks = json.loads(done_tasks_str)
                 all_done_tasks.extend(done_tasks)
-            all_done_tasks = sorted(all_done_tasks, key=lambda x: x["request_id"])
+
+            # Set to store unique request_ids
+            unique_ids = set()
+            unique_objects = []
+
+            # filter out the tasks that have duplicate ids
+            for obj in all_done_tasks:
+                request_id = obj.get("request_id")
+                if request_id not in unique_ids:
+                    unique_ids.add(request_id)
+                    unique_objects.append(obj)
+
+            unique_done_tasks = sorted(unique_objects, key=lambda x: x["request_id"])
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
-                    get_name(SynchronizedData.done_tasks): all_done_tasks,
+                    get_name(SynchronizedData.done_tasks): unique_done_tasks,
                 }
             )
-            if len(all_done_tasks) > 0:
+            if len(unique_done_tasks) > 0:
                 return synchronized_data, Event.DONE
             return synchronized_data, Event.NO_TASKS
 
