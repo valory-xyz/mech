@@ -21,7 +21,7 @@ dependencies:
     version: ==1.11.0
   tiktoken:
     version: ==0.5.1
-  readabliity-lxml:
+  readability-lxml:
     version: ==0.8.1
   python-dateutil:
     version: ==2.8.2
