@@ -60,7 +60,6 @@ spacy = "==3.7.2"
 pandas = "==2.1.1"
 tiktoken = "==0.5.1"
 python-dateutil = "==2.8.2"
-tomte = {version = "==0.2.15", extras = ["cli", "tests"]}
 markdownify = "==0.11.6"
 tavily-python = "==0.3.0"
 chromadb = "==0.4.13"
@@ -71,3 +70,6 @@ pypdf2 = "^3.0.1"
 moviepy = "1.0.3"
 replicate = "0.15.7"
 lxml = {extras = ["html-clean"], version = "^5.1.0"}
+
+[tool.poetry.group.dev.dependencies]
+tomte = {version = "==0.2.15", extras = ["cli", "tests"]}
