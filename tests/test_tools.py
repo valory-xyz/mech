@@ -90,6 +90,10 @@ class BaseToolTest:
                         model=model,
                     )
                     func = getattr(self.tool_module, self.tool_callable)
+
+                    allowed_kwargs = ['prompt', 'tool', 'api_keys', 'counter_callback', 'model']
+                    assert all(key in allowed_kwargs for key in kwargs.keys()), f"Contains kwargs that are not allowed. Do not update kwargs without considering breakages in mech."
+
                     response = func(**kwargs)
                     self._validate_response(response)
 
