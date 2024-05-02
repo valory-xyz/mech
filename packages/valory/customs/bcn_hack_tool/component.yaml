@@ -1,0 +1,16 @@
+name: bcn_hack
+author: valory
+version: 0.1.0
+type: custom
+description: An example langchain tool for the off-site hack in Barcelona
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+  openai_request.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+fingerprint_ignore_patterns: []
+entry_point: bcn_hack_tool.py
+callable: run
+dependencies:
+  langchain:
+    version: ==0.0.303
