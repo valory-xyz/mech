@@ -66,23 +66,23 @@ DEFAULT_OPENAI_SETTINGS = {
 
 LLM_SETTINGS = {
     "gpt-3.5-turbo": DEFAULT_OPENAI_SETTINGS,
-    "gpt-4-turbo": DEFAULT_OPENAI_SETTINGS,
+    "gpt-4-turbo-preview": DEFAULT_OPENAI_SETTINGS,
 }
 
 ALLOWED_TOOLS = [
     "prediction-with-rules-and-report-gpt-3.5-turbo",
-    "prediction-with-rules-and-report-gpt-4-turbo",
+    "prediction-with-rules-and-report-gpt-4-turbo-preview",
 ]
 TOOL_TO_ENGINE = {
     "prediction-with-rules-and-report-gpt-3.5-turbo": "gpt-3.5-turbo",
-    "prediction-with-rules-and-report-gpt-4-turbo": "gpt-4-turbo",
+    "prediction-with-rules-and-report-gpt-4-turbo-preview": "gpt-4-turbo-preview",
 }
 
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 
 MAX_TOKENS = {
     "gpt-3.5-turbo": 4096,
-    "gpt-4-turbo": 8192,
+    "gpt-4-turbo-preview": 8192,
 }
 
 # the default number of URLs to fetch online information for

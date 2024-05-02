@@ -77,23 +77,23 @@ DEFAULT_OPENAI_SETTINGS = {
 
 LLM_SETTINGS = {
     "gpt-3.5-turbo": DEFAULT_OPENAI_SETTINGS,
-    "gpt-4-turbo": DEFAULT_OPENAI_SETTINGS,
+    "gpt-4-turbo-preview": DEFAULT_OPENAI_SETTINGS,
 }
 
 ALLOWED_TOOLS = [
     "research-gpt-3.5-turbo",
-    "research-gpt-4-turbo",
+    "research-gpt-4-turbo-preview",
 ]
 TOOL_TO_ENGINE = {
     "research-gpt-3.5-turbo": "gpt-3.5-turbo",
-    "research-gpt-4-turbo": "gpt-4-turbo",
+    "research-gpt-4-turbo-preview": "gpt-4-turbo-preview",
 }
 
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 
 MAX_TOKENS = {
     "gpt-3.5-turbo": 4096,
-    "gpt-4-turbo": 8192,
+    "gpt-4-turbo-preview": 8192,
 }
 
 RESEARCH_PLAN_PROMPT_TEMPLATE = """
