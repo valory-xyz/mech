@@ -19,16 +19,32 @@
 
 """Contains the Barcelona off-site's hack tool."""
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Optional, Tuple
+
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+MODEL = "gpt-4"
+PROMPT_TEMPLATE = "Tell me a short joke about {topic}"
 
 
-def run_langchain_example(prompt: str) -> str:
+def run_langchain_example(topic: str, openai_api_key: str) -> Tuple[str, str]:
     """Run the langchain example and return the result."""
+    model = ChatOpenAI(model=MODEL, openai_api_key=openai_api_key)
+
+    prompt = ChatPromptTemplate.from_template(PROMPT_TEMPLATE)
+    output_parser = StrOutputParser()
+
+    chain = prompt | model | output_parser
+
+    return chain.invoke({"topic": topic}), str(prompt)
 
 
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
     """Run the langchain example."""
-    prompt = kwargs.pop("prompt")
-    response = run_langchain_example(prompt)
-    # the expected output is: response, prompt, irrelevant, optionally a token counter calculation function
+    topic = kwargs.pop("topic")
+    openai_api_key = kwargs.pop("openai_api_key")
+    response, prompt = run_langchain_example(topic, openai_api_key)
+    # the expected output is: response, prompt, irrelevant, irrelevant
     return response, prompt, None, None
