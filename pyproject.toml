@@ -71,3 +71,4 @@ pypdf2 = "^3.0.1"
 moviepy = "1.0.3"
 replicate = "0.15.7"
 lxml = {extras = ["html-clean"], version = "^5.1.0"}
+langchain-openai = "0.1.3"
