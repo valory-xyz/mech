@@ -647,71 +647,74 @@ def parser_prediction_response(response: str) -> str:
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    model = kwargs.get("model")
-    print(f"MODEL: {model}")
-    with LLMClientManager(
-        kwargs["api_keys"], model, embedding_provider="openai"
-    ):
-        tool = kwargs["tool"]
-        prompt = extract_question(kwargs["prompt"])
-        max_tokens = kwargs.get(
-            "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
-        )
-        temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
-        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
-        num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
-        counter_callback = kwargs.get("counter_callback", None)
-        api_keys = kwargs.get("api_keys", {})
-        google_api_key = api_keys.get("google_api_key", None)
-        google_engine_id = api_keys.get("google_engine_id", None)
+    try:
+        model = kwargs.get("model")
+        print(f"MODEL: {model}")
+        with LLMClientManager(
+            kwargs["api_keys"], model, embedding_provider="openai"
+        ):
+            tool = kwargs["tool"]
+            prompt = extract_question(kwargs["prompt"])
+            max_tokens = kwargs.get(
+                "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
+            )
+            temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
+            num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
+            num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
+            counter_callback = kwargs.get("counter_callback", None)
+            api_keys = kwargs.get("api_keys", {})
+            google_api_key = api_keys.get("google_api_key", None)
+            google_engine_id = api_keys.get("google_engine_id", None)
 
-        # Make sure the model is supported
-        if model not in ALLOWED_MODELS:
-            raise ValueError(f"Model {model} not supported.")
+            # Make sure the model is supported
+            if model not in ALLOWED_MODELS:
+                raise ValueError(f"Model {model} not supported.")
 
-        # make sure the tool is supported
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"Tool {tool} not supported.")
+            # make sure the tool is supported
+            if tool not in ALLOWED_TOOLS:
+                raise ValueError(f"Tool {tool} not supported.")
 
-        additional_information, counter_callback = fetch_additional_information(
-            prompt=prompt,
-            model=model,
-            google_api_key=google_api_key,
-            google_engine_id=google_engine_id,
-            counter_callback=counter_callback,
-            source_links=kwargs.get("source_links", None),
-            num_urls=num_urls,
-            num_queries=num_queries,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        # Generate the prediction prompt
-        prediction_prompt = PREDICTION_PROMPT.format(
-            ADDITIONAL_INFORMATION=additional_information,
-            USER_PROMPT=prompt,
-        )
-
-        # Generate the prediction
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prediction_prompt},
-        ]
-
-        response = client.completions(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        if counter_callback:
-            counter_callback(
-                input_tokens=response.usage.prompt_tokens,
-                output_tokens=response.usage.completion_tokens,
+            additional_information, counter_callback = fetch_additional_information(
+                prompt=prompt,
                 model=model,
-                token_counter=count_tokens,
+                google_api_key=google_api_key,
+                google_engine_id=google_engine_id,
+                counter_callback=counter_callback,
+                source_links=kwargs.get("source_links", None),
+                num_urls=num_urls,
+                num_queries=num_queries,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
 
-        results = parser_prediction_response(response.content)
-        return results, prediction_prompt, None, counter_callback
+            # Generate the prediction prompt
+            prediction_prompt = PREDICTION_PROMPT.format(
+                ADDITIONAL_INFORMATION=additional_information,
+                USER_PROMPT=prompt,
+            )
+
+            # Generate the prediction
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prediction_prompt},
+            ]
+
+            response = client.completions(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+            if counter_callback:
+                counter_callback(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                    model=model,
+                    token_counter=count_tokens,
+                )
+
+            results = parser_prediction_response(response.content)
+            return results, prediction_prompt, None, counter_callback
+    except Exception as e:
+        return f"Invalid response. The following issue was encountered: {str(e)}", "", None, None

@@ -842,101 +842,104 @@ def extract_question(prompt: str) -> str:
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    tool = kwargs["tool"]
-    model = kwargs.get("model")
-    if "claude" in tool: # maintain backwards compatibility
-        model = "claude-3-sonnet-20240229" 
-    print(f"MODEL: {model}")
-    with LLMClientManager(
-        kwargs["api_keys"], model, embedding_provider="openai"
-    ):
-        prompt = extract_question(kwargs["prompt"])
-        max_tokens = kwargs.get(
-            "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
-        )
-        temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
-        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
-        num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
-        counter_callback = kwargs.get("counter_callback", None)
-        api_keys = kwargs.get("api_keys", {})
-        google_api_key = api_keys.get("google_api_key", None)
-        google_engine_id = api_keys.get("google_engine_id", None)
+    try:
+        tool = kwargs["tool"]
+        model = kwargs.get("model")
+        if "claude" in tool: # maintain backwards compatibility
+            model = "claude-3-sonnet-20240229" 
+        print(f"MODEL: {model}")
+        with LLMClientManager(
+            kwargs["api_keys"], model, embedding_provider="openai"
+        ):
+            prompt = extract_question(kwargs["prompt"])
+            max_tokens = kwargs.get(
+                "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
+            )
+            temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
+            num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
+            num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
+            counter_callback = kwargs.get("counter_callback", None)
+            api_keys = kwargs.get("api_keys", {})
+            google_api_key = api_keys.get("google_api_key", None)
+            google_engine_id = api_keys.get("google_engine_id", None)
 
-        # Make sure the model is supported
-        if model not in ALLOWED_MODELS:
-            raise ValueError(f"Model {model} not supported.")
+            # Make sure the model is supported
+            if model not in ALLOWED_MODELS:
+                raise ValueError(f"Model {model} not supported.")
 
-        # make sure the tool is supported
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"Tool {tool} not supported.")
+            # make sure the tool is supported
+            if tool not in ALLOWED_TOOLS:
+                raise ValueError(f"Tool {tool} not supported.")
 
-        (
-            additional_information,
-            queries,
-            counter_callback,
-        ) = fetch_additional_information(
-            prompt=prompt,
-            model=model,
-            google_api_key=google_api_key,
-            google_engine_id=google_engine_id,
-            counter_callback=counter_callback,
-            source_links=kwargs.get("source_links", None),
-            num_urls=num_urls,
-            num_queries=num_queries,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        # Reasoning prompt
-        reasoning_prompt = REASONING_PROMPT.format(
-            USER_PROMPT=prompt, ADDITIONAL_INFOMATION=additional_information
-        )
-
-        # Do reasoning
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": reasoning_prompt},
-        ]
-        reasoning, counter_callback = do_reasoning_with_retry(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            retries=DEFAULT_RETRIES,
-            delay=DEFAULT_DELAY,
-            counter_callback=counter_callback,
-        )
-
-        # Prediction prompt
-        prediction_prompt = PREDICTION_PROMPT.format(
-            USER_INPUT=prompt, REASONING=reasoning
-        )
-
-        # Make the prediction
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prediction_prompt},
-        ]
-
-        response_prediction = client.completions(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-        prediction = parser_prediction_response(response_prediction.content)
-
-        if counter_callback:
-            counter_callback(
-                input_tokens=response_prediction.usage.prompt_tokens,
-                output_tokens=response_prediction.usage.completion_tokens,
+            (
+                additional_information,
+                queries,
+                counter_callback,
+            ) = fetch_additional_information(
+                prompt=prompt,
                 model=model,
-                token_counter=count_tokens,
+                google_api_key=google_api_key,
+                google_engine_id=google_engine_id,
+                counter_callback=counter_callback,
+                source_links=kwargs.get("source_links", None),
+                num_urls=num_urls,
+                num_queries=num_queries,
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
 
-        return (
-            prediction,
-            reasoning_prompt + "////" + prediction_prompt,
-            None,
-            counter_callback,
-        )
+            # Reasoning prompt
+            reasoning_prompt = REASONING_PROMPT.format(
+                USER_PROMPT=prompt, ADDITIONAL_INFOMATION=additional_information
+            )
+
+            # Do reasoning
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": reasoning_prompt},
+            ]
+            reasoning, counter_callback = do_reasoning_with_retry(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                retries=DEFAULT_RETRIES,
+                delay=DEFAULT_DELAY,
+                counter_callback=counter_callback,
+            )
+
+            # Prediction prompt
+            prediction_prompt = PREDICTION_PROMPT.format(
+                USER_INPUT=prompt, REASONING=reasoning
+            )
+
+            # Make the prediction
+            messages = [
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prediction_prompt},
+            ]
+
+            response_prediction = client.completions(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+            prediction = parser_prediction_response(response_prediction.content)
+
+            if counter_callback:
+                counter_callback(
+                    input_tokens=response_prediction.usage.prompt_tokens,
+                    output_tokens=response_prediction.usage.completion_tokens,
+                    model=model,
+                    token_counter=count_tokens,
+                )
+
+            return (
+                prediction,
+                reasoning_prompt + "////" + prediction_prompt,
+                None,
+                counter_callback,
+            )
+    except Exception as e:
+        return f"Invalid response. The following issue was encountered: {str(e)}", "", None, None

@@ -662,70 +662,73 @@ def adjust_additional_information(
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
-    tool = kwargs["tool"]
-    engine = kwargs.get("model")
-    if "claude" in tool: # maintain backwards compatibility
-        engine = "claude-3-sonnet-20240229" 
-    print(f"ENGINE: {engine}")
-    with LLMClientManager(kwargs["api_keys"], engine):
-        prompt = kwargs["prompt"]
-        max_tokens = kwargs.get(
-            "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
-        )
-        temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
-        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
-        num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
-        compression_factor = kwargs.get(
-            "compression_factor", DEFAULT_COMPRESSION_FACTOR
-        )
-        vocab = kwargs.get("vocab", DEFAULT_VOCAB)
-        counter_callback = kwargs.get("counter_callback", None)
-        api_keys = kwargs.get("api_keys", {})
-        google_api_key = api_keys.get("google_api_key", None)
-        google_engine_id = api_keys.get("google_engine_id", None)
+    try:
+        tool = kwargs["tool"]
+        engine = kwargs.get("model")
+        if "claude" in tool: # maintain backwards compatibility
+            engine = "claude-3-sonnet-20240229" 
+        print(f"ENGINE: {engine}")
+        with LLMClientManager(kwargs["api_keys"], engine):
+            prompt = kwargs["prompt"]
+            max_tokens = kwargs.get(
+                "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
+            )
+            temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
+            num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
+            num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
+            compression_factor = kwargs.get(
+                "compression_factor", DEFAULT_COMPRESSION_FACTOR
+            )
+            vocab = kwargs.get("vocab", DEFAULT_VOCAB)
+            counter_callback = kwargs.get("counter_callback", None)
+            api_keys = kwargs.get("api_keys", {})
+            google_api_key = api_keys.get("google_api_key", None)
+            google_engine_id = api_keys.get("google_engine_id", None)
 
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"Tool {tool} is not supported.")
+            if tool not in ALLOWED_TOOLS:
+                raise ValueError(f"Tool {tool} is not supported.")
 
-        if tool.startswith("prediction-online"):
-            additional_information, counter_callback = fetch_additional_information(
-                prompt,
-                engine,
-                temperature,
-                max_tokens,
-                google_api_key,
-                google_engine_id,
-                num_urls,
-                num_words,
+            if tool.startswith("prediction-online"):
+                additional_information, counter_callback = fetch_additional_information(
+                    prompt,
+                    engine,
+                    temperature,
+                    max_tokens,
+                    google_api_key,
+                    google_engine_id,
+                    num_urls,
+                    num_words,
+                    counter_callback=counter_callback,
+                    source_links=kwargs.get("source_links", None),
+                )
+            else:
+                additional_information = ""
+
+            if additional_information and tool == "prediction-online-summarized-info":
+                additional_information = summarize(
+                    additional_information, compression_factor, vocab
+                )
+            # TODO: Get adjust_additional_information working for Claude
+            # additional_information = adjust_additional_information(
+            #     prompt, PREDICTION_PROMPT, additional_information, engine
+            # )
+            prediction_prompt = PREDICTION_PROMPT.format(
+                user_prompt=prompt, additional_information=additional_information
+            )
+            messages = [
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prediction_prompt},
+            ]
+            extracted_block, counter_callback = generate_prediction_with_retry(
+                model=engine,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                retries=COMPLETION_RETRIES,
+                delay=COMPLETION_DELAY,
                 counter_callback=counter_callback,
-                source_links=kwargs.get("source_links", None),
             )
-        else:
-            additional_information = ""
 
-        if additional_information and tool == "prediction-online-summarized-info":
-            additional_information = summarize(
-                additional_information, compression_factor, vocab
-            )
-        # TODO: Get adjust_additional_information working for Claude
-        # additional_information = adjust_additional_information(
-        #     prompt, PREDICTION_PROMPT, additional_information, engine
-        # )
-        prediction_prompt = PREDICTION_PROMPT.format(
-            user_prompt=prompt, additional_information=additional_information
-        )
-        messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
-            {"role": "user", "content": prediction_prompt},
-        ]
-        extracted_block, counter_callback = generate_prediction_with_retry(
-            model=engine,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            retries=COMPLETION_RETRIES,
-            delay=COMPLETION_DELAY,
-            counter_callback=counter_callback,
-        )
-
-        return extracted_block, prediction_prompt, None, counter_callback
+            return extracted_block, prediction_prompt, None, counter_callback
+    except Exception as e:
+        return f"Invalid response. The following issue was encountered: {str(e)}", "", None, None
