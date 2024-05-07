@@ -55,3 +55,5 @@ backup_mech/
 /pip
 /tool_test.py
 .venv
+log
+.benchmark-cache
