@@ -1,15 +1,15 @@
-name: stability_ai_request
+name: bagel_request
 author: bagel
 version: 0.1.0
 type: custom
-description: A tool that runs a prompt against StabilityAI.
+description: A tool that uses bagel LLM finetuning.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  stabilityai_request.py: bafybeifi7i5syencul3nvplbnvporb4x2brr7ugosnvn6uyiaejsqetq7u
+  __init__.py: ab1cdb459bcaa25e6f1d12cd36e7bc2d70bb197f065ff7f662756dbbba23e97a
+  bagel_request.py: 728169fcf4596f5cb0d100593f503c9131858db58f8a5f8aea0c29d03763238b
 fingerprint_ignore_patterns: []
-entry_point: stabilityai_request.py
+entry_point: bagel_request.py
 callable: run
 dependencies:
   requests: {}
