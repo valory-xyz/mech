@@ -743,14 +743,17 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
         )
 
+        # Reasoning prompt
+        reasoning_prompt = REASONING_PROMPT.format(
+            user_prompt=prompt, formatted_docs=adjusted_info
+        )
+
         # Do reasoning
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": REASONING_PROMPT.format(
-                    user_prompt=prompt, formatted_docs=adjusted_info
-                ),
+                "content": reasoning_prompt,
             },
         ]
 
@@ -796,13 +799,17 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             return determinable_results.json(), reasoning, None, None
 
         # Make the prediction
+
+        # Prediction prompt
+        prediction_prompt = PREDICTION_PROMPT.format(
+            user_prompt=prompt, reasoning=reasoning
+        )
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": PREDICTION_PROMPT.format(
-                    user_prompt=prompt, reasoning=reasoning
-                ),
+                "content": prediction_prompt,
             },
         ]
 
@@ -855,4 +862,4 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-        return results.json(), reasoning, None, counter_callback
+        return results.json(), reasoning_prompt + "////" + prediction_prompt, None, counter_callback
