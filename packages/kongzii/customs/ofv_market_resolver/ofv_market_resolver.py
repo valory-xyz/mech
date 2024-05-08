@@ -1,7 +1,8 @@
 from factcheck import FactCheck
 from factcheck.utils.multimodal import modal_normalization
+import json
 from langchain_openai import ChatOpenAI
-from typing import Annotated
+from typing import Annotated, Any, Dict, Optional, Tuple
 from pydantic import SecretStr, BaseModel, BeforeValidator
 
 DEFAULT_OPENAI_MODEL = "gpt-4-0125-preview"
@@ -31,8 +32,8 @@ def factcheck(
     serper_api_key: SecretStr | None = None,
 ) -> FactCheckResult:
     api_config = {
-        "OPENAI_API_KEY": openai_api_key.get_secret_value(),
-        "SERPER_API_KEY": serper_api_key.get_secret_value(),
+        "OPENAI_API_KEY": openai_api_key,
+        "SERPER_API_KEY": serper_api_key,
     }
     factcheck = FactCheck(
         default_model=model,
@@ -59,7 +60,7 @@ def rewrite_as_sentence(
     `Former Trump Organization CFO Allen Weisselberg was sentenced to jail by 15 April 2024.`
     """
     llm = ChatOpenAI(
-        model=model, temperature=0.0, api_key=openai_api_key.get_secret_value()
+        model=model, temperature=0.0, api_key=openai_api_key
     )
 
     prompt = f"""
@@ -92,7 +93,7 @@ def is_predictable_binary(
     Evaluate if the question is actually answerable.
     """
     llm = ChatOpenAI(
-        model=model, temperature=0.0, api_key=openai_api_key.get_secret_value()
+        model=model, temperature=0.0, api_key=openai_api_key
     )
 
     prompt = f"""Main signs about a fully qualified question (sometimes referred to as a "market"):
@@ -139,11 +140,7 @@ Finally, write your final decision, write `decision: ` followed by either "yes i
     return is_predictable
 
 
-def run(
-    market_question: str,
-    openai_api_key: SecretStr | None = None,
-    serper_api_key: SecretStr | None = None,
-) -> bool | None:
+def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the prediction market resolver based on Open Fact Verifier.
 
@@ -152,6 +149,12 @@ def run(
         - True if the answer for the question is "Yes"
         - False if the answer for the question is "No"
     """
+
+    market_question = kwargs["prompt"]
+    api_keys = kwargs.get("api_keys", {})
+    openai_api_key = api_keys["openai"]
+    serper_api_key = api_keys["serperapi"]
+
     # Check if the question is reasonable to look for an answer.
     is_answerable = is_predictable_binary(
         market_question, openai_api_key=openai_api_key
@@ -175,4 +178,8 @@ def run(
         f"Fact check result for `{market_sentence}` is `{factresult.factuality}`, because {factresult.claims_details}."
     )
 
-    return factresult.factuality
+    results = {}
+    results["has_occurred"] = factresult.factuality
+    results["is_determinable"] = is_answerable
+
+    return json.dumps(results), "", None, None
