@@ -131,3 +131,4 @@ a8dd503580f9dee27828d954000e5195a8231685:packages/valory/skills/task_submission_
 a8dd503580f9dee27828d954000e5195a8231685:packages/valory/skills/task_submission_abci/skill.yaml:generic-api-key:1575
 cefa30e1c946a42089bed80891eff51bad6b39a9:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:18
 c73b5d88fe1a364d7b1168b3ad171da59e7a2eac:packages/valory/protocols/websocket_client/protocol.yaml:generic-api-key:18
+d7f9fd6ad8bcf9ea2bf14bf3de221971ddb56268:packages/valory/skills/task_execution/skill.yaml:generic-api-key:15
