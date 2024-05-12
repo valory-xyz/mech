@@ -69,10 +69,3 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     )
 
     return response.text, prompt, None, counter_callback
-
-if __name__ == "__main__":
-    prompt = "What year was Obama born?"
-    tools = "gemini-pro"
-
-    response = run(tool=tools, prompt=prompt)
-    print(response)
