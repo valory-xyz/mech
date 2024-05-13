@@ -14,7 +14,20 @@ from joblib import Memory
 MEMORY = Memory(".benchmark-cache", verbose=0)
 APP = typer.Typer()
 
-ofv_run_cached = MEMORY.cache(ofv_run)
+
+@MEMORY.cache
+def ofv_run_cached(
+    question: str,
+    openai_api_key: SecretStr,
+    serper_api_key: SecretStr,
+) -> bool | None:
+    return ofv_run(
+        prompt=question,
+        api_keys={
+            "openai": openai_api_key.get_secret_value(),
+            "serperapi": serper_api_key.get_secret_value(),
+        },
+    )
 
 
 @MEMORY.cache
