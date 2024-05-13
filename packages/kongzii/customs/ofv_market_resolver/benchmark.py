@@ -1,4 +1,5 @@
 import typer
+import json
 import pandas as pd
 from packages.kongzii.customs.ofv_market_resolver.ofv_market_resolver import (
     run as ofv_run,
@@ -21,13 +22,15 @@ def ofv_run_cached(
     openai_api_key: SecretStr,
     serper_api_key: SecretStr,
 ) -> bool | None:
-    return ofv_run(
-        prompt=question,
-        api_keys={
-            "openai": openai_api_key.get_secret_value(),
-            "serperapi": serper_api_key.get_secret_value(),
-        },
-    )
+    return json.loads(
+        ofv_run(
+            prompt=question,
+            api_keys={
+                "openai": openai_api_key.get_secret_value(),
+                "serperapi": serper_api_key.get_secret_value(),
+            },
+        )[0]
+    )["has_occurred"]
 
 
 @MEMORY.cache
