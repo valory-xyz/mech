@@ -144,6 +144,22 @@ Finally, write your final decision, write `decision: ` followed by either "yes i
     return is_predictable
 
 
+def build_run_result(
+    has_occurred: bool | None, is_determinable: bool | None
+) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+    return (
+        json.dumps(
+            {
+                "has_occurred": has_occurred,
+                "is_determinable": is_determinable,
+            }
+        ),
+        "",
+        None,
+        None,
+    )
+
+
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the prediction market resolver based on Open Fact Verifier.
@@ -167,7 +183,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         print(
             f"Question `{market_question}` is not answerable, skipping fact checking."
         )
-        return None
+        return build_run_result(has_occurred=None, is_determinable=is_answerable)
 
     # Rewrite the question (which was about a future) into a sentence (which is about the past).
     market_sentence = rewrite_as_sentence(
@@ -182,8 +198,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         f"Fact check result for `{market_sentence}` is `{factresult.factuality}`, because {factresult.claims_details}."
     )
 
-    results = {}
-    results["has_occurred"] = factresult.factuality
-    results["is_determinable"] = is_answerable
-
-    return json.dumps(results), "", None, None
+    return build_run_result(
+        has_occurred=factresult.factuality, is_determinable=is_answerable
+    )
