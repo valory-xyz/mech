@@ -28,8 +28,8 @@ class FactCheckResult(BaseModel):
 def factcheck(
     statement: str,
     model: str = DEFAULT_OPENAI_MODEL,
-    openai_api_key: SecretStr | None = None,
-    serper_api_key: SecretStr | None = None,
+    openai_api_key: str | None = None,
+    serper_api_key: str | None = None,
 ) -> FactCheckResult:
     api_config = {
         "OPENAI_API_KEY": openai_api_key,
@@ -50,7 +50,7 @@ def factcheck(
 def rewrite_as_sentence(
     question: str,
     model: str = DEFAULT_OPENAI_MODEL,
-    openai_api_key: SecretStr | None = None,
+    openai_api_key: str | None = None,
 ) -> str:
     """
     Rewrites the question into a sentence, example:
@@ -60,7 +60,9 @@ def rewrite_as_sentence(
     `Former Trump Organization CFO Allen Weisselberg was sentenced to jail by 15 April 2024.`
     """
     llm = ChatOpenAI(
-        model=model, temperature=0.0, api_key=openai_api_key
+        model=model,
+        temperature=0.0,
+        api_key=SecretStr(openai_api_key) if openai_api_key is not None else None,
     )
 
     prompt = f"""
@@ -87,13 +89,15 @@ Sentence:
 def is_predictable_binary(
     question: str,
     model: str = DEFAULT_OPENAI_MODEL,
-    openai_api_key: SecretStr | None = None,
+    openai_api_key: str | None = None,
 ) -> str:
     """
     Evaluate if the question is actually answerable.
     """
     llm = ChatOpenAI(
-        model=model, temperature=0.0, api_key=openai_api_key
+        model=model,
+        temperature=0.0,
+        api_key=SecretStr(openai_api_key) if openai_api_key is not None else None,
     )
 
     prompt = f"""Main signs about a fully qualified question (sometimes referred to as a "market"):
