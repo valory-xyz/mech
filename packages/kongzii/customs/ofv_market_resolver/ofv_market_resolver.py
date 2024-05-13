@@ -3,7 +3,7 @@ from factcheck.utils.multimodal import modal_normalization
 import json
 from langchain_openai import ChatOpenAI
 from typing import Annotated, Any, Dict, Optional, Tuple
-from pydantic import SecretStr, BaseModel, BeforeValidator
+from pydantic import BaseModel, BeforeValidator
 
 DEFAULT_OPENAI_MODEL = "gpt-4-0125-preview"
 
@@ -62,7 +62,7 @@ def rewrite_as_sentence(
     llm = ChatOpenAI(
         model=model,
         temperature=0.0,
-        api_key=SecretStr(openai_api_key) if openai_api_key is not None else None,
+        api_key=openai_api_key,
     )
 
     prompt = f"""
@@ -97,7 +97,7 @@ def is_predictable_binary(
     llm = ChatOpenAI(
         model=model,
         temperature=0.0,
-        api_key=SecretStr(openai_api_key) if openai_api_key is not None else None,
+        api_key=openai_api_key,
     )
 
     prompt = f"""Main signs about a fully qualified question (sometimes referred to as a "market"):
