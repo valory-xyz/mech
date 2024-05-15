@@ -160,7 +160,21 @@ def build_run_result(
     )
 
 
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def most_common_fact_result(results: list[FactCheckResult]) -> FactCheckResult:
+    """
+    Given a list of fact check results, return the first `FactCheckResult` in the list with `factuality` being the most common.
+    """
+    factualities = [fact.factuality for fact in results]
+    most_common_fact = max(set(factualities), key=factualities.count)
+    first_most_common_fact = [
+        fact for fact in results if fact.factuality == most_common_fact
+    ][0]
+    return first_most_common_fact
+
+
+def run(
+    prompt: str, api_keys: dict[str, str], n_fact_runs: int = 3
+) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the prediction market resolver based on Open Fact Verifier.
 
@@ -169,9 +183,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         - True if the answer for the question is "Yes"
         - False if the answer for the question is "No"
     """
-
-    market_question = kwargs["prompt"]
-    api_keys = kwargs.get("api_keys", {})
+    assert (
+        n_fact_runs > 0 and n_fact_runs % 2 != 0
+    ), "n_fact_runs must be greater than 0 and an odd number"
+    market_question = prompt  # `prompt` argument name is for compatibility with the original resolver.
     openai_api_key = api_keys["openai"]
     serper_api_key = api_keys["serperapi"]
 
@@ -191,9 +206,15 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     )
     print(f"Question `{market_question}` rewritten into `{market_sentence}`.")
     # Fact-check the sentence.
-    factresult = factcheck(
-        market_sentence, openai_api_key=openai_api_key, serper_api_key=serper_api_key
-    )
+    factresults = [
+        factcheck(
+            market_sentence,
+            openai_api_key=openai_api_key,
+            serper_api_key=serper_api_key,
+        )
+        for _ in range(n_fact_runs)
+    ]
+    factresult = most_common_fact_result(factresults)
     print(
         f"Fact check result for `{market_sentence}` is `{factresult.factuality}`, because {factresult.claims_details}."
     )
