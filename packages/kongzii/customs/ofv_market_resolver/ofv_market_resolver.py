@@ -177,11 +177,6 @@ def run(
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the prediction market resolver based on Open Fact Verifier.
-
-    Returns:
-        - None if can't decide
-        - True if the answer for the question is "Yes"
-        - False if the answer for the question is "No"
     """
     assert (
         n_fact_runs > 0 and n_fact_runs % 2 != 0
