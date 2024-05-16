@@ -1,6 +1,7 @@
 from factcheck import FactCheck
 from factcheck.utils.multimodal import modal_normalization
 import json
+import typing as t
 from langchain_openai import ChatOpenAI
 from typing import Annotated, Any, Dict, Optional, Tuple
 from pydantic import BaseModel, BeforeValidator
@@ -173,7 +174,10 @@ def most_common_fact_result(results: list[FactCheckResult]) -> FactCheckResult:
 
 
 def run(
-    prompt: str, api_keys: dict[str, str], n_fact_runs: int = 3
+    prompt: str,
+    api_keys: dict[str, str],
+    n_fact_runs: int = 3,
+    **kwargs: t.Any,  # Just to ignore any other arguments passed to the resolver by the universal benchmark script.
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the prediction market resolver based on Open Fact Verifier.
