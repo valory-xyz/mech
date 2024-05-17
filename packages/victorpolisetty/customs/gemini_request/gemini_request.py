@@ -59,13 +59,20 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     genai.configure(api_key=api_key)
     engine = genai.GenerativeModel(tool)
 
-    response = engine.generate_content(
-        prompt,
-        generation_config=genai.types.GenerationConfig(
-            candidate_count=candidate_count,
-            stop_sequences= stop_sequences,
-            max_output_tokens=max_output_tokens,
-            temperature=temperature)
-    )
+    try:
+        response = engine.generate_content(
+            prompt,
+            generation_config=genai.types.GenerationConfig(
+                candidate_count=candidate_count,
+                stop_sequences=stop_sequences,
+                max_output_tokens=max_output_tokens,
+                temperature=temperature)
+        )
+
+        # Ensure response has a .text attribute
+        response_text = getattr(response, 'text', None)
+
+    except Exception as e:
+        return f"An error occurred: {str(e)}", None, None, None
 
     return response.text, prompt, None, counter_callback
