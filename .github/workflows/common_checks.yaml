@@ -154,3 +154,42 @@ jobs:
           tar -xzf gitleaks_8.10.1_linux_x64.tar.gz && \
           sudo install gitleaks /usr/bin && \
           gitleaks detect --report-format json --report-path leak_report -v
+
+  tools_checks:
+    environment: 'ci'
+    continue-on-error: False
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ ubuntu-latest ]
+        python-version: [ "3.10" ]
+
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install dependencies
+        run: |
+          sudo apt-get update --fix-missing
+          sudo apt-get autoremove
+          sudo apt-get autoclean
+          pip install tomte[tox,cli]==0.2.15
+          pip install --user --upgrade setuptools
+      - name: Tool unit tests
+        env:
+          OPENAI_SECRET_KEY: ${{ secrets.OPENAI_API_KEY }}
+          STABILITY_API_KEY: ${{ secrets.STABILITY_AI_KEY }}
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          GOOGLE_ENGINE_ID: ${{ vars.GOOGLE_ENGINE_ID }}
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+          REPLICATE_API_KEY: ${{ secrets.REPLICATE_API_KEY }}
+          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+          OPENROUTER_API_KEY: ${{ secrets.OPEN_ROUTER_API_KEY }}
+        run: |
+          printenv
+          tox -e check-tools

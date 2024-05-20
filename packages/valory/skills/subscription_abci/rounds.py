@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -88,13 +88,17 @@ class UpdateSubscriptionRound(CollectSameUntilThresholdRound):
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
-            return self.synchronized_data, Event.NO_MAJORITY,
+            return (
+                self.synchronized_data,
+                Event.NO_MAJORITY,
+            )
 
         return None
 
 
 class FinishedWithTxRound(DegenerateRound):
     """FinishedWithTxRound"""
+
 
 class FinishedWithoutTxRound(DegenerateRound):
     """FinishedWithoutTxRound"""

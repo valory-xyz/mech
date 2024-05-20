@@ -76,6 +76,7 @@ ZERO_IPFS_HASH = (
     "f017012200000000000000000000000000000000000000000000000000000000000000000"
 )
 FILENAME = "usage"
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
@@ -515,6 +516,17 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             )
             return None
 
+        # in case an agent maps to an operator that is the zero address
+        # we need to remove it from the list of addresses that will receive funds
+        # this can happen in case of changing agent instances in the service registry
+        # old agent instances will map to the zero address, because they are still part of
+        # usage history
+        invalid_operator_reqs = accumulated_reqs_by_operator.pop(ZERO_ADDRESS, 0)
+
+        # remove the invalid operator reqs from the total reqs,
+        # so that we share 100% of the funds among the valid operators
+        total_reqs -= invalid_operator_reqs
+
         for agent, reqs in accumulated_reqs_by_operator.items():
             accumulated_reqs_by_operator[agent] = int(
                 operator_share * (reqs / total_reqs)
@@ -529,7 +541,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         agent_instances = list(reqs_by_agent.keys())
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
+            contract_address=self.params.service_registry_address,
             contract_id=str(ServiceRegistryContract.contract_id),
             contract_callable="get_operators_mapping",
             agent_instances=agent_instances,
@@ -765,6 +777,17 @@ class TransactionPreparationBehaviour(
                 # something went wrong, respond with ERROR payload for now
                 # nothing should proceed if this happens
                 return TransactionPreparationRound.ERROR_PAYLOAD
+
+            simulation_ok = deliver_tx.pop("simulation_ok", False)
+            if not simulation_ok:
+                # the simulation failed, log a warning and skip this deliver
+                self.context.logger.warning(
+                    f"Deliver tx simulation failed for task {task}. Skipping this deliver."
+                )
+                # remove the task from the list of done tasks
+                self.remove_tasks([task])
+                continue
+
             all_txs.append(deliver_tx)
             response_tx = task.get("transaction", None)
             if response_tx is not None:
@@ -875,6 +898,7 @@ class TransactionPreparationBehaviour(
             contract_address=task_data["mech_address"],
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_data",
+            sender_address=self.synchronized_data.safe_contract_address,
             request_id=task_data["request_id"],
             data=task_data["task_result"],
             request_id_nonce=task_data["request_id_nonce"],
@@ -888,10 +912,12 @@ class TransactionPreparationBehaviour(
             return None
 
         data = cast(bytes, contract_api_msg.state.body["data"])
+        simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
         return {
             "to": task_data["mech_address"],
             "value": ZERO_ETHER_VALUE,
             "data": data,
+            "simulation_ok": simulation_ok,
         }
 
 

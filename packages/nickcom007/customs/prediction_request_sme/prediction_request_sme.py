@@ -39,6 +39,7 @@ client: Optional[OpenAI] = None
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
+
     def __init__(self, api_key: str):
         self.api_key = api_key
 
@@ -65,7 +66,7 @@ NUM_URLS_EXTRACT = 5
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
-    "temperature": 0.,
+    "temperature": 0.0,
 }
 MAX_TOKENS = {
     "gpt-3.5-turbo-0125": 4096,
@@ -205,7 +206,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
         )
         .execute()
     )
-    items = search.get('items')
+    items = search.get("items")
     if items is not None:
         return [result["link"] for result in items]
     else:
@@ -239,10 +240,10 @@ def extract_text(
 
     if num_words:
         return " ".join(text.split()[:num_words])
-    
+
     # remove newlines and extra spaces
     text = " ".join(text.split())
-    
+
     return text
 
 
@@ -273,8 +274,8 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                 if result.status_code != 200:
                     continue
                 doc = {}
-                doc['text'] = extract_text(html=result.text, num_words=num_words)
-                doc['url'] = url
+                doc["text"] = extract_text(html=result.text, num_words=num_words)
+                doc["url"] = url
                 extracted_texts.append(doc)
                 count += 1
                 if count >= max_allowed:
@@ -332,7 +333,10 @@ def fetch_additional_information(
         texts = []
         for url, content in islice(source_links.items(), 3):
             doc = {}
-            doc['text'], doc['url'] = extract_text(html=content, num_words=num_words), url
+            doc["text"], doc["url"] = (
+                extract_text(html=content, num_words=num_words),
+                url,
+            )
             texts.append(doc)
     # Format the additional information
     additional_information = "\n".join(
@@ -348,7 +352,7 @@ def fetch_additional_information(
             model=engine,
             token_counter=count_tokens,
         )
-    
+
     return additional_information, counter_callback
 
 
@@ -387,33 +391,32 @@ def get_sme_role(
 
 
 def adjust_additional_information(
-    prompt: str, 
-    prompt_template:str, 
-    additional_information: str, 
-    model: str
+    prompt: str, prompt_template: str, additional_information: str, model: str
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
     # Initialize tiktoken encoder for the specified model
     enc = tiktoken.encoding_for_model(model)
-    
+
     # Encode the user prompt to calculate its token count
     prompt = prompt_template.format(user_prompt=prompt, additional_information="")
     prompt_tokens = len(enc.encode(prompt))
-    
+
     # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+    MAX_PREDICTION_PROMPT_TOKENS = (
+        MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+    )
     available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
-    
+
     # Encode the additional_information
     additional_info_tokens = enc.encode(additional_information)
-    
+
     # If additional_information exceeds available tokens, truncate it
     if len(additional_info_tokens) > available_tokens:
         truncated_info_tokens = additional_info_tokens[:available_tokens]
         # Decode tokens back to text, ensuring the output fits within the budget
         additional_information = enc.decode(truncated_info_tokens)
-    
+
     return additional_information
 
 
@@ -504,6 +507,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 model=engine,
                 token_counter=count_tokens,
             )
-        
-        return response.choices[0].message.content, prediction_prompt, None, counter_callback
 
+        return (
+            response.choices[0].message.content,
+            prediction_prompt,
+            None,
+            counter_callback,
+        )

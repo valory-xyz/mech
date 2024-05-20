@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -56,9 +56,9 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.mech_to_subscription: Dict[str, Tuple[str, int]] = self._nested_list_todict_workaround(
-            kwargs, "mech_to_subscription"
-        )
+        self.mech_to_subscription: Dict[
+            str, Tuple[str, int]
+        ] = self._nested_list_todict_workaround(kwargs, "mech_to_subscription")
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
         self.multisend_address = self._ensure_get("multisend_address", kwargs, str)
         super().__init__(*args, **kwargs)
@@ -72,7 +72,13 @@ class Params(BaseParams):
         values = cast(List, kwargs.get(key))
         if len(values) == 0:
             raise ValueError(f"No {key} specified!")
-        return {value[0]: (value[1][0], int(value[1][1]),) for value in values}
+        return {
+            value[0]: (
+                value[1][0],
+                int(value[1][1]),
+            )
+            for value in values
+        }
 
     @classmethod
     def _ensure_get(cls, key: str, kwargs: Dict, type_: Any) -> Any:
