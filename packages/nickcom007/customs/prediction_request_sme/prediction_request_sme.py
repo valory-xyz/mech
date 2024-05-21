@@ -18,13 +18,16 @@
 # ------------------------------------------------------------------------------
 
 """This module implements a Mech tool for binary predictions."""
-
+import functools
 import json
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from itertools import islice
 
+import anthropic
+import googleapiclient
+import openai
 import tiktoken
 from openai import OpenAI
 
@@ -193,6 +196,47 @@ task question: "Will the air strike conflict in Sudan be resolved by 13 Septembe
         },
 ]
 """
+
+
+
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys,)
+            except anthropic.RateLimitError as e:
+                # try with a new key again
+                api_keys.rotate("anthropic")
+                return execute()
+            except openai.RateLimitError as e:
+                # try with a new key again
+                api_keys.rotate("openai")
+                api_keys.rotate("openrouter")
+                return execute()
+            except googleapiclient.errors.HttpError as e:
+                # try with a new key again
+                rate_limit_exceeded_code = 429
+                if e.status_code != rate_limit_exceeded_code:
+                    raise e
+                api_keys.rotate("google_api_key")
+                return execute()
+            except Exception as e:
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
 
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
@@ -420,6 +464,7 @@ def adjust_additional_information(
     return additional_information
 
 
+@with_key_rotation
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):

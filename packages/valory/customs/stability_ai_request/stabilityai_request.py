@@ -18,11 +18,14 @@
 # ------------------------------------------------------------------------------
 
 """Contains the job definitions"""
-
+import functools
 import json
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Callable
 
+import anthropic
+import googleapiclient
+import openai
 import requests
 from tiktoken import encoding_for_model
 
@@ -54,6 +57,45 @@ ENGINE_SIZE_CHART = {
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
 
 
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys,)
+            except anthropic.RateLimitError as e:
+                # try with a new key again
+                api_keys.rotate("anthropic")
+                return execute()
+            except openai.RateLimitError as e:
+                # try with a new key again
+                api_keys.rotate("openai")
+                api_keys.rotate("openrouter")
+                return execute()
+            except googleapiclient.errors.HttpError as e:
+                # try with a new key again
+                rate_limit_exceeded_code = 429
+                if e.status_code != rate_limit_exceeded_code:
+                    raise e
+                api_keys.rotate("google_api_key")
+                return execute()
+            except Exception as e:
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
+
+
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
@@ -68,6 +110,7 @@ class FinishReason(Enum):
     ERROR = 2
 
 
+@with_key_rotation
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
 

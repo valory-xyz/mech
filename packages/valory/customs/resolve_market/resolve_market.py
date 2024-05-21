@@ -22,14 +22,56 @@
 This module tries to mimic the current logic on the market-creator service
 (https://github.com/valory-xyz/market-creator) for resolving closed markets.
 """
-
+import functools
 import json
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, Callable
 
+import anthropic
+import googleapiclient
+import openai
 import requests
 from openai import OpenAI
+
+
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys,)
+            except anthropic.RateLimitError as e:
+                # try with a new key again
+                api_keys.rotate("anthropic")
+                return execute()
+            except openai.RateLimitError as e:
+                # try with a new key again
+                api_keys.rotate("openai")
+                api_keys.rotate("openrouter")
+                return execute()
+            except googleapiclient.errors.HttpError as e:
+                # try with a new key again
+                rate_limit_exceeded_code = 429
+                if e.status_code != rate_limit_exceeded_code:
+                    raise e
+                api_keys.rotate("google_api_key")
+                return execute()
+            except Exception as e:
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
 
 
 client: Optional[OpenAI] = None
@@ -357,6 +399,7 @@ class CloseMarketBehaviourMock:
         return response_data["articles"]
 
 
+@with_key_rotation
 def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]

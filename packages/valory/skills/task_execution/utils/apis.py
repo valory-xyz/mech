@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 """Utils for API integrations."""
-from typing import Dict, List
+from typing import Dict, List, Any
 
 
 class KeyChain:
@@ -41,6 +41,13 @@ class KeyChain:
         self.current_index[service_name] += 1
         if self.current_index[service_name] >= len(self.services[service_name]):
             self.current_index[service_name] = 0  # Reset to the start
+
+    def get(self, service_name: str, default_value: str) -> str:
+        """Get the current API key for a given service."""
+        if service_name not in self.services:
+            return default_value
+
+        return self.__getitem__(service_name)
 
     def __getitem__(self, service_name: str) -> str:
         """Get the current API key for a given service."""

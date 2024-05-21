@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeif5ldxbdc5mw3cv3i5cya464i6tgue2gj5ms4jreyc2ybxehm7jsm
+  behaviours.py: bafybeih4g7ghuua6sefg5gussqdxu32bhw5gyjufqohwkykeijhxi6ckxu
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
   models.py: bafybeid6befxrrbiaw7nduz4zgbm5nfc246fn2eb6rfmja6v5hmq4wtcwe
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
-  utils/apis.py: bafybeicskk46wudomixcqhnkplsbhq4fjegf76etlzexd7h7z6pdv2nibi
+  utils/apis.py: bafybeibnf3j4dxbv6bgutbgqabmdx4urve6li3vdvblqmfsnrblpc5budy
   utils/benchmarks.py: bafybeic2jerkq6mzaxgnsgpwxvbl5jw7m7ilrc6i3htk23ord5nwqglewq
   utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
   utils/ipfs.py: bafybeic7cbuv3tomi2xv7h2qowrqnpoufpanngzlgzljl4ptimpss3meqm
