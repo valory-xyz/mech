@@ -65,18 +65,27 @@ def with_key_rotation(func: Callable):
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
+        retries_left: Dict[str, int] = api_keys.max_retries()
 
         def execute() -> MechResponse:
             """Retry the function with a new key."""
             try:
                 result = func(*args, **kwargs)
-                return result + (api_keys,)
+                return result + (api_keys, )
             except anthropic.RateLimitError as e:
                 # try with a new key again
-                api_keys.rotate("anthropic")
+                service = "anthropic"
+                if retries_left[service] <= 0:
+                    raise e
+                retries_left[service] -= 1
+                api_keys.rotate(service)
                 return execute()
             except openai.RateLimitError as e:
                 # try with a new key again
+                if retries_left["openai"] <= 0 and retries_left["openrouter"] <= 0:
+                    raise e
+                retries_left["openai"] -= 1
+                retries_left["openrouter"] -= 1
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
@@ -85,7 +94,10 @@ def with_key_rotation(func: Callable):
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:
                     raise e
-                api_keys.rotate("google_api_key")
+                service = "google_api_key"
+                if retries_left[service] <= 0:
+                    raise e
+                api_keys.rotate(service)
                 return execute()
             except Exception as e:
                 return str(e), "", None, None, api_keys

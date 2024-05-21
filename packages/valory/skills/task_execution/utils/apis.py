@@ -32,6 +32,10 @@ class KeyChain:
         self.services = services
         self.current_index = {service: 0 for service in services}  # Start with the first key for each service
 
+    def max_retries(self) -> Dict[str, int]:
+        """Get the maximum number of retries for a given service."""
+        return {service: len(keys) for service, keys in self.services.items()}
+
     def rotate(self, service_name: str) -> None:
         """Rotate the current API key for a given service to the next one."""
         if service_name not in self.services:
