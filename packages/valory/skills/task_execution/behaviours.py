@@ -80,7 +80,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executor = ProcessPoolExecutor(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
         self._tools_to_file_hash: Dict[str, str] = {}
-        self._all_tools: Dict[str, Tuple[str, str]] = {}
+        self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
         self._inflight_tool_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_polling: Optional[float] = None
@@ -192,11 +192,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_get_tool(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle get tool response"""
-        _component_yaml, tool_py, callable_method = ComponentPackageLoader.load(
+        component_yaml, tool_py, callable_method = ComponentPackageLoader.load(
             message.files
         )
         tool_req = cast(str, self._inflight_tool_req)
-        self._all_tools[tool_req] = tool_py, callable_method
+        self._all_tools[tool_req] = tool_py, callable_method, component_yaml
         self._inflight_tool_req = None
 
     def _populate_from_block(self) -> None:
@@ -289,6 +289,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         mech_address = executing_task.get("contract_address", None)
         tool = executing_task.get("tool", None)
         model = executing_task.get("model", None)
+        tool_params = executing_task.get("params", None)
         response = {"requestId": req_id, "result": "Invalid response"}
         task_executor = self.context.agent_address
         self._done_task = {
@@ -307,6 +308,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             metadata = {
                 "model": model,
                 "tool": tool,
+                "params": tool_params,
             }
             response = {
                 **response,
@@ -394,7 +396,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         tool_task = AnyToolAsTask()
-        tool_py, callable_method = self._all_tools[task_data["tool"]]
+        tool_py, callable_method, component_yaml = self._all_tools[task_data["tool"]]
+        tool_params = component_yaml.get("params", {})
         task_data["tool_py"] = tool_py
         task_data["callable_method"] = callable_method
         task_data["api_keys"] = self._keychain
@@ -403,7 +406,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
         executing_task["tool"] = task_data["tool"]
-        executing_task["model"] = task_data.get("model", None)
+        executing_task["model"] = task_data.get(
+            "model", tool_params.pop("default_model", None)
+        )
+        executing_task["params"] = tool_params
         self._async_result = cast(Optional[Future], future)
 
     def _build_ipfs_message(
