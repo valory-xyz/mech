@@ -1,7 +1,6 @@
 {
     "dev": {
         "custom/valory/native_transfer_request/0.1.0": "bafybeihbcd2vk5lwh33u3n3zivwrcgajagxprb7k2vplax7ch6qhqkuueu",
-        "custom/valory/prediction_request_claude/0.1.0": "bafybeia74qg6simxsc5qdoi3brfu3slo3fjbkto4x2t4pv7hx4tyc7qrfa",
         "custom/valory/openai_request/0.1.0": "bafybeihjtddwwkvwzaltk6yhtkk3xxnwnkurdtyuy6ki5tpf7h5htvuxnq",
         "custom/valory/prediction_request_embedding/0.1.0": "bafybeifnz5fzxvzyj3mmjpfsre3nzbdieuyjvnxqxuplopp5taz4qw7ys4",
         "custom/valory/resolve_market/0.1.0": "bafybeiaag2e7rsdr3bwg6mlmfyom4vctsdapohco7z45pxhzjymepz3rya",
