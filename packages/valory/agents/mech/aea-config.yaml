@@ -103,6 +103,10 @@ dependencies:
     version: ==3.7.2
   tiktoken:
     version: ==0.5.1
+  fastapi:
+    version: ==0.110.3
+  typer:
+    version: ==0.9.4
   readability-lxml:
     version: ==0.8.1
   lxml:
