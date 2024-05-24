@@ -1,0 +1,24 @@
+name: langchain_request
+author: valory
+version: 0.1.0
+type: custom
+description: A mech tool that integrates langchain
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+  langchain_request.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+fingerprint_ignore_patterns: []
+entry_point: langchain_request.py
+callable: run
+dependencies:
+  langchain:
+    version: ==0.1.20
+  langchain-core:
+    version: ==0.1.52
+  langchain-openai:
+    version: ==0.1.6
+  langgraph:
+    version: ==0.0.55
+  langchain_community:
+    version: ==0.2.1
