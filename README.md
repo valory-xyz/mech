@@ -223,7 +223,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
             <api_key>=kwargs["api_keys"][<api_key_id>].
             ```
 
-    - **Output**: It must **always** return a tuple (`Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]`):
+    - **Output**: It must **always** return a tuple (`Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]`):
         - `result_str`: A string-serialized JSON object containing the result of the tool execution (custom format).
         - `prompt_used`: A string representing the prompt used internally by the tool. This output is only used for analytics and it can be set to `None`.
         - `generated_tx`: A dictionary containing the fields of a generated transaction to be submitted following the execution of the tool (e.g., a token transfer). It can be set to `None`. Template of a generated transaction:
@@ -238,10 +238,15 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
           ```
 
         - `counter_callback`: Object to be called for calculating the cost when making requests to this tool. It can be set to `None`.
-
+        - `keychain`: The object hanlding the keys. Note that if you use the `with_key_rotation` decorator, you don't need to return this.
     - **Exceptions**: A compliant implementation of the `run` function must capture any exception raised during its execution and return it appropriately, for example as an error code in `result_str`. If `run` raises an exception the Mech will capture and output an `Invalid response` string.
 
-2. **Upload the tool file to IPFS.** You can push your tool to IPFS like the other packages:
+   - **Dependencies**: If your tool introduces new dependencies, you must add them in the following three places:
+      - [pyproject.toml](./pyproject.toml): Add your dependencies under the `[tool.poetry.dependencies]` section.
+      - [tox.ini](./tox.ini): Add your dependencies under the `[testenv]deps` section.
+      - [aea-config.yaml](./packages/valory/agents/mech/aea-config.yaml): Ensure your dependencies are listed under the `dependencies` key.
+
+3. **Upload the tool file to IPFS.** You can push your tool to IPFS like the other packages:
 
     ```bash
     autonomy push-all
@@ -258,7 +263,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
     Your tool will be available on [packages.json](packages/packages.json).
 
-3. **Configure your service.** Edit the `.env` file. The demo service has this configuration:
+4. **Configure your service.** Edit the `.env` file. The demo service has this configuration:
 
     ```bash
     FILE_HASH_TO_TOOLS=[["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
@@ -272,7 +277,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
     API_KEYS=[[openai, dummy_api_key],[<your_api_key_id>, <your_api_key>]]
     ```
 
-4. **Mint your agent service** in the [Autonolas Protocol](https://registry.olas.network/services/mint), and create a Mech for it in [Mech Hub](https://aimechs.autonolas.network/factory). This will allow you to set the `SAFE_CONTRACT_ADDRESS` and `AGENT_MECH_CONTRACT_ADDRESS` in the `.1env` file.
+5. **Mint your agent service** in the [Autonolas Protocol](https://registry.olas.network/services/mint), and create a Mech for it in [Mech Hub](https://aimechs.autonolas.network/factory). This will allow you to set the `SAFE_CONTRACT_ADDRESS` and `AGENT_MECH_CONTRACT_ADDRESS` in the `.1env` file.
 
     > **Warning**
     > AI Mechs run on the [Gnosis chain](https://www.gnosis.io/). You must ensure that your wallet is connected to the [Gnosis chain](https://www.gnosis.io/) before using the [Autonolas Protocol](https://protocol.autonolas.network/services/mint) and [Mech Hub](https://aimechs.autonolas.network/factory).
@@ -290,7 +295,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
     }
     ```
 
-5. **Run your service.** You can take a look at the `run_service.sh` script and execute your service locally as [above](#option-2-run-the-mech-as-an-agent-service).
+6. **Run your service.** You can take a look at the `run_service.sh` script and execute your service locally as [above](#option-2-run-the-mech-as-an-agent-service).
 
     Once your service works locally, you have the option to run it on a hosted service like [Propel](https://propel.valory.xyz/).
 
