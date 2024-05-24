@@ -18,12 +18,16 @@
 # ------------------------------------------------------------------------------
 
 """This module implements a Mech tool for binary predictions."""
-
+import functools
 from io import BytesIO
 import PyPDF2
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+
+import anthropic
+import googleapiclient
+import openai
 from pydantic import BaseModel, Field
 from docstring_parser import parse
 import tiktoken
@@ -37,6 +41,61 @@ from googleapiclient.discovery import build
 from tiktoken import encoding_for_model
 
 client: Optional[OpenAI] = None
+
+
+
+
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+        retries_left: Dict[str, int] = api_keys.max_retries()
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys, )
+            except anthropic.RateLimitError as e:
+                # try with a new key again
+                service = "anthropic"
+                if retries_left[service] <= 0:
+                    raise e
+                retries_left[service] -= 1
+                api_keys.rotate(service)
+                return execute()
+            except openai.RateLimitError as e:
+                # try with a new key again
+                if retries_left["openai"] <= 0 and retries_left["openrouter"] <= 0:
+                    raise e
+                retries_left["openai"] -= 1
+                retries_left["openrouter"] -= 1
+                api_keys.rotate("openai")
+                api_keys.rotate("openrouter")
+                return execute()
+            except googleapiclient.errors.HttpError as e:
+                # try with a new key again
+                rate_limit_exceeded_code = 429
+                if e.status_code != rate_limit_exceeded_code:
+                    raise e
+                service = "google_api_key"
+                if retries_left[service] <= 0:
+                    raise e
+                api_keys.rotate(service)
+                return execute()
+            except Exception as e:
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
+
 
 
 def count_tokens(text: str, model: str) -> int:
@@ -680,6 +739,7 @@ def adjust_additional_information(
     return additional_information
 
 
+@with_key_rotation
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
