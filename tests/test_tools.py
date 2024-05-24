@@ -27,6 +27,7 @@ from packages.napthaai.customs.prediction_request_reasoning import (
 )
 from packages.napthaai.customs.prediction_request_rag_cohere import prediction_request_rag_cohere
 from packages.napthaai.customs.prediction_url_cot import prediction_url_cot
+from packages.valory.skills.task_execution.utils.apis import KeyChain
 
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from tests.constants import (
@@ -44,16 +45,16 @@ from tests.constants import (
 class BaseToolTest:
     """Base tool test class."""
 
-    keys = {
-        "openai": OPENAI_SECRET_KEY,
-        "stabilityai": STABILITY_API_KEY,
-        "google_api_key": GOOGLE_API_KEY,
-        "google_engine_id": GOOGLE_ENGINE_ID,
-        "anthropic": CLAUDE_API_KEY,
-        "replicate": REPLICATE_API_KEY,
-        "newsapi": NEWS_API_KEY,
-        "openrouter": OPENROUTER_API_KEY,
-    }
+    keys = KeyChain({
+        "openai": [OPENAI_SECRET_KEY],
+        "stabilityai": [STABILITY_API_KEY],
+        "google_api_key": [GOOGLE_API_KEY],
+        "google_engine_id": [GOOGLE_ENGINE_ID],
+        "anthropic": [CLAUDE_API_KEY],
+        "replicate": [REPLICATE_API_KEY],
+        "newsapi": [NEWS_API_KEY],
+        "openrouter": [OPENROUTER_API_KEY],
+    })
     models: List = [None]
     tools: List[str]
     prompts: List[str]
@@ -63,7 +64,7 @@ class BaseToolTest:
     def _validate_response(self, response: Any) -> None:
         """Validate response."""
         assert type(response) == tuple, "Response of the tool must be a tuple."
-        assert len(response) == 4, "Response must have 4 elements."
+        assert len(response) == 5, "Response must have 5 elements."
         assert type(response[0]) == str, "Response[0] must be a string."
         assert type(response[1]) == str, "Response[1] must be a string."
         assert (
@@ -72,6 +73,7 @@ class BaseToolTest:
         assert (
             type(response[3]) == TokenCounterCallback or response[3] is None
         ), "Response[3] must be a TokenCounterCallback or None."
+        assert type(response[4]) == KeyChain, "Response[4] must be a KeyChain object."
 
     def test_run(self) -> None:
         """Test run method."""
@@ -115,6 +117,7 @@ class TestPredictionRAG(BaseToolTest):
     ]
     tool_module = prediction_request_rag
 
+
 class TestPredictionRAGCohere(BaseToolTest):
     """Test Prediction RAG using cohere model."""
 
@@ -124,6 +127,7 @@ class TestPredictionRAGCohere(BaseToolTest):
         'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
     tool_module = prediction_request_rag_cohere
+
 
 class TestPredictionReasoning(BaseToolTest):
     """Test Prediction Reasoning."""
