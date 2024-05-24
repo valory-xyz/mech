@@ -59,6 +59,9 @@ def create_agent(llm, tools, system_message: str):
                 " will help where you left off. Execute what you can to make progress."
                 " If you or any of the other assistants have the final answer or deliverable,"
                 " prefix your response with FINAL ANSWER so the team knows to stop."
+                "* Your final answer must start with FINAL ANSWER and be followed by a JSON object to be parsed by Python's json.loads()."
+                '* The JSON must contain just one field: "response" which value can only be "yes" or "no".'
+                "* Output only the FINAL ANSWER and the JSON object. Do not include any other contents in your response."
                 " You have access to the following tools: {tool_names}.\n{system_message}",
             ),
             MessagesPlaceholder(variable_name="messages"),
@@ -122,9 +125,6 @@ def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
         llm,
         [tavily_tool],
         system_message="You should analyze the data you've been provided with and decide whether an event is more likely to happen or not."
-        "* Your output response must be only a single JSON object to be parsed by Python's json.loads()."
-        '* The JSON must contain just one field: "response" which value can only be "yes" or "no".'
-        "* Output only the JSON object. Do not include any other contents in your response."
     )
     analyzer_node = functools.partial(agent_node, agent=analyzer_agent, name="data_analyzer")
 
@@ -187,7 +187,7 @@ def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
     event_list = [e for e in events]
 
     # Response is the last message from the last event
-    response = event_list[-1]["researcher"]["messages"][-1].content
+    response = event_list[-1]["researcher"]["messages"][-1].content.replace("FINAL ANSWER", "").strip()
 
     return response, prompt
 

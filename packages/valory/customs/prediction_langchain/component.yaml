@@ -1,15 +1,15 @@
-name: langchain_request
+name: prediction_langchain
 author: valory
 version: 0.1.0
 type: custom
-description: A mech tool that integrates langchain
+description: A mech tool that integrates langchain and langgraph
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
   langchain_request.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
 fingerprint_ignore_patterns: []
-entry_point: langchain_request.py
+entry_point: prediction_langchain.py
 callable: run
 dependencies:
   langchain:
