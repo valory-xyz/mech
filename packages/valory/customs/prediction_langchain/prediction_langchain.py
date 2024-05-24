@@ -39,6 +39,7 @@ import functools
 import openai
 import anthropic
 import googleapiclient
+from packages.valory.skills.task_execution.utils.apis import KeyChain
 
 tavily_tool = TavilySearchResults(max_results=5)
 llm = ChatOpenAI(model="gpt-4-1106-preview")
@@ -293,10 +294,10 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
 if __name__ == "__main__":
     """Main"""
 
-    api_keys = {
-        "openai": os.environ["OPENAI_API_KEY"],
-        "tavily": os.environ["TAVILY_API_KEY"]
-    }
+    api_keys = KeyChain({
+        "openai": [os.environ["OPENAI_API_KEY"]],
+        "tavily": [os.environ["TAVILY_API_KEY"]]
+    })
 
     response = run(
         topic="consumer technology",
