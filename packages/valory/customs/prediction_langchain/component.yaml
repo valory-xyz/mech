@@ -6,8 +6,8 @@ description: A mech tool that integrates langchain and langgraph
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
-  langchain_request.py: bafybeiunknownnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnnn
+  __init__.py: bafybeid2llyk4lr55nmq3aubhnjy4pwskzb3dmvcn5z57geyy3lmua6fue
+  prediction_langchain.py: bafybeig5romqseag2fzi5ftid2pgazekrkixoqch7ggxagigiera7ew774
 fingerprint_ignore_patterns: []
 entry_point: prediction_langchain.py
 callable: run
