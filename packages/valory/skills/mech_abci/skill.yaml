@@ -20,13 +20,13 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
-- valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
-- valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
-- valory/task_submission_abci:0.1.0:bafybeiaa6fby75jusdz55ufy6x3td7bz2feh5bpwyipfy2nrnzpzrqrb3y
-- valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
-- valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
-- valory/subscription_abci:0.1.0:bafybeig2vey5dxykpsojovlxw6f5o333f7kgmjyghmlu3yc5or5m4twqey
+- valory/abstract_round_abci:0.1.0:bafybeihnb4dd2ey2vjhlbprtxhnpc4q4resnsdrhpavjqnqaq467d6ouey
+- valory/registration_abci:0.1.0:bafybeibqbggb642wxntkivyamjpkaevcv54v6tvttlhbe2mq4oqmqtfbiu
+- valory/reset_pause_abci:0.1.0:bafybeidqwxtyjc3p3zkw77vchtemojdybucuk7arxo3vniw4karfxp4zmq
+- valory/task_submission_abci:0.1.0:bafybeicqfx5gputo73jxujc2iehtdif4urchwbeuildxvnk7s2l7el6lgq
+- valory/termination_abci:0.1.0:bafybeihvzoav5iea5a5dsyeilabogtkekgnbhtezdldmripv37b74vwmuy
+- valory/transaction_settlement_abci:0.1.0:bafybeib6tvxn6ko5mzzikrwjulancgivy6cpgnhcdw6f3bbm6vnzcwnnne
+- valory/subscription_abci:0.1.0:bafybeiefgidd4zdpbo642ha47xw7ow4ebubifqbyoidscqdci5c6ouxnba
 behaviours:
   main:
     args: {}
@@ -203,5 +203,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.50.0
+    version: ==1.53.0
 is_abstract: false
