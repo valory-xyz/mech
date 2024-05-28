@@ -21,13 +21,10 @@
 
 import getpass
 import os
-from typing import Annotated, Literal, Sequence, TypedDict, Optional, Tuple, Callable, Dict, Any
-from langchain_core.messages import (
-    BaseMessage,
-    ToolMessage,
-    HumanMessage,
-    AIMessage
-)
+from typing import Annotated, Literal, Sequence, Optional, Tuple, Callable, Dict, Any
+
+from googleapiclient.errors import HttpError as GoogleAPIHttpError
+from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage, AIMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langgraph.graph import END, StateGraph
 from langchain_community.tools.tavily_search import TavilySearchResults
@@ -38,11 +35,7 @@ import operator
 import functools
 import openai
 import anthropic
-import googleapiclient
 from packages.valory.skills.task_execution.utils.apis import KeyChain
-
-tavily_tool = TavilySearchResults(max_results=5)
-llm = ChatOpenAI(model="gpt-4-1106-preview")
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
@@ -60,7 +53,7 @@ def with_key_rotation(func: Callable):
             """Retry the function with a new key."""
             try:
                 result = func(*args, **kwargs)
-                return result + (api_keys, )
+                return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
                 service = "anthropic"
@@ -78,7 +71,7 @@ def with_key_rotation(func: Callable):
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
-            except googleapiclient.errors.HttpError as e:
+            except GoogleAPIHttpError as e:
                 # try with a new key again
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:
@@ -98,33 +91,50 @@ def with_key_rotation(func: Callable):
 
 
 def _set_if_undefined(var: str):
-    "Set env vars"
+    """Set env vars"""
     if not os.environ.get(var):
         os.environ[var] = getpass.getpass(f"Please provide your {var}")
 
 
-def create_agent(llm, tools, system_message: str):
+def create_agent(tools, system_message: str):
     """Create an agent."""
     prompt = ChatPromptTemplate.from_messages(
         [
             (
                 "system",
-                "You are a helpful AI assistant, collaborating with other assistants."
-                " Use the provided tools to progress towards answering the question."
-                " If you are unable to fully answer, that's OK, another assistant with different tools "
-                " will help where you left off. Execute what you can to make progress."
-                " If you or any of the other assistants have the final answer or deliverable,"
-                " prefix your response with FINAL ANSWER so the team knows to stop."
-                "* Your final answer must start with FINAL ANSWER and be followed by a JSON object to be parsed by Python's json.loads()."
-                '* The JSON must contain just one field: "response" which value can only be "yes" or "no".'
-                "* Output only the FINAL ANSWER and the JSON object. Do not include any other contents in your response."
-                " You have access to the following tools: {tool_names}.\n{system_message}",
+                """
+                You are a helpful AI assistant, collaborating with other assistants.
+                Use the provided tools to progress towards answering the question.
+                If you are unable to fully answer, that's OK, another assistant with different tools 
+                will help where you left off. Execute what you can to make progress.
+                If you or any of the other assistants have the final answer or deliverable,
+                prefix your response with FINAL ANSWER so the team knows to stop.
+                Your final answer must start with FINAL ANSWER and be followed by a JSON object to be parsed by Python's `json.loads()`.
+                Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
+                The JSON must contain four fields: "p_yes", "p_no", "confidence", and "info_utility".
+                Output only the FINAL ANSWER and the JSON object. Do not include any other contents in your response.
+                Each item in the JSON must have a value between 0 and 1.
+                   - "p_yes": Estimated probability that the event in the "USER_PROMPT" occurs.
+                   - "p_no": Estimated probability that the event in the "USER_PROMPT" does not occur.
+                   - "confidence": A value between 0 and 1 indicating the confidence in the prediction. 
+                     0 indicates lowest confidence value; 1 maximum confidence value.
+                   - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you 
+                     make the prediction. 0 indicates lowest utility; 1 maximum utility.
+                The sum of "p_yes" and "p_no" must equal 1.
+                You must provide your response in the format specified below:
+                   - This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
+                   - This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+                   - This is incorrect: Based on the search results: "{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
+                   - This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
+                You have access to the following tools: {tool_names}.\n{system_message}
+                """,
             ),
             MessagesPlaceholder(variable_name="messages"),
         ]
     )
     prompt = prompt.partial(system_message=system_message)
     prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
+    llm = ChatOpenAI(model="gpt-4-1106-preview", temperature=0.1)
     return prompt | llm.bind_tools(tools)
 
 
@@ -146,7 +156,7 @@ def agent_node(state, agent, name):
     return {
         "messages": [result],
         # Since we have a strict workflow, we can
-        # track the sender so we know who to pass to next.
+        # track the sender, so we know who to pass to next.
         "sender": name,
     }
 
@@ -164,25 +174,28 @@ def router(state) -> Literal["call_tool", "__end__", "continue"]:
     return "continue"
 
 
-
 def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
     """Run langgraph"""
 
+    tavily_tool = TavilySearchResults(max_results=5)
+
     # Create research agent and node
     research_agent = create_agent(
-        llm,
         [tavily_tool],
         system_message="You should provide accurate data for the data_analyzer to use.",
     )
-    research_node = functools.partial(agent_node, agent=research_agent, name="researcher")
+    research_node = functools.partial(
+        agent_node, agent=research_agent, name="researcher"
+    )
 
     # Create data_analyzer agent and node
     analyzer_agent = create_agent(
-        llm,
         [tavily_tool],
-        system_message="You should analyze the data you've been provided with and decide whether an event is more likely to happen or not."
+        system_message="You should analyze the data you've been provided with and decide whether an event is more likely to happen or not.",
     )
-    analyzer_node = functools.partial(agent_node, agent=analyzer_agent, name="data_analyzer")
+    analyzer_node = functools.partial(
+        agent_node, agent=analyzer_agent, name="data_analyzer"
+    )
 
     # Tools
     tools = [tavily_tool]
@@ -224,26 +237,26 @@ def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
     prompt = (
         f"Fetch data and news about {topic} over the {timeframe},"
         f" then ask the question: {question}"
-        " Once you have an answer, finish."
+        " Once you have an answer, finish. Remember to only output a single JSON object, parseable by `json.loads` in Python, and no extra text."
     )
 
     events = graph.stream(
         {
-            "messages": [
-                HumanMessage(
-                    content=prompt
-                )
-            ],
+            "messages": [HumanMessage(content=prompt)],
         },
         # Maximum number of steps to take in the graph
-        {"recursion_limit": 150},
+        {"recursion_limit": 300},
     )
 
     # Generator to list
     event_list = [e for e in events]
 
     # Response is the last message from the last event
-    response = event_list[-1]["researcher"]["messages"][-1].content.replace("FINAL ANSWER", "").strip()
+    response = (
+        event_list[-1]["researcher"]["messages"][-1]
+        .content.replace("FINAL ANSWER", "")
+        .strip()
+    )
 
     return response, prompt
 
@@ -258,9 +271,9 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
     """Run the langchain example."""
 
     # Process the kwargs
-    topic = kwargs.get("topic", None)
-    timeframe = kwargs.get("topic", None)
-    question = kwargs.get("question", None)
+    topic: Optional[str] = kwargs.get("topic", None)
+    timeframe: Optional[str] = kwargs.get("topic", None)
+    question: Optional[str] = kwargs.get("question", None)
     openai_api_key = kwargs.get("api_keys", {}).get("openai", None)
     tavily_api_key = kwargs.get("api_keys", {}).get("tavily", None)
 
@@ -292,17 +305,17 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
 
 
 if __name__ == "__main__":
-    """Main"""
+    api_keys = KeyChain(
+        {
+            "openai": [os.environ["OPENAI_API_KEY"]],
+            "tavily": [os.environ["TAVILY_API_KEY"]],
+        }
+    )
 
-    api_keys = KeyChain({
-        "openai": [os.environ["OPENAI_API_KEY"]],
-        "tavily": [os.environ["TAVILY_API_KEY"]]
-    })
-
-    response = run(
+    result = run(
         topic="consumer technology",
         timeframe="past month",
-        question="will Apple will unveil a new Iphone before the end of 2024?",
-        api_keys=api_keys
+        question="Will Apple unveil a new Iphone before the end of 2024?",
+        api_keys=api_keys,
     )
-    print(response)
+    print(result)
