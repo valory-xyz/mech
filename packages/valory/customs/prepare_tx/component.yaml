@@ -8,6 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeieynbsr6aijx2totfi5iw6thjwgzko526zcs5plgvgrq2lufso2sy
   prepare_tx.py: bafybeib7no24trithxrj5nwovwtezb3q3k32cpvo6mkaa2wynvqrpdwkxi
+  utils/agent/build_goal.py: bafybeif7kj2x362bhguey252op7bbaidcc7zarpgovqkgfiv5qqk7fizra
 fingerprint_ignore_patterns: []
 entry_point: prepare_tx.py
 callable: run
