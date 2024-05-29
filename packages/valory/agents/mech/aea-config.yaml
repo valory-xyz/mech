@@ -42,7 +42,7 @@ skills:
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
 - valory/subscription_abci:0.1.0:bafybeig2vey5dxykpsojovlxw6f5o333f7kgmjyghmlu3yc5or5m4twqey
-- valory/task_execution:0.1.0:bafybeiccegzjasdrwksd542jnj5e4k5nztta2yl3ssf5ijj6uqizt7d6m4
+- valory/task_execution:0.1.0:bafybeifhxjsvzwbb3zrfvx5orczapkzxq2kh5sa3w6ptq2dfs6ooinm5me
 - valory/task_submission_abci:0.1.0:bafybeiaa6fby75jusdz55ufy6x3td7bz2feh5bpwyipfy2nrnzpzrqrb3y
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
 - valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
@@ -103,6 +103,10 @@ dependencies:
     version: ==3.7.2
   tiktoken:
     version: ==0.5.1
+  fastapi:
+    version: ==0.110.3
+  typer:
+    version: ==0.9.4
   readability-lxml:
     version: ==0.8.1
   lxml:

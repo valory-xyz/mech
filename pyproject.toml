@@ -76,3 +76,6 @@ openfactverification = { git = "https://github.com/kongzii/OpenFactVerification.
 langchain-openai = { version = "^0.0.6" }
 en_core_web_sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl" }
 sentence-transformers = "^2.1.0"
+
+[tool.poetry.group.dev.dependencies]
+tomte = {version = "==0.2.15", extras = ["cli", "tests"]}
