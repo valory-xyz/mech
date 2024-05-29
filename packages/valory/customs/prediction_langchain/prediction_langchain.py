@@ -277,9 +277,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
     # timeframe: Optional[str] = kwargs.get("timeframe", None)
 
     # Process the kwargs
-    topic: Optional[str] = kwargs.get("topic", None)
-    timeframe: Optional[str] = kwargs.get("topic", None)
-    question: Optional[str] = kwargs.get("question", None)
+    question: Optional[str] = kwargs.get("prompt", None)
     openai_api_key = kwargs.get("api_keys", {}).get("openai", None)
     tavily_api_key = kwargs.get("api_keys", {}).get("tavily", None)
 
