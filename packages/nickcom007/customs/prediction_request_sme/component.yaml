@@ -21,10 +21,10 @@ dependencies:
   googlesearch-python:
     version: ==1.2.3
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0
   readability-lxml:
     version: ==0.8.1
   markdownify:
     version: ==0.11.6
   openai:
-    version: ==1.11.0
+    version: ==1.30.2

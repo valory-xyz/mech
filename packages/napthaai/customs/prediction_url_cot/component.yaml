@@ -26,7 +26,7 @@ dependencies:
   anthropic:
     version: ==0.21.3
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0
   pypdf2:
     version: ==3.0.1
   numpy:
