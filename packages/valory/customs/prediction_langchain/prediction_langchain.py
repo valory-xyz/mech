@@ -270,6 +270,12 @@ def error_response(msg: str) -> Tuple[str, None, None, None]:
 def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
     """Run the langchain example."""
 
+    # hardcode topic and timeframe
+    topic = "consumer technology"
+    timeframe = "past month"
+    # topic: Optional[str] = kwargs.get("topic", None)
+    # timeframe: Optional[str] = kwargs.get("timeframe", None)
+
     # Process the kwargs
     topic: Optional[str] = kwargs.get("topic", None)
     timeframe: Optional[str] = kwargs.get("topic", None)
@@ -313,9 +319,7 @@ if __name__ == "__main__":
     )
 
     result = run(
-        topic="consumer technology",
-        timeframe="past month",
-        question="Will Apple unveil a new Iphone before the end of 2024?",
+        prompt="Will Apple unveil a new Iphone before the end of 2024?",
         api_keys=api_keys,
     )
     print(result)
