@@ -91,7 +91,7 @@ def is_predictable_binary(
     question: str,
     model: str = DEFAULT_OPENAI_MODEL,
     openai_api_key: str | None = None,
-) -> str:
+) -> bool:
     """
     Evaluate if the question is actually answerable.
     """
@@ -146,13 +146,16 @@ Finally, write your final decision, write `decision: ` followed by either "yes i
 
 
 def build_run_result(
-    has_occurred: bool | None, is_determinable: bool | None
+    has_occurred: bool | None,
+    is_determinable: bool | None,
+    is_valid: bool | None,
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     return (
         json.dumps(
             {
                 "has_occurred": has_occurred,
                 "is_determinable": is_determinable,
+                "is_valid": is_valid,
             }
         ),
         "",
@@ -197,7 +200,9 @@ def run(
         print(
             f"Question `{market_question}` is not answerable, skipping fact checking."
         )
-        return build_run_result(has_occurred=None, is_determinable=is_answerable)
+        return build_run_result(
+            has_occurred=None, is_determinable=is_answerable, is_valid=None
+        )
 
     # Rewrite the question (which was about a future) into a sentence (which is about the past).
     market_sentence = rewrite_as_sentence(
@@ -219,5 +224,7 @@ def run(
     )
 
     return build_run_result(
-        has_occurred=factresult.factuality, is_determinable=is_answerable
+        has_occurred=factresult.factuality,
+        is_determinable=is_answerable,
+        is_valid=factresult.factuality is not None,
     )
