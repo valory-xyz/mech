@@ -254,7 +254,8 @@ def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
     # Response is the last message from the last event
     response = (
         event_list[-1]["researcher"]["messages"][-1]
-        .content.replace("FINAL ANSWER", "")
+        .content.replace("FINAL ANSWER:", "")
+        .replace("FINAL ANSWER", "")
         .strip()
     )
 
