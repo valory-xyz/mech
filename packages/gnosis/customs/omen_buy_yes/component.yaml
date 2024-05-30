@@ -1,0 +1,21 @@
+name: omen_buy_yes
+author: gnosis
+version: 0.1.0
+type: custom
+description: A tool to prepare a request for buying tokens corresponding to outcome Yes on Omen.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
+  prediction_sum_url_content.py: bafybeieywowx265yycgf5735bw4zyabfy6ivwnntl6smxa2hicktipgeby
+fingerprint_ignore_patterns: []
+entry_point: omen_buy_yes.py
+callable: run
+dependencies:
+  pydantic:
+    version: '>=1.9.0,<3'
+  prediction-market-agent-tooling:
+    git: https://github.com/gnosis/prediction-market-agent-tooling
+    ref: gabriel/olas-deps
+  langchain:
+    version: '^0.1.1'
