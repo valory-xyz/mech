@@ -1,0 +1,28 @@
+name: prediction_langchain
+author: valory
+version: 0.1.0
+type: custom
+description: A mech tool that integrates langchain and langgraph
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeid2llyk4lr55nmq3aubhnjy4pwskzb3dmvcn5z57geyy3lmua6fue
+  prediction_langchain.py: bafybeibg6giebyxjpqch2jvtvrwufp3n75n55xmqjgu3rlc4rfopnfcxlm
+fingerprint_ignore_patterns: []
+entry_point: prediction_langchain.py
+callable: run
+dependencies:
+  langchain:
+    version: ==0.1.20
+  langchain-core:
+    version: ==0.1.52
+  langchain-openai:
+    version: ==0.1.6
+  langgraph:
+    version: ==0.0.55
+  langchain_community:
+    version: ==0.2.1
+  openai:
+    version: ==1.30.2
+  anthropic:
+    version: ==0.21.3

@@ -13,6 +13,6 @@ entry_point: native_transfer_request.py
 callable: run
 dependencies:
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0
   openai:
-    version: ==1.11.0
+    version: ==1.30.2
