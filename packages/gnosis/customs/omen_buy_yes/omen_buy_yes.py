@@ -29,6 +29,9 @@ from typing import Any, Dict, Optional, Tuple, Callable
 import anthropic
 import googleapiclient
 import openai
+from langchain_core.output_parsers import PydanticOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
 from openai import OpenAI
 from prediction_market_agent_tooling.markets.agent_market import AgentMarket
 from prediction_market_agent_tooling.markets.omen.omen import OmenAgentMarket
@@ -99,26 +102,20 @@ def with_key_rotation(func: Callable):
 ENGINE = "gpt-3.5-turbo"
 MAX_TOKENS = 500
 TEMPERATURE = 0.7
-TOOL_PREFIX = "transfer-"
 
 
 """NOTE: An LLM is used for generating a dict containing interpreted parameters from the response, such as "recipient_address", "market_address", etc. This could also be done if we could somehow publish the parameters needed by the run method and make it discoverable by the caller."""
 
-# ToDo - rewrite PROMPT, add Pydantic object to prompt
-BUY_YES_TOKENS_PROMPT = """You are an LLM inside a multi-agent system that takes in a prompt from a user requesting you to execute a native gas token (ETH) transfer to another public address on Ethereum.
-The agent process you are sending your response to requires the unknown transaction parameters in the exact format below, written by you in your response as an input to sign/execute the transaction in the
-agent process.The agent does not know the receiving address, “recipient_address", the value to send, “value”, or the denomination of the "value" given in wei "wei_value" which is converted by you without
-use of any functions, the user prompt indicates to send. The unknown transaction parameters not known beforehand must be constructed by you from the user's prompt information.
+BUY_YES_TOKENS_PROMPT = """You are an LLM inside a multi-agent system that takes in a prompt from a user requesting you to produce transaction parameters which
+will later be part of an Ethereum transaction.
+Interpret the USER_PROMPT and extract the required information.
+Do not use any functions.
 
-User Prompt: {user_prompt}
+[USER_PROMPT]
+{user_prompt}
 
-only respond with the format below using curly brackets to encapsulate the variables within a json dictionary object and no other text:
-
-"to_address": recipient_address,
-"value": value,
-"wei_value": wei_value
-
-Do not respond with anything else other than the transaction object you constructed with the correct known variables the agent had before the request and the correct unknown values found in the user request prompt as input to the web3.py signing method.
+Follow the formatting instructions below for producing an output in the correct format.
+{format_instructions}
 """
 
 client: Optional[OpenAI] = None
@@ -126,10 +123,24 @@ client: Optional[OpenAI] = None
 
 class BuyYesParams(BaseModel):
     sender: str
-    recipient: str
     market_id: str
     outcome: bool
     amount_to_buy: float
+
+
+def build_buy_params_from_prompt(user_prompt: str) -> BuyYesParams:
+    model = ChatOpenAI(temperature=0)
+    parser = PydanticOutputParser(pydantic_object=BuyYesParams)
+
+    prompt = PromptTemplate(
+        template=BUY_YES_TOKENS_PROMPT,
+        input_variables=["user_prompt"],
+        partial_variables={"format_instructions": parser.get_format_instructions()},
+    )
+
+    chain = prompt | model | parser
+
+    return chain.invoke({"user_prompt": user_prompt})
 
 
 class OpenAIClientManager:
@@ -149,36 +160,6 @@ class OpenAIClientManager:
         if client is not None:
             client.close()
             client = None
-
-
-def make_request_openai_request(
-    prompt: str,
-    engine: str = ENGINE,
-    max_tokens: Optional[int] = None,
-    temperature: Optional[float] = None,
-) -> str:
-    # ToDo - Make request with Langchain and pydantic output
-    """Make openai request."""
-    max_tokens = max_tokens or MAX_TOKENS
-    temperature = temperature or TEMPERATURE
-    moderation_result = client.moderations.create(input=prompt)
-    if moderation_result.results[0].flagged:
-        return "Moderation flagged the prompt as in violation of terms."
-
-    messages = [
-        {"role": "system", "content": "You are a helpful assistant."},
-        {"role": "user", "content": prompt},
-    ]
-    response = client.chat.completions.create(
-        model=engine,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        n=1,
-        timeout=120,
-        stop=None,
-    )
-    return response.choices[0].message.content
 
 
 def build_approval_tx_params(
@@ -262,13 +243,10 @@ def build_buy_yes_tx(
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Perform native transfer."""
     tool_prompt = BUY_YES_TOKENS_PROMPT.format(user_prompt=prompt)
-    # This produces a dict having recipient, market_address, etc.
-    response = make_request_openai_request(prompt=tool_prompt)
-
     try:
         # parse the response to get the transaction object string itself
         # parsed_txs = ast.literal_eval(response)
-        buy_params = BuyYesParams.model_validate_json(response)
+        buy_params = build_buy_params_from_prompt(user_prompt=tool_prompt)
 
         # Calculate the amount of shares we will get for the given investment amount.
         # ToDo - Clarify how to use RPC inside mech
@@ -279,21 +257,9 @@ def build_buy_yes_tx(
 
         market: AgentMarket = OmenAgentMarket.get_binary_market(buy_params.market_id)
 
-        is_balance_sufficient = check_balance_sufficient_for_buying_token(
-            buy_params, w3=w3
-        )
-        if not is_balance_sufficient:
-            return (
-                f"Collateral token balance < amount to buy. Aborting.",
-                None,
-                None,
-                None,
-            )
-
         tx_params_approve = build_approval_tx_params(
             buy_params=buy_params, market=market, w3=w3
         )
-
         tx_params_buy = build_buy_tokens_tx_params(
             buy_params=buy_params, market=market, w3=w3
         )
@@ -303,11 +269,11 @@ def build_buy_yes_tx(
         transaction_dict["1"] = tx_params_approve
         transaction_dict["2"] = tx_params_buy
 
-        return response, prompt, transaction_dict, None
+        return "", prompt, transaction_dict, None
 
     except Exception as e:
         traceback.print_exception(e)
-        return response, None, None, None
+        return f"exception occurred - {e}", None, None, None
 
 
 AVAILABLE_TOOLS = {
