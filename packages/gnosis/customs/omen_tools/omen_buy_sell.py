@@ -32,6 +32,10 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 from openai import OpenAI
 from prediction_market_agent_tooling.markets.agent_market import AgentMarket
+from prediction_market_agent_tooling.markets.omen.data_models import (
+    OMEN_TRUE_OUTCOME,
+    OMEN_FALSE_OUTCOME,
+)
 from prediction_market_agent_tooling.markets.omen.omen import OmenAgentMarket
 from prediction_market_agent_tooling.markets.omen.omen_contracts import (
     OmenFixedProductMarketMakerContract,
@@ -41,6 +45,7 @@ from prediction_market_agent_tooling.markets.omen.omen_contracts import (
 from prediction_market_agent_tooling.tools.utils import check_not_none
 from prediction_market_agent_tooling.tools.web3_utils import (
     prepare_tx,
+    add_fraction,
 )
 from pydantic import BaseModel
 from web3 import Web3
@@ -79,7 +84,7 @@ class BuyOrSell(BaseModel):
 
 
 def build_params_from_prompt(user_prompt: str) -> BuyOrSell:
-    model = ChatOpenAI(temperature=0)
+    model = ChatOpenAI(temperature=0, api_key=client.api_key)
     parser = PydanticOutputParser(pydantic_object=BuyOrSell)
     prompt = PromptTemplate(
         template=BUY_OR_SELL_TOKENS_PROMPT,
@@ -169,7 +174,7 @@ def build_buy_tokens_tx_params(
     market_contract: OmenFixedProductMarketMakerContract = market.get_contract()
 
     # Get the index of the outcome we want to buy.
-    outcome_str = "True" if buy_or_sell.outcome else "False"
+    outcome_str = OMEN_TRUE_OUTCOME if buy_or_sell.outcome else OMEN_FALSE_OUTCOME
     outcome_index: int = market.get_outcome_index(outcome_str)
 
     # Allow 1% slippage.
@@ -178,7 +183,7 @@ def build_buy_tokens_tx_params(
     # Buy shares using the deposited xDai in the collateral token.
     tx_params_buy = prepare_tx(
         web3=w3,
-        contract_address=market_contract.address,
+        contract_address=Web3.to_checksum_address(market_contract.address),
         contract_abi=market_contract.abi,
         from_address=from_address_checksummed,
         function_name="buy",
@@ -187,6 +192,7 @@ def build_buy_tokens_tx_params(
             outcome_index,
             expected_shares,
         ],
+        tx_params={"gas": "21000"},
     )
     return tx_params_buy
 
@@ -194,10 +200,8 @@ def build_buy_tokens_tx_params(
 def build_sell_tokens_tx_params(
     buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
-
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
-
     market_contract: OmenFixedProductMarketMakerContract = market.get_contract()
     conditional_token_contract = OmenConditionalTokenContract()
 
@@ -207,38 +211,37 @@ def build_sell_tokens_tx_params(
             f"Market {market.id} uses conditional token that we didn't expect, {market_contract.conditionalTokens()} != {conditional_token_contract.address=}"
         )
 
-        # Get the index of the outcome we want to buy.
-        outcome_index: int = market.get_outcome_index(outcome)
+    # Get the index of the outcome we want to sell.
+    outcome_str = OMEN_TRUE_OUTCOME if buy_or_sell.outcome else OMEN_FALSE_OUTCOME
+    outcome_index: int = market.get_outcome_index(outcome_str)
 
-        # Calculate the amount of shares we will sell for the given selling amount of xdai.
-        max_outcome_tokens_to_sell = market_contract.calcSellAmount(
-            amount_wei, outcome_index, web3=web3
-        )
-        # Allow 1% slippage.
-        max_outcome_tokens_to_sell = add_fraction(max_outcome_tokens_to_sell, 0.01)
+    # Calculate the amount of shares we will sell for the given selling amount of xdai.
+    max_outcome_tokens_to_sell = market_contract.calcSellAmount(
+        amount_wei, outcome_index, web3=w3
+    )
+    # Allow 1% slippage.
+    max_outcome_tokens_to_sell = add_fraction(max_outcome_tokens_to_sell, 0.01)
 
-        # Sell the shares.
-        tx_params_sell = prepare_tx(
-            web3=w3,
-            contract_address=market_contract.address,
-            contract_abi=market_contract.abi,
-            from_address=from_address_checksummed,
-            function_name="sell",
-            function_params=[
-                amount_wei,
-                outcome_index,
-                max_outcome_tokens_to_sell,
-            ],
-        )
+    # Sell the shares.
+    tx_params_sell = prepare_tx(
+        web3=w3,
+        contract_address=market_contract.address,
+        contract_abi=market_contract.abi,
+        from_address=from_address_checksummed,
+        function_name="sell",
+        function_params=[
+            amount_wei,
+            outcome_index,
+            max_outcome_tokens_to_sell,
+        ],
+        tx_params={"gas": 210000},
+    )
 
     return tx_params_sell
 
 
 def fetch_params_from_prompt(prompt: str):
-    tool_prompt = BUY_OR_SELL_TOKENS_PROMPT.format(user_prompt=prompt)
-    # parse the response to get the transaction object string itself
-    # parsed_txs = ast.literal_eval(response)
-    buy_params = build_params_from_prompt(user_prompt=tool_prompt)
+    buy_params = build_params_from_prompt(user_prompt=prompt)
     # Calculate the amount of shares we will get for the given investment amount.
     market: AgentMarket = OmenAgentMarket.get_binary_market(buy_params.market_id)
     return buy_params, market
@@ -347,7 +350,17 @@ def error_response(msg: str) -> Tuple[str, None, None, None]:
     return msg, None, None, None
 
 
-AVAILABLE_TOOLS = {
+LLM_SETTINGS = {
+    "gpt-4-0125-preview": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 8192,
+        "temperature": 0,
+    },
+}
+
+ALLOWED_MODELS = list(LLM_SETTINGS.keys())
+
+ALLOWED_TOOLS = {
     "buy_omen": build_buy_tx,  # buyYesTokens, buyNoTokens
     "sell_omen": build_sell_tx,  # sellYesTokens, sellNoTokens
 }
@@ -365,10 +378,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     if prompt is None:
         return error_response("No prompt has been given.")
 
-    transaction_builder = AVAILABLE_TOOLS.get(tool)
+    transaction_builder = ALLOWED_TOOLS.get(tool)
     if transaction_builder is None:
         return error_response(
-            f"Tool {tool!r} is not in supported tools: {tuple(AVAILABLE_TOOLS.keys())}."
+            f"Tool {tool!r} is not in supported tools: {tuple(ALLOWED_TOOLS.keys())}."
         )
 
     api_key: str | None = kwargs.get("api_keys", {}).get("openai", None)
