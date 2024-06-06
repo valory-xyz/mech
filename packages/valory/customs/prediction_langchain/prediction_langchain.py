@@ -90,10 +90,10 @@ def with_key_rotation(func: Callable):
     return wrapper
 
 
-def _set_if_undefined(var: str):
+def _set_if_undefined(var: str, key: str):
     """Set env vars"""
     if not os.environ.get(var):
-        os.environ[var] = getpass.getpass(f"Please provide your {var}")
+        os.environ[var] = key
 
 
 def create_agent(tools, system_message: str):
@@ -105,7 +105,7 @@ def create_agent(tools, system_message: str):
                 """
                 You are a helpful AI assistant, collaborating with other assistants.
                 Use the provided tools to progress towards answering the question.
-                If you are unable to fully answer, that's OK, another assistant with different tools 
+                If you are unable to fully answer, that's OK, another assistant with different tools
                 will help where you left off. Execute what you can to make progress.
                 If you or any of the other assistants have the final answer or deliverable,
                 prefix your response with FINAL ANSWER so the team knows to stop.
@@ -116,9 +116,9 @@ def create_agent(tools, system_message: str):
                 Each item in the JSON must have a value between 0 and 1.
                    - "p_yes": Estimated probability that the event in the "USER_PROMPT" occurs.
                    - "p_no": Estimated probability that the event in the "USER_PROMPT" does not occur.
-                   - "confidence": A value between 0 and 1 indicating the confidence in the prediction. 
+                   - "confidence": A value between 0 and 1 indicating the confidence in the prediction.
                      0 indicates lowest confidence value; 1 maximum confidence value.
-                   - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you 
+                   - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you
                      make the prediction. 0 indicates lowest utility; 1 maximum utility.
                 The sum of "p_yes" and "p_no" must equal 1.
                 You must provide your response in the format specified below:
@@ -252,9 +252,13 @@ def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
     event_list = [e for e in events]
 
     # Response is the last message from the last event
+    last_event = event_list[-1]
+    last_sender = list(last_event.keys())[0]
+    last_message = last_event[last_sender]["messages"][-1]
     response = (
-        event_list[-1]["researcher"]["messages"][-1]
-        .content.replace("FINAL ANSWER", "")
+        last_message
+        .content.replace("FINAL ANSWER:", "")
+        .replace("FINAL ANSWER", "")
         .strip()
     )
 
@@ -297,8 +301,8 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
         return error_response("No tavily_api_key has been specified.")
 
     # Set the environment
-    _set_if_undefined("OPENAI_API_KEY")
-    _set_if_undefined("TAVILY_API_KEY")
+    _set_if_undefined("OPENAI_API_KEY", openai_api_key)
+    _set_if_undefined("TAVILY_API_KEY", tavily_api_key)
     os.environ["LANGCHAIN_TRACING_V2"] = "false"
 
     # Run the tool
