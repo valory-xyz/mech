@@ -24,11 +24,11 @@ dependencies:
   faiss-cpu:
     version: ==1.7.4
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0
   markdownify:
     version: ==0.11.6
   openai:
-    version: ==1.11.0
+    version: ==1.30.2
   docstring-parser:
     version: ==0.15
   readability-lxml:
