@@ -62,6 +62,7 @@ def with_key_rotation(func: Callable):
                 service = "google_api_key"
                 if retries_left[service] <= 0:
                     raise e
+                retries_left[service] -= 1
                 api_keys.rotate(service)
                 return execute()
             except Exception as e:
