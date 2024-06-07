@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_request_sme.py: bafybeigit56ftqnatznnl7yvrv4xxnbgxv3tvdiqt326beucpnzgdlx64q
+  prediction_request_sme.py: bafybeicrc5ljljdpv53f75ubmbryjehlqpt5tfsorgsyujexzm5zi34dhe
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_sme.py
 callable: run
@@ -21,10 +21,10 @@ dependencies:
   googlesearch-python:
     version: ==1.2.3
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0
   readability-lxml:
     version: ==0.8.1
   markdownify:
     version: ==0.11.6
   openai:
-    version: ==1.11.0
+    version: ==1.30.2

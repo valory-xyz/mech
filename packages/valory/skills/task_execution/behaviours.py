@@ -49,6 +49,7 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from packages.valory.skills.task_execution.utils.cost_calculation import (
     get_cost_for_done_task,
@@ -85,6 +86,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._last_polling: Optional[float] = None
         self._invalid_request = False
         self._async_result: Optional[Future] = None
+        self._keychain: Optional[KeyChain] = None
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -94,6 +96,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             for key, values in self.params.file_hash_to_tools.items()
             for value in values
         }
+        self._keychain = KeyChain(self.params.api_keys)
 
     def act(self) -> None:
         """Implement the act."""
@@ -296,9 +299,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "tool": tool,
             "request_id_nonce": request_id_nonce,
         }
-        if task_result is not None:
+        if task_result is not None and len(task_result) == 5:
             # task succeeded
-            deliver_msg, prompt, transaction, counter_callback = task_result
+            deliver_msg, prompt, transaction, counter_callback, keychain = task_result
             cost_dict = {}
             if counter_callback is not None:
                 cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
@@ -315,6 +318,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "metadata": metadata,
             }
             self._done_task["transaction"] = transaction
+
+            # update the keychain, it's possible that rotations happened
+            # we want to use the most up-to-date key priority
+            self._keychain = keychain
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
         msg, dialogue = self._build_ipfs_store_file_req(
@@ -393,17 +400,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         tool_params = component_yaml.get("params", {})
         task_data["tool_py"] = tool_py
         task_data["callable_method"] = callable_method
-        task_data["api_keys"] = self.params.api_keys
+        task_data["api_keys"] = self._keychain
         task_data["counter_callback"] = TokenCounterCallback()
+        task_data["model"] = task_data.get("model", tool_params.get("default_model", None))
         future = self._submit_task(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
         executing_task["tool"] = task_data["tool"]
         executing_task["model"] = task_data.get(
-            "model", tool_params.pop("default_model", None)
+            "model", tool_params.get("default_model", None)
         )
         executing_task["params"] = tool_params
         self._async_result = cast(Optional[Future], future)
+
 
     def _build_ipfs_message(
         self,

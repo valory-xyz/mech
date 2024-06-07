@@ -7,10 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeib36ew6vbztldut5xayk5553rylrq7yv4cpqyhwc5ktvd4cx67vwu
-  resolve_market_reasoning.py: bafybeibb54ccaum3u6qncdhhnogv2aqkfh7bi5uvhwzpqgecqdkqb3t6ue
+  resolve_market_reasoning.py: bafybeifouismth2zg4upbxyt5kgtukvt2foah53nwvymvybe3kr3pw52ou
 fingerprint_ignore_patterns: []
 entry_point: resolve_market_reasoning.py
 callable: run
+params:
+  default_model: gpt-4-0125-preview
 dependencies:
   google-api-python-client:
     version: ==2.95.0
@@ -22,11 +24,11 @@ dependencies:
   faiss-cpu:
     version: ==1.7.4
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0
   markdownify:
     version: ==0.11.6
   openai:
-    version: ==1.11.0
+    version: ==1.30.2
   docstring-parser:
     version: ==0.15
   readability-lxml:

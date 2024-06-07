@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeib36ew6vbztldut5xayk5553rylrq7yv4cpqyhwc5ktvd4cx67vwu
-  prediction_request_reasoning.py: bafybeidb43nygtvbhimnsd223ddpoii46dwirb5znmp2g473u4jii36jqa
+  prediction_request_reasoning.py: bafybeiggh5wuwqr6ggoeug6vng7uzuzjup5n46vrryrkxczpqeioadajhm
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_reasoning.py
 callable: run
@@ -24,9 +24,9 @@ dependencies:
   readability-lxml:
     version: ==0.8.1
   openai:
-    version: ==1.11.0
+    version: ==1.30.2
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0
   pypdf2:
     version: ==3.0.1
   numpy:

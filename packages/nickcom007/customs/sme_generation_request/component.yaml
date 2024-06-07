@@ -8,13 +8,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  sme_generation_request.py: bafybeih2mcuyok6nc42sge2mgv4d3jwy7k2l2vomzt4g2k7mp76ksh6siq
+  sme_generation_request.py: bafybeib2isi426675grx5gl73l6jwcfwamkrpfjwgtlwynemolkz3iip5e
 fingerprint_ignore_patterns: []
 entry_point: sme_generation_request.py
 callable: run
 dependencies:
   openai:
-    version: ==1.11.0
+    version: ==1.30.2
   requests: {}
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0

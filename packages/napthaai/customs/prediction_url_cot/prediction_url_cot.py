@@ -1,3 +1,4 @@
+import functools
 import json
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -6,6 +7,9 @@ from itertools import islice
 from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 
 import PyPDF2
+import anthropic
+import googleapiclient
+import openai
 import requests
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
@@ -13,6 +17,61 @@ from pydantic import BaseModel
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import encoding_for_model
+
+
+
+
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+        retries_left: Dict[str, int] = api_keys.max_retries()
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys, )
+            except anthropic.RateLimitError as e:
+                # try with a new key again
+                service = "anthropic"
+                if retries_left[service] <= 0:
+                    raise e
+                retries_left[service] -= 1
+                api_keys.rotate(service)
+                return execute()
+            except openai.RateLimitError as e:
+                # try with a new key again
+                if retries_left["openai"] <= 0 and retries_left["openrouter"] <= 0:
+                    raise e
+                retries_left["openai"] -= 1
+                retries_left["openrouter"] -= 1
+                api_keys.rotate("openai")
+                api_keys.rotate("openrouter")
+                return execute()
+            except googleapiclient.errors.HttpError as e:
+                # try with a new key again
+                rate_limit_exceeded_code = 429
+                if e.status_code != rate_limit_exceeded_code:
+                    raise e
+                service = "google_api_key"
+                if retries_left[service] <= 0:
+                    raise e
+                api_keys.rotate(service)
+                return execute()
+            except Exception as e:
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
+
 
 
 class LLMClientManager:
@@ -589,6 +648,7 @@ def parser_prediction_response(response: str) -> str:
     return results
 
 
+@with_key_rotation
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]

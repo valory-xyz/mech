@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  native_transfer_request.py: bafybeidixwf7aznojpl5estmzbwy4ikezmbkajyifbbfl3u75dz5ugzss4
+  native_transfer_request.py: bafybeicdgfgvahtrq4wri6d5fjrpaxaa7xy5u2hjgormcieizuquecizqm
 fingerprint_ignore_patterns: []
 entry_point: native_transfer_request.py
 callable: run
 dependencies:
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0
   openai:
-    version: ==1.11.0
+    version: ==1.30.2
