@@ -22,7 +22,6 @@ This module implements a tool which prepares a transaction for the transaction s
 Please note that the gnosis safe parameters are missing from the payload, e.g., `safe_tx_hash`, `safe_tx_gas`, etc.
 """
 import functools
-import os
 import traceback
 from typing import Any, Dict, Optional, Tuple, Callable
 
@@ -42,7 +41,6 @@ from prediction_market_agent_tooling.markets.omen.omen_contracts import (
     OmenCollateralTokenContract,
     OmenConditionalTokenContract,
 )
-from prediction_market_agent_tooling.tools.utils import check_not_none
 from prediction_market_agent_tooling.tools.web3_utils import (
     prepare_tx,
     add_fraction,
@@ -53,11 +51,9 @@ from web3.types import TxParams
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
-
 ENGINE = "gpt-3.5-turbo"
 MAX_TOKENS = 500
 TEMPERATURE = 0.7
-
 
 """NOTE: An LLM is used for generating a dict containing interpreted parameters from the response, such as "recipient_address", "market_address", etc. This could also be done if we could somehow publish the parameters needed by the run method and make it discoverable by the caller."""
 
@@ -115,7 +111,7 @@ class OpenAIClientManager:
 
 
 def build_approval_for_all_tx_params(
-    buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
+        buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
     """
     # Approve the market maker to withdraw our collateral token.
@@ -139,7 +135,7 @@ def build_approval_for_all_tx_params(
 
 
 def build_approval_tx_params(
-    buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
+        buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
     """
     # Approve the market maker to withdraw our collateral token.
@@ -165,9 +161,8 @@ def build_approval_tx_params(
 
 
 def build_buy_tokens_tx_params(
-    buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
+        buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
-
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
 
@@ -198,7 +193,7 @@ def build_buy_tokens_tx_params(
 
 
 def build_sell_tokens_tx_params(
-    buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
+        buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
@@ -248,13 +243,13 @@ def fetch_params_from_prompt(prompt: str):
 
 
 def build_buy_tx(
-    prompt: str,
+        prompt: str, rpc_url: str
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Builds buy transaction request."""
 
     try:
         buy_params, market = fetch_params_from_prompt(prompt)
-        w3 = get_web3()
+        w3 = get_web3(rpc_url)
 
         tx_params_approve = build_approval_tx_params(
             buy_or_sell=buy_params, market=market, w3=w3
@@ -271,7 +266,7 @@ def build_buy_tx(
 
 
 def build_return_from_tx_params(
-    tx_params: list[TxParams], prompt: str
+        tx_params: list[TxParams], prompt: str
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     # We return the transactions_dict below in order to be able to return multiple transactions for later execution instead of just one.
     transaction_dict = {}
@@ -281,21 +276,18 @@ def build_return_from_tx_params(
     return "", prompt, transaction_dict, None
 
 
-def get_web3() -> Web3:
-    GNOSIS_RPC_URL = check_not_none(os.environ["GNOSIS_RPC_URL"])
-    if not GNOSIS_RPC_URL:
-        raise EnvironmentError("GNOSIS_RPC_URL not set. Aborting.")
-    return Web3(Web3.HTTPProvider(GNOSIS_RPC_URL))
+def get_web3(gnosis_rpc_url: str) -> Web3:
+    return Web3(Web3.HTTPProvider(gnosis_rpc_url))
 
 
 def build_sell_tx(
-    prompt: str,
+        prompt: str, rpc_url: str
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Builds sell transaction request."""
 
     try:
         sell_params, market = fetch_params_from_prompt(prompt)
-        w3 = get_web3()
+        w3 = get_web3(rpc_url)
 
         tx_params_approve_all = build_approval_for_all_tx_params(
             buy_or_sell=sell_params, market=market, w3=w3
@@ -388,5 +380,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     if api_key is None:
         return error_response("No api key has been given.")
 
+    gnosis_rpc_url: str | None = kwargs.get("api_keys", {}).get("gnosis_rpc_url", None)
+    if gnosis_rpc_url is None:
+        return error_response("No gnosis rpc url has been given.")
+
     with OpenAIClientManager(api_key):
-        return transaction_builder(prompt)
+        return transaction_builder(prompt, gnosis_rpc_url)

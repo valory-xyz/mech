@@ -17,7 +17,6 @@
 #
 # ------------------------------------------------------------------------------
 """This module contains tool tests."""
-import os
 from typing import List, Any
 
 from packages.gnosis.customs.omen_tools import omen_buy_sell
@@ -41,6 +40,7 @@ from tests.constants import (
     REPLICATE_API_KEY,
     NEWS_API_KEY,
     OPENROUTER_API_KEY,
+    GNOSIS_RPC_URL,
 )
 
 
@@ -57,6 +57,7 @@ class BaseToolTest:
             "replicate": [REPLICATE_API_KEY],
             "newsapi": [NEWS_API_KEY],
             "openrouter": [OPENROUTER_API_KEY],
+            "gnosis_rpc_url": [GNOSIS_RPC_URL],
         }
     )
     models: List = [None]
@@ -157,8 +158,6 @@ class TestPredictionCOT(BaseToolTest):
 
 class TestOmenTransactionBuilder(BaseToolTest):
     """Test Prediction COT."""
-
-    os.environ["GNOSIS_RPC_URL"] = "https://gnosis-rpc.publicnode.com"
 
     tools = omen_buy_sell.ALLOWED_TOOLS
     models = omen_buy_sell.ALLOWED_MODELS

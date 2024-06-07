@@ -19,6 +19,7 @@
 """This module contains constants."""
 
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -31,3 +32,4 @@ CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
 REPLICATE_API_KEY = os.getenv("REPLICATE_API_KEY")
 NEWS_API_KEY = os.getenv("NEWS_API_KEY")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+GNOSIS_RPC_URL = os.getenv("GNOSIS_RPC_URL")
