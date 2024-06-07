@@ -55,6 +55,3 @@ backup_mech/
 /pip
 /tool_test.py
 .venv
-test.md
-
-utils.py
