@@ -41,6 +41,7 @@ from tests.constants import (
     NEWS_API_KEY,
     OPENROUTER_API_KEY,
     GNOSIS_RPC_URL,
+    GEMINI_API_KEY
 )
 
 
@@ -58,6 +59,7 @@ class BaseToolTest:
             "newsapi": [NEWS_API_KEY],
             "openrouter": [OPENROUTER_API_KEY],
             "gnosis_rpc_url": [GNOSIS_RPC_URL],
+            "gemini": [GEMINI_API_KEY],
         }
     )
     models: List = [None]

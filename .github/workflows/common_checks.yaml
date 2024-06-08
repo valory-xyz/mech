@@ -191,6 +191,7 @@ jobs:
           NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPEN_ROUTER_API_KEY }}
           GNOSIS_RPC_URL: ${{ secrets.GNOSIS_RPC_URL }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           printenv
           tox -e check-tools
