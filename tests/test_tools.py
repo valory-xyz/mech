@@ -17,18 +17,19 @@
 #
 # ------------------------------------------------------------------------------
 """This module contains tool tests."""
-
 from typing import List, Any
 
-from packages.valory.customs.prediction_request import prediction_request
+from packages.gnosis.customs.omen_tools import omen_buy_sell
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
+from packages.napthaai.customs.prediction_request_rag_cohere import (
+    prediction_request_rag_cohere,
+)
 from packages.napthaai.customs.prediction_request_reasoning import (
     prediction_request_reasoning,
 )
-from packages.napthaai.customs.prediction_request_rag_cohere import prediction_request_rag_cohere
 from packages.napthaai.customs.prediction_url_cot import prediction_url_cot
+from packages.valory.customs.prediction_request import prediction_request
 from packages.valory.skills.task_execution.utils.apis import KeyChain
-
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from tests.constants import (
     OPENAI_SECRET_KEY,
@@ -39,22 +40,26 @@ from tests.constants import (
     REPLICATE_API_KEY,
     NEWS_API_KEY,
     OPENROUTER_API_KEY,
+    GNOSIS_RPC_URL,
 )
 
 
 class BaseToolTest:
     """Base tool test class."""
 
-    keys = KeyChain({
-        "openai": [OPENAI_SECRET_KEY],
-        "stabilityai": [STABILITY_API_KEY],
-        "google_api_key": [GOOGLE_API_KEY],
-        "google_engine_id": [GOOGLE_ENGINE_ID],
-        "anthropic": [CLAUDE_API_KEY],
-        "replicate": [REPLICATE_API_KEY],
-        "newsapi": [NEWS_API_KEY],
-        "openrouter": [OPENROUTER_API_KEY],
-    })
+    keys = KeyChain(
+        {
+            "openai": [OPENAI_SECRET_KEY],
+            "stabilityai": [STABILITY_API_KEY],
+            "google_api_key": [GOOGLE_API_KEY],
+            "google_engine_id": [GOOGLE_ENGINE_ID],
+            "anthropic": [CLAUDE_API_KEY],
+            "replicate": [REPLICATE_API_KEY],
+            "newsapi": [NEWS_API_KEY],
+            "openrouter": [OPENROUTER_API_KEY],
+            "gnosis_rpc_url": [GNOSIS_RPC_URL],
+        }
+    )
     models: List = [None]
     tools: List[str]
     prompts: List[str]
@@ -149,3 +154,22 @@ class TestPredictionCOT(BaseToolTest):
         'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
     tool_module = prediction_url_cot
+
+
+class TestOmenTransactionBuilder(BaseToolTest):
+    """Test Prediction COT."""
+
+    tools = omen_buy_sell.ALLOWED_TOOLS
+    models = omen_buy_sell.ALLOWED_MODELS
+    market_id = (
+        "0x7323440218011988f0e431e19298d1921e41197f"  # to be resolved in 8 years
+    )
+    prompts = [
+        f"The sender 0x669F3CD2015eB9298b3feA01FCBb034068FE2D3f wants to buy 0 yes Tokens from market {market_id}."
+    ]
+    tool_module = omen_buy_sell
+
+    def _validate_response(self, response: Any) -> None:
+        super()._validate_response(response)
+        expected_num_tx_params = 2
+        assert len(response[2].keys()) == expected_num_tx_params
