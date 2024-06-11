@@ -1,0 +1,14 @@
+name: graphql-response-analyser
+author: subquery
+version: 0.1.0
+type: custom
+description: This module explains the output of the GraphQL server within a given context, including a description of the indexed data being served and the query itself.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+entry_point: graphql-response-analyser.py
+callable: run
+dependencies:
+  openai:
+    version: ==1.11.0
+  tiktoken:
+    version: ==0.5.1
