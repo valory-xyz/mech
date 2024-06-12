@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeifopioe3iqaximesrlfjcjaa362amp3rjawsxwu7kv4gt2lrberf4
-  infer_market_rules.py: bafybeifzfdvqfazahijq5435mftqbsxgvcevjwfi5mkgawbctqlehz5y4u
+  infer_market_rules.py: bafybeiflhpeuqkw5akg7cqbg72svw7o6tzytvji7uxwkmipktde6zqu3aa
 fingerprint_ignore_patterns: []
 entry_point: infer_market_rules.py
 callable: run
