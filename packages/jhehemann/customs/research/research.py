@@ -535,11 +535,14 @@ def format_date(date_string) -> str:
         return date_string
     
 
-def extract_question(text) -> str:
-    """Extract the question from prompt enclosed in escaped quotation marks."""
-    pattern = r'\"(.*?)\"'
-    match = re.search(pattern, text)
-    return match.group(1) if match else ""
+def extract_question(text:str) -> str:
+    # Look for a quoted question
+    match = re.search(r'["“](.*?\?)["”]', text)
+    if match:
+        return match.group(1).strip()
+    
+    # Return prompt if ending with a question mark
+    return text if text.strip().endswith('?') else ""
 
 
 def parse_date_str(date_str: str) -> datetime:

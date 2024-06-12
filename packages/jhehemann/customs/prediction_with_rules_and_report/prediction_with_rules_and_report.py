@@ -439,8 +439,6 @@ OUTPUT_FORMAT:
 * The bulletpoints should be useful and relevant and help answering the search query and sub-queries.
 """
 
-###################################################### INFER RULES #################################################
-
 
 SYSTEM_PROMPT_INFER_RULES = """You are a world class algorithm for generating structured output from a given input."""
 
@@ -800,14 +798,6 @@ Answer:
 """
 
 
-
-
-###################################################### END INFER RULES #################################################
-
-
-
-###################################################### RESEARCH #################################################
-
 class WebPage:
     _id_counter = 0
     id: int
@@ -837,7 +827,6 @@ class WebPage:
         self.chunks_final = []
         self.extract_attribute_names = ["title", "description", "publication_date", "publisher"]
 
-
     def get_title(self, soup, scripts):
         try:
             title = soup.title
@@ -854,13 +843,11 @@ class WebPage:
         # If no title was found return "n/a".
         return "n/a"
 
-
     def get_description(self, soup, scripts):
         description = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "description"})
         if description and description.get("content"):
             return description["content"].strip()
         return "n/a"
-
 
     def get_publisher(self, soup, scripts):
         for script in scripts:
@@ -881,7 +868,6 @@ class WebPage:
             return publisher["content"].strip()
         else:
             return "n/a"
-
 
     def get_date(self, soup, scripts):
         for script in scripts:
@@ -904,7 +890,6 @@ class WebPage:
             if meta_tag and meta_tag.get("content"):
                 return format_date(meta_tag["content"])
         return "n/a"
-
 
     def extract_page_attributes(
         self,
@@ -929,7 +914,6 @@ class WebPage:
         
         return self
 
-
     def to_prompt(self):
         """
         Function to convert article attributes into a structured format for LLM prompts.
@@ -943,7 +927,6 @@ class WebPage:
         
         return page_info
     
-
     def _find_publisher(self, data):
         def extract_names(item, key):
             """Helper function to extract names from a field that could be a list or a single object."""
@@ -979,7 +962,6 @@ class TextChunk(BaseModel):
     embedding: Optional[List[float]] = None
     similarity: Optional[float] = None
 
-
 def trim_json_formatting(text) -> str:
     """Trim the JSON formatting characters from string."""
     # Regex pattern that matches the start and end markers with optional newline characters
@@ -994,7 +976,6 @@ def trim_json_formatting(text) -> str:
     else:
         return text
 
-
 def trim_chunks_string(
     chunks_string: str,
     enc: tiktoken.Encoding,
@@ -1006,13 +987,11 @@ def trim_chunks_string(
         encoding = encoding[:max_tokens]
     return enc.decode(encoding)
 
-
 def find_release_date_in_data(data):
     for name in RELEASE_DATE_NAMES:
         if name in data:
             return data[name]
     return None
-
 
 def format_date(date_string) -> str:
     # Desired format "February 16, 2024, 3:30 PM"
@@ -1032,7 +1011,6 @@ def format_date(date_string) -> str:
         # If there's an error during parsing, return the original string
         return date_string
     
-
 def parse_date_str(date_str: str) -> datetime:
     # Desired format "February 16, 2024, 3:30 PM"
     datetime_format = "%B %d, %Y"
@@ -1041,13 +1019,11 @@ def parse_date_str(date_str: str) -> datetime:
     except (ValueError, TypeError):
         return datetime.min
     
-
 def remove_date_from_query(query: str) -> str:
     """Remove time-related information from query"""
     date_pattern = r"\b(?:on or by |on or before |before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
     new_query = re.sub(date_pattern, "", query)
     return new_query
-
 
 def recursive_character_text_splitter(text, max_tokens, overlap):
     if len(text) <= max_tokens:
@@ -1055,12 +1031,10 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
     else:
         return [text[i:i+max_tokens] for i in range(0, len(text), max_tokens - overlap)]
 
-
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
     return len(enc.encode(text))
-
 
 def get_first_dict_from_list(data):
     """Returns the first item if data is a list of dictionaries"""
@@ -1068,7 +1042,6 @@ def get_first_dict_from_list(data):
         return data[0]
     else:
         return data
-    
 
 def extract_answer(response_message: str) -> str:
     """Extract the answer from the response message."""
@@ -1077,7 +1050,6 @@ def extract_answer(response_message: str) -> str:
     else:
         answer = response_message
     return answer
-    
 
 def format_additional_information(web_pages: List[WebPage]) -> str:
     """Format the additional information from the web pages"""
@@ -1087,7 +1059,6 @@ def format_additional_information(web_pages: List[WebPage]) -> str:
         formatted_information += f"ARTICLE {i+1}: PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
         formatted_information += f"{web_page.final_output}\n\n"
     return formatted_information
-
 
 def remove_unwanted_fields(json_str) -> str:
     """Remove all fields from a JSON string except 'p_yes', 'p_no', 'confidence', and 'info_utility'."""
@@ -1105,13 +1076,14 @@ def remove_unwanted_fields(json_str) -> str:
     
     return modified_json_str
 
-
-def extract_question(text) -> str:
-    """Extract the question from prompt enclosed in escaped quotation marks."""
-    pattern = r'\"(.*?)\"'
-    match = re.search(pattern, text)
-    return match.group(1) if match else ""
-
+def extract_question(text:str) -> str:
+    # Look for a quoted question
+    match = re.search(r'["“](.*?\?)["”]', text)
+    if match:
+        return match.group(1).strip()
+    
+    # Return prompt if ending with a question mark
+    return text if text.strip().endswith('?') else ""
 
 def get_prompt_template_by_timing(query: str) -> str:
     """Get the prompt template based on the timing of the event in the query."""
@@ -1126,7 +1098,6 @@ def get_prompt_template_by_timing(query: str) -> str:
         return INFER_RULES_PROMPT_BY
     else:
         return "No time-related information found in query."
-
 
 def get_sme_role(
     engine, temperature, max_tokens, prompt, counter_callback=None
@@ -1161,7 +1132,6 @@ def get_sme_role(
         return sme["sme"], sme["sme_introduction"], counter_callback
     return sme["sme"], sme["sme_introduction"], None
 
-
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     """Search Google using a custom search engine."""
     service = build("customsearch", "v1", developerKey=api_key)
@@ -1175,7 +1145,6 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
         .execute()
     )
     return [result["link"] for result in search.get("items", [])]
-
 
 def process_in_batches(
     web_pages: List[WebPage],
@@ -1217,7 +1186,6 @@ def process_in_batches(
 
             yield get_futures
 
-
 def embed_batch(client: OpenAI, batch):
     """
     Helper function to process a single batch of texts and return the embeddings.
@@ -1233,7 +1201,6 @@ def embed_batch(client: OpenAI, batch):
 
     # Return the embeddings
     return [data.embedding for data in response.data]
-
 
 def sort_text_chunks(
     client: OpenAI, query: str, text_chunks_embedded: List[TextChunk]
@@ -1255,7 +1222,6 @@ def sort_text_chunks(
         text_chunks_embedded[I[0][i]].similarity = sim
         
     return [text_chunks_embedded[i] for i in I[0]]
-
 
 def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.Encoding) -> List[TextChunk]:
     """Get embeddings for the text chunks."""  
@@ -1298,7 +1264,6 @@ def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.E
 
     return text_chunks
 
-
 def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
     """Create chunks from the text of all web pages"""
     text_chunks = []
@@ -1308,7 +1273,6 @@ def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
             text_chunks.extend(TextChunk(text=chunk, url=web_page.url) for chunk in chunks)
 
     return text_chunks
-
 
 def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int = 10000) -> List[WebPage]:
     """Scrape text from web pages"""
@@ -1350,7 +1314,6 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
 
     return filtered_web_pages
 
-
 def extract_html_texts(
     web_pages: List[WebPage],
 ) -> List[WebPage]:    
@@ -1385,7 +1348,6 @@ def extract_html_texts(
 
     return parsed_web_pages
 
-
 def get_urls_from_queries(
     queries: List[str],
     api_key: str,
@@ -1418,7 +1380,6 @@ def get_urls_from_queries(
         print(url)
 
     return list(results)
-
 
 def fetch_queries(
     client: OpenAI,
@@ -1492,7 +1453,6 @@ def fetch_queries(
                 print("Maximum attempts reached, returning an empty string.")
                 return []
 
-
 def summarize_relevant_chunks(
         web_pages: List[WebPage],
         input_query: str,
@@ -1554,7 +1514,6 @@ def summarize_relevant_chunks(
         web_pages = [web_page for web_page in web_pages if "Error" not in web_page.relevant_chunks_summary]
     return web_pages, counter_callback
 
-
 def summarize_over_summarized_chunks(
     web_pages: List[WebPage],
     input_query: str,
@@ -1582,7 +1541,9 @@ def summarize_over_summarized_chunks(
     all_relevant_chunks_summary = '\n'.join(all_lines_with_id)
 
     prompt = FINAL_SUMMARY_PROMPT.format(input_query=input_query, chunks=all_relevant_chunks_summary)
-    print(f"\nPROMPT SUMMARIZE OVER WEBSITE SUMMARIES:\n########################\n{prompt}\n########################\n")
+    
+    print(f"\nPROMPT SUMMARIZE OVER WEBSITE SUMMARIES:\n################################################")
+    print(f"{prompt}\n################################################\n\n")
 
     messages = [
         {"role": "system", "content": "You are a professional journalist."},
@@ -1631,7 +1592,6 @@ def summarize_over_summarized_chunks(
     modified_web_pages = [web_pages_dict[web_page_id] for web_page_id in modified_ids]
 
     return modified_web_pages, counter_callback
-
 
 def research(
     market_question: str,
@@ -1704,7 +1664,6 @@ def research(
 
     return additional_information, counter_callback
 
-
 def get_market_rules(
     market_question: str,
     counter_callback,
@@ -1767,7 +1726,6 @@ def get_market_rules(
     market_status = extract_answer(response_message)
     
     return market_status, market_rules, counter_callback
-
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
@@ -1833,11 +1791,15 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             print("Using default SME introduction.")
             sme_introduction = "You are a professional journalist."
         
+        print("SUBJECT MATTER EXPERT:\n################################################\n")
         if sme:
             print(f"SME ROLE: {sme}")
         else:
             print("SME role not found.")
         print(f"SME INTRODUCTION: {sme_introduction}\n")
+        print("################################################\n\n")
+
+        print(f"REPORT PROMPT:\n################################################\n{report_prompt}\n################################################\n\n")
 
         messages_report = [
             {"role": "system", "content": sme_introduction},
@@ -1857,7 +1819,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
                 token_counter=count_tokens,
             )
         output = response.choices[0].message.content
-        print(f"RESEARCH OUTPUT:\n########################\n{output}\n########################\n")
+        print(f"RESEARCH OUTPUT:\n################################################\n\n{output}\n\n################################################\n\n")
 
         prediction_prompt = PREDICTION_PROMPT.format(market_question=market_question, market_rules=market_rules, current_date=current_date, report=output)
 
@@ -1891,7 +1853,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             )
         output = response.choices[0].message.content
         output = trim_json_formatting(output)
-        print(f"PREDICTION OUTPUT:\n########################\n{output}\n########################\n")
+        print(f"PREDICTION OUTPUT:\n################################################\n\n{output}\n\n################################################\n\n")
 
         # Remove conclusion field from the JSON string
         output = remove_unwanted_fields(output)
