@@ -14,7 +14,7 @@ entry_point: sme_generation_request.py
 callable: run
 dependencies:
   openai:
-    version: ==1.11.0
+    version: ==1.30.2
   requests: {}
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0

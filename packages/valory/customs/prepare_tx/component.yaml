@@ -13,4 +13,4 @@ entry_point: prepare_tx.py
 callable: run
 dependencies:
   openai:
-    version: ==1.11.0
+    version: ==1.30.2

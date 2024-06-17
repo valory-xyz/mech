@@ -1,4 +1,4 @@
-name: prediction_url_cot
+name: prediction_request_reasoning_lite
 author: napthaai
 version: 0.1.0
 type: custom
@@ -6,13 +6,13 @@ description: A tool for making binary predictions on markets.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiflni5dkn5fqe7fnu4lgbqxzfrgochhqfbgzwz3vlf5grijp3nkpm
-  prediction_url_cot.py: bafybeieaw7thcrzybrxegygkoampyj4xqggyji7enfgm6xi4ca6yp6jsui
+  __init__.py: bafybeib36ew6vbztldut5xayk5553rylrq7yv4cpqyhwc5ktvd4cx67vwu
+  prediction_request_reasoning.py: bafybeieqoztsrumcwsor5bcllc6u6grpecjcsrd6mvssifvxmieyhatnem
 fingerprint_ignore_patterns: []
-entry_point: prediction_url_cot.py
+entry_point: prediction_request_reasoning.py
 callable: run
 params:
-  default_model: claude-3-sonnet-20240229
+  default_model: gpt-4-0125-preview
 dependencies:
   google-api-python-client:
     version: ==2.95.0
@@ -23,13 +23,19 @@ dependencies:
     version: ==0.11.6
   readability-lxml:
     version: ==0.8.1
-  anthropic:
-    version: ==0.21.3
+  openai:
+    version: ==1.11.0
   tiktoken:
-    version: ==0.7.0
+    version: ==0.5.1
   pypdf2:
     version: ==3.0.1
   numpy:
     version: '>=1.19.0'
   pydantic:
     version: '>=1.9.0,<3'
+  faiss-cpu:
+    version: ==1.7.4
+  docstring-parser:
+    version: ==0.15
+  anthropic:
+    version: ==0.21.3

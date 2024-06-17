@@ -1,5 +1,5 @@
-name: prediction_request_embedding
-author: valory
+name: prediction_request_sme_lite
+author: nickcom007
 version: 0.1.0
 type: custom
 description: A tool to establish Subject Matter Expert (SME) roles for specific market-related
@@ -8,23 +8,23 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_sentence_embedding.py: bafybeie6wijg4klxsxx5sz7kro3a4qgimuh2tgjaqcddn3cmrplouhepvu
+  prediction_request_sme.py: bafybeiginjcsh6j2qlhluiis233yb6afsdfxfnqwokdorjoo5fhdmzlwua
 fingerprint_ignore_patterns: []
-entry_point: prediction_sentence_embedding.py
+entry_point: prediction_request_sme.py
 callable: run
+params:
+  default_model: gpt-4-0125-preview
 dependencies:
-  openai:
-    version: ==1.30.2
-  tiktoken:
-    version: ==0.7.0
   requests: {}
   google-api-python-client:
     version: ==2.95.0
   googlesearch-python:
     version: ==1.2.3
-  python-dateutil:
-    version: ==2.8.2
-  beautifulsoup4:
-    version: ==4.12.2
-  spacy:
-    version: ==3.7.2
+  tiktoken:
+    version: ==0.5.1
+  readability-lxml:
+    version: ==0.8.1
+  markdownify:
+    version: ==0.11.6
+  openai:
+    version: ==1.11.0

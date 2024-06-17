@@ -38,12 +38,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihat4giyc4bz6zopvahcj4iw53356pbtwfn7p4d5yflwly2qhahum
 - valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeicyyz3nq6zs4ovns5jwlhr7nszusdivh32pxzxnpsa3i4mbxsm25i
+- valory/mech_abci:0.1.0:bafybeicvbtbmtdps7lsbsutojiic4sam3jmi3prev5u22tps6pxy4du7nq
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
-- valory/subscription_abci:0.1.0:bafybeig2vey5dxykpsojovlxw6f5o333f7kgmjyghmlu3yc5or5m4twqey
-- valory/task_execution:0.1.0:bafybeifhxjsvzwbb3zrfvx5orczapkzxq2kh5sa3w6ptq2dfs6ooinm5me
-- valory/task_submission_abci:0.1.0:bafybeiaa6fby75jusdz55ufy6x3td7bz2feh5bpwyipfy2nrnzpzrqrb3y
+- valory/subscription_abci:0.1.0:bafybeihtortmv4fqua5wrnshpnvqsbpaf52frwynrmpuv2uw5j7wkauhze
+- valory/task_execution:0.1.0:bafybeic27brlpaamu3gfmdribywjvjyzxz2evqneh3e2kb3karubllz6xi
+- valory/task_submission_abci:0.1.0:bafybeihvvp6ovstb7po7kx6o7dno6kvjmffnmlerfw6qxhhzyrxmktd67e
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
 - valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -89,8 +89,6 @@ dependencies:
     version: ==1.2.3
   hypothesis:
     version: ==6.21.6
-  langchain:
-    version: ==0.0.303
   open-aea-ledger-ethereum:
     version: ==1.50.0
   pandas:
@@ -102,7 +100,7 @@ dependencies:
   spacy:
     version: ==3.7.2
   tiktoken:
-    version: ==0.5.1
+    version: ==0.7.0
   fastapi:
     version: ==0.110.3
   typer:
@@ -118,7 +116,7 @@ dependencies:
   pypdf2:
     version: ==3.0.1
   tavily-python:
-    version: ==0.3.0
+    version: ==0.3.3
   chromadb:
     version: ==0.4.13
   markdownify:
@@ -127,6 +125,19 @@ dependencies:
     version: ==1.0.3
   replicate:
     version: ==0.15.7
+  langchain:
+    version: ==0.2.1
+  langchain-core:
+    version: ==0.2.1
+  langchain-openai:
+    version: ==0.1.7
+  langgraph:
+    version: ==0.0.55
+  langchain-community:
+    version: ==0.2.1
+  prediction-market-agent-tooling:
+    git: https://github.com/gnosis/prediction-market-agent-tooling
+    ref: gabriel/olas-deps
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
