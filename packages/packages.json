@@ -22,8 +22,16 @@
         "custom/napthaai/prediction_request_reasoning_claude/0.1.0": "bafybeihtx2cejxoy42jwk2i5m4evfzz537aic5njuawxnzdzwlo63kdduq",
         "custom/napthaai/prediction_request_rag_claude/0.1.0": "bafybeickr32t7nmapuoymjyo3cf5rr2v2zapksxcivuqsgjr2gn6zo6y7y",
         "custom/napthaai/prediction_request_rag_cohere/0.1.0": "bafybeihh26kwgqkzojd4zastto5mgod7o7esll4f4icurvwumvwuzmosrm",
+        "custom/valory/prediction_request_lite/0.1.0": "bafybeidlrn4siraksldhiq3vbhhil4lbzuaqzooppkfhfql5rzii6cnziq",
+        "custom/nickcom007/prediction_request_sme_lite/0.1.0": "bafybeidhuikn322h7oxgl5n2t5lvcl2dmv7cbmnes5tomabuucg6a42zkm",
+        "custom/napthaai/prediction_request_reasoning_lite/0.1.0": "bafybeigxs5tq4w7ouamwlvv7vjw3z3jeercynsuka4mcpveshopvej4cyu",
         "custom/valory/prediction_langchain/0.1.0": "bafybeihhii7veepp6ovkmqjnkp6euhkwm52obabgdltdj34ikisfd7yvqi",
+<<<<<<< HEAD
         "custom/victorpolisetty/dalle_request/0.1.0": "bafybeia6ks6hnjebnki23y7r426srvz4ab2d76z5o44wpdjhenxhkjl5ua",
+=======
+        "custom/victorpolisetty/gemini_request/0.1.0": "bafybeig5x6b5jtanet2q5sk7er7fdzpippbvh4q5p7uxmxpriq66omjnaq",
+        "custom/gnosis/omen_tools/0.1.0": "bafybeifxrawgu6m3dgsxvj7jrhxzr5gwi3zjk2m4gltkr5w3hxjjbla6nu",
+>>>>>>> main
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
         "protocol/valory/websocket_client/0.1.0": "bafybeifjk254sy65rna2k32kynzenutujwqndap2r222afvr3zezi27mx4",
         "contract/valory/agent_mech/0.1.0": "bafybeiah6b5epo2hlvzg5rr2cydgpp2waausoyrpnoarf7oa7bw33rex34",
@@ -36,8 +44,8 @@
         "skill/valory/task_execution/0.1.0": "bafybeic27brlpaamu3gfmdribywjvjyzxz2evqneh3e2kb3karubllz6xi",
         "skill/valory/websocket_client/0.1.0": "bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m",
         "skill/valory/subscription_abci/0.1.0": "bafybeihtortmv4fqua5wrnshpnvqsbpaf52frwynrmpuv2uw5j7wkauhze",
-        "agent/valory/mech/0.1.0": "bafybeid2hlmwtoze3xhhqqayisdg6xzxzgf42zw7hccdaszur7qfgp5vu4",
-        "service/valory/mech/0.1.0": "bafybeibr425raoxalifrnspyph4r2u2ilijlvdm3yexxuzsmwzyx7vlica"
+        "agent/valory/mech/0.1.0": "bafybeih2oex4yt4mmiyarp2ivkqqfscoavyb7metchciiqmqdmv7lhyutq",
+        "service/valory/mech/0.1.0": "bafybeic4lql2xbqfgjyyiacsthfkkx5zea2khackffhoh36hhajhjyhgdi"
     },
     "third_party": {
         "protocol/valory/default/1.0.0": "bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq",
