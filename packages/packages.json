@@ -26,12 +26,9 @@
         "custom/nickcom007/prediction_request_sme_lite/0.1.0": "bafybeidhuikn322h7oxgl5n2t5lvcl2dmv7cbmnes5tomabuucg6a42zkm",
         "custom/napthaai/prediction_request_reasoning_lite/0.1.0": "bafybeigxs5tq4w7ouamwlvv7vjw3z3jeercynsuka4mcpveshopvej4cyu",
         "custom/valory/prediction_langchain/0.1.0": "bafybeihhii7veepp6ovkmqjnkp6euhkwm52obabgdltdj34ikisfd7yvqi",
-<<<<<<< HEAD
-        "custom/victorpolisetty/dalle_request/0.1.0": "bafybeia6ks6hnjebnki23y7r426srvz4ab2d76z5o44wpdjhenxhkjl5ua",
-=======
         "custom/victorpolisetty/gemini_request/0.1.0": "bafybeig5x6b5jtanet2q5sk7er7fdzpippbvh4q5p7uxmxpriq66omjnaq",
         "custom/gnosis/omen_tools/0.1.0": "bafybeifxrawgu6m3dgsxvj7jrhxzr5gwi3zjk2m4gltkr5w3hxjjbla6nu",
->>>>>>> main
+        "custom/victorpolisetty/dalle_request/0.1.0": "bafybeicgjdvgamkgjebdrowrxdil3aghsbcm7epup6aqidikvjpmvomn6q",
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
         "protocol/valory/websocket_client/0.1.0": "bafybeifjk254sy65rna2k32kynzenutujwqndap2r222afvr3zezi27mx4",
         "contract/valory/agent_mech/0.1.0": "bafybeiah6b5epo2hlvzg5rr2cydgpp2waausoyrpnoarf7oa7bw33rex34",
