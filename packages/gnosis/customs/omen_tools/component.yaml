@@ -15,7 +15,7 @@ dependencies:
   pydantic:
     version: '>=1.9.0,<3'
   prediction-market-agent-tooling:
-    version: ==0.39.0
+    version: '^0.39.0'
   langchain:
     version: ==0.1.20
   langchain-core:

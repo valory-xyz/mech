@@ -136,7 +136,7 @@ dependencies:
   langchain-community:
     version: ==0.2.1
   prediction-market-agent-tooling:
-    version: ==0.39.0
+    version: ^0.39.0
   google-generativeai:
     version: ==0.6.0
 default_connection: null
