@@ -20,7 +20,6 @@
 """This module accepts a GraphQL endpoint, executes queries based on a given description, and explains the response in natural language"""
 
 from typing import Any, Dict, Optional, Tuple
-import os
 from openai import OpenAI
 import json
 import requests
@@ -32,7 +31,7 @@ client: Optional[OpenAI] = None
 def analyse_data_and_generate_response(description, query, data):
     return f"""
     
-    You're a GraphQL query response analyzer. You will be provided with context about the data served by the endpoint, as well as the executed query, to give you a better understanding. Based on this, you are expected to return a short bullet point description of the response in natural language.
+    You're a GraphQL query response analyzer. You will be provided with context about the data served by the endpoint, as well as the executed query, to give you a better understanding.
 
     Description: 
     
@@ -45,6 +44,8 @@ def analyse_data_and_generate_response(description, query, data):
     Reponse:
 
     {json.dumps(data)}
+
+    Based on the provided context, please generate a bullet-pointed summary in a machine-readable JSON format. The JSON structure should have an array object named 'analysis_result,' with each analytical conclusion represented as a separate string element within the array.
 
     """
 
