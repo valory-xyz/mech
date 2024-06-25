@@ -31,6 +31,9 @@ from packages.napthaai.customs.prediction_url_cot import prediction_url_cot
 from packages.valory.customs.prediction_request import prediction_request
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
+
+from packages.subquery.customs.graphql_response_analyser import graphql_response_analyser
+
 from tests.constants import (
     OPENAI_SECRET_KEY,
     STABILITY_API_KEY,
@@ -175,3 +178,36 @@ class TestOmenTransactionBuilder(BaseToolTest):
         super()._validate_response(response)
         expected_num_tx_params = 2
         assert len(response[2].keys()) == expected_num_tx_params
+
+test_query = """
+{
+  transfers {
+    aggregates {
+      keys
+      sum {
+        value
+      }
+    }
+  }
+}
+"""
+
+class TestGraphResponseAnalyser():
+    """Check successful query output analysis"""
+    
+    tool_callable: str = "run"
+    tool_module = graphql_response_analyser
+
+    def test_run(self) -> None:
+        """Test run method."""
+        kwargs = dict(
+            tool = "openai-gpt-3.5-turbo",
+            request="When was the first transfer?",
+            query = test_query,
+            endpoint="https://api.subquery.network/sq/subquery/cusdnew__c3Vic",
+            description="This project manages and indexes data pertaining to cUSD (CELO USD) ERC-20 token transfers and approvals recorded within a dedicated smart contract. The stored data includes information on approvals granted and transfers executed. These entities provide insights into the authorization and movement of USDT tokens within the CELO ecosystem, facilitating analysis and monitoring of token transactions.",
+            api_keys={"openai": OPENAI_SECRET_KEY}
+        )
+        func = getattr(self.tool_module, self.tool_callable)
+        response = func(**kwargs)
+        assert "analysis_result" in response[0]
