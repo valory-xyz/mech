@@ -29,6 +29,9 @@ from packages.napthaai.customs.prediction_request_reasoning import (
 )
 from packages.napthaai.customs.prediction_url_cot import prediction_url_cot
 from packages.valory.customs.prediction_request import prediction_request
+from packages.jhehemann.customs.prediction_with_rules_and_report import prediction_with_rules_and_report
+from packages.jhehemann.customs.infer_market_rules import infer_market_rules
+from packages.jhehemann.customs.research import research
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from tests.constants import (
@@ -175,3 +178,33 @@ class TestOmenTransactionBuilder(BaseToolTest):
         super()._validate_response(response)
         expected_num_tx_params = 2
         assert len(response[2].keys()) == expected_num_tx_params
+
+class TestPredictionWithRulesAndReport(BaseToolTest):
+    """Test Prediction with rules and report."""
+
+    tools = prediction_with_rules_and_report.ALLOWED_TOOLS
+    models = prediction_with_rules_and_report.ALLOWED_MODELS
+    prompts = [
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by 12 March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
+    ]
+    tool_module = prediction_with_rules_and_report
+
+class TestResearch(BaseToolTest):
+    """Test Research additional information."""
+
+    tools = research.ALLOWED_TOOLS
+    models = research.ALLOWED_MODELS
+    prompts = [
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by 12 March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
+    ]
+    tool_module = research
+
+class TestInferMarketRules(BaseToolTest):
+    """Test Infer Market Rules."""
+
+    tools = infer_market_rules.ALLOWED_TOOLS
+    models = infer_market_rules.ALLOWED_MODELS
+    prompts = [
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by 12 March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
+    ]
+    tool_module = infer_market_rules
