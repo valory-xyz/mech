@@ -73,7 +73,7 @@ moviepy = "^1.0.3"
 replicate = "^0.15.7"
 lxml = {extras = ["html-clean"], version = "^5.1.0"}
 # Uses kongzii's fork of OpenFactVerification, because it has market-benefitable modifications.
-openfactverification = { git = "https://github.com/kongzii/OpenFactVerification.git", rev = "23cc3586b9cc6e9251e30229f68257e5157270e8" }
+openfactverification = { git = "https://github.com/kongzii/OpenFactVerification.git", rev = "c6194b657287e8cfaabe48a83f804909e12ac7e6" }
 en_core_web_sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl" }
 sentence-transformers = "^2.1.0"
 langgraph = "^0.0.55"
