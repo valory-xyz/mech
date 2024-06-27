@@ -140,8 +140,10 @@ def single(
     """
     ofv_run(
         question,
-        openai_api_key=SecretStr(openai_api_key),
-        serper_api_key=SecretStr(serper_api_key),
+        api_keys={
+            "openai": openai_api_key,
+            "serperapi": serper_api_key,
+        },
     )
 
 
