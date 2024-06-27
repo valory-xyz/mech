@@ -79,6 +79,7 @@ sentence-transformers = "^2.1.0"
 langgraph = "^0.0.55"
 langchain-community = "^0.2.1"
 prediction-market-agent-tooling = "^0.39.0"
+google-generativeai = "^0.6.0"
 
 [tool.poetry.group.dev.dependencies]
 tomte = {git = "https://github.com/kongzii/tomte.git", rev = "a4f7cac233c25494742feb1531305ec99fb7f721", extras = ["cli", "tests"]}

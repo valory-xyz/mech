@@ -1,0 +1,17 @@
+name: gemini_request
+author: victorpolisetty
+version: 0.1.0
+type: custom
+description: A tool that runs a prompt against Google Gemini.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeidlhllgpf65xwk357wukpguuaz6hxhkyh7dwplv2xkxlrlk4b7zty
+  gemini_request.py: bafybeigae5an6ewsboran33o2x7d6itcoxwgrnoucoluhsyrzp462afida
+fingerprint_ignore_patterns: []
+entry_point: gemini_request.py
+callable: run
+dependencies:
+  google-generativeai:
+    version: ==0.5.3
+  requests: {}
