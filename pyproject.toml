@@ -74,7 +74,7 @@ replicate = "0.15.7"
 lxml = {extras = ["html-clean"], version = "^5.1.0"}
 langgraph = "==0.0.55"
 langchain-community = "==0.2.1"
-prediction-market-agent-tooling = {git = "https://github.com/gnosis/prediction-market-agent-tooling.git", rev = "gabriel/olas-deps"}
+prediction-market-agent-tooling = "^0.39.0"
 google-generativeai = "==0.6.0"
 
 [tool.poetry.group.dev.dependencies]
