@@ -21,7 +21,9 @@ def with_key_rotation(func: Callable):
                 if isinstance(result, tuple) and len(result) == 4:
                     return result + (api_keys,)
                 else:
-                    raise ValueError("Function did not return a valid MechResponse tuple.")
+                    raise ValueError(
+                        "Function did not return a valid MechResponse tuple."
+                    )
             except openai.error.RateLimitError as e:
                 # try with a new key again
                 if retries_left["openai"] <= 0 and retries_left["openrouter"] <= 0:
@@ -74,7 +76,7 @@ PREFIX = "dall-e"
 ENGINES = {
     "text-to-image": ["-2", "-3"],
 }
-ALLOWED_MODELS = [PREFIX] 
+ALLOWED_MODELS = [PREFIX]
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["text-to-image"]]
 ALLOWED_SIZE = ["1024x1024", "1024x1792", "1792x1024"]
 ALLOWED_QUALITY = ["standard", "hd"]

@@ -59,7 +59,7 @@ def with_key_rotation(func: Callable):
             """Retry the function with a new key."""
             try:
                 result = func(*args, **kwargs)
-                return result + (api_keys, )
+                return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
                 service = "anthropic"
@@ -279,7 +279,6 @@ ALLOWED_TOOLS = [
     "prediction-offline",
     "prediction-online",
     # "prediction-online-summarized-info",
-
     # LEGACY
     "claude-prediction-offline",
     "claude-prediction-online",
@@ -720,8 +719,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     engine = kwargs.get("model")
-    if "claude" in tool: # maintain backwards compatibility
-        engine = "claude-3-sonnet-20240229" 
+    if "claude" in tool:  # maintain backwards compatibility
+        engine = "claude-3-sonnet-20240229"
     print(f"ENGINE: {engine}")
     with LLMClientManager(kwargs["api_keys"], engine):
         prompt = kwargs["prompt"]

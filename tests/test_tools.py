@@ -42,7 +42,7 @@ from tests.constants import (
     NEWS_API_KEY,
     OPENROUTER_API_KEY,
     GNOSIS_RPC_URL,
-    GEMINI_API_KEY
+    GEMINI_API_KEY,
 )
 
 
@@ -177,12 +177,11 @@ class TestOmenTransactionBuilder(BaseToolTest):
         expected_num_tx_params = 2
         assert len(response[2].keys()) == expected_num_tx_params
 
+
 class TestDALLEGeneration(BaseToolTest):
     """Test DALL-E Generation."""
 
     tools = dalle_request.ALLOWED_TOOLS
     models = dalle_request.ALLOWED_MODELS
-    prompts = [
-        "Generate an image of a futuristic cityscape."
-    ]
+    prompts = ["Generate an image of a futuristic cityscape."]
     tool_module = dalle_request
