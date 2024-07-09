@@ -28,9 +28,9 @@ python = ">=3.10,<3.12"
 open-autonomy = { git = "https://github.com/kongzii/open-autonomy.git", rev = "0a879f7f5ad6d4348f8f59610da9c70a4e9a9a10" }
 openai = "^1.30.2"
 torch = [
-    { version = "^2.3.1", source = "PyPI", platform = "darwin" },
-    { version = "^2.3.1+cpu", source = "torch-cpu", platform = "linux" },
-    { version = "^2.3.1+cpu", source = "torch-cpu", platform = "win32" },
+    { version = "==2.3.1", source = "PyPI", platform = "darwin" },
+    { version = "==2.3.1+cpu", source = "torch-cpu", platform = "linux" },
+    { version = "==2.3.1+cpu", source = "torch-cpu", platform = "win32" },
 ]
 requests = "^2.28.1"
 mech-client = "^0.2.5"
