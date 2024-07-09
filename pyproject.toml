@@ -18,7 +18,6 @@ include = "packages"
 python = ">=3.10,<3.12"
 open-autonomy = { git = "https://github.com/kongzii/open-autonomy.git", rev = "0a879f7f5ad6d4348f8f59610da9c70a4e9a9a10" }
 openai = "^1.30.2"
-torch = "^2.3.1"
 requests = "^2.28.1"
 mech-client = "^0.2.5"
 py-multibase = "^1.0.3"
@@ -76,7 +75,6 @@ lxml = {extras = ["html-clean"], version = "^5.1.0"}
 # Uses kongzii's fork of OpenFactVerification, because it has market-benefitable modifications.
 openfactverification = { git = "https://github.com/kongzii/OpenFactVerification.git", rev = "5f54b916e20503b7cbef99dcb0eceb2738ae5451" }
 en_core_web_sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl" }
-sentence-transformers = "^2.1.0"
 langgraph = "^0.0.55"
 langchain-community = "^0.2.1"
 prediction-market-agent-tooling = "^0.39.0"
