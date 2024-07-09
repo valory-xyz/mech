@@ -30,3 +30,7 @@ dependencies:
     version: ==1.30.2
   chromadb:
     version: ==0.4.13
+  anthropic:
+    version: ==0.23.1
+  google-api-python-client:
+    version: ==2.95.0

@@ -15,3 +15,7 @@ dependencies:
   openai:
     version: ==1.30.2
   requests: {}
+  anthropic:
+    version: ==0.23.1
+  google-api-python-client:
+    version: ==2.95.0

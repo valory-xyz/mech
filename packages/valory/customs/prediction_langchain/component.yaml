@@ -26,3 +26,8 @@ dependencies:
     version: ==1.30.2
   anthropic:
     version: ==0.21.3
+  google-api-python-client:
+    version: ==2.95.0
+  typing_extensions:
+    version: ==3.10.0.2
+

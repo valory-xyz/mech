@@ -33,3 +33,5 @@ dependencies:
     version: '>=1.19.0'
   pydantic:
     version: '>=1.9.0,<3'
+  openai:
+    version: ==1.30.2
