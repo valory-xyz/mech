@@ -1,7 +1,7 @@
 import typer
 import json
 import pandas as pd
-from packages.kongzii.customs.ofv_market_resolver.ofv_market_resolver import (
+from packages.gnosis.customs.ofv_market_resolver.ofv_market_resolver import (
     run as ofv_run,
 )
 from packages.napthaai.customs.resolve_market_reasoning.resolve_market_reasoning import (
@@ -74,7 +74,7 @@ def full(
     Example command:
 
     ```
-    python packages/kongzii/customs/ofv_market_resolver/benchmark.py full markets.tsv {openai api key} {serper api key} {google api key} {google engine id}
+    python packages/gnosis/customs/ofv_market_resolver/benchmark.py full markets.tsv {openai api key} {serper api key} {google api key} {google engine id}
     ```
     """
     df = pd.read_csv(data_path, sep="\t")
@@ -135,7 +135,7 @@ def single(
     Example command:
 
     ```
-    python packages/kongzii/customs/ofv_market_resolver/benchmark.py single "Will McDonald's successfully buy back all its Israeli restaurants by 12 April 2024?" {openai api key} {serper api key}
+    python packages/gnosis/customs/ofv_market_resolver/benchmark.py single "Will McDonald's successfully buy back all its Israeli restaurants by 12 April 2024?" {openai api key} {serper api key}
     ```
     """
     ofv_run(
