@@ -30,4 +30,3 @@ dependencies:
     version: ==2.95.0
   typing_extensions:
     version: ==3.10.0.2
-

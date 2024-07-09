@@ -39,4 +39,3 @@ dependencies:
     version: '>=1.19.0'
   anthropic:
     version: ==0.23.1
-
