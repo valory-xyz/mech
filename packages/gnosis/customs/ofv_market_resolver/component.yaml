@@ -1,0 +1,33 @@
+name: ofv_market_resolver
+author: gnosis
+version: 0.1.0
+type: custom
+description: Market resolution tool based on OpenFactVerifier
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
+  ofv_market_resolver.py: bafybeie77xanpmjbumzcagtooo23a2xfp6xpeirg63mpzq7i6qrges3yim
+  benchmark.py: bafybeie77xanpmjbumzcagtooo23a2xfp6xpeirg63mpzq7i6qrges3yim
+fingerprint_ignore_patterns: []
+entry_point: ofv_market_resolver.py
+callable: run
+dependencies:
+  pydantic:
+    version: '>=1.9.0,<3'
+  prediction-market-agent-tooling:
+    version: ==0.39.0
+  langchain:
+    version: ==0.1.20
+  langchain-openai:
+    version: ==0.1.6
+  langchain-core:
+    version: ==0.1.52
+  langchain_community:
+    version: ==0.2.1
+  openai:
+    version: ==1.30.2
+  web3:
+    version: ==6.20.0
+  openfactverification-kongzii:
+    version: ==0.1.0
