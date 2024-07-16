@@ -6,9 +6,9 @@ description: Market resolution tool based on OpenFactVerifier
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  ofv_market_resolver.py: bafybeie77xanpmjbumzcagtooo23a2xfp6xpeirg63mpzq7i6qrges3yim
-  benchmark.py: bafybeie77xanpmjbumzcagtooo23a2xfp6xpeirg63mpzq7i6qrges3yim
+  __init__.py: bafybeicbnwycnootsc6cogw2frfmleyzympt2jseobhsndodwkfz6kja2q
+  benchmark.py: bafybeierrehhi63qt5ysscucmk2uv6d22f6gt5g5jf4ulfzzzyhdm52x7y
+  ofv_market_resolver.py: bafybeifgx3yufxpk23e7iuqaoedpwx4zhd52kvpqflvabh2o2ljasevqfy
 fingerprint_ignore_patterns: []
 entry_point: ofv_market_resolver.py
 callable: run
