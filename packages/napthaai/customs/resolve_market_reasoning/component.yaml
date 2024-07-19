@@ -37,3 +37,5 @@ dependencies:
     version: ==3.0.1
   numpy:
     version: '>=1.19.0'
+  anthropic:
+    version: ==0.21.3
