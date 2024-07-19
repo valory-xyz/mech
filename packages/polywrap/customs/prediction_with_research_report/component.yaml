@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_with_research_report.py: bafybeiaxypufjeh2ro4hzqmwqh4khvkpodkxmlsmjewajhvgked75avdhu
+  prediction_with_research_report.py: bafybeicanskrdjdfbotfbcrousqq5mdmnrcfiimpg3fwwtaeokq33d3hpe
 fingerprint_ignore_patterns: []
 entry_point: prediction_with_research_report.py
 callable: run
@@ -30,3 +30,7 @@ dependencies:
     version: ==1.30.2
   chromadb:
     version: ==0.4.13
+  anthropic:
+    version: ==0.21.3
+  google-api-python-client:
+    version: ==2.95.0

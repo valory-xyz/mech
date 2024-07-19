@@ -39,3 +39,5 @@ dependencies:
     version: '>=1.19.0'
   spacy:
     version: ==3.7.2
+  anthropic:
+    version: ==0.21.3
