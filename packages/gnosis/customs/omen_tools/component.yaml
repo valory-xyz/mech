@@ -1,0 +1,29 @@
+name: omen_tools
+author: gnosis
+version: 0.1.0
+type: custom
+description: Collection of tools to prepare requests for interacting with prediction
+  markets on Omen.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
+  omen_buy_sell.py: bafybeid3zaursxt2nkm2u7x7u4wlodg2ulzlieu5xxsfxjyxzi3vbcezdm
+fingerprint_ignore_patterns: []
+entry_point: omen_buy_sell.py
+callable: run
+dependencies:
+  pydantic:
+    version: '>=1.9.0,<3'
+  prediction-market-agent-tooling:
+    version: '^0.39.0'
+  langchain:
+    version: ==0.1.20
+  langchain-core:
+    version: ==0.1.52
+  langchain-openai:
+    version: ==0.1.6
+  langchain_community:
+    version: ==0.2.1
+  openai:
+    version: ==1.30.2

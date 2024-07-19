@@ -135,6 +135,10 @@ dependencies:
     version: ==0.0.55
   langchain-community:
     version: ==0.2.1
+  prediction-market-agent-tooling:
+    version: ^0.39.0
+  google-generativeai:
+    version: ==0.6.0
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
