@@ -43,3 +43,5 @@ dependencies:
     version: ==4.12.2
   spacy:
     version: ==3.7.2
+  anthropic:
+    version: ==0.21.3
