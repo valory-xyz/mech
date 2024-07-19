@@ -111,7 +111,7 @@ class OpenAIClientManager:
 
 
 def build_approval_for_all_tx_params(
-        buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
+    buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
     """
     # Approve the market maker to withdraw our collateral token.
@@ -135,7 +135,7 @@ def build_approval_for_all_tx_params(
 
 
 def build_approval_tx_params(
-        buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
+    buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
     """
     # Approve the market maker to withdraw our collateral token.
@@ -161,7 +161,7 @@ def build_approval_tx_params(
 
 
 def build_buy_tokens_tx_params(
-        buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
+    buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
@@ -193,7 +193,7 @@ def build_buy_tokens_tx_params(
 
 
 def build_sell_tokens_tx_params(
-        buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
+    buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
@@ -243,7 +243,7 @@ def fetch_params_from_prompt(prompt: str):
 
 
 def build_buy_tx(
-        prompt: str, rpc_url: str
+    prompt: str, rpc_url: str
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Builds buy transaction request."""
 
@@ -266,7 +266,7 @@ def build_buy_tx(
 
 
 def build_return_from_tx_params(
-        tx_params: list[TxParams], prompt: str
+    tx_params: list[TxParams], prompt: str
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     # We return the transactions_dict below in order to be able to return multiple transactions for later execution instead of just one.
     transaction_dict = {}
@@ -281,7 +281,7 @@ def get_web3(gnosis_rpc_url: str) -> Web3:
 
 
 def build_sell_tx(
-        prompt: str, rpc_url: str
+    prompt: str, rpc_url: str
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Builds sell transaction request."""
 

@@ -59,6 +59,7 @@ ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
+
 def with_key_rotation(func: Callable):
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
@@ -71,7 +72,7 @@ def with_key_rotation(func: Callable):
             """Retry the function with a new key."""
             try:
                 result = func(*args, **kwargs)
-                return result + (api_keys, )
+                return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
                 service = "anthropic"

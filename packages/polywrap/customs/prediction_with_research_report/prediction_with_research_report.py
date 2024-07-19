@@ -182,7 +182,7 @@ def with_key_rotation(func: Callable):
             """Retry the function with a new key."""
             try:
                 result = func(*args, **kwargs)
-                return result + (api_keys, )
+                return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
                 service = "anthropic"
@@ -217,8 +217,6 @@ def with_key_rotation(func: Callable):
         return mech_response
 
     return wrapper
-
-
 
 
 class CustomOpenAIEmbeddingFunction(embedding_functions.OpenAIEmbeddingFunction):
