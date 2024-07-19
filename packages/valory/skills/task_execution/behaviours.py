@@ -414,7 +414,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_data["callable_method"] = callable_method
         task_data["api_keys"] = self._keychain
         task_data["counter_callback"] = TokenCounterCallback()
-        task_data["model"] = task_data.get("model", tool_params.get("default_model", None))
+        task_data["model"] = task_data.get(
+            "model", tool_params.get("default_model", None)
+        )
         future = self._submit_task(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
@@ -424,7 +426,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         executing_task["params"] = tool_params
         self._async_result = cast(Optional[Future], future)
-
 
     def _build_ipfs_message(
         self,
