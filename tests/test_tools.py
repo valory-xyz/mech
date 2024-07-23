@@ -33,7 +33,10 @@ from packages.valory.customs.prediction_request import prediction_request
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 
-from packages.subquery.customs.graphql_response_analyser import graphql_response_analyser
+from packages.subquery.customs.graphql_response_analyser import (
+    graphql_response_analyser
+)
+from tests.subquery.examples import query_examples
 
 from tests.constants import (
     OPENAI_SECRET_KEY,
@@ -190,34 +193,22 @@ class TestDALLEGeneration(BaseToolTest):
     ]
     tool_module = dalle_request
 
-test_query = """
-{
-  transfers {
-    aggregates {
-      keys
-      sum {
-        value
-      }
-    }
-  }
-}
-"""
 
-class TestGraphResponseAnalyser():
+class TestGraphResponseAnalyser:
     """Check successful query output analysis"""
-    
+
     tool_callable: str = "run"
     tool_module = graphql_response_analyser
 
     def test_run(self) -> None:
         """Test run method."""
         kwargs = dict(
-            tool = "openai-gpt-3.5-turbo",
+            tool="openai-gpt-3.5-turbo",
             request="When was the first transfer?",
-            query = test_query,
-            endpoint="https://api.subquery.network/sq/subquery/cusdnew__c3Vic",
-            description="This project manages and indexes data pertaining to cUSD (CELO USD) ERC-20 token transfers and approvals recorded within a dedicated smart contract. The stored data includes information on approvals granted and transfers executed. These entities provide insights into the authorization and movement of USDT tokens within the CELO ecosystem, facilitating analysis and monitoring of token transactions.",
-            api_keys={"openai": OPENAI_SECRET_KEY}
+            examples=query_examples,
+            endpoint="https://api.subquery.network/sq/subquery/cusdnew",
+            description="This project manages and indexes data pertaining to cUSD (CELO USD) ERC-20 token transfers and approvals recorded within a dedicated smart contract. The stored data includes information on approvals granted and transfers executed. These entities provide insights into the authorization and movement of cUSD tokens within the CELO ecosystem, facilitating analysis and monitoring of token transactions.",
+            api_keys={"openai": OPENAI_SECRET_KEY},
         )
         func = getattr(self.tool_module, self.tool_callable)
         response = func(**kwargs)

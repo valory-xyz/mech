@@ -2,7 +2,7 @@ name: graphql_response_analyser
 author: subquery
 version: 0.1.0
 type: custom
-description: This module explains the output of the GraphQL server within a given context, including a description of the indexed data being served and the query itself.
+description: This module explains the output of the GraphQL chain data indexer within a given context, including a description of the indexed data being served and the query itself.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 entry_point: graphql_response_analyser.py

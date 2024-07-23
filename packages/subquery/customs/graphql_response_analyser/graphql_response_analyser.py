@@ -17,9 +17,10 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module accepts a GraphQL endpoint, executes queries based on a given description, and explains the response in natural language"""
+"""Contains the job definitions"""
 
 from typing import Any, Dict, Optional, Tuple
+import os
 from openai import OpenAI
 import json
 import requests
@@ -27,26 +28,38 @@ import requests
 client: Optional[OpenAI] = None
 
 
+def generate_graphql_query(user_request, schema, description, examples):
+    return (
+        f"""
+    You are a GraphQL query generator. Based on the following GraphQL schema and the user's natural language request, generate a valid GraphQL query.
+
+    GraphQL Project Description: "{description}"
+
+    User Request: "{user_request}"
+
+    GraphQL Schema: {json.dumps(schema)}
+
+    Example Queries:
+
+    """
+        + examples
+        + """
+
+    GraphQL Query:
+
+"""
+    )
+
+
 # Analyze data and generate response using OpenAI
-def analyse_data_and_generate_response(description, query, data):
+def analyze_data_and_generate_response(data):
     return f"""
     
-    You're a GraphQL query response analyzer. You will be provided with context about the data served by the endpoint, as well as the executed query, to give you a better understanding.
+    Once the query you have given was executed, the following data was fetched:
 
-    Description: 
-    
-    {json.dumps(description)}
-    
-    Query: 
-    
-    {json.dumps(query)}
-
-    Reponse:
-
-    {json.dumps(data)}
+    JSON Data: {json.dumps(data)}
 
     Based on the provided context, please generate a bullet-pointed summary in a machine-readable JSON format. The JSON structure should have an array object named 'analysis_result,' with each analytical conclusion represented as a separate string element within the array.
-
     """
 
 
@@ -81,6 +94,33 @@ ENGINES = {
 ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in values]
 
 
+# Fetch the GraphQL schema using introspection query
+def fetch_graphql_schema(endpoint):
+    introspection_query = """
+    {
+      __schema {
+        types {
+          name
+          fields {
+            name
+            type {
+              kind
+              name
+            }
+          }
+        }
+      }
+    }
+    """
+    response = requests.post(endpoint, json={"query": introspection_query})
+    if response.status_code == 200:
+        return response.json()
+    else:
+        raise Exception(
+            f"Failed to fetch schema: {response.status_code}, {response.text}"
+        )
+
+
 def fetch_data_from_indexer(endpoint, query):
     response = requests.post(endpoint, json={"query": query})
     if response.status_code == 200:
@@ -98,16 +138,40 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
         endpoint = kwargs.get("endpoint")
         description = kwargs.get("description")
+        request = kwargs.get("request")
+        examples = kwargs.get("examples")
         tool = kwargs["tool"]
-        query = kwargs["query"]
-        requested_data = fetch_data_from_indexer(endpoint, query)
+        schema = fetch_graphql_schema(endpoint)
+        prompt = generate_graphql_query(request, schema, description, examples)
+        if tool not in ALLOWED_TOOLS:
+            return (
+                f"Tool {tool} is not in the list of supported tools.",
+                None,
+                None,
+                None,
+            )
         engine = tool.replace(PREFIX, "")
         messages = [
+            {"role": "user", "content": prompt},
+        ]
+        response = client.chat.completions.create(
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            n=1,
+            timeout=120,
+            stop=None,
+        )
+        query_to_be_used = response.choices[0].message.content
+        print(query_to_be_used)
+        requested_data = fetch_data_from_indexer(endpoint, query_to_be_used)
+        messages = [
+            {"role": "user", "content": prompt},
+            {"role": "user", "content": query_to_be_used},
             {
                 "role": "user",
-                "content": analyse_data_and_generate_response(
-                    description, query, requested_data
-                ),
+                "content": analyze_data_and_generate_response(requested_data),
             },
         ]
         response = client.chat.completions.create(
@@ -119,4 +183,4 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
             timeout=120,
             stop=None,
         )
-        return response.choices[0].message.content, None, None, None
+        return response.choices[0].message.content, prompt, None, None
