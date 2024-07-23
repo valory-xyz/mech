@@ -28,3 +28,5 @@ dependencies:
     version: ==0.11.6
   openai:
     version: ==1.11.0
+  anthropic:
+    version: ==0.21.3

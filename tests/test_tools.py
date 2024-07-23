@@ -20,6 +20,7 @@
 from typing import List, Any
 
 from packages.gnosis.customs.omen_tools import omen_buy_sell
+from packages.victorpolisetty.customs.dalle_request import dalle_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
 from packages.napthaai.customs.prediction_request_rag_cohere import (
     prediction_request_rag_cohere,
@@ -178,6 +179,16 @@ class TestOmenTransactionBuilder(BaseToolTest):
         super()._validate_response(response)
         expected_num_tx_params = 2
         assert len(response[2].keys()) == expected_num_tx_params
+
+class TestDALLEGeneration(BaseToolTest):
+    """Test DALL-E Generation."""
+
+    tools = dalle_request.ALLOWED_TOOLS
+    models = dalle_request.ALLOWED_MODELS
+    prompts = [
+        "Generate an image of a futuristic cityscape."
+    ]
+    tool_module = dalle_request
 
 test_query = """
 {
