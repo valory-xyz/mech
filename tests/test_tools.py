@@ -20,6 +20,7 @@
 from typing import List, Any
 
 from packages.gnosis.customs.omen_tools import omen_buy_sell
+from packages.victorpolisetty.customs.dalle_request import dalle_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
 from packages.napthaai.customs.prediction_request_rag_cohere import (
     prediction_request_rag_cohere,
@@ -208,3 +209,13 @@ class TestInferMarketRules(BaseToolTest):
         'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by 12 March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
     tool_module = infer_market_rules
+
+class TestDALLEGeneration(BaseToolTest):
+    """Test DALL-E Generation."""
+
+    tools = dalle_request.ALLOWED_TOOLS
+    models = dalle_request.ALLOWED_MODELS
+    prompts = [
+        "Generate an image of a futuristic cityscape."
+    ]
+    tool_module = dalle_request
