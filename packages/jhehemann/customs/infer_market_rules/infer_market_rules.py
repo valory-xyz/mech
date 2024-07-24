@@ -110,7 +110,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - No arrest is made in connection with the alleged arson at Senator Bernie Sanders' Vermont office by 7 May 2026.
     - The arrest related to the arson case occurs after 7 May 2026.
-  
+
 Question: "Will FIFA fund the construction of new football stadiums for local clubs in England by 31 December 2024?"
 Answer:
 The outcome will be 'Yes' if:
@@ -119,7 +119,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - FIFA does not fund nor begin disbursing funds for the construction of new football stadiums for local clubs in England on or before 31 December 2024.
     - FIFA allocates funds after 31 December 2024.
-   
+
 Question: "Will a new climate bill be passed by both the Senate and the House on or by 22 October 2024?"
 Answer:
 The outcome will be 'Yes' if:
@@ -129,7 +129,7 @@ The outcome will be 'No' if:
     - A new climate bill does not exist, or one of the two chambers does not pass it on or before 22 October 2024.
     - The Senate and the House pass the bill after 22 October 2024.
     - Congress does not convene a session to vote on the bill on or before 22 October 2024.
-   
+
 Question: "Will Microsoft announce a significant AI-related takeover by 16 April 2024?"
 Answer:
 The outcome will be 'Yes' if:
@@ -156,7 +156,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - Google does not destroy all browsing data collected in Incognito mode on or before 2 October 2022.
     - Google completes the destruction of the data after 2 October 2022.
-    
+
 Question: "Will President Joe Biden make another visit to Baltimore over the Francis Scott Key Bridge collapse by 16 June 2024?
 Answer:
 The outcome will be 'Yes' if:
@@ -174,7 +174,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - Gilberto Ramirez does not successfully defend his title on or before 19 February 2021.
     - The defense match occurs after 19 February 2021.
-    
+
 Question: "Will Disney Plus implement its password-sharing crackdown by August 25, 2024?"
 Answer:
 The outcome will be 'Yes' if:
@@ -183,7 +183,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - Disney Plus does not implement its password-sharing crackdown policy on or before 25 August 2024.
     - Disney Plus implements a password-sharing crackdown policy after 25 August 2024.
-        
+
 Question: "{market_question}"
 Answer:
 """
@@ -336,7 +336,7 @@ Answer:
 Status: The question implies that Samsung is considering replacing its voice assistant, Bixby, with a new voice assistant. The question focuses on the timing of Samsung's potential replacement of Bixby.
 Definitions:
     - 'replace': The discontinuation of Bixby as the primary voice assistant and the implementation of a new voice assistant.
-    
+
 Question: "Will Beyoncé release a full album for her 'country era' ?"
 Answer:
 Status: The question implies that Beyoncé is potentially exploring country music as a new musical direction referred to as her 'country era'. It focuses on the timing of the releas of a Beyoncé's full album within this thematic context.
@@ -357,14 +357,14 @@ Status: The question implies that Gilberto Ramirez is the current titleholder of
 Definitions:
     - 'successfully defend': Ramirez must be the reigning titleholder and emerge victorious in a defense match against a contender to retain his title.
     - 'WBA (Super) cruiserweight title': A specific boxing title in the cruiserweight division.
-    
+
 Question: "Will Saudi Arabia successfully host the WTA Finals ?"
 Answer:
 Status: The question implies that Saudi Arabia is in consideration to host the WTA Finals, a prestigious women's tennis event. The focus is on the timing of Saudi Arabia's successfully hosting the WTA Finals.
 Definitions:
     - 'successfully host': Saudi Arabia carries out the event to its conclusion without significant disruptions.
     - 'WTA Finals': Season-ending tennis championship for the top eight WTA singles and doubles teams.
-    
+
 Question: "Will Xiaomi's SU7 electric vehicle still have a waiting list in China ?"
 Answer:
 Status: The question implies that Xiaomi has introduced an electric vehicle model named SU7 in China, with a current waiting list of potential buyers. The question focuses on the timing for the continuation of this waiting list.
@@ -387,14 +387,14 @@ Definitions:
     - 'launch': The public release and availability of the vehicle for purchase or use.
     - 'electric vehicle': A vehicle powered by an electric motor.
     - 'Model S': The specific model name of an electric vehicle.
-   
+
 Question: "Will FIFA fund the construction of new football stadiums for local clubs in England ?"
 Answer:
 Status: The question implies that local football clubs in England are in need of new stadiums. It further implies that FIFA, the international governing body of football, may consider funding the construction of these new stadiums. The question focusses on the timing of FIFA's potential funding for these specific projects.
 Definitions:
     - 'fund': Actively disbursing financial resources.
     - 'new football stadiums for local clubs': Stadiums that are newly constructed for football clubs that are not part of the professional league system.
-    
+
 Question: "Will Prince William and Prince Harry appear separately at the event honoring Princess Diana ?"
 Answer:
 Status: Status: The question implies that there is an upcoming event honoring Princess Diana where both Prince William and Prince Harry are expected to attend. The question focuses on the event's timing and the manner in which the princes will appear at the event honoring Princess Diana.
@@ -408,7 +408,7 @@ Status: The question implies that Disney Plus is considering implementing a poli
 Definitions:
     - 'implement': The policy is put into effect and actively enforced by Disney Plus.
     - 'password-sharing crackdown': The enforcement of measures to restrict or prevent the sharing of login credentials among multiple users.
-    
+
 Question: "Will Google destroy all browsing data collected in Incognito mode ?"
 Answer:
 Status: The question implies that Google has collected browsing data in Incognito mode and is expected to destroy this data. The question focuses on the timing for the Incognito data destruction.
@@ -438,7 +438,7 @@ def extract_question(text:str) -> str:
     match = re.search(r'["“](.*?\?)["”]', text)
     if match:
         return match.group(1).strip()
-    
+
     # Return prompt if ending with a question mark
     return text if text.strip().endswith('?') else ""
 
@@ -452,7 +452,7 @@ def get_prompt_template_by_timing(query: str) -> str:
     """Get the prompt template based on the timing of the event in the query."""
     date_pattern_on = r"\b(?:on )(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
     date_pattern_by = r"\b(?:on or before |before |by |)(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
-    
+
     if re.search(date_pattern_on, query):
         match = re.search(date_pattern_on, query)
         return INFER_RULES_PROMPT_ON
@@ -489,14 +489,14 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         if not market_question:
             return "Market question not found in prompt", None, None, None
         print(f"MARKET QUESTION:\n{market_question}\n")
-        
+
         # Remove double quotes from the input query to avoid issues
         market_question = market_question.replace('"', "'")
-        
+
         # Get the prompt template based on the timing of the event in the query
         infer_rules_template = get_prompt_template_by_timing(market_question)
         infer_rules_prompt = infer_rules_template.format(market_question=market_question)
-        
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": infer_rules_prompt},
@@ -517,12 +517,12 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         # Extract the market rules from the response message
         market_rules = extract_answer(response_message)
-        
+
         ## Infer the market status
         # Remove the date from the query to avoid bias
         market_question_no_date = remove_date_from_query(market_question)
         infer_status_prompt = INFER_STATUS_PROMPT.format(market_question=market_question_no_date)
-        
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": infer_status_prompt},
@@ -543,5 +543,5 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         # Extract the market status from the response message
         market_status = extract_answer(response_message)
-        
+
         return market_status + "\n\nRules:\n" + market_rules, infer_status_prompt + "\n////\n" + infer_rules_prompt, None, counter_callback

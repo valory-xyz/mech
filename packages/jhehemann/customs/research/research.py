@@ -374,9 +374,9 @@ class WebPage:
             except Exception as e:
                 print(f"Error extracting publisher for webpage {self.url}")
                 continue
-        
+
         publisher = soup.find("meta", attrs={"name": "publisher"}) or soup.find("meta", attrs={"property": "publisher"})
-        
+
         if publisher and publisher.get("content"):
             return publisher["content"].strip()
         else:
@@ -426,7 +426,7 @@ class WebPage:
                     raise ValueError(f"Invalid attribute: {attribute_name}")
         else:
             print(f"No HTML content to extract page attributes from.\nURL: {self.url}\n")
-        
+
         return self
 
 
@@ -440,9 +440,9 @@ class WebPage:
         page_info += f"Description: {self.description or 'n/a'}\n"
         page_info += f"Published: {self.publication_date or 'Unknown'}\n"
         page_info += f"Publisher: {self.publisher or 'Unknown'}"
-        
+
         return page_info
-    
+
 
     def _find_publisher(self, data):
         def extract_names(item, key):
@@ -479,14 +479,14 @@ class TextChunk(BaseModel):
     embedding: Optional[List[float]] = None
     similarity: Optional[float] = None
 
-    
+
 def trim_json_formatting(output_string):
     # Regular expression pattern that matches the start and end markers with optional newline characters
     pattern = r'^\s*```\s*json\s*({.*?})\s*```\s*$'
-    
+
     # Use re.DOTALL to make '.' match newlines as well
     match = re.match(pattern, output_string, re.DOTALL)
-    
+
     if match:
         # Extract the JSON part from the matched pattern
         print("JSON formatting characters found and removed")
@@ -533,14 +533,14 @@ def format_date(date_string) -> str:
     except (ValueError, TypeError):
         # If there's an error during parsing, return the original string
         return date_string
-    
+
 
 def extract_question(text:str) -> str:
     # Look for a quoted question
     match = re.search(r'["“](.*?\?)["”]', text)
     if match:
         return match.group(1).strip()
-    
+
     # Return prompt if ending with a question mark
     return text if text.strip().endswith('?') else ""
 
@@ -552,7 +552,7 @@ def parse_date_str(date_str: str) -> datetime:
         return datetime.strptime(date_str, datetime_format)
     except (ValueError, TypeError):
         return datetime.min
-    
+
 def remove_date_from_query(query: str) -> str:
     # Define a regex pattern to match dates
     date_pattern = r"\b(?:on or by |on or before |before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2}),?) \d{4}\b"
@@ -579,7 +579,7 @@ def get_first_dict_from_list(data):
         return data[0]
     else:
         return data  # or raise an appropriate exception
-    
+
 
 def format_additional_information(web_pages: List[WebPage]) -> str:
     """Format the additional information from the web pages"""
@@ -625,10 +625,10 @@ def process_in_batches(
         # Loop through the URLs in batches
         for i in range(0, len(web_pages), batch_size):
             batch = web_pages[i:i + batch_size]
-            
+
             # Submit HEAD requests for all URLs in the batch
             head_futures = {executor.submit(session.head, web_page.url, headers=headers, timeout=timeout, allow_redirects=True): web_page for web_page in batch}
-            
+
             # Process HEAD requests as they complete
             get_futures = []
             for future in as_completed(head_futures):
@@ -676,18 +676,17 @@ def sort_text_chunks(
         .data[0]
         .embedding
     )
-
     index = faiss.IndexFlatIP(EMBEDDING_SIZE)
     index.add(np.array([text_chunk.embedding for text_chunk in text_chunks_embedded]))
     D, I = index.search(np.array([query_embedding]), len(text_chunks_embedded))
     for i, sim in enumerate(D[0]):
         text_chunks_embedded[I[0][i]].similarity = sim
-        
+
     return [text_chunks_embedded[i] for i in I[0]]
 
 
 def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.Encoding) -> List[TextChunk]:
-    """Get embeddings for the text chunks."""  
+    """Get embeddings for the text chunks."""
     # Batch the text chunks that the sum of tokens is less than MAX_EMBEDDING_TOKEN_INPUT
     batches = []
     current_batch = []
@@ -765,9 +764,9 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
 
                     web_page.scraped_text = scraped_text[:max_num_char]
                     web_page.scraped_text = scraped_text[:max_num_char]
-                
+
                 web_page.scraped_text = scraped_text[:max_num_char]
-                
+
                 filtered_web_pages.append(web_page)
 
             else:
@@ -782,7 +781,7 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
 
 def extract_html_texts(
     web_pages: List[WebPage],
-) -> List[WebPage]:    
+) -> List[WebPage]:
     # Initialize empty list for storing extracted sentences along with their similarity scores, release dates and urls
     parsed_web_pages = []
 
@@ -805,10 +804,10 @@ def extract_html_texts(
                     print(f"Request for {web_page.url} returned status code {result.status_code}.")
                 elif 'text/html' not in result.headers.get('Content-Type', ''):
                     print(f"Content-Type for {web_page.url} is not 'text/html'.")
-    
+
             except requests.exceptions.Timeout:
                 print(f"Request for {web_page.url} timed out.")
-            
+
             except Exception as e:
                 print(f"An error occurred in extract_html_texts: {e}")
 
@@ -869,7 +868,7 @@ def fetch_queries(
                 {"role": "assistant", "content": market_rules},
                 {"role": "user", "content": research_plan_prompt},
             ]
-            
+
             # Fetch queries from the OpenAI engine
             response = client.chat.completions.create(
                 model=engine,
@@ -884,14 +883,14 @@ def fetch_queries(
                     token_counter=count_tokens,
                 )
             search_plan = response.choices[0].message.content
-            
+
             messages = [
                 {"role": "system", "content": "You are a professional researcher."},
                 {"role": "user", "content": research_plan_prompt},
                 {"role": "assistant", "content": search_plan},
                 {"role": "user", "content": QUERY_RERANKING_PROMPT_TEMPLATE},
             ]
-            
+
             # Fetch reranked and selected queries from the OpenAI engine
             response = client.chat.completions.create(
                 model=engine,
@@ -937,7 +936,7 @@ def summarize_relevant_chunks(
         else:
             web_page.relevant_chunks_summary = "Error"
             return
-        
+
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
 
         # Transform the market question to a "When" question
@@ -990,7 +989,7 @@ def summarize_over_summarized_chunks(
     engine="gpt-3.5-turbo",
     temperature=0.0,
 ) -> List[WebPage]:
-    
+
     # Add WebPage ID after each line in relevant_chunks_summary
     # Initialize an empty list to hold all modified lines
     all_lines_with_id = []
@@ -1001,8 +1000,8 @@ def summarize_over_summarized_chunks(
             lines = web_page.relevant_chunks_summary.split('\n')
             for i, line in enumerate(lines):
                 if line.startswith("*"):
-                    lines[i] = "-" + line[1:]                  
-            
+                    lines[i] = "-" + line[1:]
+
             # Append the web page ID to each line and add it to the list
             all_lines_with_id.extend([line + f" ({web_page.id})\n" for line in lines if line.strip() != ''])
 
@@ -1029,7 +1028,7 @@ def summarize_over_summarized_chunks(
             token_counter=count_tokens,
         )
     output = response.choices[0].message.content
-    
+
     # Split the combined string into individual lines
     lines = output.strip().split('\n')
 
@@ -1040,7 +1039,7 @@ def summarize_over_summarized_chunks(
     modified_ids = set()
 
     # Process each line to extract the web_page.id and content, then update the relevant web page
-    for line in lines:      
+    for line in lines:
         match = re.match(r"^(.*) \((\d+)\)\.?$", line)
         if match:
             content, web_page_id = match.groups()
@@ -1085,10 +1084,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         if not market_question:
             return "Market question not found in prompt", None, None, None
         print(f"MARKET QUESTION:\n{market_question}\n")
-    
+
         # Generate a list of sub-queries
         queries, counter_callback = fetch_queries(market_question, engine, market_rules, counter_callback)
-        
+
         # Get URLs from sub-queries
         urls = get_urls_from_queries(
             queries,
@@ -1098,16 +1097,16 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         )
         web_pages = [WebPage(url) for url in urls]
         web_pages = extract_html_texts(web_pages)
-        
+
         # Scrape text from web pages not older than <week_interval> weeks
         week_interval = WEEKS_TO_SCRAPE_NEWS
         web_pages = scrape_web_pages(web_pages, week_interval)
 
         # Get text chunks from web pages
         text_chunks = get_chunks(web_pages)
-        
-        # Get embeddings for text chunks, sort and cap the number of text chunks 
-        enc = tiktoken.get_encoding("cl100k_base") 
+
+        # Get embeddings for text chunks, sort and cap the number of text chunks
+        enc = tiktoken.get_encoding("cl100k_base")
         text_chunks_embedded = get_embeddings(client, text_chunks, enc) if text_chunks else []
         text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
         text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
@@ -1120,7 +1119,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             if text_chunk.url in web_pages_dict:
                 web_pages_dict[text_chunk.url].chunks_sorted.append(text_chunk.text)
 
-        # Summarize the relevant chunks from each web page 
+        # Summarize the relevant chunks from each web page
         web_pages = list(web_pages_dict.values())
         web_pages, counter_callback = summarize_relevant_chunks(web_pages, market_question, enc, counter_callback, engine)
         web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
@@ -1144,7 +1143,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             additional_information += (
                 f"Disclaimer: This search output was retrieved on {datetime.now().strftime('%B %d, %Y')} and does not claim to be exhaustive or definitive."
             )
-        
+
         prompts = RESEARCH_PLAN_PROMPT_TEMPLATE + "\n\n////\n\n" + QUERY_RERANKING_PROMPT_TEMPLATE + "\n\n////\n\n" + SUMMARIZE_PROMPT + "\n\n////\n\n" + FINAL_SUMMARY_PROMPT
 
         return additional_information, prompts, None, counter_callback

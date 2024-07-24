@@ -293,7 +293,7 @@ task question: "Will Apple release iphone 15 by 1 October 2023?"
 ---
 task question: "Will the newly elected ceremonial president of Singapore face any political scandals by 13 September 2023?"
 [
-        { 
+        {
             "sme":  "Political Commentator",
             "sme_introduction": "You are an experienced political commentator in Asia. Your main objective is to produce comprehensive, insightful and impartial analysis based on the relevant political news and your politic expertise to form an answer to the question releted to a political event or politician."
         }
@@ -480,7 +480,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - No arrest is made in connection with the alleged arson at Senator Bernie Sanders' Vermont office by 7 May 2026.
     - The arrest related to the arson case occurs after 7 May 2026.
-  
+
 Question: "Will FIFA fund the construction of new football stadiums for local clubs in England by 31 December 2024?"
 Answer:
 The outcome will be 'Yes' if:
@@ -489,7 +489,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - FIFA does not fund nor begin disbursing funds for the construction of new football stadiums for local clubs in England on or before 31 December 2024.
     - FIFA allocates funds after 31 December 2024.
-   
+
 Question: "Will a new climate bill be passed by both the Senate and the House on or by 22 October 2024?"
 Answer:
 The outcome will be 'Yes' if:
@@ -499,7 +499,7 @@ The outcome will be 'No' if:
     - A new climate bill does not exist, or one of the two chambers does not pass it on or before 22 October 2024.
     - The Senate and the House pass the bill after 22 October 2024.
     - Congress does not convene a session to vote on the bill on or before 22 October 2024.
-   
+
 Question: "Will Microsoft announce a significant AI-related takeover by 16 April 2024?"
 Answer:
 The outcome will be 'Yes' if:
@@ -526,7 +526,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - Google does not destroy all browsing data collected in Incognito mode on or before 2 October 2022.
     - Google completes the destruction of the data after 2 October 2022.
-    
+
 Question: "Will President Joe Biden make another visit to Baltimore over the Francis Scott Key Bridge collapse by 16 June 2024?
 Answer:
 The outcome will be 'Yes' if:
@@ -544,7 +544,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - Gilberto Ramirez does not successfully defend his title on or before 19 February 2021.
     - The defense match occurs after 19 February 2021.
-    
+
 Question: "Will Disney Plus implement its password-sharing crackdown by August 25, 2024?"
 Answer:
 The outcome will be 'Yes' if:
@@ -553,7 +553,7 @@ The outcome will be 'Yes' if:
 The outcome will be 'No' if:
     - Disney Plus does not implement its password-sharing crackdown policy on or before 25 August 2024.
     - Disney Plus implements a password-sharing crackdown policy after 25 August 2024.
-        
+
 Question: "{market_question}"
 Answer:
 """
@@ -706,7 +706,7 @@ Answer:
 Status: The question implies that Samsung is considering replacing its voice assistant, Bixby, with a new voice assistant. The question focuses on the timing of Samsung's potential replacement of Bixby.
 Definitions:
     - 'replace': The discontinuation of Bixby as the primary voice assistant and the implementation of a new voice assistant.
-    
+
 Question: "Will Beyoncé release a full album for her 'country era' ?"
 Answer:
 Status: The question implies that Beyoncé is potentially exploring country music as a new musical direction referred to as her 'country era'. It focuses on the timing of the releas of a Beyoncé's full album within this thematic context.
@@ -727,14 +727,14 @@ Status: The question implies that Gilberto Ramirez is the current titleholder of
 Definitions:
     - 'successfully defend': Ramirez must be the reigning titleholder and emerge victorious in a defense match against a contender to retain his title.
     - 'WBA (Super) cruiserweight title': A specific boxing title in the cruiserweight division.
-    
+
 Question: "Will Saudi Arabia successfully host the WTA Finals ?"
 Answer:
 Status: The question implies that Saudi Arabia is in consideration to host the WTA Finals, a prestigious women's tennis event. The focus is on the timing of Saudi Arabia's successfully hosting the WTA Finals.
 Definitions:
     - 'successfully host': Saudi Arabia carries out the event to its conclusion without significant disruptions.
     - 'WTA Finals': Season-ending tennis championship for the top eight WTA singles and doubles teams.
-    
+
 Question: "Will Xiaomi's SU7 electric vehicle still have a waiting list in China ?"
 Answer:
 Status: The question implies that Xiaomi has introduced an electric vehicle model named SU7 in China, with a current waiting list of potential buyers. The question focuses on the timing for the continuation of this waiting list.
@@ -757,14 +757,14 @@ Definitions:
     - 'launch': The public release and availability of the vehicle for purchase or use.
     - 'electric vehicle': A vehicle powered by an electric motor.
     - 'Model S': The specific model name of an electric vehicle.
-   
+
 Question: "Will FIFA fund the construction of new football stadiums for local clubs in England ?"
 Answer:
 Status: The question implies that local football clubs in England are in need of new stadiums. It further implies that FIFA, the international governing body of football, may consider funding the construction of these new stadiums. The question focusses on the timing of FIFA's potential funding for these specific projects.
 Definitions:
     - 'fund': Actively disbursing financial resources.
     - 'new football stadiums for local clubs': Stadiums that are newly constructed for football clubs that are not part of the professional league system.
-    
+
 Question: "Will Prince William and Prince Harry appear separately at the event honoring Princess Diana ?"
 Answer:
 Status: Status: The question implies that there is an upcoming event honoring Princess Diana where both Prince William and Prince Harry are expected to attend. The question focuses on the event's timing and the manner in which the princes will appear at the event honoring Princess Diana.
@@ -778,7 +778,7 @@ Status: The question implies that Disney Plus is considering implementing a poli
 Definitions:
     - 'implement': The policy is put into effect and actively enforced by Disney Plus.
     - 'password-sharing crackdown': The enforcement of measures to restrict or prevent the sharing of login credentials among multiple users.
-    
+
 Question: "Will Google destroy all browsing data collected in Incognito mode ?"
 Answer:
 Status: The question implies that Google has collected browsing data in Incognito mode and is expected to destroy this data. The question focuses on the timing for the Incognito data destruction.
@@ -861,9 +861,9 @@ class WebPage:
             except Exception as e:
                 print(f"Error extracting publisher for webpage {self.url}")
                 continue
-        
+
         publisher = soup.find("meta", attrs={"name": "publisher"}) or soup.find("meta", attrs={"property": "publisher"})
-        
+
         if publisher and publisher.get("content"):
             return publisher["content"].strip()
         else:
@@ -911,7 +911,7 @@ class WebPage:
                     raise ValueError(f"Invalid attribute: {attribute_name}")
         else:
             print(f"No HTML content to extract page attributes from.\nURL: {self.url}\n")
-        
+
         return self
 
     def to_prompt(self):
@@ -924,9 +924,9 @@ class WebPage:
         page_info += f"Description: {self.description or 'n/a'}\n"
         page_info += f"Published: {self.publication_date or 'Unknown'}\n"
         page_info += f"Publisher: {self.publisher or 'Unknown'}"
-        
+
         return page_info
-    
+
     def _find_publisher(self, data):
         def extract_names(item, key):
             """Helper function to extract names from a field that could be a list or a single object."""
@@ -1010,7 +1010,7 @@ def format_date(date_string) -> str:
     except (ValueError, TypeError):
         # If there's an error during parsing, return the original string
         return date_string
-    
+
 def parse_date_str(date_str: str) -> datetime:
     # Desired format "February 16, 2024, 3:30 PM"
     datetime_format = "%B %d, %Y"
@@ -1018,7 +1018,7 @@ def parse_date_str(date_str: str) -> datetime:
         return datetime.strptime(date_str, datetime_format)
     except (ValueError, TypeError):
         return datetime.min
-    
+
 def remove_date_from_query(query: str) -> str:
     """Remove time-related information from query"""
     date_pattern = r"\b(?:on or by |on or before |before |by |on )?(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
@@ -1064,16 +1064,16 @@ def remove_unwanted_fields(json_str) -> str:
     """Remove all fields from a JSON string except 'p_yes', 'p_no', 'confidence', and 'info_utility'."""
     # Load the JSON string into a Python dictionary
     data = json.loads(json_str)
-    
+
     # Define the keys that you want to keep
     keys_to_keep = {'p_yes', 'p_no', 'confidence', 'info_utility'}
-    
+
     # Use dictionary comprehension to keep only the desired keys
     filtered_data = {k: v for k, v in data.items() if k in keys_to_keep}
-    
+
     # Convert the filtered dictionary back into a JSON string
     modified_json_str = json.dumps(filtered_data, indent=4)
-    
+
     return modified_json_str
 
 def extract_question(text:str) -> str:
@@ -1081,7 +1081,7 @@ def extract_question(text:str) -> str:
     match = re.search(r'["“](.*?\?)["”]', text)
     if match:
         return match.group(1).strip()
-    
+
     # Return prompt if ending with a question mark
     return text if text.strip().endswith('?') else ""
 
@@ -1089,7 +1089,7 @@ def get_prompt_template_by_timing(query: str) -> str:
     """Get the prompt template based on the timing of the event in the query."""
     date_pattern_on = r"\b(?:on )(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
     date_pattern_by = r"\b(?:on or before |before |by |)(?:(\d{1,2})(st|nd|rd|th)? (January|February|March|April|May|June|July|August|September|October|November|December)|(January|February|March|April|May|June|July|August|September|October|November|December) (\d{1,2})(st|nd|rd|th)?,?) \d{4}\b"
-    
+
     if re.search(date_pattern_on, query):
         match = re.search(date_pattern_on, query)
         return INFER_RULES_PROMPT_ON
@@ -1165,10 +1165,10 @@ def process_in_batches(
         # Loop through the URLs in batches
         for i in range(0, len(web_pages), batch_size):
             batch = web_pages[i:i + batch_size]
-            
+
             # Submit HEAD requests for all URLs in the batch
             head_futures = {executor.submit(session.head, web_page.url, headers=headers, timeout=timeout, allow_redirects=True): web_page for web_page in batch}
-            
+
             # Process HEAD requests as they complete
             get_futures = []
             for future in as_completed(head_futures):
@@ -1214,17 +1214,16 @@ def sort_text_chunks(
         .data[0]
         .embedding
     )
-
     index = faiss.IndexFlatIP(EMBEDDING_SIZE)
     index.add(np.array([text_chunk.embedding for text_chunk in text_chunks_embedded]))
     D, I = index.search(np.array([query_embedding]), len(text_chunks_embedded))
     for i, sim in enumerate(D[0]):
         text_chunks_embedded[I[0][i]].similarity = sim
-        
+
     return [text_chunks_embedded[i] for i in I[0]]
 
 def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.Encoding) -> List[TextChunk]:
-    """Get embeddings for the text chunks."""  
+    """Get embeddings for the text chunks."""
     # Batch the text chunks that the sum of tokens is less than MAX_EMBEDDING_TOKEN_INPUT
     batches = []
     current_batch = []
@@ -1300,9 +1299,9 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
 
                     web_page.scraped_text = scraped_text[:max_num_char]
                     web_page.scraped_text = scraped_text[:max_num_char]
-                
+
                 web_page.scraped_text = scraped_text[:max_num_char]
-                
+
                 filtered_web_pages.append(web_page)
 
             else:
@@ -1316,7 +1315,7 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
 
 def extract_html_texts(
     web_pages: List[WebPage],
-) -> List[WebPage]:    
+) -> List[WebPage]:
     # Initialize empty list for storing extracted sentences along with their similarity scores, release dates and urls
     parsed_web_pages = []
 
@@ -1339,10 +1338,10 @@ def extract_html_texts(
                     print(f"Request for {web_page.url} returned status code {result.status_code}.")
                 elif 'text/html' not in result.headers.get('Content-Type', ''):
                     print(f"Content-Type for {web_page.url} is not 'text/html'.")
-    
+
             except requests.exceptions.Timeout:
                 print(f"Request for {web_page.url} timed out.")
-            
+
             except Exception as e:
                 print(f"An error occurred in extract_html_texts: {e}")
 
@@ -1402,7 +1401,7 @@ def fetch_queries(
                 {"role": "assistant", "content": market_rules},
                 {"role": "user", "content": research_plan_prompt},
             ]
-            
+
             # Fetch queries from the OpenAI engine
             response = client.chat.completions.create(
                 model=engine,
@@ -1417,14 +1416,14 @@ def fetch_queries(
                     token_counter=count_tokens,
                 )
             search_plan = response.choices[0].message.content
-            
+
             messages = [
                 {"role": "system", "content": "You are a professional researcher."},
                 {"role": "user", "content": research_plan_prompt},
                 {"role": "assistant", "content": search_plan},
                 {"role": "user", "content": QUERY_RERANKING_PROMPT_TEMPLATE},
             ]
-            
+
             # Fetch reranked and selected queries from the OpenAI engine
             response = client.chat.completions.create(
                 model=engine,
@@ -1469,7 +1468,7 @@ def summarize_relevant_chunks(
         else:
             web_page.relevant_chunks_summary = "Error"
             return
-        
+
         trimmed_chunks = trim_chunks_string(chunks_string, enc)
 
         # Transform the market question to a "When" question
@@ -1521,7 +1520,7 @@ def summarize_over_summarized_chunks(
     engine="gpt-3.5-turbo",
     temperature=0.0,
 ) -> List[WebPage]:
-    
+
     # Add WebPage ID after each line in relevant_chunks_summary
     # Initialize an empty list to hold all modified lines
     all_lines_with_id = []
@@ -1532,8 +1531,8 @@ def summarize_over_summarized_chunks(
             lines = web_page.relevant_chunks_summary.split('\n')
             for i, line in enumerate(lines):
                 if line.startswith("*"):
-                    lines[i] = "-" + line[1:]                  
-            
+                    lines[i] = "-" + line[1:]
+
             # Append the web page ID to each line and add it to the list
             all_lines_with_id.extend([line + f" ({web_page.id})\n" for line in lines if line.strip() != ''])
 
@@ -1541,7 +1540,7 @@ def summarize_over_summarized_chunks(
     all_relevant_chunks_summary = '\n'.join(all_lines_with_id)
 
     prompt = FINAL_SUMMARY_PROMPT.format(input_query=input_query, chunks=all_relevant_chunks_summary)
-    
+
     print(f"\nPROMPT SUMMARIZE OVER WEBSITE SUMMARIES:\n################################################")
     print(f"{prompt}\n################################################\n\n")
 
@@ -1562,7 +1561,7 @@ def summarize_over_summarized_chunks(
             token_counter=count_tokens,
         )
     output = response.choices[0].message.content
-    
+
     # Split the combined string into individual lines
     lines = output.strip().split('\n')
 
@@ -1573,7 +1572,7 @@ def summarize_over_summarized_chunks(
     modified_ids = set()
 
     # Process each line to extract the web_page.id and content, then update the relevant web page
-    for line in lines:      
+    for line in lines:
         match = re.match(r"^(.*) \((\d+)\)\.?$", line)
         if match:
             content, web_page_id = match.groups()
@@ -1605,7 +1604,7 @@ def research(
     """Research additional information based on a prediction market question"""
     # Generate a list of sub-queries
     queries, counter_callback = fetch_queries(client, market_question, engine, market_rules, counter_callback)
-    
+
     # Get URLs from sub-queries
     urls = get_urls_from_queries(
         queries,
@@ -1615,16 +1614,16 @@ def research(
     )
     web_pages = [WebPage(url) for url in urls]
     web_pages = extract_html_texts(web_pages)
-    
+
     # Scrape text from web pages not older than <week_interval> weeks
     week_interval = WEEKS_TO_SCRAPE_NEWS
     web_pages = scrape_web_pages(web_pages, week_interval)
 
     # Get text chunks from web pages
     text_chunks = get_chunks(web_pages)
-    
-    # Get embeddings for text chunks, sort and cap the number of text chunks 
-    enc = tiktoken.get_encoding("cl100k_base") 
+
+    # Get embeddings for text chunks, sort and cap the number of text chunks
+    enc = tiktoken.get_encoding("cl100k_base")
     text_chunks_embedded = get_embeddings(client, text_chunks, enc) if text_chunks else []
     text_chunks_sorted = sort_text_chunks(client, market_question, text_chunks_embedded) if text_chunks_embedded else []
     text_chunks_limited = text_chunks_sorted[:MAX_TEXT_CHUNKS_TOTAL]
@@ -1637,7 +1636,7 @@ def research(
         if text_chunk.url in web_pages_dict:
             web_pages_dict[text_chunk.url].chunks_sorted.append(text_chunk.text)
 
-    # Summarize the relevant chunks from each web page 
+    # Summarize the relevant chunks from each web page
     web_pages = list(web_pages_dict.values())
     web_pages, counter_callback = summarize_relevant_chunks(web_pages, market_question, enc, counter_callback, engine)
     web_pages = sorted(web_pages, key=lambda web_page: parse_date_str(web_page.publication_date))
@@ -1673,11 +1672,11 @@ def get_market_rules(
     """Infer market rules for a prediction market question."""
     # Remove double quotes from the input query to avoid issues
     market_question = market_question.replace('"', "'")
-    
+
     # Get the prompt template based on the timing of the event in the query
     infer_rules_template = get_prompt_template_by_timing(market_question)
     infer_rules_prompt = infer_rules_template.format(market_question=market_question)
-    
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT_INFER_RULES},
         {"role": "user", "content": infer_rules_prompt},
@@ -1698,12 +1697,12 @@ def get_market_rules(
 
     # Extract the market rules from the response message
     market_rules = extract_answer(response_message)
-    
+
     ## Infer the market status
     # Remove the date from the query to avoid bias
     market_question_no_date = remove_date_from_query(market_question)
     infer_status_prompt = INFER_STATUS_PROMPT.format(market_question=market_question_no_date)
-    
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT_INFER_RULES},
         {"role": "user", "content": infer_status_prompt},
@@ -1724,7 +1723,7 @@ def get_market_rules(
 
     # Extract the market status from the response message
     market_status = extract_answer(response_message)
-    
+
     return market_status, market_rules, counter_callback
 
 def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
@@ -1758,7 +1757,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         market_status, market_rules, counter_callback = get_market_rules(market_question, counter_callback, engine=engine)
         print(f"MARKET STATUS: {market_status}\n")
         print(f"MARKET RULES:\n{market_rules}\n")
-        
+
         # Get additional information from the Research tool
         additional_inforamtion, counter_callback = research(market_question, google_api_key, google_engine_id, engine, market_rules, counter_callback)
 
@@ -1774,7 +1773,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             current_date=current_date,
             question_status=market_status
         )
-        
+
         # Get the subject matter expert role and introduction
         sme = ""
         sme_introduction = ""
@@ -1790,7 +1789,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
             print(f"An error occurred during SME role creation: {e}")
             print("Using default SME introduction.")
             sme_introduction = "You are a professional journalist."
-        
+
         print("SUBJECT MATTER EXPERT:\n################################################\n")
         if sme:
             print(f"SME ROLE: {sme}")
@@ -1857,12 +1856,5 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
 
         # Remove conclusion field from the JSON string
         output = remove_unwanted_fields(output)
-        
+
         return output, thread_history_string, None, counter_callback
-              
-
-                
-
-
-
-
