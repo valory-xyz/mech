@@ -337,7 +337,6 @@ class WebPage:
         self.chunks_final = []
         self.extract_attribute_names = ["title", "description", "publication_date", "publisher"]
 
-
     def get_title(self, soup, scripts):
         try:
             title = soup.title
@@ -354,13 +353,11 @@ class WebPage:
         # If no title was found return "n/a".
         return "n/a"
 
-
     def get_description(self, soup, scripts):
         description = soup.find("meta", attrs={"name": "description"}) or soup.find("meta", attrs={"property": "description"})
         if description and description.get("content"):
             return description["content"].strip()
         return "n/a"
-
 
     def get_publisher(self, soup, scripts):
         for script in scripts:
@@ -381,7 +378,6 @@ class WebPage:
             return publisher["content"].strip()
         else:
             return "n/a"
-
 
     def get_date(self, soup, scripts):
         for script in scripts:
@@ -404,7 +400,6 @@ class WebPage:
             if meta_tag and meta_tag.get("content"):
                 return format_date(meta_tag["content"])
         return "n/a"
-
 
     def extract_page_attributes(
         self,
@@ -429,7 +424,6 @@ class WebPage:
 
         return self
 
-
     def to_prompt(self):
         """
         Function to convert article attributes into a structured format for LLM prompts.
@@ -442,7 +436,6 @@ class WebPage:
         page_info += f"Publisher: {self.publisher or 'Unknown'}"
 
         return page_info
-
 
     def _find_publisher(self, data):
         def extract_names(item, key):
@@ -496,7 +489,6 @@ def trim_json_formatting(output_string):
         # Return the original string if no match is found
         return output_string
 
-
 def trim_chunks_string(
     chunks_string: str,
     enc: tiktoken.Encoding,
@@ -508,13 +500,11 @@ def trim_chunks_string(
         encoding = encoding[:max_tokens]
     return enc.decode(encoding)
 
-
 def find_release_date_in_data(data):
     for name in RELEASE_DATE_NAMES:
         if name in data:
             return data[name]
     return None
-
 
 def format_date(date_string) -> str:
     # Desired format "February 16, 2024, 3:30 PM"
@@ -534,7 +524,6 @@ def format_date(date_string) -> str:
         # If there's an error during parsing, return the original string
         return date_string
 
-
 def extract_question(text:str) -> str:
     # Look for a quoted question
     match = re.search(r'["“](.*?\?)["”]', text)
@@ -543,7 +532,6 @@ def extract_question(text:str) -> str:
 
     # Return prompt if ending with a question mark
     return text if text.strip().endswith('?') else ""
-
 
 def parse_date_str(date_str: str) -> datetime:
     # Desired format "February 16, 2024, 3:30 PM"
@@ -559,19 +547,16 @@ def remove_date_from_query(query: str) -> str:
     new_query = re.sub(date_pattern, "", query)
     return new_query
 
-
 def recursive_character_text_splitter(text, max_tokens, overlap):
     if len(text) <= max_tokens:
         return [text]
     else:
         return [text[i:i+max_tokens] for i in range(0, len(text), max_tokens - overlap)]
 
-
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
     return len(enc.encode(text))
-
 
 def get_first_dict_from_list(data):
     """Returns the first item if data is a list of dictionaries"""
@@ -579,7 +564,6 @@ def get_first_dict_from_list(data):
         return data[0]
     else:
         return data  # or raise an appropriate exception
-
 
 def format_additional_information(web_pages: List[WebPage]) -> str:
     """Format the additional information from the web pages"""
@@ -589,7 +573,6 @@ def format_additional_information(web_pages: List[WebPage]) -> str:
         formatted_information += f"ARTICLE {i+1}: PUBLISHER: {web_page.publisher}, PUBLICATION_DATE: {web_page.publication_date}\n"
         formatted_information += f"{web_page.final_output}\n\n"
     return formatted_information
-
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     """Search Google using a custom search engine."""
@@ -604,7 +587,6 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
         .execute()
     )
     return [result["link"] for result in search.get("items", [])]
-
 
 def process_in_batches(
     web_pages: List[WebPage],
@@ -646,7 +628,6 @@ def process_in_batches(
 
             yield get_futures
 
-
 def embed_batch(client: OpenAI, batch):
     """
     Helper function to process a single batch of texts and return the embeddings.
@@ -662,7 +643,6 @@ def embed_batch(client: OpenAI, batch):
 
     # Return the embeddings
     return [data.embedding for data in response.data]
-
 
 def sort_text_chunks(
     client: OpenAI, query: str, text_chunks_embedded: List[TextChunk]
@@ -683,7 +663,6 @@ def sort_text_chunks(
         text_chunks_embedded[I[0][i]].similarity = sim
 
     return [text_chunks_embedded[i] for i in I[0]]
-
 
 def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.Encoding) -> List[TextChunk]:
     """Get embeddings for the text chunks."""
@@ -726,7 +705,6 @@ def get_embeddings(client: OpenAI, text_chunks: List[TextChunk], enc: tiktoken.E
 
     return text_chunks
 
-
 def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
     """Create chunks from the text of all web pages"""
     text_chunks = []
@@ -736,7 +714,6 @@ def get_chunks(web_pages: List[WebPage]) -> List[WebPage]:
             text_chunks.extend(TextChunk(text=chunk, url=web_page.url) for chunk in chunks)
 
     return text_chunks
-
 
 def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int = 10000) -> List[WebPage]:
     """Scrape text from web pages"""
@@ -778,7 +755,6 @@ def scrape_web_pages(web_pages: List[WebPage], week_interval, max_num_char: int 
 
     return filtered_web_pages
 
-
 def extract_html_texts(
     web_pages: List[WebPage],
 ) -> List[WebPage]:
@@ -813,7 +789,6 @@ def extract_html_texts(
 
     return parsed_web_pages
 
-
 def get_urls_from_queries(
     queries: List[str],
     api_key: str,
@@ -846,7 +821,6 @@ def get_urls_from_queries(
         print(url)
 
     return list(results)
-
 
 def fetch_queries(
     input_query: str,
@@ -919,7 +893,6 @@ def fetch_queries(
                 print("Maximum attempts reached, returning an empty string.")
                 return [], counter_callback
 
-
 def summarize_relevant_chunks(
         web_pages: List[WebPage],
         input_query: str,
@@ -980,7 +953,6 @@ def summarize_relevant_chunks(
     if web_pages:
         web_pages = [web_page for web_page in web_pages if "Error" not in web_page.relevant_chunks_summary]
     return web_pages, counter_callback
-
 
 def summarize_over_summarized_chunks(
     web_pages: List[WebPage],
@@ -1058,7 +1030,6 @@ def summarize_over_summarized_chunks(
     modified_web_pages = [web_pages_dict[web_page_id] for web_page_id in modified_ids]
 
     return modified_web_pages, counter_callback
-
 
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
