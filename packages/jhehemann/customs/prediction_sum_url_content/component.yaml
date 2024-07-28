@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_sum_url_content.py: bafybeig3kioqilxhnxw7pbtq5kj7osjgggexvkpnjewixfuuzeojww32jy
+  prediction_sum_url_content.py: bafybeiew6sdbz2a2rso7kejpkvycnl2lrwmdb6pxdvnodxwjajmdfhcspa
 fingerprint_ignore_patterns: []
 entry_point: prediction_sum_url_content.py
 callable: run
