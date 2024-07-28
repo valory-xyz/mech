@@ -20,13 +20,19 @@
 """This module contains the shared state for the abci skill of Mech."""
 from typing import Any
 
-from aea.skills.base import Model
+from packages.valory.skills.websocket_client.models import Params as BaseParams
 
 
-class Params(Model):
+DEFAULT_WEBSOCKET_PROVIDER = "ws://localhost:8001"
+DEFAULT_CONTRACT_ADDRESS = "0xFf82123dFB52ab75C417195c5fDB87630145ae81"
+
+
+class Params(BaseParams):
     """A model to represent params for multiple abci apps."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
-        self.use_polling = kwargs.get("use_polling", False)
         super().__init__(*args, **kwargs)
+
+        self.use_polling = kwargs.get("use_polling", False)
+        self.contract_address = kwargs.get("contract_address", DEFAULT_CONTRACT_ADDRESS)

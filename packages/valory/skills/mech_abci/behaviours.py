@@ -33,6 +33,9 @@ from packages.valory.skills.registration_abci.behaviours import (
 from packages.valory.skills.reset_pause_abci.behaviours import (
     ResetPauseABCIConsensusBehaviour,
 )
+from packages.valory.skills.subscription_abci.behaviours import (
+    UpdateSubscriptionRoundBehaviour,
+)
 from packages.valory.skills.task_submission_abci.behaviours import (
     TaskSubmissionRoundBehaviour,
 )
@@ -56,5 +59,6 @@ class MechConsensusBehaviour(AbstractRoundBehaviour):
         *ResetPauseABCIConsensusBehaviour.behaviours,
         *TransactionSettlementRoundBehaviour.behaviours,
         *TerminationAbciBehaviours.behaviours,
+        *UpdateSubscriptionRoundBehaviour.behaviours,
     }
     background_behaviours_cls = {BackgroundBehaviour}  # type: ignore

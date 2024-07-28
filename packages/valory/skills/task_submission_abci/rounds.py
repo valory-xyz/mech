@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -93,14 +93,26 @@ class TaskPoolingRound(CollectionRound):
                 done_tasks_str = cast(TaskPoolingPayload, payload).content
                 done_tasks = json.loads(done_tasks_str)
                 all_done_tasks.extend(done_tasks)
-            all_done_tasks = sorted(all_done_tasks, key=lambda x: x["request_id"])
+
+            # Set to store unique request_ids
+            unique_ids = set()
+            unique_objects = []
+
+            # filter out the tasks that have duplicate ids
+            for obj in all_done_tasks:
+                request_id = obj.get("request_id")
+                if request_id not in unique_ids:
+                    unique_ids.add(request_id)
+                    unique_objects.append(obj)
+
+            unique_done_tasks = sorted(unique_objects, key=lambda x: x["request_id"])
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
-                    get_name(SynchronizedData.done_tasks): all_done_tasks,
+                    get_name(SynchronizedData.done_tasks): unique_done_tasks,
                 }
             )
-            if len(all_done_tasks) > 0:
+            if len(unique_done_tasks) > 0:
                 return synchronized_data, Event.DONE
             return synchronized_data, Event.NO_TASKS
 
@@ -179,10 +191,12 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         0. TaskPoolingRound
             - done: 1.
             - no tasks: 4.
+            - round timeout: 0.
         1. TransactionPreparationRound
             - done: 2.
             - error: 3.
             - no majority: 3.
+            - task execution round timeout: 1.
         2. FinishedTaskPoolingRound
         3. FinishedTaskExecutionWithErrorRound
         4. FinishedWithoutTasksRound
@@ -191,6 +205,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
 
     Timeouts:
         task execution round timeout: 60.0
+        round timeout: 60.0
     """
 
     initial_round_cls: AppState = TaskPoolingRound
@@ -199,11 +214,13 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         TaskPoolingRound: {
             Event.DONE: TransactionPreparationRound,
             Event.NO_TASKS: FinishedWithoutTasksRound,
+            Event.ROUND_TIMEOUT: TaskPoolingRound,
         },
         TransactionPreparationRound: {
             Event.DONE: FinishedTaskPoolingRound,
             Event.ERROR: FinishedTaskExecutionWithErrorRound,
             Event.NO_MAJORITY: FinishedTaskExecutionWithErrorRound,
+            Event.TASK_EXECUTION_ROUND_TIMEOUT: TransactionPreparationRound,
         },
         FinishedTaskPoolingRound: {},
         FinishedTaskExecutionWithErrorRound: {},
@@ -216,6 +233,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     }
     event_to_timeout: EventToTimeout = {
         Event.TASK_EXECUTION_ROUND_TIMEOUT: 60.0,
+        Event.ROUND_TIMEOUT: 60.0,
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         [get_name(SynchronizedData.done_tasks)]

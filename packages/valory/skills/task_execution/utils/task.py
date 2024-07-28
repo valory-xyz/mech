@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -21,13 +21,15 @@
 
 from typing import Any
 
-from aea.skills.tasks import Task
 
-
-class AnyToolAsTask(Task):
+class AnyToolAsTask:
     """AnyToolAsTask"""
 
     def execute(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the task."""
-        method = kwargs.pop("method")
+        tool_py = kwargs.pop("tool_py")
+        callable_method = kwargs.pop("callable_method")
+        local_namespace: Any = {}
+        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
+        method = local_namespace[callable_method]
         return method(*args, **kwargs)

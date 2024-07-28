@@ -28,25 +28,29 @@ from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue as BaseDialogue
 from aea.skills.base import Model
 
-from packages.valory.protocols.default.dialogues import (
-    DefaultDialogue as BaseDefaultDialogue,
+from packages.valory.protocols.websocket_client.dialogues import (
+    WebsocketClientDialogue as BaseWebsocketClientDialogue,
 )
-from packages.valory.protocols.default.dialogues import (
-    DefaultDialogues as BaseDefaultDialogues,
+from packages.valory.protocols.websocket_client.dialogues import (
+    WebsocketClientDialogues as BaseWebsocketClientDialogues,
 )
 
 
-DefaultDialogue = BaseDefaultDialogue
+WebsocketClientDialogue = BaseWebsocketClientDialogue
 
 
-class DefaultDialogues(Model, BaseDefaultDialogues):
+class WebsocketClientDialogues(Model, BaseWebsocketClientDialogues):
     """The dialogues class keeps track of all dialogues."""
 
     def __init__(self, **kwargs: Any) -> None:
-        """Initialize dialogues."""
+        """
+        Initialize dialogues.
+
+        :param kwargs: keyword arguments
+        """
         Model.__init__(self, **kwargs)
 
-        def role_from_first_message(
+        def role_from_first_message(  # pylint: disable=unused-argument
             message: Message, receiver_address: Address
         ) -> BaseDialogue.Role:
             """Infer the role of the agent from an incoming/outgoing first message
@@ -55,11 +59,10 @@ class DefaultDialogues(Model, BaseDefaultDialogues):
             :param receiver_address: the address of the receiving agent
             :return: The role of the agent
             """
-            self.context.logger.debug(f"{message} {receiver_address}")
-            return DefaultDialogue.Role.AGENT
+            return WebsocketClientDialogue.Role.SKILL
 
-        BaseDefaultDialogues.__init__(
+        BaseWebsocketClientDialogues.__init__(
             self,
-            self_address=self.context.agent_address,
+            self_address=str(self.skill_id),
             role_from_first_message=role_from_first_message,
         )

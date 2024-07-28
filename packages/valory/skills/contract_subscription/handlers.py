@@ -22,24 +22,29 @@
 
 import json
 import time
-from typing import Any, Dict, Tuple
+from typing import Any
 
-from aea.protocols.base import Message
-from aea.skills.base import Handler
 from web3 import Web3
 from web3.types import TxReceipt
 
-from packages.valory.protocols.default.message import DefaultMessage
+from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
+from packages.valory.skills.websocket_client.handlers import (
+    SubscriptionStatus,
+    WEBSOCKET_SUBSCRIPTION_STATUS,
+)
+from packages.valory.skills.websocket_client.handlers import (
+    WebSocketHandler as BaseWebSocketHandler,
+)
 
 
 JOB_QUEUE = "pending_tasks"
 DISCONNECTION_POINT = "disconnection_point"
 
 
-class WebSocketHandler(Handler):
+class WebSocketHandler(BaseWebSocketHandler):
     """This class scaffolds a handler."""
 
-    SUPPORTED_PROTOCOL = DefaultMessage.protocol_id
+    SUPPORTED_PROTOCOL = WebsocketClientMessage.protocol_id
     w3: Web3 = None
     contract = None
 
@@ -51,8 +56,12 @@ class WebSocketHandler(Handler):
 
     def setup(self) -> None:
         """Implement the setup."""
+        super().setup()
+
         self.context.shared_state[JOB_QUEUE] = []
         self.context.shared_state[DISCONNECTION_POINT] = None
+        self._last_processed_block = None
+
         # loads the contracts from the config file
         with open(
             "vendor/valory/contracts/agent_mech/build/AgentMech.json",
@@ -66,20 +75,33 @@ class WebSocketHandler(Handler):
         )
         self.contract = self.w3.eth.contract(address=self.contract_to_monitor, abi=abi)
 
-    def handle(self, message: Message) -> None:
-        """
-        Implement the reaction to an envelope.
+    def handle(self, message: WebsocketClientMessage) -> None:
+        """Handle message."""
+        super().handle(message)
+        if self.context.shared_state[WEBSOCKET_SUBSCRIPTION_STATUS][
+            message.subscription_id
+        ] in (SubscriptionStatus.UNSUBSCRIBED, SubscriptionStatus.SUBSCRIBING):
+            self.context.logger.info(
+                f"Setting disconnection point to {self._last_processed_block}"
+            )
+            self.context.shared_state[DISCONNECTION_POINT] = self._last_processed_block
 
-        :param message: the message
-        """
-        self.context.logger.info(f"Received message: {message}")
+    def handle_recv(self, message: WebsocketClientMessage) -> None:
+        """Handler `RECV` performative"""
         try:
-            data = json.loads(message.content)
+            data = json.loads(message.data)
         except json.JSONDecodeError:
             self.context.logger.info(
-                f"Error decoding data from the websocket connection; data={message.content}"
+                f"Error decoding data for websocket subscription {message.subscription_id}; data={message.data}"
             )
+            self.context.shared_state[WEBSOCKET_SUBSCRIPTION_STATUS][
+                message.subscription_id
+            ] = SubscriptionStatus.UNSUBSCRIBED
             return
+
+        self.context.logger.info(
+            f"Received {data} from subscription {message.subscription_id}"
+        )
 
         if set(data.keys()) == {"id", "result", "jsonrpc"}:
             self.context.logger.info(f"Received response: {data}")
@@ -100,18 +122,16 @@ class WebSocketHandler(Handler):
                 limit += 1
                 return
             no_args = False
+
         if len(event_args) != 0:
             self.context.shared_state[JOB_QUEUE].append(event_args)
             self.context.logger.info(f"Added job to queue: {event_args}")
 
-    def teardown(self) -> None:
-        """Implement the handler teardown."""
-
-    def _get_tx_args(self, tx_hash: str) -> Tuple[Dict, bool]:
+    def _get_tx_args(self, tx_hash: str) -> Any:
         """Get the transaction arguments."""
         try:
             tx_receipt: TxReceipt = self.w3.eth.get_transaction_receipt(tx_hash)
-            self.context.shared_state[DISCONNECTION_POINT] = tx_receipt["blockNumber"]
+            self._last_processed_block = tx_receipt["blockNumber"]
             rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
             return dict(rich_logs[0]["args"]), False
 

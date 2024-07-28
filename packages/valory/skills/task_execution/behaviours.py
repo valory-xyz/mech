@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -21,6 +21,9 @@
 import json
 import threading
 import time
+from asyncio import Future
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from aea.helpers.cid import to_v1
@@ -28,6 +31,7 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
+from eth_abi import encode
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
@@ -43,8 +47,15 @@ from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialo
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
+from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.utils.apis import KeyChain
+from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
+from packages.valory.skills.task_execution.utils.cost_calculation import (
+    get_cost_for_done_task,
+)
 from packages.valory.skills.task_execution.utils.ipfs import (
+    ComponentPackageLoader,
     get_ipfs_file_hash,
     to_multihash,
 )
@@ -54,7 +65,7 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 DONE_TASKS_LOCK = "lock"
-
+GNOSIS_CHAIN = "gnosis"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -65,13 +76,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def __init__(self, **kwargs: Any):
         """Initialise the agent."""
         super().__init__(**kwargs)
+        # we only want to execute one task at a time, for the time being
+        self._executor = ProcessPoolExecutor(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
         self._tools_to_file_hash: Dict[str, str] = {}
-        self._all_tools: Dict[str, str] = {}
+        self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
         self._inflight_tool_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_polling: Optional[float] = None
         self._invalid_request = False
+        self._async_result: Optional[Future] = None
+        self._keychain: Optional[KeyChain] = None
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -81,6 +96,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             for key, values in self.params.file_hash_to_tools.items()
             for value in values
         }
+        self._keychain = KeyChain(self.params.api_keys)
 
     def act(self) -> None:
         """Implement the act."""
@@ -97,6 +113,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def params(self) -> Params:
         """Get the parameters."""
         return cast(Params, self.context.params)
+
+    @property
+    def request_id_to_num_timeouts(self) -> Dict[int, int]:
+        """Maps the request id to the number of times it has timed out."""
+        return self.params.request_id_to_num_timeouts
+
+    def count_timeout(self, request_id: int) -> None:
+        """Increase the timeout for a request."""
+        self.request_id_to_num_timeouts[request_id] += 1
+
+    def timeout_limit_reached(self, request_id: int) -> bool:
+        """Check if the timeout limit has been reached."""
+        return self.params.timeout_limit <= self.request_id_to_num_timeouts[request_id]
 
     @property
     def pending_tasks(self) -> List[Dict[str, Any]]:
@@ -116,13 +145,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _is_executing_task_ready(self) -> bool:
         """Check if the executing task is ready."""
-        if self._executing_task is None:
+        if self._executing_task is None or self._async_result is None:
             return False
-        task_id = self._executing_task.get("async_task_id", None)
-        if task_id is None:
-            return False
-
-        return self.context.task_manager.get_task_result(task_id).ready()
+        return self._async_result.done()
 
     def _has_executing_task_timed_out(self) -> bool:
         """Check if the executing task timed out."""
@@ -139,10 +164,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             raise ValueError("Executing task is None")
         if self._invalid_request:
             return None
-        task_id = self._executing_task.get("async_task_id", None)
-        if task_id is None:
-            raise ValueError("Executing task has no async_task_id")
-        return self.context.task_manager.get_task_result(task_id).get()
+        try:
+            async_result = cast(Future, self._async_result)
+            return async_result.result()
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                "Exception raised while executing task: {}".format(str(e))
+            )
+            return None
 
     def _download_tools(self) -> None:
         """Download tools."""
@@ -163,14 +192,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_get_tool(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle get tool response"""
-        tool_py = list(message.files.values())[0]
+        component_yaml, tool_py, callable_method = ComponentPackageLoader.load(
+            message.files
+        )
         tool_req = cast(str, self._inflight_tool_req)
-        local_namespace: Dict[str, Any] = globals().copy()
-        if "run" in local_namespace:
-            del local_namespace["run"]
-        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
-        self._all_tools[tool_req] = local_namespace["run"]
+        self._all_tools[tool_req] = tool_py, callable_method, component_yaml
         self._inflight_tool_req = None
+
+    def _populate_from_block(self) -> None:
+        """Populate from_block"""
+        ledger_api_msg, _ = self.context.ledger_dialogues.create(
+            performative=LedgerApiMessage.Performative.GET_STATE,
+            callable="get_block",
+            kwargs=LedgerApiMessage.Kwargs(dict(block_identifier="latest")),
+            counterparty=LEDGER_API_ADDRESS,
+            ledger_id=self.context.default_ledger_id,
+            args=(),
+        )
+        self.context.outbox.put_message(message=ledger_api_msg)
+        self.params.in_flight_req = True
 
     def _check_for_new_reqs(self) -> None:
         """Check for new reqs."""
@@ -179,12 +219,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # or if we should not poll yet
             return
 
+        if self.params.from_block is None:
+            # set the initial from block
+            self._populate_from_block()
+            return
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.agent_mech_contract_address,
+            contract_address=self.params.agent_mech_contract_addresses[0],
             contract_id=str(AgentMechContract.contract_id),
-            callable="get_undelivered_reqs",
-            kwargs=ContractApiMessage.Kwargs(dict(from_block=self.params.from_block)),
+            callable="get_multiple_undelivered_reqs",
+            kwargs=ContractApiMessage.Kwargs(
+                dict(
+                    from_block=self.params.from_block,
+                    chain_id=GNOSIS_CHAIN,
+                    contract_addresses=self.params.agent_mech_contract_addresses,
+                    max_block_window=self.params.max_block_window,
+                )
+            ),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
@@ -201,7 +252,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         if self._executing_task is not None:
             if self._is_executing_task_ready() or self._invalid_request:
-                self._handle_done_task()
+                task_result = self._get_executing_task_result()
+                self._handle_done_task(task_result)
             elif self._has_executing_task_timed_out():
                 self._handle_timeout_task()
             return
@@ -229,18 +281,47 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.req_to_callback[nonce] = callback
         self.params.in_flight_req = True
 
-    def _handle_done_task(self) -> None:
+    def _handle_done_task(self, task_result: Any) -> None:
         """Handle done tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
-        task_result = self._get_executing_task_result()
+        request_id_nonce = executing_task.get("requestIdWithNonce", None)
+        mech_address = executing_task.get("contract_address", None)
+        tool = executing_task.get("tool", None)
+        model = executing_task.get("model", None)
+        tool_params = executing_task.get("params", None)
         response = {"requestId": req_id, "result": "Invalid response"}
-        self._done_task = {"request_id": req_id}
-        if task_result is not None:
+        task_executor = self.context.agent_address
+        self._done_task = {
+            "request_id": req_id,
+            "mech_address": mech_address,
+            "task_executor_address": task_executor,
+            "tool": tool,
+            "request_id_nonce": request_id_nonce,
+        }
+        if task_result is not None and len(task_result) == 5:
             # task succeeded
-            deliver_msg, transaction = task_result
-            response = {**response, "result": deliver_msg}
+            deliver_msg, prompt, transaction, counter_callback, keychain = task_result
+            cost_dict = {}
+            if counter_callback is not None:
+                cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
+            metadata = {
+                "model": model,
+                "tool": tool,
+                "params": tool_params,
+            }
+            response = {
+                **response,
+                "result": deliver_msg,
+                "prompt": prompt,
+                "cost_dict": cost_dict,
+                "metadata": metadata,
+            }
             self._done_task["transaction"] = transaction
+
+            # update the keychain, it's possible that rotations happened
+            # we want to use the most up-to-date key priority
+            self._keychain = keychain
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
         msg, dialogue = self._build_ipfs_store_file_req(
@@ -248,14 +329,49 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self.send_message(msg, dialogue, self._handle_store_response)
 
+    def _restart_executor(self) -> None:
+        """Restarts the executor."""
+        self._executor.shutdown(wait=False)
+        # create a new executor
+        self._executor = ProcessPoolExecutor(max_workers=1)
+
     def _handle_timeout_task(self) -> None:
         """Handle timeout tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+        self.count_timeout(req_id)
         self.context.logger.info(f"Task timed out for request {req_id}")
-        # added to end of queue
-        self.pending_tasks.append(executing_task)
-        self._executing_task = None
+        self.context.logger.info(
+            f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times"
+        )
+        async_result = cast(Future, self._async_result)
+        async_result.cancel()
+
+        # we restart the executor in case of a timeout.
+        # we do this because its possible the .cancel() call above is not respected
+        # by the executor. Since we only have 1 process running at a time, this would
+        # mean that the task being executed next would be queued. We want to avoid this.
+        self._restart_executor()
+
+        # check if we can add the task to the end of the queue
+        if not self.timeout_limit_reached(req_id):
+            # added to end of queue
+            self.context.logger.info(f"Adding task {req_id} to the end of the queue")
+            self.pending_tasks.append(executing_task)
+            self._executing_task = None
+            return None
+
+        self.context.logger.info(
+            f"Task {req_id} has reached the timeout limit of{self.params.timeout_limit}. "
+            f"It won't be added to the end of the queue again."
+        )
+        task_result = (
+            f"Task timed out {self.params.timeout_limit} times during execution. ",
+            "",
+            None,
+            None,
+        )
+        self._handle_done_task(task_result)
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a task request."""
@@ -270,22 +386,46 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._prepare_task(task_data)
         elif is_data_valid:
             tool = task_data["tool"]
+            executing_task = cast(Dict[str, Any], self._executing_task)
+            executing_task["tool"] = tool
             self.context.logger.warning(f"Tool {tool} is not valid.")
             self._invalid_request = True
         else:
             self.context.logger.warning("Data for task is not valid.")
             self._invalid_request = True
 
+    def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
+        """Submit a task."""
+        try:
+            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
+        except BrokenProcessPool:
+            self.context.logger.warning("Executor is broken. Restarting...")
+            # restart the executor
+            self._restart_executor()
+            # try to run the task again
+            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
+
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         tool_task = AnyToolAsTask()
-        task_data["method"] = self._all_tools[task_data["tool"]]
-        task_data["api_keys"] = self.params.api_keys
-        task_id = self.context.task_manager.enqueue_task(tool_task, kwargs=task_data)
+        tool_py, callable_method, component_yaml = self._all_tools[task_data["tool"]]
+        tool_params = component_yaml.get("params", {})
+        task_data["tool_py"] = tool_py
+        task_data["callable_method"] = callable_method
+        task_data["api_keys"] = self._keychain
+        task_data["counter_callback"] = TokenCounterCallback()
+        task_data["model"] = task_data.get(
+            "model", tool_params.get("default_model", None)
+        )
+        future = self._submit_task(tool_task.execute, **task_data)
         executing_task = cast(Dict[str, Any], self._executing_task)
-        executing_task["async_task_id"] = task_id
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
-        self._async_result = self.context.task_manager.get_task_result(task_id)
+        executing_task["tool"] = task_data["tool"]
+        executing_task["model"] = task_data.get(
+            "model", tool_params.get("default_model", None)
+        )
+        executing_task["params"] = tool_params
+        self._async_result = cast(Optional[Future], future)
 
     def _build_ipfs_message(
         self,
@@ -344,15 +484,27 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             executing_task["requestId"],
             executing_task["sender"],
         )
-        self.context.logger.info(f"Response for request {req_id} stored on IPFS.")
         ipfs_hash = to_v1(message.ipfs_hash)
+        self.context.logger.info(
+            f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
+        )
         self.send_data_via_acn(
             sender_address=sender,
             request_id=str(req_id),
             data=ipfs_hash,
         )
         done_task = cast(Dict[str, Any], self._done_task)
-        done_task["task_result"] = to_multihash(ipfs_hash)
+        task_result = to_multihash(ipfs_hash)
+        cost = get_cost_for_done_task(done_task)
+        self.context.logger.info(f"Cost for task {req_id}: {cost}")
+        mech_config = self.params.mech_to_config[done_task["mech_address"]]
+        if mech_config.use_dynamic_pricing:
+            self.context.logger.info(f"Dynamic pricing is enabled for task {req_id}.")
+            task_result = encode(
+                ["uint256", "bytes"], [cost, bytes.fromhex(task_result)]
+            ).hex()
+
+        done_task["task_result"] = task_result
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)

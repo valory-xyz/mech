@@ -7,9 +7,26 @@ token_id-"component_id"
 83-"skill/valory/multiplexer_abci/0.1.0"
 84-"skill/valory/task_execution_abci/0.1.0"
 85-"skill/valory/mech_abci/0.1.0"
+168-"custom/valory/openai_request/0.1.0"
+169-"custom/psouranis/optimization_by_prompting/0.1.0"
+170-"custom/valory/prediction_request/0.1.0"
+171-"custom/valory/prediction_request_claude/0.1.0"
+172-"custom/valory/prediction_request_embedding/0.1.0"
+173-"custom/nickcom007/prediction_request_sme/0.1.0"
+174-"custom/jhehemann/prediction_sum_url_content/0.1.0"
+175-"custom/nickcom007/sme_generation_request/0.1.0"
+176-"custom/valory/stability_ai_request/0.1.0"
+181-"custom/polywrap/prediction_with_research_report/0.1.0"
+186-"custom/valory/resolve_market/0.1.0"
+TBD-"custom/napthaai/prediction_request_rag/0.1.0"
+TBD-"custom/napthaai/resolve_market_reasoning/0.1.0"
 ---
 token_id-"agent_id"
 9-"agent/valory/mech/0.1.0"
+26-"agent/valory/mech/0.1.0"
+29-"agent/valory/mech/0.1.0" (mech extension)
 ---
 token_id-"service_id" (Gnosis)
 1-3-"service/valory/mech/0.1.0"
+token_id-"service_id" (Ethereum)
+21-"service/valory/mech/0.1.0"

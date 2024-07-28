@@ -1,0 +1,42 @@
+name: prediction_request_rag_cohere
+author: napthaai
+version: 0.1.0
+type: custom
+description: A tool for making binary predictions on markets using rag technique with
+  cohere models.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiekjzoy2haayvkiwhb2u2epflpqxticud34mma3gdhfzgu36lxwiq
+  prediction_request_rag_cohere.py: bafybeicfhkjsor4d7mv3uacddyfor4e2x6742hqc5sihpwmus6ploylofq
+fingerprint_ignore_patterns: []
+entry_point: prediction_request_rag_cohere.py
+callable: run
+params:
+  default_model: cohere/command-r-plus
+dependencies:
+  google-api-python-client:
+    version: ==2.95.0
+  googlesearch-python:
+    version: ==1.2.3
+  requests: {}
+  markdownify:
+    version: ==0.11.6
+  readability-lxml:
+    version: ==0.8.1
+  anthropic:
+    version: ==0.21.3
+  tiktoken:
+    version: ==0.7.0
+  pydantic:
+    version: '>=1.9.0,<3'
+  faiss-cpu:
+    version: ==1.7.4
+  openai:
+    version: ==1.30.2
+  docstring-parser:
+    version: ==0.15
+  pypdf2:
+    version: ==3.0.1
+  numpy:
+    version: '>=1.19.0'
