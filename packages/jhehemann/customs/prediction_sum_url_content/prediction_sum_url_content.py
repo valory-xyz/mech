@@ -294,8 +294,8 @@ ALLOWED_TOOLS = [
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 TOOL_TO_ENGINE = {
-    "prediction-offline-sum-url-content": "gpt-4-0125-preview",
-    "prediction-online-sum-url-content": "gpt-4-0125-preview",
+    "prediction-offline-sum-url-content": "gpt-3.5-turbo-0125",
+    "prediction-online-sum-url-content": "gpt-3.5-turbo-0125",
 }
 
 
@@ -763,6 +763,8 @@ def get_context_around_isolated_event_date(
     Returns:
         list: List of sentences surrounding the target date.
     """
+    if not event_date_ymd:
+        return []
 
     # Check max_context value constraints
     if max_context < len_sentence_threshold:
@@ -1096,7 +1098,7 @@ def extract_text(
     # Get the date of the website
     date = get_date(soup)
     if date is None:
-        raise ValueError("Could not extract release or update date from HTML.")
+        date = "unknown"
 
     # Remove unnecessary tags to clean up text
     for element in soup(HTML_TAGS_TO_REMOVE):
@@ -1234,7 +1236,7 @@ def extract_texts(
     event_date = extract_event_date(doc_question)
 
     if event_date is None:
-        raise ValueError(
+        print(
             f"Could not extract precise event date from event question: {event_question}"
         )
 
@@ -1405,7 +1407,7 @@ def fetch_additional_information(
     return additional_informations
 
 
-@with_key_rotation
+#@with_key_rotation
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
