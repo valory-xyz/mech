@@ -294,8 +294,8 @@ ALLOWED_TOOLS = [
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 TOOL_TO_ENGINE = {
-    "prediction-offline-sum-url-content": "gpt-3.5-turbo-0125",
-    "prediction-online-sum-url-content": "gpt-3.5-turbo-0125",
+    "prediction-offline-sum-url-content": "gpt-4-0125-preview",
+    "prediction-online-sum-url-content": "gpt-4-0125-preview",
 }
 
 
@@ -1407,7 +1407,7 @@ def fetch_additional_information(
     return additional_informations
 
 
-#@with_key_rotation
+@with_key_rotation
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
