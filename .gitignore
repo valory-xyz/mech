@@ -27,7 +27,6 @@ packages/valory/protocols/tendermint
 /packages/valory/skills/transaction_settlement_abci
 
 *test_mech.py
-embedding-tool-explanation.md
 
 .idea
 **/__pycache__/
