@@ -11,6 +11,8 @@ fingerprint_ignore_patterns: []
 entry_point: prediction_sentence_embedding.py
 callable: run
 dependencies:
+  tqdm:
+    version: ==4.56.0
   google-api-python-client:
     version: ==2.95.0
   googlesearch-python:
