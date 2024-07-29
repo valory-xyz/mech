@@ -171,7 +171,7 @@ class LLMClient:
                 base_url="https://openrouter.ai/api/v1",
                 api_key=self.api_keys["openrouter"],
             )
-    
+
     def completions(
         self,
         model: str,
@@ -280,12 +280,6 @@ LLM_SETTINGS = {
         "temperature": 0,
     }
 }
-
-# DEFAULT_OPENAI_SETTINGS = {
-#     "max_compl_tokens": 500,
-#     "temperature": 0,
-# }
-
 ALLOWED_TOOLS = [
     "prediction-sentence-embedding-conservative",
     "prediction-sentence-embedding-bold",
@@ -295,16 +289,6 @@ TOOL_TO_ENGINE = {
     "prediction-sentence-embedding-conservative": "gpt-3.5-turbo-0125",
     "prediction-sentence-embedding-bold": "gpt-4-0125-preview",
 }
-
-
-# * Consider the prediction market with the market question, the closing date and the outcomes in an isolated context that has no influence on the protagonists that are involved in the event in the real world, specified in the market question. The closing date is always arbitrarily set by the market creator and has no influence on the real world. So it is likely that the protagonists of the event in the real world are not even aware of the prediction market and do not care about the market's closing date.
-# * If the information in "ADDITIONAL_INFORMATION" indicate without a doubt that the event has already happened, it is very likely that the outcome of the market question will be `Yes`.
-# * If the information in "ADDITIONAL_INFORMATION" indicate that the event will happen after the closing date, it is very likely that the outcome of the market question will be `No`.
-# * If there exist contradicting information, evaluate the release and modification dates of those information and prioritize the information that is more recent and adjust your confidence in the probability estimation accordingly.
-# * If recent information indicates a status change in the future, pay close attention to the date of the status change and if it is before or after the closing date of the 'market question' and adjust your probability estimation accordingly, keeping the examples under "EXAMPLES" and their outcomes given the point in time of the status change in mind.
-# * If there exist recent information indicating that the event will happen after the closing date, it is very likely that the outcome of the market question will be `No`.
-# * Note that the sentences within the information items provided under "ADDITIONAL_INFORMATION" are a concatenation of the sentences from web pages that have the highest vector similarity to the 'market question'. Thus, the paragraphs do not represent the original context of the sentences and you should evaluate each sentence individually.
-
 
 PREDICTION_PROMPT = """
 INTRODUCTION:
