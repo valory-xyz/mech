@@ -22,7 +22,7 @@ from typing import List, Any
 from packages.gnosis.customs.omen_tools import omen_buy_sell
 from packages.victorpolisetty.customs.dalle_request import dalle_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
-from packages.jhehemann.customs.prediction_sentence_embedding import prediction_sentence_embedding
+from packages.jhehemann.customs.prediction_sentence_embeddings import prediction_sentence_embeddings
 from packages.napthaai.customs.prediction_request_rag_cohere import (
     prediction_request_rag_cohere,
 )
@@ -189,12 +189,12 @@ class TestDALLEGeneration(BaseToolTest):
     tool_module = dalle_request
 
 
-class TestPredictionSentenceEmbedding(BaseToolTest):
+class TestPredictionSentenceEmbeddings(BaseToolTest):
     """Test Prediction Sum URL Content."""
 
-    tools = prediction_sentence_embedding.ALLOWED_TOOLS
-    models = prediction_sentence_embedding.ALLOWED_MODELS
+    tools = prediction_sentence_embeddings.ALLOWED_TOOLS
+    models = prediction_sentence_embeddings.ALLOWED_MODELS
     prompts = [
         'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
-    tool_module = prediction_sentence_embedding
+    tool_module = prediction_sentence_embeddings
