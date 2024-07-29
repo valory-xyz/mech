@@ -1354,7 +1354,7 @@ def fetch_additional_information(
 
     return additional_informations
 
-#@with_key_rotation
+@with_key_rotation
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
