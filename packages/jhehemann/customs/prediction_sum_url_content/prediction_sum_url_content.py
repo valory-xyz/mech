@@ -19,18 +19,14 @@
 
 """This module implements a Mech tool for binary predictions."""
 import functools
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
+from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from datetime import datetime, timezone
 import json
-import time
 import re
-import threading
-import faiss
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor
 
 import anthropic
 import googleapiclient
-import numpy as np
 import openai
 from bs4 import BeautifulSoup, NavigableString
 from googleapiclient.discovery import build
@@ -45,6 +41,8 @@ import traceback
 from dateutil import parser
 from tiktoken import encoding_for_model
 from tqdm import tqdm
+from sentence_transformers import SentenceTransformer, util
+
 
 client: Optional[OpenAI] = None
 
@@ -101,188 +99,35 @@ def with_key_rotation(func: Callable):
     return wrapper
 
 
-class LLMClientManager:
-    """Client context manager for LLMs."""
 
-    def __init__(
-        self, api_keys: List, model: str = None, embedding_provider: str = None
-    ):
-        self.api_keys = api_keys
-        self.embedding_provider = embedding_provider
-        if "gpt" in model:
-            self.llm_provider = "openai"
-        elif "claude" in model:
-            self.llm_provider = "anthropic"
-        else:
-            self.llm_provider = "openrouter"
+class OpenAIClientManager:
+    """Client context manager for OpenAI."""
 
-    def __enter__(self):
-        clients = []
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def __enter__(self) -> OpenAI:
         global client
-        if self.llm_provider and client is None:
-            client = LLMClient(self.api_keys, self.llm_provider)
-            clients.append(client)
-        global client_embedding
-        if self.embedding_provider and client_embedding is None:
-            client_embedding = LLMClient(self.api_keys, self.embedding_provider)
-            clients.append(client_embedding)
-        return clients
+        if client is None:
+            client = OpenAI(api_key=self.api_key)
+        return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         global client
         if client is not None:
-            client.client.close()
+            client.close()
             client = None
 
-
-
-class Usage:
-    """Usage class."""
-
-    def __init__(self, prompt_tokens=None, completion_tokens=None):
-        self.prompt_tokens = prompt_tokens
-        self.completion_tokens = completion_tokens
-
-
-class LLMResponse:
-    """Response class."""
-
-    def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
-        self.content = content
-        self.usage = Usage()
-
-
-class LLMClient:
-    """Client for LLMs."""
-
-    def __init__(self, api_keys: List, llm_provider: str = None):
-        self.api_keys = api_keys
-        self.llm_provider = llm_provider
-        if self.llm_provider == "anthropic":
-            import anthropic
-
-            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
-        if self.llm_provider == "openai":
-            import openai
-
-            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
-        if self.llm_provider == "openrouter":
-            import openai
-
-            self.client = openai.OpenAI(
-                base_url="https://openrouter.ai/api/v1",
-                api_key=self.api_keys["openrouter"],
-            )
-    
-    def completions(
-        self,
-        model: str,
-        messages: List = [],
-        timeout: Optional[Union[float, int]] = None,
-        temperature: Optional[float] = None,
-        top_p: Optional[float] = None,
-        n: Optional[int] = None,
-        stop=None,
-        max_tokens: Optional[float] = None,
-    ):
-        if self.llm_provider == "anthropic":
-            # anthropic can't take system prompt in messages
-            for i in range(len(messages) - 1, -1, -1):
-                if messages[i]["role"] == "system":
-                    system_prompt = messages[i]["content"]
-                    del messages[i]
-
-            response_provider = self.client.messages.create(
-                model=model,
-                messages=messages,
-                system=system_prompt,
-                temperature=temperature,
-                max_tokens=max_tokens,
-            )
-            response = LLMResponse()
-            response.content = response_provider.content[0].text
-            response.usage.prompt_tokens = response_provider.usage.input_tokens
-            response.usage.completion_tokens = response_provider.usage.output_tokens
-            return response
-
-        if self.llm_provider == "openai":
-            response_provider = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                n=1,
-                timeout=150,
-                stop=None,
-            )
-            response = LLMResponse()
-            response.content = response_provider.choices[0].message.content
-            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
-            response.usage.completion_tokens = response_provider.usage.completion_tokens
-            return response
-
-        if self.llm_provider == "openrouter":
-            # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
-            # transform = [] # to desactivate prompt compression
-            response_provider = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                n=1,
-                timeout=150,
-                stop=None,
-            )
-            response = LLMResponse()
-            response.content = response_provider.choices[0].message.content
-            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
-            response.usage.completion_tokens = response_provider.usage.completion_tokens
-            return response
-
-    def embeddings(self, model, input):
-        if self.llm_provider == "openai" or self.llm_provider == "openrouter":
-            response = self.client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=input,
-            )
-            return response
-        else:
-            print("Only OpenAI embeddings supported currently.")
-            return None
-
-
-client: Optional[LLMClient] = None
-client_embedding: Optional[LLMClient] = None
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
     return len(enc.encode(text))
 
+
 NUM_URLS_EXTRACT = 5
 MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4096  # Set the limit for cost efficiency
 WORDS_PER_TOKEN_FACTOR = 0.75
-EMBEDDING_MODEL = "text-embedding-3-large"
-MAX_EMBEDDING_TOKEN_INPUT = 8192
-EMBEDDING_SIZE = 1536
-
-# number of retries and delay for completion
-COMPLETION_RETRIES = 3
-COMPLETION_DELAY = 2
-
-LLM_SETTINGS = {
-    "gpt-3.5-turbo-0125": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 4096,
-        "temperature": 0,
-    },
-    "gpt-4-0125-preview": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 8192,
-        "temperature": 0,
-    }
-}
-
 DEFAULT_OPENAI_SETTINGS = {
     "max_compl_tokens": 200,
     "temperature": 0,
@@ -292,7 +137,6 @@ ALLOWED_TOOLS = [
     "prediction-offline-sum-url-content",
     "prediction-online-sum-url-content",
 ]
-ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 TOOL_TO_ENGINE = {
     "prediction-offline-sum-url-content": "gpt-4-0125-preview",
     "prediction-online-sum-url-content": "gpt-4-0125-preview",
@@ -556,20 +400,6 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     )
     return [result["link"] for result in search["items"]]
 
-def extract_json_string(text):
-    # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
-    pattern = r"(\{[^}]*\})"
-    matches = re.findall(pattern, text)
-    return matches[0].replace("json", "")
-
-def download_spacy_model(model_name: str) -> None:
-    """Downloads the specified spaCy language model if it is not already installed."""
-    if not isinstance(model_name, str) or not model_name:
-        raise ValueError("spacy model_name must be a non-empty string")
-    if not spacy.util.is_package(model_name):
-        spacy.cli.download(model_name)
-    else:
-        print(f"{model_name} is already installed.")
 
 def extract_event_date(doc_question) -> str:
     """
@@ -590,7 +420,7 @@ def extract_event_date(doc_question) -> str:
             event_date_ymd = standardize_date(ent.text)
 
     # If event date not formatted as YMD or not found, return None
-    if not event_date_ymd or not datetime.strptime(event_date_ymd, "%Y-%m-%d") :
+    if not datetime.strptime(event_date_ymd, "%Y-%m-%d") or event_date_ymd is None:
         return None
     else:
         return event_date_ymd
@@ -763,8 +593,6 @@ def get_context_around_isolated_event_date(
     Returns:
         list: List of sentences surrounding the target date.
     """
-    if not event_date_ymd:
-        return []
 
     # Check max_context value constraints
     if max_context < len_sentence_threshold:
@@ -849,101 +677,9 @@ def get_context_around_isolated_event_date(
 
     return contexts_list
 
-def embed_batch(batch):
-    """
-    Helper function to process a single batch of texts and return the embeddings.
-    """
-    response = client_embedding.embeddings(
-        model=EMBEDDING_MODEL,
-        input=[sent for sent in batch]
-    )
-
-    # Assert the order of documents in the response matches the request
-    for i, data in enumerate(response.data):
-        assert i == data.index, "Document order in the response does not match the request."
-
-    # Return the embeddings
-    return [data.embedding for data in response.data]
-
-def sort_text_chunks(
-    query: str, text_chunks_embedded: List[Tuple[str, np.ndarray]]
-) -> List[Tuple[str, float]]:
-    """Similarity search to find similar chunks to a query"""
-    # Generate the query embedding
-    query_embedding = (
-        client_embedding.embeddings(
-            model=EMBEDDING_MODEL,
-            input=query,
-        )
-        .data[0]
-        .embedding
-    )
-    
-    # Create the FAISS index
-    embedding_size = len(query_embedding)
-    index = faiss.IndexFlatIP(embedding_size)
-    
-    # Add the embeddings to the index
-    embeddings = np.array([embedding for _, embedding in text_chunks_embedded])
-    index.add(embeddings)
-    
-    # Perform the search
-    D, I = index.search(np.array([query_embedding]), len(text_chunks_embedded))
-    
-    # Attach similarity scores to the corresponding text chunks
-    sorted_chunks_with_similarities = [
-        (text_chunks_embedded[i][0], D[0][j]) for j, i in enumerate(I[0])
-    ]
-    
-    return sorted_chunks_with_similarities
-
-
-def get_embeddings(sentences: List[str], enc: tiktoken.Encoding) -> List[Tuple[str, np.ndarray]]:
-    """Get embeddings for the text chunks."""
-    # Batch the text chunks that the sum of tokens is less than MAX_EMBEDDING_TOKEN_INPUT
-    batches = []
-    current_batch = []
-    current_batch_token_count = 0
-    for sent in sentences:
-        sent_num_tokens  = len(enc.encode(sent))
-        if sent_num_tokens + current_batch_token_count <= MAX_EMBEDDING_TOKEN_INPUT:
-            # Add document to the batch if token limit is not exceeded
-            current_batch.append(sent)
-            current_batch_token_count += sent_num_tokens
-        else:
-            # Process the current batch and start a new one if the token limit would be exceeded
-            batches.append(current_batch)
-            current_batch = [sent]
-            current_batch_token_count = sent_num_tokens
-
-    # Add the last batch
-    if current_batch:
-        batches.append(current_batch)
-
-    coupled_list = []
-    list_lock = threading.Lock()
-
-    # Process batches in parallel
-    with ThreadPoolExecutor(max_workers=5) as executor:
-        future_to_batch = {executor.submit(embed_batch, batch): batch for batch in batches}
-
-        for future in as_completed(future_to_batch):
-            batch = future_to_batch[future]
-            try:
-                embeddings = future.result()
-                # Assign embeddings to the corresponding documents
-                with list_lock:
-                    for sent, embedding in zip(batch, embeddings):
-                        coupled_list.append((sent, embedding))
-
-            except Exception as e:
-                print(f"Exception: {e}")
-
-    return coupled_list
-
 
 def extract_relevant_information(
-    text: str, event_question: str, event_date: str, nlp, enc, max_words: int
+    text: str, query_emb, event_date: str, model, nlp, max_words: int
 ) -> str:
     """
     Extract relevant information from website text based on a given event question.
@@ -997,17 +733,17 @@ def extract_relevant_information(
     # Limit the number of sentences for performance optimization
     sentences = sentences[:num_sentences_threshold]
 
-    sent_emb_list = get_embeddings(sentences, enc)
-    sorted_chunks_with_similarities = sort_text_chunks(event_question, sent_emb_list)
-
+    # Encode event question calculate similarity scores
+    sent_emb = model.encode(sentences)
+    similarities = util.dot_score(query_emb, sent_emb)[0].cpu().tolist()
 
     # Extract top relevant sentences
     relevant_sentences = [
         sent
         for sent, sim in sorted(
-            sorted_chunks_with_similarities, key=lambda x: x[1], reverse=True
+            zip(sentences, similarities), key=lambda x: x[1], reverse=True
         )
-        if sim > 0.5
+        if sim > 0.4
     ]
 
     if not relevant_sentences:
@@ -1065,10 +801,10 @@ def get_date(soup):
 
 def extract_text(
     html: str,
-    event_question: str,
+    query_emb,
     event_date: str,
+    model,
     nlp,
-    enc,
     max_words: int,
 ) -> str:
     """
@@ -1098,7 +834,7 @@ def extract_text(
     # Get the date of the website
     date = get_date(soup)
     if date is None:
-        date = "unknown"
+        raise ValueError("Could not extract release or update date from HTML.")
 
     # Remove unnecessary tags to clean up text
     for element in soup(HTML_TAGS_TO_REMOVE):
@@ -1114,10 +850,10 @@ def extract_text(
     # Get summarized text
     relevant_text = extract_relevant_information(
         text=text,
-        event_question=event_question,
+        query_emb=query_emb,
         event_date=event_date,
+        model=model,
         nlp=nlp,
-        enc=enc,
         max_words=max_words,
     )
 
@@ -1203,7 +939,6 @@ def extract_texts(
     event_question: str,
     max_words_per_url: int,
     nlp,
-    enc,
 ) -> List[str]:
     """
     Extract texts from a list of URLs using BERT and Spacy.
@@ -1235,8 +970,14 @@ def extract_texts(
     doc_question = nlp(event_question)
     event_date = extract_event_date(doc_question)
 
+    # Initialize Sentence Transformer model
+    model = SentenceTransformer("sentence-transformers/multi-qa-distilbert-cos-v1")
+
+    # Create sentence embeddings for event question with Sentence Transformer
+    query_emb = model.encode(event_question)
+
     if event_date is None:
-        print(
+        raise ValueError(
             f"Could not extract precise event date from event question: {event_question}"
         )
 
@@ -1252,10 +993,10 @@ def extract_texts(
                 # Extract relevant information for the event question
                 extracted_text = extract_text(
                     html=result.text,
-                    event_question=event_question,
+                    query_emb=query_emb,
                     event_date=event_date,
+                    model=model,
                     nlp=nlp,
-                    enc=enc,
                     max_words=max_words_per_url,
                 )
 
@@ -1286,45 +1027,6 @@ def extract_texts(
 
     return extracted_texts
 
-def generate_prediction_with_retry(
-    model: str,
-    messages: List[Dict[str, str]],
-    temperature: float,
-    max_tokens: int,
-    retries: int = COMPLETION_RETRIES,
-    delay: int = COMPLETION_DELAY,
-    counter_callback: Optional[Callable] = None,
-):
-    """Attempt to generate a prediction with retries on failure."""
-    attempt = 0
-    while attempt < retries:
-        try:
-            response = client.completions(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                n=1,
-                timeout=90,
-                stop=None,
-            )
-
-            if counter_callback is not None:
-                counter_callback(
-                    input_tokens=response.usage.prompt_tokens,
-                    output_tokens=response.usage.completion_tokens,
-                    model=model,
-                    token_counter=count_tokens,
-                )
-            extracted_block = extract_json_string(response.content)
-
-            return extracted_block, counter_callback
-        except Exception as e:
-            print(f"Attempt {attempt + 1} failed with error: {e}")
-            time.sleep(delay)
-            attempt += 1
-    raise Exception("Failed to generate prediction after retries")
-
 
 def fetch_additional_information(
     event_question: str,
@@ -1332,7 +1034,6 @@ def fetch_additional_information(
     google_api_key: str,
     google_engine: str,
     nlp,
-    enc,
     engine: str = "gpt-4-0125-preview",
     temperature: float = 1.0,
     max_compl_tokens: int = 500,
@@ -1357,6 +1058,11 @@ def fetch_additional_information(
     # Create URL query prompt
     url_query_prompt = URL_QUERY_PROMPT.format(event_question=event_question)
 
+    # Perform moderation check
+    moderation_result = client.moderations.create(input=url_query_prompt)
+    if moderation_result.results[0].flagged:
+        return "Moderation flagged the prompt as in violation of terms.", None
+
     # Create messages for the OpenAI engine
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -1364,7 +1070,7 @@ def fetch_additional_information(
     ]
 
     # Fetch queries from the OpenAI engine
-    response = client.completions(
+    response = client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,  # Override the default temperature parameter set for the engine
@@ -1375,8 +1081,8 @@ def fetch_additional_information(
     )
 
     # Parse the response content
-    print(f"RESPONSE: {response.content}")
-    json_data = json.loads(response.content)
+    print(f"RESPONSE: {response}")
+    json_data = json.loads(response.choices[0].message.content)
     # Print queries each on a new line
     print("QUERIES:\n")
     for query in json_data["queries"]:
@@ -1398,7 +1104,6 @@ def fetch_additional_information(
         event_question=event_question,
         max_words_per_url=max_words_per_url,
         nlp=nlp,
-        enc=enc,
     )
 
     # Join the texts and return
@@ -1423,19 +1128,13 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     Returns:
         Tuple[str, Optional[Dict[str, Any]]]: The generated content and any additional data.
     """
-    tool = kwargs["tool"]
-    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-    print(f"ENGINE: {engine}")
-
-    with LLMClientManager(
-        kwargs["api_keys"], engine, embedding_provider="openai"
-    ):
+    with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        tool = kwargs["tool"]
         prompt = kwargs["prompt"]
         max_compl_tokens = kwargs.get(
-            "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
+            "max_tokens", DEFAULT_OPENAI_SETTINGS["max_compl_tokens"]
         )
-        temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
-        counter_callback = kwargs.get("counter_callback", None)
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"TOOL {tool} is not supported.")
@@ -1447,11 +1146,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         print(f"LLM TEMPERATURE: {temperature}")
 
         # Load the spacy model
-        download_spacy_model("en_core_web_md")
-        nlp = spacy.load("en_core_web_md")
+        nlp = spacy.load("en_core_web_sm")
 
         # Get the LLM engine to be used
-   
+        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")
 
         # Extract the event question from the prompt
@@ -1480,7 +1178,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 temperature=temperature,
                 max_compl_tokens=max_compl_tokens,
                 nlp=nlp,
-                enc=enc,
                 max_add_words=max_add_words,
                 google_api_key=kwargs["api_keys"]["google_api_key"],
                 google_engine=kwargs["api_keys"]["google_engine_id"],
@@ -1504,17 +1201,14 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         # Extract event date and format it to ISO 8601 with UTC timezone and 23:59:59 time
         doc_question = nlp(event_question)
-        
-        formatted_event_date = "unknown"
         raw_event_date = extract_event_date(doc_question)
-        if raw_event_date:
-            parsed_event_date = datetime.strptime(raw_event_date, "%Y-%m-%d")
-            final_event_date = parsed_event_date.replace(
-                hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc
-            )
-            formatted_event_date = (
-                final_event_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
-            )
+        parsed_event_date = datetime.strptime(raw_event_date, "%Y-%m-%d")
+        final_event_date = parsed_event_date.replace(
+            hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc
+        )
+        formatted_event_date = (
+            final_event_date.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        )
 
         # Generate the prediction prompt
         prediction_prompt = PREDICTION_PROMPT.format(
@@ -1526,6 +1220,16 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         )
         print(f"\nPREDICTION PROMPT: {prediction_prompt}\n")
 
+        # Perform moderation
+        moderation_result = client.moderations.create(input=prediction_prompt)
+        if moderation_result.results[0].flagged:
+            return (
+                "Moderation flagged the prompt as in violation of terms.",
+                None,
+                None,
+                None,
+            )
+
         # Create messages for the OpenAI engine
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
@@ -1533,13 +1237,14 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         ]
 
         # Generate the response
-        extracted_block, counter_callback = generate_prediction_with_retry(
+        response = client.chat.completions.create(
             model=engine,
             messages=messages,
             temperature=temperature,
             max_tokens=max_compl_tokens,
-            retries=COMPLETION_RETRIES,
-            delay=COMPLETION_DELAY,
+            n=1,
+            timeout=150,
+            stop=None,
         )
-        print(f"RESPONSE: {extracted_block}")
-        return extracted_block, prediction_prompt, None, counter_callback
+        print(f"RESPONSE: {response}")
+        return response.choices[0].message.content, None, None, None
