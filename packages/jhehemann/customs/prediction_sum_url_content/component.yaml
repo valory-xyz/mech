@@ -12,6 +12,8 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: prediction_sum_url_content.py
 callable: run
+params:
+  default_model: gpt-4-0125-preview
 dependencies:
   tqdm:
     version: ==4.56.0
@@ -36,6 +38,8 @@ dependencies:
     version: ==0.8.1
   pypdf2:
     version: ==3.0.1
+  numpy:
+    version: '>=1.19.0'
   pandas: {}
   python-dateutil:
     version: ==2.8.2
