@@ -6,6 +6,7 @@ description: A tool for making binary predictions using sentence a URL article.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
+  __init__.py: bafybeicqdub7wb5n454snmgxymim63itq6st7j2whznnsz6aiyxwaaokbi
   prediction_sentence_embedding.py: bafybeid7l5vy6utk2bwjj6syc62g4mvq5dnwl6qy4pavrecltujm453hk4
 fingerprint_ignore_patterns: []
 entry_point: prediction_sentence_embedding.py

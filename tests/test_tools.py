@@ -188,6 +188,7 @@ class TestDALLEGeneration(BaseToolTest):
     ]
     tool_module = dalle_request
 
+
 class TestPredictionSentenceEmbedding(BaseToolTest):
     """Test Prediction Sum URL Content."""
 
