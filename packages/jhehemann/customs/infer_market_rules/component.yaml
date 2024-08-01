@@ -1,0 +1,19 @@
+name: infer_market_rules
+author: jhehemann
+version: 0.1.0
+type: custom
+description: A tool for infering the market rules of a prediction market solely based
+  on the market question.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeifopioe3iqaximesrlfjcjaa362amp3rjawsxwu7kv4gt2lrberf4
+  infer_market_rules.py: bafybeieqcmdblilnkyvi2khcexf72rrgzzpfvfhr7zwn44qzor4edfhnzm
+fingerprint_ignore_patterns: []
+entry_point: infer_market_rules.py
+callable: run
+dependencies:
+  openai:
+    version: ==1.11.0
+  tiktoken:
+    version: ==0.5.1
