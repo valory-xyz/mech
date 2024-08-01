@@ -22,6 +22,7 @@ from typing import List, Any
 from packages.gnosis.customs.omen_tools import omen_buy_sell
 from packages.victorpolisetty.customs.dalle_request import dalle_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
+from packages.jhehemann.customs.prediction_sentence_embeddings import prediction_sentence_embeddings
 from packages.napthaai.customs.prediction_request_rag_cohere import (
     prediction_request_rag_cohere,
 )
@@ -193,23 +194,33 @@ class TestDALLEGeneration(BaseToolTest):
     ]
     tool_module = dalle_request
 
+class TestPredictionSentenceEmbeddings(BaseToolTest):
+    """Test Prediction Sum URL Content."""
 
+    tools = prediction_sentence_embeddings.ALLOWED_TOOLS
+    models = prediction_sentence_embeddings.ALLOWED_MODELS
+    prompts = [
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
+    ]
+    tool_module = prediction_sentence_embeddings
+
+   
 class TestGraphResponseAnalyser:
-    """Check successful query output analysis"""
+  """Check successful query output analysis"""
 
-    tool_callable: str = "run"
-    tool_module = graphql_response_analyser
+  tool_callable: str = "run"
+  tool_module = graphql_response_analyser
 
-    def test_run(self) -> None:
-        """Test run method."""
-        kwargs = dict(
-            tool="openai-gpt-3.5-turbo",
-            request="When was the first transfer?",
-            examples=query_examples,
-            endpoint="https://api.subquery.network/sq/subquery/cusdnew",
-            description="This project manages and indexes data pertaining to cUSD (CELO USD) ERC-20 token transfers and approvals recorded within a dedicated smart contract. The stored data includes information on approvals granted and transfers executed. These entities provide insights into the authorization and movement of cUSD tokens within the CELO ecosystem, facilitating analysis and monitoring of token transactions.",
-            api_keys={"openai": OPENAI_SECRET_KEY},
-        )
-        func = getattr(self.tool_module, self.tool_callable)
-        response = func(**kwargs)
-        assert "analysis_result" in response[0]
+  def test_run(self) -> None:
+      """Test run method."""
+      kwargs = dict(
+          tool="openai-gpt-3.5-turbo",
+          request="When was the first transfer?",
+          examples=query_examples,
+          endpoint="https://api.subquery.network/sq/subquery/cusdnew",
+          description="This project manages and indexes data pertaining to cUSD (CELO USD) ERC-20 token transfers and approvals recorded within a dedicated smart contract. The stored data includes information on approvals granted and transfers executed. These entities provide insights into the authorization and movement of cUSD tokens within the CELO ecosystem, facilitating analysis and monitoring of token transactions.",
+          api_keys={"openai": OPENAI_SECRET_KEY},
+      )
+      func = getattr(self.tool_module, self.tool_callable)
+      response = func(**kwargs)
+      assert "analysis_result" in response[0]
