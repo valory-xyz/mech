@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeieynbsr6aijx2totfi5iw6thjwgzko526zcs5plgvgrq2lufso2sy
-  prepare_tx.py: bafybeidujwfg4zh3pl3cmpgm5csrlethsap2fcrdkecjh57n6ww4vtotay
+  prepare_tx.py: bafybeihxbsiy7za3djuo5r4vznlpqdfcwlfs3s52ms2eueb5nfucotse4e
 fingerprint_ignore_patterns: []
 entry_point: prepare_tx.py
 callable: run
@@ -15,6 +15,6 @@ dependencies:
   openai:
     version: ==1.30.2
   anthropic:
-    version: ==0.23.1
+    version: ==0.21.3
   google-api-python-client:
     version: ==2.95.0

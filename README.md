@@ -14,7 +14,7 @@
 The execution of AI tasks, such as image generation using DALL-E, prompt processing with ChatGPT, or more intricate operations involving on-chain transactions, poses a number of challenges, including:
 
 - Access to proprietary APIs, which may come with associated fees/subscriptions.
-- Proficiency in the usage of the the related open-source technologies, which may entail facing their inherent complexities.
+- Proficiency in the usage of the related open-source technologies, which may entail facing their inherent complexities.
 
 AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to post *AI tasks requests* on-chain and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are **hassle-free**, **crypto-native**, and **infinitely composable**.
 
@@ -238,7 +238,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
           ```
 
         - `counter_callback`: Object to be called for calculating the cost when making requests to this tool. It can be set to `None`.
-        - `keychain`: The object hanlding the keys. Note that if you use the `with_key_rotation` decorator, you don't need to return this.
+        - `keychain`: The object handling the keys. Note that if you use the `with_key_rotation` decorator, you don't need to return this.
     - **Exceptions**: A compliant implementation of the `run` function must capture any exception raised during its execution and return it appropriately, for example as an error code in `result_str`. If `run` raises an exception the Mech will capture and output an `Invalid response` string.
 
    - **Dependencies**: If your tool introduces new dependencies, you must add them in the following three places:
@@ -277,10 +277,10 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
     API_KEYS=[[openai, dummy_api_key],[<your_api_key_id>, <your_api_key>]]
     ```
 
-5. **Mint your agent service** in the [Autonolas Protocol](https://registry.olas.network/services/mint), and create a Mech for it in [Mech Hub](https://aimechs.autonolas.network/factory). This will allow you to set the `SAFE_CONTRACT_ADDRESS` and `AGENT_MECH_CONTRACT_ADDRESS` in the `.1env` file.
+5. **Mint your agent service** in the [Autonolas Protocol](https://registry.olas.network/ethereum/services/mint), and create a Mech for it in [Mech Hub](https://aimechs.autonolas.network/factory). This will allow you to set the `SAFE_CONTRACT_ADDRESS` and `AGENT_MECH_CONTRACT_ADDRESS` in the `.1env` file.
 
     > **Warning**
-    > AI Mechs run on the [Gnosis chain](https://www.gnosis.io/). You must ensure that your wallet is connected to the [Gnosis chain](https://www.gnosis.io/) before using the [Autonolas Protocol](https://protocol.autonolas.network/services/mint) and [Mech Hub](https://aimechs.autonolas.network/factory).
+    > AI Mechs run on the [Gnosis chain](https://www.gnosis.io/). You must ensure that your wallet is connected to the [Gnosis chain](https://www.gnosis.io/) before using the [Autonolas Protocol](https://registry.olas.network/ethereum/services/mint) and [Mech Hub](https://aimechs.autonolas.network/factory).
 
     Here is an example of the agent NFT metadata once you create the Mech:
 
@@ -320,12 +320,12 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
 ## More on tools
 
-- **OpenAI request** (`openai_request.py`). Executes requests to the OpenAI API through the engine associated to the specific tool. It receives as input an arbitrary prompt and outputs the returned output by the OpenAI API.
+- **OpenAI request** (`openai_request.py`). Executes requests to the OpenAI API through the engine associated with the specific tool. It receives as input an arbitrary prompt and outputs the returned output by the OpenAI API.
   - `openai-gpt-3.5-turbo`
   - `openai-gpt-4`
   - `openai-gpt-3.5-turbo-instruct`
 
-- **Stability AI request** (`stabilityai_request.py`): Executes requests to the Stability AI through the engine associated to the specific tool. It receives as input an arbitrary prompt and outputs the image data corresponding to the output of Stability AI.
+- **Stability AI request** (`stabilityai_request.py`): Executes requests to the Stability AI through the engine associated with the specific tool. It receives as input an arbitrary prompt and outputs the image data corresponding to the output of Stability AI.
   - `stabilityai-stable-diffusion-v1-5`
   - `stabilityai-stable-diffusion-xl-beta-v2-2-2`
   - `stabilityai-stable-diffusion-512-v2-1`

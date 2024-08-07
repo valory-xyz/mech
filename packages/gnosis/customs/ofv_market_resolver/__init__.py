@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -16,22 +16,5 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""This module contains constants."""
 
-import os
-
-from dotenv import load_dotenv
-
-load_dotenv()
-
-OPENAI_SECRET_KEY = os.getenv("OPENAI_SECRET_KEY")
-STABILITY_API_KEY = os.getenv("STABILITY_API_KEY")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-GOOGLE_ENGINE_ID = os.getenv("GOOGLE_ENGINE_ID")
-CLAUDE_API_KEY = os.getenv("CLAUDE_API_KEY")
-REPLICATE_API_KEY = os.getenv("REPLICATE_API_KEY")
-NEWS_API_KEY = os.getenv("NEWS_API_KEY")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-GNOSIS_RPC_URL = os.getenv("GNOSIS_RPC_URL")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-SERPER_API_KEY = os.getenv("SERPER_API_KEY")
+"""This module contains the bet amount per threshold strategy."""

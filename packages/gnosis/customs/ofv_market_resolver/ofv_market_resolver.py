@@ -1,12 +1,69 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2024 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+"""This module contains the ofv market resolver."""
+import functools
+
+import openai
 from factcheck import FactCheck
 from factcheck.utils.multimodal import modal_normalization
 import json
-import typing as t
 from langchain_openai import ChatOpenAI
-from typing import Annotated, Any, Dict, Optional, Tuple
+from typing import Annotated, Any, Dict, Optional, Tuple, Callable
 from pydantic import BaseModel, BeforeValidator
 
+
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+        retries_left: Dict[str, int] = api_keys.max_retries()
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys,)
+            except openai.RateLimitError as e:
+                # try with a new key again
+                if retries_left["openai"] <= 0 and retries_left["openrouter"] <= 0:
+                    raise e
+                retries_left["openai"] -= 1
+                retries_left["openrouter"] -= 1
+                api_keys.rotate("openai")
+                api_keys.rotate("openrouter")
+                return execute()
+            except Exception as e:
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
+
+
 DEFAULT_OPENAI_MODEL = "gpt-4-0125-preview"
+ALLOWED_TOOLS = ["ofv_market_resolver"]
+ALLOWED_MODELS = [DEFAULT_OPENAI_MODEL]
 
 Factuality = Annotated[
     bool | None,
@@ -55,7 +112,6 @@ def rewrite_as_sentence(
 ) -> str:
     """
     Rewrites the question into a sentence, example:
-
     `Will former Trump Organization CFO Allen Weisselberg be sentenced to jail by 15 April 2024?`
     ->
     `Former Trump Organization CFO Allen Weisselberg was sentenced to jail by 15 April 2024.`
@@ -76,7 +132,6 @@ If the question is about exact date, keep it exact.
 If the question is about a date range, keep it a range.
 Always keep the same meaning.                          
 Never negate the sentence into opposite meaning of the question.                  
-
 Question: {question}
 Sentence:                                         
 """
@@ -111,17 +166,11 @@ def is_predictable_binary(
 - The market's question can not be about itself or refer to itself.
 - The answer is probably Google-able, after the event happened.
 - The potential asnwer can be only "Yes" or "No".
-
 Follow a chain of thought to evaluate if the question is fully qualified:
-
 First, write the parts of the following question:
-
 "{question}"
-
 Then, write down what is the future event of the question, what it refers to and when that event will happen if the question contains it.
-
 Then, explain why do you think it is or isn't fully qualified.
-
 Finally, write your final decision, write `decision: ` followed by either "yes it is fully qualified" or "no it isn't fully qualified" about the question. Don't write anything else after that. You must include "yes" or "no".
 """
     completion = str(llm.invoke(prompt, max_tokens=512).content)
@@ -176,11 +225,12 @@ def most_common_fact_result(results: list[FactCheckResult]) -> FactCheckResult:
     return first_most_common_fact
 
 
+@with_key_rotation
 def run(
     prompt: str,
-    api_keys: dict[str, str],
+    api_keys: Any,
     n_fact_runs: int = 3,
-    **kwargs: t.Any,  # Just to ignore any other arguments passed to the resolver by the universal benchmark script.
+    **kwargs: Any,  # Just to ignore any other arguments passed to the resolver by the universal benchmark script.
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the prediction market resolver based on Open Fact Verifier.

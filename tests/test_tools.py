@@ -22,6 +22,8 @@ from typing import List, Any
 from packages.gnosis.customs.omen_tools import omen_buy_sell
 from packages.victorpolisetty.customs.dalle_request import dalle_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
+from packages.jhehemann.customs.prediction_sentence_embeddings import prediction_sentence_embeddings
+from packages.gnosis.customs.ofv_market_resolver import ofv_market_resolver
 from packages.napthaai.customs.prediction_request_rag_cohere import (
     prediction_request_rag_cohere,
 )
@@ -42,7 +44,7 @@ from tests.constants import (
     NEWS_API_KEY,
     OPENROUTER_API_KEY,
     GNOSIS_RPC_URL,
-    GEMINI_API_KEY,
+    GEMINI_API_KEY, SERPER_API_KEY
 )
 
 
@@ -61,6 +63,7 @@ class BaseToolTest:
             "openrouter": [OPENROUTER_API_KEY],
             "gnosis_rpc_url": [GNOSIS_RPC_URL],
             "gemini": [GEMINI_API_KEY],
+            "serperapi": [SERPER_API_KEY],
         }
     )
     models: List = [None]
@@ -183,5 +186,28 @@ class TestDALLEGeneration(BaseToolTest):
 
     tools = dalle_request.ALLOWED_TOOLS
     models = dalle_request.ALLOWED_MODELS
-    prompts = ["Generate an image of a futuristic cityscape."]
+    prompts = [
+        "Generate an image of a futuristic cityscape."
+    ]
     tool_module = dalle_request
+
+
+class TestPredictionSentenceEmbeddings(BaseToolTest):
+    """Test Prediction Sum URL Content."""
+
+    tools = prediction_sentence_embeddings.ALLOWED_TOOLS
+    models = prediction_sentence_embeddings.ALLOWED_MODELS
+    prompts = [
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
+    ]
+    tool_module = prediction_sentence_embeddings
+
+
+class TestOfvMarketResolverTool(BaseToolTest):
+    """Test OFV Market Resolver Tool."""
+
+    tools = ofv_market_resolver.ALLOWED_TOOLS
+    models = ofv_market_resolver.ALLOWED_MODELS
+    prompts = [
+        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
+    ]

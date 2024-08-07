@@ -35,7 +35,6 @@ import operator
 import functools
 import openai
 import anthropic
-from packages.valory.skills.task_execution.utils.apis import KeyChain
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
@@ -310,17 +309,3 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
     # The expected output is: response, prompt, irrelevant, irrelevant
     return response, prompt, None, None
 
-
-if __name__ == "__main__":
-    api_keys = KeyChain(
-        {
-            "openai": [os.environ["OPENAI_API_KEY"]],
-            "tavily": [os.environ["TAVILY_API_KEY"]],
-        }
-    )
-
-    result = run(
-        prompt="Will Apple unveil a new Iphone before the end of 2024?",
-        api_keys=api_keys,
-    )
-    print(result)

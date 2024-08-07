@@ -329,6 +329,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self.send_message(msg, dialogue, self._handle_store_response)
 
+    def _restart_executor(self) -> None:
+        """Restarts the executor."""
+        self._executor.shutdown(wait=False)
+        # create a new executor
+        self._executor = ProcessPoolExecutor(max_workers=1)
+
     def _handle_timeout_task(self) -> None:
         """Handle timeout tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
@@ -340,6 +346,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         async_result = cast(Future, self._async_result)
         async_result.cancel()
+
+        # we restart the executor in case of a timeout.
+        # we do this because its possible the .cancel() call above is not respected
+        # by the executor. Since we only have 1 process running at a time, this would
+        # mean that the task being executed next would be queued. We want to avoid this.
+        self._restart_executor()
+
+        # check if we can add the task to the end of the queue
         if not self.timeout_limit_reached(req_id):
             # added to end of queue
             self.context.logger.info(f"Adding task {req_id} to the end of the queue")
@@ -386,10 +400,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return self._executor.submit(fn, *args, **kwargs)  # type: ignore
         except BrokenProcessPool:
             self.context.logger.warning("Executor is broken. Restarting...")
-            # stop the current executor
-            self._executor.shutdown(wait=False)
-            # create a new executor
-            self._executor = ProcessPoolExecutor(max_workers=1)
+            # restart the executor
+            self._restart_executor()
             # try to run the task again
             return self._executor.submit(fn, *args, **kwargs)  # type: ignore
 

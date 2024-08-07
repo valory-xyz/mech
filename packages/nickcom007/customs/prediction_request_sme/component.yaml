@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_request_sme.py: bafybeibni635agoov5imrnmjg32z2jcb64n2vangdsb6dkc7y4fdqiecrq
+  prediction_request_sme.py: bafybeigfn66axfnuah6azt5j35scsvhz3dpx6azkigv4jiotgq2vglug5q
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_sme.py
 callable: run
@@ -29,4 +29,4 @@ dependencies:
   openai:
     version: ==1.30.2
   anthropic:
-    version: ==0.23.1
+    version: ==0.21.3
