@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeib36ew6vbztldut5xayk5553rylrq7yv4cpqyhwc5ktvd4cx67vwu
-  resolve_market_reasoning.py: bafybeid2265b6pualrczx6cm3sre5pc3cl5fwompsgwwoiwmffoxgvuzsu
+  resolve_market_reasoning.py: bafybeibibdzyr3luhkz3a4f3quvr4y3pdtzmi4aekgbabwffh5l4safooa
 fingerprint_ignore_patterns: []
 entry_point: resolve_market_reasoning.py
 callable: run

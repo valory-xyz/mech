@@ -35,23 +35,36 @@ ENGINES = {
 
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["chat"]]
 
+
 def count_tokens(text: str) -> int:
     """Count the number of tokens in a text using the Gemini model's tokenizer."""
     return genai.count_message_tokens(prompt=text)
 
+
 def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
-    
+
     api_key = kwargs["api_keys"]["gemini"]
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
 
     if tool not in ALLOWED_TOOLS:
-        return f"Model {tool} is not in the list of supported models.", None, None, None,
+        return (
+            f"Model {tool} is not in the list of supported models.",
+            None,
+            None,
+            None,
+        )
 
-    candidate_count = kwargs.get("candidate_count", DEFAULT_GEMINI_SETTINGS["candidate_count"])
-    stop_sequences = kwargs.get("stop_sequences", DEFAULT_GEMINI_SETTINGS["stop_sequences"])
-    max_output_tokens = kwargs.get("max_output_tokens", DEFAULT_GEMINI_SETTINGS["max_output_tokens"])
+    candidate_count = kwargs.get(
+        "candidate_count", DEFAULT_GEMINI_SETTINGS["candidate_count"]
+    )
+    stop_sequences = kwargs.get(
+        "stop_sequences", DEFAULT_GEMINI_SETTINGS["stop_sequences"]
+    )
+    max_output_tokens = kwargs.get(
+        "max_output_tokens", DEFAULT_GEMINI_SETTINGS["max_output_tokens"]
+    )
     temperature = kwargs.get("temperature", DEFAULT_GEMINI_SETTINGS["temperature"])
 
     counter_callback = kwargs.get("counter_callback", None)
@@ -66,11 +79,12 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
                 candidate_count=candidate_count,
                 stop_sequences=stop_sequences,
                 max_output_tokens=max_output_tokens,
-                temperature=temperature)
+                temperature=temperature,
+            ),
         )
 
         # Ensure response has a .text attribute
-        response_text = getattr(response, 'text', None)
+        response_text = getattr(response, "text", None)
 
     except Exception as e:
         return f"An error occurred: {str(e)}", None, None, None

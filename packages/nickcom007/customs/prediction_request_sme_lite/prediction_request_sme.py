@@ -198,7 +198,6 @@ task question: "Will the air strike conflict in Sudan be resolved by 13 Septembe
 """
 
 
-
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
@@ -214,7 +213,7 @@ def with_key_rotation(func: Callable):
             """Retry the function with a new key."""
             try:
                 result = func(*args, **kwargs)
-                return result + (api_keys, )
+                return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
                 service = "anthropic"
@@ -303,14 +302,18 @@ def extract_text(
     return text
 
 
-def get_with_length_limit(url: str, timeout: int = 10, max_length: int = 25_000_000) -> requests.Response:
+def get_with_length_limit(
+    url: str, timeout: int = 10, max_length: int = 25_000_000
+) -> requests.Response:
     response = requests.head(url)
     if response.status_code != 200:
         raise Exception(f"HEAD request failed with status code {response.status_code}")
 
-    content_length = response.headers.get('Content-Length')
+    content_length = response.headers.get("Content-Length")
     if content_length and int(content_length) > max_length:
-        raise Exception(f"Content length ({content_length} bytes) exceeds the limit of {max_length} bytes")
+        raise Exception(
+            f"Content length ({content_length} bytes) exceeds the limit of {max_length} bytes"
+        )
 
     response = requests.get(url, timeout=timeout)
     return response

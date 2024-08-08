@@ -40,8 +40,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 from tiktoken import encoding_for_model
 
 
-
-
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
@@ -57,7 +55,7 @@ def with_key_rotation(func: Callable):
             """Retry the function with a new key."""
             try:
                 result = func(*args, **kwargs)
-                return result + (api_keys, )
+                return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
                 service = "anthropic"
@@ -93,7 +91,6 @@ def with_key_rotation(func: Callable):
         return mech_response
 
     return wrapper
-
 
 
 class LLMClientManager:
@@ -285,7 +282,6 @@ LLM_SETTINGS = {
 }
 ALLOWED_TOOLS = [
     "prediction-request-rag",
-
     # LEGACY
     "prediction-request-rag-claude",
 ]
@@ -368,8 +364,12 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+        "temperature"
+    ],
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+        "default_max_tokens"
+    ],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -612,8 +612,12 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+        "temperature"
+    ],
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+        "default_max_tokens"
+    ],
 ) -> Tuple[str, Callable[[int, int, str], None]]:
     """Fetch additional information to help answer the user prompt."""
 
@@ -740,16 +744,12 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     model = kwargs.get("model")
-    if "claude" in tool: # maintain backwards compatibility
-        model = "claude-3-sonnet-20240229" 
+    if "claude" in tool:  # maintain backwards compatibility
+        model = "claude-3-sonnet-20240229"
     print(f"MODEL: {model}")
-    with LLMClientManager(
-        kwargs["api_keys"], model, embedding_provider="openai"
-    ):
+    with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai"):
         prompt = extract_question(kwargs["prompt"])
-        max_tokens = kwargs.get(
-            "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
-        )
+        max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[model]["default_max_tokens"])
         temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
