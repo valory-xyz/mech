@@ -6,6 +6,10 @@ description: This module explains the output of the GraphQL chain data indexer w
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 entry_point: graphql_response_analyser.py
+fingerprint:
+  __init__.py: 
+  graphql_response_analyser.py: 
+fingerprint_ignore_patterns: []
 callable: run
 dependencies:
   openai:  
