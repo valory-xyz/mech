@@ -76,6 +76,7 @@ langgraph = "==0.0.55"
 langchain-community = "==0.2.1"
 prediction-market-agent-tooling = "^0.39.0"
 google-generativeai = "==0.6.0"
+openfactverification-kongzii = "^0.1.0"
 
 [tool.poetry.group.dev.dependencies]
 tomte = {version = "==0.2.15", extras = ["cli", "tests"]}

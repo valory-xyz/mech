@@ -40,8 +40,6 @@ from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 from tiktoken import encoding_for_model
 
 
-
-
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
@@ -57,7 +55,7 @@ def with_key_rotation(func: Callable):
             """Retry the function with a new key."""
             try:
                 result = func(*args, **kwargs)
-                return result + (api_keys, )
+                return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
                 service = "anthropic"
@@ -93,7 +91,6 @@ def with_key_rotation(func: Callable):
         return mech_response
 
     return wrapper
-
 
 
 class LLMClientManager:
@@ -341,7 +338,9 @@ def multi_queries(
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
     temperature: Optional[float] = LLM_SETTINGS["cohere/command-r-plus"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["cohere/command-r-plus"]["default_max_tokens"],
+    max_tokens: Optional[int] = LLM_SETTINGS["cohere/command-r-plus"][
+        "default_max_tokens"
+    ],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -585,7 +584,9 @@ def fetch_additional_information(
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
     temperature: Optional[float] = LLM_SETTINGS["cohere/command-r-plus"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["cohere/command-r-plus"]["default_max_tokens"],
+    max_tokens: Optional[int] = LLM_SETTINGS["cohere/command-r-plus"][
+        "default_max_tokens"
+    ],
 ) -> Tuple[str, Callable[[int, int, str], None]]:
     """Fetch additional information to help answer the user prompt."""
 
@@ -683,21 +684,22 @@ def extract_question(prompt: str) -> str:
 
     return question
 
+
 def parser_prediction_response(response: str) -> str:
     """Parse the response from the prediction model."""
     try:
         # check if line starts with ````json
         if response.startswith("```json"):
-            results = re.findall(f'```json(.*?)```',response,re.DOTALL)
+            results = re.findall(f"```json(.*?)```", response, re.DOTALL)
             print(f"results after parsing={results}")
-            results_as_dict = json.loads(results[0]) # it returns the dictionary
-            return json.dumps(results_as_dict) 
+            results_as_dict = json.loads(results[0])  # it returns the dictionary
+            return json.dumps(results_as_dict)
 
-        extracted_text = ''.join([line.strip() for line in response.splitlines()])
+        extracted_text = "".join([line.strip() for line in response.splitlines()])
         # remove the last comma
         extracted_text = extracted_text.rstrip(",")
         print(f"extracted text= {extracted_text}")
-        
+
         return json.dumps(extracted_text)
     except Exception as e:
         print(e)
@@ -710,14 +712,10 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     model = kwargs.get("model")
     print(f"MODEL: {model}")
-    with LLMClientManager(
-        kwargs["api_keys"], model, embedding_provider="openai"
-    ):
+    with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai"):
         tool = kwargs["tool"]
         prompt = extract_question(kwargs["prompt"])
-        max_tokens = kwargs.get(
-            "max_tokens", LLM_SETTINGS[model]["default_max_tokens"]
-        )
+        max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[model]["default_max_tokens"])
         temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
