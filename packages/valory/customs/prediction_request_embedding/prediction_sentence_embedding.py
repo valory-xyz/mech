@@ -138,7 +138,7 @@ ALLOWED_TOOLS = [
 ]
 TOOL_TO_ENGINE = {
     "prediction-sentence-embedding-conservative": "gpt-3.5-turbo-0125",
-    "prediction-sentence-embedding-bold": "gpt-4o-2024-05-13",
+    "prediction-sentence-embedding-bold": "gpt-4o-2024-08-06",
 }
 
 
@@ -1097,7 +1097,7 @@ def fetch_additional_information(
     google_api_key: str,
     google_engine: str,
     nlp,
-    engine: str = "gpt-4o-2024-05-13",
+    engine: str = "gpt-4o-2024-08-06",
     temperature: float = 0.5,
     max_compl_tokens: int = 500,
 ) -> str:
@@ -1110,7 +1110,7 @@ def fetch_additional_information(
         google_api_key (str): The API key for the Google service.
         google_engine (str): The Google engine to be used.
         temperature (float): The temperature parameter for the engine.
-        engine (str): The openai engine. Defaults to "gpt-4o-2024-05-13".
+        engine (str): The openai engine. Defaults to "gpt-4o-2024-08-06".
         temperature (float): The temperature parameter for the engine. Defaults to 1.0.
         max_compl_tokens (int): The maximum number of tokens for the engine's response.
 
@@ -1222,7 +1222,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         # Fetch additional information
         additional_information = fetch_additional_information(
             event_question=event_question,
-            engine="gpt-4o-2024-05-13",
+            engine="gpt-4o-2024-08-06",
             temperature=0.5,
             max_compl_tokens=max_compl_tokens,
             nlp=nlp,

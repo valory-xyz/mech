@@ -128,7 +128,7 @@ DEFAULT_OPENAI_SETTINGS = {
 MAX_TOKENS = {
     "gpt-3.5-turbo-0125": 4096,
     "gpt-4-0125-preview": 8192,
-    "gpt-4o-2024-05-13": 4096,
+    "gpt-4o-2024-08-06": 4096,
 }
 ALLOWED_TOOLS = [
     "resolve-market-reasoning-gpt-3.5-turbo",
@@ -136,7 +136,7 @@ ALLOWED_TOOLS = [
 ]
 TOOL_TO_ENGINE = {
     "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo-0125",
-    "resolve-market-reasoning-gpt-4": "gpt-4o-2024-05-13",
+    "resolve-market-reasoning-gpt-4": "gpt-4o-2024-08-06",
 }
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 NUM_QUERIES = 3

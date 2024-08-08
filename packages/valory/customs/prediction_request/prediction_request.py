@@ -250,7 +250,7 @@ LLM_SETTINGS = {
         "limit_max_tokens": 8192,
         "temperature": 0,
     },
-    "gpt-4o-2024-05-13": {
+    "gpt-4o-2024-08-06": {
         "default_max_tokens": 500,
         "limit_max_tokens": 4096,
         "temperature": 0,

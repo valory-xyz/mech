@@ -36,7 +36,7 @@ class TokenCounterCallback:
         "gpt-4-turbo-preview": {"input": 0.01, "output": 0.03},
         "gpt-4-0125-preview": {"input": 0.01, "output": 0.03},
         "gpt-4-1106-preview": {"input": 0.01, "output": 0.03},
-        "gpt-4o-2024-05-13": {"input": 0.01, "output": 0.03},
+        "gpt-4o-2024-08-06": {"input": 0.01, "output": 0.03},
         "claude-2": {"input": 0.008, "output": 0.024},
         "claude-3-haiku-20240307": {"input": 0.00025, "output": 0.00125},
         "claude-3-sonnet-20240229": {"input": 0.003, "output": 0.015},

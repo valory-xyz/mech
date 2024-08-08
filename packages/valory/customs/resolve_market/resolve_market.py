@@ -120,7 +120,7 @@ DEFAULT_OPENAI_SETTINGS = {
 ALLOWED_TOOLS = [
     "close_market",
 ]
-TOOL_TO_ENGINE = {tool: "gpt-4o-2024-05-13" for tool in ALLOWED_TOOLS}
+TOOL_TO_ENGINE = {tool: "gpt-4o-2024-08-06" for tool in ALLOWED_TOOLS}
 
 NEWSAPI_ENDPOINT = "https://newsapi.org/v2"
 TOP_HEADLINES = "top-headlines"

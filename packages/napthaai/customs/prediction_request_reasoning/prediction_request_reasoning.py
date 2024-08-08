@@ -257,7 +257,7 @@ LLM_SETTINGS = {
         "limit_max_tokens": 8192,
         "temperature": 0,
     },
-    "gpt-4o-2024-05-13": {
+    "gpt-4o-2024-08-06": {
         "default_max_tokens": 500,
         "limit_max_tokens": 4096,
         "temperature": 0,
@@ -467,8 +467,8 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-05-13"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-05-13"][
+    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"][
         "default_max_tokens"
     ],
 ) -> List[str]:
@@ -683,8 +683,8 @@ def find_similar_chunks(
 def multi_questions_response(
     prompt: str,
     model: str,
-    temperature: float = LLM_SETTINGS["gpt-4o-2024-05-13"]["temperature"],
-    max_tokens: int = LLM_SETTINGS["gpt-4o-2024-05-13"]["default_max_tokens"],
+    temperature: float = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[str]:
     """Generate multiple questions for fetching information from the web."""
@@ -792,8 +792,8 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-05-13"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-05-13"][
+    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"][
         "default_max_tokens"
     ],
 ) -> Tuple[str, List[str], Optional[Callable[[int, int, str], None]]]:
