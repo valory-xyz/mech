@@ -250,12 +250,22 @@ LLM_SETTINGS = {
         "limit_max_tokens": 8192,
         "temperature": 0,
     },
+    "gpt-4o-2024-05-13": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
     "claude-3-sonnet-20240229": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
+    "claude-3-5-sonnet-20240620": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
         "temperature": 0,
@@ -721,7 +731,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     tool = kwargs["tool"]
     engine = kwargs.get("model")
     if "claude" in tool:  # maintain backwards compatibility
-        engine = "claude-3-sonnet-20240229"
+        engine = "claude-3-5-sonnet-20240620"
     print(f"ENGINE: {engine}")
     with LLMClientManager(kwargs["api_keys"], engine):
         prompt = kwargs["prompt"]

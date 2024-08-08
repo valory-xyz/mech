@@ -278,6 +278,11 @@ LLM_SETTINGS = {
         "default_max_tokens": 500,
         "limit_max_tokens": 8192,
         "temperature": 0,
+    },
+    "gpt-4o-2024-05-13": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
     }
 }
 ALLOWED_TOOLS = [
@@ -287,7 +292,7 @@ ALLOWED_TOOLS = [
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 TOOL_TO_ENGINE = {
     "prediction-sentence-embedding-conservative": "gpt-3.5-turbo-0125",
-    "prediction-sentence-embedding-bold": "gpt-4-0125-preview",
+    "prediction-sentence-embedding-bold": "gpt-4o-2024-05-13",
 }
 
 PREDICTION_PROMPT = """

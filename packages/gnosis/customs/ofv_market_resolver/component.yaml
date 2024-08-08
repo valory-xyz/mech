@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  ofv_market_resolver.py: bafybeibwi4ybaw6epwbqmdc3ulgkhqp7f5n6vfdmna7vclqrnt6zz64ejy
+  ofv_market_resolver.py: bafybeie5gh5xnlu53ka44w6oftgjy5dctmgqurl2472xfn7iysh7kdhrre
 fingerprint_ignore_patterns: []
 entry_point: omen_buy_sell.py
 callable: run

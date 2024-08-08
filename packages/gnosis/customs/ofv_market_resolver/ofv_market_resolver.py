@@ -61,7 +61,7 @@ def with_key_rotation(func: Callable):
     return wrapper
 
 
-DEFAULT_OPENAI_MODEL = "gpt-4-0125-preview"
+DEFAULT_OPENAI_MODEL = "gpt-4o-2024-05-13"
 ALLOWED_TOOLS = ["ofv_market_resolver"]
 ALLOWED_MODELS = [DEFAULT_OPENAI_MODEL]
 

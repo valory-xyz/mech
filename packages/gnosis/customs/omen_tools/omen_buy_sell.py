@@ -262,7 +262,7 @@ def build_buy_tx(
 
     except Exception as e:
         traceback.print_exception(e)
-        return f"exception occurred - {e}", None, None, None
+        return f"exception occurred - {e}", "", None, None
 
 
 def build_return_from_tx_params(
@@ -303,7 +303,7 @@ def build_sell_tx(
 
     except Exception as e:
         traceback.print_exception(e)
-        return f"exception occurred - {e}", None, None, None
+        return f"exception occurred - {e}", "", None, None
 
 
 def with_key_rotation(func: Callable):
@@ -346,6 +346,11 @@ LLM_SETTINGS = {
     "gpt-4-0125-preview": {
         "default_max_tokens": 500,
         "limit_max_tokens": 8192,
+        "temperature": 0,
+    },
+    "gpt-4o-2024-05-13": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 4096,
         "temperature": 0,
     },
 }

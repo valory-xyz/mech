@@ -211,3 +211,4 @@ class TestOfvMarketResolverTool(BaseToolTest):
     prompts = [
         'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
+    tool_module = ofv_market_resolver

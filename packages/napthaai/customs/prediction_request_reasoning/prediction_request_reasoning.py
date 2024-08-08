@@ -257,12 +257,22 @@ LLM_SETTINGS = {
         "limit_max_tokens": 8192,
         "temperature": 0,
     },
+    "gpt-4o-2024-05-13": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
     "claude-3-sonnet-20240229": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
+    "claude-3-5-sonnet-20240620": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
         "temperature": 0,
@@ -457,8 +467,8 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4-0125-preview"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4-0125-preview"][
+    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-05-13"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-05-13"][
         "default_max_tokens"
     ],
 ) -> List[str]:
@@ -673,8 +683,8 @@ def find_similar_chunks(
 def multi_questions_response(
     prompt: str,
     model: str,
-    temperature: float = LLM_SETTINGS["gpt-4-0125-preview"]["temperature"],
-    max_tokens: int = LLM_SETTINGS["gpt-4-0125-preview"]["default_max_tokens"],
+    temperature: float = LLM_SETTINGS["gpt-4o-2024-05-13"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["gpt-4o-2024-05-13"]["default_max_tokens"],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[str]:
     """Generate multiple questions for fetching information from the web."""
@@ -782,8 +792,8 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4-0125-preview"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4-0125-preview"][
+    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-05-13"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-05-13"][
         "default_max_tokens"
     ],
 ) -> Tuple[str, List[str], Optional[Callable[[int, int, str], None]]]:
@@ -906,7 +916,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     tool = kwargs["tool"]
     model = kwargs.get("model")
     if "claude" in tool:  # maintain backwards compatibility
-        model = "claude-3-sonnet-20240229"
+        model = "claude-3-5-sonnet-20240620"
     print(f"MODEL: {model}")
     with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai"):
         prompt = extract_question(kwargs["prompt"])

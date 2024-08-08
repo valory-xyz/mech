@@ -254,12 +254,22 @@ LLM_SETTINGS = {
         "limit_max_tokens": 8192,
         "temperature": 0,
     },
+    "gpt-4o-2024-05-13": {
+        "default_max_tokens": 500,
+        "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
     "claude-3-sonnet-20240229": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
+    "claude-3-5-sonnet-20240620": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
         "temperature": 0,
@@ -364,10 +374,10 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
         "temperature"
     ],
-    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
         "default_max_tokens"
     ],
 ) -> List[str]:
@@ -612,10 +622,10 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
         "temperature"
     ],
-    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
         "default_max_tokens"
     ],
 ) -> Tuple[str, Callable[[int, int, str], None]]:
@@ -745,7 +755,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     tool = kwargs["tool"]
     model = kwargs.get("model")
     if "claude" in tool:  # maintain backwards compatibility
-        model = "claude-3-sonnet-20240229"
+        model = "claude-3-5-sonnet-20240620"
     print(f"MODEL: {model}")
     with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai"):
         prompt = extract_question(kwargs["prompt"])

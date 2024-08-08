@@ -121,7 +121,7 @@ ALLOWED_TOOLS = [
 ]
 
 TOOL_TO_ENGINE = {
-    "strong-sme-generator": "gpt-4-0125-preview",
+    "strong-sme-generator": "gpt-4o-2024-05-13",
     "normal-sme-generator": "gpt-3.5-turbo-0125",
 }
 

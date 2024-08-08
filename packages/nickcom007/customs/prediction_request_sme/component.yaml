@@ -8,12 +8,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_request_sme.py: bafybeigasbnl5obetqi3doky3evpgcug4k3tapyfhy6o6owtebehiiwyge
+  prediction_request_sme.py: bafybeibiqzaarorsj4ukcwoz3m6sxy6luuvi7nr4d27gghpkdlnyo4x5eu
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_sme.py
 callable: run
 params:
-  default_model: gpt-4-0125-preview
+  default_model: gpt-4o-2024-05-13
 dependencies:
   requests: {}
   google-api-python-client:

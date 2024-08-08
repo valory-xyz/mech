@@ -137,8 +137,8 @@ ALLOWED_TOOLS = [
     "prediction-online-sum-url-content",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-offline-sum-url-content": "gpt-4-0125-preview",
-    "prediction-online-sum-url-content": "gpt-4-0125-preview",
+    "prediction-offline-sum-url-content": "gpt-4o-2024-05-13",
+    "prediction-online-sum-url-content": "gpt-4o-2024-05-13",
 }
 
 
@@ -1033,7 +1033,7 @@ def fetch_additional_information(
     google_api_key: str,
     google_engine: str,
     nlp,
-    engine: str = "gpt-4-0125-preview",
+    engine: str = "gpt-4o-2024-05-13",
     temperature: float = 1.0,
     max_compl_tokens: int = 500,
 ) -> str:

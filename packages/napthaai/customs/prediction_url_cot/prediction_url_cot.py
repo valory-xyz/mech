@@ -239,6 +239,11 @@ LLM_SETTINGS = {
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
+    "claude-3-5-sonnet-20240620": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
 }
 ALLOWED_TOOLS = [
     "prediction-url-cot",
@@ -318,10 +323,10 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
         "temperature"
     ],
-    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
         "default_max_tokens"
     ],
 ) -> List[str]:
@@ -566,10 +571,10 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = NUM_URLS_PER_QUERY,
     num_queries: Optional[int] = NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+    temperature: Optional[float] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
         "temperature"
     ],
-    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-sonnet-20240229"][
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
         "default_max_tokens"
     ],
     n_docs: int = N_DOCS,
@@ -659,7 +664,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     tool = kwargs["tool"]
     model = kwargs.get("model")
     if "claude" in tool:  # maintain backwards compatibility
-        model = "claude-3-sonnet-20240229"
+        model = "claude-3-5-sonnet-20240620"
     print(f"MODEL: {model}")
     with LLMClientManager(kwargs["api_keys"], model):
         prompt = extract_question(kwargs["prompt"])

@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeib36ew6vbztldut5xayk5553rylrq7yv4cpqyhwc5ktvd4cx67vwu
-  resolve_market_reasoning.py: bafybeibibdzyr3luhkz3a4f3quvr4y3pdtzmi4aekgbabwffh5l4safooa
+  resolve_market_reasoning.py: bafybeibqvdvb2adseid7xi22vmnaodv4vypanpicezhqwltm4fzm2lwjom
 fingerprint_ignore_patterns: []
 entry_point: resolve_market_reasoning.py
 callable: run
 params:
-  default_model: gpt-4-0125-preview
+  default_model: gpt-4o-2024-05-13
 dependencies:
   google-api-python-client:
     version: ==2.95.0
