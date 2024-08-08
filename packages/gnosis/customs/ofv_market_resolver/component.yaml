@@ -6,8 +6,8 @@ description: Tool for resolving markets using
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  ofv_market_resolver.py: bafybeie5gh5xnlu53ka44w6oftgjy5dctmgqurl2472xfn7iysh7kdhrre
+  __init__.py: bafybeie2727utrijcawhgm5bgj7p5lfah2pzepaufnk6m5swuwyduhf2eu
+  ofv_market_resolver.py: bafybeibzog6em3xjnau5gju7rchjgnydmx6fikgcedcfam4ocnwr3xjqku
 fingerprint_ignore_patterns: []
 entry_point: omen_buy_sell.py
 callable: run
@@ -26,4 +26,4 @@ dependencies:
     version: ==0.2.1
   openai:
     version: ==1.30.2
-  openfactverification: {}
+  openfactverification-kongzii: {}

@@ -17,4 +17,4 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the bet amount per threshold strategy."""
+"""This module contains the ofv market resolver."""

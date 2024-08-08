@@ -123,7 +123,7 @@ def rewrite_as_sentence(
     )
 
     prompt = f"""
-Rewrite the question into a simple annoucment sentence stating a fact or prediction like it is already known.  
+Rewrite the question into a simple announcement sentence stating a fact or prediction like it is already known.  
 Make future tense into past tense.
 For future questions that ask if something will happen "by" some date, rewrite it to "before" that date or any time sooner.
 For future questions that ask if something will happen "on" some date, rewrite it to "on" that date.
