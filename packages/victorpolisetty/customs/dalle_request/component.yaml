@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiaesxnkadyuhsacvtrz774edwal2ygz3hillffbkdi4yq2z44r5hm
-  dalle_request.py: bafybeieihdtkdik6vcbow4zfpng6esfqtjsanrrgn5xc5iiw2sejqemnyy
+  dalle_request.py: bafybeiesauxklzm3trj2du6ismrotwmb5vvyrmw2yb3tbhvhjk4lqdc5d4
 fingerprint_ignore_patterns: []
 entry_point: dalle_request.py
 callable: run

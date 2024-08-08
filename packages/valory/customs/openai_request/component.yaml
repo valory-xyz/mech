@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  openai_request.py: bafybeidqfig3253ikrohbh2i3wdeh4azydapishq3rnwpwaj6dbl5t2c5y
+  openai_request.py: bafybeiefuf2ssw6eid2bzy5qzoihxsc5arsmith62nyxisuoukqan5ady4
 fingerprint_ignore_patterns: []
 entry_point: openai_request.py
 callable: run
