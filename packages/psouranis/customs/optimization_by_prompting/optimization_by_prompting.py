@@ -141,7 +141,7 @@ ALLOWED_TOOLS = [
     "deepmind-optimization",
 ]
 TOOL_TO_ENGINE = {
-    "deepmind-optimization-strong": "gpt-4-0125-preview",
+    "deepmind-optimization-strong": "gpt-4o-2024-08-06",
     "deepmind-optimization": "gpt-3.5-turbo-0125",
 }
 
@@ -279,7 +279,7 @@ def prompt_engineer(
     init_instructions,
     instructions_format,
     iterations=3,
-    model_name="gpt-4-0125-preview",
+    model_name="gpt-4o-2024-08-06",
 ):
     llm = OpenAILLM(model_name=model_name, openai_api_key=openai_api_key)
     score_template = {"template": init_instructions, "score": 0.0}

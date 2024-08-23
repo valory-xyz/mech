@@ -1,5 +1,7 @@
 import functools
 from typing import Any, Dict, Optional, Tuple, Callable
+
+import openai
 from openai import OpenAI
 from tiktoken import encoding_for_model
 

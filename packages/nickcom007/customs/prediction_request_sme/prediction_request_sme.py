@@ -74,14 +74,15 @@ DEFAULT_OPENAI_SETTINGS = {
 MAX_TOKENS = {
     "gpt-3.5-turbo-0125": 4096,
     "gpt-4-0125-preview": 8192,
+    "gpt-4o-2024-08-06": 4096,
 }
 ALLOWED_TOOLS = [
     "prediction-offline-sme",
     "prediction-online-sme",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-offline-sme": "gpt-4-0125-preview",
-    "prediction-online-sme": "gpt-4-0125-preview",
+    "prediction-offline-sme": "gpt-4o-2024-08-06",
+    "prediction-online-sme": "gpt-4o-2024-08-06",
 }
 
 PREDICTION_PROMPT = """
