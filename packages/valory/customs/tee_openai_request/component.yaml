@@ -1,0 +1,22 @@
+name: tee_openai_request
+author: valory
+version: 0.1.0
+type: custom
+description: A tool that runs a prompt against the OpenAI API hosted in TEE.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: 3b70694a1ad269bdb357c4b42dd55bc50911e8f4bf43aa6d8d026925f85f2154
+  tee_openai_request.py: b9ddadcf9bc4d398c37d37e8df5ac8e4e74488f6232f03ffadd4fd8fcd9d5086
+fingerprint_ignore_patterns: []
+entry_point: tee_openai_request.py
+callable: run
+dependencies:
+  openai:
+    version: ==1.30.2
+  tiktoken:
+    version: ==0.7.0
+  anthropic:
+    version: ==0.21.3
+  google-api-python-client:
+    version: ==2.95.0
