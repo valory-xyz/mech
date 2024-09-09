@@ -80,7 +80,7 @@ dependencies:
   aiohttp:
     version: <4.0.0,>=3.8.5
   anthropic:
-    version: ==0.21.3
+    version: ==0.23.1
   beautifulsoup4:
     version: ==4.12.2
   chromadb:
@@ -116,7 +116,7 @@ dependencies:
   open-aea-ledger-ethereum:
     version: ==1.50.0
   pandas:
-    version: ==2.1.1
+    version: ==2.2.2
   pypdf2:
     version: ==3.0.1
   python-dateutil:
@@ -139,6 +139,8 @@ dependencies:
     version: '>=0.39.0,<0.40.0'
   google-generativeai:
     version: ==0.6.0
+  openfactverification-kongzii:
+    version: ==0.1.0
 customs: []
 default_connection: null
 ---

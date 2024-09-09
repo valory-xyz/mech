@@ -7,9 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeie2727utrijcawhgm5bgj7p5lfah2pzepaufnk6m5swuwyduhf2eu
+  log/factcheck_dev.log: bafybeihwremece5odkxdjxk4pt2htbpszrxheccxaqs3czogne3t7rblme
   ofv_market_resolver.py: bafybeic6kxngm3mdkpmcjucrrerhyex7kizn7tw7qmpehaiycnc7cb6umu
 fingerprint_ignore_patterns: []
-entry_point: omen_buy_sell.py
+entry_point: ofv_market_resolver.py
 callable: run
 dependencies:
   pydantic:
