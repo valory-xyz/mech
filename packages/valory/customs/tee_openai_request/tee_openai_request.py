@@ -119,7 +119,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     if response.status_code == 200:
         json_response = response.json()
         if 'message' in json_response:
-            return json_response['message'], prompt, None, counter_callback
+            return str(json_response['message']), prompt, None, counter_callback
         else:
             return (
                 "The 'message' field is not present in the response.",
