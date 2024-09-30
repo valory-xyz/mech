@@ -6,8 +6,8 @@ description: A tool to make LLM prediction requests to Gemini.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeicuohbwuyxqyv5ovgimdz326ivvvzatnw7mczil5n3tktur56cw6u
-  corcel_request.py: bafybeidvrt7sice2wuubmolzpjfitnzgminxznrz3wjz7yv47kszgrt4be
+  __init__.py: bafybeictllsxej6cl3hhrsfyroyiqcp5ian2wayajwpesbyjwnf5gwinxq
+  gemini_prediction.py: bafybeichwqlsx4ttthccdxe7zobjy3oexz5l4btkjxod7clin7avy5yf4i
 fingerprint_ignore_patterns: []
 entry_point: gemini_prediction.py
 callable: run
