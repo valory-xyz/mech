@@ -1,0 +1,16 @@
+name: gemini_prediction
+author: dvilela
+version: 0.1.0
+type: custom
+description: A tool to make LLM prediction requests to Gemini.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeicuohbwuyxqyv5ovgimdz326ivvvzatnw7mczil5n3tktur56cw6u
+  corcel_request.py: bafybeidvrt7sice2wuubmolzpjfitnzgminxznrz3wjz7yv47kszgrt4be
+fingerprint_ignore_patterns: []
+entry_point: gemini_prediction.py
+callable: run
+dependencies:
+  google-generativeai:
+    version: ==0.5.3
