@@ -1,0 +1,14 @@
+name: corcel_request
+author: victorpolisetty
+version: 0.1.0
+type: custom
+description: A tool that runs a prompt against the Corcel API.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiaesxnkadyuhsacvtrz774edwal2ygz3hillffbkdi4yq2z44r5hm
+  corcel_request.py: bafybeiaf52eguz3r5spy4nfoby3nthyxpnrm2p6jnus6u7gthr63izyioa
+fingerprint_ignore_patterns: []
+entry_point: corcel_request.py
+callable: run
+dependencies: {}
