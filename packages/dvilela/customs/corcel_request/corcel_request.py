@@ -1,7 +1,44 @@
 import requests
 import re
 import json
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Callable
+import functools
+
+class CorcelAPIException(Exception):
+    pass
+
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+        retries_left: Dict[str, int] = api_keys.max_retries()
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys,)
+            except CorcelAPIException:
+                    # try with a new key again
+                    service = "corcel"
+                    if retries_left[service] <= 0:
+                        raise Exception("Error: API retries exhausted")
+                    retries_left[service] -= 1
+                    api_keys.rotate(service)
+                    return execute()
+            except Exception as e:
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
+
 
 PREDICTION_OFFLINE_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -76,6 +113,10 @@ def send_corcel_request(api_key: str, prompt: str, **kwargs) -> str:
     }
 
     response = requests.post(CORCEL_URL, json=payload, headers=headers, timeout=60)
+
+    if response.status_code != 200:
+        raise CorcelAPIException(f"Corcel API error: {response.json()}")
+
     return response.text
 
 
@@ -109,10 +150,11 @@ def response_post_process(response: str, tool_name: str) -> str:
         return f"Error: response could not be properly postprocessed: {clean_response}"
 
 
+@with_key_rotation
 def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
 
-    api_key = kwargs.get("api_keys", {}).get("corcel", None)
+    api_key = kwargs["api_keys"]["corcel"]
     tool_name = kwargs.get("tool", None)
     prompt = kwargs.get("prompt", None)
 

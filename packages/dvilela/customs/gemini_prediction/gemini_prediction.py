@@ -1,7 +1,42 @@
 import re
 import json
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Callable
 import google.generativeai as genai
+import functools
+from google.api_core.exceptions import GoogleAPIError
+
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+        retries_left: Dict[str, int] = api_keys.max_retries()
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys,)
+            except GoogleAPIError:
+                # try with a new key again
+                service = "gemini"
+                if retries_left[service] <= 0:
+                    raise Exception("Error: API retries exhausted")
+                retries_left[service] -= 1
+                api_keys.rotate(service)
+                return execute()
+            except Exception as e:
+                import pdb;pdb.set_trace()
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
+
 
 PREDICTION_OFFLINE_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -65,10 +100,11 @@ def response_post_process(response: str) -> str:
         return f"Error: response could not be properly postprocessed: {response}"
 
 
+@with_key_rotation
 def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
 
-    api_key = kwargs.get("api_keys", {}).get("gemini", None)
+    api_key = kwargs["api_keys"]["gemini"]
     tool_name = kwargs.get("tool", None)
     prompt = kwargs.get("prompt", None)
     model = kwargs.get("model", "gemini-1.5-flash")
