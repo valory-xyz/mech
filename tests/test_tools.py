@@ -44,7 +44,9 @@ from tests.constants import (
     NEWS_API_KEY,
     OPENROUTER_API_KEY,
     GNOSIS_RPC_URL,
-    GEMINI_API_KEY, SERPER_API_KEY
+    GEMINI_API_KEY,
+    SERPER_API_KEY,
+    CORCEL_API_KEY,
 )
 
 
@@ -64,6 +66,7 @@ class BaseToolTest:
             "gnosis_rpc_url": [GNOSIS_RPC_URL],
             "gemini": [GEMINI_API_KEY],
             "serperapi": [SERPER_API_KEY],
+            "corcel": [CORCEL_API_KEY],
         }
     )
     models: List = [None]
