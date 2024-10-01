@@ -31,12 +31,14 @@ class MechConfig:
     """Mech config dataclass."""
 
     use_dynamic_pricing: bool
+    is_marketplace_mech: bool
 
     @staticmethod
     def from_dict(raw_dict: Dict[str, Any]) -> "MechConfig":
         """From dict."""
         return MechConfig(
-            use_dynamic_pricing=raw_dict["use_dynamic_pricing"].lower() == "true"
+            use_dynamic_pricing=raw_dict["use_dynamic_pricing"].lower() == "true",
+            is_marketplace_mech=raw_dict["is_marketplace_mech"].lower() == "true",
         )
 
 
@@ -82,6 +84,7 @@ class Params(Model):
         # maps the request id to the number of times it has timed out
         self.request_id_to_num_timeouts: Dict[int, int] = defaultdict(lambda: 0)
         self.mech_to_config: Dict[str, MechConfig] = self._parse_mech_configs(kwargs)
+        self.mech_marketplace_address: Optional[str] = kwargs.get("mech_marketplace_address", None)
         super().__init__(*args, **kwargs)
 
     def _nested_list_todict_workaround(

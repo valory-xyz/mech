@@ -40,6 +40,7 @@ from packages.valory.contracts.gnosis_safe.contract import (
     SafeOperation,
 )
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
+from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
@@ -889,10 +890,12 @@ class TransactionPreparationBehaviour(
         tx_hash = cast(str, response.state.body["tx_hash"])[2:]
         return tx_hash
 
-    def _get_deliver_tx(
-        self, task_data: Dict[str, Any]
+
+    def _get_agent_mech_deliver_tx(
+        self,
+        task_data: Dict[str, Any],
     ) -> Generator[None, None, Optional[Dict]]:
-        """Get the deliver tx."""
+        """Get the deliver tx for the mech delivery."""
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=task_data["mech_address"],
@@ -919,6 +922,73 @@ class TransactionPreparationBehaviour(
             "data": data,
             "simulation_ok": simulation_ok,
         }
+
+
+    def _get_deliver_marketplace_tx(
+        self,
+        task_data: Dict[str, Any],
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get the deliver tx for the marketplace delivery."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.mech_marketplace_address,
+            contract_id=str(MechMarketplaceContract.contract_id),
+            contract_callable="get_deliver_data",
+            sender_address=task_data["mech_address"],
+            request_id=task_data["request_id"],
+            data=task_data["task_result"],
+            delivery_mech_staking_instance=self.params.mech_staking_instance_address,
+            delivery_mech_service_id=self.params.on_chain_service_id,
+        )
+        if (
+                contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_deliver_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=task_data["mech_address"],
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_exec_tx_data",
+            to=self.params.mech_marketplace_address,
+            value=ZERO_ETHER_VALUE,
+            data=data,
+            tx_gas=AUTO_GAS,
+            operation=MechOperation.CALL.value,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_deliver_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": task_data["mech_address"],
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+            "simulation_ok": simulation_ok,
+        }
+
+    def _get_deliver_tx(
+        self, task_data: Dict[str, Any]
+    ) -> Generator[None, None, Optional[Dict]]:
+        """Get the deliver tx."""
+        is_marketplace_mech = task_data.get("is_marketplace_mech", False)
+        request_id = task_data["request_id"]
+        if is_marketplace_mech:
+            self.context.logger.info(f"Delivering reqId {request_id} to marketplace mech contract.")
+            return self._get_deliver_marketplace_tx(task_data)
+
+        return self._get_agent_mech_deliver_tx(task_data)
 
 
 class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):

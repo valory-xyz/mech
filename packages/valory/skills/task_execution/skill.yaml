@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeic6srotpryrn3s2kzxzvq6vrstpw6bh3qbqcvgv5dryihsffcio4u
+  behaviours.py: bafybeiebkk2tzmbpngjbr6ryfajsgbgthg445shpry7knhdfceerbpdceq
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
-  models.py: bafybeid6befxrrbiaw7nduz4zgbm5nfc246fn2eb6rfmja6v5hmq4wtcwe
+  models.py: bafybeibuatjctshvchlgtabfw3nebjsmt2jagx6oowpvegnffrsajjcb3a
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeiafnee7iay6dyjnatyqyzjov5c4ibl3ojamjmgfjri7cyghl7qayq
@@ -24,6 +24,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 contracts:
 - valory/agent_mech:0.1.0:bafybeiah6b5epo2hlvzg5rr2cydgpp2waausoyrpnoarf7oa7bw33rex34
+- valory/mech_marketplace:0.1.0:bafybeicgtxo6q4wu54zql5djwnyc4krb7mytnfdij2asl7dec44faisoqy
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
@@ -92,6 +93,8 @@ models:
       - - '0x9A676e781A523b5d0C0e43731313A708CB607508'
         - - - use_dynamic_pricing
             - 'false'
+          - - is_marketplace_mech
+            - 'false'
       polling_interval: 30.0
       task_deadline: 240.0
       max_block_window: 500
@@ -101,6 +104,7 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
+      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
     class_name: Params
 dependencies:
   beautifulsoup4:
