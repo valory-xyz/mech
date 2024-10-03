@@ -23,7 +23,7 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
 - valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
 - valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
-- valory/task_submission_abci:0.1.0:bafybeihvvp6ovstb7po7kx6o7dno6kvjmffnmlerfw6qxhhzyrxmktd67e
+- valory/task_submission_abci:0.1.0:bafybeifkd76popxwociq2ryojbcjyesmxoagqyjrbs73qoyd5o4szz6cgu
 - valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
 - valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
 - valory/subscription_abci:0.1.0:bafybeihtortmv4fqua5wrnshpnvqsbpaf52frwynrmpuv2uw5j7wkauhze
@@ -159,6 +159,8 @@ models:
       task_wait_timeout: 15.0
       use_slashing: false
       manual_gas_limit: 1000000
+      mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
+      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
       agent_registry_address: '0x0000000000000000000000000000000000000000'
       agent_id: 3
       metadata_hash: '00000000000000000000000000000000000000000000000000'
