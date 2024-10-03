@@ -74,6 +74,16 @@ class Params(BaseParams):
         self.hash_checkpoint_address = self._ensure(
             "hash_checkpoint_address", kwargs, str
         )
+        self.mech_marketplace_address = self._ensure(
+            "mech_marketplace_address",
+            kwargs,
+            str,
+        )
+        self.mech_staking_instance_address = self._ensure(
+            "mech_staking_instance_address",
+            kwargs,
+            str,
+        )
         self.minimum_agent_balance = self._ensure("minimum_agent_balance", kwargs, int)
         self.agent_funding_amount = self._ensure("agent_funding_amount", kwargs, int)
         super().__init__(*args, **kwargs)

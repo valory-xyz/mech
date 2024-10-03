@@ -8,11 +8,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeibzrspy5pkv2sxeqob4fdakf4olahsgp33afwp65svshmli6d5bbq
+  behaviours.py: bafybeifgon5yuonrcpbwslwxbpd3cttqyj42llgpcwioyfmtx3uoxh7dnm
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeigmraodqqx33mlflscp27tkngjkmtk6j7askmwe4ynhinimtcomuq
+  models.py: bafybeifkca4krpykazv4tar4nfgaefwplpcia34zrdlvkiijf5anrxzcmu
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
   rounds.py: bafybeiazzauhh5ddr6fkqckv7tiu7nek6k7deoaihwyspeywlrq46uemou
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
@@ -25,6 +25,7 @@ contracts:
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeicbxmbzt757lbmyh6762lrkcrp3oeum6dk3z7pvosixasifsk6xlm
 - valory/hash_checkpoint:0.1.0:bafybeicbycr6rxods7sg3f2qlhgkjqrbh7kymmy2yw7bewxdwjyp7ibtg4
+- valory/mech_marketplace:0.1.0:bafybeich3a3oh5w4u533w6y7ideojudqp2m5gxta7pqmsfiaohdhuw7yz4
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
@@ -139,6 +140,8 @@ models:
       tendermint_max_retries: 5
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
+      mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
+      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
       tx_timeout: 10.0
       use_termination: false
       validate_timeout: 1205

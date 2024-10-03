@@ -42,6 +42,7 @@ from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -223,6 +224,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # set the initial from block
             self._populate_from_block()
             return
+        self._check_undelivered_reqs()
+        self._check_undelivered_reqs_marketplace()
+        self.params.in_flight_req = True
+        self._last_polling = time.time()
+
+    def _check_undelivered_reqs(self) -> None:
+        """Check for undelivered mech reqs."""
+        target_mechs = [
+            mech
+            for mech, config in self.params.mech_to_config.items()
+            if not config.is_marketplace_mech
+        ]
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.agent_mech_contract_addresses[0],
@@ -232,7 +245,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 dict(
                     from_block=self.params.from_block,
                     chain_id=GNOSIS_CHAIN,
-                    contract_addresses=self.params.agent_mech_contract_addresses,
+                    contract_addresses=target_mechs,
                     max_block_window=self.params.max_block_window,
                 )
             ),
@@ -240,8 +253,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             ledger_id=self.context.default_ledger_id,
         )
         self.context.outbox.put_message(message=contract_api_msg)
-        self.params.in_flight_req = True
-        self._last_polling = time.time()
+
+    def _check_undelivered_reqs_marketplace(self) -> None:
+        """Check for undelivered mech reqs."""
+        if not self.params.use_mech_marketplace:
+            return
+        contract_api_msg, _ = self.context.contract_dialogues.create(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.mech_marketplace_address,
+            contract_id=str(MechMarketplaceContract.contract_id),
+            callable="get_undelivered_reqs",
+            kwargs=ContractApiMessage.Kwargs(
+                dict(
+                    from_block=self.params.from_block,
+                    my_mech=self._get_designated_marketplace_mech_address(),
+                    chain_id=GNOSIS_CHAIN,
+                    max_block_window=self.params.max_block_window,
+                )
+            ),
+            counterparty=LEDGER_API_ADDRESS,
+            ledger_id=self.context.default_ledger_id,
+        )
+        self.context.outbox.put_message(message=contract_api_msg)
 
     def _execute_task(self) -> None:
         """Execute tasks."""
@@ -281,12 +314,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.req_to_callback[nonce] = callback
         self.params.in_flight_req = True
 
+    def _get_designated_marketplace_mech_address(self) -> str:
+        """Get the designated mech address."""
+        for mech, config in self.params.mech_to_config.items():
+            if config.is_marketplace_mech:
+                return mech
+
+        raise ValueError("No marketplace mech address found")
+
     def _handle_done_task(self, task_result: Any) -> None:
         """Handle done tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
         request_id_nonce = executing_task.get("requestIdWithNonce", None)
-        mech_address = executing_task.get("contract_address", None)
+        mech_address = (
+            executing_task.get("contract_address", None)
+            or self._get_designated_marketplace_mech_address()
+        )
         tool = executing_task.get("tool", None)
         model = executing_task.get("model", None)
         tool_params = executing_task.get("params", None)
@@ -504,6 +548,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 ["uint256", "bytes"], [cost, bytes.fromhex(task_result)]
             ).hex()
 
+        done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
