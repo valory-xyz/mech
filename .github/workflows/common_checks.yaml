@@ -169,6 +169,7 @@ jobs:
           GNOSIS_RPC_URL: ${{ secrets.GNOSIS_RPC_URL }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GRAPH_API_KEY: ${{ secrets.GRAPH_API_KEY }}
+          CORCEL_API_KEY: ${{ secrets.CORCEL_API_KEY }}
         run: |
           printenv
           tox -e check-tools
