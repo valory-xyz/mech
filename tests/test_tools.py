@@ -95,6 +95,7 @@ class BaseToolTest:
         assert self.tools, "Tools must be provided."
         assert self.prompts, "Prompts must be provided."
         assert self.tool_module, "Callable function must be provided."
+
         for model in self.models:
             for tool in self.tools:
                 for prompt in self.prompts:
