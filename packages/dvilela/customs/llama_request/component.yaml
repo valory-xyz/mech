@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiger6zvjsg356hyirgjadryvqlvz22wdkzqjsivkeqe3jvr33gcde
-  llama_request.py: bafybeie26qv3vo3yv4fpfalpaluoyexatxtn2p5is57jhsxpkmf2fhftaa
+  llama_request.py: bafybeiekdxyjjnumfqcns5n3ghrui76zsmaxuq67bwrjxeqyshqn34syoq
 fingerprint_ignore_patterns: []
 entry_point: llama_request.py
 callable: run
