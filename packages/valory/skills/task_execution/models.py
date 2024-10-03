@@ -25,7 +25,8 @@ from typing import Any, Callable, Dict, List, Optional, cast
 from aea.exceptions import enforce
 from aea.skills.base import Model
 
-ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
 @dataclasses.dataclass
@@ -89,7 +90,10 @@ class Params(Model):
         self.mech_marketplace_address: Optional[str] = kwargs.get(
             "mech_marketplace_address", None
         )
-        self.use_mech_marketplace = self.mech_marketplace_address is not None and self.mech_marketplace_address != ZERO_ADDRESS
+        self.use_mech_marketplace = (
+            self.mech_marketplace_address is not None
+            and self.mech_marketplace_address != ZERO_ADDRESS
+        )
         super().__init__(*args, **kwargs)
 
     def _nested_list_todict_workaround(
