@@ -25,6 +25,8 @@ from typing import Any, Callable, Dict, List, Optional, cast
 from aea.exceptions import enforce
 from aea.skills.base import Model
 
+ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+
 
 @dataclasses.dataclass
 class MechConfig:
@@ -84,7 +86,10 @@ class Params(Model):
         # maps the request id to the number of times it has timed out
         self.request_id_to_num_timeouts: Dict[int, int] = defaultdict(lambda: 0)
         self.mech_to_config: Dict[str, MechConfig] = self._parse_mech_configs(kwargs)
-        self.mech_marketplace_address: Optional[str] = kwargs.get("mech_marketplace_address", None)
+        self.mech_marketplace_address: Optional[str] = kwargs.get(
+            "mech_marketplace_address", None
+        )
+        self.use_mech_marketplace = self.mech_marketplace_address is not None and self.mech_marketplace_address != ZERO_ADDRESS
         super().__init__(*args, **kwargs)
 
     def _nested_list_todict_workaround(
@@ -100,11 +105,12 @@ class Params(Model):
 
     def _parse_mech_configs(self, kwargs: Dict) -> Dict[str, MechConfig]:
         """Parse the mech configs."""
-        mech_configs_json = self._nested_list_todict_workaround(
-            kwargs, "mech_to_config"
-        )
+        key = "mech_to_config"
+        values = cast(List, kwargs.get(key))
+        mech_configs_json = {value[0]: value[1:] for value in values}
         mech_configs_json = {
-            key: {value[0]: value[1]} for key, value in mech_configs_json.items()
+            key: {value[0]: value[1] for value in values}
+            for key, values in mech_configs_json.items()
         }
 
         mech_configs = {

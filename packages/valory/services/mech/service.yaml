@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeihouxlb2bx4whzjhclqsgmjyuxd66rwzgw4zgcz346q5xitv2rffe
+agent: valory/mech:0.1.0:bafybeidazy64gta2wkcilokqrxfcdic7yclfj6kaxtz2uke2vptunfiudu
 number_of_agents: 4
 deployment:
   agent:
@@ -193,7 +193,7 @@ type: skill
         num_agents: ${NUM_AGENTS:int:4}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
-        mech_to_config: ${MECH_TO_CONFIG:list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
+        mech_to_config: ${MECH_TO_CONFIG:list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"],["is_mech_marketplace","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"],["is_mech_marketplace","false"]]]}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 1:
   models:
@@ -207,7 +207,7 @@ type: skill
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         agent_index: ${AGENT_INDEX_1:int:1}
         num_agents: ${NUM_AGENTS:int:4}
-        mech_to_config: ${MECH_TO_CONFIG:list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
+        mech_to_config: ${MECH_TO_CONFIG:list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"],["is_mech_marketplace","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"],["is_mech_marketplace","false"]]]}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 2:
@@ -222,7 +222,7 @@ type: skill
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         agent_index: ${AGENT_INDEX_2:int:2}
         num_agents: ${NUM_AGENTS:int:4}
-        mech_to_config: ${MECH_TO_CONFIG:list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
+        mech_to_config: ${MECH_TO_CONFIG:list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"],["is_mech_marketplace","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"],["is_mech_marketplace","false"]]]}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 3:
@@ -238,7 +238,7 @@ type: skill
         agent_index: ${AGENT_INDEX_3:int:3}
         num_agents: ${NUM_AGENTS:int:4}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
-        mech_to_config: ${MECH_TO_CONFIG:list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"]]]}
+        mech_to_config: ${MECH_TO_CONFIG:list:[["0xFf82123dFB52ab75C417195c5fDB87630145ae81",["use_dynamic_pricing","false"],["is_mech_marketplace","false"]],["0x77af31De935740567Cf4fF1986D04B2c964A786a",["use_dynamic_pricing","false"],["is_mech_marketplace","false"]]]}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 ---
 public_id: valory/ledger:0.19.0
