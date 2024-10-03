@@ -141,33 +141,3 @@ def run(**kwargs) -> MechResponse:
         return error_response(f"Request error occurred: {req_err}")
     except Exception as e:
         return error_response(f"An unexpected error occurred: {str(e)}")
-
-# ---- Main Function ----
-
-def main():
-    """Main function to run the Corcel image generation"""
-
-    # Define parameters for the run function
-    kwargs = {
-        "api_keys": "03001143-7422-4c8f-9b31-0dae5e6bfcd8",  # Replace with your actual API key
-        "tool": "proteus",
-        "prompt": "An autonolas robot named Pearl",
-        "cfg_scale": 7,
-        "height": 832,
-        "width": 1024,
-        "steps": 10,
-        "weight": 0,
-    }
-
-    # Run the function and print the result
-    result = run(**kwargs)
-
-    # Print a readable message based on the result
-    if result[0]:
-        print("Successfully generated image. URL:", result[0])
-    else:
-        print("Failed to generate image. Error:", result[0])
-
-# Run the main function if this script is executed
-if __name__ == "__main__":
-    main()

@@ -108,7 +108,6 @@ class BaseToolTest:
                     )
                     func = getattr(self.tool_module, self.tool_callable)
                     response = func(**kwargs)
-                    print(f"Response: {response}")  # Add a debug statement to inspect response
                     self._validate_response(response)
 
 
