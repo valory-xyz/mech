@@ -1,0 +1,14 @@
+name: corcel_text_to_image_request
+author: victorpolisetty
+version: 0.1.0
+type: custom
+description: A tool that runs a prompt against the Corcel text to image API.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeiaesxnkadyuhsacvtrz774edwal2ygz3hillffbkdi4yq2z44r5hm
+  corcel_text_to_image_request.py: bafybeic6ikm2mxn4p7esljlmonoxeeuwgut6h6b7lisgsjtv44hlvafh3m
+fingerprint_ignore_patterns: []
+entry_point: corcel_text_to_image_request.py
+callable: run
+dependencies: {}

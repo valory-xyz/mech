@@ -21,6 +21,7 @@ from typing import List, Any
 
 from packages.gnosis.customs.omen_tools import omen_buy_sell
 from packages.victorpolisetty.customs.dalle_request import dalle_request
+from packages.victorpolisetty.customs.corcel_text_to_image_request import corcel_text_to_image_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
 from packages.jhehemann.customs.prediction_sentence_embeddings import prediction_sentence_embeddings
 from packages.gnosis.customs.ofv_market_resolver import ofv_market_resolver
@@ -44,7 +45,9 @@ from tests.constants import (
     NEWS_API_KEY,
     OPENROUTER_API_KEY,
     GNOSIS_RPC_URL,
-    GEMINI_API_KEY, SERPER_API_KEY
+    GEMINI_API_KEY,
+    SERPER_API_KEY,
+    CORCEL_API_KEY,
 )
 
 
@@ -64,6 +67,7 @@ class BaseToolTest:
             "gnosis_rpc_url": [GNOSIS_RPC_URL],
             "gemini": [GEMINI_API_KEY],
             "serperapi": [SERPER_API_KEY],
+            "corcel": [CORCEL_API_KEY],
         }
     )
     models: List = [None]
@@ -79,10 +83,10 @@ class BaseToolTest:
         assert type(response[0]) == str, "Response[0] must be a string."
         assert type(response[1]) == str, "Response[1] must be a string."
         assert (
-            type(response[2]) == dict or response[2] is None
+                type(response[2]) == dict or response[2] is None
         ), "Response[2] must be a dictionary or None."
         assert (
-            type(response[3]) == TokenCounterCallback or response[3] is None
+                type(response[3]) == TokenCounterCallback or response[3] is None
         ), "Response[3] must be a TokenCounterCallback or None."
         assert type(response[4]) == KeyChain, "Response[4] must be a KeyChain object."
 
@@ -91,7 +95,7 @@ class BaseToolTest:
         assert self.tools, "Tools must be provided."
         assert self.prompts, "Prompts must be provided."
         assert self.tool_module, "Callable function must be provided."
-
+        print(self.keys)
         for model in self.models:
             for tool in self.tools:
                 for prompt in self.prompts:
@@ -104,6 +108,7 @@ class BaseToolTest:
                     )
                     func = getattr(self.tool_module, self.tool_callable)
                     response = func(**kwargs)
+                    print(f"Response: {response}")  # Add a debug statement to inspect response
                     self._validate_response(response)
 
 
@@ -190,6 +195,17 @@ class TestDALLEGeneration(BaseToolTest):
         "Generate an image of a futuristic cityscape."
     ]
     tool_module = dalle_request
+
+
+class TestCorcelGeneration(BaseToolTest):
+    """Test Corcel Generation."""
+
+    tools = corcel_text_to_image_request.ALLOWED_TOOLS
+    models = corcel_text_to_image_request.ALLOWED_MODELS
+    prompts = [
+        "Generate an image of a futuristic cityscape."
+    ]
+    tool_module = corcel_text_to_image_request
 
 
 class TestPredictionSentenceEmbeddings(BaseToolTest):
