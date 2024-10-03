@@ -1,4 +1,3 @@
-import re
 import json
 from typing import Optional, Dict, Any, Tuple, Callable
 import google.generativeai as genai
@@ -29,7 +28,6 @@ def with_key_rotation(func: Callable):
                 api_keys.rotate(service)
                 return execute()
             except Exception as e:
-                import pdb;pdb.set_trace()
                 return str(e), "", None, None, api_keys
 
         mech_response = execute()

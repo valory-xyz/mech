@@ -1,6 +1,30 @@
 from llama_cpp import Llama
 import json
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any, Tuple, Callable
+import functools
+
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys,)
+            except Exception as e:
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
+
 
 PREDICTION_OFFLINE_PROMPT = """
 You are an LLM that takes in a prompt of a user requesting a probability estimation
@@ -90,9 +114,10 @@ def response_post_process(response: str) -> str:
         json_response = json.loads(response)
         return json.dumps(json_response)
     except json.JSONDecodeError:
-        return error_response(f"Response could not be properly postprocessed: {response}")
+        return f"Response could not be properly postprocessed: {response}"
 
 
+@with_key_rotation
 def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
 
