@@ -71,12 +71,13 @@ faiss-cpu = "1.7.4"
 pypdf2 = "^3.0.1"
 moviepy = "1.0.3"
 replicate = "0.15.7"
-lxml = {extras = ["html-clean"], version = "^5.1.0"}
 langgraph = "==0.0.55"
 langchain-community = "==0.2.1"
 prediction-market-agent-tooling = "^0.39.0"
 google-generativeai = "==0.6.0"
 openfactverification-kongzii = "^0.1.0"
+
+lxml = {extras = ["html-clean"], version = "^5.1.0"}
 
 [tool.poetry.group.dev.dependencies]
 tomte = {version = "==0.2.15", extras = ["cli", "tests"]}
