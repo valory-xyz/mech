@@ -1,15 +1,15 @@
-name: openai_request
+name: propose_question
 author: valory
 version: 0.1.0
 type: custom
-description: A tool that runs a prompt against the OpenAI API.
+description: A tool that proposes prediction market questions.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
   openai_request.py: bafybeiefuf2ssw6eid2bzy5qzoihxsc5arsmith62nyxisuoukqan5ady4
 fingerprint_ignore_patterns: []
-entry_point: openai_request.py
+entry_point: propose_question.py
 callable: run
 dependencies:
   openai:
