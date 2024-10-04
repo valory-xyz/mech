@@ -364,7 +364,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
                 'type': 'json_schema',
                 'json_schema': 
                     {
-                        "name":"whocares",
+                        "name": "LLMQuestionProposalSchema",
                         "schema": LLMQuestionProposalSchema.model_json_schema()
                     }
                 },
