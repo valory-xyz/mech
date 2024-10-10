@@ -25,7 +25,6 @@ contracts:
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeicbxmbzt757lbmyh6762lrkcrp3oeum6dk3z7pvosixasifsk6xlm
 - valory/hash_checkpoint:0.1.0:bafybeicbycr6rxods7sg3f2qlhgkjqrbh7kymmy2yw7bewxdwjyp7ibtg4
-- valory/mech_marketplace:0.1.0:bafybeich3a3oh5w4u533w6y7ideojudqp2m5gxta7pqmsfiaohdhuw7yz4
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
