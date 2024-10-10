@@ -40,7 +40,6 @@ from packages.valory.contracts.gnosis_safe.contract import (
     SafeOperation,
 )
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
-from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
