@@ -930,7 +930,7 @@ class TransactionPreparationBehaviour(
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=self.params.mech_marketplace_address,
-            contract_id=str(MechMarketplaceContract.contract_id),
+            contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_to_market_tx",
             request_id=task_data["request_id"],
             data=task_data["task_result"],
