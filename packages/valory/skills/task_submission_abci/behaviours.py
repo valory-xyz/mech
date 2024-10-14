@@ -40,7 +40,6 @@ from packages.valory.contracts.gnosis_safe.contract import (
     SafeOperation,
 )
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
-from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
@@ -930,13 +929,12 @@ class TransactionPreparationBehaviour(
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=self.params.mech_marketplace_address,
-            contract_id=str(MechMarketplaceContract.contract_id),
-            contract_callable="get_deliver_data",
-            sender_address=task_data["mech_address"],
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_deliver_to_market_tx",
             request_id=task_data["request_id"],
             data=task_data["task_result"],
-            delivery_mech_staking_instance=self.params.mech_staking_instance_address,
-            delivery_mech_service_id=self.params.on_chain_service_id,
+            mech_staking_instance=self.params.mech_staking_instance_address,
+            mech_service_id=self.params.on_chain_service_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -948,25 +946,6 @@ class TransactionPreparationBehaviour(
 
         data = cast(bytes, contract_api_msg.state.body["data"])
         simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
-
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=task_data["mech_address"],
-            contract_id=str(AgentMechContract.contract_id),
-            contract_callable="get_exec_tx_data",
-            to=self.params.mech_marketplace_address,
-            value=ZERO_ETHER_VALUE,
-            data=data,
-            tx_gas=AUTO_GAS,
-            operation=MechOperation.CALL.value,
-        )
-        if (
-            contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
-            self.context.logger.warning(
-                f"get_deliver_data unsuccessful!: {contract_api_msg}"
-            )
-            return None
 
         data = cast(bytes, contract_api_msg.state.body["data"])
         return {

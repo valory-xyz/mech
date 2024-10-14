@@ -7,8 +7,8 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigpq5lxfj2aza6ok3fjuywtdafelkbvoqwaits7regfbgu4oynmku
-  build/AgentMech.json: bafybeifw3whznwg6i6sa6cicivsfmqchfwfdodxwaqzepd3h6otq5qpktq
-  contract.py: bafybeib5ucjiolzqe6ngon2dvceen2kd2vwhtslivspbbbpukylq6tzgkq
+  build/AgentMech.json: bafybeifbx2dovjm7ufoufvxwb5n3tyfcwysecaggpcds4caanqlpfg5dqm
+  contract.py: bafybeib2wss3fjozfnocvt4yqpwso5ufdaln56q4ug7hwriqfx6u4e7fdu
 fingerprint_ignore_patterns: []
 class_name: AgentMechContract
 contract_interface_paths:
