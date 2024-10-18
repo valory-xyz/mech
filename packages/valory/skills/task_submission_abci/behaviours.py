@@ -156,8 +156,12 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            # clean up the queue based on the outcome of the previous period
-            self.handle_submitted_tasks()
+
+            status = self.check_last_tx_status()
+            if status == True:
+                # clean up the queue based on the outcome of the previous period
+                self.handle_submitted_tasks()
+
             # sync new tasks
             payload_content = yield from self.get_payload_content()
             sender = self.context.agent_address
@@ -195,6 +199,22 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             f"Removing them from the list of tasks to be processed."
         )
         self.remove_tasks(submitted_tasks)
+
+    def check_last_tx_status(self) -> bool:
+        """Check if the tx in the last round was successful or not"""
+        # Try to fetch the final tx hash from the sync db
+        # If the value exists and is not None, we return True, else False
+        # ref: https://github.com/valory-xyz/open-autonomy/blob/main/packages/valory/skills/transaction_settlement_abci/rounds.py#L432-L434
+        try:
+            final_tx_hash = self.synchronized_data.final_tx_hash
+        except Exception as e:
+            self.context.logger.error(e)
+            return False
+        else:
+            if final_tx_hash is not None:
+                return True
+            else:
+                return False
 
 
 class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):
