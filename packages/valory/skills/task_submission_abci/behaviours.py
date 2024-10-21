@@ -156,11 +156,8 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-
-            status = self.check_last_tx_status()
-            if status == True:
-                # clean up the queue based on the outcome of the previous period
-                self.handle_submitted_tasks()
+            # clean up the queue based on the outcome of the previous period
+            self.handle_submitted_tasks()
 
             # sync new tasks
             payload_content = yield from self.get_payload_content()
@@ -193,12 +190,17 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
 
     def handle_submitted_tasks(self) -> None:
         """Handle tasks that have been already submitted before (in a prev. period)."""
-        submitted_tasks = cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
-        self.context.logger.info(
-            f"Tasks {submitted_tasks} has already been submitted. "
-            f"Removing them from the list of tasks to be processed."
-        )
-        self.remove_tasks(submitted_tasks)
+        status = self.check_last_tx_status()
+        self.context.logger.info(f"Last tx status is: {status}")
+        if status:
+            submitted_tasks = cast(
+                List[Dict[str, Any]], self.synchronized_data.done_tasks
+            )
+            self.context.logger.info(
+                f"Tasks {submitted_tasks} has already been submitted. "
+                f"Removing them from the list of tasks to be processed."
+            )
+            self.remove_tasks(submitted_tasks)
 
     def check_last_tx_status(self) -> bool:
         """Check if the tx in the last round was successful or not"""
