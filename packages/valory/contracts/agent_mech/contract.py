@@ -478,3 +478,31 @@ class AgentMechContract(Contract):
             simulation_ok = False
 
         return dict(data=simulation_ok)
+
+    @classmethod
+    def get_deliver_to_market_tx(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        request_id: int,
+        data: str,
+        mech_staking_instance: str,
+        mech_service_id: int,
+    ) -> JSONLike:
+        """Get tx data"""
+        ledger_api = cast(EthereumApi, ledger_api)
+
+        if not isinstance(ledger_api, EthereumApi):
+            raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
+
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        tx_data = contract_instance.encodeABI(
+            fn_name="deliverToMarketplace",
+            args=[
+                request_id,
+                data,
+                Web3.to_checksum_address(mech_staking_instance),
+                mech_service_id,
+            ],
+        )
+        return {"data": bytes.fromhex(tx_data[2:])}  # type: ignore
