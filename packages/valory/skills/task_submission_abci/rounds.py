@@ -67,6 +67,11 @@ class SynchronizedData(BaseSynchronizedData):
         """Done tasks."""
         return cast(List[Dict[str, Any]], self.db.get("done_tasks", []))
 
+    @property
+    def final_tx_hash(self) -> str:
+        """Get the verified tx hash."""
+        return cast(str, self.db.get_strict("final_tx_hash"))
+
 
 class TaskPoolingRound(CollectionRound):
     """TaskPoolingRound"""
