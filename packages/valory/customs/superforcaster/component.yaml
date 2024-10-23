@@ -1,0 +1,20 @@
+name: superforcaster
+author: valory
+version: 0.1.0
+type: custom
+description: A tool that runs superforcaster prompt.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
+  superforcaster.py: bafybeiefuf2ssw6eid2bzy5qzoihxsc5arsmith62nyxisuoukqan5ady4
+fingerprint_ignore_patterns: []
+entry_point: superforcaster.py
+callable: run
+dependencies:
+  openai:
+    version: ==1.30.2
+  tiktoken:
+    version: ==0.7.0
+  requests:
+    version: ==2.28.1

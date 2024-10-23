@@ -1,0 +1,321 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2023-2024 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+"""Contains the job definitions"""
+import functools
+import time
+import re
+from typing import Any, Dict, List, Union, Optional, Tuple, Callable
+from datetime import date
+
+import openai
+from openai import OpenAI
+from tiktoken import encoding_for_model
+
+import requests
+import json
+
+
+client: Optional[OpenAI] = None
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+
+def with_key_rotation(func: Callable):
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs) -> MechResponse:
+        # this is expected to be a KeyChain object,
+        # although it is not explicitly typed as such
+        api_keys = kwargs["api_keys"]
+        retries_left: Dict[str, int] = api_keys.max_retries()
+
+        def execute() -> MechResponse:
+            """Retry the function with a new key."""
+            try:
+                result = func(*args, **kwargs)
+                return result + (api_keys,)
+            except openai.RateLimitError as e:
+                # try with a new key again
+                if retries_left["openai"] <= 0 and retries_left["openrouter"] <= 0:
+                    raise e
+                retries_left["openai"] -= 1
+                retries_left["openrouter"] -= 1
+                api_keys.rotate("openai")
+                api_keys.rotate("openrouter")
+                return execute()
+            except Exception as e:
+                return str(e), "", None, None, api_keys
+
+        mech_response = execute()
+        return mech_response
+
+    return wrapper
+
+
+class OpenAIClientManager:
+    """Client context manager for OpenAI."""
+
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+
+    def __enter__(self) -> OpenAI:
+        global client
+        if client is None:
+            client = OpenAIClient(api_key=self.api_key)
+        return client
+
+    def __exit__(self, exc_type, exc_value, traceback) -> None:
+        global client
+        if client is not None:
+            client.close()
+            client = None
+
+
+class Usage:
+    """Usage class."""
+
+    def __init__(self, prompt_tokens=None, completion_tokens=None):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+
+class OpenAIResponse:
+    """Response class."""
+
+    def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+        self.content = content
+        self.usage = Usage()
+
+
+class OpenAIClient:
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.client = openai.OpenAI(api_key=self.api_key)
+
+    def completions(
+        self,
+        model: str,
+        messages: List = [],
+        timeout: Optional[Union[float, int]] = None,
+        temperature: Optional[float] = None,
+        top_p: Optional[float] = None,
+        n: Optional[int] = None,
+        stop=None,
+        max_tokens: Optional[float] = None,
+    ):
+
+        response_provider = self.client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            n=1,
+            timeout=150,
+            stop=None,
+        )
+        response = OpenAIResponse()
+        response.content = response_provider.choices[0].message.content
+        response.usage.prompt_tokens = response_provider.usage.prompt_tokens
+        response.usage.completion_tokens = response_provider.usage.completion_tokens
+        return response
+
+
+def count_tokens(text: str, model: str) -> int:
+    """Count the number of tokens in a text."""
+    enc = encoding_for_model(model)
+    return len(enc.encode(text))
+
+
+DEFAULT_OPENAI_SETTINGS = {
+    "max_tokens": 500,
+    "limit_max_tokens": 4096,
+    "temperature": 0,
+}
+DEFAULT_OPENAI_MODEL = "gpt-4o-2024-08-06"
+ALLOWED_TOOLS = ["superforcaster"]
+ALLOWED_MODELS = [DEFAULT_OPENAI_MODEL]
+COMPLETION_RETRIES = 3
+COMPLETION_DELAY = 2
+
+
+PREDICTION_PROMPT = """
+You are an advanced AI system which has been finetuned to provide calibrated probabilistic
+forecasts under uncertainty, with your performance evaluated according to the Brier score. When
+forecasting, do not treat 0.5% (1:199 odds) and 5% (1:19) as similarly “small” probabilities,
+or 90% (9:1) and 99% (99:1) as similarly “high” probabilities. As the odds show, they are
+markedly different, so output your probabilities accordingly.
+
+Question:
+```
+{question}
+```
+
+Today's date: ```{today}```
+Your pretraining knowledge cutoff: October 2023
+
+We have retrieved the following information for this question:
+<background>```{sources}```</background>
+
+Recall the question you are forecasting:
+```
+{question}
+```
+
+Instructions:
+1. Compress key factual information from the sources, as well as useful background information
+which may not be in the sources, into a list of core factual points to reference. Aim for
+information which is specific, relevant, and covers the core considerations you'll use to make
+your forecast. For this step, do not draw any conclusions about how a fact will influence your
+answer or forecast. Place this section of your response in <facts></facts> tags.
+
+2. Provide a few reasons why the answer might be no. Rate the strength of each reason on a
+scale of 1-10. Use <no></no> tags.
+
+3. Provide a few reasons why the answer might be yes. Rate the strength of each reason on a
+scale of 1-10. Use <yes></yes> tags.
+
+4. Aggregate your considerations. Do not summarize or repeat previous points; instead,
+investigate how the competing factors and mechanisms interact and weigh against each other.
+Factorize your thinking across (exhaustive, mutually exclusive) cases if and only if it would be
+beneficial to your reasoning. We have detected that you overestimate world conflict, drama,
+violence, and crises due to news' negativity bias, which doesn't necessarily represent overall
+trends or base rates. Similarly, we also have detected you overestimate dramatic, shocking,
+or emotionally charged news due to news' sensationalism bias. Therefore adjust for news'
+negativity bias and sensationalism bias by considering reasons to why your provided sources
+might be biased or exaggerated. Think like a superforecaster. Use <thinking></thinking> tags
+for this section of your response.
+
+5. Output an initial probability (prediction) as a single number between 0 and 1 given steps 1-4.
+Use <tentative></tentative> tags.
+
+6. Reflect on your answer, performing sanity checks and mentioning any additional knowledge
+or background information which may be relevant. Check for over/underconfidence, improper
+treatment of conjunctive or disjunctive conditions (only if applicable), and other forecasting
+biases when reviewing your reasoning. Consider priors/base rates, and the extent to which
+case-specific information justifies the deviation between your tentative forecast and the prior.
+Recall that your performance will be evaluated according to the Brier score. Be precise with tail
+probabilities. Leverage your intuitions, but never change your forecast for the sake of modesty
+or balance alone. Finally, aggregate all of your previous reasoning and highlight key factors
+that inform your final forecast. Use <thinking></thinking> tags for this portion of your response.
+
+7. Output your final prediction (a number between 0 and 1 with an asterisk at the beginning and
+end of the decimal) in <answer></answer> tags.
+"""
+
+
+def extract_json_string(text):
+    # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
+    pattern = r"(\{[^}]*\})"
+    matches = re.findall(pattern, text)
+    return matches[0].replace("json", "")
+
+
+def generate_prediction_with_retry(
+    model: str,
+    messages: List[Dict[str, str]],
+    temperature: float,
+    max_tokens: int,
+    retries: int = COMPLETION_RETRIES,
+    delay: int = COMPLETION_DELAY,
+    counter_callback: Optional[Callable] = None,
+):
+    """Attempt to generate a prediction with retries on failure."""
+    attempt = 0
+    while attempt < retries:
+        try:
+            response = client.completions(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                n=1,
+                timeout=90,
+                stop=None,
+            )
+
+            if counter_callback is not None:
+                counter_callback(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                    model=model,
+                    token_counter=count_tokens,
+                )
+            extracted_block = extract_json_string(response.content)
+
+            return extracted_block, counter_callback
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed with error: {e}")
+            time.sleep(delay)
+            attempt += 1
+    raise Exception("Failed to generate prediction after retries")
+
+
+def fetch_additional_sources(question, serper_api_key):
+    url = "https://google.serper.dev/search"
+    payload = json.dumps({"q": question})
+    headers = {
+        "X-API-KEY": serper_api_key,
+        "Content-Type": "application/json",
+    }
+
+    response = requests.request("POST", url, headers=headers, data=payload)
+
+    return response.text
+
+
+@with_key_rotation
+def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+    """Run the task"""
+    openai_api_key = kwargs["api_keys"]["openai"]
+    serper_api_key = kwargs["api_keys"]["serperapi"]
+    with OpenAIClientManager(openai_api_key):
+        max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+        temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+        prompt = kwargs["prompt"]
+        tool = kwargs["tool"]
+        engine = kwargs.get("model")
+        counter_callback = kwargs.get("counter_callback", None)
+        if tool not in ALLOWED_TOOLS:
+            raise ValueError(f"Tool {tool} is not supported.")
+
+        today = date.today()
+        d = today.strftime("%d/%m/%Y")
+
+        sources = fetch_additional_sources(prompt, serper_api_key)
+        print(f"Serper Sources: {sources}")
+
+        # @todo update serper sources
+        prediction_prompt = PREDICTION_PROMPT.format(
+            question=prompt, today=d, sources=""
+        )
+
+        messages = [
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prediction_prompt},
+        ]
+        extracted_block, counter_callback = generate_prediction_with_retry(
+            model=engine,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            retries=COMPLETION_RETRIES,
+            delay=COMPLETION_DELAY,
+            counter_callback=counter_callback,
+        )
+
+        print(f"Extracted Block: {extracted_block}")
+        print(f"Counter callback: {counter_callback}")
