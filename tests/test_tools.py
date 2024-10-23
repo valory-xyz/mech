@@ -34,6 +34,12 @@ from packages.napthaai.customs.prediction_url_cot import prediction_url_cot
 from packages.valory.customs.prediction_request import prediction_request
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
+
+from packages.subquery.customs.graphql_response_analyser import (
+    graphql_response_analyser
+)
+from tests.subquery.examples import query_examples
+
 from tests.constants import (
     OPENAI_SECRET_KEY,
     STABILITY_API_KEY,
@@ -191,7 +197,6 @@ class TestDALLEGeneration(BaseToolTest):
     ]
     tool_module = dalle_request
 
-
 class TestPredictionSentenceEmbeddings(BaseToolTest):
     """Test Prediction Sum URL Content."""
 
@@ -202,7 +207,6 @@ class TestPredictionSentenceEmbeddings(BaseToolTest):
     ]
     tool_module = prediction_sentence_embeddings
 
-
 class TestOfvMarketResolverTool(BaseToolTest):
     """Test OFV Market Resolver Tool."""
 
@@ -212,3 +216,23 @@ class TestOfvMarketResolverTool(BaseToolTest):
         'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
     tool_module = ofv_market_resolver
+
+class TestGraphResponseAnalyser:
+  """Check successful query output analysis"""
+
+  tool_callable: str = "run"
+  tool_module = graphql_response_analyser
+
+  def test_run(self) -> None:
+      """Test run method."""
+      kwargs = dict(
+          tool="openai-gpt-3.5-turbo",
+          request="When was the first transfer?",
+          examples=query_examples,
+          endpoint="https://api.subquery.network/sq/subquery/cusdnew",
+          description="This project manages and indexes data pertaining to cUSD (CELO USD) ERC-20 token transfers and approvals recorded within a dedicated smart contract. The stored data includes information on approvals granted and transfers executed. These entities provide insights into the authorization and movement of cUSD tokens within the CELO ecosystem, facilitating analysis and monitoring of token transactions.",
+          api_keys={"openai": OPENAI_SECRET_KEY},
+      )
+      func = getattr(self.tool_module, self.tool_callable)
+      response = func(**kwargs)
+      assert "analysis_result" in response[0]
