@@ -217,13 +217,6 @@ end of the decimal) in <answer></answer> tags.
 """
 
 
-def extract_json_string(text):
-    # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
-    pattern = r"(\{[^}]*\})"
-    matches = re.findall(pattern, text)
-    return matches[0].replace("json", "")
-
-
 def generate_prediction_with_retry(
     model: str,
     messages: List[Dict[str, str]],
@@ -254,9 +247,8 @@ def generate_prediction_with_retry(
                     model=model,
                     token_counter=count_tokens,
                 )
-            extracted_block = extract_json_string(response.content)
 
-            return extracted_block, counter_callback
+            return response.content, counter_callback
         except Exception as e:
             print(f"Attempt {attempt + 1} failed with error: {e}")
             time.sleep(delay)
@@ -274,7 +266,39 @@ def fetch_additional_sources(question, serper_api_key):
 
     response = requests.request("POST", url, headers=headers, data=payload)
 
-    return response.text
+    return response
+
+
+def format_sources_data(organic_data, misc_data):
+    sources = ""
+
+    if len(organic_data) > 0:
+        print("Adding organic data...")
+
+        sources = f"""
+        Organic Results:
+        """
+
+        for item in organic_data:
+            sources += f"""{item['position']}. **Title:** {item["title"]}
+            - **Link:** [{item["link"]}]({item["link"]})
+            - **Snippet:** {item["snippet"]}
+            """
+
+    if len(misc_data) > 0:
+        print("Adding misc data...")
+
+        sources += "People Also Ask:\n"
+
+        counter = 1
+        for item in misc_data:
+            sources += f"""{counter}. **Question:** {item["question"]}
+            - **Link:** [{item["link"]}]({item["link"]})
+            - **Snippet:** {item["snippet"]}
+            """
+            counter += 1
+
+    return sources
 
 
 @with_key_rotation
@@ -295,18 +319,25 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         today = date.today()
         d = today.strftime("%d/%m/%Y")
 
-        sources = fetch_additional_sources(prompt, serper_api_key)
-        print(f"Serper Sources: {sources}")
+        print("Fetching additional sources...")
+        serper_response = fetch_additional_sources(prompt, serper_api_key)
+        sources_data = serper_response.json()
+        # choose top 5 results
+        organic_data = sources_data.get("organic", [])[:5]
+        misc_data = sources_data.get("peopleAlsoAsk", [])
+        print("Formating sources...")
+        sources = format_sources_data(organic_data, misc_data)
 
-        # @todo update serper sources
+        print("Updating prompt...")
         prediction_prompt = PREDICTION_PROMPT.format(
-            question=prompt, today=d, sources=""
+            question=prompt, today=d, sources=sources
         )
 
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
         ]
+        print("Getting prompt response...")
         extracted_block, counter_callback = generate_prediction_with_retry(
             model=engine,
             messages=messages,
@@ -317,5 +348,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
             counter_callback=counter_callback,
         )
 
-        print(f"Extracted Block: {extracted_block}")
-        print(f"Counter callback: {counter_callback}")
+        print(f"extracted block: {extracted_block}")
+        print(f"counter_callback: {counter_callback}")
+
+        return extracted_block, prediction_prompt, None, counter_callback
