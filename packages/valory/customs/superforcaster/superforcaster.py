@@ -19,7 +19,6 @@
 """Contains the job definitions"""
 import functools
 import time
-import re
 from typing import Any, Dict, List, Union, Optional, Tuple, Callable
 from datetime import date
 
