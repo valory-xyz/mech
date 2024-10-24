@@ -81,7 +81,7 @@ class OpenAIClientManager:
     def __exit__(self, exc_type, exc_value, traceback) -> None:
         global client
         if client is not None:
-            client.close()
+            client.client.close()
             client = None
 
 
@@ -160,20 +160,16 @@ or 90% (9:1) and 99% (99:1) as similarly “high” probabilities. As the odds s
 markedly different, so output your probabilities accordingly.
 
 Question:
-```
 {question}
-```
 
-Today's date: ```{today}```
+Today's date: {today}
 Your pretraining knowledge cutoff: October 2023
 
 We have retrieved the following information for this question:
-<background>```{sources}```</background>
+<background>{sources}</background>
 
 Recall the question you are forecasting:
-```
 {question}
-```
 
 Instructions:
 1. Compress key factual information from the sources, as well as useful background information
@@ -214,6 +210,23 @@ that inform your final forecast. Use <thinking></thinking> tags for this portion
 
 7. Output your final prediction (a number between 0 and 1 with an asterisk at the beginning and
 end of the decimal) in <answer></answer> tags.
+
+
+OUTPUT_FORMAT
+* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
+* The JSON must contain four fields: "p_yes", "p_no", "confidence", and "info_utility".
+* Each item in the JSON must have a value between 0 and 1.
+   - "p_yes": Estimated probability that the event in the "Question" occurs.
+   - "p_no": Estimated probability that the event in the "Question" does not occur.
+   - "confidence": A value between 0 and 1 indicating the confidence in the prediction. 0 indicates lowest
+     confidence value; 1 maximum confidence value.
+   - "info_utility": Utility of the information provided in "sources" to help you make the prediction.
+     0 indicates lowest utility; 1 maximum utility.
+* The sum of "p_yes" and "p_no" must equal 1.
+* Output only the JSON object. Do not include any other contents in your response.
+* This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
+* This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+* This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
 
@@ -347,8 +360,5 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
             delay=COMPLETION_DELAY,
             counter_callback=counter_callback,
         )
-
-        print(f"extracted block: {extracted_block}")
-        print(f"counter_callback: {counter_callback}")
 
         return extracted_block, prediction_prompt, None, counter_callback
