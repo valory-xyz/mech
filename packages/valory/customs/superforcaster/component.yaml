@@ -11,6 +11,8 @@ fingerprint:
 fingerprint_ignore_patterns: []
 entry_point: superforcaster.py
 callable: run
+params:
+  default_model: gpt-4o-2024-08-06
 dependencies:
   openai:
     version: ==1.30.2
