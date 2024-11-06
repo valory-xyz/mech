@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  stabilityai_request.py: bafybeiccpaoydpdi4jvpcupooolzvgd4hefgmi2mzi6gd5nhz4liipzv6e
+  stabilityai_request.py: bafybeiaafasblkv2uuccrxexenprpwns7r5yuqai2g7i2a5dzjlmwyff3e
 fingerprint_ignore_patterns: []
 entry_point: stabilityai_request.py
 callable: run

@@ -41,17 +41,22 @@ DEFAULT_STABILITYAI_SETTINGS = {
 PREFIX = "stabilityai-"
 ENGINES = {
     "picture": [
-        "stable-diffusion-v1-5",
-        "stable-diffusion-xl-beta-v2-2-2",
-        "stable-diffusion-512-v2-1",
-        "stable-diffusion-768-v2-1",
+        "stable-diffusion-xl-1024-v1-0",
+        "stable-diffusion-v1-6",
     ]
 }
 ENGINE_SIZE_CHART = {
-    "stable-diffusion-v1-5": {"height": 512, "width": 512},
-    "stable-diffusion-xl-beta-v2-2-2": {"height": 512, "width": 512},
-    "stable-diffusion-512-v2-1": {"height": 512, "width": 512},
-    "stable-diffusion-768-v2-1": {"height": 768, "width": 768},
+    "stable-diffusion-xl-1024-v1-0": [
+        {"height": 1024, "width": 1024},
+        {"height": 1152, "width": 896},
+        {"height": 896, "width": 1152},
+        {"height": 1216, "width": 832},
+        {"height": 1344, "width": 768},
+        {"height": 768, "width": 1344},
+        {"height": 1536, "width": 640},
+        {"height": 640, "width": 1536},
+    ],
+    "stable-diffusion-v1-6": {"height": 512, "width": 512},
 }
 
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["picture"]]
@@ -131,6 +136,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     api_key = kwargs["api_keys"]["stabilityai"]
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]
+
     if tool not in ALLOWED_TOOLS:
         return f"Tool {tool} is not in the list of supported tools.", None, None, None
 
@@ -138,11 +144,16 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     engine = tool.replace(PREFIX, "")
     cfg_scale = kwargs.get("cfg_scale", DEFAULT_STABILITYAI_SETTINGS["cfg_scale"])
     weight = kwargs.get("weight", DEFAULT_STABILITYAI_SETTINGS["weight"])
-    clip_guidance_preset = kwargs.get(
-        "clip_guidance_preset", DEFAULT_STABILITYAI_SETTINGS["clip_guidance_preset"]
-    )
-    height = kwargs.get("height", ENGINE_SIZE_CHART[engine]["height"])
-    width = kwargs.get("width", ENGINE_SIZE_CHART[engine]["width"])
+    clip_guidance_preset = kwargs.get("clip_guidance_preset", DEFAULT_STABILITYAI_SETTINGS["clip_guidance_preset"])
+    
+    # Handle different engine types
+    if engine == "stable-diffusion-xl-1024-v1-0":
+        height = kwargs.get("height", ENGINE_SIZE_CHART[engine][0]["height"])  # Access first size as default
+        width = kwargs.get("width", ENGINE_SIZE_CHART[engine][0]["width"])
+    else:  # For stable-diffusion-v1-6
+        height = kwargs.get("height", ENGINE_SIZE_CHART[engine]["height"])
+        width = kwargs.get("width", ENGINE_SIZE_CHART[engine]["width"])
+
     samples = kwargs.get("samples", DEFAULT_STABILITYAI_SETTINGS["samples"])
     steps = kwargs.get("steps", DEFAULT_STABILITYAI_SETTINGS["steps"])
 
