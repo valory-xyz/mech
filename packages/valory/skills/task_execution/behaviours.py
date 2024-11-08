@@ -92,11 +92,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def setup(self) -> None:
         """Implement the setup."""
         self.context.logger.info("Setting up TaskExecutionBehaviour")
-        self._tools_to_file_hash = {
-            value: key
-            for key, values in self.params.file_hash_to_tools.items()
-            for value in values
-        }
+        self._tools_to_file_hash = self.params.tools_to_file_hash
         self._keychain = KeyChain(self.params.api_keys)
 
     def act(self) -> None:
@@ -234,7 +230,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         target_mechs = [
             mech
             for mech, config in self.params.mech_to_config.items()
-            if not config.is_marketplace_mech
+            if not config.get("is_marketplace_mech", False)
         ]
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
@@ -317,7 +313,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _get_designated_marketplace_mech_address(self) -> str:
         """Get the designated mech address."""
         for mech, config in self.params.mech_to_config.items():
-            if config.is_marketplace_mech:
+            if config.get("is_marketplace_mech", False):
                 return mech
 
         raise ValueError("No marketplace mech address found")

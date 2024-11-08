@@ -133,7 +133,7 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     @property
     def mech_addresses(self) -> List[str]:
         """Get the addresses of the MECHs."""
-        return self.context.params.agent_mech_contract_addresses
+        return self.params.agent_mech_contract_addresses
 
     @staticmethod
     def to_multihash(hash_string: str) -> str:

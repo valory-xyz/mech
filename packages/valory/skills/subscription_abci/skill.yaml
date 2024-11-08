@@ -12,21 +12,21 @@ fingerprint:
   dialogues.py: bafybeif2euu7wehnyr2r6efrbk6jh757dvbbnb3m7v5gxfdc4qzr3fnd74
   fsm_specification.yaml: bafybeia77avtbeclmr4lil2hvjrxk4unstxb4fyvdmbpdgocn3ebs2hcdi
   handlers.py: bafybeiegulbnno4efmaqmsuvjo4vrhcwcrg3faeryjjhwyabpywzty5m2u
-  models.py: bafybeia6ast2b5vckmoipidlaxzc77wokzaa3e6sb4zmbk5bw63x3fxlrq
+  models.py: bafybeicdcm3afzmszqk4gzjvjigi6v2olkzirjtvoereiixrhwssrqbjxq
   payloads.py: bafybeidqcjuyceawnzf2dkeoro2geivfeqrh34h6a7lkxvfqcl62d4hyuy
   rounds.py: bafybeigyyo3ztnqoolbrbz3cjq6vssedua7qawbemrp3mc6owqrpmew5wu
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeifj253ojkdr75ckrzb55su3j2v2hyb3v2ppqjwvvqyzbxanptebne
-- valory/gnosis_safe:0.1.0:bafybeibq77mgzhyb23blf2eqmia3kc6io5karedfzhntvpcebeqdzrgyqa
+- valory/agent_mech:0.1.0:bafybeigufdjkt3at7sycerhyupvdgkdmkxy3ll3loggj4ithtwjczm57xq
+- valory/gnosis_safe:0.1.0:bafybeiaw4yr7ubqlp63iz5wxqep3a5fokqs3kqva7sp2nsqg355zzucqgm
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
-- valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
+- valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
+- valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 behaviours:
   main:
     args: {}
@@ -78,8 +78,6 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      agent_mech_contract_addresses:
-      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0
@@ -142,10 +140,9 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
-      mech_to_subscription:
-      - - '0x77af31De935740567Cf4fF1986D04B2c964A786a'
-        - - '0x0000000000000000000000000000000000000000'
-          - '1'
+      mech_to_subscription: ${dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":["0x0000000000000000000000000000000000000000",
+        "1"],"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":["0x0000000000000000000000000000000000000001",
+        "2"]}}
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   requests:

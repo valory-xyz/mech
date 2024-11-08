@@ -20,13 +20,13 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeih3enhagoql7kzpeyzzu2scpkif6y3ubakpralfnwxcvxexdyvy5i
-- valory/registration_abci:0.1.0:bafybeiek7zcsxbucjwzgqfftafhfrocvc7q4yxllh2q44jeemsjxg3rcfm
-- valory/reset_pause_abci:0.1.0:bafybeidw4mbx3os3hmv7ley7b3g3gja7ydpitr7mxbjpwzxin2mzyt5yam
-- valory/task_submission_abci:0.1.0:bafybeigoda6koeghcboflmz5e6r7yluk7fanpjso64b4am3w2szo2a65w4
-- valory/termination_abci:0.1.0:bafybeihq6qtbwt6i53ayqym63vhjexkcppy26gguzhhjqywfmiuqghvv44
-- valory/transaction_settlement_abci:0.1.0:bafybeigtzlk4uakmd54rxnznorcrstsr52kta474lgrnvx5ovr546vj7sq
-- valory/subscription_abci:0.1.0:bafybeicnum426c4te77enoalhmthqirrhvswvyunvanjbljlhs2cob6zsa
+- valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
+- valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
+- valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
+- valory/task_submission_abci:0.1.0:bafybeidkelftx2o34iahldi4v4gsiogkkczw7rqdlszpazm23r3jaoneqq
+- valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
+- valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
+- valory/subscription_abci:0.1.0:bafybeihs63kvsuiits4mumk47xzgftzisirwjslpo7dijbfmtd7wbajbri
 behaviours:
   main:
     args: {}
@@ -78,26 +78,12 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      agent_mech_contract_addresses:
-      - '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
-      api_keys_json:
-      - - openai
-        - dummy_api_key
-      - - stabilityai
-        - dummy_api_key
+      mech_to_config: {}
+      api_keys: {}
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-      file_hash_to_tools_json:
-      - - bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4
-        - - openai-gpt-3.5-turbo-instruct
-          - openai-gpt-3.5-turbo
-          - openai-gpt-4
-      - - bafybeiafdm3jctiz6wwo3rmo3vdubk7j7l5tumoxi5n5rc3x452mtkgyua
-        - - stabilityai-stable-diffusion-v1-5
-          - stabilityai-stable-diffusion-xl-beta-v2-2-2
-          - stabilityai-stable-diffusion-512-v2-1
-          - stabilityai-stable-diffusion-768-v2-1
+      tools_to_file_hash: {}
       finalize_timeout: 60.0
       genesis_config:
         genesis_time: '2022-09-26T00:00:00.000000000Z'
@@ -174,10 +160,7 @@ models:
       serious_slash_unit_amount: 8000000000000000
       agent_funding_amount: 200000000000000000
       minimum_agent_balance: 100000000000000000
-      mech_to_subscription:
-      - - '0x77af31De935740567Cf4fF1986D04B2c964A786a'
-        - - '0x0000000000000000000000000000000000000000'
-          - '1'
+      mech_to_subscription: {}
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   randomness_api:
@@ -205,5 +188,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.50.0
+    version: ==1.59.0
 is_abstract: false

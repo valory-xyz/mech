@@ -68,9 +68,10 @@ class Params(BaseParams):
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
         self.service_owner_share = self._ensure("service_owner_share", kwargs, float)
         self.profit_split_freq = self._ensure("profit_split_freq", kwargs, int)
-        self.agent_mech_contract_addresses = self._ensure(
-            "agent_mech_contract_addresses", kwargs, list
+        self.mech_to_config: Dict[str, Dict[str, bool]] = self._ensure_get(
+            "mech_to_config", kwargs, Dict[str, Dict[str, bool]]
         )
+        self.agent_mech_contract_addresses = list(self.mech_to_config.keys())
         self.hash_checkpoint_address = self._ensure(
             "hash_checkpoint_address", kwargs, str
         )
