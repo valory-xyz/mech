@@ -241,13 +241,16 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         Event.ROUND_TIMEOUT: 60.0,
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
-        [get_name(SynchronizedData.done_tasks)]
+        [
+            get_name(SynchronizedData.done_tasks),
+            get_name(SynchronizedData.final_tx_hash)
+        ]
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskPoolingRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
-        FinishedTaskPoolingRound: {"most_voted_tx_hash"},
+        FinishedTaskPoolingRound: {"most_voted_tx_hash", "final_tx_hash"},
         FinishedTaskExecutionWithErrorRound: set(),
         FinishedWithoutTasksRound: set(),
     }
