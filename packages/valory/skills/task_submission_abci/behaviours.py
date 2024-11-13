@@ -375,6 +375,8 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 f"Split {profits} profits from mech {mech_address} into {split_funds}"
             )
             for receiver_address, amount in split_funds.items():
+                if amount == 0:
+                    continue
                 tx = yield from self._get_transfer_tx(
                     mech_address, receiver_address, amount
                 )
@@ -386,6 +388,9 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                     return None
                 txs.append(tx)
 
+        if len(txs) == 0:
+            self.context.logger.info("No profits to split, all transfer amounts are 0.")
+            return None
         return txs
 
     def _get_balance(self, address: str) -> Generator[None, None, Optional[int]]:
@@ -950,10 +955,11 @@ class TransactionPreparationBehaviour(
         """Get the deliver tx for the marketplace delivery."""
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.mech_marketplace_address,
+            contract_address=task_data["mech_address"],
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_deliver_to_market_tx",
             request_id=task_data["request_id"],
+            sender_address=self.synchronized_data.safe_contract_address,
             data=task_data["task_result"],
             mech_staking_instance=self.params.mech_staking_instance_address,
             mech_service_id=self.params.on_chain_service_id,
@@ -969,7 +975,6 @@ class TransactionPreparationBehaviour(
         data = cast(bytes, contract_api_msg.state.body["data"])
         simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
 
-        data = cast(bytes, contract_api_msg.state.body["data"])
         return {
             "to": task_data["mech_address"],
             "value": ZERO_ETHER_VALUE,

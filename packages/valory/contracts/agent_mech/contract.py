@@ -484,6 +484,7 @@ class AgentMechContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
+        sender_address: str,
         request_id: int,
         data: str,
         mech_staking_instance: str,
@@ -500,9 +501,12 @@ class AgentMechContract(Contract):
             fn_name="deliverToMarketplace",
             args=[
                 request_id,
-                data,
+                bytes.fromhex(data),
                 Web3.to_checksum_address(mech_staking_instance),
                 mech_service_id,
             ],
         )
-        return {"data": bytes.fromhex(tx_data[2:])}  # type: ignore
+        simulation_ok = cls.simulate_tx(
+            ledger_api, contract_address, sender_address, tx_data
+        ).pop("data")
+        return {"data": bytes.fromhex(tx_data[2:]), "simulation_ok": simulation_ok}  # type: ignore
