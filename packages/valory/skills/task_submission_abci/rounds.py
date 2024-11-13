@@ -243,7 +243,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         [
             get_name(SynchronizedData.done_tasks),
-            get_name(SynchronizedData.final_tx_hash)
+            get_name(SynchronizedData.final_tx_hash),
         ]
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
