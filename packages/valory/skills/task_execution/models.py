@@ -38,11 +38,11 @@ class MechConfig:
     is_marketplace_mech: bool
 
     @staticmethod
-    def from_dict(raw_dict: Dict[str, Any]) -> "MechConfig":
+    def from_dict(raw_dict: Dict[bool, bool]) -> "MechConfig":
         """From dict."""
         return MechConfig(
-            use_dynamic_pricing=raw_dict["use_dynamic_pricing"].lower() == "true",
-            is_marketplace_mech=raw_dict["is_marketplace_mech"].lower() == "true",
+            use_dynamic_pricing=raw_dict.get("use_dynamic_pricing"),
+            is_marketplace_mech=raw_dict.get("is_marketplace_mech"),
         )
 
 
@@ -57,8 +57,8 @@ class Params(Model):
         self.api_keys: Dict[str, str] = self._ensure_get(
             "api_keys", kwargs, Dict[str, str]
         )
-        self.tools_to_file_hash: Dict[str, str] = self._ensure_get(
-            "tools_to_file_hash", kwargs, Dict[str, str]
+        self.tools_to_package_hash: Dict[str, str] = self._ensure_get(
+            "tools_to_package_hash", kwargs, Dict[str, str]
         )
         self.polling_interval = kwargs.get("polling_interval", 30.0)
         self.task_deadline = kwargs.get("task_deadline", 240.0)
@@ -71,9 +71,13 @@ class Params(Model):
         self.max_block_window: int = self._ensure_get("max_block_window", kwargs, int)
         # maps the request id to the number of times it has timed out
         self.request_id_to_num_timeouts: Dict[int, int] = defaultdict(lambda: 0)
-        self.mech_to_config: Dict[str, Dict[str, bool]] = self._ensure_get(
+        mech_to_config_dict: Dict[str, Dict[str, bool]] = self._ensure_get(
             "mech_to_config", kwargs, Dict[str, Dict[str, bool]]
         )
+        self.mech_to_config: Dict[str, MechConfig] = {
+            key: MechConfig.from_dict(value)
+            for key, value in mech_to_config_dict.items()
+        }
         self.agent_mech_contract_addresses = list(self.mech_to_config.keys())
         self.mech_marketplace_address: str = self._ensure_get(
             "mech_marketplace_address", kwargs, str

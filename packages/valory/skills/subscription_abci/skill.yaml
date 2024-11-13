@@ -8,11 +8,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeih2y4s3vu6xleujurx5mihfmzaxubeubykopyftjgklbwtfn6m5yu
-  behaviours.py: bafybeieegpu4ofx3npoofnzqc6mm7ncz6hfv56i6ih52haf46l2gdzel4y
+  behaviours.py: bafybeiddq3b7vlxz5s4s7pcyfarc7grxgjhfq7hmdm53kd63bxfeaanye4
   dialogues.py: bafybeif2euu7wehnyr2r6efrbk6jh757dvbbnb3m7v5gxfdc4qzr3fnd74
   fsm_specification.yaml: bafybeia77avtbeclmr4lil2hvjrxk4unstxb4fyvdmbpdgocn3ebs2hcdi
   handlers.py: bafybeiegulbnno4efmaqmsuvjo4vrhcwcrg3faeryjjhwyabpywzty5m2u
-  models.py: bafybeicdcm3afzmszqk4gzjvjigi6v2olkzirjtvoereiixrhwssrqbjxq
+  models.py: bafybeihkg3otqrwjdq7inwcit7o736r4s7xm55yeculilpy6zhgba2jebu
   payloads.py: bafybeidqcjuyceawnzf2dkeoro2geivfeqrh34h6a7lkxvfqcl62d4hyuy
   rounds.py: bafybeigyyo3ztnqoolbrbz3cjq6vssedua7qawbemrp3mc6owqrpmew5wu
 fingerprint_ignore_patterns: []
@@ -140,9 +140,9 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
-      mech_to_subscription: ${dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":["0x0000000000000000000000000000000000000000",
-        "1"],"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":["0x0000000000000000000000000000000000000001",
-        "2"]}}
+      mech_to_subscription: ${dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
+        "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
+        "tokenId":"2"}}}
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   requests:

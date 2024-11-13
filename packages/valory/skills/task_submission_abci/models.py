@@ -33,6 +33,7 @@ from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
+from packages.valory.skills.task_execution.models import MechConfig
 from packages.valory.skills.abstract_round_abci.utils import check_type
 from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
 
@@ -68,9 +69,13 @@ class Params(BaseParams):
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
         self.service_owner_share = self._ensure("service_owner_share", kwargs, float)
         self.profit_split_freq = self._ensure("profit_split_freq", kwargs, int)
-        self.mech_to_config: Dict[str, Dict[str, bool]] = self._ensure_get(
+        mech_to_config_dict: Dict[str, Dict[str, bool]] = self._ensure_get(
             "mech_to_config", kwargs, Dict[str, Dict[str, bool]]
         )
+        self.mech_to_config: Dict[str, MechConfig] = {
+            key: MechConfig.from_dict(value)
+            for key, value in mech_to_config_dict.items()
+        }
         self.agent_mech_contract_addresses = list(self.mech_to_config.keys())
         self.hash_checkpoint_address = self._ensure(
             "hash_checkpoint_address", kwargs, str

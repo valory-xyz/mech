@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeic6g2a2mlw6xvndnubp24qxh4gcqjwr56r6brfqdmz3icwlmyheny
+  behaviours.py: bafybeifvljjzecbzahjycivwc5ygkdemiopyooj4hrhzu4v3il45jtc7cu
   dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
   handlers.py: bafybeidbt5ezj74cgfogk3w4uw4si2grlnk5g54veyumw7g5yh6gdscywu
-  models.py: bafybeih2ne7jnmfhdtnxmxft7tfx7keautshmfn7mhxuu2p4yuztb6hjoa
+  models.py: bafybeiafwc6ic4kkvcgkevabvqxuqes6tzstieujrbwpjbjxzkub3bkbue
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeiafnee7iay6dyjnatyqyzjov5c4ibl3ojamjmgfjri7cyghl7qayq
@@ -70,7 +70,7 @@ models:
     args:
       agent_index: 0
       api_keys: {}
-      tools_to_file_hash: {}
+      tools_to_package_hash: {}
       from_block_range: 50000
       num_agents: 4
       mech_to_config: {}

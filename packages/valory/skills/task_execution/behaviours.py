@@ -80,7 +80,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # we only want to execute one task at a time, for the time being
         self._executor = ProcessPoolExecutor(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
-        self._tools_to_file_hash: Dict[str, str] = {}
+        self._tools_to_package_hash: Dict[str, str] = {}
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
         self._inflight_tool_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
@@ -92,7 +92,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def setup(self) -> None:
         """Implement the setup."""
         self.context.logger.info("Setting up TaskExecutionBehaviour")
-        self._tools_to_file_hash = self.params.tools_to_file_hash
+        self._tools_to_package_hash = self.params.tools_to_package_hash
         self._keychain = KeyChain(self.params.api_keys)
 
     def act(self) -> None:
@@ -175,10 +175,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if self._inflight_tool_req is not None:
             # there already is a req in flight
             return
-        if len(self._tools_to_file_hash) == len(self._all_tools):
+        if len(self._tools_to_package_hash) == len(self._all_tools):
             # we already have all the tools
             return
-        for tool, file_hash in self._tools_to_file_hash.items():
+        for tool, file_hash in self._tools_to_package_hash.items():
             if tool in self._all_tools:
                 continue
             # read one at a time
@@ -422,7 +422,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             and "prompt" in task_data
             and "tool" in task_data
         )  # pylint: disable=C0301
-        if is_data_valid and task_data["tool"] in self._tools_to_file_hash:
+        if is_data_valid and task_data["tool"] in self._tools_to_package_hash:
             self._prepare_task(task_data)
         elif is_data_valid:
             tool = task_data["tool"]

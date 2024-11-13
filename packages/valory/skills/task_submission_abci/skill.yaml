@@ -12,7 +12,7 @@ fingerprint:
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeignqwc6tdzvpastpe7ov43wfwdccdncc2fz2adwom75oxkdgm25li
+  models.py: bafybeiatzdvm5mamweepmxxqiuxzczmqub5y4pc5gw2ioiqubgfg5xjuue
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
   rounds.py: bafybeicqimk23sc7itxwcu372lyerwnqly4v7tv2pcl4krd53gdizdv6ae
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
@@ -32,6 +32,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
+- valory/task_execution:0.1.0:bafybeiac2tl37wtrs6enevfphej3ltrrb3anibiip65rb6jbxae46uuose
 behaviours:
   main:
     args: {}

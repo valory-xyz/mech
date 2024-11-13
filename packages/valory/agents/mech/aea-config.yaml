@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeigagkwqsps5l4bt2cinbd6qkxgrmciwc5iuqimakuq4ywkpkqqdhq
+- valory/mech_abci:0.1.0:bafybeig35ipz6x2ht6wmfb6ivxvyzf7yvtggvml63mqhpgy5o6zqj7rlo4
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
-- valory/subscription_abci:0.1.0:bafybeihs63kvsuiits4mumk47xzgftzisirwjslpo7dijbfmtd7wbajbri
-- valory/task_execution:0.1.0:bafybeif4lvkzqvnoxrahwufvb7hsh7zrhxchjvhggyjyndduyf6sit75vm
-- valory/task_submission_abci:0.1.0:bafybeidkelftx2o34iahldi4v4gsiogkkczw7rqdlszpazm23r3jaoneqq
+- valory/subscription_abci:0.1.0:bafybeie6iqkvupyyan4yqfnxu4z5ujfhzf36hkdwgktmcr7zabwo3zgj3i
+- valory/task_execution:0.1.0:bafybeiac2tl37wtrs6enevfphej3ltrrb3anibiip65rb6jbxae46uuose
+- valory/task_submission_abci:0.1.0:bafybeihh7m4jvnn2sgr25kqfyn7qmrw6452kvrrsipuxruw272o5z6o6fm
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -228,9 +228,9 @@ models:
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
-      mech_to_subscription: ${dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":["0x0000000000000000000000000000000000000000",
-        "1"],"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":["0x0000000000000000000000000000000000000001",
-        "2"]}}
+      mech_to_subscription: ${dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
+        "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
+        "tokenId":"2"}}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
@@ -243,7 +243,7 @@ models:
   params:
     args:
       task_deadline: ${float:240.0}
-      tools_to_file_hash: ${dict:{"openai-gpt-3.5-turbo-instruct":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
+      tools_to_package_hash: ${dict:{"openai-gpt-3.5-turbo-instruct":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
         "openai-gpt-3.5-turbo":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
         "openai-gpt-4":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
         "stabilityai-stable-diffusion-v1-5":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",

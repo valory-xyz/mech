@@ -23,10 +23,10 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
-- valory/task_submission_abci:0.1.0:bafybeidkelftx2o34iahldi4v4gsiogkkczw7rqdlszpazm23r3jaoneqq
+- valory/task_submission_abci:0.1.0:bafybeihh7m4jvnn2sgr25kqfyn7qmrw6452kvrrsipuxruw272o5z6o6fm
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
-- valory/subscription_abci:0.1.0:bafybeihs63kvsuiits4mumk47xzgftzisirwjslpo7dijbfmtd7wbajbri
+- valory/subscription_abci:0.1.0:bafybeie6iqkvupyyan4yqfnxu4z5ujfhzf36hkdwgktmcr7zabwo3zgj3i
 behaviours:
   main:
     args: {}
@@ -83,7 +83,7 @@ models:
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-      tools_to_file_hash: {}
+      tools_to_package_hash: {}
       finalize_timeout: 60.0
       genesis_config:
         genesis_time: '2022-09-26T00:00:00.000000000Z'
