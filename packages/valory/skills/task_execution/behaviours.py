@@ -230,7 +230,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         target_mechs = [
             mech
             for mech, config in self.params.mech_to_config.items()
-            if not config.get("is_marketplace_mech", False)
+            if not config.is_marketplace_mech
         ]
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
@@ -313,7 +313,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _get_designated_marketplace_mech_address(self) -> str:
         """Get the designated mech address."""
         for mech, config in self.params.mech_to_config.items():
-            if config.get("is_marketplace_mech", False):
+            if config.is_marketplace_mech:
                 return mech
 
         raise ValueError("No marketplace mech address found")

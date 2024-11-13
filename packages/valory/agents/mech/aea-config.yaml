@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeig35ipz6x2ht6wmfb6ivxvyzf7yvtggvml63mqhpgy5o6zqj7rlo4
+- valory/mech_abci:0.1.0:bafybeif6unegjquvfy4i2bhhrq6knnupyucwxs4n76gifwthciqbpigsia
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
 - valory/subscription_abci:0.1.0:bafybeie6iqkvupyyan4yqfnxu4z5ujfhzf36hkdwgktmcr7zabwo3zgj3i
-- valory/task_execution:0.1.0:bafybeiac2tl37wtrs6enevfphej3ltrrb3anibiip65rb6jbxae46uuose
-- valory/task_submission_abci:0.1.0:bafybeihh7m4jvnn2sgr25kqfyn7qmrw6452kvrrsipuxruw272o5z6o6fm
+- valory/task_execution:0.1.0:bafybeib7fkqycq43uu3bdjwmeoiuy324je2b2teyvwee64v2hwjlm7v5x4
+- valory/task_submission_abci:0.1.0:bafybeihfxn2aqtiruwxeslipqh5v23ngxycfoy46fi7dndkkfob5g57ciu
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m

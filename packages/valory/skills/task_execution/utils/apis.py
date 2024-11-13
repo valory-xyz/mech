@@ -17,13 +17,13 @@
 #
 # ------------------------------------------------------------------------------
 """Utils for API integrations."""
-from typing import Dict, List
+from typing import Dict
 
 
 class KeyChain:
     """Class for managing API keys."""
 
-    def __init__(self, services: Dict[str, List[str]]) -> None:
+    def __init__(self, services: Dict[str, str]) -> None:
         """Initialize the KeyChain with a dictionary of service names and corresponding lists of API keys."""
         if not isinstance(services, dict):
             raise ValueError(

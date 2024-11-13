@@ -20,11 +20,12 @@
 """This module contains the shared state for the abci skill of Mech."""
 import dataclasses
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional, cast
-from packages.valory.skills.abstract_round_abci.utils import check_type
+from typing import Any, Callable, Dict, Optional
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
+
+from packages.valory.skills.abstract_round_abci.utils import check_type
 
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -38,11 +39,12 @@ class MechConfig:
     is_marketplace_mech: bool
 
     @staticmethod
-    def from_dict(raw_dict: Dict[bool, bool]) -> "MechConfig":
+    def from_dict(raw_dict: Dict[str, bool]) -> "MechConfig":
         """From dict."""
+        print(f"{raw_dict=}")
         return MechConfig(
-            use_dynamic_pricing=raw_dict.get("use_dynamic_pricing"),
-            is_marketplace_mech=raw_dict.get("is_marketplace_mech"),
+            use_dynamic_pricing=raw_dict.get("use_dynamic_pricing", False),
+            is_marketplace_mech=raw_dict.get("is_marketplace_mech", False),
         )
 
 
@@ -95,7 +97,7 @@ class Params(Model):
         skill_id = kwargs["skill_context"].skill_id
         enforce(
             key in kwargs,
-            f"'{key}' of type '{type_}' required, but it is not set in `models.params.args` of `skill.yaml` of `{skill_id}`",
+            f"{key!r} of type {type_!r} required, but it is not set in `models.params.args` of `skill.yaml` of `{skill_id}`",
         )
         value = kwargs.get(key, None)
         try:
@@ -103,6 +105,6 @@ class Params(Model):
         except TypeError:  # pragma: nocover
             enforce(
                 False,
-                f"'{key}' must be a {type_}, but type {type(value)} was found in `models.params.args` of `skill.yaml` of `{skill_id}`",
+                f"{key!r} must be a {type_}, but type {type(value)} was found in `models.params.args` of `skill.yaml` of `{skill_id}`",
             )
         return value

@@ -33,8 +33,8 @@ from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
-from packages.valory.skills.task_execution.models import MechConfig
 from packages.valory.skills.abstract_round_abci.utils import check_type
+from packages.valory.skills.task_execution.models import MechConfig
 from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
 
 
