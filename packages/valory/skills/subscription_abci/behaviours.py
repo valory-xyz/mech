@@ -149,7 +149,8 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
         """Get the mech update hash tx."""
         txs = []
         for mech_address, subscription in self.params.mech_to_subscription.items():
-            subscription_address, token_id = subscription
+            subscription_address = subscription.get("tokenAddress")
+            token_id = subscription.get("tokenId")
             should_update = yield from self._should_update_subscription(
                 mech_address, subscription_address, token_id
             )
