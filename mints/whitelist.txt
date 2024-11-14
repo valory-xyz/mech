@@ -1,5 +1,0 @@
-contract/valory/agent_registry/0.1.0
-custom/napthaai/prediction_request_rag/0.1.0
-custom/napthaai/prediction_request_reasoning/0.1.0
-custom/napthaai/resolve_market_reasoning/0.1.0
-custom/polywrap/prediction_with_research_report/0.1.0
