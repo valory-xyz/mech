@@ -1,6 +1,5 @@
 {
     "dev": {
-        "custom/valory/openai_request/0.1.0": "bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq",
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
         "protocol/valory/websocket_client/0.1.0": "bafybeifjk254sy65rna2k32kynzenutujwqndap2r222afvr3zezi27mx4",
         "contract/valory/agent_mech/0.1.0": "bafybeib6xrew4kfvus376hqcrkt6e35yfr4jp7bwbrlb3eaav262e5ns4m",
