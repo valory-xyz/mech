@@ -32,7 +32,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
-- valory/task_execution:0.1.0:bafybeibqq47xa2fic5nfd6zt2kdge5dby4ggkpzipehgc4fnf4nkgy4qai
+- valory/task_execution:0.1.0:bafybeicz2y3mtq37pqlnk35exvj7psi5ktow4lvsogtbmkfpgns4evfkji
 behaviours:
   main:
     args: {}
@@ -168,12 +168,6 @@ models:
     args: {}
     class_name: TendermintDialogues
 dependencies:
-  beautifulsoup4:
-    version: ==4.12.2
-  googlesearch-python:
-    version: ==1.2.3
-  openai:
-    version: ==1.30.2
   py-multibase:
     version: ==1.0.3
   py-multicodec:

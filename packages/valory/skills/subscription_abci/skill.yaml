@@ -158,12 +158,6 @@ models:
     args: {}
     class_name: TendermintDialogues
 dependencies:
-  beautifulsoup4:
-    version: ==4.12.2
-  googlesearch-python:
-    version: ==1.2.3
-  openai:
-    version: ==1.30.2
   py-multibase:
     version: ==1.0.3
   py-multicodec:
