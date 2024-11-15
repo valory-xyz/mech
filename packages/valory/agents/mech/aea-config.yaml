@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeihzloyjchktcixzvlltktt7fowg7kxiddndxlkjrqjo7fsxv25cp4
+- valory/mech_abci:0.1.0:bafybeiela4chgu4ricmgweqnoswisfcfbwvddwwurolhxfba66hkmhwmui
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
 - valory/subscription_abci:0.1.0:bafybeicazs3nnrztew6j5vanmpb3lnhx4a2rclcqxjr7tmtu3adhn5dziy
-- valory/task_execution:0.1.0:bafybeicz2y3mtq37pqlnk35exvj7psi5ktow4lvsogtbmkfpgns4evfkji
-- valory/task_submission_abci:0.1.0:bafybeicfsuc3gintqm6oer24v5lsrt4i22j7xee7udovdgj6pislcde72e
+- valory/task_execution:0.1.0:bafybeiagehlvfakmj632ta2yw6s3pa5um4goipcmcjnlwj7yrffmnhn26a
+- valory/task_submission_abci:0.1.0:bafybeihy4a4b2rsmygsiuvoxap5d6m4fp5wjvdhrduvenj33zqziz7tequ
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -80,8 +80,6 @@ logging_config:
 dependencies:
   aiohttp:
     version: <4.0.0,>=3.8.5
-  anthropic:
-    version: ==0.23.1
   hypothesis:
     version: ==6.21.6
   open-aea-ledger-ethereum:

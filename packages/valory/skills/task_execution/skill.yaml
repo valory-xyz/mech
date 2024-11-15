@@ -90,8 +90,6 @@ dependencies:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
-  anthropic:
-    version: ==0.21.3
   eth-abi:
     version: ==4.0.0
 is_abstract: false
