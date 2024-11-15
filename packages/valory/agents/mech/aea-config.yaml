@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeifbgquwdqzxmxvt4dqhpfqiv2jnf7tzt5pfkyyfpl7qydwdu7dnye
+- valory/mech_abci:0.1.0:bafybeiela4chgu4ricmgweqnoswisfcfbwvddwwurolhxfba66hkmhwmui
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
-- valory/subscription_abci:0.1.0:bafybeigztasskjzcuxhqezpjrjaieo45pjoroyfraikgbi7knilj3ofsmu
-- valory/task_execution:0.1.0:bafybeibqq47xa2fic5nfd6zt2kdge5dby4ggkpzipehgc4fnf4nkgy4qai
-- valory/task_submission_abci:0.1.0:bafybeic4eca7fym67oecy3e3f7p4yxel66znfeor5hd4zdjojmqanqz32e
+- valory/subscription_abci:0.1.0:bafybeicazs3nnrztew6j5vanmpb3lnhx4a2rclcqxjr7tmtu3adhn5dziy
+- valory/task_execution:0.1.0:bafybeiagehlvfakmj632ta2yw6s3pa5um4goipcmcjnlwj7yrffmnhn26a
+- valory/task_submission_abci:0.1.0:bafybeihy4a4b2rsmygsiuvoxap5d6m4fp5wjvdhrduvenj33zqziz7tequ
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -80,68 +80,12 @@ logging_config:
 dependencies:
   aiohttp:
     version: <4.0.0,>=3.8.5
-  anthropic:
-    version: ==0.23.1
-  beautifulsoup4:
-    version: ==4.12.2
-  chromadb:
-    version: ==0.4.13
-  docstring-parser:
-    version: ==0.15
-  faiss-cpu:
-    version: ==1.7.4
-  fastapi:
-    version: ==0.110.3
-  google-api-python-client:
-    version: ==2.95.0
-  googlesearch-python:
-    version: ==1.2.3
   hypothesis:
     version: ==6.21.6
-  langchain:
-    version: ==0.2.1
-  langchain-community:
-    version: ==0.2.1
-  langchain-core:
-    version: ==0.2.1
-  langchain-openai:
-    version: ==0.1.7
-  langgraph:
-    version: ==0.0.55
-  lxml:
-    version: ==5.1.0
-  markdownify:
-    version: ==0.11.6
-  moviepy:
-    version: ==1.0.3
   open-aea-ledger-ethereum:
     version: ==1.59.0
-  pandas:
-    version: ==2.2.2
-  pypdf2:
-    version: ==3.0.1
-  python-dateutil:
-    version: ==2.8.2
-  readability-lxml:
-    version: ==0.8.1
-  replicate:
-    version: ==0.15.7
-  scikit-learn:
-    version: ==1.3.1
-  spacy:
-    version: ==3.7.2
-  tavily-python:
-    version: ==0.3.3
-  tiktoken:
-    version: ==0.7.0
-  typer:
-    version: ==0.9.4
-  prediction-market-agent-tooling:
-    version: '>=0.39.0,<0.40.0'
   google-generativeai:
     version: ==0.6.0
-  openfactverification-kongzii:
-    version: ==0.1.0
 customs: []
 default_connection: null
 ---
