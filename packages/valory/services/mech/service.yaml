@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeia7qkuszlbngi7n7typcccb5zooalfvt3oayj7rsgxx7icfclzb2e
+agent: valory/mech:0.1.0:bafybeigk33wlthqhriruwyv44gcx754xzlne3ywynxg6ezswabac7dcmmq
 number_of_agents: 4
 deployment:
   agent:
@@ -197,8 +197,7 @@ type: skill
     params:
       args:
         task_deadline: ${TASK_DEADLINE:float:240.0}
-        tools_to_package_hash:
-          $TOOLS_TO_PACKAGE_HASH:dict: {}
+        tools_to_package_hash: ${TOOLS_TO_PACKAGE_HASH:dict:{}}
         api_keys: ${API_KEYS:dict:{}}
         polling_interval: ${POLLING_INTERVAL:float:30.0}
         agent_index: ${AGENT_INDEX_0:int:0}
@@ -213,8 +212,7 @@ type: skill
     params:
       args:
         task_deadline: ${TASK_DEADLINE:float:240.0}
-        tools_to_package_hash:
-          $TOOLS_TO_PACKAGE_HASH:dict: {}
+        tools_to_package_hash: ${TOOLS_TO_PACKAGE_HASH:dict:{}}
         api_keys: ${API_KEYS:dict:{}}
         polling_interval: ${POLLING_INTERVAL:float:30.0}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -229,8 +227,7 @@ type: skill
     params:
       args:
         task_deadline: ${TASK_DEADLINE:float:240.0}
-        tools_to_package_hash:
-          $TOOLS_TO_PACKAGE_HASH:dict: {}
+        tools_to_package_hash: ${TOOLS_TO_PACKAGE_HASH:dict:{}}
         api_keys: ${API_KEYS:dict:{}}
         polling_interval: ${POLLING_INTERVAL:float:30.0}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -245,8 +242,7 @@ type: skill
     params:
       args:
         task_deadline: ${TASK_DEADLINE:float:240.0}
-        tools_to_package_hash:
-          $TOOLS_TO_PACKAGE_HASH:dict: {}
+        tools_to_package_hash: ${TOOLS_TO_PACKAGE_HASH:dict:{}}
         api_keys: ${API_KEYS:dict:{}}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         polling_interval: ${POLLING_INTERVAL:float:30.0}

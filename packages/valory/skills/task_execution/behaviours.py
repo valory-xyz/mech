@@ -297,6 +297,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
+        if ipfs_hash is None:
+            self.context.logger.error(f"Invalid request data on {task_data_}")
+            self._invalid_request = True
+            return
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
         self.send_message(ipfs_msg, message, self._handle_get_task)
@@ -413,9 +417,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self._handle_done_task(task_result)
 
+    def _safely_get_task_data(self, message: IpfsMessage) -> Optional[Dict[str, Any]]:
+        """Safely get task data."""
+        try:
+            [json.loads(content) for content in message.files.values()][0]
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                f"Exception raised while decoding task data: {str(e)}"
+            )
+            return None
+
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a task request."""
-        task_data = [json.loads(content) for content in message.files.values()][0]
+        task_data = self._safely_get_task_data(message)
         is_data_valid = (
             task_data
             and isinstance(task_data, dict)
