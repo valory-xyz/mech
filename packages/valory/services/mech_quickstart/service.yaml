@@ -94,6 +94,9 @@ config:
       default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
     gnosis:
       address: ${GNOSIS_RPC_0:str:http://host.docker.internal:8545}
+      chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
+      poa_chain: ${GNOSIS_LEDGER_IS_POA_CHAIN:bool:false}
+      default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection
