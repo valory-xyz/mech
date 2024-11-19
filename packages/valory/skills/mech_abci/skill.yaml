@@ -23,7 +23,7 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
-- valory/task_submission_abci:0.1.0:bafybeigrhzhk6qkmb5kaslkymsr3mnagoycl2kxqtiqfp6whkuyqc65lim
+- valory/task_submission_abci:0.1.0:bafybeicctl2tlza5gwyzvah7hyw74ubsxrri6uovtfvk2rzuf3cn327b4y
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 - valory/subscription_abci:0.1.0:bafybeicazs3nnrztew6j5vanmpb3lnhx4a2rclcqxjr7tmtu3adhn5dziy
@@ -144,6 +144,7 @@ models:
       validate_timeout: 1205
       task_wait_timeout: 15.0
       use_slashing: false
+      default_chain_id: ethereum
       manual_gas_limit: 1000000
       mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
       mech_marketplace_address: '0x0000000000000000000000000000000000000000'

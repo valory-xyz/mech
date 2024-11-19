@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeibf5gxrngzn6j7qr5zvsshjoaxitt5e2bj6bybj73k6e3gdbggzge
+- valory/mech_abci:0.1.0:bafybeidx5mjawpbqbiozdzx3sx2vd2pokc7ulyccns55ycxgutj2s3g5d4
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
 - valory/subscription_abci:0.1.0:bafybeicazs3nnrztew6j5vanmpb3lnhx4a2rclcqxjr7tmtu3adhn5dziy
-- valory/task_execution:0.1.0:bafybeiafdhx4tyke5qao47cx5yuqnaivl47kuuu4xfdx3ndym6mvng3jve
-- valory/task_submission_abci:0.1.0:bafybeigrhzhk6qkmb5kaslkymsr3mnagoycl2kxqtiqfp6whkuyqc65lim
+- valory/task_execution:0.1.0:bafybeigmps4dtqlvmrn42bt46cmsqoyvgtd7ltojm2t3ogf5rijxftmr5q
+- valory/task_submission_abci:0.1.0:bafybeicctl2tlza5gwyzvah7hyw74ubsxrri6uovtfvk2rzuf3cn327b4y
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -223,11 +223,6 @@ public_id: valory/ledger:0.19.0
 type: connection
 config:
   ledger_apis:
-    ethereum:
-      address: ${str:https://rpc.gnosischain.com/}
-      chain_id: ${int:100}
-      poa_chain: ${bool:false}
-      default_gas_price_strategy: ${str:eip1559}
     gnosis:
       address: ${str:https://rpc.gnosischain.com/}
       chain_id: ${int:100}
