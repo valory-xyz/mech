@@ -21,8 +21,6 @@
 from abc import ABC
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
-import openai  # noqa
-
 from packages.valory.contracts.agent_mech.contract import (
     AgentMechContract,
 )

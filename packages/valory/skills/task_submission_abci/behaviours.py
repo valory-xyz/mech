@@ -25,7 +25,6 @@ from abc import ABC
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
-import openai  # noqa
 from aea.helpers.cid import CID, to_v1
 from multibase import multibase
 from multicodec import multicodec
