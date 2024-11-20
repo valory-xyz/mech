@@ -221,6 +221,11 @@ public_id: valory/ledger:0.19.0
 type: connection
 config:
   ledger_apis:
+    ethereum:
+      address: ${str:https://rpc.gnosischain.com/}
+      chain_id: ${int:100}
+      poa_chain: ${bool:false}
+      default_gas_price_strategy: ${str:eip1559}
     gnosis:
       address: ${str:https://rpc.gnosischain.com/}
       chain_id: ${int:100}
