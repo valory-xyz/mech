@@ -25,7 +25,6 @@ from abc import ABC
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
-import openai  # noqa
 from aea.helpers.cid import CID, to_v1
 from multibase import multibase
 from multicodec import multicodec
@@ -145,6 +144,26 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         # Convert the multihash bytes to a hexadecimal string
         hex_multihash = multihash_bytes.hex()
         return hex_multihash[6:]
+
+    def get_contract_api_response(
+            self,
+            performative: ContractApiMessage.Performative,
+            contract_address: Optional[str],
+            contract_id: str,
+            contract_callable: str,
+            ledger_id: Optional[str] = None,
+            **kwargs: Any,
+    ) -> Generator[None, None, ContractApiMessage]:
+        """Get the contract api response."""
+        return super().get_contract_api_response(
+            performative=performative,
+            contract_address=contract_address,
+            contract_id=contract_id,
+            contract_callable=contract_callable,
+            ledger_id=ledger_id,
+            chain_id=self.params.default_chain_id,
+            **kwargs,
+        )
 
 
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
