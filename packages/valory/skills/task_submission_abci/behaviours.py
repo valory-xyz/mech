@@ -76,6 +76,7 @@ ZERO_IPFS_HASH = (
 )
 FILENAME = "usage"
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+LAST_TX = "last_tx"
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
@@ -102,6 +103,12 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         """
         done_tasks = deepcopy(self.context.shared_state.get(DONE_TASKS, []))
         return cast(List[Dict[str, Any]], done_tasks)
+
+    def set_tx(self, last_tx: str) -> None:
+        """Signal that the transaction was prepared."""
+        now = time.time()
+        # store the tx hash and the time it was stored
+        self.context.shared_state[LAST_TX] = (last_tx, now)
 
     def done_tasks_lock(self) -> threading.Lock:
         """Get done_tasks_lock."""
@@ -227,6 +234,8 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         # ref: https://github.com/valory-xyz/open-autonomy/blob/main/packages/valory/skills/transaction_settlement_abci/rounds.py#L432-L434
         try:
             final_tx_hash = self.synchronized_data.final_tx_hash
+            # added for healthcheck purposes
+            self.set_tx(final_tx_hash)
         except Exception as e:
             self.context.logger.error(e)
             return False
