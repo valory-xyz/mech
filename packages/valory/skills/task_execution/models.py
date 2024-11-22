@@ -20,7 +20,7 @@
 """This module contains the shared state for the abci skill of Mech."""
 import dataclasses
 from collections import defaultdict
-from typing import Any, Callable, Dict, Optional, List
+from typing import Any, Callable, Dict, List, Optional
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
