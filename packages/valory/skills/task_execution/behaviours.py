@@ -49,6 +49,7 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.ledger_api import LedgerApiMessage
+from packages.valory.skills.task_execution.handlers import LAST_SUCCESSFUL_EXECUTED_TASK
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
@@ -115,6 +116,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def request_id_to_num_timeouts(self) -> Dict[int, int]:
         """Maps the request id to the number of times it has timed out."""
         return self.params.request_id_to_num_timeouts
+
+    def set_last_executed_task(self, request_id: int) -> None:
+        """Set the last executed task."""
+        self.context.shared_state[LAST_SUCCESSFUL_EXECUTED_TASK] = (
+            request_id,
+            time.time(),
+        )
 
     def count_timeout(self, request_id: int) -> None:
         """Increase the timeout for a request."""
@@ -297,6 +305,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
+        if ipfs_hash is None:
+            self.context.logger.error(f"Invalid request data on {task_data_}")
+            self._invalid_request = True
+            return
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
         self.send_message(ipfs_msg, message, self._handle_get_task)
@@ -413,18 +425,33 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self._handle_done_task(task_result)
 
+    def _safely_get_task_data(self, message: IpfsMessage) -> Optional[Dict[str, Any]]:
+        """Safely get task data."""
+        try:
+            task_data = [json.loads(content) for content in message.files.values()][0]
+            return task_data
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                f"Exception raised while decoding task data: {str(e)}"
+            )
+            return None
+
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a task request."""
-        task_data = [json.loads(content) for content in message.files.values()][0]
+        task_data = self._safely_get_task_data(message)
         is_data_valid = (
             task_data
             and isinstance(task_data, dict)
             and "prompt" in task_data
             and "tool" in task_data
         )  # pylint: disable=C0301
-        if is_data_valid and task_data["tool"] in self._tools_to_package_hash:
+        if (
+            is_data_valid
+            and task_data is not None
+            and task_data["tool"] in self._tools_to_package_hash
+        ):
             self._prepare_task(task_data)
-        elif is_data_valid:
+        elif is_data_valid and task_data is not None:
             tool = task_data["tool"]
             executing_task = cast(Dict[str, Any], self._executing_task)
             executing_task["tool"] = tool
@@ -533,6 +560,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id=str(req_id),
             data=ipfs_hash,
         )
+        # for health check metrics
+        self.set_last_executed_task(req_id)
         done_task = cast(Dict[str, Any], self._done_task)
         task_result = to_multihash(ipfs_hash)
         cost = get_cost_for_done_task(done_task)

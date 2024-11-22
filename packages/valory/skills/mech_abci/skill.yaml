@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeiaorp75iva5xgl4ebk3lg7oenqmd6wg2dxlm33oserb7aszyujml4
   dialogues.py: bafybeifhydd6xmstbh2jx5igj33upip5a3hhlcaxttfsc77heszqmru7ri
   fsm_specification.yaml: bafybeib5yne2ke3oc4amgehhn75vajexr3sedehdzmuabhyrovfqpmuipe
-  handlers.py: bafybeibfsyvno2qgcftlftjmhj66aiurmcdqwfj2ac7jm44z7kwwk6illu
+  handlers.py: bafybeidldql7dchykfm322t4rsjhnbrejirjolke74iq2et3gu7u6uap6q
   models.py: bafybeigpimz5vhgzelhc7c3ipo56wh2o7d7whyqcjd2kjigtxos5d6bwqa
 fingerprint_ignore_patterns: []
 connections:
@@ -23,10 +23,10 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
-- valory/task_submission_abci:0.1.0:bafybeic4eca7fym67oecy3e3f7p4yxel66znfeor5hd4zdjojmqanqz32e
+- valory/task_submission_abci:0.1.0:bafybeigxi5we2lfaqhy2vlt7ktp7gnjx4k3e2poy4y33jmjhfyb5fzmqhq
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
-- valory/subscription_abci:0.1.0:bafybeigztasskjzcuxhqezpjrjaieo45pjoroyfraikgbi7knilj3ofsmu
+- valory/subscription_abci:0.1.0:bafybeifilanuxfvuypcccjku7nphurgp27i2iwncdmug3in6xuzfmslgaq
 behaviours:
   main:
     args: {}
@@ -144,6 +144,7 @@ models:
       validate_timeout: 1205
       task_wait_timeout: 15.0
       use_slashing: false
+      default_chain_id: ethereum
       manual_gas_limit: 1000000
       mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
       mech_marketplace_address: '0x0000000000000000000000000000000000000000'
