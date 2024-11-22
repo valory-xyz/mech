@@ -49,6 +49,7 @@ from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.ledger_api import LedgerApiMessage
+from packages.valory.skills.task_execution.handlers import LAST_SUCCESSFUL_EXECUTED_TASK
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
@@ -115,6 +116,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def request_id_to_num_timeouts(self) -> Dict[int, int]:
         """Maps the request id to the number of times it has timed out."""
         return self.params.request_id_to_num_timeouts
+
+    def set_last_executed_task(self, request_id: int) -> None:
+        """Set the last executed task."""
+        self.context.shared_state[LAST_SUCCESSFUL_EXECUTED_TASK] = (
+            request_id,
+            time.time(),
+        )
 
     def count_timeout(self, request_id: int) -> None:
         """Increase the timeout for a request."""
@@ -552,6 +560,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id=str(req_id),
             data=ipfs_hash,
         )
+        # for health check metrics
+        self.set_last_executed_task(req_id)
         done_task = cast(Dict[str, Any], self._done_task)
         task_result = to_multihash(ipfs_hash)
         cost = get_cost_for_done_task(done_task)
