@@ -420,7 +420,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _safely_get_task_data(self, message: IpfsMessage) -> Optional[Dict[str, Any]]:
         """Safely get task data."""
         try:
-            [json.loads(content) for content in message.files.values()][0]
+            task_data = [json.loads(content) for content in message.files.values()][0]
+            return task_data
         except Exception as e:  # pylint: disable=broad-except
             self.context.logger.error(
                 f"Exception raised while decoding task data: {str(e)}"
@@ -436,9 +437,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             and "prompt" in task_data
             and "tool" in task_data
         )  # pylint: disable=C0301
-        if is_data_valid and task_data["tool"] in self._tools_to_package_hash:
+        if (
+            is_data_valid
+            and task_data is not None
+            and task_data["tool"] in self._tools_to_package_hash
+        ):
             self._prepare_task(task_data)
-        elif is_data_valid:
+        elif is_data_valid and task_data is not None:
             tool = task_data["tool"]
             executing_task = cast(Dict[str, Any], self._executing_task)
             executing_task["tool"] = tool

@@ -146,13 +146,13 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         return hex_multihash[6:]
 
     def get_contract_api_response(
-            self,
-            performative: ContractApiMessage.Performative,
-            contract_address: Optional[str],
-            contract_id: str,
-            contract_callable: str,
-            ledger_id: Optional[str] = None,
-            **kwargs: Any,
+        self,
+        performative: ContractApiMessage.Performative,
+        contract_address: Optional[str],
+        contract_id: str,
+        contract_callable: str,
+        ledger_id: Optional[str] = None,
+        **kwargs: Any,
     ) -> Generator[None, None, ContractApiMessage]:
         """Get the contract api response."""
         return super().get_contract_api_response(
