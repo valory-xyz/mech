@@ -133,16 +133,15 @@ source .1env
 
 You may customize the agent's behaviour by setting these environment variables.
 
-| Name | Type | Sample Value | Description |
-| ---- | ---- | ------------ | ----------- |
-
-| `TOOLS_TO_PACKAGE_HASH` | `dict` | `"{"openai-gpt-3.5-turbo-instruct":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-3.5-turbo":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-4":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq"}"` | Tracks services for each tool packages. |
-| `API_KEYS` | `dict` | `"{"openai":"dummy_api_key", "google_api_key":"dummy_api_key"}"` | Tracks API keys for each services. |
-|`SERVICE_REGISTRY_ADDRESS`|`str` |`"0x9338b5153AE39BB89f50468E608eD9d764B755fD"` | Smart contract which registers the services. |
-|`AGENT_REGISTRY_ADDRESS` |`str` |`"0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA"` | Smart contract which registers the agents. |
-|`MECH_MARKETPLACE_ADDRESS`|`str` |`"0x4554fE75c1f5576c1d7F765B2A036c199Adae329"` | Marketplace for posting and delivering requests served by agent mechs. |
-|`MECH_TO_SUBSCRIPTION` |`dict`|`"{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000","tokenId":"1"}}"`| Tracks mech's subscription details. |
-|`MECH_TO_CONFIG` |`dict`|`"{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}"` | Tracks mech's config. |
+| Name                       | Type   | Sample Value                                                                                                                                                                                                                                                        | Description                                                            |
+| -------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `TOOLS_TO_PACKAGE_HASH`    | `dict` | `{"openai-gpt-3.5-turbo-instruct":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-3.5-turbo":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-4":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq"}` | Tracks services for each tool packages.                                |
+| `API_KEYS`                 | `dict` | `{"openai":["dummy_api_key"], "google_api_key":["dummy_api_key"]}`                                                                                                                                                                                                      | Tracks API keys for each service.                                      |
+| `SERVICE_REGISTRY_ADDRESS` | `str`  | `"0x9338b5153AE39BB89f50468E608eD9d764B755fD"`                                                                                                                                                                                                                      | Smart contract which registers the services.                           |
+| `AGENT_REGISTRY_ADDRESS`   | `str`  | `"0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA"`                                                                                                                                                                                                                      | Smart contract which registers the agents.                             |
+| `MECH_MARKETPLACE_ADDRESS` | `str`  | `"0x4554fE75c1f5576c1d7F765B2A036c199Adae329"`                                                                                                                                                                                                                      | Marketplace for posting and delivering requests served by agent mechs. |
+| `MECH_TO_SUBSCRIPTION`     | `dict` | `{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000","tokenId":"1"}}`                                                                                                                                        | Tracks mech's subscription details.                                    |
+| `MECH_TO_CONFIG`           | `dict` | `{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}`                                                                                                                                                          | Tracks mech's config.                                                  |
 
 The rest of the common environment variables are present in the [service.yaml](https://github.com/valory-xyz/mech/blob/main/packages/valory/services/mech/service.yaml), which are customizable too.
 
