@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeial5w6zhx2lmu2ef7ewp36qjp7ke6ydsln2untkftgigeegw6txne
+  behaviours.py: bafybeidfxaeswymlgcbe3mxfekywqkpod7l7bwmn3p2d2cxakkl2wcm5ga
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
@@ -32,7 +32,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
-- valory/task_execution:0.1.0:bafybeibv46pbo2qntbensudrrkx7dlrnmvufvijpqzqyn3wrztxmr3s6pq
+- valory/task_execution:0.1.0:bafybeia2fp6evs3tz3u7ky75yr5jlsc7rrisandkwuoi3cephi4jq6fuey
 behaviours:
   main:
     args: {}
