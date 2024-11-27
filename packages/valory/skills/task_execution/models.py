@@ -20,7 +20,7 @@
 """This module contains the shared state for the abci skill of Mech."""
 import dataclasses
 from collections import defaultdict
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
@@ -56,8 +56,8 @@ class Params(Model):
         self.in_flight_req: bool = False
         self.from_block: Optional[int] = None
         self.req_to_callback: Dict[str, Callable] = {}
-        self.api_keys: Dict[str, str] = self._ensure_get(
-            "api_keys", kwargs, Dict[str, str]
+        self.api_keys: Dict[str, List[str]] = self._ensure_get(
+            "api_keys", kwargs, Dict[str, List[str]]
         )
         self.tools_to_package_hash: Dict[str, str] = self._ensure_get(
             "tools_to_package_hash", kwargs, Dict[str, str]
