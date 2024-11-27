@@ -23,7 +23,7 @@ import threading
 import time
 from abc import ABC
 from copy import deepcopy
-from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 
 import openai  # noqa
 from aea.helpers.cid import CID, to_v1
@@ -189,19 +189,19 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
 
     def handle_submitted_tasks(self) -> None:
         """Handle tasks that have been already submitted before (in a prev. period)."""
-        status = self.check_last_tx_status()
+        (status, tx_hash) = self.check_last_tx_status()
         self.context.logger.info(f"Last tx status is: {status}")
         if status:
             submitted_tasks = cast(
                 List[Dict[str, Any]], self.synchronized_data.done_tasks
             )
             self.context.logger.info(
-                f"Tasks {submitted_tasks} has already been submitted. "
+                f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}"
                 f"Removing them from the list of tasks to be processed."
             )
             self.remove_tasks(submitted_tasks)
 
-    def check_last_tx_status(self) -> bool:
+    def check_last_tx_status(self) -> Tuple[bool, str]:
         """Check if the tx in the last round was successful or not"""
         # Try to fetch the final tx hash from the sync db
         # If the value exists and is not None, we return True, else False
@@ -210,12 +210,12 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             final_tx_hash = self.synchronized_data.final_tx_hash
         except Exception as e:
             self.context.logger.error(e)
-            return False
+            return (False, "")
         else:
             if final_tx_hash is not None:
-                return True
+                return (True, final_tx_hash)
             else:
-                return False
+                return (False, "")
 
 
 class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):
