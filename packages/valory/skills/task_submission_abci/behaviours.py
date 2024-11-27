@@ -140,6 +140,8 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         """To multihash string."""
         # Decode the Base32 CID to bytes
         cid_bytes = multibase.decode(hash_string)
+        if not cid_bytes:
+            return ""
         # Remove the multicodec prefix (0x01) from the bytes
         multihash_bytes = multicodec.remove_prefix(cid_bytes)
         # Convert the multihash bytes to a hexadecimal string
@@ -725,6 +727,9 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
             self.params.task_mutable_params.latest_metadata_hash = latest_hash
 
         configured_hash = self.to_multihash(self.params.metadata_hash)
+        if configured_hash == "":
+            self.context.logger.warning("Could not calculate configured hash")
+            return False
         latest_hash = self.params.task_mutable_params.latest_metadata_hash
         return configured_hash != latest_hash
 
