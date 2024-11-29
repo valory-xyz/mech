@@ -56,6 +56,7 @@ class Params(Model):
         self.in_flight_req: bool = False
         self.from_block: Optional[int] = None
         self.req_to_callback: Dict[str, Callable] = {}
+        self.req_to_deadline: Dict[str, float] = {}
         self.api_keys: Dict[str, List[str]] = self._ensure_get(
             "api_keys", kwargs, Dict[str, List[str]]
         )
