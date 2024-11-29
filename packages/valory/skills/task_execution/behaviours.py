@@ -67,6 +67,8 @@ PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 DONE_TASKS_LOCK = "lock"
 GNOSIS_CHAIN = "gnosis"
+INITIAL_DEADLINE = 1200.0  # 20mins of deadline
+SUBSEQUENT_DEADLINE = 60.0  # 1min of deadline
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -85,6 +87,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._inflight_tool_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_polling: Optional[float] = None
+        self._last_deadline: Optional[float] = None
         self._invalid_request = False
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
@@ -140,6 +143,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return True
         return self._last_polling + self.params.polling_interval <= time.time()
 
+    def _fetch_deadline(self) -> float:
+        if self._last_deadline is None:
+            return INITIAL_DEADLINE
+        return SUBSEQUENT_DEADLINE
+
     def _is_executing_task_ready(self) -> bool:
         """Check if the executing task is ready."""
         if self._executing_task is None or self._async_result is None:
@@ -181,10 +189,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         for tool, file_hash in self._tools_to_package_hash.items():
             if tool in self._all_tools:
                 continue
+
+            current_time = time.time()
+            deadline = current_time + SUBSEQUENT_DEADLINE
             # read one at a time
             ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
             self._inflight_tool_req = tool
-            self.send_message(ipfs_msg, message, self._handle_get_tool)
+            self.send_message(ipfs_msg, message, self._handle_get_tool, deadline)
             return
 
     def _handle_get_tool(self, message: IpfsMessage, dialogue: Dialogue) -> None:
@@ -292,6 +303,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         # create new task
+        current_time = time.time()
+        deadline = current_time + SUBSEQUENT_DEADLINE
+
         task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
         self._executing_task = task_data
@@ -299,15 +313,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         ipfs_hash = get_ipfs_file_hash(task_data_)
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
-        self.send_message(ipfs_msg, message, self._handle_get_task)
+        self.send_message(
+            ipfs_msg,
+            message,
+            self._handle_get_task,
+            deadline,
+        )
 
     def send_message(
-        self, msg: Message, dialogue: Dialogue, callback: Callable
+        self, msg: Message, dialogue: Dialogue, callback: Callable, deadline: float
     ) -> None:
         """Send message."""
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
+        self.params.req_to_deadline[nonce] = deadline
         self.params.in_flight_req = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
@@ -367,7 +387,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
         )
-        self.send_message(msg, dialogue, self._handle_store_response)
+
+        current_time = time.time()
+        deadline = current_time + self._fetch_deadline()
+        self.send_message(msg, dialogue, self._handle_store_response, deadline)
 
     def _restart_executor(self) -> None:
         """Restarts the executor."""
