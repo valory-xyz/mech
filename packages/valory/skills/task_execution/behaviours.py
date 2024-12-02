@@ -557,6 +557,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             data=ipfs_hash,
         )
         done_task = cast(Dict[str, Any], self._done_task)
+        if done_task is None or not isinstance(done_task, Dict):
+            self.context.logger.error(
+                f"Invalid done task format. Expected Dict. Actual: {done_task}"
+            )
+            self._executing_task = None
+            self._done_task = None
+            self._invalid_request = False
+            return None
+
         task_result = to_multihash(ipfs_hash)
         cost = get_cost_for_done_task(done_task)
         self.context.logger.info(f"Cost for task {req_id}: {cost}")
