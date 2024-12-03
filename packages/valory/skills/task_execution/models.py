@@ -52,8 +52,12 @@ class MechConfig:
 class RequestParams:
     """Mech Req Params dataclass."""
 
-    from_block: Optional[Dict[str, Optional[int]]] = None
-    last_polling: Optional[Dict[str, Optional[float]]] = None
+    from_block: Dict[str, Optional[int]] = dataclasses.field(
+        default_factory=lambda: {"legacy": None, "marketplace": None}
+    )
+    last_polling: Dict[str, Optional[float]] = dataclasses.field(
+        default_factory=lambda: {"legacy": None, "marketplace": None}
+    )
 
 
 class Params(Model):
@@ -62,10 +66,7 @@ class Params(Model):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
         self.in_flight_req: bool = False
-        self.req_params: RequestParams = RequestParams(
-            from_block={"legacy": None, "marketplace": None},
-            last_polling={"legacy": None, "marketplace": None},
-        )
+        self.req_params: RequestParams = RequestParams()
         self.req_type: Optional[str] = None
         self.req_to_callback: Dict[str, Callable] = {}
         self.req_to_deadline: Dict[str, float] = {}
