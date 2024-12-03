@@ -91,6 +91,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._inflight_ipfs_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_polling: Optional[float] = None
+        self._last_polling_marketplace: Optional[float] = None
         self._last_deadline: Optional[float] = None
         self._invalid_request = False
         self._async_result: Optional[Future] = None
@@ -108,6 +109,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._execute_ipfs_tasks()
         self._execute_task()
         self._check_for_new_reqs()
+        self._check_for_new_marketplace_reqs()
 
     @property
     def done_tasks_lock(self) -> threading.Lock:
@@ -159,6 +161,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if self._last_polling is None:
             return True
         return self._last_polling + self.params.polling_interval <= time.time()
+
+    def _should_poll_marketplace(self) -> bool:
+        """If we should poll the marketplace contract."""
+        if self._last_polling_marketplace is None:
+            return True
+        return (
+            self._last_polling_marketplace + self.params.polling_interval <= time.time()
+        )
 
     def _fetch_deadline(self) -> float:
         if self._last_deadline is None:
@@ -249,9 +259,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._populate_from_block()
             return
         self._check_undelivered_reqs()
-        self._check_undelivered_reqs_marketplace()
         self.params.in_flight_req = True
         self._last_polling = time.time()
+
+    def _check_for_new_marketplace_reqs(self) -> None:
+        """Check for new reqs."""
+        if self.params.in_flight_req or not self._should_poll_marketplace():
+            # do nothing if there is an in flight request
+            # or if we should not poll yet
+            return
+
+        if self.params.from_block is None:
+            # set the initial from block
+            self._populate_from_block()
+            return
+        self._check_undelivered_reqs_marketplace()
+        self.params.in_flight_req = True
+        self._last_polling_marketplace = time.time()
 
     def _check_undelivered_reqs(self) -> None:
         """Check for undelivered mech reqs."""
