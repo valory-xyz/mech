@@ -48,13 +48,25 @@ class MechConfig:
         )
 
 
+@dataclasses.dataclass
+class RequestParams:
+    """Mech Req Params dataclass."""
+
+    from_block: Optional[Dict[str, Optional[int]]] = None
+    last_polling: Optional[Dict[str, Optional[float]]] = None
+
+
 class Params(Model):
     """A model to represent params for multiple abci apps."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
         self.in_flight_req: bool = False
-        self.from_block: Optional[int] = None
+        self.req_params: RequestParams = RequestParams(
+            from_block={"legacy": None, "marketplace": None},
+            last_polling={"legacy": None, "marketplace": None},
+        )
+        self.req_type: Optional[str] = None
         self.req_to_callback: Dict[str, Callable] = {}
         self.req_to_deadline: Dict[str, float] = {}
         self.api_keys: Dict[str, List[str]] = self._ensure_get(
