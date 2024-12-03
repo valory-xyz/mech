@@ -90,7 +90,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
-        self._req_params = self.params.req_params
         self._last_deadline: Optional[float] = None
         self._invalid_request = False
         self._async_result: Optional[Future] = None
@@ -247,14 +246,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # or if we should not poll yet
             return
 
-        from_block = self._req_params.from_block.get("legacy", None)
+        from_block = self.params.req_params.from_block.get("legacy", None)
         if from_block is None:
             # set the initial from block
             self._populate_from_block()
             return
         self._check_undelivered_reqs()
         self.params.in_flight_req = True
-        self._req_params.last_polling["legacy"] = time.time()
+        self.params.req_params.last_polling["legacy"] = time.time()
 
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""
@@ -263,14 +262,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # or if we should not poll yet
             return
 
-        from_block = self._req_params.from_block.get("marketplace", None)
+        from_block = self.params.req_params.from_block.get("marketplace", None)
         if from_block is None:
             # set the initial from block
             self._populate_from_block()
             return
         self._check_undelivered_reqs_marketplace()
         self.params.in_flight_req = True
-        self._req_params.last_polling["marketplace"] = time.time()
+        self.params.req_params.last_polling["marketplace"] = time.time()
 
     def _check_undelivered_reqs(self) -> None:
         """Check for undelivered mech reqs."""
