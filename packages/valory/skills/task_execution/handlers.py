@@ -202,6 +202,8 @@ class LedgerHandler(BaseHandler):
             return
 
         block_number = ledger_api_msg.state.body["number"]
-        self.params.from_block = block_number - self.params.from_block_range
+        self.params.req_params.from_block[cast(str, self.params.req_type)] = (
+            block_number - self.params.from_block_range
+        )
         self.params.in_flight_req = False
         self.on_message_handled(message)

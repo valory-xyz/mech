@@ -86,8 +86,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
         self._inflight_tool_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
-        self._last_polling: Optional[float] = None
-        self._last_polling_marketplace: Optional[float] = None
+        self._req_params = self.params.req_params
         self._last_deadline: Optional[float] = None
         self._invalid_request = False
         self._async_result: Optional[Future] = None
@@ -139,19 +138,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Get done_tasks."""
         return self.context.shared_state[DONE_TASKS]
 
-    def _should_poll(self) -> bool:
+    def _should_poll(self, req_type: str) -> bool:
         """If we should poll the contract."""
-        if self._last_polling is None:
-            return True
-        return self._last_polling + self.params.polling_interval <= time.time()
+        _last_polling = self._req_params.last_polling.get(req_type, None)
 
-    def _should_poll_marketplace(self) -> bool:
-        """If we should poll the marketplace contract."""
-        if self._last_polling_marketplace is None:
+        if _last_polling is None:
             return True
-        return (
-            self._last_polling_marketplace + self.params.polling_interval <= time.time()
-        )
+        return _last_polling + self.params.polling_interval <= time.time()
 
     def _fetch_deadline(self) -> float:
         if self._last_deadline is None:
@@ -232,33 +225,35 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _check_for_new_reqs(self) -> None:
         """Check for new reqs."""
-        if self.params.in_flight_req or not self._should_poll():
+        if self.params.in_flight_req or not self._should_poll("legacy"):
             # do nothing if there is an in flight request
             # or if we should not poll yet
             return
 
-        if self.params.from_block is None:
+        from_block = self._req_params.from_block.get("legacy", None)
+        if from_block is None:
             # set the initial from block
             self._populate_from_block()
             return
         self._check_undelivered_reqs()
         self.params.in_flight_req = True
-        self._last_polling = time.time()
+        self._req_params.last_polling["legacy"] = time.time()
 
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""
-        if self.params.in_flight_req or not self._should_poll_marketplace():
+        if self.params.in_flight_req or not self._should_poll("marketplace"):
             # do nothing if there is an in flight request
             # or if we should not poll yet
             return
 
-        if self.params.from_block is None:
+        from_block = self._req_params.from_block.get("marketplace", None)
+        if from_block is None:
             # set the initial from block
             self._populate_from_block()
             return
         self._check_undelivered_reqs_marketplace()
         self.params.in_flight_req = True
-        self._last_polling_marketplace = time.time()
+        self._req_params.last_polling["marketplace"] = time.time()
 
     def _check_undelivered_reqs(self) -> None:
         """Check for undelivered mech reqs."""
@@ -283,6 +278,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
+        self.params.req_type = "legacy"
         self.context.outbox.put_message(message=contract_api_msg)
 
     def _check_undelivered_reqs_marketplace(self) -> None:
@@ -305,6 +301,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
+        self.params.req_type = "marketplace"
         self.context.outbox.put_message(message=contract_api_msg)
 
     def _execute_task(self) -> None:
