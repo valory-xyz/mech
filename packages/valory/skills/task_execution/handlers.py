@@ -124,15 +124,6 @@ class IpfsHandler(BaseHandler):
         dialogue = self.context.ipfs_dialogues.update(ipfs_msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         callback = self.params.req_to_callback.pop(nonce)
-        deadline = self.params.req_to_deadline.pop(nonce)
-        current_time = time.time()
-        if current_time > deadline:
-            self.context.logger.warning(
-                f" IPFS Message expired for {nonce}. Current time: {current_time}. Deadline: {deadline}"
-            )
-            self.params.in_flight_req = False
-            return
-
         callback(ipfs_msg, dialogue)
         self.params.in_flight_req = False
         self.on_message_handled(message)
