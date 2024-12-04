@@ -91,6 +91,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._inflight_ipfs_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_deadline: Optional[float] = None
+        self._is_cold_start = True
         self._invalid_request = False
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
@@ -163,9 +164,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         return last_polling + self.params.polling_interval <= time.time()
 
     def _fetch_deadline(self) -> float:
-        if self._last_deadline is None:
-            return INITIAL_DEADLINE
-        return SUBSEQUENT_DEADLINE
+        if self._is_cold_start:
+            return time.time() + INITIAL_DEADLINE
+        return time.time() + SUBSEQUENT_DEADLINE
 
     def _is_executing_task_ready(self) -> bool:
         """Check if the executing task is ready."""
@@ -344,15 +345,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _execute_task(self) -> None:
         """Execute tasks."""
+        # if no deadline is set it, otherwise continue
+        if self._last_deadline is None:
+            self._last_deadline = self._fetch_deadline()
+
         # check if the executing task is within deadline or not
         while self.params.in_flight_req is not False:
-            if time.time() > self._fetch_deadline():
+            if time.time() > self._last_deadline:
                 # Deadline reached, restart the task execution
                 self.context.logger.info(
                     f"Deadline reached for task {self._executing_task}. Restarting task execution..."
                 )
                 self._last_deadline = time.time()
                 self.params.in_flight_req = False
+                self._is_cold_start = False
                 return self._execute_task()
 
         # check if there is a task already executing
