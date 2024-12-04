@@ -66,6 +66,7 @@ class Params(Model):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
         self.in_flight_req: bool = False
+        self.is_cold_start: bool = True
         self.req_params: RequestParams = RequestParams()
         self.req_type: Optional[str] = None
         self.req_to_callback: Dict[str, Callable] = {}

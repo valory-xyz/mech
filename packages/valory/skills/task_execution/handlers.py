@@ -126,6 +126,7 @@ class IpfsHandler(BaseHandler):
         callback = self.params.req_to_callback.pop(nonce)
         callback(ipfs_msg, dialogue)
         self.params.in_flight_req = False
+        self.params.is_cold_start = False
         self.on_message_handled(message)
 
 
