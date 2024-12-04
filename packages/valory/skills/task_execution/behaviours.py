@@ -87,7 +87,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._inflight_tool_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_deadline: Optional[float] = None
-        self._is_cold_start = True
         self._invalid_request = False
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
@@ -147,7 +146,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         return last_polling + self.params.polling_interval <= time.time()
 
     def _fetch_deadline(self) -> float:
-        if self._is_cold_start:
+        if self.params.is_cold_start:
             return time.time() + INITIAL_DEADLINE
         return time.time() + SUBSEQUENT_DEADLINE
 
@@ -320,7 +319,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 )
                 self._last_deadline = time.time()
                 self.params.in_flight_req = False
-                self._is_cold_start = False
+                self.params.is_cold_start = False
                 return self._execute_task()
 
         if self._executing_task is not None:
