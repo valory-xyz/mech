@@ -192,12 +192,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             if tool in self._all_tools:
                 continue
 
-            current_time = time.time()
-            deadline = current_time + SUBSEQUENT_DEADLINE
             # read one at a time
             ipfs_msg, message = self._build_ipfs_get_file_req(file_hash)
             self._inflight_tool_req = tool
-            self.send_message(ipfs_msg, message, self._handle_get_tool, deadline)
+            self.send_message(ipfs_msg, message, self._handle_get_tool)
             return
 
     def _handle_get_tool(self, message: IpfsMessage, dialogue: Dialogue) -> None:
@@ -305,6 +303,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _execute_task(self) -> None:
         """Execute tasks."""
+        # check if the executing task is within deadline or not
+        while self.params.in_flight_req is not False:
+            if time.time() > self._fetch_deadline():
+                # Deadline reached, restart the task execution
+                self.context.logger.info(
+                    f"Deadline reached for task {self._executing_task}. Restarting task execution..."
+                )
+                self._last_deadline = time.time()
+                self.params.in_flight_req = False
+                return self._execute_task()
+
         # check if there is a task already executing
         if self.params.in_flight_req:
             # there is an in flight request
@@ -323,9 +332,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         # create new task
-        current_time = time.time()
-        deadline = current_time + SUBSEQUENT_DEADLINE
-
         task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
         self._executing_task = task_data
@@ -337,17 +343,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             ipfs_msg,
             message,
             self._handle_get_task,
-            deadline,
         )
 
     def send_message(
-        self, msg: Message, dialogue: Dialogue, callback: Callable, deadline: float
+        self,
+        msg: Message,
+        dialogue: Dialogue,
+        callback: Callable,
     ) -> None:
         """Send message."""
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
-        self.params.req_to_deadline[nonce] = deadline
         self.params.in_flight_req = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
@@ -407,10 +414,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
         )
-
-        current_time = time.time()
-        deadline = current_time + self._fetch_deadline()
-        self.send_message(msg, dialogue, self._handle_store_response, deadline)
+        self.send_message(msg, dialogue, self._handle_store_response)
 
     def _restart_executor(self) -> None:
         """Restarts the executor."""
