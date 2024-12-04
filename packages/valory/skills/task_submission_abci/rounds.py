@@ -115,6 +115,7 @@ class TaskPoolingRound(CollectionRound):
                 synchronized_data_class=SynchronizedData,
                 **{
                     get_name(SynchronizedData.done_tasks): unique_done_tasks,
+                    get_name(SynchronizedData.final_tx_hash): None,
                 }
             )
             if len(unique_done_tasks) > 0:

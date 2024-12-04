@@ -348,7 +348,7 @@ class HttpHandler(BaseHttpHandler):
             else time.time() + grace_period * 2
         )
         last_tx_made = self.last_tx[1] if self.last_tx else time.time()
-        we_are_delivering = last_executed_task > last_tx_made + grace_period
+        we_are_delivering = last_executed_task < last_tx_made + grace_period
 
         # ensure we can get new reqs
         last_successful_read = (
