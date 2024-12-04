@@ -358,6 +358,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
+        self.params.req_to_deadline[nonce] = self._last_deadline
         self.params.in_flight_req = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
