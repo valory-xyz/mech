@@ -124,6 +124,15 @@ class IpfsHandler(BaseHandler):
         dialogue = self.context.ipfs_dialogues.update(ipfs_msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         callback = self.params.req_to_callback.pop(nonce)
+        deadline = self.params.req_to_deadline.pop(nonce)
+
+        if time.time() > deadline:
+            # Deadline reached
+            self.context.logger.info(f"Deadline reached for task with nonce {nonce}.")
+            self.params.in_flight_req = False
+            self.params.is_cold_start = False
+            return
+
         callback(ipfs_msg, dialogue)
         self.params.in_flight_req = False
         self.params.is_cold_start = False
