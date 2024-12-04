@@ -304,25 +304,24 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _execute_task(self) -> None:
         """Execute tasks."""
-        # if no deadline is set it, otherwise continue
-        if self._last_deadline is None:
-            self._last_deadline = self._fetch_deadline()
-
-        # check if the executing task is within deadline or not
-        if time.time() > self._last_deadline:
-            # Deadline reached, restart the task execution
-            self.context.logger.info(
-                f"Deadline reached for task {self._executing_task}. Restarting task execution..."
-            )
-            self._last_deadline = time.time()
-            self.params.in_flight_req = False
-            self._is_cold_start = False
-            return self._execute_task()
-
         # check if there is a task already executing
         if self.params.in_flight_req:
             # there is an in flight request
-            return
+
+            # if no deadline is set it, otherwise continue
+            if self._last_deadline is None:
+                self._last_deadline = self._fetch_deadline()
+
+            # check if the executing task is within deadline or not
+            if time.time() > self._last_deadline:
+                # Deadline reached, restart the task execution
+                self.context.logger.info(
+                    f"Deadline reached for task {self._executing_task}. Restarting task execution..."
+                )
+                self._last_deadline = time.time()
+                self.params.in_flight_req = False
+                self._is_cold_start = False
+                return self._execute_task()
 
         if self._executing_task is not None:
             if self._is_executing_task_ready() or self._invalid_request:
