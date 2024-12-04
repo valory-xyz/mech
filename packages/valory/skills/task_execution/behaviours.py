@@ -362,6 +362,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self.params.in_flight_req = False
                 self.params.is_cold_start = False
                 return self._execute_task()
+            return
 
         if self._executing_task is not None:
             if self._is_executing_task_ready() or self._invalid_request:
@@ -396,7 +397,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
-        self.params.req_to_deadline[nonce] = self._last_deadline
+        self.params.req_to_deadline[nonce] = cast(float, self._last_deadline)
         self.params.in_flight_req = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
