@@ -115,6 +115,33 @@ Follow these instructions to have your local environment prepared to run the dem
 
 ## Run the demo
 
+### Using Mech Quickstart (Preffered Method)
+
+To help you integrate your own tools more easily, we’ve created a new base repository that serves as a minimal example of how to run the project. It’s designed to minimize setup time and provide a more intuitive starting point. This new repo is streamlined to give you a clean slate, making it easier than ever to get started.
+
+**Why Use the New Base Repo?**
+
+- Less Configuration: A clean setup that removes unnecessary complexities.
+- Easier to Extend: Perfect for adding your own features and customizations.
+- Clear Example: Start with a working example and build from there.
+
+**Feature Comparison**
+
+   | Feature                        | New Base Repo (Recommended)                        | Old Mech Repo (Not Preferred)                |
+|---------------------------------|---------------------------------------------------|----------------------------------------------|
+| **Setup Ease**                  | Simplified minimal setup and quick to start       | Requires extra configuration and more error prone |
+| **Flexibility & Customization** | Easy to extend with your own features             | Less streamlined for extensions              |
+| **Future Support**              | Actively maintained & improved                    | No longer the focus for updates              |
+| **Complexity**                  | Low complexity, easy to use                       | More complex setup                          |
+
+
+We highly encourage you to start with this base repo for future projects. You can find it [here](https://github.com/valory-xyz/mech-quickstart).
+
+### Running the old base mech
+
+> **Warning**<br />
+The old repo is no longer the recommended approach for running and extending the project. Although it’s still remains available for legacy projects, we advise you to use the new base repo to ensure you are working with the most current and efficient setup. Access the new mech repo [here](https://github.com/valory-xyz/mech-quickstart). Start with the preferred method mentioned [above](#using-mech-quickstart-preffered-method).
+
 Follow the instructions below to run the AI Mech demo executing the tool in `./packages/valory/customs/openai_request.py`. Note that AI Mechs can be configured to work in two modes: *polling mode*, which periodically reads the chain, and *websocket mode*, which receives event updates from the chain. The default mode used by the demo is *polling*.
 
 First, you need to configure the worker service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
@@ -147,7 +174,7 @@ The rest of the common environment variables are present in the [service.yaml](h
 
 
 > **Warning**<br />
-> **The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry). Since you will not have access to its private key, your local instance will not be able to transact.
+> **The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry)). Since you will not have access to its private key, your local instance will not be able to transact.
 > However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).**
 
 Now, you have two options to run the worker: as a standalone agent or as a service.
@@ -220,101 +247,9 @@ For a complete list of required changes, [use this PR as reference](https://gith
 
 You can create and mint your own AI Mech that handles requests for tasks that you can define.
 
-1. **Create a new tool.** Tools are the components that execute the Requests for AI tasks submitted on [Mech Hub](https://aimechs.autonolas.network/mech). Tools are custom components and should be under the `customs` packages (ex. [valory tools](./packages/valory/customs)). Such file must contain a `run` function satisfying the following interface:
+You can take a look at the preferred method mentioned [above](#using-mech-quickstart-preffered-method) to get started quickly and easily.
 
-    ```python
-    def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
-        """Run the task"""
-
-        # Your code here
-
-        return result_str, prompt_used, generated_tx, counter_callback
-    ```
-
-    - **Input**: Keyword arguments (`**kwargs`). The `kwargs` object is guaranteed to contain the following keys:
-        - `tool` (`kwargs["tool"]`): A string specifying the (sub-)tool to be used. The `run` command must parse this input and execute the task corresponding to the particular sub-tool referenced. These sub-tools will allow the user to fine-tune the use of your tool.
-        - `prompt` (`kwargs["prompt"]`): A string containing the user prompt.
-        - `api_keys` (`kwargs["api_keys"]`): A dictionary containing the API keys required by your tool:
-
-            ```python
-            <api_key>=kwargs["api_keys"][<api_key_id>].
-            ```
-
-    - **Output**: It must **always** return a tuple (`Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]`):
-        - `result_str`: A string-serialized JSON object containing the result of the tool execution (custom format).
-        - `prompt_used`: A string representing the prompt used internally by the tool. This output is only used for analytics and it can be set to `None`.
-        - `generated_tx`: A dictionary containing the fields of a generated transaction to be submitted following the execution of the tool (e.g., a token transfer). It can be set to `None`. Template of a generated transaction:
-
-            ```json
-          {
-              "to": TARGET_ADDRESS,       # must be provided
-              "value": VALUE_TO_TRANSFER, # default value is 0
-              "data": TX_DATA,            # default value is b' '
-              "operation": CALL_OR_DELEGATE_CALL, # default value is CALL
-          }
-          ```
-
-        - `counter_callback`: Object to be called for calculating the cost when making requests to this tool. It can be set to `None`.
-        - `keychain`: The object handling the keys. Note that if you use the `with_key_rotation` decorator, you don't need to return this.
-    - **Exceptions**: A compliant implementation of the `run` function must capture any exception raised during its execution and return it appropriately, for example as an error code in `result_str`. If `run` raises an exception the Mech will capture and output an `Invalid response` string.
-
-   - **Dependencies**: If your tool introduces new dependencies, you must add them in the following three places:
-      - [pyproject.toml](./pyproject.toml): Add your dependencies under the `[tool.poetry.dependencies]` section.
-      - [tox.ini](./tox.ini): Add your dependencies under the `[testenv]deps` section.
-      - [aea-config.yaml](./packages/valory/agents/mech/aea-config.yaml): Ensure your dependencies are listed under the `dependencies` key.
-
-3. **Upload the tool file to IPFS.** You can push your tool to IPFS like the other packages:
-
-    ```bash
-    autonomy push-all
-    ```
-
-    You should see an output similar to this:
-
-    ```text
-        Pushing: /home/ardian/vlr/mech/packages/valory/customs/openai_request
-        Pushed component with:
-        PublicId: valory/openai_request:0.1.0
-        Package hash: bafybeibdcttrlgp5udygntka5fofi566pitkxhquke37ng7csvndhy4s2i
-    ```
-
-    Your tool will be available on [packages.json](packages/packages.json).
-
-4. **Configure your service.** Edit the `.env` file. The demo service has this configuration:
-
-    ```bash
-    FILE_HASH_TO_TOOLS=[["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
-    API_KEYS=[["openai","dummy_api_key"],["stabilityai","dummy_api_key"]]
-    ```
-
-    To add your new tool with hash `<your_tool_hash>` and sub-tool list `[a, b, c]` and API key `<your_api_key>` simply update the variables above to:
-
-    ```bash
-    FILE_HASH_TO_TOOLS=[[<your_tool_hash>, [a, b, c]],["bafybeiaodddyn4eruafqg5vldkkjfglj7jg76uvyi5xhi2cysktlu4w6r4",["openai-gpt-3.5-turbo-instruct","openai-gpt-3.5-turbo","openai-gpt-4"]],["bafybeiepc5v4ixwuu5m6p5stck5kf2ecgkydf6crj52i5umnl2qm5swb4i",["stabilityai-stable-diffusion-v1-5","stabilityai-stable-diffusion-xl-beta-v2-2-2","stabilityai-stable-diffusion-512-v2-1","stabilityai-stable-diffusion-768-v2-1"]]]
-    API_KEYS=[[openai, dummy_api_key],[<your_api_key_id>, <your_api_key>]]
-    ```
-
-5. **Mint your agent service** in the [Autonolas Protocol](https://registry.olas.network/ethereum/services/mint), and create a Mech for it in [Mech Hub](https://aimechs.autonolas.network/factory). This will allow you to set the `SAFE_CONTRACT_ADDRESS` and `AGENT_MECH_CONTRACT_ADDRESS` in the `.1env` file.
-
-    > **Warning**
-    > AI Mechs run on the [Gnosis chain](https://www.gnosis.io/). You must ensure that your wallet is connected to the [Gnosis chain](https://www.gnosis.io/) before using the [Autonolas Protocol](https://registry.olas.network/ethereum/services/mint) and [Mech Hub](https://aimechs.autonolas.network/factory).
-
-    Here is an example of the agent NFT metadata once you create the Mech:
-
-    ```json
-    {
-      "name": "Autonolas Mech III",
-      "description": "The mech executes AI tasks requested on-chain and delivers the results to the requester.",
-      "inputFormat": "ipfs-v0.1",
-      "outputFormat": "ipfs-v0.1",
-      "image": "tbd",
-      "tools": ["openai-gpt-3.5-turbo-instruct", "openai-gpt-3.5-turbo", "openai-gpt-4"]
-    }
-    ```
-
-6. **Run your service.** You can take a look at the `run_service.sh` script and execute your service locally as [above](#option-2-run-the-mech-as-an-agent-service).
-
-    Once your service works locally, you have the option to run it on a hosted service like [Propel](https://propel.valory.xyz/).
+Once your service works locally, you have the option to run it on a hosted service like [Propel](https://propel.valory.xyz/).
 
 ## Included tools
 
