@@ -1,0 +1,16 @@
+name: wallets_trades_history
+author: ivan
+version: 0.1.0
+type: custom
+description: A tool for querying Flipside data about wallet transactions and analyzing trading history across multiple blockchains
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint: {}
+fingerprint_ignore_patterns: []
+entry_point: wallets_trades_history.py
+callable: run
+dependencies:
+  flipside:
+    version: '>=0.1.0'
+  python-dotenv:
+    version: '>=1.0.0'
