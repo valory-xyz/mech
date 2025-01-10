@@ -50,6 +50,9 @@ handlers:
   ledger_handler:
     args: {}
     class_name: LedgerHandler
+  mech_http_handler:
+    args: {}
+    class_name: MechHttpHandler
 models:
   acn_data_share_dialogues:
     args: {}
@@ -66,6 +69,9 @@ models:
   ledger_dialogues:
     args: {}
     class_name: LedgerDialogues
+  mech_http_dialogues:
+    args: {}
+    class_name: MechHttpDialogues
   params:
     args:
       agent_index: 0

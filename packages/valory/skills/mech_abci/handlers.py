@@ -139,11 +139,23 @@ class HttpHandler(BaseHttpHandler):
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
 
+        # update the route for mech http handler
+        routes_data = self.context.shared_state["routes_info"]
+        routes = list(routes_data.keys())
+        funcs = list(routes_data.values())
+
+        send_signed_url = rf"{hostname_regex}\/{routes[0]}"
+        fetch_offchain_info = rf"{hostname_regex}\/{routes[1]}"
+
         # Routes
         self.routes = {
             (HttpMethod.POST.value,): [],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
+            ],
+            (HttpMethod.POST.value,): [(send_signed_url, funcs[0])],
+            (HttpMethod.GET.value, HttpMethod.HEAD.value): [
+                (fetch_offchain_info, funcs[1])
             ],
         }
 
