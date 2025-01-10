@@ -51,6 +51,12 @@ from packages.valory.protocols.ledger_api.dialogues import (
 from packages.valory.protocols.ledger_api.dialogues import (
     LedgerApiDialogues as BaseLedgerApiDialogues,
 )
+from packages.valory.skills.abstract_round_abci.dialogues import (
+    HttpDialogue as BaseHttpDialogue,
+)
+from packages.valory.skills.abstract_round_abci.dialogues import (
+    HttpDialogues as BaseHttpDialogues,
+)
 
 
 ContractApiDialogue = BaseContractApiDialogue
@@ -58,6 +64,8 @@ DefaultDialogue = BaseDefaultDialogue
 IpfsDialogue = BaseIpfsDialogue
 AcnDataShareDialogue = BaseAcnDataShareDialogue
 LedgerDialogue = BaseLedgerApiDialogue
+HttpDialogue = BaseHttpDialogue
+MechHttpDialogues = BaseHttpDialogues
 
 
 class IpfsDialogues(Model, BaseIpfsDialogues):

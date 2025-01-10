@@ -20,7 +20,11 @@
 """This package contains a scaffold of a handler."""
 import threading
 import time
-from typing import Any, Dict, List, cast
+import json
+import uuid
+from web3 import Web3
+from typing import Any, Dict, List, cast, Generator
+
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -32,7 +36,11 @@ from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
+from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.skills.task_execution.models import Params
+from packages.valory.protocols.http.message import HttpMessage
+from packages.valory.skills.task_execution.dialogues import HttpDialogue
+from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 
 
 PENDING_TASKS = "pending_tasks"
@@ -112,12 +120,12 @@ class IpfsHandler(BaseHandler):
         callback = self.params.req_to_callback.pop(nonce)
         deadline = self.params.req_to_deadline.pop(nonce)
 
-        if time.time() > deadline:
-            # Deadline reached
-            self.context.logger.info(f"Deadline reached for task with nonce {nonce}.")
-            self.params.in_flight_req = False
-            self.params.is_cold_start = False
-            return
+        # if time.time() > deadline:
+        #     # Deadline reached
+        #     self.context.logger.info(f"Deadline reached for task with nonce {nonce}.")
+        #     self.params.in_flight_req = False
+        #     self.params.is_cold_start = False
+        #     return
 
         callback(ipfs_msg, dialogue)
         self.params.in_flight_req = False
@@ -208,3 +216,97 @@ class LedgerHandler(BaseHandler):
         )
         self.params.in_flight_req = False
         self.on_message_handled(message)
+
+
+class MechHttpHandler(AbstractResponseHandler):
+
+    SUPPORTED_PROTOCOL = HttpMessage.protocol_id
+
+    @property
+    def pending_tasks(self) -> List[Dict[str, Any]]:
+        """Get pending_tasks."""
+        return self.context.shared_state[PENDING_TASKS]
+
+    @property
+    def done_tasks(self) -> List[Dict[str, Any]]:
+        """Get done_tasks."""
+        return self.context.shared_state[DONE_TASKS]
+
+    def setup(self) -> None:
+        """Setup the mech http handler."""
+        self.context.shared_state["routes_info"] = {
+            "send_signed_tx": self._handle_signed_requests,
+            "fetch_offchain_info": self._handle_offchain_request_info,
+        }
+        self.web3 = Web3()
+        super().setup()
+
+    def _handle_signed_requests(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> Generator[None, None, None]:
+        """
+        Handle POST requests to send signed tx to mech.
+
+        :param http_msg: the HttpMessage instance
+        :param http_dialogue: the HttpDialogue instance
+        """
+
+        try:
+            # Parse incoming data
+            data = json.loads(http_msg.body.decode("utf-8"))
+
+            sender = data.sender
+            signed_tx = data.signed_tx
+            ipfs_hash = data.ipfs_hash
+
+            decoded_address = self.web3.eth.account.recover_transaction(
+                signed_tx["raw_transaction"]
+            )
+            if decoded_address != sender:
+                raise Exception("Sender mismatch for signed tx")
+
+            req = {
+                "from_block": self.params.from_block,
+                "requestId": uuid.uuid4().hex,
+                "data": ipfs_hash,
+                "is_offchain": True,
+            }
+            self.pending_tasks.extend(req)
+            self.context.logger.info(f"Offchain Task added with data: {req}")
+
+        except (json.JSONDecodeError, ValueError, Exception) as e:
+            self.context.logger.error(f"Error processing signed request data: {str(e)}")
+
+    def _handle_offchain_request_info(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> Generator[None, None, None]:
+        """
+        Handle GET requests to fetch offchain request info.
+
+        :param http_msg: the HttpMessage instance
+        :param http_dialogue: the HttpDialogue instance
+        """
+
+        try:
+            # Parse incoming data
+            data = json.loads(http_msg.body.decode("utf-8"))
+
+            request_id = data.request_id
+
+            done_tasks_list = self.done_tasks
+            offchain_done_tasks_list = [
+                data
+                for data in done_tasks_list
+                if data.get("is_offchain") is True
+                and data.get("request_id") == request_id
+            ]
+
+            if len(requested_data) > 0:
+                print(f"Data for request_id {request_id} found")
+                requested_data = offchain_done_tasks_list[0]
+                return requested_data
+
+            return {}
+
+        except (json.JSONDecodeError, ValueError) as e:
+            self.context.logger.error(f"Error getting offchain request info: {str(e)}")
