@@ -22,8 +22,10 @@ import threading
 import time
 import json
 import uuid
+import urllib.parse
+from enum import Enum
 from web3 import Web3
-from typing import Any, Dict, List, cast, Generator
+from typing import Any, Dict, List, cast, Generator, Union
 
 
 from aea.protocols.base import Message
@@ -223,6 +225,14 @@ class LedgerHandler(BaseHandler):
         self.on_message_handled(message)
 
 
+class HttpCode(Enum):
+    """Http codes"""
+
+    OK_CODE = 200
+    NOT_FOUND_CODE = 404
+    BAD_REQUEST_CODE = 400
+
+
 class MechHttpHandler(AbstractResponseHandler):
 
     SUPPORTED_PROTOCOL = HttpMessage.protocol_id
@@ -243,6 +253,7 @@ class MechHttpHandler(AbstractResponseHandler):
             "send_signed_tx": self._handle_signed_requests,
             "fetch_offchain_info": self._handle_offchain_request_info,
         }
+        self.json_content_header = "Content-Type: application/json\n"
         self.web3 = Web3()
         super().setup()
 
@@ -258,29 +269,35 @@ class MechHttpHandler(AbstractResponseHandler):
 
         try:
             # Parse incoming data
-            data = json.loads(http_msg.body.decode("utf-8"))
+            request_data = http_msg.body.decode("utf-8")
+            parsed_data = urllib.parse.parse_qs(request_data)
+            data = {key: value[0] for key, value in parsed_data.items()}
 
-            sender = data.sender
-            signed_tx = data.signed_tx
-            ipfs_hash = data.ipfs_hash
+            sender = data["sender"]
+            signed_tx = data["signed_tx"]
+            ipfs_hash = data["ipfs_hash"]
+            contract_address = data["contract_address"]
 
-            decoded_address = self.web3.eth.account.recover_transaction(
-                signed_tx["raw_transaction"]
-            )
+            decoded_address = self.web3.eth.account.recover_transaction(signed_tx)
             if decoded_address != sender:
                 raise Exception("Sender mismatch for signed tx")
 
             req = {
-                "from_block": self.params.from_block,
                 "requestId": uuid.uuid4().hex,
-                "data": ipfs_hash,
+                "data": bytes.fromhex(ipfs_hash[2:]),
+                "contract_address": contract_address,
                 "is_offchain": True,
             }
-            self.pending_tasks.extend(req)
+            self.pending_tasks.append(req)
             self.context.logger.info(f"Offchain Task added with data: {req}")
+
+            self._send_ok_response(
+                http_msg, http_dialogue, data={"request_id": req["requestId"]}
+            )
 
         except (json.JSONDecodeError, ValueError, Exception) as e:
             self.context.logger.error(f"Error processing signed request data: {str(e)}")
+            self._handle_bad_request(http_msg, http_dialogue)
 
     def _handle_offchain_request_info(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -309,9 +326,54 @@ class MechHttpHandler(AbstractResponseHandler):
             if len(requested_data) > 0:
                 print(f"Data for request_id {request_id} found")
                 requested_data = offchain_done_tasks_list[0]
-                return requested_data
+                self._send_ok_response(http_msg, http_dialogue, data=requested_data)
 
-            return {}
+            self._send_ok_response(http_msg, http_dialogue, data={})
 
         except (json.JSONDecodeError, ValueError) as e:
             self.context.logger.error(f"Error getting offchain request info: {str(e)}")
+            self._handle_bad_request(http_msg, http_dialogue)
+
+    def _handle_bad_request(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle a Http bad request.
+
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
+        """
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=HttpCode.BAD_REQUEST_CODE.value,
+            status_text="Bad request",
+            headers=http_msg.headers,
+            body=b"",
+        )
+
+        # Send response
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)
+
+    def _send_ok_response(
+        self,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        data: Union[Dict, List],
+    ) -> None:
+        """Send an OK response with the provided data"""
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=HttpCode.OK_CODE.value,
+            status_text="Success",
+            headers=f"{self.json_content_header}{http_msg.headers}",
+            body=json.dumps(data).encode("utf-8"),
+        )
+
+        # Send response
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)
