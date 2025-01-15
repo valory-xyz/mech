@@ -306,24 +306,25 @@ class MechHttpHandler(AbstractResponseHandler):
 
         try:
             # Parse incoming data
-            data = json.loads(http_msg.body.decode("utf-8"))
+            request_data = http_msg.body.decode("utf-8")
+            parsed_data = urllib.parse.parse_qs(request_data)
+            data = {key: value[0] for key, value in parsed_data.items()}
 
-            request_id = data.request_id
+            request_id = int(data["request_id"])
 
             done_tasks_list = self.done_tasks
-            offchain_done_tasks_list = [
-                data
-                for data in done_tasks_list
-                if data.get("is_offchain") is True
-                and data.get("request_id") == request_id
+
+            requested_done_tasks_list = [
+                data for data in done_tasks_list if data.get("request_id") == request_id
             ]
 
-            if len(requested_data) > 0:
+            if len(requested_done_tasks_list) > 0:
                 print(f"Data for request_id {request_id} found")
-                requested_data = offchain_done_tasks_list[0]
+                requested_data = requested_done_tasks_list[0]
                 self._send_ok_response(http_msg, http_dialogue, data=requested_data)
 
-            self._send_ok_response(http_msg, http_dialogue, data={})
+            else:
+                self._send_ok_response(http_msg, http_dialogue, data={})
 
         except (json.JSONDecodeError, ValueError) as e:
             self.context.logger.error(f"Error getting offchain request info: {str(e)}")
