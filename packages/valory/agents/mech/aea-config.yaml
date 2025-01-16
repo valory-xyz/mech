@@ -102,7 +102,7 @@ behaviours:
 handlers:
   new_event:
     args:
-      contract_to_monitor: ${str:0x8Ef36686B353C58e5403e67c15e4bA2Ed778B3F7}
+      contract_to_monitor: ${str:0x5dea95b381676c741bdbA50ED8b6899Ea9AF5a65}
       websocket_provider: ${str:https://rpc.gnosischain.com}
 models:
   params:
@@ -151,7 +151,7 @@ models:
       reset_period_count: ${int:1000}
       on_chain_service_id: ${int:1}
       mech_staking_instance_address: ${str:0x0000000000000000000000000000000000000000}
-      mech_marketplace_address: ${str:0x0000000000000000000000000000000000000000}
+      mech_marketplace_address: ${str:0x9fBC801359F14850457c96e2d8Da74F92EFa18B4}
       agent_registry_address: ${str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
       agent_id: ${int:3}
       metadata_hash: ${str:0000000000000000000000000000000000000000000000000000000000000000}
@@ -170,7 +170,7 @@ models:
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
-      mech_to_subscription: ${dict:{"0x8Ef36686B353C58e5403e67c15e4bA2Ed778B3F7":{"tokenAddress":"0x0000000000000000000000000000000000000000",
+      mech_to_subscription: ${dict:{"0x5dea95b381676c741bdbA50ED8b6899Ea9AF5a65":{"tokenAddress":"0x0000000000000000000000000000000000000000",
         "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
         "tokenId":"2"}}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
@@ -185,9 +185,9 @@ models:
   params:
     args:
       task_deadline: ${float:240.0}
-      tools_to_package_hash: ${dict:{"openai-gpt-3.5-turbo-instruct":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
-        "openai-gpt-3.5-turbo":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
-        "openai-gpt-4":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
+      tools_to_package_hash: ${dict:{"openai-gpt-3.5-turbo-instruct":"bafybeihahysrfznr3642ssrqfatr4my5ectfh3okh7kacdo23igccjewni",
+        "openai-gpt-3.5-turbo":"bafybeihahysrfznr3642ssrqfatr4my5ectfh3okh7kacdo23igccjewni",
+        "openai-gpt-4":"bafybeihahysrfznr3642ssrqfatr4my5ectfh3okh7kacdo23igccjewni",
         "stabilityai-stable-diffusion-v1-5":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
         "stabilityai-stable-diffusion-xl-beta-v2-2-2":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
         "stabilityai-stable-diffusion-512-v2-1":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
@@ -205,15 +205,14 @@ models:
         "prediction-sentence-embedding-conservative":"bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai",
         "prediction-sentence-embedding-bold":"bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai",
         "prediction-online-sum-url-content":"bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e"}}
-      api_keys: ${dict:{"openai":["dummy_api_key"], "stabilityai":["dummy_api_key"],
-        "google_api_key":["dummy_api_key"], "google_engine_id":["dummy_api_key"]}}
+      api_keys: ${dict:{"openai":["dummy_api_key"],
+        "stabilityai":["dummy_api_key"], "google_api_key":["dummy_api_key"], "google_engine_id":["dummy_api_key"]}}
       polling_interval: ${float:30.0}
       agent_index: ${int:0}
       num_agents: ${int:4}
       from_block_range: ${int:50000}
-      mech_marketplace_address: ${str:0x0000000000000000000000000000000000000000}
-      mech_to_config: ${dict:{"0x8Ef36686B353C58e5403e67c15e4bA2Ed778B3F7":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-        "0x8Ef36686B353C58e5403e67c15e4bA2Ed778B3F7":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+      mech_marketplace_address: ${str:0x9fBC801359F14850457c96e2d8Da74F92EFa18B4}
+      mech_to_config: ${dict:{ "0x5dea95b381676c741bdbA50ED8b6899Ea9AF5a65":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
 ---
@@ -222,7 +221,7 @@ type: connection
 config:
   ledger_apis:
     ethereum:
-      address: ${str:https://rpc.gnosischain.com/}
+      address: ${str:https://rpc.chiado.gnosis.gateway.fm/}
       chain_id: ${int:100}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
