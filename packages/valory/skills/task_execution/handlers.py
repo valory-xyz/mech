@@ -180,10 +180,22 @@ class ContractHandler(BaseHandler):
 
         self.params.from_block = max([req["block_number"] for req in reqs]) + 1
         self.context.logger.info(f"Received {len(reqs)} new requests.")
+
+        # replace uuid request ids with the onchain ids
+        tx_hash_lookup = {req["tx_hash"]: req["requestId"] for req in reqs}
+
+        for pending_task in self.pending_tasks:
+            if (
+                pending_task.get("is_offchain", False)
+                and pending_task["tx_hash"] in tx_hash_lookup
+            ):
+                pending_task["requestId"] = tx_hash_lookup[pending_task["tx_hash"]]
+
         reqs = [
             req
             for req in reqs
             if req["block_number"] % self.params.num_agents == self.params.agent_index
+            and req["tx_hash"] not in self.params.offchain_tx_list
         ]
         self.context.logger.info(f"Processing only {len(reqs)} of the new requests.")
         self.pending_tasks.extend(reqs)
@@ -242,6 +254,11 @@ class MechHttpHandler(AbstractResponseHandler):
         """Get done_tasks."""
         return self.context.shared_state[DONE_TASKS]
 
+    @property
+    def params(self) -> Params:
+        """Get the parameters."""
+        return cast(Params, self.context.params)
+
     def setup(self) -> None:
         """Setup the mech http handler."""
         self.context.shared_state["routes_info"] = {
@@ -285,10 +302,11 @@ class MechHttpHandler(AbstractResponseHandler):
                 "requestId": uuid.uuid4().hex,
                 "data": bytes.fromhex(ipfs_hash[2:]),
                 "contract_address": contract_address,
-                "tx_hash": tx_hash,
+                "tx_hash": tx_hash.hex(),
                 "is_offchain": True,
             }
             self.pending_tasks.append(req)
+            self.params.offchain_tx_list.append(req["tx_hash"])
             self.context.logger.info(f"Offchain Task added with data: {req}")
 
             self._send_ok_response(
