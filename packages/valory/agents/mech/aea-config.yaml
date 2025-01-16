@@ -205,8 +205,8 @@ models:
         "prediction-sentence-embedding-conservative":"bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai",
         "prediction-sentence-embedding-bold":"bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai",
         "prediction-online-sum-url-content":"bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e"}}
-      api_keys: ${dict:{"openai":["dummy_api_key"],
-        "stabilityai":["dummy_api_key"], "google_api_key":["dummy_api_key"], "google_engine_id":["dummy_api_key"]}}
+      api_keys: ${dict:{"openai":["dummy_api_key"], "stabilityai":["dummy_api_key"],
+        "google_api_key":["dummy_api_key"], "google_engine_id":["dummy_api_key"]}}
       polling_interval: ${float:30.0}
       agent_index: ${int:0}
       num_agents: ${int:4}

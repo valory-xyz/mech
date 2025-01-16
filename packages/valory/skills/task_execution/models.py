@@ -88,6 +88,7 @@ class Params(Model):
             self.mech_marketplace_address is not None
             and self.mech_marketplace_address != ZERO_ADDRESS
         )
+        self.offchain_tx_list = list()
         super().__init__(*args, **kwargs)
 
     @classmethod
