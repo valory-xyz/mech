@@ -249,7 +249,8 @@ class MechHttpHandler(AbstractResponseHandler):
             "fetch_offchain_info": self._handle_offchain_request_info,
         }
         self.json_content_header = "Content-Type: application/json\n"
-        self.web3 = Web3()
+        # @todo remove hardcoded url
+        self.web3 = Web3(Web3.HTTPProvider("https://rpc.chiado.gnosis.gateway.fm/"))
         super().setup()
 
     def _handle_signed_requests(
@@ -277,10 +278,14 @@ class MechHttpHandler(AbstractResponseHandler):
             if decoded_address != sender:
                 raise Exception("Sender mismatch for signed tx")
 
+            # send signed tx onchain for recording request and payment
+            tx_hash = self.web3.eth.send_raw_transaction(signed_tx)
+
             req = {
                 "requestId": uuid.uuid4().hex,
                 "data": bytes.fromhex(ipfs_hash[2:]),
                 "contract_address": contract_address,
+                "tx_hash": tx_hash,
                 "is_offchain": True,
             }
             self.pending_tasks.append(req)
