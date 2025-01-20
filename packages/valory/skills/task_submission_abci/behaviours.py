@@ -172,7 +172,13 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     def get_payload_content(self) -> Generator[None, None, str]:
         """Get the payload content."""
         done_tasks = yield from self.get_done_tasks(self.params.task_wait_timeout)
-        return json.dumps(done_tasks)
+        # discard the offchain done tasks if any as they are being processed seperately
+        filtered_done_tasks = [
+            done_task
+            for done_task in done_tasks
+            if done_task["is_offchain"] in [False, None]
+        ]
+        return json.dumps(filtered_done_tasks)
 
     def get_done_tasks(self, timeout: float) -> Generator[None, None, List[Dict]]:
         """Wait for tasks to get done in the specified timeout."""

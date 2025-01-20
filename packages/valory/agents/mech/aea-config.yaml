@@ -10,7 +10,7 @@ connections:
 - valory/abci:0.1.0:bafybeiavg4blopyq2mfojlfmsdxpk64ywpot25zi34wfmv4yeal6pbqbfy
 - valory/http_client:0.23.0:bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u
 - valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
-- valory/ipfs:0.1.0:bafybeiboqkvt7q3vv4ljj3uhcmkeabb5ignqudnjgjdyb7jnvzen47rw7q
+- valory/ipfs:0.1.0:bafybeie6ddno6nufc7yz3q3pkvrpqltqvoyf5iogm7unek6vs4cmzzflsy
 - valory/ledger:0.19.0:bafybeigntoericenpzvwejqfuc3kqzo2pscs76qoygg5dbj6f4zxusru5e
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 - valory/websocket_client:0.1.0:bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli
@@ -22,7 +22,7 @@ contracts:
 - valory/hash_checkpoint:0.1.0:bafybeibpfllgkoa2fb47gtb7qwlb6gya5yufgm7m7u5f3cdwxuu2r2grw4
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeicky7duncl25yif5gduo7a3ccgbgfo4pkx6rvexooyvzgyomcfuy4
-- valory/mech_marketplace:0.1.0:bafybeigulghv7bvx4evl6kmogvv6gjxovyt22tkwlbdmeretmop2crdmem
+- valory/mech_marketplace:0.1.0:bafybeiafl4nbxpzs45lipksegw76rg6iurrvsr7xkxdhjklrpkniofctfy
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
 - valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
@@ -37,16 +37,16 @@ protocols:
 - valory/websocket_client:0.1.0:bafybeifjk254sy65rna2k32kynzenutujwqndap2r222afvr3zezi27mx4
 skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
-- valory/abstract_round_abci:0.1.0:bafybeifgp5iyybzsjy475ro54p4sqfmedxzfgpgpz45dgzjowuczp5fye4
+- valory/abstract_round_abci:0.1.0:bafybeifylvzfqtepgwn66zgqusfznf7slus5fzf54ay4owxte47x4b2bem
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeig7n5ctxixqpatrf7olpjhlqqzv26i2gdwst5rt4bngktm7oyqq5e
-- valory/registration_abci:0.1.0:bafybeietfl3bmd7wjgdjrwaj6zmirc6t23c3uyyjbmc3e4mgyng3a6znbe
-- valory/reset_pause_abci:0.1.0:bafybeie5hj4wffs4cdinzckpw4wc3xep5ihsypriz46v5obyvmw3lva2dm
-- valory/subscription_abci:0.1.0:bafybeicl3w6yxwt4hbkpcpjbxsxgniv7txow7mpk6y3l42c3qo6ww52ev4
-- valory/task_execution:0.1.0:bafybeieup25lwxfscl2vyatfhtf7tp2u5qras7zjkjvizzhkxgn6m6ondm
-- valory/task_submission_abci:0.1.0:bafybeihrvychq44jwrur7fv7ji5mkvznib3dyjzojym7ozcirreonewukq
-- valory/termination_abci:0.1.0:bafybeibe4mcmulytol5u7cip77h3phmspo7yb6f6p6z4hgom2mlahtemzi
-- valory/transaction_settlement_abci:0.1.0:bafybeigczqrwprnx7xyhaomvq65iqfr3nee27xua7z42ztbxmksq6urrim
+- valory/mech_abci:0.1.0:bafybeicfjwtjboqpn4usy4mlcxk32wjbhuy7jsbduzku64njtyauis5p4i
+- valory/registration_abci:0.1.0:bafybeifcsf75zpv4znjgl3muquzs5j4v34sokouj6isdbthk4iqwiqa2mu
+- valory/reset_pause_abci:0.1.0:bafybeifdtbbkok2urjxhivcwyc7yo7dsbokgtxlofo25wgytek3hcmzbdi
+- valory/subscription_abci:0.1.0:bafybeias2n7742yl4csch2ciaqea2vlugvew4j7zbfrryhevbv4fck2hfe
+- valory/task_execution:0.1.0:bafybeiawa7ufijo4jcvb4ftynwcnmqfrccwkkqpa4rlegt7srkowekqqqm
+- valory/task_submission_abci:0.1.0:bafybeiat4ghphonpgu5anym2jjt6rmf54csd4jiwsiyne3i2c2x34wsbs4
+- valory/termination_abci:0.1.0:bafybeiflco36yb3wpjgva2er64kclbveoyytwnxooqmr52dxg7ofcsog2a
+- valory/transaction_settlement_abci:0.1.0:bafybeieleqba32mkft5oeayykgvupa5eosyhnzwdfjj4cf5go7xzqaqndm
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
 default_ledger: ethereum
 required_ledgers:
