@@ -266,7 +266,7 @@ class MechHttpHandler(AbstractResponseHandler):
     def setup(self) -> None:
         """Setup the mech http handler."""
         self.context.shared_state["routes_info"] = {
-            "send_signed_tx": self._handle_signed_requests,
+            "send_signed_requests": self._handle_signed_requests,
             "fetch_offchain_info": self._handle_offchain_request_info,
         }
         self.json_content_header = "Content-Type: application/json\n"
@@ -290,31 +290,21 @@ class MechHttpHandler(AbstractResponseHandler):
             parsed_data = urllib.parse.parse_qs(request_data)
             data = {key: value[0] for key, value in parsed_data.items()}
 
-            sender = data["sender"]
-            signed_tx = data["signed_tx"]
             ipfs_hash = data["ipfs_hash"]
-            contract_address = data["contract_address"]
-
-            decoded_address = self.web3.eth.account.recover_transaction(signed_tx)
-            if decoded_address != sender:
-                raise Exception("Sender mismatch for signed tx")
-
-            # send signed tx onchain for recording request and payment
-            tx_hash = self.web3.eth.send_raw_transaction(signed_tx)
-
+            request_id = data["request_id"]
             req = {
-                "requestId": uuid.uuid4().hex,
+                "requestId": request_id,
                 "data": bytes.fromhex(ipfs_hash[2:]),
-                "contract_address": contract_address,
-                "tx_hash": tx_hash.hex(),
                 "is_offchain": True,
+                **data,
             }
             self.pending_tasks.append(req)
-            self.params.offchain_tx_list.append(req["tx_hash"])
             self.context.logger.info(f"Offchain Task added with data: {req}")
 
             self._send_ok_response(
-                http_msg, http_dialogue, data={"request_id": req["requestId"]}
+                http_msg,
+                http_dialogue,
+                data={"request_id": req["requestId"]},
             )
 
         except (json.JSONDecodeError, ValueError, Exception) as e:
@@ -337,7 +327,7 @@ class MechHttpHandler(AbstractResponseHandler):
             parsed_data = urllib.parse.parse_qs(request_data)
             data = {key: value[0] for key, value in parsed_data.items()}
 
-            request_id = int(data["request_id"])
+            request_id = data["request_id"]
 
             done_tasks_list = self.done_tasks
 
