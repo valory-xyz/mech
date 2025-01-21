@@ -349,7 +349,6 @@ class MechMarketplaceContract(Contract):
         ledger_api: LedgerApi,
         contract_address: str,
         requester: str,
-        requesterServiceId: int,
         requestDatas: List[str],
         signatures: List[str],
         deliverDatas: List[str],
@@ -363,7 +362,6 @@ class MechMarketplaceContract(Contract):
             fn_name="deliverMarketplaceWithSignatures",
             args=[
                 requester,
-                requesterServiceId,
                 requestDatas,
                 signatures,
                 deliverDatas,
