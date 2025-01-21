@@ -629,11 +629,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             print(f"{offchain_done_tasks_list=}")
 
             offchain_list_by_sender = defaultdict(
-                lambda: {"request_data": [], "signature": [], "deliver_data": []}
+                lambda: {
+                    "request_data": [],
+                    "signature": [],
+                    "deliver_data": [],
+                    "delivery_rates": [],
+                }
             )
             for data in offchain_done_tasks_list:
                 sender = data["sender"]
-                requester_service_id = data["requester_service_id"]
                 offchain_list_by_sender[sender]["request_data"].append(
                     data["ipfs_hash"]
                 )
@@ -641,27 +645,31 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 offchain_list_by_sender[sender]["deliver_data"].append(
                     data["task_result"]
                 )
+                offchain_list_by_sender[sender]["delivery_rates"].append(
+                    data["delivery_rate"]
+                )
 
             for sender, details in offchain_list_by_sender.items():
                 self.context.logger.info(
                     f"Preparing deliver data for requester: {sender}"
                 )
 
-                request_datas = (details["request_data"],)
-                signatures = (details["signature"],)
-                deliver_datas = (details["deliver_data"],)
+                request_datas = details["request_data"]
+                signatures = details["signature"]
+                deliver_datas = details["deliver_data"]
+                delivery_rates = details["delivery_rates"]
 
-                # @todo dynamic delivery rates (1 wei for testing)
                 contract_data = {
                     "requester": sender,
-                    "requesterServiceId": requester_service_id,
                     "requestDatas": request_datas,
                     "signatures": signatures,
                     "deliverDatas": deliver_datas,
-                    "deliveryRates": [1] * len(request_datas),
+                    "deliveryRates": delivery_rates,
                     "paymentData": "0x",
                 }
-                self.context.logger.info(f"Preparing deliver data: {contract_data}")
+                self.context.logger.info(
+                    f"Preparing deliver with signature data: {contract_data}"
+                )
 
                 contract_api_msg, _ = self.context.contract_dialogues.create(
                     performative=ContractApiMessage.Performative.GET_STATE,
