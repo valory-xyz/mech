@@ -108,10 +108,10 @@ models:
       from_block_range: 50000
       num_agents: 4
       mech_to_config:
-        '0xFf82123dFB52ab75C417195c5fDB87630145ae81':
+        '0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb':
           use_dynamic_pricing: false
-          is_marketplace_mech: false
-        '0x77af31De935740567Cf4fF1986D04B2c964A786a':
+          is_marketplace_mech: true
+        '0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D':
           use_dynamic_pricing: false
           is_marketplace_mech: false
       polling_interval: 30.0

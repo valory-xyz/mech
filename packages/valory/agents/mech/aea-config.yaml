@@ -15,14 +15,14 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 - valory/websocket_client:0.1.0:bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli
 contracts:
-- valory/agent_mech:0.1.0:bafybeib6xrew4kfvus376hqcrkt6e35yfr4jp7bwbrlb3eaav262e5ns4m
+- valory/agent_mech:0.1.0:bafybeifugr6fgvekv3g2zsu7xz2vteif3x7zr27tf3ofaeoqguycdv5eri
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
 - valory/gnosis_safe:0.1.0:bafybeiaw4yr7ubqlp63iz5wxqep3a5fokqs3kqva7sp2nsqg355zzucqgm
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeidkqhw7smq4kbqryodom6maj7gubc5nbxwm4vi343xbkqxx3brjtm
 - valory/hash_checkpoint:0.1.0:bafybeibpfllgkoa2fb47gtb7qwlb6gya5yufgm7m7u5f3cdwxuu2r2grw4
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeicky7duncl25yif5gduo7a3ccgbgfo4pkx6rvexooyvzgyomcfuy4
-- valory/mech_marketplace:0.1.0:bafybeiafl4nbxpzs45lipksegw76rg6iurrvsr7xkxdhjklrpkniofctfy
+- valory/mech_marketplace:0.1.0:bafybeiftw4xjshpevnx44hmglkflyxvsy47u3ui7x26rl5cvvspminov5a
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
 - valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
@@ -102,7 +102,7 @@ behaviours:
 handlers:
   new_event:
     args:
-      contract_to_monitor: ${str:0x5dea95b381676c741bdbA50ED8b6899Ea9AF5a65}
+      contract_to_monitor: ${str:0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D}
       websocket_provider: ${str:https://rpc.gnosischain.com}
 models:
   params:
@@ -151,7 +151,7 @@ models:
       reset_period_count: ${int:1000}
       on_chain_service_id: ${int:1}
       mech_staking_instance_address: ${str:0x0000000000000000000000000000000000000000}
-      mech_marketplace_address: ${str:0x9fBC801359F14850457c96e2d8Da74F92EFa18B4}
+      mech_marketplace_address: ${str:0x85dCa9b0E27DDECdB7c657616e34967d2711Db55}
       agent_registry_address: ${str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
       agent_id: ${int:3}
       metadata_hash: ${str:0000000000000000000000000000000000000000000000000000000000000000}
@@ -170,13 +170,13 @@ models:
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
-      mech_to_subscription: ${dict:{"0x5dea95b381676c741bdbA50ED8b6899Ea9AF5a65":{"tokenAddress":"0x0000000000000000000000000000000000000000",
+      mech_to_subscription: ${dict:{"0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D":{"tokenAddress":"0x0000000000000000000000000000000000000000",
         "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
         "tokenId":"2"}}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
-        all_participants: ${list:["0x7a1De622c62c6e985fEDd4919FfA8e9997B9547f"]}
-        safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
+        all_participants: ${list:["0x264968d975cAA715e1D65c2b5902fE9ea64E6F28"]}
+        safe_contract_address: ${str:0xBc3Fca6F74674596f8840859fe69D41C817577aa}
         consensus_threshold: ${int:null}
 ---
 public_id: valory/task_execution:0.1.0
@@ -211,8 +211,8 @@ models:
       agent_index: ${int:0}
       num_agents: ${int:4}
       from_block_range: ${int:50000}
-      mech_marketplace_address: ${str:0x9fBC801359F14850457c96e2d8Da74F92EFa18B4}
-      mech_to_config: ${dict:{ "0x5dea95b381676c741bdbA50ED8b6899Ea9AF5a65":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
+      mech_marketplace_address: ${str:0x85dCa9b0E27DDECdB7c657616e34967d2711Db55}
+      mech_to_config: ${dict:{ "0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
 ---
@@ -221,12 +221,12 @@ type: connection
 config:
   ledger_apis:
     ethereum:
-      address: ${str:https://rpc.chiado.gnosis.gateway.fm/}
+      address: ${str:https://rpc.gnosischain.com/}
       chain_id: ${int:100}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     gnosis:
-      address: ${str:https://rpc.chiado.gnosis.gateway.fm/}
+      address: ${str:https://rpc.gnosischain.com/}
       chain_id: ${int:100}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}

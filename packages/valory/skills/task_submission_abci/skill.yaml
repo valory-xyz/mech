@@ -19,7 +19,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeib6xrew4kfvus376hqcrkt6e35yfr4jp7bwbrlb3eaav262e5ns4m
+- valory/agent_mech:0.1.0:bafybeifugr6fgvekv3g2zsu7xz2vteif3x7zr27tf3ofaeoqguycdv5eri
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
 - valory/gnosis_safe:0.1.0:bafybeiaw4yr7ubqlp63iz5wxqep3a5fokqs3kqva7sp2nsqg355zzucqgm
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
@@ -84,7 +84,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      mech_to_config: ${dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
+      mech_to_config: ${dict:{"0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb":{"use_dynamic_pricing":false,"is_marketplace_mech":true},
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0
