@@ -25,7 +25,6 @@ from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
-from collections import defaultdict
 
 
 from aea.helpers.cid import to_v1
@@ -105,7 +104,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._execute_task()
         self._check_for_new_reqs()
         self._check_for_new_marketplace_reqs()
-        self._submit_offchain_tasks()
 
     @property
     def done_tasks_lock(self) -> threading.Lock:
@@ -605,16 +603,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_result = to_multihash(ipfs_hash)
         cost = get_cost_for_done_task(done_task)
         self.context.logger.info(f"Cost for task {req_id}: {cost}")
-        # mech_config = self.params.mech_to_config[done_task["mech_address"]]
-        # if mech_config.use_dynamic_pricing:
-        #     self.context.logger.info(f"Dynamic pricing is enabled for task {req_id}.")
-        #     task_result = encode(
-        #         ["uint256", "bytes"], [cost, bytes.fromhex(task_result)]
-        #     ).hex()
+        mech_config = self.params.mech_to_config[done_task["mech_address"]]
+        if mech_config.use_dynamic_pricing:
+            self.context.logger.info(f"Dynamic pricing is enabled for task {req_id}.")
+            task_result = encode(
+                ["uint256", "bytes"], [cost, bytes.fromhex(task_result)]
+            ).hex()
 
-        # done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
+        done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["is_marketplace_mech"] = False
         done_task["task_result"] = task_result
+        # pop the data key value as it's bytes which causes issues
+        # with json dumps and not required anywhere
+        done_task.pop("data", None)
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
@@ -645,76 +646,3 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             message=response,
             context=EnvelopeContext(connection_id=P2P_CLIENT_PUBLIC_ID),
         )
-
-    def _submit_offchain_tasks(self) -> None:
-        done_tasks_list = self.done_tasks
-        offchain_done_tasks_list = [
-            done_task
-            for done_task in done_tasks_list
-            if done_task.get("is_offchain") is True
-        ]
-
-        if len(offchain_done_tasks_list) > 0:
-            self.context.logger.info(
-                f"{len(offchain_done_tasks_list)} Offchain Requests Found. Attempting to deliver onchain"
-            )
-            print(f"{offchain_done_tasks_list=}")
-
-            offchain_list_by_sender = defaultdict(
-                lambda: {
-                    "request_data": [],
-                    "signature": [],
-                    "deliver_data": [],
-                    "delivery_rates": [],
-                }
-            )
-            for data in offchain_done_tasks_list:
-                sender = data["sender"]
-                offchain_list_by_sender[sender]["request_data"].append(
-                    data["ipfs_hash"]
-                )
-                offchain_list_by_sender[sender]["signature"].append(data["signature"])
-                offchain_list_by_sender[sender]["deliver_data"].append(
-                    data["task_result"]
-                )
-                offchain_list_by_sender[sender]["delivery_rates"].append(
-                    data["delivery_rate"]
-                )
-
-            for sender, details in offchain_list_by_sender.items():
-                self.context.logger.info(
-                    f"Preparing deliver data for requester: {sender}"
-                )
-
-                request_datas = details["request_data"]
-                signatures = details["signature"]
-                deliver_datas = details["deliver_data"]
-                delivery_rates = details["delivery_rates"]
-
-                contract_data = {
-                    "requester": sender,
-                    "requestDatas": request_datas,
-                    "signatures": signatures,
-                    "deliverDatas": deliver_datas,
-                    "deliveryRates": delivery_rates,
-                    "paymentData": "0x",
-                }
-                self.context.logger.info(
-                    f"Preparing deliver with signature data: {contract_data}"
-                )
-
-                contract_api_msg, _ = self.context.contract_dialogues.create(
-                    performative=ContractApiMessage.Performative.GET_STATE,
-                    contract_address=self.params.mech_marketplace_address,
-                    contract_id=str(MechMarketplaceContract.contract_id),
-                    callable="get_offchain_deliver_data",
-                    kwargs=ContractApiMessage.Kwargs(
-                        dict(
-                            **contract_data,
-                            chain_id=GNOSIS_CHAIN,
-                        )
-                    ),
-                    counterparty=LEDGER_API_ADDRESS,
-                    ledger_id=self.context.default_ledger_id,
-                )
-                self.context.outbox.put_message(message=contract_api_msg)

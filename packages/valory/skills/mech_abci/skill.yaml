@@ -23,10 +23,10 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifylvzfqtepgwn66zgqusfznf7slus5fzf54ay4owxte47x4b2bem
 - valory/registration_abci:0.1.0:bafybeifcsf75zpv4znjgl3muquzs5j4v34sokouj6isdbthk4iqwiqa2mu
 - valory/reset_pause_abci:0.1.0:bafybeifdtbbkok2urjxhivcwyc7yo7dsbokgtxlofo25wgytek3hcmzbdi
-- valory/task_submission_abci:0.1.0:bafybeiat4ghphonpgu5anym2jjt6rmf54csd4jiwsiyne3i2c2x34wsbs4
+- valory/task_submission_abci:0.1.0:bafybeifubbhcjeucggshk3sujeeerq4bsdhvt2d7lhs4vegk2h67owi6o4
 - valory/termination_abci:0.1.0:bafybeiflco36yb3wpjgva2er64kclbveoyytwnxooqmr52dxg7ofcsog2a
 - valory/transaction_settlement_abci:0.1.0:bafybeieleqba32mkft5oeayykgvupa5eosyhnzwdfjj4cf5go7xzqaqndm
-- valory/subscription_abci:0.1.0:bafybeias2n7742yl4csch2ciaqea2vlugvew4j7zbfrryhevbv4fck2hfe
+- valory/subscription_abci:0.1.0:bafybeidvtimvthvx4msd4e6kvgcizpbodgxd2pd26c5fpkwn22jhpd56a4
 behaviours:
   main:
     args: {}
@@ -79,10 +79,10 @@ models:
   params:
     args:
       mech_to_config:
-        '0xFf82123dFB52ab75C417195c5fDB87630145ae81':
+        '0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb':
           use_dynamic_pricing: false
-          is_marketplace_mech: false
-        '0x77af31De935740567Cf4fF1986D04B2c964A786a':
+          is_marketplace_mech: true
+        '0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D':
           use_dynamic_pricing: false
           is_marketplace_mech: false
       api_keys:
