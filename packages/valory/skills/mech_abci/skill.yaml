@@ -82,7 +82,7 @@ models:
         '0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb':
           use_dynamic_pricing: false
           is_marketplace_mech: true
-        '0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D':
+        '0x69e105E7fdad198859726f5787e523c3FE2b07e3':
           use_dynamic_pricing: false
           is_marketplace_mech: false
       api_keys:

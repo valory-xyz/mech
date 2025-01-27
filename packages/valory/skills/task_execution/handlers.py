@@ -48,6 +48,7 @@ from packages.valory.skills.abstract_round_abci.handlers import AbstractResponse
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 DONE_TASKS_LOCK = "lock"
+IPFS_TASKS = "ipfs_tasks"
 LAST_SUCCESSFUL_READ = "last_successful_read"
 LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
@@ -259,6 +260,11 @@ class MechHttpHandler(AbstractResponseHandler):
         return self.context.shared_state[DONE_TASKS]
 
     @property
+    def ipfs_tasks(self) -> List[Dict[str, Any]]:
+        """Get ipfs_tasks."""
+        return self.context.shared_state[IPFS_TASKS]
+
+    @property
     def params(self) -> Params:
         """Get the parameters."""
         return cast(Params, self.context.params)
@@ -269,9 +275,8 @@ class MechHttpHandler(AbstractResponseHandler):
             "send_signed_requests": self._handle_signed_requests,
             "fetch_offchain_info": self._handle_offchain_request_info,
         }
+        self.context.shared_state[IPFS_TASKS] = []
         self.json_content_header = "Content-Type: application/json\n"
-        # @todo remove hardcoded url
-        self.web3 = Web3(Web3.HTTPProvider("https://rpc.chiado.gnosis.gateway.fm/"))
         super().setup()
 
     def _handle_signed_requests(
@@ -292,6 +297,7 @@ class MechHttpHandler(AbstractResponseHandler):
 
             ipfs_hash = data["ipfs_hash"]
             request_id = data["request_id"]
+            ipfs_data = data["ipfs_data"]
             req = {
                 "requestId": request_id,
                 "data": bytes.fromhex(ipfs_hash[2:]),
@@ -299,6 +305,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 **data,
             }
             self.pending_tasks.append(req)
+            self.ipfs_tasks.append({"request_id": request_id, "ipfs_data": ipfs_data})
             self.context.logger.info(f"Offchain Task added with data: {req}")
 
             self._send_ok_response(

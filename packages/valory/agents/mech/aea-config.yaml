@@ -102,7 +102,7 @@ behaviours:
 handlers:
   new_event:
     args:
-      contract_to_monitor: ${str:0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D}
+      contract_to_monitor: ${str:0x69e105E7fdad198859726f5787e523c3FE2b07e3}
       websocket_provider: ${str:https://rpc.gnosischain.com}
 models:
   params:
@@ -170,13 +170,13 @@ models:
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
-      mech_to_subscription: ${dict:{"0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D":{"tokenAddress":"0x0000000000000000000000000000000000000000",
+      mech_to_subscription: ${dict:{"0x69e105E7fdad198859726f5787e523c3FE2b07e3":{"tokenAddress":"0x0000000000000000000000000000000000000000",
         "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
         "tokenId":"2"}}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
-        all_participants: ${list:["0x264968d975cAA715e1D65c2b5902fE9ea64E6F28"]}
-        safe_contract_address: ${str:0xBc3Fca6F74674596f8840859fe69D41C817577aa}
+        all_participants: ${list:["0x7a1De622c62c6e985fEDd4919FfA8e9997B9547f"]}
+        safe_contract_address: ${str:0x9e9d95A2a3dF7CF20a8ac1422a6D1A2DB3B15565}
         consensus_threshold: ${int:null}
 ---
 public_id: valory/task_execution:0.1.0
@@ -212,7 +212,7 @@ models:
       num_agents: ${int:4}
       from_block_range: ${int:50000}
       mech_marketplace_address: ${str:0x85dCa9b0E27DDECdB7c657616e34967d2711Db55}
-      mech_to_config: ${dict:{ "0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
+      mech_to_config: ${dict:{ "0x69e105E7fdad198859726f5787e523c3FE2b07e3":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
 ---

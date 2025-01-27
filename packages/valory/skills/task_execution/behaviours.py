@@ -67,6 +67,7 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
+IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 GNOSIS_CHAIN = "gnosis"
 
@@ -85,6 +86,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_package_hash: Dict[str, str] = {}
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
         self._inflight_tool_req: Optional[str] = None
+        self._inflight_ipfs_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
         self._last_polling: Optional[float] = None
         self._invalid_request = False
@@ -100,6 +102,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def act(self) -> None:
         """Implement the act."""
         self._download_tools()
+        self._execute_ipfs_tasks()
         self._execute_task()
         self._check_for_new_reqs()
 
@@ -142,6 +145,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def done_tasks(self) -> List[Dict[str, Any]]:
         """Get done_tasks."""
         return self.context.shared_state[DONE_TASKS]
+
+    @property
+    def ipfs_tasks(self) -> List[Dict[str, Any]]:
+        """Get ipfs_tasks."""
+        return self.context.shared_state[IPFS_TASKS]
 
     def _should_poll(self) -> bool:
         """If we should poll the contract."""
@@ -280,6 +288,30 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             ledger_id=self.context.default_ledger_id,
         )
         self.context.outbox.put_message(message=contract_api_msg)
+
+    def _execute_ipfs_tasks(self) -> None:
+        """Execute IPFS tasks."""
+
+        if self._inflight_ipfs_req:
+            return
+
+        if len(self.ipfs_tasks) == 0:
+            # not ipfs tasks
+            return
+
+        if self.ipfs_tasks is not None:
+            self.context.logger.info(f"Found {len(self.ipfs_tasks)} IPFS Tasks")
+            ipfs_task = self.ipfs_tasks.pop(0)
+            request_id = ipfs_task["request_id"]
+            ipfs_data = ipfs_task["ipfs_data"]
+            self.context.logger.info(
+                f"Preparing ipfs task for request id {request_id} with data: {ipfs_data}"
+            )
+            self._inflight_ipfs_req = request_id
+            msg, dialogue = self._build_ipfs_store_file_req(
+                {"metadata.json": ipfs_data}
+            )
+            self.send_message(msg, dialogue, self._handle_ipfs_tasks_response)
 
     def _execute_task(self) -> None:
         """Execute tasks."""
@@ -591,6 +623,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executing_task = None
         self._done_task = None
         self._invalid_request = False
+
+    def _handle_ipfs_tasks_response(
+        self, message: IpfsMessage, dialogue: Dialogue
+    ) -> None:
+        """Handle the response from ipfs for a stored request."""
+        request_id = cast(str, self._inflight_ipfs_req)
+        ipfs_hash = to_v1(message.ipfs_hash)
+        self.context.logger.info(
+            f"Response for request {request_id} stored on IPFS with hash {ipfs_hash}."
+        )
+        # remove the uploaded request from the pending list
+        self.context.shared_state[IPFS_TASKS] = [
+            t for t in self.ipfs_tasks if t != {"request_id": request_id}
+        ]
+        self._inflight_ipfs_req = None
 
     def send_data_via_acn(
         self,
