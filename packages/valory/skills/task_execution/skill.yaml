@@ -7,9 +7,9 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeib6wvkl4tubg3fmao6ajr2ro5y4ytdbcz4tfizw3f6tdqkts5vxim
+  behaviours.py: bafybeiewjybd6zte6yabxxj34lez2w7r54oppgqwoqobk4cicszdsaftkq
   dialogues.py: bafybeia5byu6hwo5fv4tnsuqw5tw7wj3aceldqszizhugybqzn23tnhr2i
-  handlers.py: bafybeidefwpoirsurk2h62sq5en3t7xqfynn2k52fj4ttrlezw7mym6dnm
+  handlers.py: bafybeigu4zzqofu4wse5relaum7sksq6fzursxaelna57dhm2kohvslkz4
   models.py: bafybeih45axytaozeabnpyjwcuh5dai7hm7ggownr6chesuoynpvec7wki
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
@@ -112,7 +112,7 @@ models:
         '0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb':
           use_dynamic_pricing: false
           is_marketplace_mech: true
-        '0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D':
+        '0x69e105E7fdad198859726f5787e523c3FE2b07e3':
           use_dynamic_pricing: false
           is_marketplace_mech: false
       polling_interval: 30.0

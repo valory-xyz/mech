@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeifylvzfqtepgwn66zgqusfznf7slus5fzf54ay4owxte47x4b2bem
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeihmahr7zqrgn7r5yojmscm7d5dthcsml6sntieciyeuhxiiupqwia
+- valory/mech_abci:0.1.0:bafybeianr5uwcafnhnt6ulouyooh647oygkyj76whtugqdg3zyfsqegbce
 - valory/registration_abci:0.1.0:bafybeifcsf75zpv4znjgl3muquzs5j4v34sokouj6isdbthk4iqwiqa2mu
 - valory/reset_pause_abci:0.1.0:bafybeifdtbbkok2urjxhivcwyc7yo7dsbokgtxlofo25wgytek3hcmzbdi
-- valory/subscription_abci:0.1.0:bafybeidvtimvthvx4msd4e6kvgcizpbodgxd2pd26c5fpkwn22jhpd56a4
-- valory/task_execution:0.1.0:bafybeihvvatateg3njw3gkgnnv5qkuaqgvz7i3aljs4vhonuvchlwbioam
-- valory/task_submission_abci:0.1.0:bafybeifubbhcjeucggshk3sujeeerq4bsdhvt2d7lhs4vegk2h67owi6o4
+- valory/subscription_abci:0.1.0:bafybeiefq6zvuhyhbrrl6rf6uqzphujqtugyi3v67zp4f5mxxvhs57yinu
+- valory/task_execution:0.1.0:bafybeigcrbjvjxplpln7gyjts37yiatbsj4p52wuct6dkjcn5dguqz3gqy
+- valory/task_submission_abci:0.1.0:bafybeieczj7gxexr6zxfgghco6pgalabdehrlf3h65phi2qmt7lqtjmtdq
 - valory/termination_abci:0.1.0:bafybeiflco36yb3wpjgva2er64kclbveoyytwnxooqmr52dxg7ofcsog2a
 - valory/transaction_settlement_abci:0.1.0:bafybeieleqba32mkft5oeayykgvupa5eosyhnzwdfjj4cf5go7xzqaqndm
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -160,7 +160,7 @@ behaviours:
 handlers:
   new_event:
     args:
-      contract_to_monitor: ${str:0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D}
+      contract_to_monitor: ${str:0x69e105E7fdad198859726f5787e523c3FE2b07e3}
       websocket_provider: ${str:https://rpc.gnosischain.com}
 models:
   params:
@@ -228,13 +228,13 @@ models:
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
-      mech_to_subscription: ${dict:{"0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D":{"tokenAddress":"0x0000000000000000000000000000000000000000",
+      mech_to_subscription: ${dict:{"0x69e105E7fdad198859726f5787e523c3FE2b07e3":{"tokenAddress":"0x0000000000000000000000000000000000000000",
         "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
         "tokenId":"2"}}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
-        all_participants: ${list:["0x264968d975cAA715e1D65c2b5902fE9ea64E6F28"]}
-        safe_contract_address: ${str:0xBc3Fca6F74674596f8840859fe69D41C817577aa}
+        all_participants: ${list:["0x7a1De622c62c6e985fEDd4919FfA8e9997B9547f"]}
+        safe_contract_address: ${str:0x9e9d95A2a3dF7CF20a8ac1422a6D1A2DB3B15565}
         consensus_threshold: ${int:null}
 ---
 public_id: valory/task_execution:0.1.0
@@ -270,7 +270,7 @@ models:
       num_agents: ${int:4}
       from_block_range: ${int:50000}
       mech_marketplace_address: ${str:0x85dCa9b0E27DDECdB7c657616e34967d2711Db55}
-      mech_to_config: ${dict:{ "0xec7C53f7B1368eE82EF64bef65A3E9dE7d36B49D":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
+      mech_to_config: ${dict:{ "0x69e105E7fdad198859726f5787e523c3FE2b07e3":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
 ---
