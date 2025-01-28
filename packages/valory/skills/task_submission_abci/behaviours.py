@@ -1065,7 +1065,8 @@ class TransactionPreparationBehaviour(
             )
             for data in tx_list_sorted_by_nonce:
                 sender = data["sender"]
-                mech_address = "0x69e105E7fdad198859726f5787e523c3FE2b07e3"
+                # uses the first mech in config as marketplace mech
+                mech_address = self.mech_addresses[0]
                 offchain_list_by_sender[sender]["request_data"].append(
                     bytes.fromhex(data["ipfs_hash"][2:])
                 )
