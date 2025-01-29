@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigpq5lxfj2aza6ok3fjuywtdafelkbvoqwaits7regfbgu4oynmku
   build/AgentMech.json: bafybeienigznrwv45y4f4dth4r2xvqtffrdphi3qwqta34fakhpzjlym3i
-  contract.py: bafybeidyrj454qegttvouj5y3jsgrqjkw6cfrn5jjbnjnkp3qnzs5yb5qy
+  contract.py: bafybeibnpm3fhn26m2bjavnmkfethssehtl3ikbbf2p2ecblgxpktxvgk4
 fingerprint_ignore_patterns: []
 class_name: AgentMechContract
 contract_interface_paths:
