@@ -24,8 +24,7 @@ import json
 import uuid
 import urllib.parse
 from enum import Enum
-from web3 import Web3
-from typing import Any, Dict, List, cast, Generator, Union
+from typing import Any, Dict, List, cast, Generator, Union, Optional
 
 
 from aea.protocols.base import Message
