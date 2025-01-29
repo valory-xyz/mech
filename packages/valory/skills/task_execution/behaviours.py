@@ -26,7 +26,6 @@ from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
-
 from aea.helpers.cid import to_v1
 from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message

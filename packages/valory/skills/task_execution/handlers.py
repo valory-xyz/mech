@@ -18,14 +18,12 @@
 # ------------------------------------------------------------------------------
 
 """This package contains a scaffold of a handler."""
+import json
 import threading
 import time
-import json
-import uuid
 import urllib.parse
 from enum import Enum
-from typing import Any, Dict, List, cast, Generator, Union, Optional
-
+from typing import Any, Dict, List, Optional, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -35,13 +33,12 @@ from packages.valory.connections.ledger.connection import (
 )
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
-from packages.valory.protocols.http.message import HttpMessage
-from packages.valory.skills.task_execution.models import Params
-from packages.valory.protocols.http.message import HttpMessage
-from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
+from packages.valory.skills.task_execution.dialogues import HttpDialogue
+from packages.valory.skills.task_execution.models import Params
 
 
 PENDING_TASKS = "pending_tasks"
@@ -257,6 +254,7 @@ class HttpCode(Enum):
 
 
 class MechHttpHandler(AbstractResponseHandler):
+    """Mech Http handler."""
 
     SUPPORTED_PROTOCOL = HttpMessage.protocol_id
 
@@ -292,7 +290,7 @@ class MechHttpHandler(AbstractResponseHandler):
 
     def _handle_signed_requests(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> Generator[None, None, None]:
+    ) -> None:
         """
         Handle POST requests to send signed tx to mech.
 
@@ -331,7 +329,7 @@ class MechHttpHandler(AbstractResponseHandler):
 
     def _handle_offchain_request_info(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> Generator[None, None, None]:
+    ) -> None:
         """
         Handle GET requests to fetch offchain request info.
 

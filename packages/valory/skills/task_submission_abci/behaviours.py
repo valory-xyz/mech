@@ -22,9 +22,9 @@ import json
 import threading
 import time
 from abc import ABC
+from collections import defaultdict
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
-from collections import defaultdict
 
 from aea.helpers.cid import CID, to_v1
 from multibase import multibase
@@ -1055,7 +1055,7 @@ class TransactionPreparationBehaviour(
                 offchain_done_tasks_list, key=lambda x: x["nonce"]
             )
 
-            offchain_list_by_sender = defaultdict(
+            offchain_list_by_sender: defaultdict = defaultdict(
                 lambda: {
                     "request_data": [],
                     "signature": [],
@@ -1119,14 +1119,14 @@ class TransactionPreparationBehaviour(
                     )
                     return None
 
-                data = cast(bytes, contract_api_msg.state.body["data"])
+                data_ = cast(bytes, contract_api_msg.state.body["data"])
                 simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
 
                 tx_list.append(
                     {
                         "to": mech_address,
                         "value": ZERO_ETHER_VALUE,
-                        "data": data,
+                        "data": data_,
                         "simulation_ok": simulation_ok,
                     }
                 )
