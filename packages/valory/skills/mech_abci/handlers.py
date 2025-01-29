@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -377,25 +377,31 @@ class HttpHandler(BaseHttpHandler):
             "current_round": current_round,
             "previous_rounds": previous_rounds,
             "is_transitioning_fast": is_transitioning_fast,
-            "last_successful_read": {
-                "block_number": self.last_successful_read[0],
-                "timestamp": self.last_successful_read[1],
-            }
-            if self.last_successful_read
-            else None,
-            "last_successful_executed_task": {
-                "request_id": self.last_successful_executed_task[0],
-                "timestamp": self.last_successful_executed_task[1],
-            }
-            if self.last_successful_executed_task
-            else None,
+            "last_successful_read": (
+                {
+                    "block_number": self.last_successful_read[0],
+                    "timestamp": self.last_successful_read[1],
+                }
+                if self.last_successful_read
+                else None
+            ),
+            "last_successful_executed_task": (
+                {
+                    "request_id": self.last_successful_executed_task[0],
+                    "timestamp": self.last_successful_executed_task[1],
+                }
+                if self.last_successful_executed_task
+                else None
+            ),
             "was_last_read_successful": self.was_last_read_successful,
-            "last_tx": {
-                "tx_hash": self.last_tx[0],
-                "timestamp": self.last_tx[1],
-            }
-            if self.last_tx
-            else None,
+            "last_tx": (
+                {
+                    "tx_hash": self.last_tx[0],
+                    "timestamp": self.last_tx[1],
+                }
+                if self.last_tx
+                else None
+            ),
             "is_ok": (we_are_delivering and we_can_get_new_reqs),
         }
 
