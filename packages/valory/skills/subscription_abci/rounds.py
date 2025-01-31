@@ -63,6 +63,7 @@ class UpdateSubscriptionRound(CollectSameUntilThresholdRound):
     payload_class = UpdateSubscriptionPayload
     payload_attribute = "content"
     synchronized_data_class = SynchronizedData
+    extended_requirements = ()
 
     ERROR_PAYLOAD = "error"
     NO_TX_PAYLOAD = "no_tx"

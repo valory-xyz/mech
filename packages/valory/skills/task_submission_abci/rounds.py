@@ -131,6 +131,7 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
     payload_class = TransactionPayload
     payload_attribute = "content"
     synchronized_data_class = SynchronizedData
+    extended_requirements = ()
 
     ERROR_PAYLOAD = "error"
 
