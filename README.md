@@ -246,7 +246,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
 You can take a look at the preferred method mentioned [above](#using-mech-quickstart-preffered-method) to get started quickly and easily.
 
-Once your service works locally, you have the option to run it on a hosted service like [Propel](https://propel.valory.xyz/).
+Once your service works locally, you have the option to run it on a hosted service like [Propel](https://app.propel.valory.xyz/).
 
 ## Included tools
 
