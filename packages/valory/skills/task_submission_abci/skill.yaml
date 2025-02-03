@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeidfxaeswymlgcbe3mxfekywqkpod7l7bwmn3p2d2cxakkl2wcm5ga
+  behaviours.py: bafybeihtmacs5hjhcpskc6xjnca265wpjzdfik2hppwrxsm7ocqrqimbti
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
@@ -19,7 +19,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeido2ob63apizwagf6vqm6kybfbscamtklskssswd2vro37k3l3x6q
+- valory/agent_mech:0.1.0:bafybeifmaifwegdtfwvm52nbuiavlqbwjmiolocsqd4y4i7q53lktjwfzu
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
 - valory/gnosis_safe:0.1.0:bafybeialsnaekbdtn3h6phjs5xxx44es56jffs5jnlkkcgc62k62vxpkxm
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
@@ -27,12 +27,12 @@ contracts:
 - valory/hash_checkpoint:0.1.0:bafybeidhpjfv7u2kxfvfkljawkiuzkl4smzonqvapafwo7k4fmdo7k2dqi
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
-- valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
+- valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeig4wczuh3l6wbxb47rgsmodlfupichj66gfcwkvy65q5pbm3utykm
-- valory/transaction_settlement_abci:0.1.0:bafybeicjqlnqgmccwb5vjga2lnb2doxqfkvqg36fixil5q4dbymaiggdua
-- valory/task_execution:0.1.0:bafybeif7vu2wnizkxlltobeyala4ctxyshsgqmg32p5tkf5suq3sfprjgi
+- valory/abstract_round_abci:0.1.0:bafybeidpi5h6wrbjen2ncypzybsut6qoocyg5oj3rghbsyhv4muswdbmgy
+- valory/transaction_settlement_abci:0.1.0:bafybeiene3muzkusavzfozlftvdf7cp56lzak534z4hwd3xocwrv5zfmgm
+- valory/task_execution:0.1.0:bafybeidvhxxtizwb2aad5gubq76pgwu44rl2vvt3gb7s4yf7pkapmh2liq
 behaviours:
   main:
     args: {}
@@ -84,7 +84,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      mech_to_config: ${dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
+      mech_to_config: ${dict:{"0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb":{"use_dynamic_pricing":false,"is_marketplace_mech":true},
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0

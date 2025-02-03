@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -48,14 +48,29 @@ class MechConfig:
         )
 
 
+@dataclasses.dataclass
+class RequestParams:
+    """Mech Req Params dataclass."""
+
+    from_block: Dict[str, Optional[int]] = dataclasses.field(
+        default_factory=lambda: {"legacy": None, "marketplace": None}
+    )
+    last_polling: Dict[str, Optional[float]] = dataclasses.field(
+        default_factory=lambda: {"legacy": None, "marketplace": None}
+    )
+
+
 class Params(Model):
     """A model to represent params for multiple abci apps."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
         self.in_flight_req: bool = False
-        self.from_block: Optional[int] = None
+        self.is_cold_start: bool = True
+        self.req_params: RequestParams = RequestParams()
+        self.req_type: Optional[str] = None
         self.req_to_callback: Dict[str, Callable] = {}
+        self.req_to_deadline: Dict[str, float] = {}
         self.api_keys: Dict[str, List[str]] = self._ensure_get(
             "api_keys", kwargs, Dict[str, List[str]]
         )
@@ -88,6 +103,7 @@ class Params(Model):
             self.mech_marketplace_address is not None
             and self.mech_marketplace_address != ZERO_ADDRESS
         )
+        self.offchain_tx_list: list = list()
         super().__init__(*args, **kwargs)
 
     @classmethod

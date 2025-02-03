@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ import json
 import threading
 import time
 from abc import ABC
+from collections import defaultdict
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 
@@ -831,6 +832,11 @@ class TransactionPreparationBehaviour(
             # of the txs. The error will be logged.
             all_txs.extend(split_profit_txs)
 
+        offchain_deliver_txs = yield from self._get_offchain_tasks_deliver_data()
+        if offchain_deliver_txs is not None:
+            # in case of None, the agent will procced ahead as there are no offchain tasks to deliver
+            all_txs.extend(offchain_deliver_txs)
+
         for task in self.synchronized_data.done_tasks:
             deliver_tx = yield from self._get_deliver_tx(task)
             if deliver_tx is None:
@@ -1028,6 +1034,104 @@ class TransactionPreparationBehaviour(
             return self._get_deliver_marketplace_tx(task_data)
 
         return self._get_agent_mech_deliver_tx(task_data)
+
+    def _get_offchain_tasks_deliver_data(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        done_tasks_list = self.done_tasks
+        offchain_done_tasks_list = [
+            done_task
+            for done_task in done_tasks_list
+            if done_task.get("is_offchain") is True
+        ]
+        tx_list = []
+
+        if len(offchain_done_tasks_list) > 0:
+            self.context.logger.info(
+                f"{len(offchain_done_tasks_list)} Offchain Requests Found. Preparing deliver onchain tx(s)"
+            )
+            self.context.logger.info(f"{offchain_done_tasks_list=}")
+            tx_list_sorted_by_nonce = sorted(
+                offchain_done_tasks_list, key=lambda x: x["nonce"]
+            )
+
+            offchain_list_by_sender: defaultdict = defaultdict(
+                lambda: {
+                    "request_data": [],
+                    "signature": [],
+                    "deliver_data": [],
+                    "delivery_rates": [],
+                }
+            )
+            for data in tx_list_sorted_by_nonce:
+                sender = data["sender"]
+                # uses the first mech in config as marketplace mech
+                mech_address = self.mech_addresses[0]
+                offchain_list_by_sender[sender]["request_data"].append(
+                    bytes.fromhex(data["ipfs_hash"][2:])
+                )
+                offchain_list_by_sender[sender]["signature"].append(
+                    bytes.fromhex(data["signature"][2:])
+                )
+                offchain_list_by_sender[sender]["deliver_data"].append(
+                    bytes.fromhex(data["task_result"][2:])
+                )
+                offchain_list_by_sender[sender]["delivery_rates"].append(
+                    int(data["delivery_rate"])
+                )
+
+            for sender, details in offchain_list_by_sender.items():
+                self.context.logger.info(
+                    f"Preparing deliver data for requester: {sender}"
+                )
+
+                request_datas = details["request_data"]
+                signatures = details["signature"]
+                deliver_datas = details["deliver_data"]
+                delivery_rates = details["delivery_rates"]
+
+                contract_data = {
+                    "sender": self.synchronized_data.safe_contract_address,
+                    "requester": sender,
+                    "requestDatas": request_datas,
+                    "signatures": signatures,
+                    "deliverDatas": deliver_datas,
+                    "deliveryRates": delivery_rates,
+                    "paymentData": b"",
+                }
+                self.context.logger.info(
+                    f"Preparing deliver with signature data: {contract_data}"
+                )
+
+                contract_api_msg = yield from self.get_contract_api_response(
+                    performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+                    contract_address=mech_address,
+                    contract_id=str(AgentMechContract.contract_id),
+                    contract_callable="get_offchain_deliver_data",
+                    **contract_data,
+                )
+                if (
+                    contract_api_msg.performative
+                    != ContractApiMessage.Performative.STATE
+                ):  # pragma: nocover
+                    self.context.logger.warning(
+                        f"get_offchain_deliver_data unsuccessful!: {contract_api_msg}"
+                    )
+                    return None
+
+                data_ = cast(bytes, contract_api_msg.state.body["data"])
+                simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+
+                tx_list.append(
+                    {
+                        "to": mech_address,
+                        "value": ZERO_ETHER_VALUE,
+                        "data": data_,
+                        "simulation_ok": simulation_ok,
+                    }
+                )
+
+        return tx_list
 
 
 class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -510,3 +510,36 @@ class AgentMechContract(Contract):
             ledger_api, contract_address, sender_address, tx_data
         ).pop("data")
         return {"data": bytes.fromhex(tx_data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+
+    @classmethod
+    def get_offchain_deliver_data(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        sender: str,
+        requester: str,
+        requestDatas: List[str],
+        signatures: List[str],
+        deliverDatas: List[str],
+        deliveryRates: List[int],
+        paymentData: str,
+    ) -> JSONLike:
+        """Get offchain deliver data"""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encodeABI(
+            fn_name="deliverMarketplaceWithSignatures",
+            args=[
+                requester,
+                requestDatas,
+                signatures,
+                deliverDatas,
+                deliveryRates,
+                paymentData,
+            ],
+        )
+
+        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
+            "data"
+        )
+        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
