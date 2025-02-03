@@ -6,132 +6,132 @@ description: A skill used for monitoring and executing tasks.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-    __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-    behaviours.py: bafybeif46qerkr3xupfw57rwcajdyowcqupp3i5ltrpd4mveyi5ftsmedy
-    dialogues.py: bafybeie6cf22v7qmmm5avlsqkagliivdljugim24dcvujt6ghghk27osxy
-    handlers.py: bafybeibcsfyvshifedbmxwzj5f44txpa57m7m3vkox6b7tpbgqvkqseswq
-    models.py: bafybeigl3ng2hvzilfirsj5hxrqognd4uvp5imoosquowjotnfzp66jt6q
-    utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
-    utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
-    utils/benchmarks.py: bafybeiafnee7iay6dyjnatyqyzjov5c4ibl3ojamjmgfjri7cyghl7qayq
-    utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
-    utils/ipfs.py: bafybeicp6d2y4aguetcod2yzxrbiqqwkzarzccyf2iajuwvrcfckmn6jm4
-    utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
+  __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
+  behaviours.py: bafybeif46qerkr3xupfw57rwcajdyowcqupp3i5ltrpd4mveyi5ftsmedy
+  dialogues.py: bafybeie6cf22v7qmmm5avlsqkagliivdljugim24dcvujt6ghghk27osxy
+  handlers.py: bafybeibcsfyvshifedbmxwzj5f44txpa57m7m3vkox6b7tpbgqvkqseswq
+  models.py: bafybeigl3ng2hvzilfirsj5hxrqognd4uvp5imoosquowjotnfzp66jt6q
+  utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
+  utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
+  utils/benchmarks.py: bafybeiafnee7iay6dyjnatyqyzjov5c4ibl3ojamjmgfjri7cyghl7qayq
+  utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
+  utils/ipfs.py: bafybeicp6d2y4aguetcod2yzxrbiqqwkzarzccyf2iajuwvrcfckmn6jm4
+  utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
 fingerprint_ignore_patterns: []
 connections:
-    - valory/ledger:0.19.0:bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby
-    - valory/ipfs:0.1.0:bafybeid5fdr6ufha3axnktfofsc2hxha3jatnoi7st3pccorf7sztfpaky
-    - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
+- valory/ledger:0.19.0:bafybeiem5ffzyxvf47j2htmcymvuxc43ah5mocizpxzgijtcreqkrytvzq
+- valory/ipfs:0.1.0:bafybeid5fdr6ufha3axnktfofsc2hxha3jatnoi7st3pccorf7sztfpaky
+- valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 contracts:
-    - valory/agent_mech:0.1.0:bafybeido2ob63apizwagf6vqm6kybfbscamtklskssswd2vro37k3l3x6q
-    - valory/mech_marketplace:0.1.0:bafybeiff7ae5cehppx3odjayr3ud6xw4ag6avgac2fcalooyfqxdxsstau
+- valory/agent_mech:0.1.0:bafybeifmaifwegdtfwvm52nbuiavlqbwjmiolocsqd4y4i7q53lktjwfzu
+- valory/mech_marketplace:0.1.0:bafybeihpgkpbnd6k67nqbbgintlmer3np56rb7vbxj4nptsvpvgsqzbsii
 protocols:
-    - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
-    - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
-    - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
-    - valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq
-    - valory/ipfs:0.1.0:bafybeifi2nri7sprmkez4rqzwb4lnu6peoy3bax5k6asf6k5ms7kmjpmkq
+- valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
+- valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
+- valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
+- valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq
+- valory/ipfs:0.1.0:bafybeifi2nri7sprmkez4rqzwb4lnu6peoy3bax5k6asf6k5ms7kmjpmkq
 skills:
-    - valory/abstract_round_abci:0.1.0:bafybeig4wczuh3l6wbxb47rgsmodlfupichj66gfcwkvy65q5pbm3utykm
+- valory/abstract_round_abci:0.1.0:bafybeidpi5h6wrbjen2ncypzybsut6qoocyg5oj3rghbsyhv4muswdbmgy
 behaviours:
-    task_execution:
-        args: {}
-        class_name: TaskExecutionBehaviour
+  task_execution:
+    args: {}
+    class_name: TaskExecutionBehaviour
 handlers:
-    acn_data_share_handler:
-        args: {}
-        class_name: AcnHandler
-    contract_handler:
-        args: {}
-        class_name: ContractHandler
-    ipfs_handler:
-        args: {}
-        class_name: IpfsHandler
-    ledger_handler:
-        args: {}
-        class_name: LedgerHandler
-    mech_http_handler:
-        args: {}
-        class_name: MechHttpHandler
+  acn_data_share_handler:
+    args: {}
+    class_name: AcnHandler
+  contract_handler:
+    args: {}
+    class_name: ContractHandler
+  ipfs_handler:
+    args: {}
+    class_name: IpfsHandler
+  ledger_handler:
+    args: {}
+    class_name: LedgerHandler
+  mech_http_handler:
+    args: {}
+    class_name: MechHttpHandler
 models:
-    acn_data_share_dialogues:
-        args: {}
-        class_name: AcnDataShareDialogues
-    contract_dialogues:
-        args: {}
-        class_name: ContractDialogues
-    default_dialogues:
-        args: {}
-        class_name: DefaultDialogues
-    ipfs_dialogues:
-        args: {}
-        class_name: IpfsDialogues
-    ledger_dialogues:
-        args: {}
-        class_name: LedgerDialogues
-    mech_http_dialogues:
-        args: {}
-        class_name: MechHttpDialogues
-    params:
-        args:
-            agent_index: 0
-            api_keys:
-                openai:
-                    - dummy_api_key
-                stabilityai:
-                    - dummy_api_key
-                google_api_key:
-                    - dummy_api_key
-                google_engine_id:
-                    - dummy_api_key
-            tools_to_package_hash:
-                openai-gpt-3.5-turbo-instruct: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-                openai-gpt-3.5-turbo: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-                openai-gpt-4: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-                stabilityai-stable-diffusion-v1-5: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-                stabilityai-stable-diffusion-xl-beta-v2-2-2: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-                stabilityai-stable-diffusion-512-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-                stabilityai-stable-diffusion-768-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-                transfer-native: bafybeideuyqn4uslp4ccanzd5tjladzotyi6tiwfxbouecw5ufzgyi4ryy
-                prediction-offline: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-                prediction-online: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-                prediction-online-summarized-info: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-                prediction-online-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
-                prediction-offline-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
-                claude-prediction-online: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
-                claude-prediction-offline: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
-                deepmind-optimization-strong: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
-                deepmind-optimization: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
-                prediction-sentence-embedding-conservative: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
-                prediction-sentence-embedding-bold: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
-                prediction-online-sum-url-content: bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e
-            from_block_range: 50000
-            num_agents: 4
-            mech_to_config:
-                '0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb':
-                    use_dynamic_pricing: false
-                    is_marketplace_mech: true
-                '0x69e105E7fdad198859726f5787e523c3FE2b07e3':
-                    use_dynamic_pricing: false
-                    is_marketplace_mech: false
-            polling_interval: 30.0
-            task_deadline: 240.0
-            max_block_window: 500
-            use_slashing: false
-            timeout_limit: 3
-            slash_cooldown_hours: 3
-            slash_threshold_amount: 10000000000000000
-            light_slash_unit_amount: 5000000000000000
-            serious_slash_unit_amount: 8000000000000000
-            mech_marketplace_address: '0x0000000000000000000000000000000000000000'
-        class_name: Params
+  acn_data_share_dialogues:
+    args: {}
+    class_name: AcnDataShareDialogues
+  contract_dialogues:
+    args: {}
+    class_name: ContractDialogues
+  default_dialogues:
+    args: {}
+    class_name: DefaultDialogues
+  ipfs_dialogues:
+    args: {}
+    class_name: IpfsDialogues
+  ledger_dialogues:
+    args: {}
+    class_name: LedgerDialogues
+  mech_http_dialogues:
+    args: {}
+    class_name: MechHttpDialogues
+  params:
+    args:
+      agent_index: 0
+      api_keys:
+        openai:
+        - dummy_api_key
+        stabilityai:
+        - dummy_api_key
+        google_api_key:
+        - dummy_api_key
+        google_engine_id:
+        - dummy_api_key
+      tools_to_package_hash:
+        openai-gpt-3.5-turbo-instruct: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
+        openai-gpt-3.5-turbo: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
+        openai-gpt-4: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
+        stabilityai-stable-diffusion-v1-5: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
+        stabilityai-stable-diffusion-xl-beta-v2-2-2: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
+        stabilityai-stable-diffusion-512-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
+        stabilityai-stable-diffusion-768-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
+        transfer-native: bafybeideuyqn4uslp4ccanzd5tjladzotyi6tiwfxbouecw5ufzgyi4ryy
+        prediction-offline: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
+        prediction-online: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
+        prediction-online-summarized-info: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
+        prediction-online-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
+        prediction-offline-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
+        claude-prediction-online: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
+        claude-prediction-offline: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
+        deepmind-optimization-strong: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
+        deepmind-optimization: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
+        prediction-sentence-embedding-conservative: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
+        prediction-sentence-embedding-bold: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
+        prediction-online-sum-url-content: bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e
+      from_block_range: 50000
+      num_agents: 4
+      mech_to_config:
+        '0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb':
+          use_dynamic_pricing: false
+          is_marketplace_mech: true
+        '0x69e105E7fdad198859726f5787e523c3FE2b07e3':
+          use_dynamic_pricing: false
+          is_marketplace_mech: false
+      polling_interval: 30.0
+      task_deadline: 240.0
+      max_block_window: 500
+      use_slashing: false
+      timeout_limit: 3
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
+      light_slash_unit_amount: 5000000000000000
+      serious_slash_unit_amount: 8000000000000000
+      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
+    class_name: Params
 dependencies:
-    py-multibase:
-        version: ==1.0.3
-    py-multicodec:
-        version: ==0.2.1
-    eth-abi:
-        version: ==4.0.0
-    pyyaml:
-        version: ==6.0.1
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
+  eth-abi:
+    version: ==4.0.0
+  pyyaml:
+    version: ==6.0.1
 is_abstract: false
