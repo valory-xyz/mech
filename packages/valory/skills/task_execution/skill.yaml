@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeiewjybd6zte6yabxxj34lez2w7r54oppgqwoqobk4cicszdsaftkq
+  behaviours.py: bafybeigst6ld4w7oa6ctedfsa7nohvujc2vud4slorgz6k6rdbxqspugiq
   dialogues.py: bafybeia5byu6hwo5fv4tnsuqw5tw7wj3aceldqszizhugybqzn23tnhr2i
   handlers.py: bafybeigu4zzqofu4wse5relaum7sksq6fzursxaelna57dhm2kohvslkz4
   models.py: bafybeih45axytaozeabnpyjwcuh5dai7hm7ggownr6chesuoynpvec7wki
@@ -23,8 +23,8 @@ connections:
 - valory/ipfs:0.1.0:bafybeie6ddno6nufc7yz3q3pkvrpqltqvoyf5iogm7unek6vs4cmzzflsy
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 contracts:
-- valory/agent_mech:0.1.0:bafybeifugr6fgvekv3g2zsu7xz2vteif3x7zr27tf3ofaeoqguycdv5eri
-- valory/mech_marketplace:0.1.0:bafybeiftw4xjshpevnx44hmglkflyxvsy47u3ui7x26rl5cvvspminov5a
+- valory/agent_mech:0.1.0:bafybeigyqhi4aiqo26eu65pkigawwspzjfoejx2jyhvfnlihtylcmsloxq
+- valory/mech_marketplace:0.1.0:bafybeig6evotsusegug6zyeqt6bdbzrugll47mriqmrrsuxgjqoldl3ydq
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
@@ -109,12 +109,9 @@ models:
       from_block_range: 50000
       num_agents: 4
       mech_to_config:
-        '0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb':
+        '0x80e5a22fe1fbf8159c13b58811669e028a0b16ff':
           use_dynamic_pricing: false
           is_marketplace_mech: true
-        '0x69e105E7fdad198859726f5787e523c3FE2b07e3':
-          use_dynamic_pricing: false
-          is_marketplace_mech: false
       polling_interval: 30.0
       task_deadline: 240.0
       max_block_window: 500

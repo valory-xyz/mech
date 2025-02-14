@@ -518,9 +518,7 @@ class AgentMechContract(Contract):
         contract_address: str,
         sender: str,
         requester: str,
-        requestDatas: List[str],
-        signatures: List[str],
-        deliverDatas: List[str],
+        deliverWithSignatures: List[Dict[str, List]],
         deliveryRates: List[int],
         paymentData: str,
     ) -> JSONLike:
@@ -531,9 +529,7 @@ class AgentMechContract(Contract):
             fn_name="deliverMarketplaceWithSignatures",
             args=[
                 requester,
-                requestDatas,
-                signatures,
-                deliverDatas,
+                deliverWithSignatures,
                 deliveryRates,
                 paymentData,
             ],

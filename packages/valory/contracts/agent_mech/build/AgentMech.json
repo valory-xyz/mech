@@ -48,17 +48,6 @@
     {
       "inputs": [
         {
-          "internalType": "bytes32",
-          "name": "requestId",
-          "type": "bytes32"
-        }
-      ],
-      "name": "RequestIdNotFound",
-      "type": "error"
-    },
-    {
-      "inputs": [
-        {
           "internalType": "uint256",
           "name": "numValues1",
           "type": "uint256"
@@ -118,6 +107,12 @@
           "internalType": "bytes32",
           "name": "requestId",
           "type": "bytes32"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "deliveryRate",
+          "type": "uint256"
         },
         {
           "indexed": false,
@@ -227,19 +222,26 @@
           "type": "address"
         },
         {
-          "internalType": "bytes[]",
-          "name": "requestDatas",
-          "type": "bytes[]"
-        },
-        {
-          "internalType": "bytes[]",
-          "name": "signatures",
-          "type": "bytes[]"
-        },
-        {
-          "internalType": "bytes[]",
-          "name": "deliveryDatas",
-          "type": "bytes[]"
+          "components": [
+            {
+              "internalType": "bytes",
+              "name": "requestData",
+              "type": "bytes"
+            },
+            {
+              "internalType": "bytes",
+              "name": "signature",
+              "type": "bytes"
+            },
+            {
+              "internalType": "bytes",
+              "name": "deliveryData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct DeliverWithSignature[]",
+          "name": "deliverWithSignatures",
+          "type": "tuple[]"
         },
         {
           "internalType": "uint256[]",
@@ -271,7 +273,13 @@
         }
       ],
       "name": "deliverToMarketplace",
-      "outputs": [],
+      "outputs": [
+        {
+          "internalType": "bool[]",
+          "name": "deliveredRequests",
+          "type": "bool[]"
+        }
+      ],
       "stateMutability": "nonpayable",
       "type": "function"
     },
@@ -325,25 +333,6 @@
         }
       ],
       "stateMutability": "nonpayable",
-      "type": "function"
-    },
-    {
-      "inputs": [
-        {
-          "internalType": "bytes32[]",
-          "name": "requestIds",
-          "type": "bytes32[]"
-        }
-      ],
-      "name": "getFinalizedDeliveryRates",
-      "outputs": [
-        {
-          "internalType": "uint256[]",
-          "name": "deliveryRates",
-          "type": "uint256[]"
-        }
-      ],
-      "stateMutability": "view",
       "type": "function"
     },
     {
@@ -672,16 +661,42 @@
       "type": "function"
     },
     {
+      "inputs": [],
+      "name": "serviceId",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "serviceRegistry",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
       "inputs": [
         {
           "internalType": "bytes",
-          "name": "initParams",
+          "name": "",
           "type": "bytes"
         }
       ],
       "name": "setUp",
       "outputs": [],
-      "stateMutability": "nonpayable",
+      "stateMutability": "pure",
       "type": "function"
     },
     {
@@ -690,7 +705,7 @@
       "outputs": [
         {
           "internalType": "address",
-          "name": "serviceRegistry",
+          "name": "",
           "type": "address"
         }
       ],
@@ -703,7 +718,7 @@
       "outputs": [
         {
           "internalType": "uint256",
-          "name": "serviceId",
+          "name": "",
           "type": "uint256"
         }
       ],

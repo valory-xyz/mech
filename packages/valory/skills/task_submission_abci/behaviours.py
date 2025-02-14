@@ -1029,9 +1029,7 @@ class TransactionPreparationBehaviour(
 
             offchain_list_by_sender = defaultdict(
                 lambda: {
-                    "request_data": [],
-                    "signature": [],
-                    "deliver_data": [],
+                    "deliverWithSignatures": [],
                     "delivery_rates": [],
                 }
             )
@@ -1039,14 +1037,12 @@ class TransactionPreparationBehaviour(
                 sender = data["sender"]
                 # uses the first mech in config as marketplace mech
                 mech_address = self.mech_addresses[0]
-                offchain_list_by_sender[sender]["request_data"].append(
-                    bytes.fromhex(data["ipfs_hash"][2:])
-                )
-                offchain_list_by_sender[sender]["signature"].append(
-                    bytes.fromhex(data["signature"][2:])
-                )
-                offchain_list_by_sender[sender]["deliver_data"].append(
-                    bytes.fromhex(data["task_result"][2:])
+                offchain_list_by_sender[sender]["deliverWithSignatures"].append(
+                    {
+                        "requestData": bytes.fromhex(data["ipfs_hash"][2:]),
+                        "signature": bytes.fromhex(data["signature"][2:]),
+                        "deliveryData": bytes.fromhex(data["task_result"][2:]),
+                    }
                 )
                 offchain_list_by_sender[sender]["delivery_rates"].append(
                     int(data["delivery_rate"])
@@ -1057,17 +1053,13 @@ class TransactionPreparationBehaviour(
                     f"Preparing deliver data for requester: {sender}"
                 )
 
-                request_datas = details["request_data"]
-                signatures = details["signature"]
-                deliver_datas = details["deliver_data"]
+                deliver_with_signatures = details["deliverWithSignatures"]
                 delivery_rates = details["delivery_rates"]
 
                 contract_data = {
                     "sender": self.synchronized_data.safe_contract_address,
                     "requester": sender,
-                    "requestDatas": request_datas,
-                    "signatures": signatures,
-                    "deliverDatas": deliver_datas,
+                    "deliverWithSignatures": deliver_with_signatures,
                     "deliveryRates": delivery_rates,
                     "paymentData": b"",
                 }

@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   BatchPriorityPassedCheck.sol: bafybeie3hfpyss43sggqh5rjzwsqe7o37td4v4k6f3hlweiosnayyseo4i
   __init__.py: bafybeigqedpnruwcvjarngql7yfnpqwozvvgzcei2xcrp7mjf4ccspa62y
-  build/MechMarketplace.json: bafybeigts444kghky6it67zltv4ubz2mo55bdoajxh6gzuxykwmwzggape
+  build/MechMarketplace.json: bafybeiauqsmm5aqqzqqr7vi46obq7exa7id5vbq57e3e3wxxkzblgqnjoy
   contract.py: bafybeidwynzoz23yulmxdpe5ae6dx75ozbxm6v3zghzs7pyr6zfhkfkm4q
 fingerprint_ignore_patterns: []
 class_name: MechMarketplaceContract

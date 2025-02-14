@@ -313,7 +313,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _execute_ipfs_tasks(self) -> None:
         """Execute IPFS tasks."""
 
-        if self._inflight_ipfs_req:
+        if (
+            self._inflight_ipfs_req
+            or self._inflight_tool_req
+            or self.params.in_flight_req
+        ):
             return
 
         if len(self.ipfs_tasks) == 0:
