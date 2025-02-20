@@ -341,3 +341,23 @@ class MechMarketplaceContract(Contract):
             simulation_ok = False
 
         return dict(data=simulation_ok)
+
+    @classmethod
+    def get_encoded_data_for_request(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        request_id: bytes,
+        data: str,
+    ) -> JSONLike:
+        """Fetch info for a given request id."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+
+        request_id_info = contract_instance.functions.mapRequestIdInfos(
+            request_id
+        ).call()
+
+        delivery_rate = request_id_info[4]
+        encoded_data = ledger_api.api.codec.encode(["uint256", "bytes"], [delivery_rate, data])
+
+        return dict(data=encoded_data)

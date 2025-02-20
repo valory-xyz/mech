@@ -35,6 +35,7 @@ from packages.valory.contracts.agent_mech.contract import (
     AgentMechContract,
     MechOperation,
 )
+from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.contracts.agent_registry.contract import AgentRegistryContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -1116,6 +1117,55 @@ class TransactionPreparationBehaviour(
 
         return tx_list
 
+    def _get_is_nvm_mech(self, mech: str) -> Generator[None, None, bool]:
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=mech,
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_is_nvm_mech",
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_is_nvm_mech unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        is_nvm_mech = cast(bytes, contract_api_msg.state.body["data"])
+        return is_nvm_mech
+
+    def _get_encoded_deliver_data(
+        self, request_ids: List, datas: List
+    ) -> Generator[None, None, Tuple]:
+
+        final_request_ids = []
+        final_datas = []
+        for request_id, data in zip(request_ids, datas):
+            contract_api_msg = yield from self.get_contract_api_response(
+                performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+                contract_address=self.params.mech_marketplace_address,
+                contract_id=str(MechMarketplaceContract.contract_id),
+                contract_callable="get_encoded_data_for_request",
+                request_id=request_id,
+                data=data,
+            )
+            if (
+                contract_api_msg.performative != ContractApiMessage.Performative.STATE
+            ):  # pragma: nocover
+                self.context.logger.warning(
+                    f"get_encoded_data_for_request unsuccessful!: {contract_api_msg}"
+                )
+                return None
+
+            encoded_data = cast(bytes, contract_api_msg.state.body["data"])
+            final_request_ids.append(request_id)
+            final_datas.append(encoded_data)
+
+        print(f"{final_request_ids=}")
+        print(f"{final_datas=}")
+        return final_request_ids, final_datas
+
     def _get_marketplace_tasks_deliver_data(
         self, marketplace_done_tasks: List[Dict[str, Any]]
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
@@ -1151,6 +1201,22 @@ class TransactionPreparationBehaviour(
 
                 request_ids = details["requestIds"]
                 deliver_datas = details["datas"]
+
+                # check if mech is nvm mech or not
+                # if yes, encode delivery rate and deliver data
+                is_nvm_mech = yield from self._get_is_nvm_mech(mech)
+
+                if is_nvm_mech:
+                    self.context.logger.info(
+                        "NVM Mech Deliver detected. Encoding deliver datas"
+                    )
+                    (final_request_ids, final_datas) = (
+                        yield from self._get_encoded_deliver_data(
+                            request_ids, deliver_datas
+                        )
+                    )
+                    request_ids = final_request_ids
+                    deliver_datas = final_datas
 
                 contract_data = {
                     "sender": self.synchronized_data.safe_contract_address,

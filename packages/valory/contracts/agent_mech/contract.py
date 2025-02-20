@@ -37,6 +37,10 @@ _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
 )
 
+PAYMENT_TYPE_NVM = (
+    "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"  # nosec
+)
+
 partial_abis = [
     [
         {
@@ -541,6 +545,16 @@ class AgentMechContract(Contract):
         return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
 
     @classmethod
+    def get_is_nvm_mech(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
+        """Get tx data"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        payment_type_bytes = contract_instance.functions.paymentType().call()
+        payment_type = payment_type_bytes.hex()
+
+        is_nvm_mech = True if payment_type == PAYMENT_TYPE_NVM else False
+        return {"data": is_nvm_mech}
+
+    @classmethod
     def get_marketplace_mech_request_events(
         cls,
         ledger_api: LedgerApi,
@@ -565,7 +579,6 @@ class AgentMechContract(Contract):
             }
             for entry in entries
         )
-        print(f"{request_events=}")
         return {"data": request_events}
 
     @classmethod
@@ -593,7 +606,6 @@ class AgentMechContract(Contract):
             }
             for entry in entries
         )
-        print(f"{deliver_events=}")
         return {"data": deliver_events}
 
     @classmethod
@@ -643,7 +655,6 @@ class AgentMechContract(Contract):
                 # store each requests in the pending_tasks list, make sure each req is stored once
                 pending_tasks.append(request)
 
-        print(f"{pending_tasks=}")
         return {"data": pending_tasks}
 
     @classmethod
