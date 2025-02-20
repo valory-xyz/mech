@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeihjhsicxbeq37cxstrliydu2vki6jplr2tylixgok5lmn4xzllu24
+  behaviours.py: bafybeigmo3fs4azte3uvfzezuysy6ck62s7d6qorokapf43r3u24o3kjiq
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
@@ -19,7 +19,8 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeigyqhi4aiqo26eu65pkigawwspzjfoejx2jyhvfnlihtylcmsloxq
+- valory/agent_mech:0.1.0:bafybeiamh4bdzeyutxao2segjwwj3n5s4lpvtst4te43z2bvpnjyouawga
+- valory/mech_marketplace:0.1.0:bafybeice4e7h2nlrke7gbszsaajlcp65ergquk7yleneswkbe2u4b6ynle
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
 - valory/gnosis_safe:0.1.0:bafybeiaw4yr7ubqlp63iz5wxqep3a5fokqs3kqva7sp2nsqg355zzucqgm
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
@@ -32,7 +33,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifylvzfqtepgwn66zgqusfznf7slus5fzf54ay4owxte47x4b2bem
 - valory/transaction_settlement_abci:0.1.0:bafybeieleqba32mkft5oeayykgvupa5eosyhnzwdfjj4cf5go7xzqaqndm
-- valory/task_execution:0.1.0:bafybeicr64vqc7nt6satped7ousvx2mng24y7adujnr4czyvxjuyaoayky
+- valory/task_execution:0.1.0:bafybeifjxsd7lb7q7atdshedlnatqg67vxuvwsoitf5vejim2kfjw7yy5m
 behaviours:
   main:
     args: {}
@@ -84,7 +85,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      mech_to_config: ${dict:{"0x80e5a22fe1fbf8159c13b58811669e028a0b16ff":{"use_dynamic_pricing":false,"is_marketplace_mech":true},
+      mech_to_config: ${dict:{"0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75":{"use_dynamic_pricing":false,"is_marketplace_mech":true},
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0

@@ -15,14 +15,14 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 - valory/websocket_client:0.1.0:bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli
 contracts:
-- valory/agent_mech:0.1.0:bafybeigyqhi4aiqo26eu65pkigawwspzjfoejx2jyhvfnlihtylcmsloxq
+- valory/agent_mech:0.1.0:bafybeiamh4bdzeyutxao2segjwwj3n5s4lpvtst4te43z2bvpnjyouawga
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
 - valory/gnosis_safe:0.1.0:bafybeiaw4yr7ubqlp63iz5wxqep3a5fokqs3kqva7sp2nsqg355zzucqgm
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeidkqhw7smq4kbqryodom6maj7gubc5nbxwm4vi343xbkqxx3brjtm
 - valory/hash_checkpoint:0.1.0:bafybeibpfllgkoa2fb47gtb7qwlb6gya5yufgm7m7u5f3cdwxuu2r2grw4
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeicky7duncl25yif5gduo7a3ccgbgfo4pkx6rvexooyvzgyomcfuy4
-- valory/mech_marketplace:0.1.0:bafybeig6evotsusegug6zyeqt6bdbzrugll47mriqmrrsuxgjqoldl3ydq
+- valory/mech_marketplace:0.1.0:bafybeice4e7h2nlrke7gbszsaajlcp65ergquk7yleneswkbe2u4b6ynle
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
 - valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeifylvzfqtepgwn66zgqusfznf7slus5fzf54ay4owxte47x4b2bem
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeihco2lqnvmou2updj4rx6esknan737jwqvxk565j6eh4vbbsypffy
+- valory/mech_abci:0.1.0:bafybeieq2slxkhh6w2ocxtgvjb4kus2xbakezwg5olofpjrxfbics6hyba
 - valory/registration_abci:0.1.0:bafybeifcsf75zpv4znjgl3muquzs5j4v34sokouj6isdbthk4iqwiqa2mu
 - valory/reset_pause_abci:0.1.0:bafybeifdtbbkok2urjxhivcwyc7yo7dsbokgtxlofo25wgytek3hcmzbdi
-- valory/subscription_abci:0.1.0:bafybeigp4eis53u6lapp3sexlnqw7l7t3a4psdpqglb5gtaybhtsrmnbta
-- valory/task_execution:0.1.0:bafybeicr64vqc7nt6satped7ousvx2mng24y7adujnr4czyvxjuyaoayky
-- valory/task_submission_abci:0.1.0:bafybeigmtet3s3hknctulgdlzzhvirckyyaf5x3yysl7zkazb674d7xmny
+- valory/subscription_abci:0.1.0:bafybeiadnw5nybzk6cm4l34anwxr55ziyjgtzkoyaaqs4pjzervtuohlle
+- valory/task_execution:0.1.0:bafybeifjxsd7lb7q7atdshedlnatqg67vxuvwsoitf5vejim2kfjw7yy5m
+- valory/task_submission_abci:0.1.0:bafybeifap2aeoy6zaqs3fhgs7cgxwdesuizf7vpnexzvmpbjjyt44cktla
 - valory/termination_abci:0.1.0:bafybeiflco36yb3wpjgva2er64kclbveoyytwnxooqmr52dxg7ofcsog2a
 - valory/transaction_settlement_abci:0.1.0:bafybeieleqba32mkft5oeayykgvupa5eosyhnzwdfjj4cf5go7xzqaqndm
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -160,7 +160,7 @@ behaviours:
 handlers:
   new_event:
     args:
-      contract_to_monitor: ${str:0x80e5a22fe1fbf8159c13b58811669e028a0b16ff}
+      contract_to_monitor: ${str:0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75}
       websocket_provider: ${str:https://rpc.gnosischain.com}
 models:
   params:
@@ -228,7 +228,7 @@ models:
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
-      mech_to_subscription: ${dict:{"0x80e5a22fe1fbf8159c13b58811669e028a0b16ff":{"tokenAddress":"0x0000000000000000000000000000000000000000",
+      mech_to_subscription: ${dict:{"0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75":{"tokenAddress":"0x0000000000000000000000000000000000000000",
         "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
         "tokenId":"2"}}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
@@ -265,12 +265,12 @@ models:
         "prediction-online-sum-url-content":"bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e"}}
       api_keys: ${dict:{"openai":["dummy_api_key"], "stabilityai":["dummy_api_key"],
         "google_api_key":["dummy_api_key"], "google_engine_id":["dummy_api_key"]}}
-      polling_interval: ${float:30.0}
+      polling_interval: ${float:10}
       agent_index: ${int:0}
       num_agents: ${int:4}
       from_block_range: ${int:50000}
       mech_marketplace_address: ${str:0xad380C51cd5297FbAE43494dD5D407A2a3260b58}
-      mech_to_config: ${dict:{"0x80e5a22fe1fbf8159c13b58811669e028a0b16ff":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
+      mech_to_config: ${dict:{"0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
 ---
