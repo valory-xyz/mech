@@ -240,6 +240,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if from_block is None:
             # set the initial from block
             self._populate_from_block()
+            self.params.req_type = "legacy"
             return
         self._check_undelivered_reqs()
         self.params.in_flight_req = True
@@ -256,6 +257,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if from_block is None:
             # set the initial from block
             self._populate_from_block()
+            self.params.req_type = "marketplace"
             return
         self._check_undelivered_reqs_marketplace()
         self.params.in_flight_req = True
@@ -275,7 +277,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             callable="get_multiple_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
-                    from_block=self.params.from_block,
+                    from_block=self.params.req_params.from_block["legacy"],
                     chain_id=GNOSIS_CHAIN,
                     contract_addresses=target_mechs,
                     max_block_window=self.params.max_block_window,
@@ -291,15 +293,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Check for undelivered mech reqs."""
         if not self.params.use_mech_marketplace:
             return
+
+        # we are quering requests from marketplace mech as it contains the relevant data
+        # instead of the marketplace itself
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.mech_marketplace_address,
-            contract_id=str(MechMarketplaceContract.contract_id),
-            callable="get_undelivered_reqs",
+            contract_address=self._get_designated_marketplace_mech_address(),
+            contract_id=str(AgentMechContract.contract_id),
+            callable="get_marketplace_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
-                    from_block=self.params.from_block,
-                    my_mech=self._get_designated_marketplace_mech_address(),
+                    from_block=self.params.req_params.from_block["marketplace"],
                     chain_id=GNOSIS_CHAIN,
                     max_block_window=self.params.max_block_window,
                 )
@@ -375,6 +379,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # create new task
         task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
+        # convert request id to int if it's bytes
+        if type(task_data["requestId"] == bytes):
+            request_id = task_data["requestId"]
+            task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
+
         self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
@@ -613,9 +622,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _handle_store_response(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a store response request."""
         executing_task = cast(Dict[str, Any], self._executing_task)
+        # if sender is not present, use mech address
         req_id, sender = (
             executing_task["requestId"],
-            executing_task["sender"],
+            executing_task.get("sender", executing_task["mech"]),
         )
         ipfs_hash = to_v1(message.ipfs_hash)
         self.context.logger.info(
@@ -639,7 +649,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_result = to_multihash(ipfs_hash)
         cost = get_cost_for_done_task(done_task)
         self.context.logger.info(f"Cost for task {req_id}: {cost}")
-        mech_config = self.params.mech_to_config[done_task["mech_address"]]
+        mech_config = self.params.mech_to_config[done_task["mech_address"].lower()]
         if mech_config.use_dynamic_pricing:
             self.context.logger.info(f"Dynamic pricing is enabled for task {req_id}.")
             task_result = encode(
@@ -647,7 +657,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             ).hex()
 
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
-        done_task["is_marketplace_mech"] = False
         done_task["task_result"] = task_result
         # pop the data key value as it's bytes which causes issues
         # with json dumps and not required anywhere

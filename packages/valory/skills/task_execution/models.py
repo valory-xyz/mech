@@ -41,7 +41,6 @@ class MechConfig:
     @staticmethod
     def from_dict(raw_dict: Dict[str, bool]) -> "MechConfig":
         """From dict."""
-        print(f"{raw_dict=}")
         return MechConfig(
             use_dynamic_pricing=raw_dict.get("use_dynamic_pricing", False),
             is_marketplace_mech=raw_dict.get("is_marketplace_mech", False),
@@ -92,7 +91,7 @@ class Params(Model):
             "mech_to_config", kwargs, Dict[str, Dict[str, bool]]
         )
         self.mech_to_config: Dict[str, MechConfig] = {
-            key: MechConfig.from_dict(value)
+            key.lower(): MechConfig.from_dict(value)
             for key, value in mech_to_config_dict.items()
         }
         self.agent_mech_contract_addresses = list(self.mech_to_config.keys())

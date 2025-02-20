@@ -809,7 +809,26 @@ class TransactionPreparationBehaviour(
             # in case of None, the agent will procced ahead as there are no offchain tasks to deliver
             all_txs.extend(offchain_deliver_txs)
 
-        for task in self.synchronized_data.done_tasks:
+        # filter out all the marketplace done tasks
+        marketplace_done_tasks = [
+            done_task
+            for done_task in self.synchronized_data.done_tasks
+            if done_task["is_marketplace_mech"]
+        ]
+        marketplace_deliver_txs = yield from self._get_marketplace_tasks_deliver_data(
+            marketplace_done_tasks
+        )
+        if marketplace_deliver_txs is not None:
+            # in case of None, the agent will procced ahead as there are no marketplace tasks to deliver
+            all_txs.extend(marketplace_deliver_txs)
+
+        # filter out the remaining tasks
+        remaining_tasks = [
+            done_task
+            for done_task in self.synchronized_data.done_tasks
+            if not done_task["is_marketplace_mech"]
+        ]
+        for task in remaining_tasks:
             deliver_tx = yield from self._get_deliver_tx(task)
             if deliver_tx is None:
                 # something went wrong, respond with ERROR payload for now
@@ -1089,6 +1108,81 @@ class TransactionPreparationBehaviour(
                 tx_list.append(
                     {
                         "to": mech_address,
+                        "value": ZERO_ETHER_VALUE,
+                        "data": data,
+                        "simulation_ok": simulation_ok,
+                    }
+                )
+
+        return tx_list
+
+    def _get_marketplace_tasks_deliver_data(
+        self, marketplace_done_tasks: List[Dict[str, Any]]
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        if len(marketplace_done_tasks) > 0:
+            self.context.logger.info(
+                f"{len(marketplace_done_tasks)} Marketplace Tasks Found. Preparing deliver onchain tx(s)"
+            )
+
+            tx_list = []
+            marketplace_deliver_by_mech = defaultdict(
+                lambda: {
+                    "requestIds": [],
+                    "datas": [],
+                }
+            )
+
+            def _num_to_bytes(value: int) -> bytes:
+                num_bytes = (value.bit_length() + 7) // 8
+                num_in_bytes = value.to_bytes(num_bytes, byteorder="big")
+                return num_in_bytes
+
+            for data in marketplace_done_tasks:
+                mech = data["mech_address"]
+                marketplace_deliver_by_mech[mech]["requestIds"].append(
+                    _num_to_bytes(data["requestId"])
+                )
+                marketplace_deliver_by_mech[mech]["datas"].append(
+                    bytes.fromhex(data["task_result"])
+                )
+
+            for mech, details in marketplace_deliver_by_mech.items():
+                self.context.logger.info(f"Preparing deliver data for mech: {mech}")
+
+                request_ids = details["requestIds"]
+                deliver_datas = details["datas"]
+
+                contract_data = {
+                    "sender": self.synchronized_data.safe_contract_address,
+                    "requestIds": request_ids,
+                    "datas": deliver_datas,
+                }
+                self.context.logger.info(
+                    f"Preparing marketplace deliver with data: {contract_data}"
+                )
+
+                contract_api_msg = yield from self.get_contract_api_response(
+                    performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+                    contract_address=mech,
+                    contract_id=str(AgentMechContract.contract_id),
+                    contract_callable="get_marketplace_deliver_data",
+                    **contract_data,
+                )
+                if (
+                    contract_api_msg.performative
+                    != ContractApiMessage.Performative.STATE
+                ):  # pragma: nocover
+                    self.context.logger.warning(
+                        f"get_marketplace_deliver_data unsuccessful!: {contract_api_msg}"
+                    )
+                    return None
+
+                data = cast(bytes, contract_api_msg.state.body["data"])
+                simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+
+                tx_list.append(
+                    {
+                        "to": mech,
                         "value": ZERO_ETHER_VALUE,
                         "data": data,
                         "simulation_ok": simulation_ok,
