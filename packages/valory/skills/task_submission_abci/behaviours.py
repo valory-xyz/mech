@@ -1060,7 +1060,7 @@ class TransactionPreparationBehaviour(
                     {
                         "requestData": bytes.fromhex(data["ipfs_hash"][2:]),
                         "signature": bytes.fromhex(data["signature"][2:]),
-                        "deliveryData": bytes.fromhex(data["task_result"][2:]),
+                        "deliveryData": bytes.fromhex(data["task_result"]),
                     }
                 )
                 offchain_list_by_sender[sender]["delivery_rates"].append(
