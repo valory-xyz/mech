@@ -25,6 +25,7 @@ from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+from enum import Enum
 
 
 from aea.helpers.cid import to_v1
@@ -73,6 +74,13 @@ INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 60.0  # 1min of deadline
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
+
+
+class RequestType(Enum):
+    """Request Types"""
+
+    LEGACY = "legacy"
+    MARKETPLACE = "marketplace"
 
 
 class TaskExecutionBehaviour(SimpleBehaviour):
@@ -231,37 +239,43 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _check_for_new_reqs(self) -> None:
         """Check for new reqs."""
-        if self.params.in_flight_req or not self._should_poll("legacy"):
+        if self.params.in_flight_req or not self._should_poll(RequestType.LEGACY.value):
             # do nothing if there is an in flight request
             # or if we should not poll yet
             return
 
-        from_block = self.params.req_params.from_block.get("legacy", None)
+        from_block = self.params.req_params.from_block.get(
+            RequestType.LEGACY.value, None
+        )
         if from_block is None:
             # set the initial from block
             self._populate_from_block()
-            self.params.req_type = "legacy"
+            self.params.req_type = RequestType.LEGACY.value
             return
         self._check_undelivered_reqs()
         self.params.in_flight_req = True
-        self.params.req_params.last_polling["legacy"] = time.time()
+        self.params.req_params.last_polling[RequestType.LEGACY.value] = time.time()
 
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""
-        if self.params.in_flight_req or not self._should_poll("marketplace"):
+        if self.params.in_flight_req or not self._should_poll(
+            RequestType.MARKETPLACE.value
+        ):
             # do nothing if there is an in flight request
             # or if we should not poll yet
             return
 
-        from_block = self.params.req_params.from_block.get("marketplace", None)
+        from_block = self.params.req_params.from_block.get(
+            RequestType.MARKETPLACE.value, None
+        )
         if from_block is None:
             # set the initial from block
             self._populate_from_block()
-            self.params.req_type = "marketplace"
+            self.params.req_type = RequestType.MARKETPLACE.value
             return
         self._check_undelivered_reqs_marketplace()
         self.params.in_flight_req = True
-        self.params.req_params.last_polling["marketplace"] = time.time()
+        self.params.req_params.last_polling[RequestType.MARKETPLACE.value] = time.time()
 
     def _check_undelivered_reqs(self) -> None:
         """Check for undelivered mech reqs."""
@@ -277,7 +291,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             callable="get_multiple_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
-                    from_block=self.params.req_params.from_block["legacy"],
+                    from_block=self.params.req_params.from_block.get(
+                        RequestType.LEGACY.value
+                    ),
                     chain_id=GNOSIS_CHAIN,
                     contract_addresses=target_mechs,
                     max_block_window=self.params.max_block_window,
@@ -286,7 +302,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
-        self.params.req_type = "legacy"
+        self.params.req_type = RequestType.LEGACY.value
         self.context.outbox.put_message(message=contract_api_msg)
 
     def _check_undelivered_reqs_marketplace(self) -> None:
@@ -303,7 +319,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             callable="get_marketplace_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
-                    from_block=self.params.req_params.from_block["marketplace"],
+                    from_block=self.params.req_params.from_block.get(
+                        RequestType.MARKETPLACE.value
+                    ),
                     chain_id=GNOSIS_CHAIN,
                     max_block_window=self.params.max_block_window,
                 )
@@ -311,7 +329,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
-        self.params.req_type = "marketplace"
+        self.params.req_type = RequestType.MARKETPLACE.value
         self.context.outbox.put_message(message=contract_api_msg)
 
     def _execute_ipfs_tasks(self) -> None:
@@ -380,7 +398,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
         # convert request id to int if it's bytes
-        if type(task_data["requestId"] == bytes):
+        if type(task_data.get("requestId") == bytes):
             request_id = task_data["requestId"]
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
 
@@ -625,7 +643,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # if sender is not present, use mech address
         req_id, sender = (
             executing_task["requestId"],
-            executing_task.get("sender", executing_task["mech"]),
+            executing_task.get("sender", executing_task.get("mech")),
         )
         ipfs_hash = to_v1(message.ipfs_hash)
         self.context.logger.info(

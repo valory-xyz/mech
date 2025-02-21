@@ -25,6 +25,7 @@ from abc import ABC
 from copy import deepcopy
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 from collections import defaultdict
+from enum import Enum
 
 import openai  # noqa
 from aea.helpers.cid import CID, to_v1
@@ -79,6 +80,44 @@ ZERO_IPFS_HASH = (
 )
 FILENAME = "usage"
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
+IS_MARKETPLACE_MECH_KEY = "is_marketplace_mech"
+
+IS_OFFCHAIN = "is_offchain"
+NONCE = "nonce"
+SENDER = "sender"
+REQUESTER_KEY = "requester"
+MECH_ADDRESS = "mech_address"
+
+
+class OffchainKeys(Enum):
+    DELIVER_WITH_SIGNATURES = "deliverWithSignatures"
+    DELIVERY_RATES = "delivery_rates"
+    PAYMENT_DATA = "paymentData"
+    DELIVERY_RATES_CAMEL = "deliveryRates"
+
+
+class OffchainDataKey(Enum):
+    REQUEST_DATA_KEY = "requestData"
+    SIGNATURE_KEY = "signature"
+    DELIVERY_DATA = "deliveryData"
+
+
+class OffchainDataValue(Enum):
+    IPFS_HASH = "ipfs_hash"
+    SIGNATURE = "signature"
+    TASK_RESULT = "task_result"
+    DELIVERY_RATE = "delivery_rate"
+
+
+class MarketplaceKeys(Enum):
+    REQUEST_IDS = "requestIds"
+    DATAS = "datas"
+
+
+class MarketplaceData(Enum):
+    REQUEST_ID = "requestId"
+    TASK_RESULT = "task_result"
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
@@ -814,7 +853,7 @@ class TransactionPreparationBehaviour(
         marketplace_done_tasks = [
             done_task
             for done_task in self.synchronized_data.done_tasks
-            if done_task["is_marketplace_mech"]
+            if done_task.get(IS_MARKETPLACE_MECH_KEY)
         ]
         marketplace_deliver_txs = yield from self._get_marketplace_tasks_deliver_data(
             marketplace_done_tasks
@@ -827,7 +866,7 @@ class TransactionPreparationBehaviour(
         remaining_tasks = [
             done_task
             for done_task in self.synchronized_data.done_tasks
-            if not done_task["is_marketplace_mech"]
+            if not done_task.get(IS_MARKETPLACE_MECH_KEY)
         ]
         for task in remaining_tasks:
             deliver_tx = yield from self._get_deliver_tx(task)
@@ -1034,7 +1073,7 @@ class TransactionPreparationBehaviour(
         offchain_done_tasks_list = [
             done_task
             for done_task in done_tasks_list
-            if done_task.get("is_offchain") is True
+            if done_task.get(IS_OFFCHAIN) is True
         ]
         tx_list = []
 
@@ -1044,44 +1083,54 @@ class TransactionPreparationBehaviour(
             )
             self.context.logger.info(f"{offchain_done_tasks_list=}")
             tx_list_sorted_by_nonce = sorted(
-                offchain_done_tasks_list, key=lambda x: x["nonce"]
+                offchain_done_tasks_list, key=lambda x: x[NONCE]
             )
 
             offchain_list_by_sender = defaultdict(
                 lambda: {
-                    "deliverWithSignatures": [],
-                    "delivery_rates": [],
+                    OffchainKeys.DELIVER_WITH_SIGNATURES.value: [],
+                    OffchainKeys.DELIVERY_RATES.value: [],
                 }
             )
             for data in tx_list_sorted_by_nonce:
-                sender = data["sender"]
+                sender = data[SENDER]
                 # uses the first mech in config as marketplace mech
                 mech_address = self.mech_addresses[0]
-                offchain_list_by_sender[sender]["deliverWithSignatures"].append(
+                offchain_list_by_sender[sender][
+                    OffchainKeys.DELIVER_WITH_SIGNATURES.value
+                ].append(
                     {
-                        "requestData": bytes.fromhex(data["ipfs_hash"][2:]),
-                        "signature": bytes.fromhex(data["signature"][2:]),
-                        "deliveryData": bytes.fromhex(data["task_result"]),
+                        OffchainDataKey.REQUEST_DATA_KEY.value: bytes.fromhex(
+                            data.get(OffchainDataValue.IPFS_HASH.value)[2:]
+                        ),
+                        OffchainDataKey.SIGNATURE_KEY.value: bytes.fromhex(
+                            data.get(OffchainDataValue.SIGNATURE.value)[2:]
+                        ),
+                        OffchainDataKey.DELIVERY_DATA.value: bytes.fromhex(
+                            data.get(OffchainDataValue.TASK_RESULT.value)
+                        ),
                     }
                 )
-                offchain_list_by_sender[sender]["delivery_rates"].append(
-                    int(data["delivery_rate"])
-                )
+                offchain_list_by_sender[sender][
+                    OffchainKeys.DELIVERY_RATES.value
+                ].append(int(data.get(OffchainDataValue.DELIVERY_RATE.value)))
 
             for sender, details in offchain_list_by_sender.items():
                 self.context.logger.info(
                     f"Preparing deliver data for requester: {sender}"
                 )
 
-                deliver_with_signatures = details["deliverWithSignatures"]
-                delivery_rates = details["delivery_rates"]
+                deliver_with_signatures = details[
+                    OffchainKeys.DELIVER_WITH_SIGNATURES.value
+                ]
+                delivery_rates = details[OffchainKeys.DELIVERY_RATES.value]
 
                 contract_data = {
-                    "sender": self.synchronized_data.safe_contract_address,
-                    "requester": sender,
-                    "deliverWithSignatures": deliver_with_signatures,
-                    "deliveryRates": delivery_rates,
-                    "paymentData": b"",
+                    SENDER: self.synchronized_data.safe_contract_address,
+                    REQUESTER_KEY: sender,
+                    OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
+                    OffchainKeys.DELIVERY_RATES_CAMEL.value: delivery_rates,
+                    OffchainKeys.PAYMENT_DATA.value: b"",
                 }
                 self.context.logger.info(
                     f"Preparing deliver with signature data: {contract_data}"
@@ -1162,8 +1211,6 @@ class TransactionPreparationBehaviour(
             final_request_ids.append(request_id)
             final_datas.append(encoded_data)
 
-        print(f"{final_request_ids=}")
-        print(f"{final_datas=}")
         return final_request_ids, final_datas
 
     def _get_marketplace_tasks_deliver_data(
@@ -1177,30 +1224,33 @@ class TransactionPreparationBehaviour(
             tx_list = []
             marketplace_deliver_by_mech = defaultdict(
                 lambda: {
-                    "requestIds": [],
-                    "datas": [],
+                    MarketplaceKeys.REQUEST_IDS.value: [],
+                    MarketplaceKeys.DATAS.value: [],
                 }
             )
 
             def _num_to_bytes(value: int) -> bytes:
-                num_bytes = (value.bit_length() + 7) // 8
+                MAGIC_BITS = 7
+                MAGIC_BYTE_SIZE = 8
+
+                num_bytes = (value.bit_length() + MAGIC_BITS) // MAGIC_BYTE_SIZE
                 num_in_bytes = value.to_bytes(num_bytes, byteorder="big")
                 return num_in_bytes
 
             for data in marketplace_done_tasks:
-                mech = data["mech_address"]
-                marketplace_deliver_by_mech[mech]["requestIds"].append(
-                    _num_to_bytes(data["requestId"])
-                )
-                marketplace_deliver_by_mech[mech]["datas"].append(
-                    bytes.fromhex(data["task_result"])
+                mech = data[MECH_ADDRESS]
+                marketplace_deliver_by_mech[mech][
+                    MarketplaceKeys.REQUEST_IDS.value
+                ].append(_num_to_bytes(data[MarketplaceData.REQUEST_ID.value]))
+                marketplace_deliver_by_mech[mech][MarketplaceKeys.DATAS.value].append(
+                    bytes.fromhex(data[MarketplaceData.TASK_RESULT.value])
                 )
 
             for mech, details in marketplace_deliver_by_mech.items():
                 self.context.logger.info(f"Preparing deliver data for mech: {mech}")
 
-                request_ids = details["requestIds"]
-                deliver_datas = details["datas"]
+                request_ids = details[MarketplaceKeys.REQUEST_IDS.value]
+                deliver_datas = details[MarketplaceKeys.DATAS.value]
 
                 # check if mech is nvm mech or not
                 # if yes, encode delivery rate and deliver data
@@ -1219,9 +1269,9 @@ class TransactionPreparationBehaviour(
                     deliver_datas = final_datas
 
                 contract_data = {
-                    "sender": self.synchronized_data.safe_contract_address,
-                    "requestIds": request_ids,
-                    "datas": deliver_datas,
+                    SENDER: self.synchronized_data.safe_contract_address,
+                    MarketplaceKeys.REQUEST_IDS.value: request_ids,
+                    MarketplaceKeys.DATAS.value: deliver_datas,
                 }
                 self.context.logger.info(
                     f"Preparing marketplace deliver with data: {contract_data}"
