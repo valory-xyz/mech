@@ -34,13 +34,18 @@ AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to p
 The project consists of three components:
 
 -   Off-chain AI workers, each of which controls a Mech. Each AI worker is implemented as an autonomous service on the Autonolas stack.
--   An on-chain protocol, which is used to generate a registry of AI Mechs, represented as NFTs on-chain.
+-   An on-chain protocol. This protocol consists of different types of smart contracts: Olas Mechs, which handle payments and receive requests for the off-chain part of the Mechs; the Mech Marketplace which relays requests to Mechs and guarantees quality to users by implementing a reputation score and a take-over mechanism. Mechs are services registered on the Olas registry which then register on the Mech Marketplace.  The repository for this protocol is: https://github.com/valory-xyz/ai-registry-mech. 
 -   [Mech Hub](https://aimechs.autonolas.network/), a frontend which allows to interact with the protocol:
     -   Gives an overview of the AI workers in the registry.
     -   Allows Mech owners to create new workers.
     -   Allows users to request work from an existing worker.
 
+Note that Mechs which were deployed before the Mech Marketplace (called legacy Mechs) receive requests directly on their contract on-chain.
+
 ## Mech request-response flow
+
+This section presents the workflow for Mech agents independently from the Mech Marketplace. For Mechs which receive requests
+via the Marketplace, check this [document](https://github.com/valory-xyz/ai-registry-mech/blob/main/docs/MechMarketplaceDescriptionAndContractsOverviewRepo.pdf).
 
 ![image](docs/images/mech_request_response_flow.png)
 
