@@ -274,6 +274,8 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 
 ## Examples of deployed Mechs
 
+### Legacy Mechs
+
 | Network  | Service                                               | Mech Instance (Nevermined Pricing) - Agent Id    | Mech Instance (Fixed Pricing) - Agent Id         |
 | :------: | ----------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
 | Ethereum | https://registry.olas.network/ethereum/services/21    | n/a                                              | n/a                                              |
@@ -283,3 +285,7 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 |   Base   | https://registry.olas.network/base/services/1         | `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA` - 1 | `0x111D7DB1B752AB4D2cC0286983D9bd73a49bac6c` - 2 |
 |   Celo   | https://registry.olas.network/celo/services/1         | `0xeC20694b7BD7870d2dc415Af3b349360A6183245` - 1 | `0x230eD015735c0D01EA0AaD2786Ed6Bd3C6e75912` - 2 |
 | Optimism | https://registry.olas.network/optimism/services/1     | `0xbA4491C86705e8f335Ceaa8aaDb41361b2F82498` - 1 | `0xDd40E7D93c37eFD860Bd53Ab90b2b0a8D05cf71a` - 2 |
+
+### Mechs receiving requests via the Mech Marketplace
+
+There is no Mech deployed on the Mech Marketplace at the moment.
