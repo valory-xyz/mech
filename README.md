@@ -277,7 +277,7 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 ### Legacy Mechs
 
 | Network  | Service                                               | Mech Instance (Nevermined Pricing) - Agent Id    | Mech Instance (Fixed Pricing) - Agent Id         |  Service id |
-| :------: | ----------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------ |
+| :------: | ----------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------ | -------- |
 | Ethereum | https://registry.olas.network/ethereum/services/21    | n/a                                              | n/a  | n/a                                            |
 |  Gnosis  | https://registry.olas.network/gnosis/services/3       | `0x327E26bDF1CfEa50BFAe35643B23D5268E41F7F9` - 3 | `0x77af31De935740567Cf4fF1986D04B2c964A786a` - 6 | 3 |
 | Arbitrum | https://registry.olas.network/arbitrum-one/services/1 | `0x0eA6B3137f294657f0E854390bb2F607e315B82c` - 1 | `0x1FDAD3a5af5E96e5a64Fc0662B1814458F114597` - 2 | 1 |
