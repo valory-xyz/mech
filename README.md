@@ -41,7 +41,7 @@ The project consists of three components:
     -   Allows Mech owners to create new workers.
     -   Allows users to request work from an existing worker.
 
-Note that Mechs which were deployed before the Mech Marketplace (called legacy Mechs) receive requests directly on their contract on-chain.
+_Note that Mechs which were deployed before the Mech Marketplace contracts (called legacy Mechs) receive and delivery services directly via their Mech contract._
 
 ## Mech request-response flow
 
