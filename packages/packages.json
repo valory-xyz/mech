@@ -68,15 +68,15 @@
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
         "connection/valory/http_client/0.23.0": "bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u",
         "connection/valory/abci/0.1.0": "bafybeiavg4blopyq2mfojlfmsdxpk64ywpot25zi34wfmv4yeal6pbqbfy",
-        "connection/valory/ipfs/0.1.0": "bafybeie6ddno6nufc7yz3q3pkvrpqltqvoyf5iogm7unek6vs4cmzzflsy",
+        "connection/valory/ipfs/0.1.0": "bafybeiay3g7ioixe5zxilb5vodvz3lpf3jhugvpdzisfzeqlxt2wejaira",
         "connection/valory/ledger/0.19.0": "bafybeigntoericenpzvwejqfuc3kqzo2pscs76qoygg5dbj6f4zxusru5e",
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e",
         "connection/valory/http_server/0.22.0": "bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m",
-        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeieleqba32mkft5oeayykgvupa5eosyhnzwdfjj4cf5go7xzqaqndm",
-        "skill/valory/termination_abci/0.1.0": "bafybeiflco36yb3wpjgva2er64kclbveoyytwnxooqmr52dxg7ofcsog2a",
-        "skill/valory/abstract_round_abci/0.1.0": "bafybeifylvzfqtepgwn66zgqusfznf7slus5fzf54ay4owxte47x4b2bem",
-        "skill/valory/reset_pause_abci/0.1.0": "bafybeifdtbbkok2urjxhivcwyc7yo7dsbokgtxlofo25wgytek3hcmzbdi",
-        "skill/valory/registration_abci/0.1.0": "bafybeifcsf75zpv4znjgl3muquzs5j4v34sokouj6isdbthk4iqwiqa2mu",
+        "skill/valory/transaction_settlement_abci/0.1.0": "bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy",
+        "skill/valory/termination_abci/0.1.0": "bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy",
+        "skill/valory/abstract_round_abci/0.1.0": "bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti",
+        "skill/valory/reset_pause_abci/0.1.0": "bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e",
+        "skill/valory/registration_abci/0.1.0": "bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq",
         "skill/valory/abstract_abci/0.1.0": "bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu"
     }
 }
