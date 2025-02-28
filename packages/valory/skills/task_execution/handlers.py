@@ -123,7 +123,7 @@ class IpfsHandler(BaseHandler):
         callback = self.params.req_to_callback.pop(nonce)
         deadline = self.params.req_to_deadline.pop(nonce)
 
-        if time.time() > deadline:
+        if deadline and time.time() > deadline:
             # Deadline reached
             self.context.logger.info(f"Deadline reached for task with nonce {nonce}.")
             self.params.in_flight_req = False
@@ -179,29 +179,21 @@ class ContractHandler(BaseHandler):
         if len(reqs) == 0:
             return
 
-        self.params.from_block = max([req["block_number"] for req in reqs]) + 1
+        self.params.req_params.from_block[cast(str, self.params.req_type)] = (
+            max([req["block_number"] for req in reqs]) + 1
+        )
         self.context.logger.info(f"Received {len(reqs)} new requests.")
-
-        # replace uuid request ids with the onchain ids
-        tx_hash_lookup = {req["tx_hash"]: req["requestId"] for req in reqs}
-
-        for pending_task in self.pending_tasks:
-            if (
-                pending_task.get("is_offchain", False)
-                and pending_task["tx_hash"] in tx_hash_lookup
-            ):
-                pending_task["requestId"] = tx_hash_lookup[pending_task["tx_hash"]]
 
         reqs = [
             req
             for req in reqs
             if req["block_number"] % self.params.num_agents == self.params.agent_index
-            and req["tx_hash"] not in self.params.offchain_tx_list
         ]
+
         self.context.logger.info(f"Processing only {len(reqs)} of the new requests.")
         self.pending_tasks.extend(reqs)
         self.context.logger.info(
-            f"Monitoring new reqs from block {self.params.from_block}"
+            f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
         )
 
 

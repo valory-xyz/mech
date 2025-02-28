@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeiewjybd6zte6yabxxj34lez2w7r54oppgqwoqobk4cicszdsaftkq
+  behaviours.py: bafybeihkyplmqfaiy6nq7zystouirmji2uae7vb3wqoeplt2lqzeo7bofy
   dialogues.py: bafybeia5byu6hwo5fv4tnsuqw5tw7wj3aceldqszizhugybqzn23tnhr2i
-  handlers.py: bafybeigu4zzqofu4wse5relaum7sksq6fzursxaelna57dhm2kohvslkz4
-  models.py: bafybeih45axytaozeabnpyjwcuh5dai7hm7ggownr6chesuoynpvec7wki
+  handlers.py: bafybeiamdnz3xinxwxz5vvlgxrtiv3bo2x4pp2kgkn6faywk6h7d3ucanm
+  models.py: bafybeifljr6aqc64rxkgww3f7i3rtelyhexq5syoz6mizcoefygyouh5uy
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeiafnee7iay6dyjnatyqyzjov5c4ibl3ojamjmgfjri7cyghl7qayq
@@ -23,8 +23,8 @@ connections:
 - valory/ipfs:0.1.0:bafybeie6ddno6nufc7yz3q3pkvrpqltqvoyf5iogm7unek6vs4cmzzflsy
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 contracts:
-- valory/agent_mech:0.1.0:bafybeifugr6fgvekv3g2zsu7xz2vteif3x7zr27tf3ofaeoqguycdv5eri
-- valory/mech_marketplace:0.1.0:bafybeiftw4xjshpevnx44hmglkflyxvsy47u3ui7x26rl5cvvspminov5a
+- valory/agent_mech:0.1.0:bafybeiamh4bdzeyutxao2segjwwj3n5s4lpvtst4te43z2bvpnjyouawga
+- valory/mech_marketplace:0.1.0:bafybeice4e7h2nlrke7gbszsaajlcp65ergquk7yleneswkbe2u4b6ynle
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
@@ -109,12 +109,9 @@ models:
       from_block_range: 50000
       num_agents: 4
       mech_to_config:
-        '0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb':
+        '0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75':
           use_dynamic_pricing: false
           is_marketplace_mech: true
-        '0x69e105E7fdad198859726f5787e523c3FE2b07e3':
-          use_dynamic_pricing: false
-          is_marketplace_mech: false
       polling_interval: 30.0
       task_deadline: 240.0
       max_block_window: 500
