@@ -7,46 +7,46 @@ aea_version: '>=1.37.0, <2.0.0'
 fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
-- valory/abci:0.1.0:bafybeidiwux3jrlkaemob55ojxgvpzrmyzyq5dld6phzb6bandgrquc7zu
-- valory/http_client:0.23.0:bafybeid5ffvg76ejjoese7brj5ji3lx66cu7p2ixfwflpo6rgofkypfd7y
-- valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
+- valory/abci:0.1.0:bafybeiffzevwpd5bjfpmstnp4dp6knocjkdumnhuyq72l3y6w7pqomvwmu
+- valory/http_client:0.23.0:bafybeihi772xgzpqeipp3fhmvpct4y6e6tpjp4sogwqrnf3wqspgeilg4u
+- valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
 - valory/ipfs:0.1.0:bafybeid5fdr6ufha3axnktfofsc2hxha3jatnoi7st3pccorf7sztfpaky
-- valory/ledger:0.19.0:bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby
+- valory/ledger:0.19.0:bafybeiem5ffzyxvf47j2htmcymvuxc43ah5mocizpxzgijtcreqkrytvzq
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 - valory/websocket_client:0.1.0:bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli
 contracts:
-- valory/agent_mech:0.1.0:bafybeido2ob63apizwagf6vqm6kybfbscamtklskssswd2vro37k3l3x6q
+- valory/agent_mech:0.1.0:bafybeifmaifwegdtfwvm52nbuiavlqbwjmiolocsqd4y4i7q53lktjwfzu
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
 - valory/gnosis_safe:0.1.0:bafybeialsnaekbdtn3h6phjs5xxx44es56jffs5jnlkkcgc62k62vxpkxm
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeic3ozple3xqw556esxx7l3dsgm3om7kitozjar5id4ryw6zptllfi
 - valory/hash_checkpoint:0.1.0:bafybeidhpjfv7u2kxfvfkljawkiuzkl4smzonqvapafwo7k4fmdo7k2dqi
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeid4kiq2fwospfod4buof2fwwz3gk36jiyqkfjyg2xx346ad5zt72y
-- valory/mech_marketplace:0.1.0:bafybeiff7ae5cehppx3odjayr3ud6xw4ag6avgac2fcalooyfqxdxsstau
+- valory/mech_marketplace:0.1.0:bafybeihpgkpbnd6k67nqbbgintlmer3np56rb7vbxj4nptsvpvgsqzbsii
 protocols:
 - open_aea/signing:1.0.0:bafybeig2d36zxy65vd7fwhs7scotuktydcarm74aprmrb5nioiymr3yixm
-- valory/abci:0.1.0:bafybeiatodhboj6a3p35x4f4b342lzk6ckxpud23awnqbxwjeon3k5y36u
+- valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
 - valory/acn:1.1.0:bafybeic6h55ov5lrzbah6fate54c4u6spopcexxspw3abotbmffabfddeu
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
-- valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
+- valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
 - valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq
-- valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
+- valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 - valory/ipfs:0.1.0:bafybeifi2nri7sprmkez4rqzwb4lnu6peoy3bax5k6asf6k5ms7kmjpmkq
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
 - valory/tendermint:0.1.0:bafybeigydrbfrlmr4f7shbtqx44kvmbg22im27mxdap2e3m5tkti6t445y
 - valory/websocket_client:0.1.0:bafybeifjk254sy65rna2k32kynzenutujwqndap2r222afvr3zezi27mx4
 skills:
-- valory/abstract_abci:0.1.0:bafybeifuzjuq5af36e5gg2fpnxxf7xoqq5oqhqk76sgi3uewtcxkpyn2m4
-- valory/abstract_round_abci:0.1.0:bafybeig4wczuh3l6wbxb47rgsmodlfupichj66gfcwkvy65q5pbm3utykm
+- valory/abstract_abci:0.1.0:bafybeib7rb6yhmqhoprkvyldpdfftde6hodfzerh2xdsctaeb2slhtxlwu
+- valory/abstract_round_abci:0.1.0:bafybeidpi5h6wrbjen2ncypzybsut6qoocyg5oj3rghbsyhv4muswdbmgy
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeifpvaczb7islvhiv6z6jp36gl6x52dvvt7or5qoe6vtvrb4sw2oi4
-- valory/registration_abci:0.1.0:bafybeicfrgzo3tbcr6lijd5vsrjrggsehobr7xv2m74jkx6h3k6lxhqgqu
-- valory/reset_pause_abci:0.1.0:bafybeidlzt3jvgokzwpfxbcnpnxmfedcchscxq3crfaceldy4jamu65ave
-- valory/subscription_abci:0.1.0:bafybeif4bbibfdz25sqadadw5i5cxkck65qcxze4vltj7sv7zi2nc4c2rm
-- valory/task_execution:0.1.0:bafybeif7vu2wnizkxlltobeyala4ctxyshsgqmg32p5tkf5suq3sfprjgi
-- valory/task_submission_abci:0.1.0:bafybeib753ydmvnostja2jbdvwap4dst5iknjrneopjwzsqoboilskrnbi
-- valory/termination_abci:0.1.0:bafybeibpisfldpcdbib74totredbuhtzyzh2esg6gkxzgg2ncby7ktegga
-- valory/transaction_settlement_abci:0.1.0:bafybeicjqlnqgmccwb5vjga2lnb2doxqfkvqg36fixil5q4dbymaiggdua
+- valory/mech_abci:0.1.0:bafybeifrmdtqs6mjuykmmbds4vwaidsj43sv63zcrbu257tbdevcw2ohae
+- valory/registration_abci:0.1.0:bafybeih7w72yqgxvzbegkrhiysbuklhhy6xjmnqit4h35yww2hovrpziua
+- valory/reset_pause_abci:0.1.0:bafybeicy7pcdyxsqeptvetlked3w253umm7cccyyekvoxilfjqmhqneaye
+- valory/subscription_abci:0.1.0:bafybeigq3zkhv64z4aadg44ki2posmf3sfum5obi4xw6egjzvopgvptwra
+- valory/task_execution:0.1.0:bafybeidvhxxtizwb2aad5gubq76pgwu44rl2vvt3gb7s4yf7pkapmh2liq
+- valory/task_submission_abci:0.1.0:bafybeib5vt23czrjaucvw5w3e3uqwwosprcxqzbc4hzyy35u5znonpq3h4
+- valory/termination_abci:0.1.0:bafybeibsvobhm2ux7udvikn7v466rmr2nnomjw2f6pypqz4qil62ktedmi
+- valory/transaction_settlement_abci:0.1.0:bafybeiene3muzkusavzfozlftvdf7cp56lzak534z4hwd3xocwrv5zfmgm
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
 default_ledger: ethereum
 required_ledgers:
@@ -102,7 +102,7 @@ behaviours:
 handlers:
   new_event:
     args:
-      contract_to_monitor: ${str:0xFf82123dFB52ab75C417195c5fDB87630145ae81}
+      contract_to_monitor: ${str:0x69e105E7fdad198859726f5787e523c3FE2b07e3}
       websocket_provider: ${str:https://rpc.gnosischain.com}
 models:
   params:
@@ -151,7 +151,7 @@ models:
       reset_period_count: ${int:1000}
       on_chain_service_id: ${int:1}
       mech_staking_instance_address: ${str:0x0000000000000000000000000000000000000000}
-      mech_marketplace_address: ${str:0x0000000000000000000000000000000000000000}
+      mech_marketplace_address: ${str:0x85dCa9b0E27DDECdB7c657616e34967d2711Db55}
       agent_registry_address: ${str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
       agent_id: ${int:3}
       metadata_hash: ${str:0000000000000000000000000000000000000000000000000000000000000000}
@@ -170,13 +170,13 @@ models:
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
-      mech_to_subscription: ${dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
+      mech_to_subscription: ${dict:{"0x69e105E7fdad198859726f5787e523c3FE2b07e3":{"tokenAddress":"0x0000000000000000000000000000000000000000",
         "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
         "tokenId":"2"}}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
-        all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
-        safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
+        all_participants: ${list:["0x7a1De622c62c6e985fEDd4919FfA8e9997B9547f"]}
+        safe_contract_address: ${str:0x9e9d95A2a3dF7CF20a8ac1422a6D1A2DB3B15565}
         consensus_threshold: ${int:null}
 ---
 public_id: valory/task_execution:0.1.0
@@ -185,9 +185,9 @@ models:
   params:
     args:
       task_deadline: ${float:240.0}
-      tools_to_package_hash: ${dict:{"openai-gpt-3.5-turbo-instruct":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
-        "openai-gpt-3.5-turbo":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
-        "openai-gpt-4":"bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke",
+      tools_to_package_hash: ${dict:{"openai-gpt-3.5-turbo-instruct":"bafybeihahysrfznr3642ssrqfatr4my5ectfh3okh7kacdo23igccjewni",
+        "openai-gpt-3.5-turbo":"bafybeihahysrfznr3642ssrqfatr4my5ectfh3okh7kacdo23igccjewni",
+        "openai-gpt-4":"bafybeihahysrfznr3642ssrqfatr4my5ectfh3okh7kacdo23igccjewni",
         "stabilityai-stable-diffusion-v1-5":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
         "stabilityai-stable-diffusion-xl-beta-v2-2-2":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
         "stabilityai-stable-diffusion-512-v2-1":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
@@ -211,9 +211,8 @@ models:
       agent_index: ${int:0}
       num_agents: ${int:4}
       from_block_range: ${int:50000}
-      mech_marketplace_address: ${str:0x0000000000000000000000000000000000000000}
-      mech_to_config: ${dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-        "0x77af31De935740567Cf4fF1986D04B2c964A786a":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+      mech_marketplace_address: ${str:0x85dCa9b0E27DDECdB7c657616e34967d2711Db55}
+      mech_to_config: ${dict:{ "0x69e105E7fdad198859726f5787e523c3FE2b07e3":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
 ---

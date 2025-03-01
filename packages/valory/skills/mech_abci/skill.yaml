@@ -11,22 +11,22 @@ fingerprint:
   composition.py: bafybeiaorp75iva5xgl4ebk3lg7oenqmd6wg2dxlm33oserb7aszyujml4
   dialogues.py: bafybeifhydd6xmstbh2jx5igj33upip5a3hhlcaxttfsc77heszqmru7ri
   fsm_specification.yaml: bafybeige54bdtuq7e2oqqzppiyjra7mv74fid276pqlq25cmlgoc7vgsye
-  handlers.py: bafybeidqjq52ejhnbdgiadfzxilrrcyzub2dfbd75a4jkkq6mmaexmey5u
+  handlers.py: bafybeidutt2dbz7xumkbl7yslqppcfuk3lkk76ktat4c4rogfaixw3oy3m
   models.py: bafybeigpimz5vhgzelhc7c3ipo56wh2o7d7whyqcjd2kjigtxos5d6bwqa
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
+- valory/http_server:0.22.0:bafybeihpgu56ovmq4npazdbh6y6ru5i7zuv6wvdglpxavsckyih56smu7m
 contracts: []
 protocols:
-- valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
+- valory/http:1.0.0:bafybeifugzl63kfdmwrxwphrnrhj7bn6iruxieme3a4ntzejf6kmtuwmae
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeig4wczuh3l6wbxb47rgsmodlfupichj66gfcwkvy65q5pbm3utykm
-- valory/registration_abci:0.1.0:bafybeicfrgzo3tbcr6lijd5vsrjrggsehobr7xv2m74jkx6h3k6lxhqgqu
-- valory/reset_pause_abci:0.1.0:bafybeidlzt3jvgokzwpfxbcnpnxmfedcchscxq3crfaceldy4jamu65ave
-- valory/task_submission_abci:0.1.0:bafybeib753ydmvnostja2jbdvwap4dst5iknjrneopjwzsqoboilskrnbi
-- valory/termination_abci:0.1.0:bafybeibpisfldpcdbib74totredbuhtzyzh2esg6gkxzgg2ncby7ktegga
-- valory/transaction_settlement_abci:0.1.0:bafybeicjqlnqgmccwb5vjga2lnb2doxqfkvqg36fixil5q4dbymaiggdua
-- valory/subscription_abci:0.1.0:bafybeif4bbibfdz25sqadadw5i5cxkck65qcxze4vltj7sv7zi2nc4c2rm
+- valory/abstract_round_abci:0.1.0:bafybeidpi5h6wrbjen2ncypzybsut6qoocyg5oj3rghbsyhv4muswdbmgy
+- valory/registration_abci:0.1.0:bafybeih7w72yqgxvzbegkrhiysbuklhhy6xjmnqit4h35yww2hovrpziua
+- valory/reset_pause_abci:0.1.0:bafybeicy7pcdyxsqeptvetlked3w253umm7cccyyekvoxilfjqmhqneaye
+- valory/task_submission_abci:0.1.0:bafybeib5vt23czrjaucvw5w3e3uqwwosprcxqzbc4hzyy35u5znonpq3h4
+- valory/termination_abci:0.1.0:bafybeibsvobhm2ux7udvikn7v466rmr2nnomjw2f6pypqz4qil62ktedmi
+- valory/transaction_settlement_abci:0.1.0:bafybeiene3muzkusavzfozlftvdf7cp56lzak534z4hwd3xocwrv5zfmgm
+- valory/subscription_abci:0.1.0:bafybeigq3zkhv64z4aadg44ki2posmf3sfum5obi4xw6egjzvopgvptwra
 behaviours:
   main:
     args: {}
@@ -79,10 +79,10 @@ models:
   params:
     args:
       mech_to_config:
-        '0xFf82123dFB52ab75C417195c5fDB87630145ae81':
+        '0xDbd69EBBE30Fb62456164770AF7838fD584DfFBb':
           use_dynamic_pricing: false
-          is_marketplace_mech: false
-        '0x77af31De935740567Cf4fF1986D04B2c964A786a':
+          is_marketplace_mech: true
+        '0x69e105E7fdad198859726f5787e523c3FE2b07e3':
           use_dynamic_pricing: false
           is_marketplace_mech: false
       api_keys:
