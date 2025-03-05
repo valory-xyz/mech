@@ -23,10 +23,10 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
-- valory/task_submission_abci:0.1.0:bafybeicjrtpabifhgxxbs6ygh55j44ovutwbgkjhgmb7ibev5omdpd36dq
+- valory/task_submission_abci:0.1.0:bafybeigq2nohfsg2xbn73talvwylzio3lp3cdrkofsyjgco3gfxsj3p5xa
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
-- valory/subscription_abci:0.1.0:bafybeigvbykjoimc4zfgx7eeyn6cjt7bimmpx5ugxqqhyewuqdqkgfgafa
+- valory/subscription_abci:0.1.0:bafybeihaz2j4dfiahld66vz7flk3m3et6rs7ccnglihxkdgyhbdqipnmxi
 behaviours:
   main:
     args: {}
@@ -78,10 +78,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      mech_to_config:
-        '0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75':
-          use_dynamic_pricing: false
-          is_marketplace_mech: true
+      mech_to_config: {}
       api_keys:
         openai:
         - dummy_api_key

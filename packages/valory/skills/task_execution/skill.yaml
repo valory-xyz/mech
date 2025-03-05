@@ -108,10 +108,7 @@ models:
         prediction-online-sum-url-content: bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e
       from_block_range: 50000
       num_agents: 4
-      mech_to_config:
-        '0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75':
-          use_dynamic_pricing: false
-          is_marketplace_mech: true
+      mech_to_config: {}
       polling_interval: 30.0
       task_deadline: 240.0
       max_block_window: 500
