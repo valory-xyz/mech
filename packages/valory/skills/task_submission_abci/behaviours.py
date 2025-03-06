@@ -1230,11 +1230,7 @@ class TransactionPreparationBehaviour(
             )
 
             def _num_to_bytes(value: int) -> bytes:
-                MAGIC_BITS = 7
-                MAGIC_BYTE_SIZE = 8
-
-                num_bytes = (value.bit_length() + MAGIC_BITS) // MAGIC_BYTE_SIZE
-                num_in_bytes = value.to_bytes(num_bytes, byteorder="big")
+                num_in_bytes = value.to_bytes(32, byteorder="big")
                 return num_in_bytes
 
             for data in marketplace_done_tasks:
