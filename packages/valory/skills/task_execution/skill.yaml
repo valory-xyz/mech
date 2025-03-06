@@ -76,36 +76,8 @@ models:
   params:
     args:
       agent_index: 0
-      api_keys:
-        openai:
-        - dummy_api_key
-        stabilityai:
-        - dummy_api_key
-        google_api_key:
-        - dummy_api_key
-        google_engine_id:
-        - dummy_api_key
-      tools_to_package_hash:
-        openai-gpt-3.5-turbo-instruct: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-        openai-gpt-3.5-turbo: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-        openai-gpt-4: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-        stabilityai-stable-diffusion-v1-5: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        stabilityai-stable-diffusion-xl-beta-v2-2-2: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        stabilityai-stable-diffusion-512-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        stabilityai-stable-diffusion-768-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        transfer-native: bafybeideuyqn4uslp4ccanzd5tjladzotyi6tiwfxbouecw5ufzgyi4ryy
-        prediction-offline: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-        prediction-online: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-        prediction-online-summarized-info: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-        prediction-online-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
-        prediction-offline-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
-        claude-prediction-online: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
-        claude-prediction-offline: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
-        deepmind-optimization-strong: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
-        deepmind-optimization: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
-        prediction-sentence-embedding-conservative: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
-        prediction-sentence-embedding-bold: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
-        prediction-online-sum-url-content: bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e
+      api_keys: {}
+      tools_to_package_hash: {}
       from_block_range: 50000
       num_agents: 4
       mech_to_config: {}

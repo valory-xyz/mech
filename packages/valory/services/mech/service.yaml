@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeic7457ce7wbkssumm4xmthl46x4vuutlmobzhupjlusbw4b6axqea
+agent: valory/mech:0.1.0:bafybeid3ax5nhsokd6brhpdm2clp6we2d4jmprd77vfbqsrcugk2r75su4
 number_of_agents: 4
 deployment:
   agent:
