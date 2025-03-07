@@ -22,10 +22,10 @@ import json
 import threading
 import time
 from abc import ABC
-from copy import deepcopy
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 from collections import defaultdict
+from copy import deepcopy
 from enum import Enum
+from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 
 import openai  # noqa
 from aea.helpers.cid import CID, to_v1
@@ -36,13 +36,13 @@ from packages.valory.contracts.agent_mech.contract import (
     AgentMechContract,
     MechOperation,
 )
-from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.contracts.agent_registry.contract import AgentRegistryContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
 )
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
+from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
@@ -1187,7 +1187,6 @@ class TransactionPreparationBehaviour(
     def _get_encoded_deliver_data(
         self, request_ids: List, datas: List
     ) -> Generator[None, None, Tuple]:
-
         final_request_ids = []
         final_datas = []
         for request_id, data in zip(request_ids, datas):
@@ -1260,10 +1259,11 @@ class TransactionPreparationBehaviour(
                     self.context.logger.info(
                         "NVM Mech Deliver detected. Encoding deliver datas"
                     )
-                    (final_request_ids, final_datas) = (
-                        yield from self._get_encoded_deliver_data(
-                            request_ids, deliver_datas
-                        )
+                    (
+                        final_request_ids,
+                        final_datas,
+                    ) = yield from self._get_encoded_deliver_data(
+                        request_ids, deliver_datas
                     )
                     request_ids = final_request_ids
                     deliver_datas = final_datas

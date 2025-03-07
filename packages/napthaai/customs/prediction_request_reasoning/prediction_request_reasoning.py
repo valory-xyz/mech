@@ -267,11 +267,6 @@ LLM_SETTINGS = {
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
-    "claude-3-sonnet-20240229": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
     "claude-3-5-sonnet-20240620": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
@@ -468,9 +463,7 @@ def multi_queries(
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
     temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"][
-        "default_max_tokens"
-    ],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -793,9 +786,7 @@ def fetch_additional_information(
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
     temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"][
-        "default_max_tokens"
-    ],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
 ) -> Tuple[str, List[str], Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information from the web."""
 

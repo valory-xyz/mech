@@ -18,31 +18,29 @@
 # ------------------------------------------------------------------------------
 
 """This package contains a scaffold of a handler."""
+import json
 import threading
 import time
-import json
-import uuid
 import urllib.parse
+import uuid
 from enum import Enum
-from web3 import Web3
-from typing import Any, Dict, List, cast, Generator, Union
-
+from typing import Any, Dict, Generator, List, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
+from web3 import Web3
 
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
 )
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
-from packages.valory.protocols.http.message import HttpMessage
-from packages.valory.skills.task_execution.models import Params
-from packages.valory.protocols.http.message import HttpMessage
-from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
+from packages.valory.skills.task_execution.dialogues import HttpDialogue
+from packages.valory.skills.task_execution.models import Params
 
 
 PENDING_TASKS = "pending_tasks"
@@ -234,7 +232,6 @@ class HttpCode(Enum):
 
 
 class MechHttpHandler(AbstractResponseHandler):
-
     SUPPORTED_PROTOCOL = HttpMessage.protocol_id
 
     @property

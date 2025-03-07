@@ -264,11 +264,6 @@ LLM_SETTINGS = {
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
-    "claude-3-sonnet-20240229": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
     "claude-3-5-sonnet-20240620": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,

@@ -526,7 +526,6 @@ class AgentMechContract(Contract):
         deliveryRates: List[int],
         paymentData: str,
     ) -> JSONLike:
-
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encodeABI(
@@ -629,22 +628,26 @@ class AgentMechContract(Contract):
             to_block_batch = (from_block_batch + max_block_window) - 1
             if to_block_batch >= current_block:
                 to_block_batch = "latest"
-            requests_batch: List[Dict[str, Any]] = (
-                cls.get_marketplace_mech_request_events(
-                    ledger_api,
-                    checksumed_contract_address,
-                    from_block_batch,
-                    to_block_batch,
-                )["data"]
-            )
-            delivers_batch: List[Dict[str, Any]] = (
-                cls.get_marketplace_mech_deliver_events(
-                    ledger_api,
-                    checksumed_contract_address,
-                    from_block_batch,
-                    to_block_batch,
-                )["data"]
-            )
+            requests_batch: List[
+                Dict[str, Any]
+            ] = cls.get_marketplace_mech_request_events(
+                ledger_api,
+                checksumed_contract_address,
+                from_block_batch,
+                to_block_batch,
+            )[
+                "data"
+            ]
+            delivers_batch: List[
+                Dict[str, Any]
+            ] = cls.get_marketplace_mech_deliver_events(
+                ledger_api,
+                checksumed_contract_address,
+                from_block_batch,
+                to_block_batch,
+            )[
+                "data"
+            ]
             requests.extend(requests_batch)
             delivers.extend(delivers_batch)
         pending_tasks: List[Dict[str, Any]] = []
