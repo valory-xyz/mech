@@ -71,7 +71,7 @@ IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 GNOSIS_CHAIN = "gnosis"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
-SUBSEQUENT_DEADLINE = 30.0  # 5min of deadline
+SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
