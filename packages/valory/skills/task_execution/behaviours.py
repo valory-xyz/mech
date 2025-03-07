@@ -71,7 +71,7 @@ IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 GNOSIS_CHAIN = "gnosis"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
-SUBSEQUENT_DEADLINE = 60.0  # 1min of deadline
+SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -371,14 +371,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._last_deadline = self._fetch_deadline()
 
             # check if the executing task is within deadline or not
-            if time.time() > self._last_deadline:
+            if self._executing_task and time.time() > self._last_deadline:
                 # Deadline reached, restart the task execution
                 self.context.logger.info(
                     f"Deadline reached for task {self._executing_task}. Restarting task execution..."
                 )
-                self._last_deadline = time.time()
                 self.params.in_flight_req = False
                 self.params.is_cold_start = False
+                self._last_deadline = self._fetch_deadline()
                 return self._execute_task()
             return
 

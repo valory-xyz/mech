@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeig63vbzhrxej4nrm55umyrwckar4tjtpfdmz6p3cskjzcycylarpa
+  behaviours.py: bafybeiax2lolwe6jvkeksk4m7gddo5q2lxw6cpfzz5q5b4cu7q5ziramdq
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
@@ -33,7 +33,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
-- valory/task_execution:0.1.0:bafybeicsorevl2b7clbjbrgg5zxovhl4sh2quansn6wdpiig5llcf5nva4
+- valory/task_execution:0.1.0:bafybeib54gvvjos2jqxa4ivztdsj3xcstdxvnstjjhneew4xdwo3vpdrpy
 behaviours:
   main:
     args: {}
@@ -85,7 +85,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      mech_to_config: ${dict:{"0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75":{"use_dynamic_pricing":false,"is_marketplace_mech":true},
+      mech_to_config: {}
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0

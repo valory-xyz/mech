@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeihzdm75xwjqb5hrddm6o52uymbx2hr7xghtysc2evrmwyevj44uoe
+- valory/mech_abci:0.1.0:bafybeigm5tlehiylvg37xbxe3sl7j3il72ui5hml7qllog4n3cf6ggnpru
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
-- valory/subscription_abci:0.1.0:bafybeigvbykjoimc4zfgx7eeyn6cjt7bimmpx5ugxqqhyewuqdqkgfgafa
-- valory/task_execution:0.1.0:bafybeicsorevl2b7clbjbrgg5zxovhl4sh2quansn6wdpiig5llcf5nva4
-- valory/task_submission_abci:0.1.0:bafybeicjrtpabifhgxxbs6ygh55j44ovutwbgkjhgmb7ibev5omdpd36dq
+- valory/subscription_abci:0.1.0:bafybeihaz2j4dfiahld66vz7flk3m3et6rs7ccnglihxkdgyhbdqipnmxi
+- valory/task_execution:0.1.0:bafybeib54gvvjos2jqxa4ivztdsj3xcstdxvnstjjhneew4xdwo3vpdrpy
+- valory/task_submission_abci:0.1.0:bafybeib66r57jedpmivsrfgrx6a5gqipx4eg2feran6q3s3or3bccqb5li
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -228,9 +228,7 @@ models:
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
-      mech_to_subscription: ${dict:{"0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-        "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-        "tokenId":"2"}}}
+      mech_to_subscription: ${dict:{}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x7a1De622c62c6e985fEDd4919FfA8e9997B9547f"]}
@@ -243,34 +241,14 @@ models:
   params:
     args:
       task_deadline: ${float:240.0}
-      tools_to_package_hash: ${dict:{"openai-gpt-3.5-turbo-instruct":"bafybeihahysrfznr3642ssrqfatr4my5ectfh3okh7kacdo23igccjewni",
-        "openai-gpt-3.5-turbo":"bafybeihahysrfznr3642ssrqfatr4my5ectfh3okh7kacdo23igccjewni",
-        "openai-gpt-4":"bafybeihahysrfznr3642ssrqfatr4my5ectfh3okh7kacdo23igccjewni",
-        "stabilityai-stable-diffusion-v1-5":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
-        "stabilityai-stable-diffusion-xl-beta-v2-2-2":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
-        "stabilityai-stable-diffusion-512-v2-1":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
-        "stabilityai-stable-diffusion-768-v2-1":"bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q",
-        "transfer-native":"bafybeideuyqn4uslp4ccanzd5tjladzotyi6tiwfxbouecw5ufzgyi4ryy",
-        "prediction-offline":"bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi",
-        "prediction-online":"bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi",
-        "prediction-online-summarized-info":"bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi",
-        "prediction-online-sme":"bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy",
-        "prediction-offline-sme":"bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy",
-        "claude-prediction-online":"bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu",
-        "claude-prediction-offline":"bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu",
-        "deepmind-optimization-strong":"bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum",
-        "deepmind-optimization":"bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum",
-        "prediction-sentence-embedding-conservative":"bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai",
-        "prediction-sentence-embedding-bold":"bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai",
-        "prediction-online-sum-url-content":"bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e"}}
-      api_keys: ${dict:{"openai":["dummy_api_key"], "stabilityai":["dummy_api_key"],
-        "google_api_key":["dummy_api_key"], "google_engine_id":["dummy_api_key"]}}
+      tools_to_package_hash: ${dict:{}}
+      api_keys: ${dict:{}}
       polling_interval: ${float:10}
       agent_index: ${int:0}
       num_agents: ${int:4}
       from_block_range: ${int:50000}
       mech_marketplace_address: ${str:0xad380C51cd5297FbAE43494dD5D407A2a3260b58}
-      mech_to_config: ${dict:{"0x5AE9c87F8789842DED5cab0F33923DeB2260Dd75":{"use_dynamic_pricing":false,"is_marketplace_mech":true}}}
+      mech_to_config: ${dict:{}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
 ---
