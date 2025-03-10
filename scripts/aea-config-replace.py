@@ -43,6 +43,7 @@ PATH_TO_VAR = {
     "models/params/args/setup/all_participants": "ALL_PARTICIPANTS",
     "models/params/args/setup/safe_contract_address": "SAFE_CONTRACT_ADDRESS",
     "models/params/args/mech_to_subscription": "MECH_TO_SUBSCRIPTION",
+    "models/benchmark_tool/args/log_dir": "LOG_DIR",
     # task_execution
     "models/params/args/tools_to_package_hash": "TOOLS_TO_PACKAGE_HASH",
     "models/params/args/api_keys": "API_KEYS",
