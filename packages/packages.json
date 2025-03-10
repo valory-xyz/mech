@@ -48,8 +48,8 @@
         "skill/valory/task_execution/0.1.0": "bafybeib54gvvjos2jqxa4ivztdsj3xcstdxvnstjjhneew4xdwo3vpdrpy",
         "skill/valory/websocket_client/0.1.0": "bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m",
         "skill/valory/subscription_abci/0.1.0": "bafybeihaz2j4dfiahld66vz7flk3m3et6rs7ccnglihxkdgyhbdqipnmxi",
-        "agent/valory/mech/0.1.0": "bafybeiexfdu4e3gvm67qdeogdckgkxosklvjclxb5ikjh5a7zxyazw6vai",
-        "service/valory/mech/0.1.0": "bafybeicslygrbyoa5sas5wihfkojfexqrjnhh2hm5xri53yucpf7aqywt4",
+        "agent/valory/mech/0.1.0": "bafybeib67bogp7pdq65vzn2qsanuuvtm3ejvtzssmvwxopkfrjdtrpligq",
+        "service/valory/mech/0.1.0": "bafybeifda4vn5hzlroo37rnikafx2zk4efva3e7cb2wnbdknc5epjo5lte",
         "service/valory/mech_quickstart/0.1.0": "bafybeic7nyt734ysd2agj352zlxhxxemi6laeevclvepzzlm53oqp3hwxi"
     },
     "third_party": {
