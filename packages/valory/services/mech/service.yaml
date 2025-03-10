@@ -58,9 +58,7 @@ type: skill
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-          "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-          "tokenId":"2"}}}
+        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -96,9 +94,7 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-          "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-          "tokenId":"2"}}}
+        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
@@ -136,9 +132,7 @@ type: skill
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-          "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-          "tokenId":"2"}}}
+        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -175,9 +169,7 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-          "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-          "tokenId":"2"}}}
+        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -190,31 +182,27 @@ type: skill
     params:
       args:
         task_deadline: ${TASK_DEADLINE:float:240.0}
-        tools_to_package_hash:
-          $TOOLS_TO_PACKAGE_HASH:dict: {}
+        tools_to_package_hash: ${TOOLS_TO_PACKAGE_HASH:dict:{}}
         api_keys: ${API_KEYS:dict:{}}
         polling_interval: ${POLLING_INTERVAL:float:30.0}
         agent_index: ${AGENT_INDEX_0:int:0}
         num_agents: ${NUM_AGENTS:int:4}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
-        mech_to_config: ${MECH_TO_CONFIG:dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-          "0x77af31De935740567Cf4fF1986D04B2c964A786a":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 1:
   models:
     params:
       args:
         task_deadline: ${TASK_DEADLINE:float:240.0}
-        tools_to_package_hash:
-          $TOOLS_TO_PACKAGE_HASH:dict: {}
+        tools_to_package_hash: ${TOOLS_TO_PACKAGE_HASH:dict:{}}
         api_keys: ${API_KEYS:dict:{}}
         polling_interval: ${POLLING_INTERVAL:float:30.0}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         agent_index: ${AGENT_INDEX_1:int:1}
         num_agents: ${NUM_AGENTS:int:4}
-        mech_to_config: ${MECH_TO_CONFIG:dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-          "0x77af31De935740567Cf4fF1986D04B2c964A786a":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 2:
@@ -222,15 +210,13 @@ type: skill
     params:
       args:
         task_deadline: ${TASK_DEADLINE:float:240.0}
-        tools_to_package_hash:
-          $TOOLS_TO_PACKAGE_HASH:dict: {}
+        tools_to_package_hash: ${TOOLS_TO_PACKAGE_HASH:dict:{}}
         api_keys: ${API_KEYS:dict:{}}
         polling_interval: ${POLLING_INTERVAL:float:30.0}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         agent_index: ${AGENT_INDEX_2:int:2}
         num_agents: ${NUM_AGENTS:int:4}
-        mech_to_config: ${MECH_TO_CONFIG:dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-          "0x77af31De935740567Cf4fF1986D04B2c964A786a":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 3:
@@ -238,16 +224,14 @@ type: skill
     params:
       args:
         task_deadline: ${TASK_DEADLINE:float:240.0}
-        tools_to_package_hash:
-          $TOOLS_TO_PACKAGE_HASH:dict: {}
+        tools_to_package_hash: ${TOOLS_TO_PACKAGE_HASH:dict:{}}
         api_keys: ${API_KEYS:dict:{}}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         polling_interval: ${POLLING_INTERVAL:float:30.0}
         agent_index: ${AGENT_INDEX_3:int:3}
         num_agents: ${NUM_AGENTS:int:4}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
-        mech_to_config: ${MECH_TO_CONFIG:dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-          "0x77af31De935740567Cf4fF1986D04B2c964A786a":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 ---
 public_id: valory/ledger:0.19.0
