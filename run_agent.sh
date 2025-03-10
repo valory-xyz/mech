@@ -26,12 +26,9 @@ autonomy packages lock
 # Fetch the agent
 autonomy fetch --local --agent valory/mech --alias agent
 
-# Replace params with env vars
-source .1env
-python scripts/aea-config-replace.py
-
-# Copy and add the keys and issue certificates
+# Copy and add the keys, env and issue certificates
 cd agent
+cp $PWD/../.agentenv .
 cp $PWD/../ethereum_private_key.txt .
 autonomy add-key ethereum ethereum_private_key.txt
 autonomy issue-certificates
@@ -44,4 +41,4 @@ tendermint node --proxy_app=tcp://127.0.0.1:26658 --rpc.laddr=tcp://127.0.0.1:26
 tm_subprocess_pid=$!
 
 # Run the agent
-aea -s run
+aea -s run --env .agentenv
