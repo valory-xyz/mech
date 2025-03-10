@@ -28,7 +28,6 @@ from typing import Any, Dict, Generator, List, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
-from web3 import Web3
 
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
