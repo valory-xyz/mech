@@ -22,7 +22,7 @@ contracts:
 - valory/hash_checkpoint:0.1.0:bafybeibpfllgkoa2fb47gtb7qwlb6gya5yufgm7m7u5f3cdwxuu2r2grw4
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeicky7duncl25yif5gduo7a3ccgbgfo4pkx6rvexooyvzgyomcfuy4
-- valory/mech_marketplace:0.1.0:bafybeice4e7h2nlrke7gbszsaajlcp65ergquk7yleneswkbe2u4b6ynle
+- valory/mech_marketplace:0.1.0:bafybeibbumasogxfpes5pxod2mwdfd6qovagln27ytl75uyki665teixk4
 protocols:
 - open_aea/signing:1.0.0:bafybeihv62fim3wl2bayavfcg3u5e5cxu3b7brtu4cn5xoxd6lqwachasi
 - valory/abci:0.1.0:bafybeiaqmp7kocbfdboksayeqhkbrynvlfzsx4uy4x6nohywnmaig4an7u
@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeic6g74suoeeupdyfqd26a32yc4ubd6tzjs5n67ytxtmhhyvnglo5u
+- valory/mech_abci:0.1.0:bafybeihy44iky4xn7unrgjkyfyu3f5iihpx5wvmgslrqi4hsdrcduabqly
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
 - valory/subscription_abci:0.1.0:bafybeiajlokbsufg6xhptkth7l4zwwpbtjo7oyftqr3bmhhxgmjuwspdoi
-- valory/task_execution:0.1.0:bafybeihaq6mjlcji4z25v7txzcqwcgb7aw3vcyvsqe3dl2knr4sih3bvei
-- valory/task_submission_abci:0.1.0:bafybeihginpotn75gdj3tt5rqsgi7mqrox6l5d465cjnysyq3y7qcdk6py
+- valory/task_execution:0.1.0:bafybeia55ao4mlvxthl6z7uy6cbys5tbzihocflyjp5zsbh2mnyy7kaxrq
+- valory/task_submission_abci:0.1.0:bafybeibponjkng72qreszdg2s45osiizvhdeejpklc3m3laaysxxvjzstm
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
