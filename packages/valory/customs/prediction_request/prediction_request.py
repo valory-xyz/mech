@@ -310,21 +310,60 @@ COMPLETION_RETRIES = 3
 COMPLETION_DELAY = 2
 
 PREDICTION_PROMPT = """
-You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
-for a given event. You are provided with an input under the label "USER_PROMPT". You must follow the instructions
-under the label "INSTRUCTIONS". You must provide your response in the format specified under "OUTPUT_FORMAT".
+Evaluate the given binary question under the label "USER_PROMPT" to determine the probabilities of the yes and no outcomes. 
+You need to compute the p_yes and p_no values based on the context of the question under the label "ADDITIONAL_INFORMATION" and the options provided.
 
-INSTRUCTIONS
-* Read the input under the label "USER_PROMPT" delimited by three backticks.
-* The "USER_PROMPT" specifies an event.
-* The event will only have two possible outcomes: either the event will happen or the event will not happen.
-* If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You must provide a probability estimation of the event happening, based on your training data.
-* You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION" delimited by three backticks.
-* You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data.
-* If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
-* You must provide your response in the format specified under "OUTPUT_FORMAT".
-* Do not include any other contents in your response.
+Follow these steps
+1. Analyze the Question: Understand the content and context of the given question. Identify key elements that will affect the probabilities.
+
+2. Consider Historical Data & Context: Reflect on any relevant historical data, trends, or context that could influence the outcomes.
+
+3. Statistical Analysis: Use statistical methods and models to determine the likelihood of each outcome based on the data or context if available.
+
+4. Calculate the yes and no probabilities:
+
+    * Determine p_yes (probability of the yes option).
+
+    * Determine p_no (probability of the no option).
+
+5. Verify Total Probability: Ensure that the sum of p_yes and p_no equals 1, confirming a valid probability distribution.
+6. Evaluate how confident you are in the predicted answer to the question: give a "confidence" value between 0 and 1.
+    * 0 meaning the lowest confidence value. 
+    * 1 meaning the maximum confidence value.
+7. Evaluate how relevant is the information provided in "ADDITIONAL_INFORMATION" and any historical data plus context used to answer the question: give an "info_utility" value between 0 and 1.
+    * 0 meaning the extra information was not very useful to answer the question.
+    * 1 meaning the extra information was very useful and relevant for the prediction.
+8. Build the final answer in JSON format with the four values:
+    {
+    "p_yes": [calculated_probability_of_yes],
+    "p_no": [calculated_probability_of_no],
+    "confidence": [confidence value],
+    "info_utility": [info_utility value]
+    }
+
+Examples
+Example 1:
+
+Input: 
+    * Question: "Will Red Bull win the World Constructors’ Championship in the 2024 F1 Season?"
+
+    * Yes Option: "Yes, Red Bull will win."
+
+    * No Option: "No, Red Bull will not win."
+
+Reasoning:
+
+    * Consider related news with the topic of the question, past sport reports and relevant articles on the field.
+
+Output:
+
+{
+  "p_yes": 0.3,
+  "p_no": 0.7,
+  "confidence": 0.8,
+  "info_utility": 0.8
+}
+
 
 USER_PROMPT:
 ```
@@ -335,22 +374,6 @@ ADDITIONAL_INFORMATION:
 ```
 {additional_information}
 ```
-
-OUTPUT_FORMAT
-* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
-* The JSON must contain four fields: "p_yes", "p_no", "confidence", and "info_utility".
-* Each item in the JSON must have a value between 0 and 1.
-   - "p_yes": Estimated probability that the event in the "USER_PROMPT" occurs.
-   - "p_no": Estimated probability that the event in the "USER_PROMPT" does not occur.
-   - "confidence": A value between 0 and 1 indicating the confidence in the prediction. 0 indicates lowest
-     confidence value; 1 maximum confidence value.
-   - "info_utility": Utility of the information provided in "ADDITIONAL_INFORMATION" to help you make the prediction.
-     0 indicates lowest utility; 1 maximum utility.
-* The sum of "p_yes" and "p_no" must equal 1.
-* Output only the JSON object. Do not include any other contents in your response.
-* This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
-* This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
-* This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
 URL_QUERY_PROMPT = """
