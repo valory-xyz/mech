@@ -195,6 +195,9 @@ is_abstract: false
 public_id: valory/mech_abci:0.1.0
 type: skill
 models:
+  benchmark_tool:
+    args:
+      log_dir: ${str:/logs}
   params:
     args:
       sleep_time: ${int:1}
