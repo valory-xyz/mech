@@ -554,11 +554,7 @@ class AgentMechContract(Contract):
         payment_type_bytes = contract_instance.functions.paymentType().call()
         payment_type = payment_type_bytes.hex()
 
-        is_nvm_mech = (
-            True
-            if payment_type in [PAYMENT_TYPE_NATIVE_NVM, PAYMENT_TYPE_TOKEN_NVM]
-            else False
-        )
+        is_nvm_mech = payment_type in [PAYMENT_TYPE_NATIVE_NVM, PAYMENT_TYPE_TOKEN_NVM]
         return {"data": is_nvm_mech}
 
     @classmethod
