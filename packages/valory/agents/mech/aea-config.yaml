@@ -222,8 +222,8 @@ models:
       service_endpoint_base: ${str:https://dummy_service.autonolas.tech/}
       gas_params:
         gas_price: ${int:null}
-        max_fee_per_gas: ${int:5466922}
-        max_priority_fee_per_gas: ${int:5000000}
+        max_fee_per_gas: ${int:null}
+        max_priority_fee_per_gas: ${int:null}
       init_fallback_gas: ${int:500000}
       manual_gas_limit: ${int:1000000}
       service_owner_share: ${float:0.1}

@@ -27,13 +27,17 @@ type: skill
   models:
     params:
       args:
+        gas_params: &id001
+          gas_price: ${GAS_PRICE:int:null}
+          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:null}
+          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:null}
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: &id001
+        setup: &id002
           all_participants: ${ALL_PARTICIPANTS:list:[]}
           safe_contract_address: ${SAFE_CONTRACT_ADDRESS:str:0x0000000000000000000000000000000000000000}
           consensus_threshold: ${CONSENSUS_THRESHOLD:int:null}
@@ -68,6 +72,7 @@ type: skill
   models:
     params:
       args:
+        gas_params: *id001
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
@@ -75,7 +80,7 @@ type: skill
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: *id001
+        setup: *id002
         share_tm_config_on_startup: ${USE_ACN:bool:false}
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
         tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
@@ -106,6 +111,7 @@ type: skill
   models:
     params:
       args:
+        gas_params: *id001
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
@@ -113,7 +119,7 @@ type: skill
         use_polling: ${USE_POLLING:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: *id001
+        setup: *id002
         share_tm_config_on_startup: ${USE_ACN:bool:false}
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:0}
@@ -144,13 +150,14 @@ type: skill
   models:
     params:
       args:
+        gas_params: *id001
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: *id001
+        setup: *id002
         share_tm_config_on_startup: ${USE_ACN:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
