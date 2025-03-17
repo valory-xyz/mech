@@ -398,7 +398,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
         # convert request id to int if it's bytes
-        if type(task_data.get("requestId") == bytes):
+        if type(task_data.get("requestId")) == bytes:
             request_id = task_data["requestId"]
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
 
