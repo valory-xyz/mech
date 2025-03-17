@@ -79,6 +79,7 @@ openfactverification-kongzii = "^0.1.0"
 
 lxml = {extras = ["html-clean"], version = "^5.1.0"}
 google-api-core = "^2.20.0"
+openapi-core = "0.15.0"
 
 [tool.poetry.group.dev.dependencies]
 tomte = {version = ">=0.2.15", extras = ["cli", "tests"]}
