@@ -353,7 +353,7 @@ OUTPUT_FORMAT
 * This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
-ALTERNATIVE_PREDICTION_PROMPT = """
+OFFLINE_PREDICTION_PROMPT = """
 You are a superforecasting agent specializing in predicting the probabilities of binary outcomes (yes or no). Your responses MUST be in JSON format as specified below.
 
 **INSTRUCTIONS:**
@@ -791,6 +791,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             raise ValueError(f"Tool {tool} is not supported.")
 
         active_prompt = PREDICTION_PROMPT
+        additional_information = ""
         if tool.startswith("prediction-online"):
             additional_information, counter_callback = fetch_additional_information(
                 prompt,
@@ -804,11 +805,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 counter_callback=counter_callback,
                 source_links=kwargs.get("source_links", None),
             )
-        else:
-            additional_information = ""
-            if "claude" not in engine:
-                # used improved prompt in all models except the Claude ones
-                active_prompt = ALTERNATIVE_PREDICTION_PROMPT
+        elif "claude" not in engine:
+            # used improved prompt in all models except the Claude ones
+            active_prompt = OFFLINE_PREDICTION_PROMPT
 
         if additional_information and tool == "prediction-online-summarized-info":
             additional_information = summarize(
