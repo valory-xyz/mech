@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -24,9 +24,8 @@ import time
 from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 from enum import Enum
-
+from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from aea.helpers.cid import to_v1
 from aea.mail.base import EnvelopeContext

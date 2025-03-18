@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -255,11 +255,6 @@ LLM_SETTINGS = {
         "temperature": 0,
     },
     "claude-3-haiku-20240307": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "claude-3-sonnet-20240229": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
         "temperature": 0,

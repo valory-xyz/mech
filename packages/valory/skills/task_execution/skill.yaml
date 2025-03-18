@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeifey3nw4mpibfww7dgzfvlqavoafecdhlatuy5o55fmg7oimu5ah4
-  dialogues.py: bafybeia5byu6hwo5fv4tnsuqw5tw7wj3aceldqszizhugybqzn23tnhr2i
-  handlers.py: bafybeiamdnz3xinxwxz5vvlgxrtiv3bo2x4pp2kgkn6faywk6h7d3ucanm
-  models.py: bafybeifljr6aqc64rxkgww3f7i3rtelyhexq5syoz6mizcoefygyouh5uy
+  behaviours.py: bafybeifdlpbv6cstir4d7lem74p6pephukfr43apgmkvrdrd57t7kdcqtu
+  dialogues.py: bafybeifnfgvnq7kydpai75xbl5ma3wxq6fdxoycseysvizi4ek6supamra
+  handlers.py: bafybeie2gk6viqd7frhbecsu53ig5rbd44l5reelnmsuh54nawvuc4fwhu
+  models.py: bafybeifhj67fr45qevfalqqecbr643gawwxmcp5fsqqkc6mwza4tyd6i7q
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
-  utils/benchmarks.py: bafybeiafnee7iay6dyjnatyqyzjov5c4ibl3ojamjmgfjri7cyghl7qayq
+  utils/benchmarks.py: bafybeib5xjfeu2jezcj4ofl36qnznhbrjad6hqiwavebg5cidkl2pwlhz4
   utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
   utils/ipfs.py: bafybeic7cbuv3tomi2xv7h2qowrqnpoufpanngzlgzljl4ptimpss3meqm
   utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
@@ -23,8 +23,8 @@ connections:
 - valory/ipfs:0.1.0:bafybeiay3g7ioixe5zxilb5vodvz3lpf3jhugvpdzisfzeqlxt2wejaira
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 contracts:
-- valory/agent_mech:0.1.0:bafybeihlbmsxebglvoybxl7tephgkbysagp27fkvkus5ulh2sbnqbkcrie
-- valory/mech_marketplace:0.1.0:bafybeice4e7h2nlrke7gbszsaajlcp65ergquk7yleneswkbe2u4b6ynle
+- valory/agent_mech:0.1.0:bafybeid6zk3kxhl2vyayhnrheij5qensxidtk6ikasbyzzm67mhfqrdp4m
+- valory/mech_marketplace:0.1.0:bafybeibbumasogxfpes5pxod2mwdfd6qovagln27ytl75uyki665teixk4
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeidgu7o5llh26xp3u3ebq3yluull5lupiyeu6iooi2xyymdrgnzq5i
