@@ -853,7 +853,7 @@ class TransactionPreparationBehaviour(
         marketplace_done_tasks = [
             done_task
             for done_task in self.synchronized_data.done_tasks
-            if done_task.get(IS_MARKETPLACE_MECH_KEY)
+            if done_task.get(IS_MARKETPLACE_MECH_KEY) and not done_task.get(IS_OFFCHAIN)
         ]
         marketplace_deliver_txs = yield from self._get_marketplace_tasks_deliver_data(
             marketplace_done_tasks
@@ -1215,12 +1215,12 @@ class TransactionPreparationBehaviour(
     def _get_marketplace_tasks_deliver_data(
         self, marketplace_done_tasks: List[Dict[str, Any]]
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        tx_list = []
         if len(marketplace_done_tasks) > 0:
             self.context.logger.info(
                 f"{len(marketplace_done_tasks)} Marketplace Tasks Found. Preparing deliver onchain tx(s)"
             )
 
-            tx_list = []
             marketplace_deliver_by_mech = defaultdict(
                 lambda: {
                     MarketplaceKeys.REQUEST_IDS.value: [],

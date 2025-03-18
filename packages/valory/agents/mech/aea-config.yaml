@@ -15,7 +15,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 - valory/websocket_client:0.1.0:bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli
 contracts:
-- valory/agent_mech:0.1.0:bafybeigcbzicdyasoonpwvlkr7jg2yaoci7o3gca3akgqspmemtk6yj5fy
+- valory/agent_mech:0.1.0:bafybeid6zk3kxhl2vyayhnrheij5qensxidtk6ikasbyzzm67mhfqrdp4m
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
 - valory/gnosis_safe:0.1.0:bafybeiaw4yr7ubqlp63iz5wxqep3a5fokqs3kqva7sp2nsqg355zzucqgm
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeidkqhw7smq4kbqryodom6maj7gubc5nbxwm4vi343xbkqxx3brjtm
@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieo7pe5wqjphs5izpz5aujjbubymlxub62b3rhx6yglu65ibalffu
 - valory/abstract_round_abci:0.1.0:bafybeibiw4oqwqvo4jccwz5fb73iardzychgvcl66tceiildohoju2ikti
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeiftuqyypyeoduaa2yff3uu2dsb4slwpaapf63qmvrju5rvgvkh75u
+- valory/mech_abci:0.1.0:bafybeigso4med6bz6nx5dkt33mmi243oawmfdupmr3im3caqhmy2mg5pti
 - valory/registration_abci:0.1.0:bafybeib3n6vqkfbrcubcbliebjnuwyywdinxkbzt76n6gbn2kg7ace47dq
 - valory/reset_pause_abci:0.1.0:bafybeihkj6lmaypspyxe5qqrjgnolyck62pyvqoylr24ab6ue4steqcw7e
-- valory/subscription_abci:0.1.0:bafybeiajlokbsufg6xhptkth7l4zwwpbtjo7oyftqr3bmhhxgmjuwspdoi
-- valory/task_execution:0.1.0:bafybeibumm6lxqgiqxkbgn6hicfu6mkmwlvjz45mrtnlawgie6ytk2ljhq
-- valory/task_submission_abci:0.1.0:bafybeihtv6kqyzwdbz5lfyu3t54azb5t7ohieugzpst4oyxrst2b5r44tu
+- valory/subscription_abci:0.1.0:bafybeiejlbsm36mjf64knuu5ns3tydwvb6gdubjgvzrsv264wi7u7qtnue
+- valory/task_execution:0.1.0:bafybeiaw4srehwq7kgqm5fqzqy4kyisojczrsjgrkknx74rpkjndpcc53q
+- valory/task_submission_abci:0.1.0:bafybeidgjh37o5cdzdncylv3iberwuppqeu6mfrcd4yi7wf7j3xc6cq56y
 - valory/termination_abci:0.1.0:bafybeifi2uodnrjsrivj53g3sjutocmyusbx6mlsb6oanqdyt2mfbyvusy
 - valory/transaction_settlement_abci:0.1.0:bafybeigh2vkt74jrad5gtsczrgqcuhcqe7jkgjy7jdw56yamlzwwnaymjy
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -222,8 +222,8 @@ models:
       service_endpoint_base: ${str:https://dummy_service.autonolas.tech/}
       gas_params:
         gas_price: ${int:null}
-        max_fee_per_gas: ${int:31000}
-        max_priority_fee_per_gas: ${int:30000}
+        max_fee_per_gas: ${int:5466922}
+        max_priority_fee_per_gas: ${int:5000000}
       init_fallback_gas: ${int:500000}
       manual_gas_limit: ${int:1000000}
       service_owner_share: ${float:0.1}
@@ -232,6 +232,7 @@ models:
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
       mech_to_subscription: ${dict:{}}
+      mech_to_config: ${dict:{}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x7a1De622c62c6e985fEDd4919FfA8e9997B9547f"]}
