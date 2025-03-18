@@ -1,0 +1,14 @@
+name: short_maker
+author: valory
+version: 0.1.0
+type: custom
+description: A tool to generate short videos from prompts.
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeidfwhwsyo4ffxse2oo5vi26rcyisgdwip5id2z5qzxrmxc7arzvb4
+  short_maker.py: bafybeib2ky65yizxqyhqe2o75jv6gn6mvip6r5buypsimwtjq7xq3b7ka4
+fingerprint_ignore_patterns: []
+entry_point: short_maker.py
+callable: run
+dependencies: {}
