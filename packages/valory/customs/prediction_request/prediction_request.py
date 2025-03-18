@@ -353,6 +353,43 @@ OUTPUT_FORMAT
 * This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
 """
 
+OFFLINE_PREDICTION_PROMPT = """
+You are a superforecasting agent specializing in predicting the probabilities of binary outcomes (yes or no). Your responses MUST be in JSON format as specified below.
+
+**INSTRUCTIONS:**
+
+1. **Analyze the Question:** Carefully understand the question's core meaning and any relevant context.
+
+2. **Gather Information:** Consider historical data, trends, and any information provided under "ADDITIONAL_INFORMATION".  Evaluate the relevance and utility of this information.
+
+3. **Estimate Probabilities:**  Determine the probabilities of "yes" (p_yes) and "no" (p_no) outcomes based on your analysis. These *must* be floating-point numbers between 0 and 1.
+
+4. **Ensure Validity:** The sum of p_yes and p_no *must* equal 1.0.
+
+5. **Assess Confidence:**  Evaluate your confidence in the prediction (confidence). This *must* be a floating-point number between 0 and 1. A value of 0 indicates the lowest confidence, and 1 indicates the highest.
+
+6. **Evaluate Information Utility:** Assess how helpful the "ADDITIONAL_INFORMATION" was in making your prediction (info_utility). This *must* be a floating-point number between 0 and 1. A value of 0 means the information was not useful, and 1 means it was highly relevant.
+
+7. **JSON Output ONLY:** Your ENTIRE response *must* be a valid JSON object conforming to the "OUTPUT_FORMAT" below.  Do *not* include any surrounding text, explanations, or conversational elements.
+
+
+**USER_PROMPT:**
+{user_prompt}
+
+**ADDITIONAL_INFORMATION:**
+{additional_information}
+
+
+**OUTPUT_FORMAT:**
+* Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
+* The JSON must contain four fields: "p_yes", "p_no", "confidence", and "info_utility".
+* This is incorrect:"```json{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}```"
+* This is incorrect:```json"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"```
+* This is correct:"{{\n  \"p_yes\": 0.2,\n  \"p_no\": 0.8,\n  \"confidence\": 0.7,\n  \"info_utility\": 0.5\n}}"
+IMPORTANT: Adhere strictly to the JSON format. No extra text or explanations are allowed. The values for p_yes, p_no, confidence, and info_utility MUST be floating-point numbers between 0 and 1, and p_yes + p_no MUST equal 1.0.
+"""
+
+
 URL_QUERY_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
 for a given event. You are provided with an input under the label "USER_PROMPT". You must follow the instructions
@@ -753,6 +790,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
+        active_prompt = PREDICTION_PROMPT
+        additional_information = ""
         if tool.startswith("prediction-online"):
             additional_information, counter_callback = fetch_additional_information(
                 prompt,
@@ -766,8 +805,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
                 counter_callback=counter_callback,
                 source_links=kwargs.get("source_links", None),
             )
-        else:
-            additional_information = ""
+        elif "claude" not in engine:
+            # used improved prompt in all models except the Claude ones
+            active_prompt = OFFLINE_PREDICTION_PROMPT
 
         if additional_information and tool == "prediction-online-summarized-info":
             additional_information = summarize(
@@ -777,7 +817,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         # additional_information = adjust_additional_information(
         #     prompt, PREDICTION_PROMPT, additional_information, engine
         # )
-        prediction_prompt = PREDICTION_PROMPT.format(
+        prediction_prompt = active_prompt.format(
             user_prompt=prompt, additional_information=additional_information
         )
         messages = [
