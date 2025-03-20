@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeibavdwkdwaokwrumik6skkhts2nxxrspjxqi7mnjzkbzrftq2mlqq
+agent: valory/mech:0.1.0:bafybeifqwgriadoia3mrt3hpywvebmqnhbq5hsmczcz3sl4svyo3kt6loy
 number_of_agents: 4
 deployment:
   agent:
@@ -27,6 +27,7 @@ type: skill
   models:
     params:
       args:
+        gas_params: ${GAS_PARAMS:dict:{"gas_price":null, "max_fee_per_gas":null, "max_priority_fee_per_gas":null}}
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
@@ -68,6 +69,7 @@ type: skill
   models:
     params:
       args:
+        gas_params: ${GAS_PARAMS:dict:{"gas_price":null, "max_fee_per_gas":null, "max_priority_fee_per_gas":null}}
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
@@ -106,6 +108,7 @@ type: skill
   models:
     params:
       args:
+        gas_params: ${GAS_PARAMS:dict:{"gas_price":null, "max_fee_per_gas":null, "max_priority_fee_per_gas":null}}
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
@@ -144,6 +147,7 @@ type: skill
   models:
     params:
       args:
+        gas_params: ${GAS_PARAMS:dict:{"gas_price":null, "max_fee_per_gas":null, "max_priority_fee_per_gas":null}}
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
