@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeifdlpbv6cstir4d7lem74p6pephukfr43apgmkvrdrd57t7kdcqtu
+  behaviours.py: bafybeiglw43w3gegqmdldlaed2r62k7peo2juz37k7xrnl4r2xwo3l644m
   dialogues.py: bafybeifnfgvnq7kydpai75xbl5ma3wxq6fdxoycseysvizi4ek6supamra
-  handlers.py: bafybeie2gk6viqd7frhbecsu53ig5rbd44l5reelnmsuh54nawvuc4fwhu
-  models.py: bafybeifhj67fr45qevfalqqecbr643gawwxmcp5fsqqkc6mwza4tyd6i7q
+  handlers.py: bafybeib7ek7kvfdzdrcxihmg5siyeqgftqfr5nv4g5lqexh5rkdgjl4m4q
+  models.py: bafybeieeqyryjsb3632ahvbnzdzs3tfoujbinrt4kecqt2rx5vhi64xdle
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeib5xjfeu2jezcj4ofl36qnznhbrjad6hqiwavebg5cidkl2pwlhz4
@@ -23,7 +23,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeiay3g7ioixe5zxilb5vodvz3lpf3jhugvpdzisfzeqlxt2wejaira
 - valory/p2p_libp2p_client:0.1.0:bafybeid3xg5k2ol5adflqloy75ibgljmol6xsvzvezebsg7oudxeeolz7e
 contracts:
-- valory/agent_mech:0.1.0:bafybeid6zk3kxhl2vyayhnrheij5qensxidtk6ikasbyzzm67mhfqrdp4m
+- valory/agent_mech:0.1.0:bafybeibvr4vgxoe27difqqcaqegqlisdjdctjmep344mm6cskasnri3rhm
 - valory/mech_marketplace:0.1.0:bafybeibbumasogxfpes5pxod2mwdfd6qovagln27ytl75uyki665teixk4
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
