@@ -22,9 +22,8 @@ import json
 import threading
 import time
 import urllib.parse
-import uuid
 from enum import Enum
-from typing import Any, Dict, Generator, List, Union, cast
+from typing import Any, Dict, List, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -231,6 +230,8 @@ class HttpCode(Enum):
 
 
 class MechHttpHandler(AbstractResponseHandler):
+    """Mech HTTP message handler."""
+
     SUPPORTED_PROTOCOL = HttpMessage.protocol_id
 
     @property
@@ -265,7 +266,7 @@ class MechHttpHandler(AbstractResponseHandler):
 
     def _handle_signed_requests(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> Generator[None, None, None]:
+    ) -> None:
         """
         Handle POST requests to send signed tx to mech.
 
@@ -304,7 +305,7 @@ class MechHttpHandler(AbstractResponseHandler):
 
     def _handle_offchain_request_info(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> Generator[None, None, None]:
+    ) -> None:
         """
         Handle GET requests to fetch offchain request info.
 

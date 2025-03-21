@@ -43,7 +43,6 @@ from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
-from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
 from packages.valory.protocols.contract_api import ContractApiMessage
