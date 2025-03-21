@@ -1214,7 +1214,7 @@ class TransactionPreparationBehaviour(
                 self.context.logger.warning(
                     f"get_encoded_data_for_request unsuccessful!: {contract_api_msg}"
                 )
-                return ()
+                return (None, None)
 
             encoded_data = cast(bytes, contract_api_msg.state.body["data"])
             final_request_ids.append(request_id)
