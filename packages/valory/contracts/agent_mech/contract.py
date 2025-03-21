@@ -529,6 +529,7 @@ class AgentMechContract(Contract):
         deliveryRates: List[int],
         paymentData: str,
     ) -> JSONLike:
+        """Get offchain deliver tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encodeABI(
