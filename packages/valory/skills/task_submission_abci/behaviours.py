@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -18,11 +18,14 @@
 # ------------------------------------------------------------------------------
 
 """This package contains round behaviours of TaskExecutionAbciApp."""
+
 import json
 import threading
 import time
 from abc import ABC
+from collections import defaultdict
 from copy import deepcopy
+from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 
 from aea.helpers.cid import CID, to_v1
@@ -39,6 +42,7 @@ from packages.valory.contracts.gnosis_safe.contract import (
     SafeOperation,
 )
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
+from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
@@ -76,7 +80,54 @@ ZERO_IPFS_HASH = (
 )
 FILENAME = "usage"
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
-LAST_TX = "last_tx"
+
+IS_MARKETPLACE_MECH_KEY = "is_marketplace_mech"
+
+IS_OFFCHAIN = "is_offchain"
+NONCE = "nonce"
+SENDER = "sender"
+REQUESTER_KEY = "requester"
+MECH_ADDRESS = "mech_address"
+
+
+class OffchainKeys(Enum):
+    """enum for offchain delivery as per smart contract function input"""
+
+    DELIVER_WITH_SIGNATURES = "deliverWithSignatures"
+    DELIVERY_RATES = "delivery_rates"
+    PAYMENT_DATA = "paymentData"
+    DELIVERY_RATES_CAMEL = "deliveryRates"
+
+
+class OffchainDataKey(Enum):
+    """enum for offchain delivery function's input list keys"""
+
+    REQUEST_DATA_KEY = "requestData"
+    SIGNATURE_KEY = "signature"
+    DELIVERY_DATA = "deliveryData"
+
+
+class OffchainDataValue(Enum):
+    """enum for offchain delivery function's input list values"""
+
+    IPFS_HASH = "ipfs_hash"
+    SIGNATURE = "signature"
+    TASK_RESULT = "task_result"
+    DELIVERY_RATE = "delivery_rate"
+
+
+class MarketplaceKeys(Enum):
+    """enum for marketplace delivery function's input keys"""
+
+    REQUEST_IDS = "requestIds"
+    DATAS = "datas"
+
+
+class MarketplaceData(Enum):
+    """enum for marketplace delivery function's input values"""
+
+    REQUEST_ID = "requestId"
+    TASK_RESULT = "task_result"
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
@@ -103,12 +154,6 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         """
         done_tasks = deepcopy(self.context.shared_state.get(DONE_TASKS, []))
         return cast(List[Dict[str, Any]], done_tasks)
-
-    def set_tx(self, last_tx: str) -> None:
-        """Signal that the transaction was prepared."""
-        now = time.time()
-        # store the tx hash and the time it was stored
-        self.context.shared_state[LAST_TX] = (last_tx, now)
 
     def done_tasks_lock(self) -> threading.Lock:
         """Get done_tasks_lock."""
@@ -153,26 +198,6 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         # Convert the multihash bytes to a hexadecimal string
         hex_multihash = multihash_bytes.hex()
         return hex_multihash[6:]
-
-    def get_contract_api_response(
-        self,
-        performative: ContractApiMessage.Performative,
-        contract_address: Optional[str],
-        contract_id: str,
-        contract_callable: str,
-        ledger_id: Optional[str] = None,
-        **kwargs: Any,
-    ) -> Generator[None, None, ContractApiMessage]:
-        """Get the contract api response."""
-        return super().get_contract_api_response(
-            performative=performative,
-            contract_address=contract_address,
-            contract_id=contract_id,
-            contract_callable=contract_callable,
-            ledger_id=ledger_id,
-            chain_id=self.params.default_chain_id,
-            **kwargs,
-        )
 
 
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
@@ -236,8 +261,6 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         # ref: https://github.com/valory-xyz/open-autonomy/blob/main/packages/valory/skills/transaction_settlement_abci/rounds.py#L432-L434
         try:
             final_tx_hash = self.synchronized_data.final_tx_hash
-            # added for healthcheck purposes
-            self.set_tx(final_tx_hash)
         except Exception as e:
             self.context.logger.error(e)
             return (False, "")
@@ -831,7 +854,31 @@ class TransactionPreparationBehaviour(
             # of the txs. The error will be logged.
             all_txs.extend(split_profit_txs)
 
-        for task in self.synchronized_data.done_tasks:
+        offchain_deliver_txs = yield from self._get_offchain_tasks_deliver_data()
+        if offchain_deliver_txs is not None:
+            # in case of None, the agent will procced ahead as there are no offchain tasks to deliver
+            all_txs.extend(offchain_deliver_txs)
+
+        # filter out all the marketplace done tasks
+        marketplace_done_tasks = [
+            done_task
+            for done_task in self.synchronized_data.done_tasks
+            if done_task.get(IS_MARKETPLACE_MECH_KEY) and not done_task.get(IS_OFFCHAIN)
+        ]
+        marketplace_deliver_txs = yield from self._get_marketplace_tasks_deliver_data(
+            marketplace_done_tasks
+        )
+        if marketplace_deliver_txs is not None:
+            # in case of None, the agent will procced ahead as there are no marketplace tasks to deliver
+            all_txs.extend(marketplace_deliver_txs)
+
+        # filter out the remaining tasks
+        remaining_tasks = [
+            done_task
+            for done_task in self.synchronized_data.done_tasks
+            if not done_task.get(IS_MARKETPLACE_MECH_KEY)
+        ]
+        for task in remaining_tasks:
             deliver_tx = yield from self._get_deliver_tx(task)
             if deliver_tx is None:
                 # something went wrong, respond with ERROR payload for now
@@ -1028,6 +1075,244 @@ class TransactionPreparationBehaviour(
             return self._get_deliver_marketplace_tx(task_data)
 
         return self._get_agent_mech_deliver_tx(task_data)
+
+    def _get_offchain_tasks_deliver_data(
+        self,
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        done_tasks_list = self.done_tasks
+        offchain_done_tasks_list = [
+            done_task
+            for done_task in done_tasks_list
+            if done_task.get(IS_OFFCHAIN) is True
+        ]
+        tx_list = []
+
+        if len(offchain_done_tasks_list) > 0:
+            self.context.logger.info(
+                f"{len(offchain_done_tasks_list)} Offchain Requests Found. Preparing deliver onchain tx(s)"
+            )
+            self.context.logger.info(f"{offchain_done_tasks_list=}")
+            tx_list_sorted_by_nonce = sorted(
+                offchain_done_tasks_list, key=lambda x: x[NONCE]
+            )
+
+            offchain_list_by_sender: Dict[str, Dict] = defaultdict(
+                lambda: {
+                    OffchainKeys.DELIVER_WITH_SIGNATURES.value: [],
+                    OffchainKeys.DELIVERY_RATES.value: [],
+                }
+            )
+            for data in tx_list_sorted_by_nonce:
+                sender = data[SENDER]
+                # uses the first mech in config as marketplace mech
+                mech_address = self.mech_addresses[0]
+                offchain_list_by_sender[sender][
+                    OffchainKeys.DELIVER_WITH_SIGNATURES.value
+                ].append(
+                    {
+                        OffchainDataKey.REQUEST_DATA_KEY.value: bytes.fromhex(
+                            data[OffchainDataValue.IPFS_HASH.value][2:]
+                        ),
+                        OffchainDataKey.SIGNATURE_KEY.value: bytes.fromhex(
+                            data[OffchainDataValue.SIGNATURE.value][2:]
+                        ),
+                        OffchainDataKey.DELIVERY_DATA.value: bytes.fromhex(
+                            data[OffchainDataValue.TASK_RESULT.value]
+                        ),
+                    }
+                )
+                offchain_list_by_sender[sender][
+                    OffchainKeys.DELIVERY_RATES.value
+                ].append(int(data[OffchainDataValue.DELIVERY_RATE.value]))
+
+            for sender, details in offchain_list_by_sender.items():
+                self.context.logger.info(
+                    f"Preparing deliver data for requester: {sender}"
+                )
+
+                deliver_with_signatures = details[
+                    OffchainKeys.DELIVER_WITH_SIGNATURES.value
+                ]
+                delivery_rates = details[OffchainKeys.DELIVERY_RATES.value]
+
+                contract_data = {
+                    SENDER: self.synchronized_data.safe_contract_address,
+                    REQUESTER_KEY: sender,
+                    OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
+                    OffchainKeys.DELIVERY_RATES_CAMEL.value: delivery_rates,
+                    OffchainKeys.PAYMENT_DATA.value: b"",
+                }
+                self.context.logger.info(
+                    f"Preparing deliver with signature data: {contract_data}"
+                )
+
+                contract_api_msg = yield from self.get_contract_api_response(
+                    performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+                    contract_address=mech_address,
+                    contract_id=str(AgentMechContract.contract_id),
+                    contract_callable="get_offchain_deliver_data",
+                    **contract_data,
+                )
+                if (
+                    contract_api_msg.performative
+                    != ContractApiMessage.Performative.STATE
+                ):  # pragma: nocover
+                    self.context.logger.warning(
+                        f"get_offchain_deliver_data unsuccessful!: {contract_api_msg}"
+                    )
+                    return None
+
+                data_ = cast(bytes, contract_api_msg.state.body["data"])
+                simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+
+                tx_list.append(
+                    {
+                        "to": mech_address,
+                        "value": ZERO_ETHER_VALUE,
+                        "data": data_,
+                        "simulation_ok": simulation_ok,
+                    }
+                )
+
+        return tx_list
+
+    def _get_is_nvm_mech(self, mech: str) -> Generator[None, None, Optional[bool]]:
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=mech,
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_is_nvm_mech",
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_is_nvm_mech unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        is_nvm_mech = cast(bool, contract_api_msg.state.body["data"])
+        return is_nvm_mech
+
+    def _get_encoded_deliver_data(
+        self, request_ids: List, datas: List
+    ) -> Generator[None, None, Tuple]:
+        final_request_ids = []
+        final_datas = []
+        for request_id, data in zip(request_ids, datas):
+            contract_api_msg = yield from self.get_contract_api_response(
+                performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+                contract_address=self.params.mech_marketplace_address,
+                contract_id=str(MechMarketplaceContract.contract_id),
+                contract_callable="get_encoded_data_for_request",
+                request_id=request_id,
+                data=data,
+            )
+            if (
+                contract_api_msg.performative != ContractApiMessage.Performative.STATE
+            ):  # pragma: nocover
+                self.context.logger.warning(
+                    f"get_encoded_data_for_request unsuccessful!: {contract_api_msg}"
+                )
+                return (None, None)
+
+            encoded_data = cast(bytes, contract_api_msg.state.body["data"])
+            final_request_ids.append(request_id)
+            final_datas.append(encoded_data)
+
+        return final_request_ids, final_datas
+
+    def _get_marketplace_tasks_deliver_data(
+        self, marketplace_done_tasks: List[Dict[str, Any]]
+    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+        tx_list = []
+        if len(marketplace_done_tasks) > 0:
+            self.context.logger.info(
+                f"{len(marketplace_done_tasks)} Marketplace Tasks Found. Preparing deliver onchain tx(s)"
+            )
+
+            marketplace_deliver_by_mech: Dict[str, Dict] = defaultdict(
+                lambda: {
+                    MarketplaceKeys.REQUEST_IDS.value: [],
+                    MarketplaceKeys.DATAS.value: [],
+                }
+            )
+
+            def _num_to_bytes(value: int) -> bytes:
+                num_in_bytes = value.to_bytes(32, byteorder="big")
+                return num_in_bytes
+
+            for data in marketplace_done_tasks:
+                mech = data[MECH_ADDRESS]
+                marketplace_deliver_by_mech[mech][
+                    MarketplaceKeys.REQUEST_IDS.value
+                ].append(_num_to_bytes(data[MarketplaceData.REQUEST_ID.value]))
+                marketplace_deliver_by_mech[mech][MarketplaceKeys.DATAS.value].append(
+                    bytes.fromhex(data[MarketplaceData.TASK_RESULT.value])
+                )
+
+            for mech, details in marketplace_deliver_by_mech.items():
+                self.context.logger.info(f"Preparing deliver data for mech: {mech}")
+
+                request_ids = details[MarketplaceKeys.REQUEST_IDS.value]
+                deliver_datas = details[MarketplaceKeys.DATAS.value]
+
+                # check if mech is nvm mech or not
+                # if yes, encode delivery rate and deliver data
+                is_nvm_mech = yield from self._get_is_nvm_mech(mech)
+
+                if is_nvm_mech:
+                    self.context.logger.info(
+                        "NVM Mech Deliver detected. Encoding deliver datas"
+                    )
+                    (
+                        final_request_ids,
+                        final_datas,
+                    ) = yield from self._get_encoded_deliver_data(
+                        request_ids, deliver_datas
+                    )
+                    if final_request_ids and final_datas:
+                        request_ids = final_request_ids
+                        deliver_datas = final_datas
+
+                contract_data = {
+                    SENDER: self.synchronized_data.safe_contract_address,
+                    MarketplaceKeys.REQUEST_IDS.value: request_ids,
+                    MarketplaceKeys.DATAS.value: deliver_datas,
+                }
+                self.context.logger.info(
+                    f"Preparing marketplace deliver with data: {contract_data}"
+                )
+
+                contract_api_msg = yield from self.get_contract_api_response(
+                    performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+                    contract_address=mech,
+                    contract_id=str(AgentMechContract.contract_id),
+                    contract_callable="get_marketplace_deliver_data",
+                    **contract_data,
+                )
+                if (
+                    contract_api_msg.performative
+                    != ContractApiMessage.Performative.STATE
+                ):  # pragma: nocover
+                    self.context.logger.warning(
+                        f"get_marketplace_deliver_data unsuccessful!: {contract_api_msg}"
+                    )
+                    return None
+
+                data_ = cast(bytes, contract_api_msg.state.body["data"])
+                simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+
+                tx_list.append(
+                    {
+                        "to": mech,
+                        "value": ZERO_ETHER_VALUE,
+                        "data": data_,
+                        "simulation_ok": simulation_ok,
+                    }
+                )
+
+        return tx_list
 
 
 class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):

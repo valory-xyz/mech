@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This package contains the rounds of SubscriptionUpdateAbciApp."""
+
 from enum import Enum
 from typing import Dict, Optional, Set, Tuple, cast
 

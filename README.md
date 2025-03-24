@@ -13,19 +13,19 @@
 
 The execution of AI tasks, such as image generation using DALL-E, prompt processing with ChatGPT, or more intricate operations involving on-chain transactions, poses a number of challenges, including:
 
--   Access to proprietary APIs, which may come with associated fees/subscriptions.
--   Proficiency in the usage of the related open-source technologies, which may entail facing their inherent complexities.
+- Access to proprietary APIs, which may come with associated fees/subscriptions.
+- Proficiency in the usage of the related open-source technologies, which may entail facing their inherent complexities.
 
-AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to post _AI tasks requests_ on-chain and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are **hassle-free**, **crypto-native**, and **infinitely composable**.
+AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to post *AI tasks requests* on-chain and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are **hassle-free**, **crypto-native**, and **infinitely composable**.
 
 > :bulb: These are just a few ideas on what capabilities can be brought on-chain with AI Mechs:
 >
-> -   fetch real-time **web search** results
-> -   integrate **multi-sig wallets**,
-> -   **simulate** chain transactions
-> -   execute a variety of **AI models**:
->     -   **generative** (e.g, Stability AI, Midjourney),
->     -   **action-based** AI agents (e.g., AutoGPT, LangChain)
+> - fetch real-time **web search** results
+> - integrate **multi-sig wallets**,
+> - **simulate** chain transactions
+> - execute a variety of **AI models**:
+>   - **generative** (e.g, Stability AI, Midjourney),
+>   - **action-based** AI agents (e.g., AutoGPT, LangChain)
 
 **AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).**
 
@@ -33,13 +33,13 @@ AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to p
 
 The project consists of three components:
 
--   Off-chain AI workers, each of which controls a Mech contract. Each AI worker is implemented as an autonomous service on the Autonolas stack.
--   An on-chain protocol, which is used to generate a registry of AI Mechs, represented as NFTs on-chain.
--   An on-chain [MarketPlace](https://github.com/valory-xyz/ai-registry-mech/) which enable AI Mechs to easily deploy Mech contracts, relays service requests and deliveries to such Mech contracts, and guarantees service deliveries by implementing a reputation score and a take-over mechanism.
--   [Mech Hub](https://aimechs.autonolas.network/), a frontend which allows to interact with the protocol:
-    -   Gives an overview of the AI workers in the registry.
-    -   Allows Mech owners to create new workers.
-    -   Allows users to request work from an existing worker.
+- Off-chain AI workers, each of which controls a Mech contract. Each AI worker is implemented as an autonomous service on the Autonolas stack.
+- An on-chain protocol, which is used to generate a registry of AI Mechs, represented as NFTs on-chain.
+- An on-chain [MarketPlace](https://github.com/valory-xyz/ai-registry-mech/) which enable AI Mechs to easily deploy Mech contracts, relays service requests and deliveries to such Mech contracts, and guarantees service deliveries by implementing a reputation score and a take-over mechanism.
+- [Mech Hub](https://aimechs.autonolas.network/), a frontend which allows to interact with the protocol:
+  - Gives an overview of the AI workers in the registry.
+  - Allows Mech owners to create new workers.
+  - Allows users to request work from an existing worker.
 
 _Note that Mechs which were deployed before the Mech Marketplace contracts (called legacy Mechs) receive request and deliver services directly via their Mech contract._
 
@@ -54,9 +54,9 @@ via the Marketplace, check this [document](https://github.com/valory-xyz/ai-regi
 
     ```json
     {
-    	"nonce": 15,
-    	"tool": "prediction_request",
-    	"prompt": "Will my favourite football team win this week's match?"
+      "nonce": 15,
+      "tool": "prediction_request",
+      "prompt": "Will my favourite football team win this week's match?"
     }
     ```
 
@@ -84,8 +84,8 @@ via the Marketplace, check this [document](https://github.com/valory-xyz/ai-regi
 
     ```json
     {
-    	"requestId": 68039248068127180134548324138158983719531519331279563637951550269130775,
-    	"result": "{\"p_yes\": 0.35, \"p_no\": 0.65, \"confidence\": 0.85, \"info_utility\": 0.75}"
+      "requestId": 68039248068127180134548324138158983719531519331279563637951550269130775,
+      "result": "{\"p_yes\": 0.35, \"p_no\": 0.65, \"confidence\": 0.85, \"info_utility\": 0.75}"
     }
     ```
 
@@ -95,11 +95,11 @@ See some examples of requests and responses on the [Mech Hub](https://aimechs.au
 
 This repository contains a demo AI Mech. You can clone and extend the codebase to create your own AI Mech. You need the following requirements installed in your system:
 
--   [Python](https://www.python.org/) (recommended `3.10`)
--   [Poetry](https://python-poetry.org/docs/)
--   [Docker Engine](https://docs.docker.com/engine/install/)
--   [Docker Compose](https://docs.docker.com/compose/install/)
--   [Tendermint](https://docs.tendermint.com/v0.34/introduction/install.html) `==0.34.19`
+- [Python](https://www.python.org/) (recommended `3.10`)
+- [Poetry](https://python-poetry.org/docs/)
+- [Docker Engine](https://docs.docker.com/engine/install/)
+- [Docker Compose](https://docs.docker.com/compose/install/)
+- [Tendermint](https://docs.tendermint.com/v0.34/introduction/install.html) `==0.34.19`
 
 ## Set up your environment
 
@@ -127,27 +127,27 @@ To help you integrate your own tools more easily, we’ve created a new base rep
 
 **Why Use the New Base Repo?**
 
--   Less Configuration: A clean setup that removes unnecessary complexities.
--   Easier to Extend: Perfect for adding your own features and customizations.
--   Clear Example: Start with a working example and build from there.
+- Less Configuration: A clean setup that removes unnecessary complexities.
+- Easier to Extend: Perfect for adding your own features and customizations.
+- Clear Example: Start with a working example and build from there.
 
 **Feature Comparison**
 
-| Feature                         | New Base Repo (Recommended)                 | Old Mech Repo (Not Preferred)                     |
-| ------------------------------- | ------------------------------------------- | ------------------------------------------------- |
-| **Setup Ease**                  | Simplified minimal setup and quick to start | Requires extra configuration and more error prone |
-| **Flexibility & Customization** | Easy to extend with your own features       | Less streamlined for extensions                   |
-| **Future Support**              | Actively maintained & improved              | No longer the focus for updates                   |
-| **Complexity**                  | Low complexity, easy to use                 | More complex setup                                |
+| Feature                        | New Base Repo (Recommended)                        | Old Mech Repo (Not Preferred)                |
+|---------------------------------|---------------------------------------------------|----------------------------------------------|
+| **Setup Ease**                  | Simplified minimal setup and quick to start       | Requires extra configuration and more error prone |
+| **Flexibility & Customization** | Easy to extend with your own features             | Less streamlined for extensions              |
+| **Future Support**              | Actively maintained & improved                    | No longer the focus for updates              |
+| **Complexity**                  | Low complexity, easy to use                       | More complex setup                          |
 
 We highly encourage you to start with this base repo for future projects. You can find it [here](https://github.com/valory-xyz/mech-quickstart).
 
 ### Running the old base mech
 
 > **Warning**<br />
-> The old repo is no longer the recommended approach for running and extending the project. Although it’s still remains available for legacy projects, we advise you to use the new base repo to ensure you are working with the most current and efficient setup. Access the new mech repo [here](https://github.com/valory-xyz/mech-quickstart). Start with the preferred method mentioned [above](#using-mech-quickstart-preffered-method).
+The old repo is no longer the recommended approach for running and extending the project. Although it’s still remains available for legacy projects, we advise you to use the new base repo to ensure you are working with the most current and efficient setup. Access the new mech repo [here](https://github.com/valory-xyz/mech-quickstart). Start with the preferred method mentioned [above](#using-mech-quickstart-preffered-method).
 
-Follow the instructions below to run the AI Mech demo executing the tool in `./packages/valory/customs/openai_request.py`. Note that AI Mechs can be configured to work in two modes: _polling mode_, which periodically reads the chain, and _websocket mode_, which receives event updates from the chain. The default mode used by the demo is _polling_.
+Follow the instructions below to run the AI Mech demo executing the tool in `./packages/valory/customs/openai_request.py`. Note that AI Mechs can be configured to work in two modes: *polling mode*, which periodically reads the chain, and *websocket mode*, which receives event updates from the chain. The default mode used by the demo is *polling*.
 
 First, you need to configure the worker service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
 
@@ -161,7 +161,7 @@ cp .example.env .1env
 source .1env
 ```
 
-##### Environment variables
+##### Environment Variables
 
 You may customize the agent's behaviour by setting these environment variables.
 
@@ -177,7 +177,8 @@ You may customize the agent's behaviour by setting these environment variables.
 
 The rest of the common environment variables are present in the [service.yaml](https://github.com/valory-xyz/mech/blob/main/packages/valory/services/mech/service.yaml), which are customizable too.
 
-> **Warning**<br /> > **The demo service is configured to match a specific on-chain agent (ID 3) on [Mech Hub](https://aimechs.autonolas.network/registry). Since you will not have access to its private key, your local instance will not be able to transact.
+> **Warning**<br />
+> **The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry)). Since you will not have access to its private key, your local instance will not be able to transact.
 > However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).**
 
 Now, you have two options to run the worker: as a standalone agent or as a service.
@@ -186,9 +187,9 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 1. Ensure you have a file with a private key (`ethereum_private_key.txt`). You can generate a new private key file using the Open Autonomy CLI:
 
-    ```bash
-    autonomy generate-key ethereum
-    ```
+   ```bash
+   autonomy generate-key ethereum
+   ```
 
 2. From one terminal, run the agent:
 
@@ -207,14 +208,14 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 1. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
 
     ```bash
-    autonomy generate-key ethereum -n 4
+    autonomy generate-key ethereum -n 1
     ```
 
-2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent addresses from `keys.json`:
+2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`:
 
-    ```bash
-    ALL_PARTICIPANTS='["your_agent_address_1", "your_agent_address_2", "your_agent_address_3", "your_agent_address_4"]'
-    ```
+   ```bash
+   ALL_PARTICIPANTS='["your_agent_address"]'
+   ```
 
 3. Run, the service:
 
@@ -232,17 +233,17 @@ Use the [mech-client](https://github.com/valory-xyz/mech-client), which can be u
 
 To perform mech requests from your service, use the [mech_interact_abci skill](https://github.com/valory-xyz/IEKit/tree/main/packages/valory/skills/mech_interact_abci). This skill abstracts away all the IPFS and contract interactions so you only need to care about the following:
 
--   Add the mech_interact_abci skill to your dependency list, both in `packages.json`, `aea-config.yaml` and any composed `skill.yaml`.
+- Add the mech_interact_abci skill to your dependency list, both in `packages.json`, `aea-config.yaml` and any composed `skill.yaml`.
 
--   Import [MechInteractParams and MechResponseSpecs in your `models.py` file](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/models.py#L88). You will also need to copy [some dataclasses to your rounds.py](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L66-L97).
+- Import [MechInteractParams and MechResponseSpecs in your `models.py` file](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/models.py#L88). You will also need to copy [some dataclasses to your rounds.py](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L66-L97).
 
--   Add mech_requests and mech_responses to your skills' `SynchonizedData` class ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L181-193))
+- Add mech_requests and mech_responses to your skills' `SynchonizedData` class ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L181-193))
 
--   To send a request, [prepare the request metadata](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L857), write it to [`synchronized_data.mech_requests`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L535) and [transition into mech_interact](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L736).
+- To send a request, [prepare the request metadata](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L857), write it to [`synchronized_data.mech_requests`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L535) and [transition into mech_interact](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L736).
 
--   You will need to appropriately chain the `mech_interact_abci` skill with your other skills ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/composition.py#L66)) and `transaction_settlement_abci`.
+- You will need to appropriately chain the `mech_interact_abci` skill with your other skills ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/composition.py#L66)) and `transaction_settlement_abci`.
 
--   After the interaction finishes, the responses will be inside [`synchronized_data.mech_responses`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L903)
+- After the interaction finishes, the responses will be inside [`synchronized_data.mech_responses`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L903)
 
 For a complete list of required changes, [use this PR as reference](https://github.com/valory-xyz/market-creator/pull/91).
 
@@ -252,7 +253,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
 You can take a look at the preferred method mentioned [above](#using-mech-quickstart-preffered-method) to get started quickly and easily.
 
-Once your service works locally, you have the option to run it on a hosted service like [Propel](https://app.propel.valory.xyz/).
+Once your service works locally, you have the option to run it on a hosted service like [Propel](https://propel.valory.xyz/).
 
 ## Included tools
 

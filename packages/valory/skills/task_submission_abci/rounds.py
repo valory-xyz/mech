@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This package contains the rounds of TaskSubmissionAbciApp."""
+
 import json
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, cast
@@ -115,7 +116,6 @@ class TaskPoolingRound(CollectionRound):
                 synchronized_data_class=SynchronizedData,
                 **{
                     get_name(SynchronizedData.done_tasks): unique_done_tasks,
-                    get_name(SynchronizedData.final_tx_hash): None,
                 }
             )
             if len(unique_done_tasks) > 0:
@@ -253,7 +253,6 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedTaskPoolingRound: {"most_voted_tx_hash", "final_tx_hash"},
-        # added to avoid ABCI check errors
-        FinishedWithoutTasksRound: {"most_voted_tx_hash", "final_tx_hash"},
         FinishedTaskExecutionWithErrorRound: set(),
+        FinishedWithoutTasksRound: set(),
     }

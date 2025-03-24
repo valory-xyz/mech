@@ -14,11 +14,11 @@ fingerprint:
   handlers.py: bafybeiegulbnno4efmaqmsuvjo4vrhcwcrg3faeryjjhwyabpywzty5m2u
   models.py: bafybeihkg3otqrwjdq7inwcit7o736r4s7xm55yeculilpy6zhgba2jebu
   payloads.py: bafybeidqcjuyceawnzf2dkeoro2geivfeqrh34h6a7lkxvfqcl62d4hyuy
-  rounds.py: bafybeidgh5g3ohq6vwcqxjvdecpotfvc3wlb4p3pxfbna7hlukmglks4k4
+  rounds.py: bafybeih3ja7xwy4ku65sp23di3dyxcq7re77o7aet4jme5s5nefuuvjmea
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeif4psxwfahblirq62jwqigickrmfh6yilhcmg5gil3n4c7q7yn57e
+- valory/agent_mech:0.1.0:bafybeihgm4lmqdjo2exulgzbms2jva7wjybatyt6ylrinrjogi6rwskida
 - valory/gnosis_safe:0.1.0:bafybeidw3uxuxyp3lso5mh43nhauzvra4jabnuk34bkqd6mrv4ojz37nui
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 protocols:
@@ -140,9 +140,7 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
-      mech_to_subscription: ${dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-        "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-        "tokenId":"2"}}}
+      mech_to_subscription: {}
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   requests:

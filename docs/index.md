@@ -96,4 +96,4 @@ In order to run a local demo service based on the MechKit:
 
 !!! tip "Looking for help building your own?"
 
-    Refer to the [Autonolas Discord community](https://discord.com/invite/z2PT65jKqQ), or consider ecosystem services like [Valory Propel](https://app.propel.valory.xyz) for the fastest way to get your first autonomous service in production.
+    Refer to the [Autonolas Discord community](https://discord.com/invite/z2PT65jKqQ), or consider ecosystem services like [Valory Propel](https://propel.valory.xyz) for the fastest way to get your first autonomous service in production.
