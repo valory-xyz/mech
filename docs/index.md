@@ -15,7 +15,7 @@ For instance, if an agent service needs to perform a task requiring access to an
 
 !!! tip "See it in action!"
 
-    Watch a Mech service live in action [here](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a)!
+    Watch a Mech service live in action [here](https://mech.olas.network/gnosis/mech/0x77af31de935740567cf4ff1986d04b2c964a786a?legacy=true)!
 
 Consider the [Trader service](https://github.com/valory-xyz/trader), an autonomous service that trades in prediction markets. It utilizes a specific tool called `prediction_request` provided by the Mech service.
 
@@ -36,9 +36,9 @@ The clever part? All the intricacies of dealing with APIs and data scraping are 
 
     This section is under active development - please report issues in the [Autonolas Discord](https://discord.com/invite/z2PT65jKqQ).
 
-    The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry). Since you will not have access to its private key, your local instance will not be able to transact.
+    The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://mech.olas.network/mechs?legacy=true). Since you will not have access to its private key, your local instance will not be able to transact.
 
-    However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).
+    However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://mech.olas.network/mechs). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).
 
     Please, refer to the complete instructions on the repository [README.md](https://github.com/valory-xyz/mech).
 
@@ -96,4 +96,4 @@ In order to run a local demo service based on the MechKit:
 
 !!! tip "Looking for help building your own?"
 
-    Refer to the [Autonolas Discord community](https://discord.com/invite/z2PT65jKqQ), or consider ecosystem services like [Valory Propel](https://propel.valory.xyz) for the fastest way to get your first autonomous service in production.
+    Refer to the [Autonolas Discord community](https://discord.com/invite/z2PT65jKqQ), or consider ecosystem services like [Valory Propel](https://app.propel.valory.xyz) for the fastest way to get your first autonomous service in production.

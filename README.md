@@ -36,7 +36,7 @@ The project consists of three components:
 - Off-chain AI workers, each of which controls a Mech contract. Each AI worker is implemented as an autonomous service on the Autonolas stack.
 - An on-chain protocol, which is used to generate a registry of AI Mechs, represented as NFTs on-chain.
 - An on-chain [MarketPlace](https://github.com/valory-xyz/ai-registry-mech/) which enable AI Mechs to easily deploy Mech contracts, relays service requests and deliveries to such Mech contracts, and guarantees service deliveries by implementing a reputation score and a take-over mechanism.
-- [Mech Hub](https://aimechs.autonolas.network/), a frontend which allows to interact with the protocol:
+- [Mech Hub](https://mech.olas.network/mechs), a frontend which allows to interact with the protocol:
   - Gives an overview of the AI workers in the registry.
   - Allows Mech owners to create new workers.
   - Allows users to request work from an existing worker.
@@ -89,7 +89,7 @@ via the Marketplace, check this [document](https://github.com/valory-xyz/ai-regi
     }
     ```
 
-See some examples of requests and responses on the [Mech Hub](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a).
+See some examples of requests and responses on the [Mech Hub](https://mech.olas.network/gnosis/mech/0x77af31de935740567cf4ff1986d04b2c964a786a?legacy=true).
 
 ## Requirements
 
@@ -178,8 +178,8 @@ You may customize the agent's behaviour by setting these environment variables.
 The rest of the common environment variables are present in the [service.yaml](https://github.com/valory-xyz/mech/blob/main/packages/valory/services/mech/service.yaml), which are customizable too.
 
 > **Warning**<br />
-> **The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://aimechs.autonolas.network/registry)). Since you will not have access to its private key, your local instance will not be able to transact.
-> However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://aimechs.autonolas.network/mech). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).**
+> **The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://mech.olas.network/mechs?legacy=true)). Since you will not have access to its private key, your local instance will not be able to transact.
+> However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://mech.olas.network/mechs). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).**
 
 Now, you have two options to run the worker: as a standalone agent or as a service.
 
@@ -253,7 +253,7 @@ You can create and mint your own AI Mech that handles requests for tasks that yo
 
 You can take a look at the preferred method mentioned [above](#using-mech-quickstart-preffered-method) to get started quickly and easily.
 
-Once your service works locally, you have the option to run it on a hosted service like [Propel](https://propel.valory.xyz/).
+Once your service works locally, you have the option to run it on a hosted service like [Propel](https://app.propel.valory.xyz/).
 
 ## Included tools
 
