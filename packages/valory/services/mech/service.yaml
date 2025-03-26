@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeicapdc5pjs54wyqngxn7swir6mlbd2tikjzezzfykb7ngv7uv2nf4
+agent: valory/mech:0.1.0:bafybeidp43cgdif6uhokli3ncckzuc5hpwauz7oesvneo4tjnaftphwv74
 number_of_agents: 4
 deployment:
   agent:
@@ -27,17 +27,14 @@ type: skill
   models:
     params:
       args:
-        gas_params: &id001
-          gas_price: ${GAS_PRICE:int:null}
-          max_fee_per_gas: ${MAX_FEE_PER_GAS:int:null}
-          max_priority_fee_per_gas: ${MAX_PRIORITY_FEE_PER_GAS:int:null}
+        gas_params: ${GAS_PARAMS:dict:{"gas_price":null, "max_fee_per_gas":null, "max_priority_fee_per_gas":null}}
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: &id002
+        setup: &id001
           all_participants: ${ALL_PARTICIPANTS:list:[]}
           safe_contract_address: ${SAFE_CONTRACT_ADDRESS:str:0x0000000000000000000000000000000000000000}
           consensus_threshold: ${CONSENSUS_THRESHOLD:int:null}
@@ -62,9 +59,8 @@ type: skill
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-          "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-          "tokenId":"2"}}}
+        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -73,7 +69,7 @@ type: skill
   models:
     params:
       args:
-        gas_params: *id001
+        gas_params: ${GAS_PARAMS:dict:{"gas_price":null, "max_fee_per_gas":null, "max_priority_fee_per_gas":null}}
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
@@ -81,7 +77,7 @@ type: skill
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: *id002
+        setup: *id001
         share_tm_config_on_startup: ${USE_ACN:bool:false}
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
         tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
@@ -101,9 +97,8 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-          "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-          "tokenId":"2"}}}
+        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
@@ -113,7 +108,7 @@ type: skill
   models:
     params:
       args:
-        gas_params: *id001
+        gas_params: ${GAS_PARAMS:dict:{"gas_price":null, "max_fee_per_gas":null, "max_priority_fee_per_gas":null}}
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
@@ -121,7 +116,7 @@ type: skill
         use_polling: ${USE_POLLING:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: *id002
+        setup: *id001
         share_tm_config_on_startup: ${USE_ACN:bool:false}
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:0}
@@ -142,9 +137,8 @@ type: skill
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-          "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-          "tokenId":"2"}}}
+        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -153,14 +147,14 @@ type: skill
   models:
     params:
       args:
-        gas_params: *id001
+        gas_params: ${GAS_PARAMS:dict:{"gas_price":null, "max_fee_per_gas":null, "max_priority_fee_per_gas":null}}
         multisend_address: ${MULTISEND_ADDRESS:str:0xA238CBeb142c10Ef7Ad8442C6D1f9E89e07e7761}
         on_chain_service_id: ${ON_CHAIN_SERVICE_ID:int:null}
         reset_pause_duration: ${RESET_PAUSE_DURATION:int:10}
         round_timeout_seconds: ${ROUND_TIMEOUT:float:150.0}
         use_polling: ${USE_POLLING:bool:false}
         service_registry_address: ${SERVICE_REGISTRY_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        setup: *id002
+        setup: *id001
         share_tm_config_on_startup: ${USE_ACN:bool:false}
         manual_gas_limit: ${MANUAL_GAS_LIMIT:int:1000000}
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
@@ -182,9 +176,8 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-          "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-          "tokenId":"2"}}}
+        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -204,8 +197,7 @@ type: skill
         num_agents: ${NUM_AGENTS:int:4}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
-        mech_to_config: ${MECH_TO_CONFIG:dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-          "0x77af31De935740567Cf4fF1986D04B2c964A786a":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 1:
   models:
@@ -218,8 +210,7 @@ type: skill
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         agent_index: ${AGENT_INDEX_1:int:1}
         num_agents: ${NUM_AGENTS:int:4}
-        mech_to_config: ${MECH_TO_CONFIG:dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-          "0x77af31De935740567Cf4fF1986D04B2c964A786a":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 2:
@@ -233,8 +224,7 @@ type: skill
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         agent_index: ${AGENT_INDEX_2:int:2}
         num_agents: ${NUM_AGENTS:int:4}
-        mech_to_config: ${MECH_TO_CONFIG:dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-          "0x77af31De935740567Cf4fF1986D04B2c964A786a":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 3:
@@ -249,8 +239,7 @@ type: skill
         agent_index: ${AGENT_INDEX_3:int:3}
         num_agents: ${NUM_AGENTS:int:4}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
-        mech_to_config: ${MECH_TO_CONFIG:dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
-          "0x77af31De935740567Cf4fF1986D04B2c964A786a":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}}
+        mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
 ---
 public_id: valory/ledger:0.19.0

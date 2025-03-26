@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,7 +17,8 @@
 #
 # ------------------------------------------------------------------------------
 """This module contains helpers for IPFS interaction."""
-from typing import Any, Dict, Optional, Tuple
+
+from typing import Any, Dict, Tuple
 
 import yaml
 from aea.helpers.cid import CID
@@ -28,21 +29,16 @@ from multicodec import multicodec
 CID_PREFIX = "f01701220"
 
 
-def get_ipfs_file_hash(data: bytes) -> Optional[str]:
+def get_ipfs_file_hash(data: bytes) -> str:
     """Get hash from bytes"""
     try:
         return str(CID.from_string(data.decode()))
     except Exception:  # noqa
         # if something goes wrong, fallback to sha256
-        pass
-    try:
         file_hash = data.hex()
         file_hash = CID_PREFIX + file_hash
         file_hash = str(CID.from_string(file_hash))
         return file_hash
-    except Exception:
-        # return None if all fails
-        return None
 
 
 def to_multihash(hash_string: str) -> str:

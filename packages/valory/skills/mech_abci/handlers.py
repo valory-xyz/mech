@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@
 
 import json
 import re
-import time
 from datetime import datetime
 from enum import Enum
 from typing import Callable, Dict, List, Optional, Tuple, Union, cast
@@ -68,11 +67,6 @@ ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
 
-LAST_SUCCESSFUL_READ = "last_successful_read"
-LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
-WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
-LAST_TX = "last_tx"
-
 
 class HttpCode(Enum):
     """Http codes"""
@@ -95,32 +89,6 @@ class HttpHandler(BaseHttpHandler):
 
     SUPPORTED_PROTOCOL = HttpMessage.protocol_id
 
-    @property
-    def last_successful_read(self) -> Optional[Tuple[int, float]]:
-        """Get the last successful read."""
-        return cast(
-            Optional[Tuple[int, float]],
-            self.context.shared_state.get(LAST_SUCCESSFUL_READ),
-        )
-
-    @property
-    def last_successful_executed_task(self) -> Optional[Tuple[int, float]]:
-        """Get the last successful executed task."""
-        return cast(
-            Optional[Tuple[int, float]],
-            self.context.shared_state.get(LAST_SUCCESSFUL_EXECUTED_TASK),
-        )
-
-    @property
-    def was_last_read_successful(self) -> bool:
-        """Get the last read status."""
-        return self.context.shared_state.get(WAS_LAST_READ_SUCCESSFUL) is not False
-
-    @property
-    def last_tx(self) -> Optional[Tuple[str, float]]:
-        """Get the last transaction."""
-        return cast(Optional[Tuple[str, float]], self.context.shared_state.get(LAST_TX))
-
     def setup(self) -> None:
         """Implement the setup."""
 
@@ -139,11 +107,23 @@ class HttpHandler(BaseHttpHandler):
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
 
+        # update the route for mech http handler
+        routes_data = self.context.shared_state["routes_info"]
+        routes = list(routes_data.keys())
+        funcs = list(routes_data.values())
+
+        send_signed_url = rf"{hostname_regex}\/{routes[0]}"
+        fetch_offchain_info = rf"{hostname_regex}\/{routes[1]}"
+
         # Routes
         self.routes = {
             (HttpMethod.POST.value,): [],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
+            ],
+            (HttpMethod.POST.value,): [(send_signed_url, funcs[0])],
+            (HttpMethod.GET.value, HttpMethod.HEAD.value): [
+                (fetch_offchain_info, funcs[1])
             ],
         }
 
@@ -340,23 +320,6 @@ class HttpHandler(BaseHttpHandler):
                 r.round_id for r in round_sequence._abci_app._previous_rounds[-10:]
             ]
 
-        # ensure we are delivering
-        grace_period = 300  # 5 min
-        last_executed_task = (
-            self.last_successful_executed_task[1]
-            if self.last_successful_executed_task
-            else time.time() + grace_period * 2
-        )
-        last_tx_made = self.last_tx[1] if self.last_tx else time.time()
-        we_are_delivering = last_executed_task < last_tx_made + grace_period
-
-        # ensure we can get new reqs
-        last_successful_read = (
-            self.last_successful_read[1] if self.last_successful_read else time.time()
-        )
-        grace_period = 300  # 5 min
-        we_can_get_new_reqs = last_successful_read > time.time() - grace_period
-
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,
             "is_tm_healthy": not is_tm_unhealthy,
@@ -365,26 +328,6 @@ class HttpHandler(BaseHttpHandler):
             "current_round": current_round,
             "previous_rounds": previous_rounds,
             "is_transitioning_fast": is_transitioning_fast,
-            "last_successful_read": {
-                "block_number": self.last_successful_read[0],
-                "timestamp": self.last_successful_read[1],
-            }
-            if self.last_successful_read
-            else None,
-            "last_successful_executed_task": {
-                "request_id": self.last_successful_executed_task[0],
-                "timestamp": self.last_successful_executed_task[1],
-            }
-            if self.last_successful_executed_task
-            else None,
-            "was_last_read_successful": self.was_last_read_successful,
-            "last_tx": {
-                "tx_hash": self.last_tx[0],
-                "timestamp": self.last_tx[1],
-            }
-            if self.last_tx
-            else None,
-            "is_ok": (we_are_delivering and we_can_get_new_reqs),
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)

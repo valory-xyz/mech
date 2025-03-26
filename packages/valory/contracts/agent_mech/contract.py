@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the dynamic_contribution contract definition."""
+
 import logging
 from enum import Enum
 from typing import Any, Dict, List, Optional, cast
@@ -35,6 +36,13 @@ PUBLIC_ID = PublicId.from_str("valory/agent_mech:0.1.0")
 
 _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
+)
+
+PAYMENT_TYPE_NATIVE_NVM = (
+    "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"  # nosec
+)
+PAYMENT_TYPE_TOKEN_NVM = (
+    "0d6fd99afa9c4c580fab5e341922c2a5c4b61d880da60506193d7bf88944dd14"  # nosec
 )
 
 partial_abis = [
@@ -510,3 +518,174 @@ class AgentMechContract(Contract):
             ledger_api, contract_address, sender_address, tx_data
         ).pop("data")
         return {"data": bytes.fromhex(tx_data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+
+    @classmethod
+    def get_offchain_deliver_data(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        sender: str,
+        requester: str,
+        deliverWithSignatures: List[Dict[str, List]],
+        deliveryRates: List[int],
+        paymentData: str,
+    ) -> JSONLike:
+        """Get offchain deliver tx data"""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encodeABI(
+            fn_name="deliverMarketplaceWithSignatures",
+            args=[
+                requester,
+                deliverWithSignatures,
+                deliveryRates,
+                paymentData,
+            ],
+        )
+
+        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
+            "data"
+        )
+        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+
+    @classmethod
+    def get_is_nvm_mech(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
+        """Get tx data"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        payment_type_bytes = contract_instance.functions.paymentType().call()
+        payment_type = payment_type_bytes.hex()
+
+        is_nvm_mech = payment_type in [PAYMENT_TYPE_NATIVE_NVM, PAYMENT_TYPE_TOKEN_NVM]
+        return {"data": is_nvm_mech}
+
+    @classmethod
+    def get_marketplace_mech_request_events(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
+    ) -> JSONLike:
+        """Get the Request events emitted by the contract."""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        entries = contract_instance.events.Request.create_filter(
+            fromBlock=from_block,
+            toBlock=to_block,
+        ).get_all_entries()
+
+        request_events = list(
+            {
+                "tx_hash": entry.transactionHash.hex(),
+                "block_number": entry.blockNumber,
+                **entry["args"],
+                "contract_address": contract_address,
+            }
+            for entry in entries
+        )
+        return {"data": request_events}
+
+    @classmethod
+    def get_marketplace_mech_deliver_events(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
+    ) -> JSONLike:
+        """Get the Deliver events emitted by the contract."""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        entries = contract_instance.events.Deliver.create_filter(
+            fromBlock=from_block,
+            toBlock=to_block,
+        ).get_all_entries()
+
+        deliver_events = list(
+            {
+                "tx_hash": entry.transactionHash.hex(),
+                "block_number": entry.blockNumber,
+                **entry["args"],
+                "contract_address": contract_address,
+            }
+            for entry in entries
+        )
+        return {"data": deliver_events}
+
+    @classmethod
+    def get_marketplace_undelivered_reqs(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
+        max_block_window: int = 1000,
+        **kwargs: Any,
+    ) -> JSONLike:
+        """Get the requests that are not delivered."""
+        if from_block == "earliest":
+            from_block = 0
+
+        current_block = ledger_api.api.eth.block_number
+        checksumed_contract_address = Web3.to_checksum_address(contract_address)
+        requests, delivers = [], []
+        for from_block_batch in range(int(from_block), current_block, max_block_window):
+            to_block_batch = (from_block_batch + max_block_window) - 1
+            if to_block_batch >= current_block:
+                to_block_batch = "latest"
+            requests_batch: List[
+                Dict[str, Any]
+            ] = cls.get_marketplace_mech_request_events(
+                ledger_api,
+                checksumed_contract_address,
+                from_block_batch,
+                to_block_batch,
+            )[
+                "data"
+            ]
+            delivers_batch: List[
+                Dict[str, Any]
+            ] = cls.get_marketplace_mech_deliver_events(
+                ledger_api,
+                checksumed_contract_address,
+                from_block_batch,
+                to_block_batch,
+            )[
+                "data"
+            ]
+            requests.extend(requests_batch)
+            delivers.extend(delivers_batch)
+        pending_tasks: List[Dict[str, Any]] = []
+        for request in requests:
+            if request["requestId"] not in [
+                deliver["requestId"] for deliver in delivers
+            ]:
+                # store each requests in the pending_tasks list, make sure each req is stored once
+                pending_tasks.append(request)
+
+        return {"data": pending_tasks}
+
+    @classmethod
+    def get_marketplace_deliver_data(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        sender: str,
+        requestIds: List,
+        datas: List,
+    ) -> JSONLike:
+        """Get tx data"""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encodeABI(
+            fn_name="deliverToMarketplace",
+            args=[
+                requestIds,
+                datas,
+            ],
+        )
+
+        simulation_ok = cls.simulate_tx(ledger_api, contract_address, sender, data).pop(
+            "data"
+        )
+        return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore

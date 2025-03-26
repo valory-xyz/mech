@@ -8,31 +8,32 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeidfxaeswymlgcbe3mxfekywqkpod7l7bwmn3p2d2cxakkl2wcm5ga
+  behaviours.py: bafybeiettaltycagwn6ao6ludbudyqi5hp3ow3co3rz3qr4zlxr7ydeyki
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
   models.py: bafybeicoes4rtg2edxpdxlrow5dmnof2lm6xscagzp55mocrkbxy2xlxwe
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
-  rounds.py: bafybeiawdt7e4ryeiftrxcva6mywwknkcg6ffsbq7h3cekofgfjwdcbt3m
+  rounds.py: bafybeig7rio35qvs25lvnyfeehazcdiosvnsb7mloh2agdwvoqx3ncybau
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeido2ob63apizwagf6vqm6kybfbscamtklskssswd2vro37k3l3x6q
+- valory/agent_mech:0.1.0:bafybeihgm4lmqdjo2exulgzbms2jva7wjybatyt6ylrinrjogi6rwskida
+- valory/mech_marketplace:0.1.0:bafybeia65b4jioic2lrifzcgox2xhvmbwjbmuer7xpiowg6o6o3gcel6qa
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
-- valory/gnosis_safe:0.1.0:bafybeialsnaekbdtn3h6phjs5xxx44es56jffs5jnlkkcgc62k62vxpkxm
+- valory/gnosis_safe:0.1.0:bafybeidw3uxuxyp3lso5mh43nhauzvra4jabnuk34bkqd6mrv4ojz37nui
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
-- valory/service_registry:0.1.0:bafybeid4kiq2fwospfod4buof2fwwz3gk36jiyqkfjyg2xx346ad5zt72y
-- valory/hash_checkpoint:0.1.0:bafybeidhpjfv7u2kxfvfkljawkiuzkl4smzonqvapafwo7k4fmdo7k2dqi
+- valory/service_registry:0.1.0:bafybeibuq4p66jdpnrq7viz4zylydu3zneteukfy3gwdgp273vptnq3dvi
+- valory/hash_checkpoint:0.1.0:bafybeihyzjja65zrhjdgm5p4oecjm7ijrs6aur2ux2fkmfgfiurautm2da
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeig4wczuh3l6wbxb47rgsmodlfupichj66gfcwkvy65q5pbm3utykm
-- valory/transaction_settlement_abci:0.1.0:bafybeicjqlnqgmccwb5vjga2lnb2doxqfkvqg36fixil5q4dbymaiggdua
-- valory/task_execution:0.1.0:bafybeif7vu2wnizkxlltobeyala4ctxyshsgqmg32p5tkf5suq3sfprjgi
+- valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
+- valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
+- valory/task_execution:0.1.0:bafybeiajoeda47rkj72ncdifcu3b2jq3pjhatuxwiexpgzzztixqojmyhm
 behaviours:
   main:
     args: {}
@@ -84,7 +85,7 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      mech_to_config: ${dict:{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false},
+      mech_to_config: {}
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0

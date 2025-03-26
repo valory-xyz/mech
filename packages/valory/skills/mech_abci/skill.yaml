@@ -11,7 +11,7 @@ fingerprint:
   composition.py: bafybeiaorp75iva5xgl4ebk3lg7oenqmd6wg2dxlm33oserb7aszyujml4
   dialogues.py: bafybeifhydd6xmstbh2jx5igj33upip5a3hhlcaxttfsc77heszqmru7ri
   fsm_specification.yaml: bafybeige54bdtuq7e2oqqzppiyjra7mv74fid276pqlq25cmlgoc7vgsye
-  handlers.py: bafybeidqjq52ejhnbdgiadfzxilrrcyzub2dfbd75a4jkkq6mmaexmey5u
+  handlers.py: bafybeiequcuyjmcvv6slouptdtalzgwfmuevytbh5m4bkafowpisbp3xu4
   models.py: bafybeigpimz5vhgzelhc7c3ipo56wh2o7d7whyqcjd2kjigtxos5d6bwqa
 fingerprint_ignore_patterns: []
 connections:
@@ -20,13 +20,13 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeig4wczuh3l6wbxb47rgsmodlfupichj66gfcwkvy65q5pbm3utykm
-- valory/registration_abci:0.1.0:bafybeicfrgzo3tbcr6lijd5vsrjrggsehobr7xv2m74jkx6h3k6lxhqgqu
-- valory/reset_pause_abci:0.1.0:bafybeidlzt3jvgokzwpfxbcnpnxmfedcchscxq3crfaceldy4jamu65ave
-- valory/task_submission_abci:0.1.0:bafybeib753ydmvnostja2jbdvwap4dst5iknjrneopjwzsqoboilskrnbi
-- valory/termination_abci:0.1.0:bafybeibpisfldpcdbib74totredbuhtzyzh2esg6gkxzgg2ncby7ktegga
-- valory/transaction_settlement_abci:0.1.0:bafybeicjqlnqgmccwb5vjga2lnb2doxqfkvqg36fixil5q4dbymaiggdua
-- valory/subscription_abci:0.1.0:bafybeif4bbibfdz25sqadadw5i5cxkck65qcxze4vltj7sv7zi2nc4c2rm
+- valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
+- valory/registration_abci:0.1.0:bafybeigp2g6uhhgjlkqyhjlk4abfjuecmulnwlki6acbpfu45thslqujlu
+- valory/reset_pause_abci:0.1.0:bafybeidhqvc4cl6alvkql5kadiv7snudl7o2ctfqbmhrihtejm3zhkmbby
+- valory/task_submission_abci:0.1.0:bafybeiecniumgvn65xfbjsbm7ygp53sw6ukdeq22bdee5krbcry3cm2xv4
+- valory/termination_abci:0.1.0:bafybeig4stz7s6phndruvrgqptbc62ue2filttj4wbnempkur5ybso5edu
+- valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
+- valory/subscription_abci:0.1.0:bafybeibveqvt3dkr66cndgetdfut442xmyqibdwy3bgmtg23in6wfijguy
 behaviours:
   main:
     args: {}
@@ -78,46 +78,12 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      mech_to_config:
-        '0xFf82123dFB52ab75C417195c5fDB87630145ae81':
-          use_dynamic_pricing: false
-          is_marketplace_mech: false
-        '0x77af31De935740567Cf4fF1986D04B2c964A786a':
-          use_dynamic_pricing: false
-          is_marketplace_mech: false
-      api_keys:
-        openai:
-        - dummy_api_key
-        stabilityai:
-        - dummy_api_key
-        google_api_key:
-        - dummy_api_key
-        google_engine_id:
-        - dummy_api_key
+      mech_to_config: {}
+      api_keys: {}
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-      tools_to_package_hash:
-        openai-gpt-3.5-turbo-instruct: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-        openai-gpt-3.5-turbo: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-        openai-gpt-4: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-        stabilityai-stable-diffusion-v1-5: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        stabilityai-stable-diffusion-xl-beta-v2-2-2: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        stabilityai-stable-diffusion-512-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        stabilityai-stable-diffusion-768-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        transfer-native: bafybeideuyqn4uslp4ccanzd5tjladzotyi6tiwfxbouecw5ufzgyi4ryy
-        prediction-offline: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-        prediction-online: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-        prediction-online-summarized-info: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-        prediction-online-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
-        prediction-offline-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
-        claude-prediction-online: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
-        claude-prediction-offline: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
-        deepmind-optimization-strong: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
-        deepmind-optimization: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
-        prediction-sentence-embedding-conservative: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
-        prediction-sentence-embedding-bold: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
-        prediction-online-sum-url-content: bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e
+      tools_to_package_hash: {}
       finalize_timeout: 60.0
       genesis_config:
         genesis_time: '2022-09-26T00:00:00.000000000Z'
@@ -178,7 +144,6 @@ models:
       validate_timeout: 1205
       task_wait_timeout: 15.0
       use_slashing: false
-      default_chain_id: ethereum
       manual_gas_limit: 1000000
       mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
       mech_marketplace_address: '0x0000000000000000000000000000000000000000'
@@ -223,5 +188,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.62.0
+    version: ==1.63.0
 is_abstract: false

@@ -7,7 +7,6 @@ token_id-"component_id"
 83-"skill/valory/multiplexer_abci/0.1.0"
 84-"skill/valory/task_execution_abci/0.1.0"
 85-"skill/valory/mech_abci/0.1.0"
-168-"custom/valory/openai_request/0.1.0"
 
 ---
 token_id-"agent_id"

@@ -8,15 +8,15 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   BatchPriorityPassedCheck.sol: bafybeie3hfpyss43sggqh5rjzwsqe7o37td4v4k6f3hlweiosnayyseo4i
   __init__.py: bafybeigqedpnruwcvjarngql7yfnpqwozvvgzcei2xcrp7mjf4ccspa62y
-  build/MechMarketplace.json: bafybeiavaelxgltfzquszveskzn732c47tbkyoqd6gwbk3by6ky2n73rcm
-  contract.py: bafybeidwynzoz23yulmxdpe5ae6dx75ozbxm6v3zghzs7pyr6zfhkfkm4q
+  build/MechMarketplace.json: bafybeiauqsmm5aqqzqqr7vi46obq7exa7id5vbq57e3e3wxxkzblgqnjoy
+  contract.py: bafybeifdbi56lqkqervpl4m2ftebvzu4chdde4nimp3p6l2y7pxmme46gm
 fingerprint_ignore_patterns: []
 class_name: MechMarketplaceContract
 contract_interface_paths:
   ethereum: build/MechMarketplace.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.62.0
+    version: ==1.63.0
   web3:
     version: <7,>=6.0.0
 contracts: []

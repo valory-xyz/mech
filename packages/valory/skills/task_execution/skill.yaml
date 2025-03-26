@@ -7,32 +7,32 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeigt442yaasazy4qlbcvyxswxvmgardufabnphknv4yrzyhauhbqae
-  dialogues.py: bafybeid4zxalqdlo5mw4yfbuf34hx4jp5ay5z6chm4zviwu4cj7fudtwca
-  handlers.py: bafybeigzujgdroodhgcegao4pczlpmo3v4hyj6ydbonq5wnehwp7kl77lq
-  models.py: bafybeicohoprd4f6rxnt6zxgwzzb3djpyk4o72bepoty4lybnf7fdpkgbu
+  behaviours.py: bafybeiexdsjfkhm3bburwnafqxuwlta473cynzie6o3sbqxznnhbaoqhlq
+  dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
+  handlers.py: bafybeifcagftjvcgkva76iisq7ymfuvwna43jsyrgl24tu5v6qzaa6aoje
+  models.py: bafybeieeqyryjsb3632ahvbnzdzs3tfoujbinrt4kecqt2rx5vhi64xdle
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
-  utils/benchmarks.py: bafybeiafnee7iay6dyjnatyqyzjov5c4ibl3ojamjmgfjri7cyghl7qayq
+  utils/benchmarks.py: bafybeib5xjfeu2jezcj4ofl36qnznhbrjad6hqiwavebg5cidkl2pwlhz4
   utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
-  utils/ipfs.py: bafybeicp6d2y4aguetcod2yzxrbiqqwkzarzccyf2iajuwvrcfckmn6jm4
+  utils/ipfs.py: bafybeiev3mtt5ubsiykigmsxxyf4abevi7qsektcrxbgrirvidc36zjlve
   utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
 fingerprint_ignore_patterns: []
 connections:
 - valory/ledger:0.19.0:bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby
-- valory/ipfs:0.1.0:bafybeid5fdr6ufha3axnktfofsc2hxha3jatnoi7st3pccorf7sztfpaky
+- valory/ipfs:0.1.0:bafybeigjspoceazd5roxo4pcqcgyu3ozixkdoc44domwcaumt2zwoz2x3m
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 contracts:
-- valory/agent_mech:0.1.0:bafybeido2ob63apizwagf6vqm6kybfbscamtklskssswd2vro37k3l3x6q
-- valory/mech_marketplace:0.1.0:bafybeiff7ae5cehppx3odjayr3ud6xw4ag6avgac2fcalooyfqxdxsstau
+- valory/agent_mech:0.1.0:bafybeihgm4lmqdjo2exulgzbms2jva7wjybatyt6ylrinrjogi6rwskida
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 - valory/ledger_api:1.0.0:bafybeihmqzcbj6t7vxz2aehd5726ofnzsfjs5cwlf42ro4tn6i34cbfrc4
 - valory/default:1.0.0:bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq
 - valory/ipfs:0.1.0:bafybeifi2nri7sprmkez4rqzwb4lnu6peoy3bax5k6asf6k5ms7kmjpmkq
+- valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeig4wczuh3l6wbxb47rgsmodlfupichj66gfcwkvy65q5pbm3utykm
+- valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
 behaviours:
   task_execution:
     args: {}
@@ -50,6 +50,9 @@ handlers:
   ledger_handler:
     args: {}
     class_name: LedgerHandler
+  mech_http_handler:
+    args: {}
+    class_name: MechHttpHandler
 models:
   acn_data_share_dialogues:
     args: {}
@@ -66,48 +69,17 @@ models:
   ledger_dialogues:
     args: {}
     class_name: LedgerDialogues
+  mech_http_dialogues:
+    args: {}
+    class_name: MechHttpDialogues
   params:
     args:
       agent_index: 0
-      api_keys:
-        openai:
-        - dummy_api_key
-        stabilityai:
-        - dummy_api_key
-        google_api_key:
-        - dummy_api_key
-        google_engine_id:
-        - dummy_api_key
-      tools_to_package_hash:
-        openai-gpt-3.5-turbo-instruct: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-        openai-gpt-3.5-turbo: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-        openai-gpt-4: bafybeicziwfw7nb7gaxso357hrvtdlv6f23grm2c2rlfngpz4vbvoz2bke
-        stabilityai-stable-diffusion-v1-5: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        stabilityai-stable-diffusion-xl-beta-v2-2-2: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        stabilityai-stable-diffusion-512-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        stabilityai-stable-diffusion-768-v2-1: bafybeibaalr745aqajcaijykactx2nmg3jviefvnvpuk5kkxlt2yeedc2q
-        transfer-native: bafybeideuyqn4uslp4ccanzd5tjladzotyi6tiwfxbouecw5ufzgyi4ryy
-        prediction-offline: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-        prediction-online: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-        prediction-online-summarized-info: bafybeig7yntvhhfufaadhd43zr4loivpit43kwfgban72w43xz4u3tansi
-        prediction-online-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
-        prediction-offline-sme: bafybeiautzxe3faq53ceogfjtfbml5373wvqpsk77c4k3hjivloblivuxy
-        claude-prediction-online: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
-        claude-prediction-offline: bafybeifp6tn3ovhuz4oipy67ijfdm4y7t2o7en3xuggn6kh5wbwokxmczu
-        deepmind-optimization-strong: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
-        deepmind-optimization: bafybeievl777e2425q7zy6qkt26luu2i6xzp4q6pquykntx2yzivy3iwum
-        prediction-sentence-embedding-conservative: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
-        prediction-sentence-embedding-bold: bafybeihsyxhchqgtdwsd53z4a2lswt6ri4fre2yg2bpjo36kwboilsp7ai
-        prediction-online-sum-url-content: bafybeial5a56vsowqu4suynnmv5pkt5iebkxtmpgrae57qzi7s6tg4vq6e
+      api_keys: {}
+      tools_to_package_hash: {}
       from_block_range: 50000
       num_agents: 4
-      mech_to_config:
-        '0xFf82123dFB52ab75C417195c5fDB87630145ae81':
-          use_dynamic_pricing: false
-          is_marketplace_mech: false
-        '0x77af31De935740567Cf4fF1986D04B2c964A786a':
-          use_dynamic_pricing: false
-          is_marketplace_mech: false
+      mech_to_config: {}
       polling_interval: 30.0
       task_deadline: 240.0
       max_block_window: 500
@@ -126,6 +98,6 @@ dependencies:
     version: ==0.2.1
   eth-abi:
     version: ==4.0.0
-  pyyaml:
+  PyYAML:
     version: ==6.0.1
 is_abstract: false

@@ -14,19 +14,19 @@ fingerprint:
   handlers.py: bafybeiegulbnno4efmaqmsuvjo4vrhcwcrg3faeryjjhwyabpywzty5m2u
   models.py: bafybeihkg3otqrwjdq7inwcit7o736r4s7xm55yeculilpy6zhgba2jebu
   payloads.py: bafybeidqcjuyceawnzf2dkeoro2geivfeqrh34h6a7lkxvfqcl62d4hyuy
-  rounds.py: bafybeidgh5g3ohq6vwcqxjvdecpotfvc3wlb4p3pxfbna7hlukmglks4k4
+  rounds.py: bafybeih3ja7xwy4ku65sp23di3dyxcq7re77o7aet4jme5s5nefuuvjmea
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeido2ob63apizwagf6vqm6kybfbscamtklskssswd2vro37k3l3x6q
-- valory/gnosis_safe:0.1.0:bafybeialsnaekbdtn3h6phjs5xxx44es56jffs5jnlkkcgc62k62vxpkxm
+- valory/agent_mech:0.1.0:bafybeihgm4lmqdjo2exulgzbms2jva7wjybatyt6ylrinrjogi6rwskida
+- valory/gnosis_safe:0.1.0:bafybeidw3uxuxyp3lso5mh43nhauzvra4jabnuk34bkqd6mrv4ojz37nui
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeig4wczuh3l6wbxb47rgsmodlfupichj66gfcwkvy65q5pbm3utykm
-- valory/transaction_settlement_abci:0.1.0:bafybeicjqlnqgmccwb5vjga2lnb2doxqfkvqg36fixil5q4dbymaiggdua
+- valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
+- valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
 behaviours:
   main:
     args: {}
@@ -140,9 +140,7 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
-      mech_to_subscription: ${dict:{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000",
-        "tokenId":"1"},"0xA6bE7Ef2e2FbdA7fB2BfE60726b74A3B2206D67f":{"tokenAddress":"0x0000000000000000000000000000000000000001",
-        "tokenId":"2"}}}
+      mech_to_subscription: {}
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   requests:

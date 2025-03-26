@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -18,12 +18,14 @@
 # ------------------------------------------------------------------------------
 
 """This package contains the implementation of ."""
+
 import json
 import threading
 import time
 from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
+from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
 from aea.helpers.cid import to_v1
@@ -42,14 +44,12 @@ from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
-from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.ledger_api import LedgerApiMessage
-from packages.valory.skills.task_execution.handlers import LAST_SUCCESSFUL_EXECUTED_TASK
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
@@ -66,10 +66,20 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
+IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 GNOSIS_CHAIN = "gnosis"
+INITIAL_DEADLINE = 1200.0  # 20mins of deadline
+SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
+
+
+class RequestType(Enum):
+    """Request Types"""
+
+    LEGACY = "legacy"
+    MARKETPLACE = "marketplace"
 
 
 class TaskExecutionBehaviour(SimpleBehaviour):
@@ -84,8 +94,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_package_hash: Dict[str, str] = {}
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
         self._inflight_tool_req: Optional[str] = None
+        self._inflight_ipfs_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
-        self._last_polling: Optional[float] = None
+        self._last_deadline: Optional[float] = None
         self._invalid_request = False
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
@@ -99,8 +110,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def act(self) -> None:
         """Implement the act."""
         self._download_tools()
+        self._execute_ipfs_tasks()
         self._execute_task()
         self._check_for_new_reqs()
+        self._check_for_new_marketplace_reqs()
 
     @property
     def done_tasks_lock(self) -> threading.Lock:
@@ -116,13 +129,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def request_id_to_num_timeouts(self) -> Dict[int, int]:
         """Maps the request id to the number of times it has timed out."""
         return self.params.request_id_to_num_timeouts
-
-    def set_last_executed_task(self, request_id: int) -> None:
-        """Set the last executed task."""
-        self.context.shared_state[LAST_SUCCESSFUL_EXECUTED_TASK] = (
-            request_id,
-            time.time(),
-        )
 
     def count_timeout(self, request_id: int) -> None:
         """Increase the timeout for a request."""
@@ -142,11 +148,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Get done_tasks."""
         return self.context.shared_state[DONE_TASKS]
 
-    def _should_poll(self) -> bool:
+    @property
+    def ipfs_tasks(self) -> List[Dict[str, Any]]:
+        """Get ipfs_tasks."""
+        return self.context.shared_state[IPFS_TASKS]
+
+    def _should_poll(self, req_type: str) -> bool:
         """If we should poll the contract."""
-        if self._last_polling is None:
+        last_polling = self.params.req_params.last_polling.get(req_type, None)
+
+        if last_polling is None:
             return True
-        return self._last_polling + self.params.polling_interval <= time.time()
+        return last_polling + self.params.polling_interval <= time.time()
+
+    def _fetch_deadline(self) -> float:
+        if self.params.is_cold_start:
+            return time.time() + INITIAL_DEADLINE
+        return time.time() + SUBSEQUENT_DEADLINE
 
     def _is_executing_task_ready(self) -> bool:
         """Check if the executing task is ready."""
@@ -219,19 +237,43 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _check_for_new_reqs(self) -> None:
         """Check for new reqs."""
-        if self.params.in_flight_req or not self._should_poll():
+        if self.params.in_flight_req or not self._should_poll(RequestType.LEGACY.value):
             # do nothing if there is an in flight request
             # or if we should not poll yet
             return
 
-        if self.params.from_block is None:
+        from_block = self.params.req_params.from_block.get(
+            RequestType.LEGACY.value, None
+        )
+        if from_block is None:
             # set the initial from block
             self._populate_from_block()
+            self.params.req_type = RequestType.LEGACY.value
             return
         self._check_undelivered_reqs()
+        self.params.in_flight_req = True
+        self.params.req_params.last_polling[RequestType.LEGACY.value] = time.time()
+
+    def _check_for_new_marketplace_reqs(self) -> None:
+        """Check for new reqs."""
+        if self.params.in_flight_req or not self._should_poll(
+            RequestType.MARKETPLACE.value
+        ):
+            # do nothing if there is an in flight request
+            # or if we should not poll yet
+            return
+
+        from_block = self.params.req_params.from_block.get(
+            RequestType.MARKETPLACE.value, None
+        )
+        if from_block is None:
+            # set the initial from block
+            self._populate_from_block()
+            self.params.req_type = RequestType.MARKETPLACE.value
+            return
         self._check_undelivered_reqs_marketplace()
         self.params.in_flight_req = True
-        self._last_polling = time.time()
+        self.params.req_params.last_polling[RequestType.MARKETPLACE.value] = time.time()
 
     def _check_undelivered_reqs(self) -> None:
         """Check for undelivered mech reqs."""
@@ -247,7 +289,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             callable="get_multiple_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
-                    from_block=self.params.from_block,
+                    from_block=self.params.req_params.from_block.get(
+                        RequestType.LEGACY.value
+                    ),
                     chain_id=GNOSIS_CHAIN,
                     contract_addresses=target_mechs,
                     max_block_window=self.params.max_block_window,
@@ -256,21 +300,26 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
+        self.params.req_type = RequestType.LEGACY.value
         self.context.outbox.put_message(message=contract_api_msg)
 
     def _check_undelivered_reqs_marketplace(self) -> None:
         """Check for undelivered mech reqs."""
         if not self.params.use_mech_marketplace:
             return
+
+        # we are quering requests from marketplace mech as it contains the relevant data
+        # instead of the marketplace itself
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.mech_marketplace_address,
-            contract_id=str(MechMarketplaceContract.contract_id),
-            callable="get_undelivered_reqs",
+            contract_address=self._get_designated_marketplace_mech_address(),
+            contract_id=str(AgentMechContract.contract_id),
+            callable="get_marketplace_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
-                    from_block=self.params.from_block,
-                    my_mech=self._get_designated_marketplace_mech_address(),
+                    from_block=self.params.req_params.from_block.get(
+                        RequestType.MARKETPLACE.value
+                    ),
                     chain_id=GNOSIS_CHAIN,
                     max_block_window=self.params.max_block_window,
                 )
@@ -278,13 +327,57 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
+        self.params.req_type = RequestType.MARKETPLACE.value
         self.context.outbox.put_message(message=contract_api_msg)
+
+    def _execute_ipfs_tasks(self) -> None:
+        """Execute IPFS tasks."""
+
+        if (
+            self._inflight_ipfs_req
+            or self._inflight_tool_req
+            or self.params.in_flight_req
+        ):
+            return
+
+        if len(self.ipfs_tasks) == 0:
+            # not ipfs tasks
+            return
+
+        if self.ipfs_tasks is not None:
+            self.context.logger.info(f"Found {len(self.ipfs_tasks)} IPFS Tasks")
+            ipfs_task = self.ipfs_tasks.pop(0)
+            request_id = ipfs_task["request_id"]
+            ipfs_data = ipfs_task["ipfs_data"]
+            self.context.logger.info(
+                f"Preparing ipfs task for request id {request_id} with data: {ipfs_data}"
+            )
+            self._inflight_ipfs_req = request_id
+            msg, dialogue = self._build_ipfs_store_file_req(
+                {"metadata.json": ipfs_data}
+            )
+            self.send_message(msg, dialogue, self._handle_ipfs_tasks_response)
 
     def _execute_task(self) -> None:
         """Execute tasks."""
         # check if there is a task already executing
         if self.params.in_flight_req:
             # there is an in flight request
+
+            # if no deadline is set it, otherwise continue
+            if self._last_deadline is None:
+                self._last_deadline = self._fetch_deadline()
+
+            # check if the executing task is within deadline or not
+            if self._executing_task and time.time() > self._last_deadline:
+                # Deadline reached, restart the task execution
+                self.context.logger.info(
+                    f"Deadline reached for task {self._executing_task}. Restarting task execution..."
+                )
+                self.params.in_flight_req = False
+                self.params.is_cold_start = False
+                self._last_deadline = self._fetch_deadline()
+                return self._execute_task()
             return
 
         if self._executing_task is not None:
@@ -302,24 +395,33 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # create new task
         task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
+        # convert request id to int if it's bytes
+        if type(task_data.get("requestId")) == bytes:
+            request_id = task_data["requestId"]
+            task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
+
         self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
-        if ipfs_hash is None:
-            self.context.logger.error(f"Invalid request data on {task_data_}")
-            self._invalid_request = True
-            return
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
-        self.send_message(ipfs_msg, message, self._handle_get_task)
+        self.send_message(
+            ipfs_msg,
+            message,
+            self._handle_get_task,
+        )
 
     def send_message(
-        self, msg: Message, dialogue: Dialogue, callback: Callable
+        self,
+        msg: Message,
+        dialogue: Dialogue,
+        callback: Callable,
     ) -> None:
         """Send message."""
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
+        self.params.req_to_deadline[nonce] = cast(float, self._last_deadline)
         self.params.in_flight_req = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
@@ -342,6 +444,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         tool = executing_task.get("tool", None)
         model = executing_task.get("model", None)
         tool_params = executing_task.get("params", None)
+        is_offchain = executing_task.get("is_offchain", False)
         response = {"requestId": req_id, "result": "Invalid response"}
         task_executor = self.context.agent_address
         self._done_task = {
@@ -350,6 +453,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "task_executor_address": task_executor,
             "tool": tool,
             "request_id_nonce": request_id_nonce,
+            "is_offchain": is_offchain,
+            **executing_task,
         }
         if task_result is not None and len(task_result) == 5:
             # task succeeded
@@ -368,6 +473,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "prompt": prompt,
                 "cost_dict": cost_dict,
                 "metadata": metadata,
+                "is_offchain": is_offchain,
             }
             self._done_task["transaction"] = transaction
 
@@ -425,33 +531,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self._handle_done_task(task_result)
 
-    def _safely_get_task_data(self, message: IpfsMessage) -> Optional[Dict[str, Any]]:
-        """Safely get task data."""
-        try:
-            task_data = [json.loads(content) for content in message.files.values()][0]
-            return task_data
-        except Exception as e:  # pylint: disable=broad-except
-            self.context.logger.error(
-                f"Exception raised while decoding task data: {str(e)}"
-            )
-            return None
-
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a task request."""
-        task_data = self._safely_get_task_data(message)
+        task_data = [json.loads(content) for content in message.files.values()][0]
         is_data_valid = (
             task_data
             and isinstance(task_data, dict)
             and "prompt" in task_data
             and "tool" in task_data
         )  # pylint: disable=C0301
-        if (
-            is_data_valid
-            and task_data is not None
-            and task_data["tool"] in self._tools_to_package_hash
-        ):
+        if is_data_valid and task_data["tool"] in self._tools_to_package_hash:
             self._prepare_task(task_data)
-        elif is_data_valid and task_data is not None:
+        elif is_data_valid:
             tool = task_data["tool"]
             executing_task = cast(Dict[str, Any], self._executing_task)
             executing_task["tool"] = tool
@@ -547,9 +638,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _handle_store_response(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a store response request."""
         executing_task = cast(Dict[str, Any], self._executing_task)
+        # if sender is not present, use mech address
         req_id, sender = (
             executing_task["requestId"],
-            executing_task["sender"],
+            executing_task.get("sender", executing_task.get("mech")),
         )
         ipfs_hash = to_v1(message.ipfs_hash)
         self.context.logger.info(
@@ -560,13 +652,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id=str(req_id),
             data=ipfs_hash,
         )
-        # for health check metrics
-        self.set_last_executed_task(req_id)
         done_task = cast(Dict[str, Any], self._done_task)
+        if done_task is None or not isinstance(done_task, Dict):
+            self.context.logger.error(
+                f"Invalid done task format. Expected Dict. Actual: {done_task}"
+            )
+            self._executing_task = None
+            self._done_task = None
+            self._invalid_request = False
+            return None
+
         task_result = to_multihash(ipfs_hash)
         cost = get_cost_for_done_task(done_task)
         self.context.logger.info(f"Cost for task {req_id}: {cost}")
-        mech_config = self.params.mech_to_config[done_task["mech_address"]]
+        mech_config = self.params.mech_to_config[done_task["mech_address"].lower()]
         if mech_config.use_dynamic_pricing:
             self.context.logger.info(f"Dynamic pricing is enabled for task {req_id}.")
             task_result = encode(
@@ -575,6 +674,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
+        # pop the data key value as it's bytes which causes issues
+        # with json dumps and not required anywhere
+        done_task.pop("data", None)
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
@@ -582,6 +684,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executing_task = None
         self._done_task = None
         self._invalid_request = False
+
+    def _handle_ipfs_tasks_response(
+        self, message: IpfsMessage, dialogue: Dialogue
+    ) -> None:
+        """Handle the response from ipfs for a stored request."""
+        request_id = cast(str, self._inflight_ipfs_req)
+        ipfs_hash = to_v1(message.ipfs_hash)
+        self.context.logger.info(
+            f"Response for request {request_id} stored on IPFS with hash {ipfs_hash}."
+        )
+        # remove the uploaded request from the pending list
+        self.context.shared_state[IPFS_TASKS] = [
+            t for t in self.ipfs_tasks if t != {"request_id": request_id}
+        ]
+        self._inflight_ipfs_req = None
 
     def send_data_via_acn(
         self,
