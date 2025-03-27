@@ -142,6 +142,8 @@ dependencies:
     version: ==0.6.0
   openfactverification-kongzii:
     version: ==0.1.0
+  httpx:
+    version: ==0.25.2
 customs: []
 default_connection: null
 ---
