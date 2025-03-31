@@ -122,11 +122,6 @@ jobs:
 
       - name: Make use proxy instead of actual nlb by dns override
         run: |
-          # for staging
-          export IP_ADDR=$(dig +short balancer.tcp.propel.staging.autonolas.tech)
-          echo -e "\n$IP_ADDR\tapp.propel.staging.valory.xyz\n"  | sudo tee -a /etc/hosts
-          
-          # for prod
           export IP_ADDR=$(dig +short balancer.tcp.propel.autonolas.tech)
           echo -e "\n$IP_ADDR\tapp.propel.valory.xyz\n"  | sudo tee -a /etc/hosts
 
@@ -179,14 +174,8 @@ jobs:
 
       - name: Make use proxy instead of actual nlb by dns override
         run: |
-          # for staging
           export IP_ADDR=$(dig +short balancer.tcp.propel.staging.autonolas.tech)
           echo -e "\n$IP_ADDR\tapp.propel.staging.valory.xyz\n"  | sudo tee -a /etc/hosts
-          
-          # for prod
-          export IP_ADDR=$(dig +short balancer.tcp.propel.autonolas.tech)
-          echo -e "\n$IP_ADDR\tapp.propel.valory.xyz\n"  | sudo tee -a /etc/hosts
-
 
       - name: Login to propel
         run: |
