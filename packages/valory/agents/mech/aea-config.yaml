@@ -50,7 +50,6 @@ skills:
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
 customs:
 - valory/native_transfer_request:0.1.0:bafybeifi2ojtjohfwy3qlvdsms5y7qa7iqbow7wq7gcjptgz2gbymve3vu
-- valory/prediction_request_claude:0.1.0:bafybeia74qg6simxsc5qdoi3brfu3slo3fjbkto4x2t4pv7hx4tyc7qrfa
 - valory/openai_request:0.1.0:bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq
 - valory/prediction_request_embedding:0.1.0:bafybeihtwykqnoxluqo2n4w2ccoh4xqoc6pifevol6obho3fneg7touzj4
 - valory/resolve_market:0.1.0:bafybeidog2vsqmezxe63jqjpf7p6qmqy3opq3rppvihqtehf6k44hzyo74
@@ -65,11 +64,7 @@ customs:
 - napthaai/prediction_request_rag:0.1.0:bafybeiafsp6yxshdlb3yfrz2r243b3niz563d6n4jjh7ohxwlbpdqaawjm
 - napthaai/prediction_request_reasoning:0.1.0:bafybeifbtrig3iadatei5rildhwo6k2qhuqzymxhupgbbx7bywiulauyeq
 - valory/prepare_tx:0.1.0:bafybeiggkqqyrj4n6qmtwgmx4r4qtrb2k6f67v42qyfgrgoow677vywgw4
-- valory/short_maker:0.1.0:bafybeif63rt4lkopu3rc3l7sg6tebrrwg2lxqufjx6dx4hoda5yzax43fa
 - napthaai/prediction_url_cot:0.1.0:bafybeihy2ad764picvozsap7viycxervokesnbww3qe4oy3ggrieqnuhyu
-- napthaai/prediction_url_cot_claude:0.1.0:bafybeicbjywni5hx5ssoiv6tnnjbqzsck6cmtsdpr6m562z6afogz5eh44
-- napthaai/prediction_request_reasoning_claude:0.1.0:bafybeihtx2cejxoy42jwk2i5m4evfzz537aic5njuawxnzdzwlo63kdduq
-- napthaai/prediction_request_rag_claude:0.1.0:bafybeickr32t7nmapuoymjyo3cf5rr2v2zapksxcivuqsgjr2gn6zo6y7y
 - napthaai/prediction_request_rag_cohere:0.1.0:bafybeid56svuhz3w47lq4kpsl72gsc2h2y7fxmndjrieo2rwq2vac6n6hy
 - valory/prediction_request_lite:0.1.0:bafybeifsdsjsiulsmlcmolda47v6pu6v6kjr3z4zkzjku6iett7xsmgmki
 - nickcom007/prediction_request_sme_lite:0.1.0:bafybeic3tjzls5iqs7mljdohwuu4cmuzf2warfxqr2htorbka4nivlbrbq
