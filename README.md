@@ -268,7 +268,6 @@ Once your service works locally, you have the option to run it on a hosted servi
 | packages/valory/customs/prediction_request_claude |
 | packages/valory/customs/prediction_request_embedding |
 | packages/valory/customs/resolve_market |
-| packages/valory/customs/stability_ai_request |
 
 ## More on tools
 
