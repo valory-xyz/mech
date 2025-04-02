@@ -2,29 +2,10 @@
 *private_key.txt
 packages/fetchai/
 packages/open_aea/
-packages/valory/connections/abci/
-packages/valory/connections/http_server
-packages/valory/connections/ipfs/
-packages/valory/connections/ledger/
-packages/valory/connections/p2p_libp2p_client/
-packages/valory/skills/abstract_abci/
-
-packages/valory/contracts/gnosis_safe_proxy_factory/
-packages/valory/contracts/multisend/
-packages/valory/contracts/service_registry/
-packages/valory/contracts/gnosis_safe/
-
-packages/valory/protocols/abci
-packages/valory/protocols/acn
-packages/valory/protocols/contract_api
-packages/valory/protocols/http
-packages/valory/protocols/ipfs
-packages/valory/protocols/ledger_api
-packages/valory/protocols/tendermint
-/packages/valory/skills/abstract_round_abci
-/packages/valory/skills/registration_abci
-/packages/valory/skills/reset_pause_abci
-/packages/valory/skills/transaction_settlement_abci
+packages/valory/
+!packages/valory/customs
+!packages/valory/agents
+!packages/valory/services
 
 *test_mech.py
 
@@ -34,15 +15,6 @@ packages/valory/protocols/tendermint
 
 .mypy_cache
 /.tox/
-
-packages/valory/protocols/abci
-packages/valory/protocols/acn
-packages/valory/protocols/contract_api
-packages/valory/protocols/http
-packages/valory/protocols/ipfs
-packages/valory/protocols/ledger_api
-packages/valory/protocols/tendermint
-
 
 .env
 .1env

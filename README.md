@@ -11,83 +11,11 @@
     </a>
 </h1>
 
-The execution of AI tasks, such as image generation using DALL-E, prompt processing with ChatGPT, or more intricate operations involving on-chain transactions, poses a number of challenges, including:
-
-- Access to proprietary APIs, which may come with associated fees/subscriptions.
-- Proficiency in the usage of the related open-source technologies, which may entail facing their inherent complexities.
-
-AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to post *AI tasks requests* on-chain and get their result delivered back to you efficiently. An AI Mech will execute these tasks for you. All you need is some xDAI in your wallet to reward the worker service executing your task. AI Mechs are **hassle-free**, **crypto-native**, and **infinitely composable**.
-
-> :bulb: These are just a few ideas on what capabilities can be brought on-chain with AI Mechs:
->
-> - fetch real-time **web search** results
-> - integrate **multi-sig wallets**,
-> - **simulate** chain transactions
-> - execute a variety of **AI models**:
->   - **generative** (e.g, Stability AI, Midjourney),
->   - **action-based** AI agents (e.g., AutoGPT, LangChain)
-
-**AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).**
-
-## AI Mechs components
-
-The project consists of three components:
-
-- Off-chain AI workers, each of which controls a Mech. Each AI worker is implemented as an autonomous service on the Autonolas stack.
-- An on-chain protocol, which is used to generate a registry of AI Mechs, represented as NFTs on-chain.
-- [Mech Hub](https://aimechs.autonolas.network/), a frontend which allows to interact with the protocol:
-  - Gives an overview of the AI workers in the registry.
-  - Allows Mech owners to create new workers.
-  - Allows users to request work from an existing worker.
-
-## Mech request-response flow
-
-![image](docs/images/mech_request_response_flow.png)
-
-1. Write request metadata: the application writes the request metadata to the IPFS. The request metadata must contain the attributes `nonce`, `tool`, and `prompt`. Additional attributes can be passed depending on the specific tool:
-
-    ```json
-    {
-      "nonce": 15,
-      "tool": "prediction_request",
-      "prompt": "Will my favourite football team win this week's match?"
-    }
-    ```
-
-2. The application gets the metadata's IPFS hash.
-
-3. The application writes the request's IPFS hash to the Mech contract which includes a small payment (currently $0.01 on the Gnosis chain deployment). Alternatively, the payment could be done separately through a Nevermined subscription.
-
-4. The Mech service is constantly monitoring Mech contract events, and therefore gets the request hash.
-
-5. The Mech reads the request metadata from IPFS using its hash.
-
-6. The Mech selects the appropriate tool to handle the request from the `tool` entry in the metadata, and runs the tool with the given arguments, usually a prompt. In this example, the mech has been requested to interact with OpenAI's API, so it forwards the prompt to it, but the tool can implement any other desired behavior.
-
-7. The Mech gets a response from the tool.
-
-8. The Mech writes the response to the IPFS.
-
-9. The Mech receives the response the IPFS hash.
-
-10. The Mech writes the response hash to the Mech contract.
-
-11. The application monitors for contract Deliver events and reads the response hash from the associated transaction.
-
-12. The application gets the response metadata from the IPFS:
-
-    ```json
-    {
-      "requestId": 68039248068127180134548324138158983719531519331279563637951550269130775,
-      "result": "{\"p_yes\": 0.35, \"p_no\": 0.65, \"confidence\": 0.85, \"info_utility\": 0.75}"
-    }
-    ```
-
-See some examples of requests and responses on the [Mech Hub](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a).
+This repository contains an AI Mech for the [Predict Agent Economy](https://olas.network/agent-economies/predict). 
 
 ## Requirements
 
-This repository contains a demo AI Mech. You can clone and extend the codebase to create your own AI Mech. You need the following requirements installed in your system:
+You need the following requirements installed in your system:
 
 - [Python](https://www.python.org/) (recommended `3.10`)
 - [Poetry](https://python-poetry.org/docs/)
@@ -113,9 +41,9 @@ Follow these instructions to have your local environment prepared to run the dem
 
     This will populate the Open Autonomy [local registry](https://docs.autonolas.network/open-autonomy/guides/set_up/#the-registries-and-runtime-folders) (folder `./packages`) with the required components to run the worker services.
 
-## Run the demo
+## Run the Mech Predict
 
-### Using Mech Quickstart (Preffered Method)
+### Using Mech Quickstart (Preferred Method)
 
 To help you integrate your own tools more easily, we’ve created a new base repository that serves as a minimal example of how to run the project. It’s designed to minimize setup time and provide a more intuitive starting point. This new repo is streamlined to give you a clean slate, making it easier than ever to get started.
 
@@ -219,38 +147,6 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
     bash run_service.sh
     ```
 
-## Integrating mechs into your application
-
-### For generic apps and scripts
-
-Use the [mech-client](https://github.com/valory-xyz/mech-client), which can be used either as a CLI or directly from a Python script.
-
-### For other autonomous services
-
-To perform mech requests from your service, use the [mech_interact_abci skill](https://github.com/valory-xyz/IEKit/tree/main/packages/valory/skills/mech_interact_abci). This skill abstracts away all the IPFS and contract interactions so you only need to care about the following:
-
-- Add the mech_interact_abci skill to your dependency list, both in `packages.json`, `aea-config.yaml` and any composed `skill.yaml`.
-
-- Import [MechInteractParams and MechResponseSpecs in your `models.py` file](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/models.py#L88). You will also need to copy [some dataclasses to your rounds.py](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L66-L97).
-
-- Add mech_requests and mech_responses to your skills' `SynchonizedData` class ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L181-193))
-
-- To send a request, [prepare the request metadata](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L857), write it to [`synchronized_data.mech_requests`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L535) and [transition into mech_interact](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/rounds.py#L736).
-
-- You will need to appropriately chain the `mech_interact_abci` skill with your other skills ([see here](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/impact_evaluator_abci/composition.py#L66)) and `transaction_settlement_abci`.
-
-- After the interaction finishes, the responses will be inside [`synchronized_data.mech_responses`](https://github.com/valory-xyz/IEKit/blob/main/packages/valory/skills/twitter_scoring_abci/behaviours.py#L903)
-
-For a complete list of required changes, [use this PR as reference](https://github.com/valory-xyz/market-creator/pull/91).
-
-## Build your own
-
-You can create and mint your own AI Mech that handles requests for tasks that you can define.
-
-You can take a look at the preferred method mentioned [above](#using-mech-quickstart-preffered-method) to get started quickly and easily.
-
-Once your service works locally, you have the option to run it on a hosted service like [Propel](https://propel.valory.xyz/).
-
 ## Included tools
 
 | Tools |
@@ -268,7 +164,6 @@ Once your service works locally, you have the option to run it on a hosted servi
 | packages/valory/customs/prediction_request_claude |
 | packages/valory/customs/prediction_request_embedding |
 | packages/valory/customs/resolve_market |
-| packages/valory/customs/stability_ai_request |
 
 ## More on tools
 
@@ -289,25 +184,3 @@ Once your service works locally, you have the option to run it on a hosted servi
 - **Prediction request** (`prediction_request.py`): Outputs the estimated probability of occurrence (`p_yes`) or no occurrence (`p_no`) of a certain event specified as the input prompt in natural language.
   - `prediction-offline`: Uses only training data of the model to make the prediction.
   - `prediction-online`: In addition to training data, it also uses online information to improve the prediction.
-
-## How key files look
-
-A keyfile is just a file with your ethereum private key as a hex-string, example:
-
-```text
-0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcd
-```
-
-Make sure you don't have any extra characters in the file, like newlines or spaces.
-
-## Examples of deployed Mechs
-
-| Network   | Service                                            | Mech Instance (Nevermined Pricing) - Agent Id                                          | Mech Instance (Fixed Pricing) - Agent Id           |
-|:---------:|----------------------------------------------------|--------------------------------------------------|----------------------------------------------------|
-| Ethereum  | https://registry.olas.network/ethereum/services/21 | n/a                                                 | n/a                                                |
-| Gnosis    | https://registry.olas.network/gnosis/services/3    | `0x327E26bDF1CfEa50BFAe35643B23D5268E41F7F9`  - 3  | `0x77af31De935740567Cf4fF1986D04B2c964A786a` - 6   |
-| Arbitrum  | https://registry.olas.network/arbitrum/services/1  | `0x0eA6B3137f294657f0E854390bb2F607e315B82c`  - 1  | `0x1FDAD3a5af5E96e5a64Fc0662B1814458F114597` - 2   |
-| Polygon   | https://registry.olas.network/polygon/services/3   | `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188`  - 1  | `0xbF92568718982bf65ee4af4F7020205dE2331a8a` - 2  |
-| Base      | https://registry.olas.network/base/services/1      | `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA`  - 1  | `0x111D7DB1B752AB4D2cC0286983D9bd73a49bac6c` - 2  |
-| Celo      | https://registry.olas.network/celo/services/1      | `0xeC20694b7BD7870d2dc415Af3b349360A6183245`  - 1  | `0x230eD015735c0D01EA0AaD2786Ed6Bd3C6e75912` - 2  |
-| Optimism  | https://registry.olas.network/optimism/services/1  | `0xbA4491C86705e8f335Ceaa8aaDb41361b2F82498`  - 1  | `0xDd40E7D93c37eFD860Bd53Ab90b2b0a8D05cf71a` - 2  |
