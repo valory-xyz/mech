@@ -14,7 +14,7 @@ entry_point: prediction_sum_url_content.py
 callable: run
 dependencies:
   tqdm:
-    version: ==4.56.0
+    version: ==4.67.1
   google-api-python-client:
     version: ==2.95.0
   googlesearch-python:
