@@ -13,7 +13,7 @@ entry_point: optimization_by_prompting.py
 callable: run
 dependencies:
   tqdm:
-    version: ==4.56.0
+    version: ==4.67.1
   google-api-python-client:
     version: ==2.95.0
   googlesearch-python:
@@ -43,7 +43,7 @@ dependencies:
   spacy:
     version: ==3.7.2
   langchain:
-    version: ==0.0.303
+    version: ==0.2.1
   scikit-learn:
     version: ==1.3.1
   anthropic:

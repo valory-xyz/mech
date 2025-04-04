@@ -13,11 +13,11 @@ entry_point: prediction_langchain.py
 callable: run
 dependencies:
   langchain:
-    version: ==0.1.20
+    version: ==0.2.1
   langchain-core:
-    version: ==0.1.52
+    version: ==0.2.1
   langchain-openai:
-    version: ==0.1.6
+    version: ==0.1.7
   langgraph:
     version: ==0.0.55
   langchain_community:

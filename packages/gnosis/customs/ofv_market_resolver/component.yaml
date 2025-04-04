@@ -17,11 +17,11 @@ dependencies:
   prediction-market-agent-tooling:
     version: '>=0.39.0,<0.40.0'
   langchain:
-    version: ==0.1.20
+    version: ==0.2.1
   langchain-core:
-    version: ==0.1.52
+    version: ==0.2.1
   langchain-openai:
-    version: ==0.1.6
+    version: ==0.1.7
   langchain_community:
     version: ==0.2.1
   openai:
