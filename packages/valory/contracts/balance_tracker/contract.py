@@ -20,16 +20,13 @@
 """This module contains the balance_tracker contract definition."""
 
 import logging
-from enum import Enum
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
-from web3 import Web3
-from web3.types import BlockIdentifier, TxReceipt
 
 
 PUBLIC_ID = PublicId.from_str("valory/balance_tracker:0.1.0")
@@ -37,20 +34,6 @@ PUBLIC_ID = PublicId.from_str("valory/balance_tracker:0.1.0")
 _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
 )
-
-PAYMENT_TYPE_NATIVE_NVM = (
-    "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"  # nosec
-)
-PAYMENT_TYPE_TOKEN_NVM = (
-    "0d6fd99afa9c4c580fab5e341922c2a5c4b61d880da60506193d7bf88944dd14"  # nosec
-)
-
-
-class MechOperation(Enum):
-    """Operation types."""
-
-    CALL = 0
-    DELEGATE_CALL = 1
 
 
 class BalanceTrackerContract(Contract):
