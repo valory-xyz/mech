@@ -540,7 +540,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
 
     def _get_balance_tracker_address(
         self, mech_type: bytes
-    ) -> Generator[None, None, Optional[int]]:
+    ) -> Generator[None, None, Optional[str]]:
         self.context.logger.info(
             f"Fetching balance tracker address for mech type {mech_type.hex()}"
         )
