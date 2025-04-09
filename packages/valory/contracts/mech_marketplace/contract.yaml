@@ -9,7 +9,7 @@ fingerprint:
   BatchPriorityPassedCheck.sol: bafybeie3hfpyss43sggqh5rjzwsqe7o37td4v4k6f3hlweiosnayyseo4i
   __init__.py: bafybeigqedpnruwcvjarngql7yfnpqwozvvgzcei2xcrp7mjf4ccspa62y
   build/MechMarketplace.json: bafybeiauqsmm5aqqzqqr7vi46obq7exa7id5vbq57e3e3wxxkzblgqnjoy
-  contract.py: bafybeifdbi56lqkqervpl4m2ftebvzu4chdde4nimp3p6l2y7pxmme46gm
+  contract.py: bafybeihecvdkxkeebiwattzrsnzctopetlgqd2vyiyca7qheeqyiww7w4a
 fingerprint_ignore_patterns: []
 class_name: MechMarketplaceContract
 contract_interface_paths:

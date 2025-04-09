@@ -1,0 +1,21 @@
+name: balance_tracker
+author: valory
+version: 0.1.0
+type: contract
+description: balance tracker contract
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeieofqhohfzrjxsiqvqv6qpyyvubskfwv2fsbo3juqssu6aqakzkte
+  build/BalanceTracker.json: bafybeifnmntoaw2qym5oei2shy3zvy4exhfklrh5sindvi2hqymoina2ny
+  contract.py: bafybeidiff4pnkl3t55zzvui4nhedg4ntcy5gmsb26sczo5oph433eoqem
+fingerprint_ignore_patterns: []
+class_name: BalanceTrackerContract
+contract_interface_paths:
+  ethereum: build/BalanceTracker.json
+dependencies:
+  open-aea-ledger-ethereum:
+    version: ==1.63.0
+  web3:
+    version: <7,>=6.0.0
+contracts: []
