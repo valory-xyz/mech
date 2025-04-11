@@ -41,7 +41,7 @@ states:
 - SynchronizeLateMessagesRound
 - TaskPoolingRound
 - TransactionPreparationRound
-- UpdateSubscriptionRound
+- UpdateDeliveryRateRound
 - ValidateTransactionRound
 transition_func:
     (CheckLateTxHashesRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
@@ -69,9 +69,9 @@ transition_func:
     (RandomnessTransactionSubmissionRound, NONE): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, NO_MAJORITY): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, ROUND_TIMEOUT): RandomnessTransactionSubmissionRound
-    (RegistrationRound, DONE): UpdateSubscriptionRound
+    (RegistrationRound, DONE): UpdateDeliveryRateRound
     (RegistrationRound, NO_MAJORITY): RegistrationRound
-    (RegistrationStartupRound, DONE): UpdateSubscriptionRound
+    (RegistrationStartupRound, DONE): UpdateDeliveryRateRound
     (ResetAndPauseRound, DONE): TaskPoolingRound
     (ResetAndPauseRound, NO_MAJORITY): RegistrationRound
     (ResetAndPauseRound, RESET_AND_PAUSE_TIMEOUT): RegistrationRound
@@ -103,10 +103,10 @@ transition_func:
     (TransactionPreparationRound, ERROR): ResetAndPauseRound
     (TransactionPreparationRound, NO_MAJORITY): ResetAndPauseRound
     (TransactionPreparationRound, TASK_EXECUTION_ROUND_TIMEOUT): TransactionPreparationRound
-    (UpdateSubscriptionRound, DONE): RandomnessTransactionSubmissionRound
-    (UpdateSubscriptionRound, ERROR): UpdateSubscriptionRound
-    (UpdateSubscriptionRound, NO_MAJORITY): UpdateSubscriptionRound
-    (UpdateSubscriptionRound, NO_TX): TaskPoolingRound
+    (UpdateDeliveryRateRound, DONE): RandomnessTransactionSubmissionRound
+    (UpdateDeliveryRateRound, ERROR): UpdateDeliveryRateRound
+    (UpdateDeliveryRateRound, NO_MAJORITY): UpdateDeliveryRateRound
+    (UpdateDeliveryRateRound, NO_TX): TaskPoolingRound
     (ValidateTransactionRound, DONE): ResetAndPauseRound
     (ValidateTransactionRound, NEGATIVE): CheckTransactionHistoryRound
     (ValidateTransactionRound, NONE): SelectKeeperTransactionSubmissionBRound

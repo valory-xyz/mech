@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the handlers for the skill of UpdateSubscriptionAbciApp."""
+"""This module contains the handlers for the skill of UpdateDeliveryRateAbciApp."""
 
 
 from packages.valory.skills.abstract_round_abci.handlers import (

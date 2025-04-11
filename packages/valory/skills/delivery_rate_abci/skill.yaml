@@ -1,20 +1,20 @@
-name: subscription_abci
+name: delivery_rate_abci
 author: valory
 version: 0.1.0
 type: skill
-description: An abci skill that implements logic for updating the subscription of
-  the mech. for the mech.
+description: An abci skill that implements logic for updating the delivery rates for
+  the mech.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeih2y4s3vu6xleujurx5mihfmzaxubeubykopyftjgklbwtfn6m5yu
-  behaviours.py: bafybeihfiqkffiwn7ycpox36pt7asog6aawiuajdanaj3ivv5qcpcbhqom
-  dialogues.py: bafybeif2euu7wehnyr2r6efrbk6jh757dvbbnb3m7v5gxfdc4qzr3fnd74
-  fsm_specification.yaml: bafybeia77avtbeclmr4lil2hvjrxk4unstxb4fyvdmbpdgocn3ebs2hcdi
-  handlers.py: bafybeiegulbnno4efmaqmsuvjo4vrhcwcrg3faeryjjhwyabpywzty5m2u
-  models.py: bafybeihkg3otqrwjdq7inwcit7o736r4s7xm55yeculilpy6zhgba2jebu
-  payloads.py: bafybeidqcjuyceawnzf2dkeoro2geivfeqrh34h6a7lkxvfqcl62d4hyuy
-  rounds.py: bafybeih3ja7xwy4ku65sp23di3dyxcq7re77o7aet4jme5s5nefuuvjmea
+  __init__.py: bafybeifcvoooekkflaur3hbolvqnlx4zyvhdqlzabte7wgqamdktcer2my
+  behaviours.py: bafybeigpuc37x3qoqvzdpj2blrvpcgcwkpbqx2l3mx5kofzapsaowrt62m
+  dialogues.py: bafybeihbdssotxn4agfzenkud2zxcwinuti3qbycz7uvp75mxsadky4t2a
+  fsm_specification.yaml: bafybeia34sdfrpuh7fzotueupd5ndaukdyykwjdp27w6nqnqpjxgyjq4pe
+  handlers.py: bafybeia6kcugm7rg3ogncmyslbdxydwe5wb4crhoufgljgefh3yohb2kbe
+  models.py: bafybeickmgyzwbrvy532lo4n2rfnmnofi5wek2c3zuxgy6jrzv7yhgf4lu
+  payloads.py: bafybeifh6jspeurwefqd6ulrw5442i3ozv6agnwsuwfxgycktlki52536a
+  rounds.py: bafybeihmc2sun33r2ld4wmbxjg77v3junxrsdygot4wpx2ezqpsrvx7x5q
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -30,7 +30,7 @@ skills:
 behaviours:
   main:
     args: {}
-    class_name: UpdateSubscriptionRoundBehaviour
+    class_name: UpdateDeliveryRateRoundBehaviour
 handlers:
   abci:
     args: {}
@@ -140,7 +140,7 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
-      mech_to_subscription: {}
+      mech_to_max_delivery_rate: {}
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   requests:

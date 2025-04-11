@@ -21,7 +21,7 @@
 
 import packages.valory.skills.registration_abci.rounds as RegistrationAbci
 import packages.valory.skills.reset_pause_abci.rounds as ResetAndPauseAbci
-import packages.valory.skills.subscription_abci.rounds as SubscriptionUpdateAbciApp
+import packages.valory.skills.delivery_rate_abci.rounds as DeliveryRateUpdateAbciApp
 import packages.valory.skills.task_submission_abci.rounds as TaskSubmissionAbciApp
 import packages.valory.skills.transaction_settlement_abci.rounds as TransactionSubmissionAbciApp
 from packages.valory.skills.abstract_round_abci.abci_app_chain import (
@@ -39,9 +39,9 @@ from packages.valory.skills.termination_abci.rounds import (
 # Here we define how the transition between the FSMs should happen
 # more information here: https://docs.autonolas.network/fsm_app_introduction/#composition-of-fsm-apps
 abci_app_transition_mapping: AbciAppTransitionMapping = {
-    RegistrationAbci.FinishedRegistrationRound: SubscriptionUpdateAbciApp.UpdateSubscriptionRound,
-    SubscriptionUpdateAbciApp.FinishedWithoutTxRound: TaskSubmissionAbciApp.TaskPoolingRound,
-    SubscriptionUpdateAbciApp.FinishedWithTxRound: TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound,  # pylint: disable=C0301
+    RegistrationAbci.FinishedRegistrationRound: DeliveryRateUpdateAbciApp.UpdateDeliveryRateRound,
+    DeliveryRateUpdateAbciApp.FinishedWithoutTxRound: TaskSubmissionAbciApp.TaskPoolingRound,
+    DeliveryRateUpdateAbciApp.FinishedWithTxRound: TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound,  # pylint: disable=C0301
     TaskSubmissionAbciApp.FinishedTaskPoolingRound: TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound,  # pylint: disable=C0301
     TaskSubmissionAbciApp.FinishedTaskExecutionWithErrorRound: ResetAndPauseAbci.ResetAndPauseRound,
     TaskSubmissionAbciApp.FinishedWithoutTasksRound: ResetAndPauseAbci.ResetAndPauseRound,
@@ -63,7 +63,7 @@ MechAbciApp = chain(
         TaskSubmissionAbciApp.TaskSubmissionAbciApp,
         ResetAndPauseAbci.ResetPauseAbciApp,
         TransactionSubmissionAbciApp.TransactionSubmissionAbciApp,
-        SubscriptionUpdateAbciApp.SubscriptionUpdateAbciApp,
+        DeliveryRateUpdateAbciApp.DeliveryRateUpdateAbciApp,
     ),
     abci_app_transition_mapping,
 ).add_background_app(termination_config)

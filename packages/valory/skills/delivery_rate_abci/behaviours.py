@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of UpdateSubscriptionAbciApp."""
+"""This package contains round behaviours of UpdateDeliveryRateAbciApp."""
 from abc import ABC
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
@@ -38,12 +38,14 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
-from packages.valory.skills.subscription_abci.models import Params
-from packages.valory.skills.subscription_abci.payloads import UpdateSubscriptionPayload
-from packages.valory.skills.subscription_abci.rounds import (
+from packages.valory.skills.delivery_rate_abci.models import Params
+from packages.valory.skills.delivery_rate_abci.payloads import (
+    UpdateDeliveryRatePayload,
+)
+from packages.valory.skills.delivery_rate_abci.rounds import (
     SynchronizedData,
-    SubscriptionUpdateAbciApp,
-    UpdateSubscriptionRound,
+    DeliveryRateUpdateAbciApp,
+    UpdateDeliveryRateRound,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -53,8 +55,8 @@ ZERO_ETHER_VALUE = 0
 AUTO_GAS = SAFE_GAS = 0
 
 
-class BaseSubscriptionBehaviour(BaseBehaviour, ABC):
-    """Base behaviour for the subscription_abci skill."""
+class BaseDeliveryRateBehaviour(BaseBehaviour, ABC):
+    """Base behaviour for the delivery_rate_abci skill."""
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -67,17 +69,17 @@ class BaseSubscriptionBehaviour(BaseBehaviour, ABC):
         return cast(Params, super().params)
 
 
-class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
-    """UpdateSubscriptionBehaviour"""
+class UpdateDeliveryRateBehaviour(BaseDeliveryRateBehaviour):
+    """UpdateDeliveryRateBehaviour"""
 
-    matching_round: Type[AbstractRound] = UpdateSubscriptionRound
+    matching_round: Type[AbstractRound] = UpdateDeliveryRateRound
 
     def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             payload_content = yield from self.get_payload_content()
             sender = self.context.agent_address
-            payload = UpdateSubscriptionPayload(sender=sender, content=payload_content)
+            payload = UpdateDeliveryRatePayload(sender=sender, content=payload_content)
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
@@ -146,7 +148,7 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
     ) -> Generator[None, None, List[Dict[str, Any]]]:
         """Get the mech update hash tx."""
         txs = []
-        for mech_address, subscription in self.params.mech_to_subscription.items():
+        for mech_address, subscription in self.params.mech_to_max_delivery_rate.items():
             subscription_address = subscription.get("tokenAddress")
             token_id = subscription.get("tokenId")
             should_update = yield from self._should_update_subscription(
@@ -183,12 +185,12 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
         txs = yield from self.get_subscription_update_txs()
         if len(txs) == 0:
             self.context.logger.info("No subscription update txs to send.")
-            return UpdateSubscriptionRound.NO_TX_PAYLOAD
+            return UpdateDeliveryRateRound.NO_TX_PAYLOAD
 
         multisend_tx_str = yield from self._to_multisend(txs)
         if multisend_tx_str is None:
             # something went wrong, respond with ERROR payload for now
-            return UpdateSubscriptionRound.ERROR_PAYLOAD
+            return UpdateDeliveryRateRound.ERROR_PAYLOAD
 
         return multisend_tx_str
 
@@ -275,11 +277,11 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
         return tx_hash
 
 
-class UpdateSubscriptionRoundBehaviour(AbstractRoundBehaviour):
-    """UpdateSubscriptionRoundBehaviour"""
+class UpdateDeliveryRateRoundBehaviour(AbstractRoundBehaviour):
+    """UpdateDeliveryRateRoundBehaviour"""
 
-    initial_behaviour_cls = UpdateSubscriptionBehaviour
-    abci_app_cls = SubscriptionUpdateAbciApp
+    initial_behaviour_cls = UpdateDeliveryRateBehaviour
+    abci_app_cls = DeliveryRateUpdateAbciApp
     behaviours: Set[Type[BaseBehaviour]] = {
-        UpdateSubscriptionBehaviour,
+        UpdateDeliveryRateBehaviour,
     }

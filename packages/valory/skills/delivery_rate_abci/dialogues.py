@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the dialogues of the UpdateSubscriptionAbciApp."""
+"""This module contains the dialogues of the UpdateDeliveryRateAbciApp."""
 
 from typing import Any
 

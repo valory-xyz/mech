@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
-  behaviours.py: bafybeifrqnth46dr3tsiwqjz3fia3kq7jzupxfqhiqkvntekudvfjssiwe
-  composition.py: bafybeiaorp75iva5xgl4ebk3lg7oenqmd6wg2dxlm33oserb7aszyujml4
+  behaviours.py: bafybeicvpeemvpymo2wg6h5efkmriiiwze76hkemjwuannkiwhqpioppfi
+  composition.py: bafybeih4k6hojxiyug2endkzfknq55efpahr2amqfipkdqvcxujabdq6q4
   dialogues.py: bafybeifhydd6xmstbh2jx5igj33upip5a3hhlcaxttfsc77heszqmru7ri
-  fsm_specification.yaml: bafybeige54bdtuq7e2oqqzppiyjra7mv74fid276pqlq25cmlgoc7vgsye
+  fsm_specification.yaml: bafybeibac4bsjjhmxljzptuus3xlkufsiaofgg77g7nq7qgeju7fa6lh3u
   handlers.py: bafybeiequcuyjmcvv6slouptdtalzgwfmuevytbh5m4bkafowpisbp3xu4
-  models.py: bafybeigpimz5vhgzelhc7c3ipo56wh2o7d7whyqcjd2kjigtxos5d6bwqa
+  models.py: bafybeie5dqylmepgnghhgyxmif2q5c7th26boxc5lubra2f354hzgskqqe
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -26,7 +26,7 @@ skills:
 - valory/task_submission_abci:0.1.0:bafybeiecniumgvn65xfbjsbm7ygp53sw6ukdeq22bdee5krbcry3cm2xv4
 - valory/termination_abci:0.1.0:bafybeig4stz7s6phndruvrgqptbc62ue2filttj4wbnempkur5ybso5edu
 - valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
-- valory/subscription_abci:0.1.0:bafybeibveqvt3dkr66cndgetdfut442xmyqibdwy3bgmtg23in6wfijguy
+- valory/delivery_rate_abci:0.1.0:bafybeidnsbx4dhmvppc52cpfm2uckpk2f4s5bwmktsxquofhqc6ywabqdi
 behaviours:
   main:
     args: {}
@@ -160,7 +160,7 @@ models:
       serious_slash_unit_amount: 8000000000000000
       agent_funding_amount: 200000000000000000
       minimum_agent_balance: 100000000000000000
-      mech_to_subscription: {}
+      mech_to_max_delivery_rate: {}
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   randomness_api:
