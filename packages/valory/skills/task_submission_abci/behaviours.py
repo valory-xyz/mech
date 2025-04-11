@@ -422,12 +422,21 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             process_payment_tx = yield from self._get_process_payment_tx(
                 mech_address, balance_tracker_address
             )
+            simulation_ok = process_payment_tx.pop("simulation_ok", False)
             if process_payment_tx is None:
                 self.context.logger.error(
                     f"Could not get transfer process_payment_tx for mech {mech_address}. "
                     f"Don't split profits."
                 )
                 return None
+
+            if not simulation_ok:
+                # the simulation failed, log a warning and skip split profit
+                self.context.logger.warning(
+                    f"Process Payment tx simulation failed. Skipping splitting profits."
+                )
+                return None
+
             txs.append(process_payment_tx)
 
             self.context.logger.info(f"Got {profits} profits from mech {mech_address}")
@@ -586,10 +595,12 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             return None
 
         data = cast(bytes, contract_api_msg.state.body["data"])
+        simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
         return {
             "to": balance_tracker,
             "value": ZERO_ETHER_VALUE,
             "data": data,
+            "simulation_ok": simulation_ok,
         }
 
     def _split_funds(
