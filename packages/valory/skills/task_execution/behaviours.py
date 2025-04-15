@@ -68,7 +68,6 @@ PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
-GNOSIS_CHAIN = "gnosis"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
@@ -292,7 +291,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     from_block=self.params.req_params.from_block.get(
                         RequestType.LEGACY.value
                     ),
-                    chain_id=GNOSIS_CHAIN,
+                    chain_id=self.params.mech_chain_id,
                     contract_addresses=target_mechs,
                     max_block_window=self.params.max_block_window,
                 )
@@ -320,7 +319,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     from_block=self.params.req_params.from_block.get(
                         RequestType.MARKETPLACE.value
                     ),
-                    chain_id=GNOSIS_CHAIN,
+                    chain_id=self.params.mech_chain_id,
                     max_block_window=self.params.max_block_window,
                 )
             ),

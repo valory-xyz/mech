@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeifv2dynqo3o57nr6jntsvdkduytz3f6i52csv2bjwrr4qhi4mkm7i
 - valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeic457x25nmrx7jhnvg523ppfjf5jzhvjgjbiuoxio4iqceksx3uzm
+- valory/mech_abci:0.1.0:bafybeihztlbovl2or7m5otrj4wirh23oqvtahyhmot7s6enx56yxzwfcn4
 - valory/registration_abci:0.1.0:bafybeigp2g6uhhgjlkqyhjlk4abfjuecmulnwlki6acbpfu45thslqujlu
 - valory/reset_pause_abci:0.1.0:bafybeidhqvc4cl6alvkql5kadiv7snudl7o2ctfqbmhrihtejm3zhkmbby
 - valory/subscription_abci:0.1.0:bafybeibveqvt3dkr66cndgetdfut442xmyqibdwy3bgmtg23in6wfijguy
-- valory/task_execution:0.1.0:bafybeiajoeda47rkj72ncdifcu3b2jq3pjhatuxwiexpgzzztixqojmyhm
-- valory/task_submission_abci:0.1.0:bafybeiecniumgvn65xfbjsbm7ygp53sw6ukdeq22bdee5krbcry3cm2xv4
+- valory/task_execution:0.1.0:bafybeihitvla6jahyk3zmngzduug7usdaygs44ogef4tsfeyoktdediohy
+- valory/task_submission_abci:0.1.0:bafybeifv2ypabh4j2oqvjbwamopx6fubq4ti64uwbw3shuoiog7wrv3jbe
 - valory/termination_abci:0.1.0:bafybeig4stz7s6phndruvrgqptbc62ue2filttj4wbnempkur5ybso5edu
 - valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -194,18 +194,19 @@ models:
       mech_to_config: ${dict:{}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
+      mech_chain_id: ${str:gnosis}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
 config:
   ledger_apis:
-    ethereum:
-      address: ${str:https://rpc.gnosischain.com/}
-      chain_id: ${int:100}
+    base:
+      address: ${str:http://localhost:8545}
+      chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     gnosis:
-      address: ${str:https://rpc.gnosischain.com/}
+      address: ${str:http://localhost:8545}
       chain_id: ${int:100}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
