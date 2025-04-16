@@ -46,7 +46,6 @@ packages/valory/protocols/tendermint
 
 .env
 .agentenv
-.agentenv
 keys.json
 leak_report
 
