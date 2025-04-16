@@ -3,7 +3,7 @@
 rm -r mech
 
 # Load env vars
-set -o allexport; source .1env; set +o allexport
+set -o allexport; source .agentenv; set +o allexport
 
 # Remove previous builds
 # if [ -d "mech" ]; then

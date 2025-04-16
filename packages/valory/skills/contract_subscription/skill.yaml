@@ -8,9 +8,9 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihmbiavlq5ekiat57xuekfuxjkoniizurn77hivqwtsaqydv32owu
-  behaviours.py: bafybeihhhfpan6i5vzxaoggmnj5jw556wnxz75ufcmiucq3yygrbmlsdpm
+  behaviours.py: bafybeidpbjogwmfqlef5rhy3dt5ovaddq4fzn6r2etgspom654hha4bfau
   dialogues.py: bafybeigxlbj6mte72ko7osykjfilg4udfmnrnhxtoib5k4xcxde6qi3niu
-  handlers.py: bafybeiasnq4qlq5qys4ugktetmaeqnreaswvaqyi7zvjjlifmhbylucasu
+  handlers.py: bafybeib5pdozn7bettpf4zhbbyyut4tas7nh57tidilhhd6rj7udo6xn5m
   models.py: bafybeiafdc32u7yjph4kb4tvsdsaz4tpzo25m3gmthssc62newpgvrros4
 fingerprint_ignore_patterns: []
 connections:
@@ -27,21 +27,24 @@ behaviours:
 handlers:
   new_event:
     args:
-      contract_to_monitor: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
+      contract_to_monitor: '0x77af31De935740567Cf4fF1986D04B2c964A786a'
+      debounce_seconds: 30
+      fallback_interval: 120
       websocket_provider: https://rpc.gnosischain.com
     class_name: WebSocketHandler
 models:
+  params:
+    args:
+      contract_address: '0x77af31De935740567Cf4fF1986D04B2c964A786a'
+      subscription_id: mech-contract-subscription
+      use_polling: false
+      websocket_provider: wss://rpc.gnosischain.com/wss
+    class_name: Params
   websocket_client_dialogues:
     args: {}
     class_name: WebsocketClientDialogues
-  params:
-    args:
-      use_polling: false
-      websocket_provider: ws://localhost:8001
-      contract_address: '0xFf82123dFB52ab75C417195c5fDB87630145ae81'
-      subscription_id: mech-contract-subscription
-    class_name: Params
 dependencies:
   web3:
     version: <7,>=6.0.0
 is_abstract: false
+customs: []

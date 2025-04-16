@@ -153,12 +153,12 @@ First, you need to configure the worker service. You need to create a `.1env` fi
 
 ```bash
 # Copy the prefilled template
-cp .example.env .1env
+cp .example.env .agentenv
 
-# Edit ".1env" and replace "dummy_api_key" with your OpenAI API key.
+# Edit ".agentenv" and replace "dummy_api_key" with your OpenAI API key.
 
 # Source the env file
-source .1env
+source .agentenv
 ```
 
 ##### Environment Variables

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2025 Valory AG
 #   Copyright 2023 eightballer
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
@@ -52,12 +52,16 @@ class WebSocketHandler(BaseWebSocketHandler):
         """Initialize the handler."""
         self.websocket_provider = kwargs.pop("websocket_provider")
         self.contract_to_monitor = kwargs.pop("contract_to_monitor")
+        self.debounce_seconds = kwargs.pop("debounce_seconds")
+        self.fallback_interval = kwargs.pop("fallback_interval")
+        self.last_processed_time = 0
+
         super().__init__(**kwargs)
 
     def setup(self) -> None:
         """Implement the setup."""
         super().setup()
-
+        self.context.shared_state["event_detected"] = False
         self.context.shared_state[JOB_QUEUE] = []
         self.context.shared_state[DISCONNECTION_POINT] = None
         self._last_processed_block = None
@@ -70,14 +74,20 @@ class WebSocketHandler(BaseWebSocketHandler):
         ) as file:
             abi = json.load(file)["abi"]
 
-        self.w3 = Web3(  # pylint: disable=C0103
-            Web3.HTTPProvider(self.websocket_provider)
+        self.w3 = Web3(
+            Web3.WebsocketProvider(
+                self.websocket_provider,
+                websocket_timeout=60,
+                websocket_kwargs={"ping_interval": 20},
+            )
         )
         self.contract = self.w3.eth.contract(address=self.contract_to_monitor, abi=abi)
 
     def handle(self, message: WebsocketClientMessage) -> None:
         """Handle message."""
         super().handle(message)
+
+        # Track disconnection
         if self.context.shared_state[WEBSOCKET_SUBSCRIPTION_STATUS][
             message.subscription_id
         ] in (SubscriptionStatus.UNSUBSCRIBED, SubscriptionStatus.SUBSCRIBING):
@@ -86,57 +96,24 @@ class WebSocketHandler(BaseWebSocketHandler):
             )
             self.context.shared_state[DISCONNECTION_POINT] = self._last_processed_block
 
-    def handle_recv(self, message: WebsocketClientMessage) -> None:
-        """Handler `RECV` performative"""
-        try:
-            data = json.loads(message.data)
-        except json.JSONDecodeError:
-            self.context.logger.info(
-                f"Error decoding data for websocket subscription {message.subscription_id}; data={message.data}"
-            )
-            self.context.shared_state[WEBSOCKET_SUBSCRIPTION_STATUS][
-                message.subscription_id
-            ] = SubscriptionStatus.UNSUBSCRIBED
-            return
+        now = time.time()
 
-        self.context.logger.info(
-            f"Received {data} from subscription {message.subscription_id}"
-        )
-
-        if set(data.keys()) == {"id", "result", "jsonrpc"}:
-            self.context.logger.info(f"Received response: {data}")
-            return
-
-        self.context.logger.info("Extracting data")
-        tx_hash = data["params"]["result"]["transactionHash"]
-        no_args = True
-        limit = 0
-        while no_args and limit < 10:
-            event_args, no_request = self._get_tx_args(tx_hash)
-            if no_request:
-                self.context.logger.info("Event not a Request.")
-                break
-            if len(event_args) == 0:
-                self.context.logger.info(f"Could not get event args. tx_hash={tx_hash}")
-                time.sleep(1)
-                limit += 1
-                return
-            no_args = False
-
-        if len(event_args) != 0:
-            self.context.shared_state[JOB_QUEUE].append(event_args)
-            self.context.logger.info(f"Added job to queue: {event_args}")
-
-    def _get_tx_args(self, tx_hash: str) -> Any:
-        """Get the transaction arguments."""
-        try:
-            tx_receipt: TxReceipt = self.w3.eth.get_transaction_receipt(tx_hash)
-            self._last_processed_block = tx_receipt["blockNumber"]
-            rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
-            return dict(rich_logs[0]["args"]), False
-
-        except Exception as exc:  # pylint: disable=W0718
-            self.context.logger.error(
-                f"An exception occurred while trying to get the transaction arguments for {tx_hash}: {exc}"
-            )
-            return {}, True
+        # Debounce logic
+        if now - self.last_processed_time >= self.debounce_seconds:
+            if not self.context.shared_state.get("event_detected", False):
+                self.context.logger.info("🔔 Debounced event detected. Setting flag to pull.")
+                self.context.shared_state["event_detected"] = True
+            else:
+                self.context.logger.info("⏸ Event already detected. Waiting for it to be handled.")
+            self.last_processed_time = now
+        else:
+            remaining = int(self.debounce_seconds - (now - self.last_processed_time))
+            self.context.logger.info(f"⏳ Debounced: skipping event (wait {remaining}s)")
+        # Fallback logic
+        if (
+            not self.context.shared_state.get("event_detected", False)
+            and now - self.last_processed_time > self.fallback_interval
+        ):
+            self.context.logger.warning("🛟 Fallback triggered: no event in fallback interval. Forcing pull.")
+            self.context.shared_state["event_detected"] = True
+            self.last_processed_time = now
