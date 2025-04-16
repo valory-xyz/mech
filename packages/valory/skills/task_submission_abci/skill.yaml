@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeiettaltycagwn6ao6ludbudyqi5hp3ow3co3rz3qr4zlxr7ydeyki
+  behaviours.py: bafybeidccfzvlri4d7ekqmy3wihg2nice5a5wj7y7qrgvr2tz3ambcj4li
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
@@ -19,13 +19,14 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeihgm4lmqdjo2exulgzbms2jva7wjybatyt6ylrinrjogi6rwskida
-- valory/mech_marketplace:0.1.0:bafybeia65b4jioic2lrifzcgox2xhvmbwjbmuer7xpiowg6o6o3gcel6qa
+- valory/agent_mech:0.1.0:bafybeihpticltv53ttetvd4qeonrvcrjt4xlmpoeoioj2ibnbephbvrfem
+- valory/mech_marketplace:0.1.0:bafybeic7xtjx7a6i2h6apxjaupezqsxlhidsnvnasv6ms3rlekn7vorkgi
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
 - valory/gnosis_safe:0.1.0:bafybeidw3uxuxyp3lso5mh43nhauzvra4jabnuk34bkqd6mrv4ojz37nui
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeibuq4p66jdpnrq7viz4zylydu3zneteukfy3gwdgp273vptnq3dvi
 - valory/hash_checkpoint:0.1.0:bafybeihyzjja65zrhjdgm5p4oecjm7ijrs6aur2ux2fkmfgfiurautm2da
+- valory/balance_tracker:0.1.0:bafybeiceepsgckl7x5ljvkv4ztg7ubc3re6d4xzan6msywuifao3nxyyq4
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
@@ -33,7 +34,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
 - valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
-- valory/task_execution:0.1.0:bafybeiajoeda47rkj72ncdifcu3b2jq3pjhatuxwiexpgzzztixqojmyhm
+- valory/task_execution:0.1.0:bafybeihjmeyo7pq3i2i4rmkrxt3k4yy6ftlqgncsnzd7k2qt3qsahpk7ze
 behaviours:
   main:
     args: {}
