@@ -39,13 +39,13 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeifv2dynqo3o57nr6jntsvdkduytz3f6i52csv2bjwrr4qhi4mkm7i
 - valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
-- valory/contract_subscription:0.1.0:bafybeigi5bxvfs5j6uzvi27gj2bb6hx4l4u74ubx4jtvizl2qewslyppqe
-- valory/mech_abci:0.1.0:bafybeifobniwgcevo4f6dfanptvaaw7kbq5ipdzb2qku2awai3u5vmgi5i
+- valory/contract_subscription:0.1.0:bafybeib2wsa7kudpqcbtonpa2l7cc65qhy7w2nqmhminhgx72t4ojhvnle
+- valory/mech_abci:0.1.0:bafybeibmqohhekuxmnbp2aoq52hef6zc77xtwstc4efhviwkzbzfqw4li4
 - valory/registration_abci:0.1.0:bafybeigp2g6uhhgjlkqyhjlk4abfjuecmulnwlki6acbpfu45thslqujlu
 - valory/reset_pause_abci:0.1.0:bafybeidhqvc4cl6alvkql5kadiv7snudl7o2ctfqbmhrihtejm3zhkmbby
 - valory/subscription_abci:0.1.0:bafybeidzuhsy2dz4uhyxgh4ts37mgcob4f6nvaugsoove6agfewr3jaawe
-- valory/task_execution:0.1.0:bafybeihjmeyo7pq3i2i4rmkrxt3k4yy6ftlqgncsnzd7k2qt3qsahpk7ze
-- valory/task_submission_abci:0.1.0:bafybeib7o54es3i5ctn5pcscisqdcs77w4av4wlgro66keknk32s3o2che
+- valory/task_execution:0.1.0:bafybeiaqbbzw62is6hw364rvdwojoc6cunkdgp5ohym6zexbd4an7yspsm
+- valory/task_submission_abci:0.1.0:bafybeibqnjuear4yvqn3qudmbl3lglren4m7hufkpjgvwkgyuqbn42fize
 - valory/termination_abci:0.1.0:bafybeig4stz7s6phndruvrgqptbc62ue2filttj4wbnempkur5ybso5edu
 - valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
