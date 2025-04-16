@@ -424,7 +424,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             )
             if process_payment_tx is None:
                 self.context.logger.error(
-                    f"Could not get transfer process_payment_tx for mech {mech_address}. "
+                    f"Could not get process payment tx for mech {mech_address}. "
                     f"Don't split profits."
                 )
                 return None

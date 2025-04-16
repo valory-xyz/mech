@@ -6,16 +6,16 @@
         "contract/valory/agent_registry/0.1.0": "bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq",
         "contract/valory/hash_checkpoint/0.1.0": "bafybeihyzjja65zrhjdgm5p4oecjm7ijrs6aur2ux2fkmfgfiurautm2da",
         "contract/valory/mech_marketplace/0.1.0": "bafybeic7xtjx7a6i2h6apxjaupezqsxlhidsnvnasv6ms3rlekn7vorkgi",
-        "contract/valory/balance_tracker/0.1.0": "bafybeia54dv2p2zrjhckve433ed53ip7ughqroy7nvmtaoqnrja4bx6fym",
+        "contract/valory/balance_tracker/0.1.0": "bafybeiaw4dfrvmay5quswrgulcmeapcmfyulguhzyx4aivnsgfenmfelau",
         "connection/valory/websocket_client/0.1.0": "bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli",
         "skill/valory/contract_subscription/0.1.0": "bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy",
-        "skill/valory/mech_abci/0.1.0": "bafybeihtbh2m75cvgmiquje5wnbam6irnpbzjeztmvbk2uvzmaeheczy3m",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeig3rlulxlcvopoyza7f7sey7fyqpj5walfn45jig2w6tng7abgtma",
+        "skill/valory/mech_abci/0.1.0": "bafybeihrziyahkgf3rgwgl7xph3ldpiks4u6eaum5fyq6aylgnlqhu62qu",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeibtdpmlca5kfjspeedvpwbibaghlavnrfij636a2qzc75umsw6aba",
         "skill/valory/task_execution/0.1.0": "bafybeihjmeyo7pq3i2i4rmkrxt3k4yy6ftlqgncsnzd7k2qt3qsahpk7ze",
         "skill/valory/websocket_client/0.1.0": "bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m",
         "skill/valory/subscription_abci/0.1.0": "bafybeidzuhsy2dz4uhyxgh4ts37mgcob4f6nvaugsoove6agfewr3jaawe",
-        "agent/valory/mech/0.1.0": "bafybeiakaozixl43xshnxxpmzl25tz5ugbgr4nkc526j45ybysdo7ghvji",
-        "service/valory/mech/0.1.0": "bafybeibq6ahnufqf3bdoxke5nvha2vcbq7jr7qotht7n6fgg74b5fduice"
+        "agent/valory/mech/0.1.0": "bafybeid5ol4ozrx7akrqsrein4ju7mw3ap7mmnpgrgr3jbft35d7kptuvq",
+        "service/valory/mech/0.1.0": "bafybeigz4f7i5u5tt53tfkaf553nalaaqwvm6ef7bjtw6uhkcwfjzf6feu"
     },
     "third_party": {
         "protocol/valory/default/1.0.0": "bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq",

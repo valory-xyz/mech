@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -42,57 +42,6 @@ class BalanceTrackerContract(Contract):
     contract_id = PublicId.from_str("valory/balance_tracker:0.1.0")
 
     @classmethod
-    def get_raw_transaction(
-        cls, ledger_api: LedgerApi, contract_address: str, **kwargs: Any
-    ) -> JSONLike:
-        """
-        Handler method for the 'GET_RAW_TRANSACTION' requests.
-
-        Implement this method in the sub class if you want
-        to handle the contract requests manually.
-
-        :param ledger_api: the ledger apis.
-        :param contract_address: the contract address.
-        :param kwargs: the keyword arguments.
-        :return: the tx  # noqa: DAR202
-        """
-        raise NotImplementedError
-
-    @classmethod
-    def get_raw_message(
-        cls, ledger_api: LedgerApi, contract_address: str, **kwargs: Any
-    ) -> bytes:
-        """
-        Handler method for the 'GET_RAW_MESSAGE' requests.
-
-        Implement this method in the sub class if you want
-        to handle the contract requests manually.
-
-        :param ledger_api: the ledger apis.
-        :param contract_address: the contract address.
-        :param kwargs: the keyword arguments.
-        :return: the tx  # noqa: DAR202
-        """
-        raise NotImplementedError
-
-    @classmethod
-    def get_state(
-        cls, ledger_api: LedgerApi, contract_address: str, **kwargs: Any
-    ) -> JSONLike:
-        """
-        Handler method for the 'GET_STATE' requests.
-
-        Implement this method in the sub class if you want
-        to handle the contract requests manually.
-
-        :param ledger_api: the ledger apis.
-        :param contract_address: the contract address.
-        :param kwargs: the keyword arguments.
-        :return: the tx  # noqa: DAR202
-        """
-        raise NotImplementedError
-
-    @classmethod
     def get_mech_balance(
         cls, ledger_api: LedgerApi, contract_address: str, mech_address: str
     ) -> JSONLike:
@@ -128,7 +77,7 @@ class BalanceTrackerContract(Contract):
     @classmethod
     def get_process_payment_tx(
         cls,
-        ledger_api: LedgerApi,
+        ledger_api: EthereumApi,
         contract_address: str,
         sender_address: str,
         mech_address: str,
