@@ -451,6 +451,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         ledger_api_response = yield from self.get_ledger_api_response(
             performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
             ledger_callable="get_balance",
+            chain_id=self.params.mech_chain_id,
             account=address,
         )
         if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:

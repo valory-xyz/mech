@@ -226,7 +226,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         ledger_api_msg, _ = self.context.ledger_dialogues.create(
             performative=LedgerApiMessage.Performative.GET_STATE,
             callable="get_block",
-            kwargs=LedgerApiMessage.Kwargs(dict(block_identifier="latest")),
+            kwargs=LedgerApiMessage.Kwargs(
+                dict(block_identifier="latest", chain_id=self.params.mech_chain_id)
+            ),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
             args=(),
