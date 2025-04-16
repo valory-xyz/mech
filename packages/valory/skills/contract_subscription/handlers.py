@@ -101,10 +101,14 @@ class WebSocketHandler(BaseWebSocketHandler):
         # Debounce logic
         if now - self.last_processed_time >= self.debounce_seconds:
             if not self.context.shared_state.get("event_detected", False):
-                self.context.logger.info("🔔 Debounced event detected. Setting flag to pull.")
+                self.context.logger.info(
+                    "🔔 Debounced event detected. Setting flag to pull."
+                )
                 self.context.shared_state["event_detected"] = True
             else:
-                self.context.logger.info("⏸ Event already detected. Waiting for it to be handled.")
+                self.context.logger.info(
+                    "⏸ Event already detected. Waiting for it to be handled."
+                )
             self.last_processed_time = now
         else:
             remaining = int(self.debounce_seconds - (now - self.last_processed_time))
@@ -114,6 +118,8 @@ class WebSocketHandler(BaseWebSocketHandler):
             not self.context.shared_state.get("event_detected", False)
             and now - self.last_processed_time > self.fallback_interval
         ):
-            self.context.logger.warning("🛟 Fallback triggered: no event in fallback interval. Forcing pull.")
+            self.context.logger.warning(
+                "🛟 Fallback triggered: no event in fallback interval. Forcing pull."
+            )
             self.context.shared_state["event_detected"] = True
             self.last_processed_time = now

@@ -71,8 +71,15 @@ class ContractSubscriptionBehaviour(BaseSubscriptionBehaviour):
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "eth_subscribe",
-                "params": ["logs", {"address": self.params.contract_address,
-                                    "topics": ["0x0cd979445339c62199996f208428d987b1cea24d18e62b79ec24d94b636e8b70"]}],
+                "params": [
+                    "logs",
+                    {
+                        "address": self.params.contract_address,
+                        "topics": [
+                            "0x0cd979445339c62199996f208428d987b1cea24d18e62b79ec24d94b636e8b70"
+                        ],
+                    },
+                ],
             }
         )
 
@@ -87,7 +94,9 @@ class ContractSubscriptionBehaviour(BaseSubscriptionBehaviour):
                     {
                         "fromBlock": disconnection_point,
                         "address": self.params.contract_address,
-                        "topics": ["0x0cd979445339c62199996f208428d987b1cea24d18e62b79ec24d94b636e8b70"],
+                        "topics": [
+                            "0x0cd979445339c62199996f208428d987b1cea24d18e62b79ec24d94b636e8b70"
+                        ],
                     }
                 ],
             }
