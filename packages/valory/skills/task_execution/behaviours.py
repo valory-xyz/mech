@@ -155,9 +155,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _should_poll(self, req_type: str) -> bool:
         """If we should poll the contract."""
-        self.context.logger.info(
-            f"SHOULD I PULL ? {self.context.shared_state['event_detected']}"
-        )
         last_polling = self.params.req_params.last_polling.get(req_type, None)
 
         if last_polling is None:
