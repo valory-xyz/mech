@@ -83,10 +83,6 @@ class BalanceTrackerContract(Contract):
         mech_address: str,
     ) -> JSONLike:
         """Get tx data"""
-        ledger_api = cast(EthereumApi, ledger_api)
-
-        if not isinstance(ledger_api, EthereumApi):
-            raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
         tx_data = contract_instance.encodeABI(
