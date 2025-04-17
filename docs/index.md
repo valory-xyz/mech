@@ -56,15 +56,13 @@ In order to run a local demo service based on the MechKit:
 
 2. Configure the service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
 
-    ```bash
+  ```bash
     # Copy the prefilled template
-    cp .example.env .agentenv
-
-    # Edit ".agentenv" and replace "dummy_api_key" with your OpenAI API key.
-
+    cp .example.env .1env
+    # Edit ".1env" and replace "dummy_api_key" with your OpenAI API key.
     # Source the env file
-    source .agentenv
-    ```
+    source .1env
+```
 
 3. Run the service.
 
