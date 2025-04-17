@@ -678,16 +678,11 @@ class AgentMechContract(Contract):
     @classmethod
     def get_set_delivery_rate_tx_data(
         cls,
-        ledger_api: LedgerApi,
+        ledger_api: EthereumApi,
         contract_address: str,
         new_max_delivery_rate: int,
     ) -> JSONLike:
         """Get tx data"""
-        ledger_api = cast(EthereumApi, ledger_api)
-
-        if not isinstance(ledger_api, EthereumApi):
-            raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
-
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encodeABI(
             fn_name="changeMaxDeliveryRate",
