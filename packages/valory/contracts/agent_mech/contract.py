@@ -526,6 +526,14 @@ class AgentMechContract(Contract):
         return {"data": is_nvm_mech}
 
     @classmethod
+    def get_mech_type(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
+        """Get tx data"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        payment_type_bytes = contract_instance.functions.paymentType().call()
+
+        return {"data": payment_type_bytes}
+
+    @classmethod
     def get_marketplace_mech_request_events(
         cls,
         ledger_api: LedgerApi,

@@ -359,3 +359,18 @@ class MechMarketplaceContract(Contract):
         )
 
         return dict(data=encoded_data)
+
+    @classmethod
+    def get_balance_tracker_for_mech_type(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        mech_type: str,
+    ) -> JSONLike:
+        """Fetch balance tracker address for a given mech type."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+
+        balance_tracker_address = (
+            contract_instance.functions.mapPaymentTypeBalanceTrackers(mech_type).call()
+        )
+        return dict(data=balance_tracker_address)
