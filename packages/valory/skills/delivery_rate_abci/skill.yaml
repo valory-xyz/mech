@@ -1,24 +1,24 @@
-name: subscription_abci
+name: delivery_rate_abci
 author: valory
 version: 0.1.0
 type: skill
-description: An abci skill that implements logic for updating the subscription of
-  the mech. for the mech.
+description: An abci skill that implements logic for updating the delivery rates for
+  the mech.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeih2y4s3vu6xleujurx5mihfmzaxubeubykopyftjgklbwtfn6m5yu
-  behaviours.py: bafybeihfiqkffiwn7ycpox36pt7asog6aawiuajdanaj3ivv5qcpcbhqom
-  dialogues.py: bafybeif2euu7wehnyr2r6efrbk6jh757dvbbnb3m7v5gxfdc4qzr3fnd74
-  fsm_specification.yaml: bafybeia77avtbeclmr4lil2hvjrxk4unstxb4fyvdmbpdgocn3ebs2hcdi
-  handlers.py: bafybeiegulbnno4efmaqmsuvjo4vrhcwcrg3faeryjjhwyabpywzty5m2u
-  models.py: bafybeihkg3otqrwjdq7inwcit7o736r4s7xm55yeculilpy6zhgba2jebu
-  payloads.py: bafybeidqcjuyceawnzf2dkeoro2geivfeqrh34h6a7lkxvfqcl62d4hyuy
-  rounds.py: bafybeih3ja7xwy4ku65sp23di3dyxcq7re77o7aet4jme5s5nefuuvjmea
+  __init__.py: bafybeichkazmroftew6ifqoe4tud2faoo24hza5sgfghapmlp4l2rqjwee
+  behaviours.py: bafybeiacouh7xfq7ld6zkeodo7syc7v6axxjsaw6siu3eajuard24yhnwq
+  dialogues.py: bafybeicpmnp6nf4rautp2246dk3rj54k6kcjbbkekc7hvanh2um3y3ckdm
+  fsm_specification.yaml: bafybeifurkk2plflg3p5rgh7bn3nf2z3tf6pamnha76lvz7vfmu36gpony
+  handlers.py: bafybeibl2xi6ikicoamazml6uh2tiqhni7tgekmtwt672c43utdlbbyi34
+  models.py: bafybeibgzaawtuk45ivbjccnwnt3hoit52m324icfhrclke62xqw7wsegm
+  payloads.py: bafybeifpjamx7ii5vh25vbqpiw4xdx7rnphh5xbbsrs6dxpovhjkhgfuq4
+  rounds.py: bafybeihwqthwavbxookhkq53fy2oj5zui526fpnvcdteiv6k4wjcyey27q
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeihpticltv53ttetvd4qeonrvcrjt4xlmpoeoioj2ibnbephbvrfem
+- valory/agent_mech:0.1.0:bafybeigs3jle7n57sqwdnwi2egfia6ingt7wxhzykft7ssasjj26ig32xi
 - valory/gnosis_safe:0.1.0:bafybeidw3uxuxyp3lso5mh43nhauzvra4jabnuk34bkqd6mrv4ojz37nui
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 protocols:
@@ -30,7 +30,7 @@ skills:
 behaviours:
   main:
     args: {}
-    class_name: UpdateSubscriptionRoundBehaviour
+    class_name: UpdateDeliveryRateRoundBehaviour
 handlers:
   abci:
     args: {}
@@ -140,7 +140,7 @@ models:
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
-      mech_to_subscription: {}
+      mech_to_max_delivery_rate: {}
       service_endpoint_base: https://dummy_service.autonolas.tech/
     class_name: Params
   requests:

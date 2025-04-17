@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the shared state for the abci skill of UpdateSubscriptionAbciApp."""
+"""This module contains the shared state for the abci skill of UpdateDeliveryRateAbciApp."""
 from dataclasses import dataclass
 from typing import Any, Optional, Type, Dict, List
 
@@ -34,13 +34,13 @@ from packages.valory.skills.abstract_round_abci.models import (
 )
 from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
 from packages.valory.skills.abstract_round_abci.utils import check_type
-from packages.valory.skills.subscription_abci.rounds import SubscriptionUpdateAbciApp
+from packages.valory.skills.delivery_rate_abci.rounds import DeliveryRateUpdateAbciApp
 
 
 class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
-    abci_app_cls: Type[AbciApp] = SubscriptionUpdateAbciApp
+    abci_app_cls: Type[AbciApp] = DeliveryRateUpdateAbciApp
 
 
 @dataclass
@@ -56,8 +56,8 @@ class Params(BaseParams):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         """Initialize the parameters object."""
 
-        self.mech_to_subscription: Dict[str, Dict[str, str]] = self._ensure_get(
-            "mech_to_subscription", kwargs, Dict[str, Dict[str, str]]
+        self.mech_to_max_delivery_rate: Dict[str, int] = self._ensure_get(
+            "mech_to_max_delivery_rate", kwargs, Dict[str, int]
         )
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
         self.multisend_address = self._ensure_get("multisend_address", kwargs, str)
