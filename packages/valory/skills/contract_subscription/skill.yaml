@@ -8,9 +8,9 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeihmbiavlq5ekiat57xuekfuxjkoniizurn77hivqwtsaqydv32owu
-  behaviours.py: bafybeiaxjm2ggzms7s4ixo4r64ozup3vq544zdqzcqzsrveolsyujcna2i
+  behaviours.py: bafybeihosl4ubn6yddxxxkb5fycxyz2i4q7qf4ktw7b3utt4xwisi6x2my
   dialogues.py: bafybeigxlbj6mte72ko7osykjfilg4udfmnrnhxtoib5k4xcxde6qi3niu
-  handlers.py: bafybeiex7oanu3haxczpbv2baxmry2lranhzyoto2enxa7kirmh4gfu5me
+  handlers.py: bafybeibeue26ihzp4glnhtqakx5k3ogi5kzuvx2yvwyhjnm5ps6fvumhqq
   models.py: bafybeiafdc32u7yjph4kb4tvsdsaz4tpzo25m3gmthssc62newpgvrros4
 fingerprint_ignore_patterns: []
 connections:
@@ -22,7 +22,8 @@ skills:
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
 behaviours:
   contract_subscriptions:
-    args: {}
+    args:
+      websocket_event_topic: '0x0cd979445339c62199996f208428d987b1cea24d18e62b79ec24d94b636e8b70'
     class_name: ContractSubscriptionBehaviour
 handlers:
   new_event:

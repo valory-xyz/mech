@@ -8,14 +8,14 @@
         "contract/valory/mech_marketplace/0.1.0": "bafybeic7xtjx7a6i2h6apxjaupezqsxlhidsnvnasv6ms3rlekn7vorkgi",
         "contract/valory/balance_tracker/0.1.0": "bafybeiceepsgckl7x5ljvkv4ztg7ubc3re6d4xzan6msywuifao3nxyyq4",
         "connection/valory/websocket_client/0.1.0": "bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli",
-        "skill/valory/contract_subscription/0.1.0": "bafybeicvps76fmtwjdy76oojhyxngpp5cmf4gcse6p3cjqt64jdon2r5qa",
-        "skill/valory/mech_abci/0.1.0": "bafybeih326p3aqhmzrq5tpxsp36spigcvz2lbysnzjj2dcb3lxlercodyu",
+        "skill/valory/contract_subscription/0.1.0": "bafybeihahy35yyyzgdnc7a22p2b5qv7cklnx4qpeixvhp2guew44pm4tr4",
+        "skill/valory/mech_abci/0.1.0": "bafybeicknr6rxvg3bv4zdz4coofa7segc2p3h73iy37m7pnno5rod2phv4",
         "skill/valory/task_submission_abci/0.1.0": "bafybeidlizfazegrbipcx7kclevl2dijcyhurqhbpufnfu7jqb27hltzv4",
         "skill/valory/task_execution/0.1.0": "bafybeifmicf3gmbzdadkiiqvpvfsuhlsj3rwkdwclsekyl3xpqyzeoqxoe",
         "skill/valory/websocket_client/0.1.0": "bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m",
         "skill/valory/delivery_rate_abci/0.1.0": "bafybeiholgtngzkvrtvjjmnboojynmiaj5raj7kb76udstadikqq74qbmu",
-        "agent/valory/mech/0.1.0": "bafybeic2xmgbhkpm4gi5qlsnu7mvbp56jyp5hjxdvusyud3iodmdnp4xbm",
-        "service/valory/mech/0.1.0": "bafybeib7chvfb3gti2sn5z7hli5d7pfodhgpadoic2wwdk6xjwafw4umre"
+        "agent/valory/mech/0.1.0": "bafybeiefvruem32mmz7koiy23pxpmutb6ka7266bu4unm2n5s4b52uexea",
+        "service/valory/mech/0.1.0": "bafybeidcmjj34ktcdieldehyc4m2qspbdvbzfjlw7h2pud7wzf6vjjkhay"
     },
     "third_party": {
         "protocol/valory/default/1.0.0": "bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq",
@@ -36,7 +36,7 @@
         "connection/valory/ipfs/0.1.0": "bafybeigjspoceazd5roxo4pcqcgyu3ozixkdoc44domwcaumt2zwoz2x3m",
         "connection/valory/ledger/0.19.0": "bafybeibiayfscw4badpr545f47hsvc2r5lgfpgzib5q4h4u6kkosdsytby",
         "connection/valory/p2p_libp2p_client/0.1.0": "bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q",
-        "connection/valory/http_server/0.22.0": "bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy",
+        "connection/valory/http_server/0.22.0": "bafybeigencoytvu7izs4vx4dfh6so4d4dywz6jpdyx743fqa6ves5dkrcm",
         "skill/valory/transaction_settlement_abci/0.1.0": "bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky",
         "skill/valory/termination_abci/0.1.0": "bafybeig4stz7s6phndruvrgqptbc62ue2filttj4wbnempkur5ybso5edu",
         "skill/valory/abstract_round_abci/0.1.0": "bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm",
