@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -25,6 +25,9 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
+from packages.valory.skills.delivery_rate_abci.behaviours import (
+    UpdateDeliveryRateRoundBehaviour,
+)
 from packages.valory.skills.mech_abci.composition import MechAbciApp
 from packages.valory.skills.registration_abci.behaviours import (
     AgentRegistrationRoundBehaviour,
@@ -32,9 +35,6 @@ from packages.valory.skills.registration_abci.behaviours import (
 )
 from packages.valory.skills.reset_pause_abci.behaviours import (
     ResetPauseABCIConsensusBehaviour,
-)
-from packages.valory.skills.subscription_abci.behaviours import (
-    UpdateSubscriptionRoundBehaviour,
 )
 from packages.valory.skills.task_submission_abci.behaviours import (
     TaskSubmissionRoundBehaviour,
@@ -59,6 +59,6 @@ class MechConsensusBehaviour(AbstractRoundBehaviour):
         *ResetPauseABCIConsensusBehaviour.behaviours,
         *TransactionSettlementRoundBehaviour.behaviours,
         *TerminationAbciBehaviours.behaviours,
-        *UpdateSubscriptionRoundBehaviour.behaviours,
+        *UpdateDeliveryRateRoundBehaviour.behaviours,
     }
     background_behaviours_cls = {BackgroundBehaviour}  # type: ignore

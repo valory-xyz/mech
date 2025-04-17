@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of UpdateSubscriptionAbciApp."""
+"""This package contains round behaviours of UpdateDeliveryRateAbciApp."""
 from abc import ABC
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
@@ -38,12 +38,14 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
-from packages.valory.skills.subscription_abci.models import Params
-from packages.valory.skills.subscription_abci.payloads import UpdateSubscriptionPayload
-from packages.valory.skills.subscription_abci.rounds import (
+from packages.valory.skills.delivery_rate_abci.models import Params
+from packages.valory.skills.delivery_rate_abci.payloads import (
+    UpdateDeliveryRatePayload,
+)
+from packages.valory.skills.delivery_rate_abci.rounds import (
     SynchronizedData,
-    SubscriptionUpdateAbciApp,
-    UpdateSubscriptionRound,
+    DeliveryRateUpdateAbciApp,
+    UpdateDeliveryRateRound,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -53,8 +55,8 @@ ZERO_ETHER_VALUE = 0
 AUTO_GAS = SAFE_GAS = 0
 
 
-class BaseSubscriptionBehaviour(BaseBehaviour, ABC):
-    """Base behaviour for the subscription_abci skill."""
+class BaseDeliveryRateBehaviour(BaseBehaviour, ABC):
+    """Base behaviour for the delivery_rate_abci skill."""
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -67,70 +69,71 @@ class BaseSubscriptionBehaviour(BaseBehaviour, ABC):
         return cast(Params, super().params)
 
 
-class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
-    """UpdateSubscriptionBehaviour"""
+class UpdateDeliveryRateBehaviour(BaseDeliveryRateBehaviour):
+    """UpdateDeliveryRateBehaviour"""
 
-    matching_round: Type[AbstractRound] = UpdateSubscriptionRound
+    matching_round: Type[AbstractRound] = UpdateDeliveryRateRound
 
     def async_act(self) -> Generator:  # pylint: disable=R0914,R0915
         """Do the act, supporting asynchronous execution."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             payload_content = yield from self.get_payload_content()
             sender = self.context.agent_address
-            payload = UpdateSubscriptionPayload(sender=sender, content=payload_content)
+            payload = UpdateDeliveryRatePayload(sender=sender, content=payload_content)
         with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
         self.set_done()
 
-    def _should_update_subscription(
+    def _should_update_delivery_rate(
         self,
         mech_address: str,
-        expected_subscription: str,
-        expected_token_id: int,
+        expected_delivery_rate: int,
     ) -> Generator[None, None, Optional[bool]]:
-        """Check if the agent should update the subscription."""
+        """Check if the agent should update the delivery_rate."""
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=mech_address,
             contract_id=str(AgentMechContract.contract_id),
-            contract_callable="get_subscription",
+            contract_callable="get_delivery_rate",
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
         ):  # pragma: nocover
             self.context.logger.warning(
-                f"get_subscription unsuccessful!: {contract_api_msg}"
+                f"get_delivery_rate unsuccessful!: {contract_api_msg}"
             )
             return None
 
-        actual_subscription_address = cast(str, contract_api_msg.state.body["nft"])
-        actual_token_id = cast(int, contract_api_msg.state.body["token_id"])
-        return (
-            actual_subscription_address != expected_subscription
-            or actual_token_id != expected_token_id
-        )
+        actual_delivery_rate = cast(int, contract_api_msg.state.body["data"])
+        if actual_delivery_rate != expected_delivery_rate:
+            self.context.logger.info(
+                f"Mech {mech_address} rates info. "
+                f"Actual Delivery rate {actual_delivery_rate}. "
+                f"Expected Delivery rate {expected_delivery_rate}. "
+            )
+            return True
 
-    def _get_subscription_update_tx(
+        return False
+
+    def _get_delivery_rate_update_tx(
         self,
         mech_address: str,
-        subscription_address: str,
-        token_id: int,
+        delivery_rate: int,
     ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get the mech update hash tx."""
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=mech_address,
             contract_id=str(AgentMechContract.contract_id),
-            contract_callable="get_set_subscription_tx_data",
-            subscription_address=subscription_address,
-            token_id=token_id,
+            contract_callable="get_set_delivery_rate_tx_data",
+            new_max_delivery_rate=delivery_rate,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
         ):  # pragma: nocover
             self.context.logger.warning(
-                f"get_set_subscription_tx_data unsuccessful!: {contract_api_msg}"
+                f"get_set_delivery_rate_tx_data unsuccessful!: {contract_api_msg}"
             )
             return None
 
@@ -141,37 +144,38 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
             "data": data,
         }
 
-    def get_subscription_update_txs(
+    def get_delivery_rate_update_txs(
         self,
     ) -> Generator[None, None, List[Dict[str, Any]]]:
         """Get the mech update hash tx."""
         txs = []
-        for mech_address, subscription in self.params.mech_to_subscription.items():
-            subscription_address = subscription.get("tokenAddress")
-            token_id = subscription.get("tokenId")
-            should_update = yield from self._should_update_subscription(
-                mech_address, subscription_address, token_id
+        for (
+            mech_address,
+            delivery_rate,
+        ) in self.params.mech_to_max_delivery_rate.items():
+            should_update = yield from self._should_update_delivery_rate(
+                mech_address, delivery_rate
             )
             if should_update is None:
                 # something went wrong
                 self.context.logger.warning(
-                    f"Could not check if subscription should be updated for {mech_address}."
+                    f"Could not check if delivery_rate should be updated for {mech_address}."
                 )
                 continue
             if not should_update:
                 # no need to update
                 self.context.logger.info(
-                    f"No need to update subscription for {mech_address}."
+                    f"No need to update delivery_rate for {mech_address}."
                 )
                 continue
 
-            tx = yield from self._get_subscription_update_tx(
-                mech_address, subscription_address, token_id
+            tx = yield from self._get_delivery_rate_update_tx(
+                mech_address, delivery_rate
             )
             if tx is None:
                 # something went wrong
                 self.context.logger.warning(
-                    f"Could not get subscription update tx for {mech_address}."
+                    f"Could not get delivery_rate update tx for {mech_address}."
                 )
 
             txs.append(tx)
@@ -180,15 +184,15 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
 
     def get_payload_content(self) -> Generator[None, None, str]:
         """Prepare the transaction"""
-        txs = yield from self.get_subscription_update_txs()
+        txs = yield from self.get_delivery_rate_update_txs()
         if len(txs) == 0:
-            self.context.logger.info("No subscription update txs to send.")
-            return UpdateSubscriptionRound.NO_TX_PAYLOAD
+            self.context.logger.info("No delivery_rate update txs to send.")
+            return UpdateDeliveryRateRound.NO_TX_PAYLOAD
 
         multisend_tx_str = yield from self._to_multisend(txs)
         if multisend_tx_str is None:
             # something went wrong, respond with ERROR payload for now
-            return UpdateSubscriptionRound.ERROR_PAYLOAD
+            return UpdateDeliveryRateRound.ERROR_PAYLOAD
 
         return multisend_tx_str
 
@@ -275,11 +279,11 @@ class UpdateSubscriptionBehaviour(BaseSubscriptionBehaviour):
         return tx_hash
 
 
-class UpdateSubscriptionRoundBehaviour(AbstractRoundBehaviour):
-    """UpdateSubscriptionRoundBehaviour"""
+class UpdateDeliveryRateRoundBehaviour(AbstractRoundBehaviour):
+    """UpdateDeliveryRateRoundBehaviour"""
 
-    initial_behaviour_cls = UpdateSubscriptionBehaviour
-    abci_app_cls = SubscriptionUpdateAbciApp
+    initial_behaviour_cls = UpdateDeliveryRateBehaviour
+    abci_app_cls = DeliveryRateUpdateAbciApp
     behaviours: Set[Type[BaseBehaviour]] = {
-        UpdateSubscriptionBehaviour,
+        UpdateDeliveryRateBehaviour,
     }

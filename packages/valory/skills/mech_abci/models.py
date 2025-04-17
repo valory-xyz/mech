@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -25,9 +25,11 @@ from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
 )
 from packages.valory.skills.abstract_round_abci.models import Requests as BaseRequests
+from packages.valory.skills.delivery_rate_abci.models import (
+    Params as SubscriptionParams,
+)
 from packages.valory.skills.mech_abci.composition import MechAbciApp
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
-from packages.valory.skills.subscription_abci.models import Params as SubscriptionParams
 from packages.valory.skills.task_submission_abci.models import (
     Params as TaskExecutionAbciParams,
 )

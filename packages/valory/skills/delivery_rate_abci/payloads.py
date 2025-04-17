@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,9 +17,15 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the implementation of the update subscription skill."""
+"""This module contains the transaction payloads of the UpdateDeliveryRateAbciApp."""
 
-from aea.configurations.base import PublicId
+from dataclasses import dataclass
+
+from packages.valory.skills.abstract_round_abci.base import BaseTxPayload
 
 
-PUBLIC_ID = PublicId.from_str("valory/subscription_abci:0.1.0")
+@dataclass(frozen=True)
+class UpdateDeliveryRatePayload(BaseTxPayload):
+    """Represent a transaction payload for the UpdateDeliveryRateRound."""
+
+    content: str

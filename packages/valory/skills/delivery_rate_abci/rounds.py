@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains the rounds of SubscriptionUpdateAbciApp."""
+"""This package contains the rounds of DeliveryRateUpdateAbciApp."""
 
 from enum import Enum
 from typing import Dict, Optional, Set, Tuple, cast
@@ -32,11 +32,13 @@ from packages.valory.skills.abstract_round_abci.base import (
     EventToTimeout,
     get_name,
 )
-from packages.valory.skills.subscription_abci.payloads import UpdateSubscriptionPayload
+from packages.valory.skills.delivery_rate_abci.payloads import (
+    UpdateDeliveryRatePayload,
+)
 
 
 class Event(Enum):
-    """SubscriptionUpdateAbciApp Events"""
+    """DeliveryRateUpdateAbciApp Events"""
 
     ROUND_TIMEOUT = "round_timeout"
     NO_MAJORITY = "no_majority"
@@ -58,10 +60,10 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(str, self.db.get_strict("most_voted_tx_hash"))
 
 
-class UpdateSubscriptionRound(CollectSameUntilThresholdRound):
-    """UpdateSubscriptionRound"""
+class UpdateDeliveryRateRound(CollectSameUntilThresholdRound):
+    """UpdateDeliveryRateRound"""
 
-    payload_class = UpdateSubscriptionPayload
+    payload_class = UpdateDeliveryRatePayload
     payload_attribute = "content"
     synchronized_data_class = SynchronizedData
     extended_requirements = ()
@@ -106,15 +108,15 @@ class FinishedWithoutTxRound(DegenerateRound):
     """FinishedWithoutTxRound"""
 
 
-class SubscriptionUpdateAbciApp(AbciApp[Event]):
-    """SubscriptionUpdateAbciApp
+class DeliveryRateUpdateAbciApp(AbciApp[Event]):
+    """DeliveryRateUpdateAbciApp
 
-    Initial round: UpdateSubscriptionRound
+    Initial round: UpdateDeliveryRateRound
 
-    Initial states: {UpdateSubscriptionRound}
+    Initial states: {UpdateDeliveryRateRound}
 
     Transition states:
-        0. UpdateSubscriptionRound
+        0. UpdateDeliveryRateRound
             - done: 1.
             - no tx: 2.
             - error: 0.
@@ -128,14 +130,14 @@ class SubscriptionUpdateAbciApp(AbciApp[Event]):
         round timeout: 60.0
     """
 
-    initial_round_cls: AppState = UpdateSubscriptionRound
-    initial_states: Set[AppState] = {UpdateSubscriptionRound}
+    initial_round_cls: AppState = UpdateDeliveryRateRound
+    initial_states: Set[AppState] = {UpdateDeliveryRateRound}
     transition_function: AbciAppTransitionFunction = {
-        UpdateSubscriptionRound: {
+        UpdateDeliveryRateRound: {
             Event.DONE: FinishedWithTxRound,
             Event.NO_TX: FinishedWithoutTxRound,
-            Event.ERROR: UpdateSubscriptionRound,
-            Event.NO_MAJORITY: UpdateSubscriptionRound,
+            Event.ERROR: UpdateDeliveryRateRound,
+            Event.NO_MAJORITY: UpdateDeliveryRateRound,
         },
         FinishedWithTxRound: {},
         FinishedWithoutTxRound: {},
@@ -148,7 +150,7 @@ class SubscriptionUpdateAbciApp(AbciApp[Event]):
         Event.ROUND_TIMEOUT: 60.0,
     }
     db_pre_conditions: Dict[AppState, Set[str]] = {
-        UpdateSubscriptionRound: set(),
+        UpdateDeliveryRateRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedWithTxRound: {"most_voted_tx_hash"},
