@@ -15,7 +15,7 @@ fingerprint:
   models.py: bafybeid5pljpqrhdw6w4lkxiu7wufmjey44hev6rybvlgkgc4qg4xh7che
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeigencoytvu7izs4vx4dfh6so4d4dywz6jpdyx743fqa6ves5dkrcm
+- valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
 contracts: []
 protocols:
 - valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
