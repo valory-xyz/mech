@@ -7,7 +7,7 @@ default_start_state: UpdateDeliveryRateRound
 final_states:
 - FinishedWithTxRound
 - FinishedWithoutTxRound
-label: SubscriptionUpdateAbciApp
+label: DeliveryRateUpdateAbciApp
 start_states:
 - UpdateDeliveryRateRound
 states:
