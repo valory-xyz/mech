@@ -8,11 +8,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeietrhplydasarvvylbcp4bwsaycgpdvj3axrgsco3ykwbbpdsfv2u
+  behaviours.py: bafybeigz6nk37uhfjc6egvtfuw3yzhogcx3t25a7sbaa4mzm7v7xhtt27i
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeib75t2k6mse5ablrghclgk52vhgykxnnmqs62q52bsobuybdyqhqi
+  models.py: bafybeibbagzqj4bjpcpteuprvjfzgrtyuiju64lais2klogharfqjyaxba
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
   rounds.py: bafybeig7rio35qvs25lvnyfeehazcdiosvnsb7mloh2agdwvoqx3ncybau
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
@@ -33,7 +33,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
 - valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
-- valory/task_execution:0.1.0:bafybeihitvla6jahyk3zmngzduug7usdaygs44ogef4tsfeyoktdediohy
+- valory/task_execution:0.1.0:bafybeigkw3wuxqieacbpq2gucft74xwwmvovrscggcvcesp7qo7fmv3xkm
 behaviours:
   main:
     args: {}
@@ -155,7 +155,7 @@ models:
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
       service_endpoint_base: https://dummy_service.autonolas.tech/
-      mech_chain_id: gnosis
+      default_chain_id: gnosis
     class_name: Params
   requests:
     args: {}

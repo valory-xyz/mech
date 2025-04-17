@@ -103,7 +103,7 @@ class Params(Model):
             and self.mech_marketplace_address != ZERO_ADDRESS
         )
         self.offchain_tx_list: List = list()
-        self.mech_chain_id: str = self._ensure_get("mech_chain_id", kwargs, str)
+        self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
         super().__init__(*args, **kwargs)
 
     @classmethod

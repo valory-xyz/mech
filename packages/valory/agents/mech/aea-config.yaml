@@ -39,12 +39,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeifv2dynqo3o57nr6jntsvdkduytz3f6i52csv2bjwrr4qhi4mkm7i
 - valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeiclmfnhipphqocj63xkdfzpfo57diewc42kp2s57rd3wc2s2gp2j4
+- valory/mech_abci:0.1.0:bafybeihyx5k33k3nrl5p43yqnmzvf5fheyx3tj3xushcqcskfkw4toj5oq
 - valory/registration_abci:0.1.0:bafybeigp2g6uhhgjlkqyhjlk4abfjuecmulnwlki6acbpfu45thslqujlu
 - valory/reset_pause_abci:0.1.0:bafybeidhqvc4cl6alvkql5kadiv7snudl7o2ctfqbmhrihtejm3zhkmbby
 - valory/subscription_abci:0.1.0:bafybeibveqvt3dkr66cndgetdfut442xmyqibdwy3bgmtg23in6wfijguy
-- valory/task_execution:0.1.0:bafybeihitvla6jahyk3zmngzduug7usdaygs44ogef4tsfeyoktdediohy
-- valory/task_submission_abci:0.1.0:bafybeidhincl2tut2q6czjevefjgwjgqdewdn7zylh6tnusgyuhokljnzi
+- valory/task_execution:0.1.0:bafybeigkw3wuxqieacbpq2gucft74xwwmvovrscggcvcesp7qo7fmv3xkm
+- valory/task_submission_abci:0.1.0:bafybeidb2br24d3dh2gplxqoltxehjgjrjyj76xpyievxd2pg6sh4yzp2u
 - valory/termination_abci:0.1.0:bafybeig4stz7s6phndruvrgqptbc62ue2filttj4wbnempkur5ybso5edu
 - valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -177,6 +177,7 @@ models:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
         consensus_threshold: ${int:null}
+      default_chain_id: ${str:gnosis}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
@@ -194,7 +195,7 @@ models:
       mech_to_config: ${dict:{}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
-      mech_chain_id: ${str:gnosis}
+      default_chain_id: ${str:gnosis}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

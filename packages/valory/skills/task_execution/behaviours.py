@@ -227,7 +227,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             performative=LedgerApiMessage.Performative.GET_STATE,
             callable="get_block",
             kwargs=LedgerApiMessage.Kwargs(
-                dict(block_identifier="latest", chain_id=self.params.mech_chain_id)
+                dict(block_identifier="latest", chain_id=self.params.default_chain_id)
             ),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
@@ -293,7 +293,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     from_block=self.params.req_params.from_block.get(
                         RequestType.LEGACY.value
                     ),
-                    chain_id=self.params.mech_chain_id,
+                    chain_id=self.params.default_chain_id,
                     contract_addresses=target_mechs,
                     max_block_window=self.params.max_block_window,
                 )
@@ -321,7 +321,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     from_block=self.params.req_params.from_block.get(
                         RequestType.MARKETPLACE.value
                     ),
-                    chain_id=self.params.mech_chain_id,
+                    chain_id=self.params.default_chain_id,
                     max_block_window=self.params.max_block_window,
                 )
             ),
