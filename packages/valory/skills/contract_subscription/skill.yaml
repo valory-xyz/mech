@@ -30,6 +30,8 @@ handlers:
       contract_to_monitor: '0x77af31De935740567Cf4fF1986D04B2c964A786a'
       debounce_seconds: 30
       fallback_interval: 120
+      websocket_timeout: 60
+      ping_interval: 20
       websocket_provider: https://rpc.gnosischain.com
     class_name: WebSocketHandler
 models:

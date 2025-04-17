@@ -38,6 +38,7 @@ from packages.valory.skills.websocket_client.handlers import (
 
 JOB_QUEUE = "pending_tasks"
 DISCONNECTION_POINT = "disconnection_point"
+EVENT_DETECTED = "event_detected"
 
 
 class WebSocketHandler(BaseWebSocketHandler):
@@ -53,6 +54,8 @@ class WebSocketHandler(BaseWebSocketHandler):
         self.contract_to_monitor = kwargs.pop("contract_to_monitor")
         self.debounce_seconds = kwargs.pop("debounce_seconds")
         self.fallback_interval = kwargs.pop("fallback_interval")
+        self.ping_interval = kwargs.pop("ping_interval")
+        self.websocket_timeout = kwargs.pop("websocket_timeout")
         self.last_processed_time: float = 0.0
 
         super().__init__(**kwargs)
@@ -60,7 +63,7 @@ class WebSocketHandler(BaseWebSocketHandler):
     def setup(self) -> None:
         """Implement the setup."""
         super().setup()
-        self.context.shared_state["event_detected"] = False
+        self.context.shared_state[EVENT_DETECTED] = False
         self.context.shared_state[JOB_QUEUE] = []
         self.context.shared_state[DISCONNECTION_POINT] = None
         self._last_processed_block = None
@@ -76,8 +79,8 @@ class WebSocketHandler(BaseWebSocketHandler):
         self.w3 = Web3(
             Web3.WebsocketProvider(
                 self.websocket_provider,
-                websocket_timeout=60,
-                websocket_kwargs={"ping_interval": 20},
+                websocket_timeout=self.websocket_timeout,
+                websocket_kwargs={"ping_interval": self.ping_interval},
             )
         )
         self.contract = self.w3.eth.contract(address=self.contract_to_monitor, abi=abi)
@@ -99,26 +102,20 @@ class WebSocketHandler(BaseWebSocketHandler):
 
         # Debounce logic
         if now - self.last_processed_time >= self.debounce_seconds:
-            if not self.context.shared_state.get("event_detected", False):
+            if not self.context.shared_state.get(EVENT_DETECTED, False):
                 self.context.logger.info(
-                    "🔔 Debounced event detected. Setting flag to pull."
+                    "Debounced event detected. Setting flag to pull."
                 )
-                self.context.shared_state["event_detected"] = True
-            else:
-                self.context.logger.info(
-                    "⏸ Event already detected. Waiting for it to be handled."
-                )
+                self.context.shared_state[EVENT_DETECTED] = True
             self.last_processed_time = now
-        else:
-            remaining = int(self.debounce_seconds - (now - self.last_processed_time))
-            self.context.logger.info(f"⏳ Debounced: skipping event (wait {remaining}s)")
+
         # Fallback logic
         if (
-            not self.context.shared_state.get("event_detected", False)
+            not self.context.shared_state.get(EVENT_DETECTED, False)
             and now - self.last_processed_time > self.fallback_interval
         ):
             self.context.logger.warning(
-                "🛟 Fallback triggered: no event in fallback interval. Forcing pull."
+                "Fallback triggered: no event in fallback interval. Forcing pull."
             )
-            self.context.shared_state["event_detected"] = True
+            self.context.shared_state[EVENT_DETECTED] = True
             self.last_processed_time = now
