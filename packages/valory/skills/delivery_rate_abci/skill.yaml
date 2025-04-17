@@ -7,14 +7,14 @@ description: An abci skill that implements logic for updating the delivery rates
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeifcvoooekkflaur3hbolvqnlx4zyvhdqlzabte7wgqamdktcer2my
-  behaviours.py: bafybeibqxf7rxho72ckxcryg45rwfqrj7z7jjaiwbicfhtyunu3rpnkg2i
-  dialogues.py: bafybeihbdssotxn4agfzenkud2zxcwinuti3qbycz7uvp75mxsadky4t2a
-  fsm_specification.yaml: bafybeia34sdfrpuh7fzotueupd5ndaukdyykwjdp27w6nqnqpjxgyjq4pe
-  handlers.py: bafybeia6kcugm7rg3ogncmyslbdxydwe5wb4crhoufgljgefh3yohb2kbe
-  models.py: bafybeier4okggzff2ddvdkjtmk4cni6laqx2r2c2mlpa24satbvq3g4rnu
-  payloads.py: bafybeifh6jspeurwefqd6ulrw5442i3ozv6agnwsuwfxgycktlki52536a
-  rounds.py: bafybeihmc2sun33r2ld4wmbxjg77v3junxrsdygot4wpx2ezqpsrvx7x5q
+  __init__.py: bafybeichkazmroftew6ifqoe4tud2faoo24hza5sgfghapmlp4l2rqjwee
+  behaviours.py: bafybeiacouh7xfq7ld6zkeodo7syc7v6axxjsaw6siu3eajuard24yhnwq
+  dialogues.py: bafybeicpmnp6nf4rautp2246dk3rj54k6kcjbbkekc7hvanh2um3y3ckdm
+  fsm_specification.yaml: bafybeifurkk2plflg3p5rgh7bn3nf2z3tf6pamnha76lvz7vfmu36gpony
+  handlers.py: bafybeibl2xi6ikicoamazml6uh2tiqhni7tgekmtwt672c43utdlbbyi34
+  models.py: bafybeibgzaawtuk45ivbjccnwnt3hoit52m324icfhrclke62xqw7wsegm
+  payloads.py: bafybeifpjamx7ii5vh25vbqpiw4xdx7rnphh5xbbsrs6dxpovhjkhgfuq4
+  rounds.py: bafybeihwqthwavbxookhkq53fy2oj5zui526fpnvcdteiv6k4wjcyey27q
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
