@@ -25,7 +25,6 @@ import time
 from typing import Any
 
 from web3 import Web3
-from web3.types import TxReceipt
 
 from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
 from packages.valory.skills.websocket_client.handlers import (
@@ -54,7 +53,7 @@ class WebSocketHandler(BaseWebSocketHandler):
         self.contract_to_monitor = kwargs.pop("contract_to_monitor")
         self.debounce_seconds = kwargs.pop("debounce_seconds")
         self.fallback_interval = kwargs.pop("fallback_interval")
-        self.last_processed_time = 0
+        self.last_processed_time: float = 0.0
 
         super().__init__(**kwargs)
 

@@ -237,10 +237,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _check_for_new_reqs(self) -> None:
         """Check for new reqs."""
-        # if self.params.in_flight_req or not self._should_poll(RequestType.LEGACY.value):
-        #     # do nothing if there is an in flight request
-        #     # or if we should not poll yet
-        #     return
 
         if self.params.in_flight_req or not self.context.shared_state["event_detected"]:
             # do nothing if there is an in flight request
@@ -262,9 +258,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""
-        # if self.params.in_flight_req or not self._should_poll(
-        #     RequestType.MARKETPLACE.value
-        # ):
+
         if self.params.in_flight_req or not self.context.shared_state["event_detected"]:
             # do nothing if there is an in flight request
             # or if we should not poll yet
