@@ -19,9 +19,9 @@
 
 """This package contains round behaviours of MechAbciApp."""
 
+import packages.valory.skills.delivery_rate_abci.rounds as DeliveryRateUpdateAbciApp
 import packages.valory.skills.registration_abci.rounds as RegistrationAbci
 import packages.valory.skills.reset_pause_abci.rounds as ResetAndPauseAbci
-import packages.valory.skills.delivery_rate_abci.rounds as DeliveryRateUpdateAbciApp
 import packages.valory.skills.task_submission_abci.rounds as TaskSubmissionAbciApp
 import packages.valory.skills.transaction_settlement_abci.rounds as TransactionSubmissionAbciApp
 from packages.valory.skills.abstract_round_abci.abci_app_chain import (

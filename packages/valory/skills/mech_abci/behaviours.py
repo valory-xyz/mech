@@ -25,6 +25,9 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     AbstractRoundBehaviour,
     BaseBehaviour,
 )
+from packages.valory.skills.delivery_rate_abci.behaviours import (
+    UpdateDeliveryRateRoundBehaviour,
+)
 from packages.valory.skills.mech_abci.composition import MechAbciApp
 from packages.valory.skills.registration_abci.behaviours import (
     AgentRegistrationRoundBehaviour,
@@ -32,9 +35,6 @@ from packages.valory.skills.registration_abci.behaviours import (
 )
 from packages.valory.skills.reset_pause_abci.behaviours import (
     ResetPauseABCIConsensusBehaviour,
-)
-from packages.valory.skills.delivery_rate_abci.behaviours import (
-    UpdateDeliveryRateRoundBehaviour,
 )
 from packages.valory.skills.task_submission_abci.behaviours import (
     TaskSubmissionRoundBehaviour,
