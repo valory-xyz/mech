@@ -37,6 +37,7 @@ from packages.valory.contracts.agent_mech.contract import (
     MechOperation,
 )
 from packages.valory.contracts.agent_registry.contract import AgentRegistryContract
+from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
@@ -410,12 +411,34 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         self.context.logger.info(f"Splitting profits {self.mech_addresses}.")
         txs = []
         for mech_address in self.mech_addresses:
-            profits = yield from self._get_balance(mech_address)
-            if profits is None:
+            data = yield from self._get_mech_info(mech_address)
+            if data is None:
                 self.context.logger.error(
-                    f"Could not get profits from mech {mech_address}. Don't split profits."
+                    f"Could not get data for mech {mech_address}. Skipping Process Payment."
                 )
                 return None
+
+            _, balance_tracker_address, profits = data
+
+            process_payment_tx = yield from self._get_process_payment_tx(
+                mech_address, balance_tracker_address
+            )
+            if process_payment_tx is None:
+                self.context.logger.error(
+                    f"Could not get process payment tx for mech {mech_address}. "
+                    f"Don't split profits."
+                )
+                return None
+
+            simulation_ok = process_payment_tx.pop("simulation_ok", False)
+            if not simulation_ok:
+                # the simulation failed, log a warning and skip split profit
+                self.context.logger.warning(
+                    "Process Payment tx simulation failed. Skipping splitting profits."
+                )
+                return None
+
+            txs.append(process_payment_tx)
 
             self.context.logger.info(f"Got {profits} profits from mech {mech_address}")
             split_funds = yield from self._split_funds(profits)
@@ -459,6 +482,128 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             return None
         balance = cast(int, ledger_api_response.state.body.get("get_balance_result"))
         return balance
+
+    def _get_mech_info(
+        self, address: str
+    ) -> Generator[None, None, Optional[Tuple[bytes, str, int]]]:
+        """Get mech balance from the balance tracker"""
+        mech_type = yield from self._get_mech_payment_type(address)
+        if mech_type is None:
+            self.context.logger.error(
+                f"Could not get mech type for {address}. Skipping process payment"
+            )
+            return None
+
+        balance_tracker_address = yield from self._get_balance_tracker_address(
+            mech_type
+        )
+        if balance_tracker_address is None:
+            self.context.logger.error(
+                f"Could not get mech balance tracker address for {address}. Skipping process payment"
+            )
+            return None
+
+        self.context.logger.info(f"Fetching balance tracker balance for mech {address}")
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=balance_tracker_address,
+            contract_id=str(BalanceTrackerContract.contract_id),
+            contract_callable="get_mech_balance",
+            mech_address=address,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_mech_balance unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        mech_balance = cast(int, contract_api_msg.state.body["mech_balance"])
+        self.context.logger.info(
+            f"Fetched balance tracker balance for mech {address}: {mech_balance}"
+        )
+        return mech_type, balance_tracker_address, mech_balance
+
+    def _get_mech_payment_type(
+        self, address: str
+    ) -> Generator[None, None, Optional[bytes]]:
+        self.context.logger.info(f"Fetching mech type for mech {address}")
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=address,
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_mech_type",
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_mech_type unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        mech_type = cast(bytes, contract_api_msg.state.body["data"])
+        self.context.logger.info(
+            f"Fetched mech type for mech {address}: {mech_type.hex()}"
+        )
+        return mech_type
+
+    def _get_balance_tracker_address(
+        self, mech_type: bytes
+    ) -> Generator[None, None, Optional[str]]:
+        self.context.logger.info(
+            f"Fetching balance tracker address for mech type {mech_type.hex()}"
+        )
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.mech_marketplace_address,
+            contract_id=str(MechMarketplaceContract.contract_id),
+            contract_callable="get_balance_tracker_for_mech_type",
+            mech_type=mech_type,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_balance_tracker_for_mech_type unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        balance_tracker_address = cast(str, contract_api_msg.state.body["data"])
+        self.context.logger.info(
+            f"Fetched balance tracker address: {balance_tracker_address}"
+        )
+        return balance_tracker_address
+
+    def _get_process_payment_tx(
+        self, address: str, balance_tracker: str
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get the transfer tx."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=balance_tracker,
+            contract_id=str(BalanceTrackerContract.contract_id),
+            contract_callable="get_process_payment_tx",
+            sender_address=self.synchronized_data.safe_contract_address,
+            mech_address=address,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_process_payment_tx unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+        return {
+            "to": balance_tracker,
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+            "simulation_ok": simulation_ok,
+        }
 
     def _split_funds(
         self, profits: int

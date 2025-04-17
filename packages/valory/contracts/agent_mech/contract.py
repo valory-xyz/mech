@@ -431,39 +431,6 @@ class AgentMechContract(Contract):
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
 
     @classmethod
-    def get_subscription(
-        cls,
-        ledger_api: LedgerApi,
-        contract_address: str,
-    ) -> JSONLike:
-        """Get tx data"""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        nft = contract_instance.functions.subscriptionNFT().call()
-        token_id = contract_instance.functions.subscriptionTokenId().call()
-        return {"nft": nft, "token_id": token_id}
-
-    @classmethod
-    def get_set_subscription_tx_data(
-        cls,
-        ledger_api: LedgerApi,
-        contract_address: str,
-        subscription_address: str,
-        token_id: int,
-    ) -> JSONLike:
-        """Get tx data"""
-        ledger_api = cast(EthereumApi, ledger_api)
-
-        if not isinstance(ledger_api, EthereumApi):
-            raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
-
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="setSubscription",
-            args=[Web3.to_checksum_address(subscription_address), token_id],
-        )
-        return {"data": bytes.fromhex(data[2:])}  # type: ignore
-
-    @classmethod
     def simulate_tx(
         cls,
         ledger_api: EthereumApi,
@@ -557,6 +524,14 @@ class AgentMechContract(Contract):
 
         is_nvm_mech = payment_type in [PAYMENT_TYPE_NATIVE_NVM, PAYMENT_TYPE_TOKEN_NVM]
         return {"data": is_nvm_mech}
+
+    @classmethod
+    def get_mech_type(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
+        """Get tx data"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        payment_type_bytes = contract_instance.functions.paymentType().call()
+
+        return {"data": payment_type_bytes}
 
     @classmethod
     def get_marketplace_mech_request_events(
@@ -689,3 +664,28 @@ class AgentMechContract(Contract):
             "data"
         )
         return {"data": bytes.fromhex(data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+
+    @classmethod
+    def get_delivery_rate(
+        cls, ledger_api: LedgerApi, contract_address: str
+    ) -> JSONLike:
+        """Get tx data"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        max_delivery_rate = contract_instance.functions.maxDeliveryRate().call()
+
+        return {"data": max_delivery_rate}
+
+    @classmethod
+    def get_set_delivery_rate_tx_data(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        new_max_delivery_rate: int,
+    ) -> JSONLike:
+        """Get tx data"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encodeABI(
+            fn_name="changeMaxDeliveryRate",
+            args=[new_max_delivery_rate],
+        )
+        return {"data": bytes.fromhex(data[2:])}  # type: ignore
