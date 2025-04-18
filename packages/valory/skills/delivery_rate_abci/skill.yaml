@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeichkazmroftew6ifqoe4tud2faoo24hza5sgfghapmlp4l2rqjwee
-  behaviours.py: bafybeiacouh7xfq7ld6zkeodo7syc7v6axxjsaw6siu3eajuard24yhnwq
+  behaviours.py: bafybeih3fga6ds6gznrtshpfg774dhikcznxchvru37y4wyk66ocx3ir3q
   dialogues.py: bafybeicpmnp6nf4rautp2246dk3rj54k6kcjbbkekc7hvanh2um3y3ckdm
   fsm_specification.yaml: bafybeifurkk2plflg3p5rgh7bn3nf2z3tf6pamnha76lvz7vfmu36gpony
   handlers.py: bafybeibl2xi6ikicoamazml6uh2tiqhni7tgekmtwt672c43utdlbbyi34
@@ -142,6 +142,7 @@ models:
       serious_slash_unit_amount: 8000000000000000
       mech_to_max_delivery_rate: {}
       service_endpoint_base: https://dummy_service.autonolas.tech/
+      default_chain_id: gnosis
     class_name: Params
   requests:
     args: {}

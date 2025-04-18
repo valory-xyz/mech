@@ -96,6 +96,7 @@ class UpdateDeliveryRateBehaviour(BaseDeliveryRateBehaviour):
             contract_address=mech_address,
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_delivery_rate",
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -128,6 +129,7 @@ class UpdateDeliveryRateBehaviour(BaseDeliveryRateBehaviour):
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_set_delivery_rate_tx_data",
             new_max_delivery_rate=delivery_rate,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -216,6 +218,7 @@ class UpdateDeliveryRateBehaviour(BaseDeliveryRateBehaviour):
             contract_id=str(MultiSendContract.contract_id),
             contract_callable="get_tx_data",
             multi_send_txs=multi_send_txs,
+            chain_id=self.params.default_chain_id,
         )
         if response.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
             self.context.logger.error(
@@ -264,6 +267,7 @@ class UpdateDeliveryRateBehaviour(BaseDeliveryRateBehaviour):
             data=data,
             safe_tx_gas=SAFE_GAS,
             operation=SafeOperation.DELEGATE_CALL.value,
+            chain_id=self.params.default_chain_id,
         )
 
         if response.performative != ContractApiMessage.Performative.STATE:

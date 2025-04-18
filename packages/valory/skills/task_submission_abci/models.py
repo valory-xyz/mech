@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -92,6 +92,7 @@ class Params(BaseParams):
         )
         self.minimum_agent_balance = self._ensure("minimum_agent_balance", kwargs, int)
         self.agent_funding_amount = self._ensure("agent_funding_amount", kwargs, int)
+        self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
         super().__init__(*args, **kwargs)
 
     @classmethod
