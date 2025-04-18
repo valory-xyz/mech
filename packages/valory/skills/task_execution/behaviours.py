@@ -237,7 +237,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _check_for_new_reqs(self) -> None:
         """Check for new reqs."""
-        if self.params.in_flight_req or not self._should_poll(RequestType.LEGACY.value):
+
+        if self.params.in_flight_req or not self.context.shared_state["event_detected"]:
             # do nothing if there is an in flight request
             # or if we should not poll yet
             return
@@ -251,14 +252,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.params.req_type = RequestType.LEGACY.value
             return
         self._check_undelivered_reqs()
+        self.context.shared_state["event_detected"] = False
         self.params.in_flight_req = True
         self.params.req_params.last_polling[RequestType.LEGACY.value] = time.time()
 
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""
-        if self.params.in_flight_req or not self._should_poll(
-            RequestType.MARKETPLACE.value
-        ):
+
+        if self.params.in_flight_req or not self.context.shared_state["event_detected"]:
             # do nothing if there is an in flight request
             # or if we should not poll yet
             return
@@ -272,6 +273,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.params.req_type = RequestType.MARKETPLACE.value
             return
         self._check_undelivered_reqs_marketplace()
+        self.context.shared_state["event_detected"] = False
         self.params.in_flight_req = True
         self.params.req_params.last_polling[RequestType.MARKETPLACE.value] = time.time()
 

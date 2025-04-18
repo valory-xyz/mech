@@ -45,6 +45,7 @@ class ContractSubscriptionBehaviour(BaseSubscriptionBehaviour):
     def __init__(self, **kwargs: Any) -> None:
         """Initialise the agent."""
         super().__init__(**kwargs)
+        self.websocket_event_topic = kwargs.pop("websocket_event_topic")
 
     @property
     def params(self) -> Params:
@@ -71,7 +72,13 @@ class ContractSubscriptionBehaviour(BaseSubscriptionBehaviour):
                 "jsonrpc": "2.0",
                 "id": 1,
                 "method": "eth_subscribe",
-                "params": ["logs", {"address": self.params.contract_address}],
+                "params": [
+                    "logs",
+                    {
+                        "address": self.params.contract_address,
+                        "topics": [self.websocket_event_topic],
+                    },
+                ],
             }
         )
 
@@ -86,6 +93,7 @@ class ContractSubscriptionBehaviour(BaseSubscriptionBehaviour):
                     {
                         "fromBlock": disconnection_point,
                         "address": self.params.contract_address,
+                        "topics": [self.websocket_event_topic],
                     }
                 ],
             }
