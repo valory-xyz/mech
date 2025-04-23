@@ -510,6 +510,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_id=str(BalanceTrackerContract.contract_id),
             contract_callable="get_mech_balance",
             mech_address=address,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -534,6 +535,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_address=address,
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_mech_type",
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -561,6 +563,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_id=str(MechMarketplaceContract.contract_id),
             contract_callable="get_balance_tracker_for_mech_type",
             mech_type=mech_type,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -587,6 +590,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_callable="get_process_payment_tx",
             sender_address=self.synchronized_data.safe_contract_address,
             mech_address=address,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
