@@ -280,6 +280,11 @@ LLM_SETTINGS = {
         "limit_max_tokens": 32_000,
         "temperature": 0,
     },
+    "deepseek/deepseek-r1:free": {
+        "default_max_tokens": 1000,
+        "limit_max_tokens": 65_336,
+        "temperature": 0,
+    },
 }
 ALLOWED_TOOLS = [
     "prediction-offline",
