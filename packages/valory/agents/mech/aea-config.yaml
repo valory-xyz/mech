@@ -40,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeifv2dynqo3o57nr6jntsvdkduytz3f6i52csv2bjwrr4qhi4mkm7i
 - valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeigqw7mjgx6mhogxrgtfxcdieomo6vzaqabpfehuzjjc42jk4lgkp4
+- valory/mech_abci:0.1.0:bafybeic2if43namlrflybbhh24d6gi2hvlxw36kd6ceyncx2s2kbst5bpe
 - valory/registration_abci:0.1.0:bafybeigp2g6uhhgjlkqyhjlk4abfjuecmulnwlki6acbpfu45thslqujlu
 - valory/reset_pause_abci:0.1.0:bafybeidhqvc4cl6alvkql5kadiv7snudl7o2ctfqbmhrihtejm3zhkmbby
-- valory/delivery_rate_abci:0.1.0:bafybeiholgtngzkvrtvjjmnboojynmiaj5raj7kb76udstadikqq74qbmu
-- valory/task_execution:0.1.0:bafybeiek42u7c2qzyuq7suuzymwrhr6tnw332m2lfsodf6abaim7jj2ici
-- valory/task_submission_abci:0.1.0:bafybeig2xmgnbfjyaxrgaospbaldznl36sxnrarux3susj2kifbsuvzife
+- valory/delivery_rate_abci:0.1.0:bafybeifa2gmumovmta3tkjcgref6347ubml54o3g64vymeolodcjuh2zoq
+- valory/task_execution:0.1.0:bafybeih6wsacer2q7lamj647cegunpz4en2s6pwv2ju2uv6odhumj44cx4
+- valory/task_submission_abci:0.1.0:bafybeibmfyiik5vbiwmxqvq3zuzhlu4ilxevj4jo66lj7mr3yqgujdga3u
 - valory/termination_abci:0.1.0:bafybeig4stz7s6phndruvrgqptbc62ue2filttj4wbnempkur5ybso5edu
 - valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -178,6 +178,7 @@ models:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
         safe_contract_address: ${str:0x5e1D1eb61E1164D5a50b28C575dA73A29595dFf7}
         consensus_threshold: ${int:null}
+      default_chain_id: ${str:gnosis}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
@@ -195,18 +196,19 @@ models:
       mech_to_config: ${dict:{}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
+      default_chain_id: ${str:gnosis}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
 config:
   ledger_apis:
-    ethereum:
-      address: ${str:https://rpc.gnosischain.com/}
-      chain_id: ${int:100}
+    base:
+      address: ${str:http://localhost:8545}
+      chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     gnosis:
-      address: ${str:https://rpc.gnosischain.com/}
+      address: ${str:http://localhost:8545}
       chain_id: ${int:100}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
