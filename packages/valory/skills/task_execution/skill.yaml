@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeidesvpxxrapf7liquqkot4p4fuionjxwdlpo64q34ma5h6jujbyky
+  behaviours.py: bafybeig3inrdo2kjjxzy5wazccyncl3gmliy5vkkz6vgs6kybt3xejeaxa
   dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
   handlers.py: bafybeifcagftjvcgkva76iisq7ymfuvwna43jsyrgl24tu5v6qzaa6aoje
-  models.py: bafybeieeqyryjsb3632ahvbnzdzs3tfoujbinrt4kecqt2rx5vhi64xdle
+  models.py: bafybeiedvetvbvd3hd455kfg7ms476r5qigji4dns4m4wdnipac726dus4
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeib5xjfeu2jezcj4ofl36qnznhbrjad6hqiwavebg5cidkl2pwlhz4
@@ -90,6 +90,7 @@ models:
       light_slash_unit_amount: 5000000000000000
       serious_slash_unit_amount: 8000000000000000
       mech_marketplace_address: '0x0000000000000000000000000000000000000000'
+      default_chain_id: gnosis
     class_name: Params
 dependencies:
   py-multibase:

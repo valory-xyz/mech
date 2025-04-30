@@ -92,6 +92,7 @@ class Params(BaseParams):
         )
         self.minimum_agent_balance = self._ensure("minimum_agent_balance", kwargs, int)
         self.agent_funding_amount = self._ensure("agent_funding_amount", kwargs, int)
+        self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
         super().__init__(*args, **kwargs)
 
     @classmethod

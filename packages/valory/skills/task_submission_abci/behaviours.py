@@ -285,6 +285,7 @@ class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):
             contract_id=str(HashCheckpointContract.contract_id),
             contract_callable="get_latest_hash",
             sender_address=self.synchronized_data.safe_contract_address,
+            chain_id=self.params.default_chain_id,
         )
         if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
             self.context.logger.warning(
@@ -474,6 +475,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         ledger_api_response = yield from self.get_ledger_api_response(
             performative=LedgerApiMessage.Performative.GET_STATE,  # type: ignore
             ledger_callable="get_balance",
+            chain_id=self.params.default_chain_id,
             account=address,
         )
         if ledger_api_response.performative != LedgerApiMessage.Performative.STATE:
@@ -508,6 +510,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_id=str(BalanceTrackerContract.contract_id),
             contract_callable="get_mech_balance",
             mech_address=address,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -532,6 +535,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_address=address,
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_mech_type",
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -559,6 +563,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_id=str(MechMarketplaceContract.contract_id),
             contract_callable="get_balance_tracker_for_mech_type",
             mech_type=mech_type,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -585,6 +590,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_callable="get_process_payment_tx",
             sender_address=self.synchronized_data.safe_contract_address,
             mech_address=address,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -677,6 +683,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             data=NO_DATA,
             tx_gas=AUTO_GAS,
             operation=MechOperation.CALL.value,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -704,6 +711,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_id=str(ServiceRegistryContract.contract_id),
             contract_callable="get_service_owner",
             service_id=service_id,
+            chain_id=self.params.default_chain_id,
         )
         if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
             self.context.logger.warning(
@@ -770,6 +778,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             contract_id=str(ServiceRegistryContract.contract_id),
             contract_callable="get_operators_mapping",
             agent_instances=agent_instances,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -838,6 +847,7 @@ class TrackingBehaviour(DeliverBehaviour, ABC):
             contract_id=str(HashCheckpointContract.contract_id),
             contract_callable="get_checkpoint_data",
             data=bytes.fromhex(ipfs_hash),
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -899,6 +909,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
             contract_id=str(AgentRegistryContract.contract_id),
             contract_callable="get_token_hash",
             token_id=self.params.agent_id,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -947,6 +958,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
             contract_callable="get_update_hash_tx_data",
             token_id=self.params.agent_id,
             metadata_hash=metadata,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -1079,6 +1091,7 @@ class TransactionPreparationBehaviour(
             contract_id=str(MultiSendContract.contract_id),
             contract_callable="get_tx_data",
             multi_send_txs=multi_send_txs,
+            chain_id=self.params.default_chain_id,
         )
         if response.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
             self.context.logger.error(
@@ -1127,6 +1140,7 @@ class TransactionPreparationBehaviour(
             data=data,
             safe_tx_gas=SAFE_GAS,
             operation=SafeOperation.DELEGATE_CALL.value,
+            chain_id=self.params.default_chain_id,
         )
 
         if response.performative != ContractApiMessage.Performative.STATE:
@@ -1155,6 +1169,7 @@ class TransactionPreparationBehaviour(
             request_id=task_data["request_id"],
             data=task_data["task_result"],
             request_id_nonce=task_data["request_id_nonce"],
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -1188,6 +1203,7 @@ class TransactionPreparationBehaviour(
             data=task_data["task_result"],
             mech_staking_instance=self.params.mech_staking_instance_address,
             mech_service_id=self.params.on_chain_service_id,
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -1297,6 +1313,7 @@ class TransactionPreparationBehaviour(
                     contract_id=str(AgentMechContract.contract_id),
                     contract_callable="get_offchain_deliver_data",
                     **contract_data,
+                    chain_id=self.params.default_chain_id,
                 )
                 if (
                     contract_api_msg.performative
@@ -1327,6 +1344,7 @@ class TransactionPreparationBehaviour(
             contract_address=mech,
             contract_id=str(AgentMechContract.contract_id),
             contract_callable="get_is_nvm_mech",
+            chain_id=self.params.default_chain_id,
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -1352,6 +1370,7 @@ class TransactionPreparationBehaviour(
                 contract_callable="get_encoded_data_for_request",
                 request_id=request_id,
                 data=data,
+                chain_id=self.params.default_chain_id,
             )
             if (
                 contract_api_msg.performative != ContractApiMessage.Performative.STATE
@@ -1435,6 +1454,7 @@ class TransactionPreparationBehaviour(
                     contract_id=str(AgentMechContract.contract_id),
                     contract_callable="get_marketplace_deliver_data",
                     **contract_data,
+                    chain_id=self.params.default_chain_id,
                 )
                 if (
                     contract_api_msg.performative

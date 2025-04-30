@@ -68,7 +68,6 @@ PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
-GNOSIS_CHAIN = "gnosis"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
@@ -227,7 +226,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         ledger_api_msg, _ = self.context.ledger_dialogues.create(
             performative=LedgerApiMessage.Performative.GET_STATE,
             callable="get_block",
-            kwargs=LedgerApiMessage.Kwargs(dict(block_identifier="latest")),
+            kwargs=LedgerApiMessage.Kwargs(
+                dict(block_identifier="latest", chain_id=self.params.default_chain_id)
+            ),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
             args=(),
@@ -294,7 +295,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     from_block=self.params.req_params.from_block.get(
                         RequestType.LEGACY.value
                     ),
-                    chain_id=GNOSIS_CHAIN,
+                    chain_id=self.params.default_chain_id,
                     contract_addresses=target_mechs,
                     max_block_window=self.params.max_block_window,
                 )
@@ -322,7 +323,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     from_block=self.params.req_params.from_block.get(
                         RequestType.MARKETPLACE.value
                     ),
-                    chain_id=GNOSIS_CHAIN,
+                    chain_id=self.params.default_chain_id,
                     max_block_window=self.params.max_block_window,
                 )
             ),
