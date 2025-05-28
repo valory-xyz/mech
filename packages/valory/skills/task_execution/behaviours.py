@@ -638,7 +638,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_store_response(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a store response request."""
-        executing_task = cast(Dict[str, Any], self._executing_task)
+        if not self._executing_task:
+            self.context.logger.error("No executing task found")
+            return
+
+        executing_task = self._executing_task
         # if sender is not present, use mech address
         req_id, sender = (
             executing_task["requestId"],
