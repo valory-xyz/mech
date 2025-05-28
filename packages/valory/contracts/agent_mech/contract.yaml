@@ -18,4 +18,9 @@ dependencies:
     version: ==1.63.0
   web3:
     version: <7,>=6.0.0
+  eth-abi:
+    version: ==4.0.0
+  eth-utils:
+    version: ==2.2.0
+  hexbytes: {}
 contracts: []
