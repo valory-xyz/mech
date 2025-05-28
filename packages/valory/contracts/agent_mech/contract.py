@@ -28,8 +28,11 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
+from eth_utils import event_abi_to_log_topic
+from hexbytes import HexBytes
 from web3 import Web3
-from web3.types import BlockIdentifier, TxReceipt
+from web3._utils.events import get_event_data
+from web3.types import BlockIdentifier, FilterParams, TxReceipt
 
 
 PUBLIC_ID = PublicId.from_str("valory/agent_mech:0.1.0")
@@ -153,11 +156,22 @@ partial_abis = [
 ]
 
 
+TOPIC_BYTES = 32
+TOPIC_CHARS = TOPIC_BYTES * 2
+Ox = "0x"
+Ox_CHARS = len(Ox)
+
+
 class MechOperation(Enum):
     """Operation types."""
 
     CALL = 0
     DELEGATE_CALL = 1
+
+
+def pad_address_for_topic(address: str) -> HexBytes:
+    """Left-pad an Ethereum address to 32 bytes for use in a topic."""
+    return HexBytes(Ox + address[Ox_CHARS:].zfill(TOPIC_CHARS))
 
 
 class AgentMechContract(Contract):
@@ -291,10 +305,13 @@ class AgentMechContract(Contract):
         all_entries = []
         for abi in partial_abis:
             contract_instance = ledger_api.api.eth.contract(contract_address, abi=abi)
-            entries = contract_instance.events.Request.create_filter(
-                fromBlock=from_block,
-                toBlock=to_block,
-            ).get_all_entries()
+            entries = cls.get_event_entries(
+                ledger_api=ledger_api,
+                from_block=from_block,
+                to_block=to_block,
+                contract_instance=contract_instance,
+            )
+
             all_entries.extend(entries)
 
         request_events = list(
@@ -321,10 +338,12 @@ class AgentMechContract(Contract):
         all_entries = []
         for abi in partial_abis:
             contract_instance = ledger_api.api.eth.contract(contract_address, abi=abi)
-            entries = contract_instance.events.Deliver.create_filter(
-                fromBlock=from_block,
-                toBlock=to_block,
-            ).get_all_entries()
+            entries = cls.get_event_entries(
+                ledger_api=ledger_api,
+                from_block=from_block,
+                to_block=to_block,
+                contract_instance=contract_instance,
+            )
             all_entries.extend(entries)
 
         deliver_events = list(
@@ -544,10 +563,12 @@ class AgentMechContract(Contract):
         """Get the Request events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        entries = contract_instance.events.Request.create_filter(
-            fromBlock=from_block,
-            toBlock=to_block,
-        ).get_all_entries()
+        entries = cls.get_event_entries(
+            ledger_api=ledger_api,
+            from_block=from_block,
+            to_block=to_block,
+            contract_instance=contract_instance,
+        )
 
         request_events = list(
             {
@@ -571,10 +592,12 @@ class AgentMechContract(Contract):
         """Get the Deliver events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        entries = contract_instance.events.Deliver.create_filter(
-            fromBlock=from_block,
-            toBlock=to_block,
-        ).get_all_entries()
+        entries = cls.get_event_entries(
+            ledger_api=ledger_api,
+            from_block=from_block,
+            to_block=to_block,
+            contract_instance=contract_instance,
+        )
 
         deliver_events = list(
             {
@@ -689,3 +712,28 @@ class AgentMechContract(Contract):
             args=[new_max_delivery_rate],
         )
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
+
+    @classmethod
+    def get_event_entries(
+        cls,
+        ledger_api: EthereumApi,
+        contract_instance: Any,
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
+    ) -> List:
+        """Helper method to extract the events."""
+        event_abi = contract_instance.events.SafeReceived().abi
+
+        event_topic = event_abi_to_log_topic(event_abi)
+
+        filter_params: FilterParams = {
+            "fromBlock": from_block,
+            "toBlock": to_block,
+            "address": contract_instance.address,
+            "topics": [event_topic],
+        }
+
+        w3 = ledger_api.api.eth
+        logs = w3.get_logs(filter_params)
+        entries = [get_event_data(w3.codec, event_abi, log) for log in logs]
+        return entries
