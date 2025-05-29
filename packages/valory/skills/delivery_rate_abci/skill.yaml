@@ -18,7 +18,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeigs3jle7n57sqwdnwi2egfia6ingt7wxhzykft7ssasjj26ig32xi
+- valory/agent_mech:0.1.0:bafybeibjlxgwwqodubwy3mhstnjqjsyat4ray32xgkkv5adysjwz5mzcau
 - valory/gnosis_safe:0.1.0:bafybeidw3uxuxyp3lso5mh43nhauzvra4jabnuk34bkqd6mrv4ojz37nui
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 protocols:
