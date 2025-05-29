@@ -23,4 +23,5 @@ dependencies:
   eth-utils:
     version: ==2.2.0
   hexbytes: {}
+  eth_typing: {}
 contracts: []
