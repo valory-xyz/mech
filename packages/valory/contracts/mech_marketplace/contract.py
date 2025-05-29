@@ -21,6 +21,8 @@
 
 import logging
 from enum import Enum
+
+from eth_typing import ChecksumAddress
 from eth_utils import event_abi_to_log_topic
 from hexbytes import HexBytes
 from typing import Any, Dict, List, cast
@@ -190,11 +192,14 @@ class MechMarketplaceContract(Contract):
         """Get the Request events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-
-        entries = cls.get_event_entries(ledger_api=ledger_api,
-                                        from_block=from_block,
-                                        to_block=to_block,
-                                        contract_instance=contract_instance)
+        event_abi = contract_instance.events.MarketplaceRequest().abi
+        entries = cls.get_event_entries(
+            ledger_api=ledger_api,
+            event_abi=event_abi,
+            address=contract_instance.address,
+            from_block=from_block,
+            to_block=to_block,
+        )
 
         request_events = list(
             {
@@ -218,10 +223,14 @@ class MechMarketplaceContract(Contract):
         """Get the Deliver events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        entries = cls.get_event_entries(ledger_api=ledger_api,
-                                        from_block=from_block,
-                                        to_block=to_block,
-                                        contract_instance=contract_instance)
+        event_abi = contract_instance.events.MarketplaceDeliver().abi
+        entries = cls.get_event_entries(
+            ledger_api=ledger_api,
+            event_abi=event_abi,
+            address=contract_instance.address,
+            from_block=from_block,
+            to_block=to_block,
+        )
 
         request_events = list(
             {
@@ -391,21 +400,22 @@ class MechMarketplaceContract(Contract):
         return dict(data=balance_tracker_address)
 
     @classmethod
-    def get_event_entries(cls,
-                          ledger_api: EthereumApi,
-                          contract_instance: Any,
-                          from_block: BlockIdentifier = "earliest",
-                          to_block: BlockIdentifier = "latest"
+    def get_event_entries(
+        cls,
+        ledger_api: EthereumApi,
+        event_abi: Any,
+        address: ChecksumAddress,
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
     ) -> List:
         """Helper method to extract the events."""
-        event_abi = contract_instance.events.SafeReceived().abi
 
         event_topic = event_abi_to_log_topic(event_abi)
 
         filter_params: FilterParams = {
             "fromBlock": from_block,
             "toBlock": to_block,
-            "address": contract_instance.address,
+            "address": address,
             "topics": [event_topic],
         }
 
