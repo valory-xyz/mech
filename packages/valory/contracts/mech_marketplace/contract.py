@@ -84,7 +84,6 @@ def pad_address_for_topic(address: str) -> HexBytes:
     return HexBytes(Ox + address[Ox_CHARS:].zfill(TOPIC_CHARS))
 
 
-
 class MechMarketplaceContract(Contract):
     """The scaffold contract class for a smart contract."""
 
@@ -369,6 +368,7 @@ class MechMarketplaceContract(Contract):
         contract_address: str,
         request_id: bytes,
         data: str,
+        delivery_rate: int,
     ) -> JSONLike:
         """Fetch info for a given request id."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
@@ -377,9 +377,9 @@ class MechMarketplaceContract(Contract):
             request_id
         ).call()
 
-        delivery_rate = request_id_info[4]
+        final_delivery_rate = min(request_id_info[4], delivery_rate)
         encoded_data = ledger_api.api.codec.encode(
-            ["uint256", "bytes"], [delivery_rate, data]
+            ["uint256", "bytes"], [final_delivery_rate, data]
         )
 
         return dict(data=encoded_data)

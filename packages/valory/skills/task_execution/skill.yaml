@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeidps7mfbiog4k35ow6weq363n2qwc3p4yqzlwnoljacvvnhf2op24
+  behaviours.py: bafybeicmaymlbalgblitoimrffedjrisjrrzouc3hbuowdk26cjq6k5yha
   dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
   handlers.py: bafybeifcagftjvcgkva76iisq7ymfuvwna43jsyrgl24tu5v6qzaa6aoje
-  models.py: bafybeiedvetvbvd3hd455kfg7ms476r5qigji4dns4m4wdnipac726dus4
+  models.py: bafybeib5d3vy7wqw6a7pfh4ht2evv4duzdc3kr4x7xowjv4ryp4t2qcrbe
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeib5xjfeu2jezcj4ofl36qnznhbrjad6hqiwavebg5cidkl2pwlhz4
@@ -80,6 +80,7 @@ models:
       from_block_range: 50000
       num_agents: 4
       mech_to_config: {}
+      tools_to_pricing: {}
       polling_interval: 30.0
       task_deadline: 240.0
       max_block_window: 500

@@ -104,6 +104,12 @@ class Params(Model):
         )
         self.offchain_tx_list: List = list()
         self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
+        self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing")
+        if self.tools_to_pricing:
+            self._ensure_same_keys(
+                kwargs, self.tools_to_package_hash, self.tools_to_pricing
+            )
+
         super().__init__(*args, **kwargs)
 
     @classmethod
@@ -124,3 +130,29 @@ class Params(Model):
                 f"{key!r} must be a {type_}, but type {type(value)} was found in `models.params.args` of `skill.yaml` of `{skill_id}`",
             )
         return value
+
+    @classmethod
+    def _ensure_same_keys(
+        cls, kwargs: Dict, hash_dict: Dict, pricing_dict: Dict
+    ) -> Any:
+        """Ensure that the same keys are available inside two dicts"""
+        enforce("skill_context" in kwargs, "Only use on models!")
+        hash_keys = hash_dict.keys()
+        pricing_keys = pricing_dict.keys()
+        extra_keys_in_hash_dict = hash_keys - pricing_keys
+        extra_keys_in_pricing_dict = pricing_keys - hash_keys
+
+        if extra_keys_in_hash_dict or extra_keys_in_pricing_dict:
+            errors = []
+            if extra_keys_in_hash_dict:
+                errors.append(
+                    f"Extra keys in tools_to_packages_hash dictionary: {', '.join(extra_keys_in_hash_dict)}"
+                )
+            if extra_keys_in_pricing_dict:
+                errors.append(
+                    f"Extra keys in tools_to_pricing dictionary: {', '.join(extra_keys_in_pricing_dict)}"
+                )
+            enforce(
+                False,
+                "; ".join(errors),
+            )

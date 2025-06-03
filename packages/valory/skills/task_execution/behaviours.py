@@ -668,15 +668,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return None
 
         task_result = to_multihash(ipfs_hash)
-        cost = get_cost_for_done_task(done_task)
-        self.context.logger.info(f"Cost for task {req_id}: {cost}")
-        mech_config = self.params.mech_to_config[done_task["mech_address"].lower()]
-        if mech_config.use_dynamic_pricing:
-            self.context.logger.info(f"Dynamic pricing is enabled for task {req_id}.")
-            task_result = encode(
-                ["uint256", "bytes"], [cost, bytes.fromhex(task_result)]
-            ).hex()
+        tool = done_task.get("tool")
+        dynamic_tool_cost = self.params.tools_to_pricing.get(tool)
+        if dynamic_tool_cost:
+            self.context.logger.info(
+                f"Tools to pricing found for tool {tool}. Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}"
+            )
+            done_task["dynamic_tool_cost"] = dynamic_tool_cost
+        else:
+            dynamic_tool_cost = 0
+            cost = get_cost_for_done_task(done_task)
+            self.context.logger.info(f"Cost for task {req_id}: {cost}")
 
+        mech_config = self.params.mech_to_config[done_task["mech_address"].lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
         # pop the data key value as it's bytes which causes issues
