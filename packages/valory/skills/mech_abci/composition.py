@@ -28,12 +28,6 @@ from packages.valory.skills.abstract_round_abci.abci_app_chain import (
     AbciAppTransitionMapping,
     chain,
 )
-from packages.valory.skills.abstract_round_abci.base import BackgroundAppConfig
-from packages.valory.skills.termination_abci.rounds import (
-    BackgroundRound,
-    Event,
-    TerminationAbciApp,
-)
 
 
 # Here we define how the transition between the FSMs should happen
@@ -51,12 +45,6 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     ResetAndPauseAbci.FinishedResetAndPauseErrorRound: RegistrationAbci.RegistrationRound,
 }
 
-termination_config = BackgroundAppConfig(
-    round_cls=BackgroundRound,
-    start_event=Event.TERMINATE,
-    abci_app=TerminationAbciApp,
-)
-
 MechAbciApp = chain(
     (
         RegistrationAbci.AgentRegistrationAbciApp,
@@ -66,4 +54,4 @@ MechAbciApp = chain(
         DeliveryRateUpdateAbciApp.DeliveryRateUpdateAbciApp,
     ),
     abci_app_transition_mapping,
-).add_background_app(termination_config)
+)
