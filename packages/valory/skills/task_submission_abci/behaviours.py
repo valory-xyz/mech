@@ -1411,7 +1411,6 @@ class TransactionPreparationBehaviour(
                 return num_in_bytes
 
             for data in marketplace_done_tasks:
-                print(f"{data=}")
                 mech = data[MECH_ADDRESS]
                 marketplace_deliver_by_mech[mech][
                     MarketplaceKeys.REQUEST_IDS.value
@@ -1419,9 +1418,10 @@ class TransactionPreparationBehaviour(
                 marketplace_deliver_by_mech[mech][MarketplaceKeys.DATAS.value].append(
                     bytes.fromhex(data[MarketplaceData.TASK_RESULT.value])
                 )
+                # default is set to 0 as for regular mechs this key is not being used in deliveries
                 marketplace_deliver_by_mech[mech][
                     MarketplaceKeys.DELIVERY_RATES.value
-                ].append(data[MarketplaceData.DYNAMIC_TOOL_COST.value])
+                ].append(data.get(MarketplaceData.DYNAMIC_TOOL_COST.value, 0))
 
             for mech, details in marketplace_deliver_by_mech.items():
                 self.context.logger.info(f"Preparing deliver data for mech: {mech}")
