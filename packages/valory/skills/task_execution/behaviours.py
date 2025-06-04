@@ -91,6 +91,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executor = ProcessPoolExecutor(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
         self._tools_to_package_hash: Dict[str, str] = {}
+        self._tools_to_pricing: Dict[str, int] = {}
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
@@ -104,6 +105,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Implement the setup."""
         self.context.logger.info("Setting up TaskExecutionBehaviour")
         self._tools_to_package_hash = self.params.tools_to_package_hash
+        self._tools_to_pricing = self.params.tools_to_pricing
         self._keychain = KeyChain(self.params.api_keys)
 
     def act(self) -> None:
@@ -323,6 +325,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     ),
                     chain_id=self.params.default_chain_id,
                     max_block_window=self.params.max_block_window,
+                    marketplace_address=self.params.mech_marketplace_address,
                 )
             ),
             counterparty=LEDGER_API_ADDRESS,
@@ -401,6 +404,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id = task_data["requestId"]
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
 
+        self.params.request_id_to_delivery_rate_info[task_data["requestId"]] = (
+            task_data["request_delivery_rate"]
+        )
         self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
@@ -446,7 +452,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         model = executing_task.get("model", None)
         tool_params = executing_task.get("params", None)
         is_offchain = executing_task.get("is_offchain", False)
-        response = {"requestId": req_id, "result": "Invalid response"}
+        response = {"requestId": req_id, "result": "Invalid response", "tool": tool}
         task_executor = self.context.agent_address
         self._done_task = {
             "request_id": req_id,
@@ -542,7 +548,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             and "tool" in task_data
         )  # pylint: disable=C0301
         if is_data_valid and task_data["tool"] in self._tools_to_package_hash:
-            self._prepare_task(task_data)
+            is_pricing_valid = True
+
+            if self._tools_to_pricing:
+                executing_task = cast(Dict[str, Any], self._executing_task)
+                tool_pricing = self._tools_to_pricing[task_data["tool"]]
+                request_id_delivery_rate = self.params.request_id_to_delivery_rate_info[
+                    executing_task["requestId"]
+                ]
+                if request_id_delivery_rate < tool_pricing:
+                    self.context.logger.warning(
+                        f"Requested pricing is not valid. Actual {request_id_delivery_rate} Needed {tool_pricing}"
+                    )
+                    self._invalid_request = True
+                    is_pricing_valid = False
+                    # added to fetch the tool's pricing while delivering for nvm mech
+                    self._executing_task["tool"] = task_data["tool"]
+
+            if is_pricing_valid:
+                self._prepare_task(task_data)
         elif is_data_valid:
             tool = task_data["tool"]
             executing_task = cast(Dict[str, Any], self._executing_task)
@@ -566,6 +590,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
+        self.context.logger.info(f"Preparing tool task with data: {task_data}")
         tool_task = AnyToolAsTask()
         tool_py, callable_method, component_yaml = self._all_tools[task_data["tool"]]
         tool_params = component_yaml.get("params", {})
@@ -669,7 +694,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         task_result = to_multihash(ipfs_hash)
         tool = done_task.get("tool")
-        dynamic_tool_cost = self.params.tools_to_pricing.get(tool)
+        dynamic_tool_cost = self._tools_to_pricing.get(tool)
         if dynamic_tool_cost:
             self.context.logger.info(
                 f"Tools to pricing found for tool {tool}. Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}"

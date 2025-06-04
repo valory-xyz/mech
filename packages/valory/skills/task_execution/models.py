@@ -109,6 +109,7 @@ class Params(Model):
             self._ensure_same_keys(
                 kwargs, self.tools_to_package_hash, self.tools_to_pricing
             )
+        self.request_id_to_delivery_rate_info: Dict[str, int] = {}
 
         super().__init__(*args, **kwargs)
 

@@ -371,18 +371,31 @@ class MechMarketplaceContract(Contract):
         delivery_rate: int,
     ) -> JSONLike:
         """Fetch info for a given request id."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
-
-        request_id_info = contract_instance.functions.mapRequestIdInfos(
-            request_id
-        ).call()
-
-        final_delivery_rate = min(request_id_info[4], delivery_rate)
+        request_id_info = cls.get_request_id_info(
+            ledger_api, contract_address, request_id
+        )
+        final_delivery_rate = min(request_id_info["data"][4], delivery_rate)
         encoded_data = ledger_api.api.codec.encode(
             ["uint256", "bytes"], [final_delivery_rate, data]
         )
 
         return dict(data=encoded_data)
+
+    @classmethod
+    def get_request_id_info(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        request_id: bytes,
+    ) -> JSONLike:
+        """Fetch info for a given request id."""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        request_id_info = contract_instance.functions.mapRequestIdInfos(
+            request_id
+        ).call()
+
+        return dict(data=request_id_info)
 
     @classmethod
     def get_balance_tracker_for_mech_type(
