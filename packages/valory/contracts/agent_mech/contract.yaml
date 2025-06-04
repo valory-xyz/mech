@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeigpq5lxfj2aza6ok3fjuywtdafelkbvoqwaits7regfbgu4oynmku
   build/AgentMech.json: bafybeigtikt7m5nyhlsxscgfciejkfvot56a7gbwe2og6dziwzvgkvo7hq
-  contract.py: bafybeigbe2x57etfsqkf5xocgeaejid2tpyoc7xp6zud55mey7odnpn7jy
+  contract.py: bafybeiawktt6ag7sdy3volggdeumioelaczjlk2tnwuqzjpw6lzmuniym4
 fingerprint_ignore_patterns: []
 class_name: AgentMechContract
 contract_interface_paths:
@@ -24,4 +24,5 @@ dependencies:
     version: ==2.2.0
   hexbytes: {}
   eth_typing: {}
-contracts: []
+contracts:
+- valory/mech_marketplace:0.1.0:bafybeia32kjqqlfhmbs7xcgeufd4hqgpsxz6lbgbntkko5it4a7q6ydflm
