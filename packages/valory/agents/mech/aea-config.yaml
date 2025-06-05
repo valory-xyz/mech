@@ -15,14 +15,15 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 - valory/websocket_client:0.1.0:bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli
 contracts:
-- valory/agent_mech:0.1.0:bafybeihgm4lmqdjo2exulgzbms2jva7wjybatyt6ylrinrjogi6rwskida
+- valory/agent_mech:0.1.0:bafybeibjlxgwwqodubwy3mhstnjqjsyat4ray32xgkkv5adysjwz5mzcau
 - valory/agent_registry:0.1.0:bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq
 - valory/gnosis_safe:0.1.0:bafybeidw3uxuxyp3lso5mh43nhauzvra4jabnuk34bkqd6mrv4ojz37nui
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeihx4j2k4gwst4qswkgqlcsr3zmplroc7zjwuqo3ttngjq3fwyumpu
 - valory/hash_checkpoint:0.1.0:bafybeihyzjja65zrhjdgm5p4oecjm7ijrs6aur2ux2fkmfgfiurautm2da
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeibuq4p66jdpnrq7viz4zylydu3zneteukfy3gwdgp273vptnq3dvi
-- valory/mech_marketplace:0.1.0:bafybeia65b4jioic2lrifzcgox2xhvmbwjbmuer7xpiowg6o6o3gcel6qa
+- valory/mech_marketplace:0.1.0:bafybeicx4aw7kbp4zxbdsafshkagzb53ji5m2ak537on2ryrzpnoxs2jkq
+- valory/balance_tracker:0.1.0:bafybeiceepsgckl7x5ljvkv4ztg7ubc3re6d4xzan6msywuifao3nxyyq4
 protocols:
 - open_aea/signing:1.0.0:bafybeig2d36zxy65vd7fwhs7scotuktydcarm74aprmrb5nioiymr3yixm
 - valory/abci:0.1.0:bafybeiatodhboj6a3p35x4f4b342lzk6ckxpud23awnqbxwjeon3k5y36u
@@ -39,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeifv2dynqo3o57nr6jntsvdkduytz3f6i52csv2bjwrr4qhi4mkm7i
 - valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeic457x25nmrx7jhnvg523ppfjf5jzhvjgjbiuoxio4iqceksx3uzm
+- valory/mech_abci:0.1.0:bafybeie2xstvcujzo7frn227a5thsbxv22prngc2nbzxbwms2hwkrhk5ty
 - valory/registration_abci:0.1.0:bafybeigp2g6uhhgjlkqyhjlk4abfjuecmulnwlki6acbpfu45thslqujlu
 - valory/reset_pause_abci:0.1.0:bafybeidhqvc4cl6alvkql5kadiv7snudl7o2ctfqbmhrihtejm3zhkmbby
-- valory/subscription_abci:0.1.0:bafybeibveqvt3dkr66cndgetdfut442xmyqibdwy3bgmtg23in6wfijguy
-- valory/task_execution:0.1.0:bafybeiajoeda47rkj72ncdifcu3b2jq3pjhatuxwiexpgzzztixqojmyhm
-- valory/task_submission_abci:0.1.0:bafybeiecniumgvn65xfbjsbm7ygp53sw6ukdeq22bdee5krbcry3cm2xv4
+- valory/delivery_rate_abci:0.1.0:bafybeiakedzpbl2v4ajpovpzrgpigwbzfqlwjyuucvexs2kckhlh7x3mce
+- valory/task_execution:0.1.0:bafybeigbueebww7nbja5jo3x7o3524e26hhfnmvxrprpbmnvjffcxm7k54
+- valory/task_submission_abci:0.1.0:bafybeib2v5zeeu4cwnxt37avxysdxgqh4gmotcvz6wthepqnvupafbpy7e
 - valory/termination_abci:0.1.0:bafybeig4stz7s6phndruvrgqptbc62ue2filttj4wbnempkur5ybso5edu
 - valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -176,6 +177,8 @@ dependencies:
     version: ==0.25.2
   tqdm:
     version: ==4.67.1
+  typing_extensions:
+    version: ==4.12.2
 default_connection: null
 ---
 public_id: valory/websocket_client:0.1.0:bafybeiexove4oqyhoae5xmk2hilskthosov5imdp65olpgj3cfrepbouyy
@@ -245,7 +248,7 @@ models:
       reset_period_count: ${int:1000}
       on_chain_service_id: ${int:1}
       mech_staking_instance_address: ${str:0x0000000000000000000000000000000000000000}
-      mech_marketplace_address: ${str:0xad380C51cd5297FbAE43494dD5D407A2a3260b58}
+      mech_marketplace_address: ${str:0x0000000000000000000000000000000000000000}
       agent_registry_address: ${str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
       agent_id: ${int:3}
       metadata_hash: ${str:0000000000000000000000000000000000000000000000000000000000000000}
@@ -261,13 +264,14 @@ models:
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
       termination_from_block: ${int:0}
-      mech_to_subscription: ${dict:{}}
+      mech_to_max_delivery_rate: ${dict:{}}
       mech_to_config: ${dict:{}}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x7a1De622c62c6e985fEDd4919FfA8e9997B9547f"]}
         safe_contract_address: ${str:0x9e9d95A2a3dF7CF20a8ac1422a6D1A2DB3B15565}
         consensus_threshold: ${int:null}
+      default_chain_id: ${str:gnosis}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
@@ -281,22 +285,23 @@ models:
       agent_index: ${int:0}
       num_agents: ${int:4}
       from_block_range: ${int:50000}
-      mech_marketplace_address: ${str:0xad380C51cd5297FbAE43494dD5D407A2a3260b58}
+      mech_marketplace_address: ${str:0x0000000000000000000000000000000000000000}
       mech_to_config: ${dict:{}}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
+      default_chain_id: ${str:gnosis}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
 config:
   ledger_apis:
-    ethereum:
-      address: ${str:https://rpc.gnosischain.com/}
-      chain_id: ${int:100}
+    base:
+      address: ${str:http://localhost:8545}
+      chain_id: ${int:8453}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
     gnosis:
-      address: ${str:https://rpc.gnosischain.com/}
+      address: ${str:http://localhost:8545}
       chain_id: ${int:100}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
