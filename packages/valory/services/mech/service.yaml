@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeibs4fvgjhzzhu4t6n45n35feehzrsschqe6dg5o7igq2nflkvaawq
+agent: valory/mech:0.1.0:bafybeien5dceqfzsjs3w3tsr4oqk2pgwevpca2j7nkahmzdho2xsxfcrle
 number_of_agents: 1
 deployment:
   agent:
@@ -59,12 +59,13 @@ type: skill
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
+        mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_owner_share: ${SERVICE_SHARE:float:0}
+        default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 1:
   models:
     params:
@@ -97,13 +98,14 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
+        mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_owner_share: ${SERVICE_SHARE:float:0}
+        default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 2:
   models:
     params:
@@ -137,12 +139,13 @@ type: skill
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
+        mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_owner_share: ${SERVICE_SHARE:float:0}
+        default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 3:
   models:
     params:
@@ -176,12 +179,13 @@ type: skill
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
-        mech_to_subscription: ${MECH_TO_SUBSCRIPTION:dict:{}}
+        mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_owner_share: ${SERVICE_SHARE:float:0}
+        default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
@@ -199,6 +203,7 @@ type: skill
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
+        default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 1:
   models:
     params:
@@ -213,6 +218,7 @@ type: skill
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
+        default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 2:
   models:
     params:
@@ -227,6 +233,7 @@ type: skill
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
+        default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 3:
   models:
     params:
@@ -241,17 +248,18 @@ type: skill
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
+        default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
 0:
   config:
     ledger_apis:
-      ethereum:
-        address: ${ETHEREUM_LEDGER_RPC_0:str:http://host.docker.internal:8545}
-        chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
-        poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
-        default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      base:
+        address: ${BASE_LEDGER_RPC_0:str:http://host.docker.internal:8545}
+        chain_id: ${BASE_LEDGER_CHAIN_ID:int:8453}
+        poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
       gnosis:
         address: ${GNOSIS_LEDGER_RPC_0:str:http://host.docker.internal:8545}
         chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
@@ -260,11 +268,11 @@ type: connection
 1:
   config:
     ledger_apis:
-      ethereum:
-        address: ${ETHEREUM_LEDGER_RPC_1:str:http://host.docker.internal:8545}
-        chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
-        poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
-        default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      base:
+        address: ${BASE_LEDGER_RPC_1:str:http://host.docker.internal:8545}
+        chain_id: ${BASE_LEDGER_CHAIN_ID:int:8453}
+        poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
       gnosis:
         address: ${GNOSIS_LEDGER_RPC_1:str:http://host.docker.internal:8545}
         chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
@@ -273,11 +281,11 @@ type: connection
 2:
   config:
     ledger_apis:
-      ethereum:
-        address: ${ETHEREUM_LEDGER_RPC_2:str:http://host.docker.internal:8545}
-        chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
-        poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
-        default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      base:
+        address: ${BASE_LEDGER_RPC_2:str:http://host.docker.internal:8545}
+        chain_id: ${BASE_LEDGER_CHAIN_ID:int:8453}
+        poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
       gnosis:
         address: ${GNOSIS_LEDGER_RPC_2:str:http://host.docker.internal:8545}
         chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
@@ -286,11 +294,11 @@ type: connection
 3:
   config:
     ledger_apis:
-      ethereum:
-        address: ${ETHEREUM_LEDGER_RPC_3:str:http://host.docker.internal:8545}
-        chain_id: ${ETHEREUM_LEDGER_CHAIN_ID:int:1}
-        poa_chain: ${ETHEREUM_LEDGER_IS_POA_CHAIN:bool:false}
-        default_gas_price_strategy: ${ETHEREUM_LEDGER_PRICING:str:eip1559}
+      base:
+        address: ${BASE_LEDGER_RPC_3:str:http://host.docker.internal:8545}
+        chain_id: ${BASE_LEDGER_CHAIN_ID:int:8453}
+        poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
       gnosis:
         address: ${GNOSIS_LEDGER_RPC_3:str:http://host.docker.internal:8545}
         chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
