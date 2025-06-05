@@ -85,6 +85,8 @@ dependencies:
     version: ==6.21.6
   open-aea-ledger-ethereum:
     version: ==1.63.0
+  typing_extensions:
+    version: ==4.12.2
 customs: []
 default_connection: null
 ---
