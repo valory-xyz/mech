@@ -82,7 +82,7 @@ type: skill
         share_tm_config_on_startup: ${USE_ACN:bool:false}
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
         tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
-        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
+        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_1:str:node0:26656}
         termination_sleep: ${TERMINATION_SLEEP:int:900}
         use_termination: ${USE_TERMINATION:bool:false}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
@@ -123,7 +123,7 @@ type: skill
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:0}
         tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
-        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
+        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_2:str:node0:26656}
         termination_sleep: ${TERMINATION_SLEEP:int:900}
         use_termination: ${USE_TERMINATION:bool:false}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
@@ -163,7 +163,7 @@ type: skill
         tendermint_com_url: ${TENDERMINT_COM_URL:str:http://localhost:8080}
         tendermint_url: ${TENDERMINT_URL:str:http://localhost:26657}
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:0}
-        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}
+        tendermint_p2p_url: ${TM_P2P_ENDPOINT_NODE_3:str:node0:26656}
         termination_sleep: ${TERMINATION_SLEEP:int:900}
         use_termination: ${USE_TERMINATION:bool:false}
         reset_period_count: ${RESET_PERIOD_COUNT:int:1000}
