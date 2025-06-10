@@ -291,3 +291,19 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 ### Mechs receiving requests via the Mech Marketplace
 
 There is no Mech deployed on the Mech Marketplace at the moment.
+
+### TroubleShooting
+
+If the mech has problems connecting to tendermint make sure that not all the instances are configured
+to connect to `${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}`.
+
+You can update these information inside the :
+`packages/valory/services/mech/service.yaml`
+
+If we have more than one agent in the service, these agents should not share the same configuration.
+You can use different nodes like so : 
+```
+-${TM_P2P_ENDPOINT_NODE_1
+-${TM_P2P_ENDPOINT_NODE_2
+-${TM_P2P_ENDPOINT_NODE_3
+```
