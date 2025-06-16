@@ -255,6 +255,11 @@ LLM_SETTINGS = {
         "limit_max_tokens": 4096,
         "temperature": 0,
     },
+    "gpt-4.1-2025-04-14": {
+        "default_max_tokens": 4096,
+        "limit_max_tokens": 1_047_576,
+        "temperature": 0,
+    },
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
