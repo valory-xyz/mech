@@ -582,20 +582,32 @@ def find_similar_chunks(
     return [docs_with_embeddings[i] for i in I[0]]
 
 
+MAX_EMBEDDING_TOKENS = 300000
+
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
-    """Get embeddings for the split documents."""
-    for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
-        batch_end = batch_start + EMBEDDING_BATCH_SIZE
-        batch = [doc.text for doc in split_docs[batch_start:batch_end]]
+    """Get embeddings for the split documents using token-based batching."""
+    i = 0
+    while i < len(split_docs):
+        current_batch_docs = []
+        current_batch_tokens = 0
+        while i < len(split_docs):
+            doc = split_docs[i]
+            doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
+            if current_batch_docs and (current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS):
+                break
+            if not current_batch_docs and (doc_token_count > MAX_EMBEDDING_TOKENS):
+                raise ValueError(f"Document token count ({doc_token_count}) exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS}).")
+            current_batch_docs.append(doc)
+            current_batch_tokens += doc_token_count
+            i += 1
+        batch_texts = [doc.text for doc in current_batch_docs]
         response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
-            input=batch,
+            input=batch_texts,
         )
-        for i, be in enumerate(response.data):
-            assert i == be.index
-        batch_embeddings = [e.embedding for e in response.data]
-        for i, doc in enumerate(split_docs[batch_start:batch_end]):
-            doc.embedding = batch_embeddings[i]
+        for j, emb in enumerate(response.data):
+            assert j == emb.index, "Embeddings response out-of-order"
+            current_batch_docs[j].embedding = emb.embedding
     return split_docs
 
 
