@@ -305,6 +305,7 @@ NUM_NEIGHBORS = 4
 HTTP_TIMEOUT = 20
 HTTP_MAX_REDIRECTS = 5
 HTTP_MAX_RETIES = 2
+MAX_EMBEDDING_TOKENS = 300000
 
 
 PREDICTION_PROMPT = """
@@ -581,8 +582,6 @@ def find_similar_chunks(
 
     return [docs_with_embeddings[i] for i in I[0]]
 
-
-MAX_EMBEDDING_TOKENS = 300000
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents using token-based batching."""
