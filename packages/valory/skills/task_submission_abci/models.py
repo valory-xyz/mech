@@ -60,10 +60,9 @@ class Params(BaseParams):
         self.task_wait_timeout = self._ensure("task_wait_timeout", kwargs, float)
         self.service_endpoint_base = self._ensure("service_endpoint_base", kwargs, str)
         self.multisend_address = self._ensure_get("multisend_address", kwargs, str)
-        self.agent_registry_address = self._ensure(
-            "agent_registry_address", kwargs, str
+        self.complementary_service_metadata_address = self._ensure(
+            "complementary_service_metadata_address", kwargs, str
         )
-        self.agent_id: int = self._ensure("agent_id", kwargs, int)
         self.metadata_hash: str = self._ensure("metadata_hash", kwargs, str)
         self.task_mutable_params = MutableParams()
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)

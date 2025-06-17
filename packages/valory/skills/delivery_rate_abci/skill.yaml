@@ -100,7 +100,6 @@ models:
         voting_power: '10'
       history_check_timeout: 1205
       ipfs_domain_name: null
-      agent_id: 3
       ipfs_fetch_timeout: 15.0
       keeper_allowed_retries: 3
       keeper_timeout: 30.0

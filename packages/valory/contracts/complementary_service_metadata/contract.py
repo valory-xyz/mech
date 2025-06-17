@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2022-2024 Valory AG
+#   Copyright 2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,9 +17,8 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the class to connect to the Service Registry contract."""
+"""This module contains the class to connect to the ComplementaryServiceMetadata contract."""
 
-import logging
 from typing import Any, Optional
 
 from aea.common import JSONLike
@@ -28,18 +27,11 @@ from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 
 
-PUBLIC_ID = PublicId.from_str("valory/agent_registry:0.1.0")
-
-AGENT_UNIT_TYPE = 1
-UNIT_HASH_PREFIX = "0x{metadata_hash}"
-
-_logger = logging.getLogger(
-    f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
-)
+PUBLIC_ID = PublicId.from_str("valory/complementary_service_metadata:0.1.0")
 
 
-class AgentRegistryContract(Contract):
-    """The Agent Registry contract."""
+class ComplementaryServiceMetadata(Contract):
+    """The Complementary Service Metadata contract."""
 
     contract_id = PUBLIC_ID
 
@@ -65,51 +57,36 @@ class AgentRegistryContract(Contract):
         raise NotImplementedError  # pragma: nocover
 
     @classmethod
-    def get_create_events(  # pragma: nocover
-        cls,
-        ledger_api: LedgerApi,
-        contract_address: str,
-        receipt: JSONLike,
-    ) -> Optional[int]:
-        """Returns `CreateUnit` event filter."""
-        contract_interface = cls.get_instance(
-            ledger_api=ledger_api,
-            contract_address=contract_address,
-        )
-        return contract_interface.events.CreateUnit().process_receipt(receipt)
-
-    @classmethod
     def get_update_hash_events(  # pragma: nocover
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
         receipt: JSONLike,
     ) -> Optional[int]:
-        """Returns `CreateUnit` event filter."""
+        """Returns `ComplementaryMetadataUpdated` event filter."""
         contract_interface = cls.get_instance(
             ledger_api=ledger_api,
             contract_address=contract_address,
         )
-        return contract_interface.events.UpdateUnitHash().process_receipt(receipt)
+        return contract_interface.events.ComplementaryMetadataUpdated().process_receipt(
+            receipt
+        )
 
     @classmethod
     def get_token_uri(
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
-        token_id: int,
+        service_id: int,
     ) -> str:
-        """Returns the latest metadata URI for a component."""
+        """Returns the metadata hash uri for a service id."""
         contract_interface = cls.get_instance(
             ledger_api=ledger_api,
             contract_address=contract_address,
         )
-        _, hash_updates = contract_interface.functions.getHashes(token_id).call()
-        if len(hash_updates) > 0:  # pragma: nocover
-            *_, latest_hash = hash_updates
-            uri = f"https://gateway.autonolas.tech/ipfs/f01701220{latest_hash.hex()}"
-        else:
-            uri = contract_interface.functions.tokenURI(token_id).call()
+        latest_hash = contract_interface.functions.mapServiceHashes(service_id).call()
+        uri = f"https://gateway.autonolas.tech/ipfs/f01701220{latest_hash.hex()}"
+
         return uri
 
     @classmethod
@@ -117,28 +94,22 @@ class AgentRegistryContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
-        token_id: int,
+        service_id: int,
     ) -> JSONLike:
-        """Returns the latest metadata URI for a component."""
+        """Returns the metadata hash for a service id."""
         contract_interface = cls.get_instance(
             ledger_api=ledger_api,
             contract_address=contract_address,
         )
-        _, hash_updates = contract_interface.functions.getHashes(token_id).call()
-        if len(hash_updates) > 0:  # pragma: nocover
-            *_, latest_hash = hash_updates
-            return dict(data=latest_hash.hex())
-        _logger.warning(
-            f"No metadata hash updates found for {token_id} on {contract_address}."
-        )
-        return dict(data=None)
+        latest_hash = contract_interface.functions.mapServiceHashes(service_id).call()
+        return dict(data=latest_hash.hex())
 
     @classmethod
     def get_update_hash_tx_data(
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
-        token_id: int,
+        service_id: int,
         metadata_hash: bytes,
     ) -> JSONLike:
         """Returns the transaction to update the metadata hash."""
@@ -147,6 +118,6 @@ class AgentRegistryContract(Contract):
             contract_address=contract_address,
         )
         data = contract_interface.encodeABI(
-            fn_name="updateHash", args=[token_id, metadata_hash]
+            fn_name="changeHash", args=[service_id, metadata_hash]
         )
         return dict(data=data)
