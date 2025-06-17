@@ -305,7 +305,8 @@ NUM_NEIGHBORS = 4
 HTTP_TIMEOUT = 20
 HTTP_MAX_REDIRECTS = 5
 HTTP_MAX_RETIES = 2
-MAX_EMBEDDING_TOKENS = 300000
+DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
+MAX_EMBEDDING_TOKENS = 300000  # Maximum total tokens per embeddings batch
 
 
 PREDICTION_PROMPT = """
@@ -361,6 +362,7 @@ class Document(BaseModel):
 
 # Clean text by removing emojis and non-printable characters.
 def clean_text(text: str) -> str:
+    """Remove emojis and non-printable characters, collapse whitespace."""
     emoji_pattern = re.compile(
         "[\U0001F600-\U0001F64F"
         "\U0001F300-\U0001F5FF"
@@ -369,19 +371,20 @@ def clean_text(text: str) -> str:
         "]+",
         flags=re.UNICODE,
     )
-    cleaned = emoji_pattern.sub("", text)
-    cleaned = "".join(ch for ch in cleaned if ch.isprintable())
-    return cleaned
+    text = emoji_pattern.sub("", text)
+    text = "".join(ch for ch in text if ch.isprintable())
+    # Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
 
 # Utility: truncate text to a maximum number of tokens.
-def trim_text_to_tokens(text: str, model: str, max_tokens: int) -> str:
-    """Trim the text to the first max_tokens tokens according to model's tokenizer."""
+def truncate_text(text: str, model: str, max_tokens: int) -> str:
+    """Truncate text to the first max_tokens tokens based on model encoding."""
     enc = encoding_for_model(model)
     token_ids = enc.encode(text)
     if len(token_ids) <= max_tokens:
         return text
-    trimmed_ids = token_ids[:max_tokens]
-    return enc.decode(trimmed_ids)
+    return enc.decode(token_ids[:max_tokens])
 
 # Utility: count tokens using model-specific tokenizer
 def count_tokens(text: str, model: str) -> int:
@@ -613,7 +616,7 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
     # Preprocessing: clean and truncate each document to DOC_TOKEN_LIMIT
     for doc in split_docs:
         cleaned = clean_text(doc.text)
-        doc.text = trim_text_to_tokens(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
+        doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
 
     i = 0
     while i < len(split_docs):
