@@ -775,7 +775,7 @@ def do_reasoning_with_retry(
             # join the tool errors with the exception message
             tool_errors += f"Attempt {attempt + 1} failed with error: {e}\n"
             attempt += 1
-    raise Exception("Failed to generate prediction after retries" + tool_errors)
+    raise Exception(f"Failed to generate prediction after retries:\n{tool_errors}")
 
 
 def count_tokens(text: str, model: str) -> int:
