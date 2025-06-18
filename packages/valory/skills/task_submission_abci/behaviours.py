@@ -36,10 +36,10 @@ from packages.valory.contracts.agent_mech.contract import (
     AgentMechContract,
     MechOperation,
 )
+from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
 from packages.valory.contracts.complementary_service_metadata.contract import (
     ComplementaryServiceMetadata,
 )
-from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
