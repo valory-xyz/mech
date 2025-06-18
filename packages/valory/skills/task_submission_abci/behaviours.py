@@ -910,7 +910,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
             contract_address=self.params.complementary_service_metadata_address,
             contract_id=str(ComplementaryServiceMetadata.contract_id),
             contract_callable="get_token_hash",
-            token_id=self.params.on_chain_service_id,
+            service_id=self.params.on_chain_service_id,
             chain_id=self.params.default_chain_id,
         )
         if (
@@ -948,6 +948,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         if not should_update_hash:
             return None
 
+        self.context.logger.info("Updating metadata hash")
         # reset the latest hash, this will be updated after the tx is sent
         self.params.task_mutable_params.latest_metadata_hash = None
 
@@ -958,7 +959,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
             contract_address=self.params.complementary_service_metadata_address,
             contract_id=str(ComplementaryServiceMetadata.contract_id),
             contract_callable="get_update_hash_tx_data",
-            token_id=self.params.on_chain_service_id,
+            service_id=self.params.on_chain_service_id,
             metadata_hash=metadata,
             chain_id=self.params.default_chain_id,
         )
