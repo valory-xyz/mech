@@ -95,7 +95,7 @@ class TestHttpHandler:
                 ),
             ],
             (HttpMethod.POST.value,): [
-                [(send_signed_url, self.mech_handler._handle_signed_requests)]
+                (send_signed_url, self.mech_handler._handle_signed_requests)
             ],
         }
         assert self.handler.json_content_header == "Content-Type: application/json\n"
