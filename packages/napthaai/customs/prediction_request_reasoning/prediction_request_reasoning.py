@@ -770,10 +770,11 @@ def do_reasoning_with_retry(
 
             return reasoning, counter_callback
         except Exception as e:
-            print(f"Attempt {attempt + 1} failed with error: {e}")
+            error = f"Attempt {attempt + 1} failed with error: {e}"
+            print(error)
             time.sleep(delay)
             # join the tool errors with the exception message
-            tool_errors += f"Attempt {attempt + 1} failed with error: {e}\n"
+            tool_errors += f"{error}\n"
             attempt += 1
     raise Exception(f"Failed to generate prediction after retries:\n{tool_errors}")
 
