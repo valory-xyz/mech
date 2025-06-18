@@ -746,6 +746,7 @@ def do_reasoning_with_retry(
 ):
     """Attempt to do reasoning with retries on failure."""
     attempt = 0
+    tool_errors = ""
     while attempt < retries:
         try:
             response_reasoning = client.completions(
@@ -771,8 +772,10 @@ def do_reasoning_with_retry(
         except Exception as e:
             print(f"Attempt {attempt + 1} failed with error: {e}")
             time.sleep(delay)
+            # join the tool errors with the exception message
+            tool_errors += f"Attempt {attempt + 1} failed with error: {e}\n"
             attempt += 1
-    raise Exception("Failed to generate prediction after retries")
+    raise Exception("Failed to generate prediction after retries" + tool_errors)
 
 
 def count_tokens(text: str, model: str) -> int:

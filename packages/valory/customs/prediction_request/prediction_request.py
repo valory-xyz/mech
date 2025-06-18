@@ -590,6 +590,7 @@ def generate_prediction_with_retry(
 ):
     """Attempt to generate a prediction with retries on failure."""
     attempt = 0
+    tool_errors = ""
     while attempt < retries:
         try:
             response = client.completions(
@@ -614,9 +615,11 @@ def generate_prediction_with_retry(
             return extracted_block, counter_callback
         except Exception as e:
             print(f"Attempt {attempt + 1} failed with error: {e}")
+            # join the tool errors with the exception message
+            tool_errors += f"Attempt {attempt + 1} failed with error: {e}\n"
             time.sleep(delay)
             attempt += 1
-    raise Exception("Failed to generate prediction after retries")
+    raise Exception("Failed to generate prediction after retries" + tool_errors)
 
 
 def fetch_additional_information(
@@ -829,6 +832,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
         ]
+
         extracted_block, counter_callback = generate_prediction_with_retry(
             model=engine,
             messages=messages,
