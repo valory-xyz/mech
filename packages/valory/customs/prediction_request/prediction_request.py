@@ -614,12 +614,13 @@ def generate_prediction_with_retry(
 
             return extracted_block, counter_callback
         except Exception as e:
-            print(f"Attempt {attempt + 1} failed with error: {e}")
-            # join the tool errors with the exception message
-            tool_errors += f"Attempt {attempt + 1} failed with error: {e}\n"
+            error = f"Attempt {attempt + 1} failed with error: {e}"
+            print(error)
             time.sleep(delay)
+            # join the tool errors with the exception message
+            tool_errors += f"{error}\n"
             attempt += 1
-    raise Exception("Failed to generate prediction after retries" + tool_errors)
+    raise Exception(f"Failed to generate prediction after retries:\n{tool_errors}")
 
 
 def fetch_additional_information(
