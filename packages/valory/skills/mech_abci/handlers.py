@@ -126,8 +126,6 @@ class HttpHandler(BaseHttpHandler):
                 (fetch_offchain_info, funcs[1])
             ],
         }
-        print("inside skill")
-        print(self.routes)
 
         self.json_content_header = "Content-Type: application/json\n"
 

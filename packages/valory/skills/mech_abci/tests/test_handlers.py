@@ -83,12 +83,10 @@ class TestHttpHandler:
         send_signed_url = rf"{hostname_regex}\/send_signed_requests"
         fetch_offchain_info_url = rf"{hostname_regex}\/fetch_offchain_info"
 
-        print("inside test")
-        print(self.handler.routes)
-
         assert self.handler.handler_url_regex == rf"{hostname_regex}\/.*"
         assert self.handler.routes == {
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
+                (health_url_regex, self.handler._handle_get_health),
                 (
                     fetch_offchain_info_url,
                     self.mech_handler._handle_offchain_request_info,
