@@ -28,6 +28,7 @@ from aea.crypto.base import LedgerApi
 
 
 PUBLIC_ID = PublicId.from_str("valory/complementary_service_metadata:0.1.0")
+IPFS_URL_TEMPLATE = "https://gateway.autonolas.tech/ipfs/f01701220{}"
 
 
 class ComplementaryServiceMetadata(Contract):
@@ -85,7 +86,7 @@ class ComplementaryServiceMetadata(Contract):
             contract_address=contract_address,
         )
         latest_hash = contract_interface.functions.mapServiceHashes(service_id).call()
-        uri = f"https://gateway.autonolas.tech/ipfs/f01701220{latest_hash.hex()}"
+        uri = IPFS_URL_TEMPLATE.format(latest_hash.hex())
 
         return uri
 
