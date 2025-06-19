@@ -4,10 +4,10 @@ version: 0.1.0
 type: custom
 description: A tool for making binary predictions on markets.
 license: Apache-2.0
-aea_version: ">=1.0.0, <2.0.0"
+aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibt7f7crtwvmkg7spy3jhscmlqltvyblzp32g6gj44v7tlo5lycuq
-  prediction_request_rag.py: bafybeifhbfp3xbkfco473vrktc3di4qxgtgwjdqz7gdjmu5zfzc3wla2oq
+  prediction_request_rag.py: bafybeigaxttzg4mdgiebn46bz3em7r5pvx7n23ndcsnq6xsjdwb7qynrpu
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_rag.py
 callable: run
@@ -28,7 +28,7 @@ dependencies:
   tiktoken:
     version: ==0.7.0
   pydantic:
-    version: ">=1.9.0,<3"
+    version: '>=1.9.0,<3'
   faiss-cpu:
     version: ==1.7.4
   openai:
@@ -38,4 +38,4 @@ dependencies:
   pypdf2:
     version: ==3.0.1
   numpy:
-    version: ">=1.19.0"
+    version: '>=1.19.0'
