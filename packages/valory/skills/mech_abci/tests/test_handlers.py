@@ -35,24 +35,7 @@ from packages.valory.skills.task_execution.handlers import (
 from packages.valory.skills.mech_abci.handlers import HttpHandler, HttpMethod
 
 
-PACKAGE_DIR = Path(__file__).parent.parent
-
-HTTP_SERVER_SENDER = str(HTTP_SERVER_PUBLIC_ID.without_hash())
-
-
-@dataclass
-class HandlerTestCase:
-    """HandlerTestCase"""
-
-    name: str
-    message_performative: str
-    message_sender: str
-    get_handler_return_value: tuple
-    message_url: Union[str, None] = None
-    message_method: Union[str, None] = None
-    update_return_value: Union[MagicMock, None] = None
-    expected_logger_call: Union[str, None] = None
-    expected_handler_call: bool = False
+PACKAGE_DIR = Path(__file__).parents[1]
 
 
 class TestHttpHandler:
