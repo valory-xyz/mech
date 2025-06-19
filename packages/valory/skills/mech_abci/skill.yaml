@@ -14,7 +14,7 @@ fingerprint:
   handlers.py: bafybeiguarn4lzovodwhdmvee2m3zirydqlm6wpre4ihpwvmlxddcpzcsu
   models.py: bafybeid5pljpqrhdw6w4lkxiu7wufmjey44hev6rybvlgkgc4qg4xh7che
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
-  tests/test_handlers.py: bafybeidzfx3fu6h25hweygcqicyp5hsnywmzmd4qgwfxptlyanh52hwd3e
+  tests/test_handlers.py: bafybeihkbnvbcdstqoe23yj3ryhudh6h6rifuxqyp3j76e7uxsjvdhrboq
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy

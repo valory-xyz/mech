@@ -20,11 +20,12 @@
 """Test the handlers.py module of the mech_abci skill."""
 
 
-import pytest
 from dataclasses import dataclass
-from typing import Any, Dict, Union, Optional
 from pathlib import Path
+from typing import Any, Dict, Optional, Union
 from unittest.mock import MagicMock
+
+import pytest
 
 from packages.valory.skills.mech_abci.handlers import HttpHandler, HttpMethod
 from packages.valory.skills.task_execution.handlers import MechHttpHandler
