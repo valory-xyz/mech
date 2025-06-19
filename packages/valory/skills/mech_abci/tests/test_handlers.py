@@ -20,19 +20,11 @@
 """Test the handlers.py module of the mech_abci skill."""
 
 
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
 from unittest.mock import MagicMock
 
-
-from packages.valory.connections.http_server.connection import (
-    PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
-)
-from packages.valory.skills.task_execution.handlers import (
-    MechHttpHandler,
-)
 from packages.valory.skills.mech_abci.handlers import HttpHandler, HttpMethod
+from packages.valory.skills.task_execution.handlers import MechHttpHandler
 
 
 PACKAGE_DIR = Path(__file__).parents[1]
@@ -43,8 +35,7 @@ class TestHttpHandler:
 
     path_to_skill = PACKAGE_DIR
 
-    @classmethod
-    def setup_class(self):
+    def setup_class(self) -> None:
         """Setup the test class."""
         self.context = MagicMock()
         self.context.logger = MagicMock()
@@ -55,7 +46,7 @@ class TestHttpHandler:
         self.mech_handler.setup()
         self.handler.setup()
 
-    def test_setup(self):
+    def test_setup(self) -> None:
         """Test the setup method of the handler."""
         service_endpoint_base = "localhost"
         propel_uri_base_hostname = (
@@ -80,41 +71,3 @@ class TestHttpHandler:
             ],
         }
         assert self.handler.json_content_header == "Content-Type: application/json\n"
-
-    # @pytest.mark.parametrize(
-    #     "url, method, expected_handler_name",
-    #     [
-    #         ("wrong_url", "get", None),
-    #         (
-    #             "http://mech.staging.autonolas.tech/send_signed_requests",
-    #             "post",
-    #             "_handle_signed_requests",
-    #         ),
-    #         (
-    #             "http://mech.staging.autonolas.tech/health_check",
-    #             "get",
-    #             "_handle_get_health",
-    #         ),
-    #         (
-    #             "http://mech.staging.autonolas.tech/fetch_offchain_info",
-    #             "get",
-    #             "_handle_offchain_request_info",
-    #         ),
-    #         (
-    #             "http://mech.staging.autonolas.tech/fetch_offchain_info/1",
-    #             "get",
-    #             "_handle_offchain_request_info",
-    #         ),
-    #     ],
-    # )
-    # def test_get_handler(self, url, method, expected_handler_name):
-    #     """Test check_url"""
-    #     expected_handler = (
-    #         getattr(self.http_handler, expected_handler_name)
-    #         if expected_handler_name
-    #         else None
-    #     )
-    #     actual_handler, _ = self.http_handler._get_handler(url, method)
-    #     assert (
-    #         actual_handler == expected_handler
-    #     ), f"Wrong value for {url}. Expected {expected_handler}, got {actual_handler}"
