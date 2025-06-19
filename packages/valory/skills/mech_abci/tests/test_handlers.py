@@ -20,6 +20,9 @@
 """Test the handlers.py module of the mech_abci skill."""
 
 
+import pytest
+from dataclasses import dataclass
+from typing import Any, Dict, Union, Optional
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -28,6 +31,17 @@ from packages.valory.skills.task_execution.handlers import MechHttpHandler
 
 
 PACKAGE_DIR = Path(__file__).parents[1]
+
+
+@dataclass
+class GetHandlerTestCase:
+    """Get Handler test case."""
+
+    name: str
+    url: str
+    method: str
+    expected_handler: Union[str, None]
+    is_mech_handler: Optional[bool] = False
 
 
 class TestHttpHandler:
@@ -71,3 +85,69 @@ class TestHttpHandler:
             ],
         }
         assert self.handler.json_content_header == "Content-Type: application/json\n"
+
+    @pytest.mark.parametrize(
+        "test_case",
+        [
+            GetHandlerTestCase(
+                name="Happy Path",
+                url="http://localhost:8080/healthcheck",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_get_health",
+            ),
+            GetHandlerTestCase(
+                name="Happy Path",
+                url="http://localhost:8080/send_signed_requests",
+                method=HttpMethod.POST.value,
+                expected_handler="_handle_signed_requests",
+                is_mech_handler=True,
+            ),
+            GetHandlerTestCase(
+                name="Happy Path",
+                url="http://localhost:8080/fetch_offchain_info",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_offchain_request_info",
+                is_mech_handler=True,
+            ),
+            GetHandlerTestCase(
+                name="Happy Path",
+                url="http://localhost:8080/fetch_offchain_info/1",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_offchain_request_info",
+                is_mech_handler=True,
+            ),
+            GetHandlerTestCase(
+                name="No url match",
+                url="http://invalid.url/not/matching",
+                method=HttpMethod.GET.value,
+                expected_handler=None,
+            ),
+            GetHandlerTestCase(
+                name="No method match",
+                url="http://localhost:8080/some/path",
+                method=HttpMethod.POST.value,
+                expected_handler="_handle_bad_request",
+            ),
+        ],
+    )
+    def test_mech_get_handler(self, test_case: GetHandlerTestCase) -> None:
+        """Test _get_handler."""
+        url = test_case.url
+        method = test_case.method
+        is_mech_handler = test_case.is_mech_handler
+
+        if test_case.expected_handler is not None:
+            if is_mech_handler:
+                expected_handler = getattr(
+                    self.mech_handler, test_case.expected_handler
+                )
+            else:
+                expected_handler = getattr(self.handler, test_case.expected_handler)
+        else:
+            expected_handler = test_case.expected_handler
+        expected_captures: Dict[Any, Any] = {}
+
+        handler, captures = self.handler._get_handler(url, method)
+
+        assert handler == expected_handler
+        assert captures == expected_captures
