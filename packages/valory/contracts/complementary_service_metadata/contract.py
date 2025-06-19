@@ -28,7 +28,6 @@ from aea.crypto.base import LedgerApi
 
 
 PUBLIC_ID = PublicId.from_str("valory/complementary_service_metadata:0.1.0")
-IPFS_URL_TEMPLATE = "https://gateway.autonolas.tech/ipfs/f01701220{}"
 
 
 class ComplementaryServiceMetadata(Contract):
@@ -74,21 +73,21 @@ class ComplementaryServiceMetadata(Contract):
         )
 
     @classmethod
-    def get_token_uri(
+    def get_token_cid_hash(
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
         service_id: int,
     ) -> str:
-        """Returns the metadata hash uri for a service id."""
+        """Returns the CID prefix and metadata hash for a service id."""
         contract_interface = cls.get_instance(
             ledger_api=ledger_api,
             contract_address=contract_address,
         )
+        cid_prefix = contract_interface.functions.CID_PREFIX().call()
         latest_hash = contract_interface.functions.mapServiceHashes(service_id).call()
-        uri = IPFS_URL_TEMPLATE.format(latest_hash.hex())
 
-        return uri
+        return dict(cid_prefix=cid_prefix, hash=latest_hash.hex())
 
     @classmethod
     def get_token_hash(
