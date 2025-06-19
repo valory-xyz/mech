@@ -13,6 +13,8 @@ fingerprint:
   fsm_specification.yaml: bafybeibac4bsjjhmxljzptuus3xlkufsiaofgg77g7nq7qgeju7fa6lh3u
   handlers.py: bafybeiequcuyjmcvv6slouptdtalzgwfmuevytbh5m4bkafowpisbp3xu4
   models.py: bafybeid5pljpqrhdw6w4lkxiu7wufmjey44hev6rybvlgkgc4qg4xh7che
+  tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
+  tests/test_handlers.py: bafybeigtayhhdqdzbly6afdmw675674cvz5tbme4hr4vxu7x7pevu2u7p4
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
