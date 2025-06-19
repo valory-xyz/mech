@@ -310,6 +310,8 @@ NUM_NEIGHBORS = 4
 HTTP_TIMEOUT = 20
 HTTP_MAX_REDIRECTS = 5
 HTTP_MAX_RETIES = 2
+DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
+MAX_EMBEDDING_TOKENS = 300000  # Maximum total tokens per embeddings batch
 
 
 PREDICTION_PROMPT = """
@@ -363,6 +365,33 @@ class Document(BaseModel):
     embedding: Optional[List[float]] = None
 
 
+# Clean text by removing emojis and non-printable characters.
+def clean_text(text: str) -> str:
+    """Remove emojis and non-printable characters, collapse whitespace."""
+    emoji_pattern = re.compile(
+        "[\U0001F600-\U0001F64F"
+        "\U0001F300-\U0001F5FF"
+        "\U0001F680-\U0001F6FF"
+        "\U0001F1E0-\U0001F1FF"
+        "]+",
+        flags=re.UNICODE,
+    )
+    text = emoji_pattern.sub("", text)
+    text = "".join(ch for ch in text if ch.isprintable())
+    # Collapse whitespace
+    text = re.sub(r'\s+', ' ', text).strip()
+    return text
+
+# Utility: truncate text to a maximum number of tokens.
+def truncate_text(text: str, model: str, max_tokens: int) -> str:
+    """Truncate text to the first max_tokens tokens based on model encoding."""
+    enc = encoding_for_model(model)
+    token_ids = enc.encode(text)
+    if len(token_ids) <= max_tokens:
+        return text
+    return enc.decode(token_ids[:max_tokens])
+
+# Utility: count tokens using model-specific tokenizer
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
@@ -588,19 +617,39 @@ def find_similar_chunks(
 
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
-    """Get embeddings for the split documents."""
-    for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
-        batch_end = batch_start + EMBEDDING_BATCH_SIZE
-        batch = [doc.text for doc in split_docs[batch_start:batch_end]]
+    """Get embeddings for the split documents: clean, truncate, then batch by token count."""
+    # Preprocessing: clean and truncate each document to DOC_TOKEN_LIMIT
+    for doc in split_docs:
+        cleaned = clean_text(doc.text)
+        doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
+
+    i = 0
+    while i < len(split_docs):
+        current_batch_docs = []
+        current_batch_tokens = 0
+        while i < len(split_docs):
+            doc = split_docs[i]
+            doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
+            # If adding this document would exceed the batch token limit and we already have docs in the batch, break
+            if current_batch_docs and (current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS):
+                break
+            # If a single document exceeds the limit on its own, raise
+            if not current_batch_docs and (doc_token_count > MAX_EMBEDDING_TOKENS):
+                raise ValueError(
+                    f"Document token count ({doc_token_count}) exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS})."
+                )
+            current_batch_docs.append(doc)
+            current_batch_tokens += doc_token_count
+            i += 1
+
+        batch_texts = [doc.text for doc in current_batch_docs]
         response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
-            input=batch,
+            input=batch_texts,
         )
-        for i, be in enumerate(response.data):
-            assert i == be.index
-        batch_embeddings = [e.embedding for e in response.data]
-        for i, doc in enumerate(split_docs[batch_start:batch_end]):
-            doc.embedding = batch_embeddings[i]
+        for j, emb in enumerate(response.data):
+            assert j == emb.index, "Embeddings response out-of-order"
+            current_batch_docs[j].embedding = emb.embedding
     return split_docs
 
 
