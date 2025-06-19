@@ -117,14 +117,11 @@ class HttpHandler(BaseHttpHandler):
 
         # Routes
         self.routes = {
-            (HttpMethod.POST.value,): [],
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
+                (fetch_offchain_info, funcs[1]),
             ],
             (HttpMethod.POST.value,): [(send_signed_url, funcs[0])],
-            (HttpMethod.GET.value, HttpMethod.HEAD.value): [
-                (fetch_offchain_info, funcs[1])
-            ],
         }
 
         self.json_content_header = "Content-Type: application/json\n"

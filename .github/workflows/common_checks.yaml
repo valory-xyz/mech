@@ -157,3 +157,16 @@ jobs:
           sudo apt-get autoclean
           pip install tomte[tox,cli]==0.2.15
           pip install --user --upgrade setuptools
+
+      - name: Packages unit tests ${{ matrix.os }}
+        run: |
+          tox -e py${{ matrix.python-version }}-linux
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
