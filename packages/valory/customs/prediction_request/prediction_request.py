@@ -590,7 +590,7 @@ def generate_prediction_with_retry(
 ):
     """Attempt to generate a prediction with retries on failure."""
     attempt = 0
-    tool_errors = ""
+    tool_errors = []
     while attempt < retries:
         try:
             response = client.completions(
@@ -615,12 +615,11 @@ def generate_prediction_with_retry(
             return extracted_block, counter_callback
         except Exception as e:
             error = f"Attempt {attempt + 1} failed with error: {e}"
-            print(error)
             time.sleep(delay)
             # join the tool errors with the exception message
-            tool_errors += f"{error}\n"
+            tool_errors.append(error)
             attempt += 1
-    raise Exception(f"Failed to generate prediction after retries:\n{tool_errors}")
+    raise Exception(f"Failed to generate prediction after retries:\n{'\n'.join(tool_errors)}")
 
 
 def fetch_additional_information(
