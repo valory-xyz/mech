@@ -8,7 +8,7 @@ aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeie5gvlvdam464ch7zknawcq6zvhaqwncau4ehhngjmigto537go2q
   build/ComplementaryServiceMetadata.json: bafybeia4jozxbrjpofs72c3dm3k64btsvlzxkqts5wblgo4b2rieeq57ee
-  contract.py: bafybeihzalhpva6cmi2yzmrusmws4ltsedlhbqh73ojlkirss2nkdgqr5a
+  contract.py: bafybeih2ik56vt47xvjtcbealbeit4bydg352xasakxrogv7hp3tsgtpsi
 fingerprint_ignore_patterns: []
 contracts: []
 class_name: ComplementaryServiceMetadata
