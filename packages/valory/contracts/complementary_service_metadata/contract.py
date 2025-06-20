@@ -87,7 +87,7 @@ class ComplementaryServiceMetadata(Contract):
         cid_prefix = contract_interface.functions.CID_PREFIX().call()
         latest_hash = contract_interface.functions.mapServiceHashes(service_id).call()
 
-        return dict(cid_prefix=cid_prefix, hash=latest_hash.hex())
+        return dict(hash=cid_prefix+latest_hash.hex())
 
     @classmethod
     def get_token_hash(
