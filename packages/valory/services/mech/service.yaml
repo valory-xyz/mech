@@ -54,7 +54,7 @@ type: skill
         slash_threshold_amount: ${SLASH_THRESHOLD_AMOUNT:int:10000000000000000}
         light_slash_unit_amount: ${LIGHT_SLASH_UNIT_AMOUNT:int:5000000000000000}
         serious_slash_unit_amount: ${SERIOUS_SLASH_UNIT_AMOUNT:int:8000000000000000}
-        complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
+        complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -91,7 +91,7 @@ type: skill
         termination_from_block: ${TERMINATION_FROM_BLOCK:int:0}
         light_slash_unit_amount: ${LIGHT_SLASH_UNIT_AMOUNT:int:5000000000000000}
         serious_slash_unit_amount: ${SERIOUS_SLASH_UNIT_AMOUNT:int:8000000000000000}
-        complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
+        complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -132,7 +132,7 @@ type: skill
         light_slash_unit_amount: ${LIGHT_SLASH_UNIT_AMOUNT:int:5000000000000000}
         serious_slash_unit_amount: ${SERIOUS_SLASH_UNIT_AMOUNT:int:8000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
-        complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
+        complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
@@ -169,7 +169,7 @@ type: skill
         slash_threshold_amount: ${SLASH_THRESHOLD_AMOUNT:int:10000000000000000}
         light_slash_unit_amount: ${LIGHT_SLASH_UNIT_AMOUNT:int:5000000000000000}
         serious_slash_unit_amount: ${SERIOUS_SLASH_UNIT_AMOUNT:int:8000000000000000}
-        complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
+        complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
         profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
