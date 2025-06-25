@@ -87,8 +87,8 @@ ALLOWED_TOOLS = [
     "prediction-online-sme",
 ]
 TOOL_TO_ENGINE = {
-    "prediction-offline-sme": "gpt-4.1-2025-04-14",
-    "prediction-online-sme": "gpt-4.1-2025-04-14",
+    "prediction-offline-sme": "gpt-4o-2024-08-06",
+    "prediction-online-sme": "gpt-4o-2024-08-06",
 }
 
 PREDICTION_PROMPT = """
