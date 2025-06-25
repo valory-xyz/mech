@@ -59,7 +59,7 @@ customs:
 - jhehemann/prediction_sum_url_content:0.1.0:bafybeign4roqx55xvyyvz6iyi5wnvb2kep2c7gfqc6gmipg4kdsedwr7gi
 - psouranis/optimization_by_prompting:0.1.0:bafybeibcy2jwtceobruvzoepajuuwttw3fhn36mojmnd6jotifwr3p5o3i
 - nickcom007/sme_generation_request:0.1.0:bafybeicjcszg5hig6pr46vwsn2wsod6xl4jo3nj2ftxdkbotoe2h43t7bi
-- nickcom007/prediction_request_sme:0.1.0:bafybeif24uhwzxur2fdutrwgrhvzeo6m5rnwn6s5sfexdykyxqakle5huq
+- nickcom007/prediction_request_sme:0.1.0:bafybeidjmaf4rdnkqhk2ncag5aw7tmc3w7jchvu5hisi62ciuvykmcrfca
 - napthaai/resolve_market_reasoning:0.1.0:bafybeibyvxgspwaieatpi2hp63jo6cxcwleff4jorkiigjwjznl4vtd33a
 - napthaai/prediction_request_rag:0.1.0:bafybeibmvuv5pdn2lfc4amk4gxlkgxnphrtus4iffnjg4dpl7c3ocf5dey
 - napthaai/prediction_request_reasoning:0.1.0:bafybeiezjauecgd6ovncfqczkauzshqaa7dnhhdlq7yycqlmetjjoves5e
@@ -75,7 +75,7 @@ customs:
 - victorpolisetty/dalle_request:0.1.0:bafybeieqqtd6gtlry7vheix54nj3ok4cag3uy47yoxlufhi6y3u5i6doti
 - jhehemann/prediction_sentence_embeddings:0.1.0:bafybeiem7mvu7xbe3fnky5nve44cohlqxhbxegau44y34exd57whf7mlga
 - gnosis/ofv_market_resolver:0.1.0:bafybeiemccplw5cf3jymg3f4d4vejhk2gqy5czbnlkmxe2yvo3lprfexsq
-- valory/superforcaster:0.1.0:bafybeibub6ulgkyyefw5zaab2tawyvjxbhcdddx7emfqrhlzkifb4dxox4
+- valory/superforcaster:0.1.0:bafybeia5vzhld22pep5hwg3k2vwcttfechp44x5vhqmg2qisxxp6vnsu2q
 - valory/tee_openai_request:0.1.0:bafybeictmezaorzxelsy4dztbxh5n2343zio3rk6vo7wc5lptxlobhdnku
 - dvilela/corcel_request:0.1.0:bafybeicjrix2wg23cm2j437isokkzd26uloqezlx3cg2pu7rf7mfwg3p6e
 - dvilela/gemini_prediction:0.1.0:bafybeigvwflupxzbjgmaxcxml5vkez3obl4fjo6bxzhquq56urnviq32u4

@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeifvbuxt54l5jsxextf6ru5yvimkfdg4gfkcsnmyvsyqcsgclg7vey
-  superforcaster.py: bafybeify3b3s5mimghq3d3pr4yoldbfo2giliebhfj7eh6w6sucfkk6iku
+  superforcaster.py: bafybeifgtrrxslqz5a6exosppsdzqlg7oluuirwqibjdntubz6nrltqkk4
 fingerprint_ignore_patterns: []
 entry_point: superforcaster.py
 callable: run
 params:
-  default_model: gpt-4o-2024-08-06
+  default_model: gpt-4.1-2025-04-14
 dependencies:
   openai:
     version: ==1.30.2

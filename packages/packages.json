@@ -9,7 +9,7 @@
         "custom/jhehemann/prediction_sum_url_content/0.1.0": "bafybeign4roqx55xvyyvz6iyi5wnvb2kep2c7gfqc6gmipg4kdsedwr7gi",
         "custom/psouranis/optimization_by_prompting/0.1.0": "bafybeibcy2jwtceobruvzoepajuuwttw3fhn36mojmnd6jotifwr3p5o3i",
         "custom/nickcom007/sme_generation_request/0.1.0": "bafybeicjcszg5hig6pr46vwsn2wsod6xl4jo3nj2ftxdkbotoe2h43t7bi",
-        "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeif24uhwzxur2fdutrwgrhvzeo6m5rnwn6s5sfexdykyxqakle5huq",
+        "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeidjmaf4rdnkqhk2ncag5aw7tmc3w7jchvu5hisi62ciuvykmcrfca",
         "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeibyvxgspwaieatpi2hp63jo6cxcwleff4jorkiigjwjznl4vtd33a",
         "custom/napthaai/prediction_request_rag/0.1.0": "bafybeibmvuv5pdn2lfc4amk4gxlkgxnphrtus4iffnjg4dpl7c3ocf5dey",
         "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeiezjauecgd6ovncfqczkauzshqaa7dnhhdlq7yycqlmetjjoves5e",
@@ -25,12 +25,12 @@
         "custom/victorpolisetty/dalle_request/0.1.0": "bafybeieqqtd6gtlry7vheix54nj3ok4cag3uy47yoxlufhi6y3u5i6doti",
         "custom/jhehemann/prediction_sentence_embeddings/0.1.0": "bafybeiem7mvu7xbe3fnky5nve44cohlqxhbxegau44y34exd57whf7mlga",
         "custom/gnosis/ofv_market_resolver/0.1.0": "bafybeiemccplw5cf3jymg3f4d4vejhk2gqy5czbnlkmxe2yvo3lprfexsq",
-        "custom/valory/superforcaster/0.1.0": "bafybeibub6ulgkyyefw5zaab2tawyvjxbhcdddx7emfqrhlzkifb4dxox4",
+        "custom/valory/superforcaster/0.1.0": "bafybeia5vzhld22pep5hwg3k2vwcttfechp44x5vhqmg2qisxxp6vnsu2q",
         "custom/valory/tee_openai_request/0.1.0": "bafybeictmezaorzxelsy4dztbxh5n2343zio3rk6vo7wc5lptxlobhdnku",
         "custom/dvilela/corcel_request/0.1.0": "bafybeicjrix2wg23cm2j437isokkzd26uloqezlx3cg2pu7rf7mfwg3p6e",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeigvwflupxzbjgmaxcxml5vkez3obl4fjo6bxzhquq56urnviq32u4",
-        "agent/valory/mech/0.1.0": "bafybeic6yky2rehknojg35wvmho4u3fuffo5yz2byhzhl3hgkrzjkwybfm",
-        "service/valory/mech/0.1.0": "bafybeibxerdpgfktlouih5jpqltqvobhf7galw4aodabj57zdz6bue3uh4"
+        "agent/valory/mech/0.1.0": "bafybeihwep4e7dc5iyytfrf3x3hw2gkfr47pzbmie5pagu2h6vbesuqxvi",
+        "service/valory/mech/0.1.0": "bafybeieckjzfvt4azmwpmnrxp5ezcytgza2povd6uelfbtxp6lp7rsuvj4"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
