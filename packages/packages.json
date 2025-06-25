@@ -25,12 +25,12 @@
         "custom/victorpolisetty/dalle_request/0.1.0": "bafybeieqqtd6gtlry7vheix54nj3ok4cag3uy47yoxlufhi6y3u5i6doti",
         "custom/jhehemann/prediction_sentence_embeddings/0.1.0": "bafybeiem7mvu7xbe3fnky5nve44cohlqxhbxegau44y34exd57whf7mlga",
         "custom/gnosis/ofv_market_resolver/0.1.0": "bafybeiemccplw5cf3jymg3f4d4vejhk2gqy5czbnlkmxe2yvo3lprfexsq",
-        "custom/valory/superforcaster/0.1.0": "bafybeia5vzhld22pep5hwg3k2vwcttfechp44x5vhqmg2qisxxp6vnsu2q",
+        "custom/valory/superforcaster/0.1.0": "bafybeif3buv5vz4itrbuahalgkaeg35nfbgsyntoesgqnzfbyslb6vefi4",
         "custom/valory/tee_openai_request/0.1.0": "bafybeictmezaorzxelsy4dztbxh5n2343zio3rk6vo7wc5lptxlobhdnku",
         "custom/dvilela/corcel_request/0.1.0": "bafybeicjrix2wg23cm2j437isokkzd26uloqezlx3cg2pu7rf7mfwg3p6e",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeigvwflupxzbjgmaxcxml5vkez3obl4fjo6bxzhquq56urnviq32u4",
-        "agent/valory/mech/0.1.0": "bafybeiau2zvrjgz7mrjwz6pfoxkksv53fopelji765na32oqkp2n3ehfsq",
-        "service/valory/mech/0.1.0": "bafybeidpsvpgu47v67ovq4yn6eavlzgdezlkqanh7mwb4dt223kokhs6w4"
+        "agent/valory/mech/0.1.0": "bafybeiapq5kjuqdk5dehjomr6skmo6i5dft7345vfc6trdf4yyibxoz264",
+        "service/valory/mech/0.1.0": "bafybeigyvwgvlmjn5hvjcu544ib2ggof7a2bka247bx3fjr3rjp6m2m4ua"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
