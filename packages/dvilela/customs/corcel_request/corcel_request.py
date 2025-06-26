@@ -1,11 +1,14 @@
-import requests
-import re
-import json
-from typing import Optional, Dict, Any, Tuple, Callable
 import functools
+import json
+import re
+from typing import Any, Callable, Dict, Optional, Tuple
+
+import requests
+
 
 class CorcelAPIException(Exception):
     pass
+
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
@@ -24,13 +27,13 @@ def with_key_rotation(func: Callable):
                 result = func(*args, **kwargs)
                 return result + (api_keys,)
             except CorcelAPIException:
-                    # try with a new key again
-                    service = "corcel"
-                    if retries_left[service] <= 0:
-                        raise Exception("Error: API retries exhausted")
-                    retries_left[service] -= 1
-                    api_keys.rotate(service)
-                    return execute()
+                # try with a new key again
+                service = "corcel"
+                if retries_left[service] <= 0:
+                    raise Exception("Error: API retries exhausted")
+                retries_left[service] -= 1
+                api_keys.rotate(service)
+                return execute()
             except Exception as e:
                 return str(e), "", None, None, api_keys
 
@@ -87,29 +90,23 @@ CORCEL_URL = "https://api.corcel.io/v1/chat/completions"
 
 AVAILABLE_TOOLS = ["corcel-prediction", "corcel-completion"]
 
-DEFAULT_VALUES = {
-    "model": "llama-3",
-    "temperature": 0.1,
-    "max_tokens": 500
-}
+DEFAULT_VALUES = {"model": "llama-3", "temperature": 0.1, "max_tokens": 500}
 
 
 def send_corcel_request(api_key: str, prompt: str, **kwargs) -> str:
     """Makes a request to Corcel API"""
 
-    payload = {key: kwargs.get(key, default_value) for key, default_value in DEFAULT_VALUES.items()}
+    payload = {
+        key: kwargs.get(key, default_value)
+        for key, default_value in DEFAULT_VALUES.items()
+    }
 
-    payload["messages"] = [
-        {
-            "role": "system",
-            "content": prompt
-        }
-    ]
+    payload["messages"] = [{"role": "system", "content": prompt}]
 
     headers = {
         "accept": "application/json",
         "content-type": "application/json",
-        "Authorization": api_key
+        "Authorization": api_key,
     }
 
     response = requests.post(CORCEL_URL, json=payload, headers=headers, timeout=60)
@@ -134,13 +131,13 @@ def response_post_process(response: str, tool_name: str) -> str:
     joined = ("").join(matches)
 
     # Clean and parse the response
-    clean_response = joined.replace('\\n', '').replace('"', '').replace('\\', '')
+    clean_response = joined.replace("\\n", "").replace('"', "").replace("\\", "")
 
     if tool_name != "corcel-prediction":
         return clean_response
 
     # Add missing quotes to the json keys
-    clean_response = re.sub(r'(\w+):', r'"\1":', clean_response)
+    clean_response = re.sub(r"(\w+):", r'"\1":', clean_response)
 
     # Load the response
     try:
@@ -165,7 +162,9 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         return error_response("No tool name has been specified.")
 
     if tool_name not in AVAILABLE_TOOLS:
-        return error_response(f"Tool {tool_name} is not an available tool [{AVAILABLE_TOOLS}].")
+        return error_response(
+            f"Tool {tool_name} is not an available tool [{AVAILABLE_TOOLS}]."
+        )
 
     if prompt is None:
         return error_response("No prompt has been given.")

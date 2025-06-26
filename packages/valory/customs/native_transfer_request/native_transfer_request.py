@@ -23,13 +23,14 @@ python native_transfer_request.py “transfer 0.0001 ETH to 0x4253cB6Fbf9Cb7CD6c
 
 import ast
 import functools
-from typing import Any, Dict, Optional, Tuple, cast, Callable
+from typing import Any, Callable, Dict, Optional, Tuple, cast
 
 import anthropic
+import googleapiclient
 import openai
 from openai import OpenAI
 from tiktoken import encoding_for_model
-import googleapiclient
+
 
 client: Optional[OpenAI] = None
 

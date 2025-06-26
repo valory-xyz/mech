@@ -22,6 +22,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import google.generativeai as genai
 
+
 DEFAULT_GEMINI_SETTINGS = {
     "candidate_count": 1,
     "stop_sequences": None,

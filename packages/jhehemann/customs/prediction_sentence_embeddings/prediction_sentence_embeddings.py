@@ -20,35 +20,35 @@
 """This module implements a Mech tool for binary predictions."""
 
 import functools
-import time
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
-from datetime import datetime, timezone
 import json
 import re
+import time
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime, timezone
 from itertools import groupby
 from operator import itemgetter
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
-from bs4 import BeautifulSoup, NavigableString
-from googleapiclient.discovery import build
 import openai
-from openai import OpenAI
 import requests
-from requests import Session
 import spacy
 import spacy.util
 import tiktoken
-from tiktoken import encoding_for_model
-
-
+from bs4 import BeautifulSoup, NavigableString
 from dateutil import parser
+from googleapiclient.discovery import build
+from openai import OpenAI
+from requests import Session
+from tiktoken import encoding_for_model
 from tqdm import tqdm
+
 
 client: Optional[OpenAI] = None
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
 
 def with_key_rotation(func: Callable):
     @functools.wraps(func)
@@ -62,7 +62,7 @@ def with_key_rotation(func: Callable):
             """Retry the function with a new key."""
             try:
                 result = func(*args, **kwargs)
-                return result + (api_keys, )
+                return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
                 service = "anthropic"
@@ -252,10 +252,12 @@ class LLMClient:
 client: Optional[LLMClient] = None
 client_embedding: Optional[LLMClient] = None
 
+
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
     return len(enc.encode(text))
+
 
 NUM_URLS_EXTRACT = 5
 MAX_TOTAL_TOKENS_CHAT_COMPLETION = 4000  # Set the limit for cost efficiency
@@ -283,7 +285,7 @@ LLM_SETTINGS = {
         "default_max_tokens": 500,
         "limit_max_tokens": 4096,
         "temperature": 0,
-    }
+    },
 }
 ALLOWED_TOOLS = [
     "prediction-sentence-embedding-conservative",
@@ -550,11 +552,13 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     )
     return [result["link"] for result in search["items"]]
 
+
 def extract_json_string(text):
     # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
     pattern = r"(\{[^}]*\})"
     matches = re.findall(pattern, text)
     return matches[0].replace("json", "")
+
 
 def download_spacy_model(model_name: str) -> None:
     """Downloads the specified spaCy language model if it is not already installed."""
@@ -1242,6 +1246,7 @@ def join_and_group_sentences(
 
     return final_output
 
+
 def generate_prediction_with_retry(
     model: str,
     messages: List[Dict[str, str]],
@@ -1359,6 +1364,7 @@ def fetch_additional_information(
 
     return additional_informations
 
+
 @with_key_rotation
 def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
@@ -1377,10 +1383,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
     tool = kwargs["tool"]
     engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-    
-    with LLMClientManager(
-        kwargs["api_keys"], engine, embedding_provider="openai"
-    ):
+
+    with LLMClientManager(kwargs["api_keys"], engine, embedding_provider="openai"):
         prompt = kwargs["prompt"]
         max_compl_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
@@ -1390,7 +1394,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         openai.api_key = kwargs["api_keys"]["openai"]
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"TOOL {tool} is not supported.")
-        
+
         # Print the settings
         print(f"MECH TOOL: {tool}")
         print(f"PROMPT: {prompt}")
@@ -1408,7 +1412,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         event_question = re.search(r"\"(.+?)\"", prompt).group(1)
         if not event_question:
             raise ValueError("No event question found in prompt.")
-        
+
         print(f"EVENT_QUESTION: {event_question}")
         print()
 
@@ -1444,7 +1448,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         # Get the current utc timestamp
         current_time_utc = datetime.now(timezone.utc)
-        formatted_time_utc = current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        formatted_time_utc = (
+            current_time_utc.strftime("%Y-%m-%dT%H:%M:%S.%f")[:-6] + "Z"
+        )
 
         # Generate the prediction prompt
         prediction_prompt = PREDICTION_PROMPT.format(

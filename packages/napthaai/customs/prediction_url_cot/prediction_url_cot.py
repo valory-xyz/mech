@@ -4,7 +4,7 @@ import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from itertools import islice
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import PyPDF2
 import anthropic

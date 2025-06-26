@@ -19,28 +19,27 @@
 
 """A script that implements the optimization by prompting methodology."""
 import functools
-import os
-from io import StringIO
-import re
 import json
+import os
+import re
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from io import StringIO
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import anthropic
 import googleapiclient
 import openai
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 from googleapiclient.discovery import build
-
-from openai import OpenAI
-
-import pandas as pd
 from langchain.chains import LLMChain
 from langchain.llms import OpenAI as OpenAILLM
 from langchain.prompts import PromptTemplate
+from openai import OpenAI
 from sklearn.metrics import roc_auc_score
 from tiktoken import encoding_for_model
+
 
 client: Optional[OpenAI] = None
 

@@ -19,26 +19,27 @@
 
 """This module implements a Mech tool for binary predictions."""
 import functools
-from io import BytesIO
-import PyPDF2
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from io import BytesIO
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
+import PyPDF2
 import anthropic
-import googleapiclient
-import openai
-from pydantic import BaseModel, Field
-from docstring_parser import parse
-import tiktoken
-from openai import OpenAI
-import numpy as np
 import faiss
+import googleapiclient
+import numpy as np
+import openai
 import requests
-from readability import Document as ReadabilityDocument
-from markdownify import markdownify as md
+import tiktoken
+from docstring_parser import parse
 from googleapiclient.discovery import build
+from markdownify import markdownify as md
+from openai import OpenAI
+from pydantic import BaseModel, Field
+from readability import Document as ReadabilityDocument
 from tiktoken import encoding_for_model
+
 
 client: Optional[OpenAI] = None
 

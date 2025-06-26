@@ -19,25 +19,25 @@
 
 """This module implements a Mech tool for binary predictions."""
 import functools
+import logging
+import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import random
 
 import anthropic
+import chromadb.utils.embedding_functions as embedding_functions
 import googleapiclient
 import openai
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from openai import OpenAI
-from pydantic import BaseModel
-from tavily import TavilyClient
-import logging
-from markdownify import markdownify
 import requests
 from bs4 import BeautifulSoup
+from chromadb import Collection, Documents, Embeddings, EphemeralClient
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from markdownify import markdownify
+from openai import OpenAI
+from pydantic import BaseModel
 from requests import Response
-from chromadb import Collection, EphemeralClient, Documents, Embeddings
-import chromadb.utils.embedding_functions as embedding_functions
+from tavily import TavilyClient
 from tiktoken import encoding_for_model
 
 

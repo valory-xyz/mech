@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -18,16 +18,15 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 import functools
+import json
 import time
-from typing import Any, Dict, List, Union, Optional, Tuple, Callable
 from datetime import date
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import openai
+import requests
 from openai import OpenAI
 from tiktoken import encoding_for_model
-
-import requests
-import json
 
 
 client: Optional[OpenAI] = None
@@ -116,7 +115,6 @@ class OpenAIClient:
         stop=None,
         max_tokens: Optional[float] = None,
     ):
-
         response_provider = self.client.chat.completions.create(
             model=model,
             messages=messages,
@@ -144,7 +142,7 @@ DEFAULT_OPENAI_SETTINGS = {
     "limit_max_tokens": 4096,
     "temperature": 0,
 }
-DEFAULT_OPENAI_MODEL = "gpt-4o-2024-08-06"
+DEFAULT_OPENAI_MODEL = "gpt-4.1-2025-04-14"
 ALLOWED_TOOLS = ["superforcaster"]
 ALLOWED_MODELS = [DEFAULT_OPENAI_MODEL]
 COMPLETION_RETRIES = 3

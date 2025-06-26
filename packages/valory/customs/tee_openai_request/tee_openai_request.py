@@ -18,15 +18,17 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 import functools
-from typing import Any, Dict, Optional, Tuple, Callable
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import anthropic
 import googleapiclient
 import openai
-from tiktoken import encoding_for_model
 import requests
+from tiktoken import encoding_for_model
+
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
 
 def with_key_rotation(func: Callable):
     @functools.wraps(func)
@@ -77,10 +79,12 @@ def with_key_rotation(func: Callable):
 
     return wrapper
 
+
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
     enc = encoding_for_model(model)
     return len(enc.encode(text))
+
 
 PREFIX = "tee-openai-"
 ENGINES = {
@@ -89,6 +93,7 @@ ENGINES = {
 }
 ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in values]
 AGENT_URL = "https://wapo-testnet.phala.network/ipfs/QmeUiNKgsHiAK3WM57XYd7ssqMwVNbcGwtm8gKLD2pVXiP"
+
 
 @with_key_rotation
 def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
@@ -107,19 +112,15 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
 
     engine = tool.replace(PREFIX, "")
 
-    params = {
-        "openaiApiKey": api_key,
-        "chatQuery": prompt,
-        "openAiModel": engine
-    }
+    params = {"openaiApiKey": api_key, "chatQuery": prompt, "openAiModel": engine}
 
     # Request to agent contract in TEE
     response = requests.get(AGENT_URL, params=params)
 
     if response.status_code == 200:
         json_response = response.json()
-        if 'message' in json_response:
-            return str(json_response['message']), prompt, None, counter_callback
+        if "message" in json_response:
+            return str(json_response["message"]), prompt, None, counter_callback
         else:
             return (
                 "The 'message' field is not present in the response.",

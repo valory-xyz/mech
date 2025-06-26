@@ -19,28 +19,28 @@
 
 """This module implements a Mech tool for binary predictions."""
 import functools
-import re
 import json
-
-import anthropic
-import faiss
-import PyPDF2
-import googleapiclient
-import openai
-import requests
+import re
 import time
-import numpy as np
+from collections import defaultdict
+from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from itertools import islice
-from pydantic import BaseModel
-from collections import defaultdict
-from tiktoken import encoding_for_model
-from markdownify import markdownify as md
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
+
+import PyPDF2
+import anthropic
+import faiss
+import googleapiclient
+import numpy as np
+import openai
+import requests
 from googleapiclient.discovery import build
+from markdownify import markdownify as md
+from pydantic import BaseModel
 from readability import Document as ReadabilityDocument
-from concurrent.futures import Future, ThreadPoolExecutor
 from requests.exceptions import RequestException, TooManyRedirects
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
+from tiktoken import encoding_for_model
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]

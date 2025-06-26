@@ -1,9 +1,10 @@
 import functools
-from typing import Any, Dict, Optional, Tuple, Callable
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import openai
 from openai import OpenAI
 from tiktoken import encoding_for_model
+
 
 client: Optional[OpenAI] = None
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
