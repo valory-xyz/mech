@@ -639,21 +639,23 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
 DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
 MAX_EMBEDDING_TOKENS = 300000  # Maximum total tokens per embeddings batch
 
+
 def clean_text(text: str) -> str:
     """Remove emojis and non-printable characters, collapse whitespace."""
     emoji_pattern = re.compile(
-        '['
-        '\U0001F300-\U0001F5FF'
-        '\U0001F600-\U0001F64F'
-        '\U0001F680-\U0001F6FF'
-        '\U0001F1E0-\U0001F1FF'
-        ']+',
+        "["
+        "\U0001f300-\U0001f5ff"
+        "\U0001f600-\U0001f64f"
+        "\U0001f680-\U0001f6ff"
+        "\U0001f1e0-\U0001f1ff"
+        "]+",
         flags=re.UNICODE,
     )
-    text = emoji_pattern.sub('', text)
-    text = ''.join(ch for ch in text if ch.isprintable())
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = emoji_pattern.sub("", text)
+    text = "".join(ch for ch in text if ch.isprintable())
+    text = re.sub(r"\s+", " ", text).strip()
     return text
+
 
 def truncate_text(text: str, model: str, max_tokens: int) -> str:
     """Truncate text to the first max_tokens tokens based on model encoding."""
@@ -662,6 +664,7 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
     if len(tokens) <= max_tokens:
         return text
     return enc.decode(tokens[:max_tokens])
+
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents: clean, truncate, then batch by token count."""
@@ -676,10 +679,14 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
         while i < len(split_docs):
             doc = split_docs[i]
             doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
-            if current_batch_docs and (current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS):
+            if current_batch_docs and (
+                current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS
+            ):
                 break
             if not current_batch_docs and (doc_token_count > MAX_EMBEDDING_TOKENS):
-                raise ValueError(f"Document token count ({doc_token_count}) exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS}).")
+                raise ValueError(
+                    f"Document token count ({doc_token_count}) exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS})."
+                )
             current_batch_docs.append(doc)
             current_batch_tokens += doc_token_count
             i += 1
@@ -782,6 +789,7 @@ def do_reasoning_with_retry(
 ):
     """Attempt to do reasoning with retries on failure."""
     attempt = 0
+    tool_errors = ""
     while attempt < retries:
         try:
             response_reasoning = client.completions(
@@ -805,10 +813,13 @@ def do_reasoning_with_retry(
 
             return reasoning, counter_callback
         except Exception as e:
-            print(f"Attempt {attempt + 1} failed with error: {e}")
+            error = f"Attempt {attempt + 1} failed with error: {e}"
+            print(error)
             time.sleep(delay)
+            # join the tool errors with the exception message
+            tool_errors += f"{error}\n"
             attempt += 1
-    raise Exception("Failed to generate prediction after retries")
+    raise Exception(f"Failed to generate prediction after retries:\n{tool_errors}")
 
 
 def count_tokens(text: str, model: str) -> int:
