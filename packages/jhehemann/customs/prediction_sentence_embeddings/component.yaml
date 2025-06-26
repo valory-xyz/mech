@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeicqdub7wb5n454snmgxymim63itq6st7j2whznnsz6aiyxwaaokbi
-  prediction_sentence_embeddings.py: bafybeicpd3o4fyxzw3pjee6r6iyguk4lheiilfxya2yqww5asuinbfwbgi
+  prediction_sentence_embeddings.py: bafybeidab72pj6zozxzc4pa2mawpaax37jajm6o2bmldoc4w5zoumhyqc4
 fingerprint_ignore_patterns: []
 entry_point: prediction_sentence_embeddings.py
 callable: run

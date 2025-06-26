@@ -18,17 +18,18 @@
 # ------------------------------------------------------------------------------
 """This module contains the ofv market resolver."""
 import functools
+import json
+from typing import Annotated, Any, Callable, Dict, Optional, Tuple
 
 import openai
 from factcheck import FactCheck
 from factcheck.utils.multimodal import modal_normalization
-import json
 from langchain_openai import ChatOpenAI
-from typing import Annotated, Any, Dict, Optional, Tuple, Callable
 from pydantic import BaseModel, BeforeValidator
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
 
 def with_key_rotation(func: Callable):
     @functools.wraps(func)

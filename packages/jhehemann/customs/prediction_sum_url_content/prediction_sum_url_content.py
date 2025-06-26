@@ -19,29 +19,27 @@
 
 """This module implements a Mech tool for binary predictions."""
 import functools
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
-from datetime import datetime, timezone
 import json
 import re
+import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import anthropic
 import googleapiclient
 import openai
-from bs4 import BeautifulSoup, NavigableString
-from googleapiclient.discovery import build
-from openai import OpenAI
-
 import requests
-from requests import Session
 import spacy
 import tiktoken
-import traceback
-
+from bs4 import BeautifulSoup, NavigableString
 from dateutil import parser
+from googleapiclient.discovery import build
+from openai import OpenAI
+from requests import Session
+from sentence_transformers import SentenceTransformer, util
 from tiktoken import encoding_for_model
 from tqdm import tqdm
-from sentence_transformers import SentenceTransformer, util
 
 
 client: Optional[OpenAI] = None

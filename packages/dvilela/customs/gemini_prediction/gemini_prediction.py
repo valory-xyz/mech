@@ -1,10 +1,13 @@
-import json
-from typing import Optional, Dict, Any, Tuple, Callable
-import google.generativeai as genai
 import functools
+import json
+from typing import Any, Callable, Dict, Optional, Tuple
+
+import google.generativeai as genai
 from google.api_core.exceptions import GoogleAPIError
 
+
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
 
 def with_key_rotation(func: Callable):
     @functools.wraps(func)
@@ -114,13 +117,17 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         return error_response("No tool name has been specified.")
 
     if tool_name not in AVAILABLE_TOOLS:
-        return error_response(f"Tool {tool_name} is not an available tool [{AVAILABLE_TOOLS}].")
+        return error_response(
+            f"Tool {tool_name} is not an available tool [{AVAILABLE_TOOLS}]."
+        )
 
     if prompt is None:
         return error_response("No prompt has been given.")
 
     if model not in AVAILABLE_MODELS:
-        return error_response(f"Model {model} is not an avaliable model: {AVAILABLE_MODELS}")
+        return error_response(
+            f"Model {model} is not an avaliable model: {AVAILABLE_MODELS}"
+        )
 
     if tool_name == "gemini-prediction":
         prompt = PREDICTION_OFFLINE_PROMPT.format(user_prompt=prompt)

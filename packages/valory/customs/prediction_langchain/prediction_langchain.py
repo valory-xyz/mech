@@ -19,22 +19,22 @@
 
 """A mech tool that integrates langchain and langgraph."""
 
-import getpass
-import os
-from typing import Annotated, Literal, Sequence, Optional, Tuple, Callable, Dict, Any
-
-from googleapiclient.errors import HttpError as GoogleAPIHttpError
-from langchain_core.messages import BaseMessage, ToolMessage, HumanMessage, AIMessage
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langgraph.graph import END, StateGraph
-from langchain_community.tools.tavily_search import TavilySearchResults
-from langchain_openai import ChatOpenAI
-from typing_extensions import TypedDict
-from langgraph.prebuilt import ToolNode
-import operator
 import functools
-import openai
+import getpass
+import operator
+import os
+from typing import Annotated, Any, Callable, Dict, Literal, Optional, Sequence, Tuple
+
 import anthropic
+import openai
+from googleapiclient.errors import HttpError as GoogleAPIHttpError
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_openai import ChatOpenAI
+from langgraph.graph import END, StateGraph
+from langgraph.prebuilt import ToolNode
+from typing_extensions import TypedDict
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
@@ -308,4 +308,3 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
 
     # The expected output is: response, prompt, irrelevant, irrelevant
     return response, prompt, None, None
-

@@ -17,26 +17,26 @@
 #
 # ------------------------------------------------------------------------------
 import functools
-import re
 import json
-
-import anthropic
-import faiss
-import PyPDF2
-import googleapiclient
-import openai
-import requests
-import numpy as np
+import re
+from collections import defaultdict
+from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from itertools import islice
-from pydantic import BaseModel
-from collections import defaultdict
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
+
+import PyPDF2
+import anthropic
+import faiss
+import googleapiclient
+import numpy as np
+import openai
+import requests
 from googleapiclient.discovery import build
-from concurrent.futures import Future, ThreadPoolExecutor
+from markdownify import markdownify as md
+from pydantic import BaseModel
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
-from markdownify import markdownify as md
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
 from tiktoken import encoding_for_model
 
 
@@ -379,8 +379,9 @@ def clean_text(text: str) -> str:
     text = emoji_pattern.sub("", text)
     text = "".join(ch for ch in text if ch.isprintable())
     # Collapse whitespace
-    text = re.sub(r'\s+', ' ', text).strip()
+    text = re.sub(r"\s+", " ", text).strip()
     return text
+
 
 # Utility: truncate text to a maximum number of tokens.
 def truncate_text(text: str, model: str, max_tokens: int) -> str:
@@ -390,6 +391,7 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
     if len(token_ids) <= max_tokens:
         return text
     return enc.decode(token_ids[:max_tokens])
+
 
 # Utility: count tokens using model-specific tokenizer
 def count_tokens(text: str, model: str) -> int:
@@ -631,7 +633,9 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
             doc = split_docs[i]
             doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
             # If adding this document would exceed the batch token limit and we already have docs in the batch, break
-            if current_batch_docs and (current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS):
+            if current_batch_docs and (
+                current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS
+            ):
                 break
             # If a single document exceeds the limit on its own, raise
             if not current_batch_docs and (doc_token_count > MAX_EMBEDDING_TOKENS):

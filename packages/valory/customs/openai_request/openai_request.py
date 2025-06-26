@@ -18,13 +18,14 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 import functools
-from typing import Any, Dict, Optional, Tuple, Callable
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import anthropic
 import googleapiclient
 import openai
 from openai import OpenAI
 from tiktoken import encoding_for_model
+
 
 client: Optional[OpenAI] = None
 

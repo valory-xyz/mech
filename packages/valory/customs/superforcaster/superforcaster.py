@@ -18,16 +18,15 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 import functools
+import json
 import time
-from typing import Any, Dict, List, Union, Optional, Tuple, Callable
 from datetime import date
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import openai
+import requests
 from openai import OpenAI
 from tiktoken import encoding_for_model
-
-import requests
-import json
 
 
 client: Optional[OpenAI] = None
@@ -116,7 +115,6 @@ class OpenAIClient:
         stop=None,
         max_tokens: Optional[float] = None,
     ):
-
         response_provider = self.client.chat.completions.create(
             model=model,
             messages=messages,

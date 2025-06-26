@@ -23,7 +23,7 @@ Please note that the gnosis safe parameters are missing from the payload, e.g., 
 """
 import functools
 import traceback
-from typing import Any, Dict, Optional, Tuple, Callable
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import openai
 from langchain_core.output_parsers import PydanticOutputParser
@@ -32,22 +32,20 @@ from langchain_openai import ChatOpenAI
 from openai import OpenAI
 from prediction_market_agent_tooling.markets.agent_market import AgentMarket
 from prediction_market_agent_tooling.markets.omen.data_models import (
-    OMEN_TRUE_OUTCOME,
     OMEN_FALSE_OUTCOME,
+    OMEN_TRUE_OUTCOME,
 )
 from prediction_market_agent_tooling.markets.omen.omen import OmenAgentMarket
 from prediction_market_agent_tooling.markets.omen.omen_contracts import (
-    OmenFixedProductMarketMakerContract,
     OmenCollateralTokenContract,
     OmenConditionalTokenContract,
+    OmenFixedProductMarketMakerContract,
 )
-from prediction_market_agent_tooling.tools.web3_utils import (
-    prepare_tx,
-    add_fraction,
-)
+from prediction_market_agent_tooling.tools.web3_utils import add_fraction, prepare_tx
 from pydantic import BaseModel
 from web3 import Web3
 from web3.types import TxParams
+
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 

@@ -22,20 +22,20 @@ import functools
 import json
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from itertools import islice
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import anthropic
 import googleapiclient
 import openai
-import tiktoken
-from openai import OpenAI
-
 import requests
-from readability import Document
-from markdownify import markdownify as md
+import tiktoken
 from googleapiclient.discovery import build
+from markdownify import markdownify as md
+from openai import OpenAI
+from readability import Document
 from tiktoken import encoding_for_model
+
 
 client: Optional[OpenAI] = None
 
