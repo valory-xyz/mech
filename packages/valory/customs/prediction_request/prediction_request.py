@@ -20,23 +20,23 @@
 """This module implements a Mech tool for binary predictions."""
 import functools
 import json
+import re
 import time
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
 import openai
 import requests
 import spacy
+from googleapiclient.discovery import build
 from markdownify import markdownify as md
 from readability import Document
-from googleapiclient.discovery import build
-import re
 from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
@@ -253,6 +253,11 @@ LLM_SETTINGS = {
     "gpt-4o-2024-08-06": {
         "default_max_tokens": 500,
         "limit_max_tokens": 4096,
+        "temperature": 0,
+    },
+    "gpt-4.1-2025-04-14": {
+        "default_max_tokens": 4096,
+        "limit_max_tokens": 1_047_576,
         "temperature": 0,
     },
     "claude-3-haiku-20240307": {
@@ -585,6 +590,7 @@ def generate_prediction_with_retry(
 ):
     """Attempt to generate a prediction with retries on failure."""
     attempt = 0
+    tool_errors = []
     while attempt < retries:
         try:
             response = client.completions(
@@ -608,10 +614,15 @@ def generate_prediction_with_retry(
 
             return extracted_block, counter_callback
         except Exception as e:
-            print(f"Attempt {attempt + 1} failed with error: {e}")
+            error = f"Attempt {attempt + 1} failed with error: {e}"
             time.sleep(delay)
+            # join the tool errors with the exception message
+            tool_errors.append(error)
             attempt += 1
-    raise Exception("Failed to generate prediction after retries")
+    error_message = (
+        f"Failed to generate prediction after retries:\n{chr(10).join(tool_errors)}"
+    )
+    raise Exception(error_message)
 
 
 def fetch_additional_information(
@@ -824,6 +835,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
         ]
+
         extracted_block, counter_callback = generate_prediction_with_retry(
             model=engine,
             messages=messages,

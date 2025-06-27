@@ -21,13 +21,14 @@
 """This module implements a Mech tool to generate Subject Matter Expert (SME) roles for a given market question"""
 import functools
 import json
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import anthropic
 import googleapiclient
 import openai
 from openai import OpenAI
 from tiktoken import encoding_for_model
+
 
 client: Optional[OpenAI] = None
 

@@ -22,20 +22,20 @@ import functools
 import json
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable
 from itertools import islice
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import anthropic
 import googleapiclient
 import openai
-import tiktoken
-from openai import OpenAI
-
 import requests
-from readability import Document
-from markdownify import markdownify as md
+import tiktoken
 from googleapiclient.discovery import build
+from markdownify import markdownify as md
+from openai import OpenAI
+from readability import Document
 from tiktoken import encoding_for_model
+
 
 client: Optional[OpenAI] = None
 
@@ -61,7 +61,12 @@ class OpenAIClientManager:
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    enc = encoding_for_model(model)
+    # Workaround since tiktoken does not have support yet for gpt4.1
+    # https://github.com/openai/tiktoken/issues/395
+    if model == "gpt-4.1-2025-04-14":
+        enc = tiktoken.get_encoding("o200k_base")
+    else:
+        enc = encoding_for_model(model)
     return len(enc.encode(text))
 
 
@@ -75,6 +80,7 @@ MAX_TOKENS = {
     "gpt-3.5-turbo-0125": 4096,
     "gpt-4-0125-preview": 8192,
     "gpt-4o-2024-08-06": 4096,
+    "gpt-4.1-2025-04-14": 4096,
 }
 ALLOWED_TOOLS = [
     "prediction-offline-sme",

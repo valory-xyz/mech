@@ -21,15 +21,16 @@
 This module implements a tool which prepares a transaction for the transaction settlement skill.
 Please note that the gnosis safe parameters are missing from the payload, e.g., `safe_tx_hash`, `safe_tx_gas`, etc.
 """
+import ast
 import functools
 import json
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import anthropic
 import googleapiclient
 import openai
 from openai import OpenAI
-from typing import Any, Dict, Optional, Tuple, Callable
-import ast
+
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 

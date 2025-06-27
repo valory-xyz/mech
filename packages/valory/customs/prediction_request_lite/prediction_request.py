@@ -20,23 +20,23 @@
 """This module implements a Mech tool for binary predictions."""
 import functools
 import json
+import re
 import time
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
-from typing import Any, Dict, Generator, List, Optional, Tuple, Callable, Union
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
 import openai
 import requests
 import spacy
+from googleapiclient.discovery import build
 from markdownify import markdownify as md
 from readability import Document
-from googleapiclient.discovery import build
-import re
 from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
