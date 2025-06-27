@@ -861,6 +861,8 @@ def do_reasoning_with_retry(
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
+    # Workaround since tiktoken does not have support yet for gpt4.1
+    # https://github.com/openai/tiktoken/issues/395
     if model == "gpt-4.1-2025-04-14":
         enc = get_encoding("o200k_base")
     else:
