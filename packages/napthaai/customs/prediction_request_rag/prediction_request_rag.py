@@ -312,10 +312,11 @@ HTTP_MAX_REDIRECTS = 5
 HTTP_MAX_RETIES = 2
 DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
 RAG_PROMPT_LENGTH = 320
+BUFFER = 15000  # Buffer for the total tokens in the embeddings batch
 MAX_EMBEDDING_TOKENS = (
-    300000 - RAG_PROMPT_LENGTH
+    300000 - RAG_PROMPT_LENGTH - BUFFER  # Maximum tokens for the embeddings batch
 )  # Maximum total tokens per embeddings batch
-
+MAX_NR_DOCS = 3000
 
 PREDICTION_PROMPT = """
 You will be evaluating the likelihood of an event based on a user's question and additional information from search results.
@@ -767,11 +768,14 @@ def fetch_additional_information(
         except Exception as e:
             print(f"Error splitting document: {e}")
             continue
-    print(f"Split Docs: {len(split_docs)}")
 
     # Remove None values from the list
     split_docs = [doc for doc in split_docs if doc]
-
+    print(f"Split Docs: {len(split_docs)}")
+    if len(split_docs) > MAX_NR_DOCS:
+        # truncate the split_docs to the first MAX_NR_DOCS documents
+        print(f"Truncating split_docs to the first {MAX_NR_DOCS} documents")
+        split_docs = split_docs[:MAX_NR_DOCS]
     # Embed the documents
     docs_with_embeddings = get_embeddings(split_docs)
     print(f"Docs with embeddings: {len(docs_with_embeddings)}")

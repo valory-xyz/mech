@@ -318,10 +318,12 @@ DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
 # Reasoning prompt has around 250 tokens so we adjust the max tokens accordingly
 # to avoid exceeding the limit when adding reasoning
 PREDICTION_PROMPT_LENGTH = 500
+BUFFER = 15000  # Buffer to avoid exceeding the limit when adding reasoning
 # This is a rough estimate, actual token count may vary based on the model and text
 MAX_EMBEDDING_TOKENS = (
-    300000 - PREDICTION_PROMPT_LENGTH
+    300000 - PREDICTION_PROMPT_LENGTH - BUFFER  # Total tokens for embeddings
 )  # Maximum total tokens per embeddings batch
+MAX_NR_DOCS = 3000
 
 
 class Document(BaseModel):
@@ -698,7 +700,8 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
             continue
         filtered_docs.append(doc)
         total_tokens_count += doc_token_count
-
+    print(f"Filtered documents count: {len(filtered_docs)}")
+    print(f"total tokens count: {total_tokens_count}")
     # Process documents in batches that respect the total token limit
     processed_docs = []
     i = 0
@@ -941,11 +944,14 @@ def fetch_additional_information(
         except Exception as e:
             print(f"Error splitting document: {e}")
             continue
-    print(f"Split Docs: {len(split_docs)}")
 
     # Remove None values from the list
     split_docs = [doc for doc in split_docs if doc]
-
+    print(f"Split Docs: {len(split_docs)}")
+    if len(split_docs) > MAX_NR_DOCS:
+        # truncate the split_docs to the first MAX_NR_DOCS documents
+        print(f"Truncating split_docs to the first {MAX_NR_DOCS} documents")
+        split_docs = split_docs[:MAX_NR_DOCS]
     # Embed the documents
     docs_with_embeddings = get_embeddings(split_docs)
     print(f"Docs with embeddings: {len(docs_with_embeddings)}")
