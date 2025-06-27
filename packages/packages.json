@@ -53,7 +53,6 @@
         "contract/valory/gnosis_safe_proxy_factory/0.1.0": "bafybeihx4j2k4gwst4qswkgqlcsr3zmplroc7zjwuqo3ttngjq3fwyumpu",
         "contract/valory/gnosis_safe/0.1.0": "bafybeidw3uxuxyp3lso5mh43nhauzvra4jabnuk34bkqd6mrv4ojz37nui",
         "contract/valory/multisend/0.1.0": "bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y",
-        "contract/valory/agent_registry/0.1.0": "bafybeiarzhzs2wm2sl47qg37tqoc3qok54enxlcj6vx3hldozg537uslnq",
         "connection/valory/websocket_client/0.1.0": "bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli",
         "connection/valory/http_client/0.23.0": "bafybeid5ffvg76ejjoese7brj5ji3lx66cu7p2ixfwflpo6rgofkypfd7y",
         "connection/valory/abci/0.1.0": "bafybeifu42n4vz3bid3nkbr7sea6d3pfmxx7rzctr37ovafmbpyq6vplkm",
