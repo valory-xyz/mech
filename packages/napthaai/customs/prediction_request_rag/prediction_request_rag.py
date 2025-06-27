@@ -639,13 +639,13 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
     total_tokens_count = 0
     for doc in split_docs:
         doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
-        if total_tokens_count + doc_token_count <= MAX_EMBEDDING_TOKENS:
-            filtered_docs.append(doc)
-            total_tokens_count += doc_token_count
-        else:
+        if total_tokens_count + doc_token_count > MAX_EMBEDDING_TOKENS:
             print(
                 f"Warning: The total tokens count exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS}). Removing this document."
             )
+            continue
+        filtered_docs.append(doc)
+        total_tokens_count += doc_token_count
 
     # Process documents in batches that respect the total token limit
     processed_docs = []
