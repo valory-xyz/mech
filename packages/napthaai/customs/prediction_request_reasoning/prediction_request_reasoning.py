@@ -40,7 +40,7 @@ from markdownify import markdownify as md
 from pydantic import BaseModel
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
-from tiktoken import encoding_for_model
+from tiktoken import encoding_for_model, get_encoding
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
@@ -314,6 +314,15 @@ HTTP_MAX_RETIES = 2
 DEFAULT_RETRIES = 3
 DEFAULT_DELAY = 2
 
+DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
+# Reasoning prompt has around 250 tokens so we adjust the max tokens accordingly
+# to avoid exceeding the limit when adding reasoning
+PREDICTION_PROMPT_LENGTH = 500
+# This is a rough estimate, actual token count may vary based on the model and text
+MAX_EMBEDDING_TOKENS = (
+    300000 - PREDICTION_PROMPT_LENGTH
+)  # Maximum total tokens per embeddings batch
+
 
 class Document(BaseModel):
     text: str
@@ -467,8 +476,10 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["gpt-4.1-2025-04-14"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4.1-2025-04-14"][
+        "default_max_tokens"
+    ],
 ) -> List[str]:
     """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -641,18 +652,14 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
         ]
 
 
-DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
-MAX_EMBEDDING_TOKENS = 300000  # Maximum total tokens per embeddings batch
-
-
 def clean_text(text: str) -> str:
     """Remove emojis and non-printable characters, collapse whitespace."""
     emoji_pattern = re.compile(
         "["
-        "\U0001F300-\U0001F5FF"
-        "\U0001F600-\U0001F64F"
-        "\U0001F680-\U0001F6FF"
-        "\U0001F1E0-\U0001F1FF"
+        "\U0001f300-\U0001f5ff"
+        "\U0001f600-\U0001f64f"
+        "\U0001f680-\U0001f6ff"
+        "\U0001f1e0-\U0001f1ff"
         "]+",
         flags=re.UNICODE,
     )
@@ -676,34 +683,57 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
     # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
     for doc in split_docs:
         cleaned = clean_text(doc.text)
+        # TODO we could summarize instead of truncating
         doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
+
+    # Filter out any documents that exceed the maximum token limit individually
+    filtered_docs = []
+    total_tokens_count = 0
+    for doc in split_docs:
+        doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
+        if total_tokens_count + doc_token_count <= MAX_EMBEDDING_TOKENS:
+            filtered_docs.append(doc)
+            total_tokens_count += doc_token_count
+        else:
+            print(
+                f"Warning: The total tokens count exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS}). Removing this document."
+            )
+
+    # Process documents in batches that respect the total token limit
+    processed_docs = []
     i = 0
-    while i < len(split_docs):
+    while i < len(filtered_docs):
         current_batch_docs = []
         current_batch_tokens = 0
-        while i < len(split_docs):
-            doc = split_docs[i]
+
+        while i < len(filtered_docs):
+            doc = filtered_docs[i]
             doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
-            if current_batch_docs and (
-                current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS
-            ):
+
+            if current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS:
                 break
-            if not current_batch_docs and (doc_token_count > MAX_EMBEDDING_TOKENS):
-                raise ValueError(
-                    f"Document token count ({doc_token_count}) exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS})."
-                )
+
             current_batch_docs.append(doc)
             current_batch_tokens += doc_token_count
             i += 1
+
+        if not current_batch_docs:
+            # This should not happen after filtering, but just in case
+            i += 1
+            continue
+
         batch_texts = [doc.text for doc in current_batch_docs]
         response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
             input=batch_texts,
         )
+
         for j, emb in enumerate(response.data):
             assert j == emb.index, "Embeddings response out-of-order"
             current_batch_docs[j].embedding = emb.embedding
-    return split_docs
+            processed_docs.append(current_batch_docs[j])
+
+    return processed_docs
 
 
 def find_similar_chunks(
@@ -729,8 +759,8 @@ def find_similar_chunks(
 def multi_questions_response(
     prompt: str,
     model: str,
-    temperature: float = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
-    max_tokens: int = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
+    temperature: float = LLM_SETTINGS["gpt-4.1-2025-04-14"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["gpt-4.1-2025-04-14"]["default_max_tokens"],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[str]:
     """Generate multiple questions for fetching information from the web."""
@@ -831,7 +861,10 @@ def do_reasoning_with_retry(
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    enc = encoding_for_model(model)
+    if model == "gpt-4.1-2025-04-14":
+        enc = get_encoding("o200k_base")
+    else:
+        enc = encoding_for_model(model)
     return len(enc.encode(text))
 
 
@@ -844,8 +877,10 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
     num_urls: Optional[int] = DEFAULT_NUM_URLS,
     num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["gpt-4.1-2025-04-14"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4.1-2025-04-14"][
+        "default_max_tokens"
+    ],
 ) -> Tuple[str, List[str], Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information from the web."""
 

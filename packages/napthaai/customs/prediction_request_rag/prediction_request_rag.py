@@ -37,7 +37,7 @@ from markdownify import markdownify as md
 from pydantic import BaseModel
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
-from tiktoken import encoding_for_model
+from tiktoken import encoding_for_model, get_encoding
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
@@ -311,7 +311,10 @@ HTTP_TIMEOUT = 20
 HTTP_MAX_REDIRECTS = 5
 HTTP_MAX_RETIES = 2
 DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
-MAX_EMBEDDING_TOKENS = 300000  # Maximum total tokens per embeddings batch
+RAG_PROMPT_LENGTH = 320
+MAX_EMBEDDING_TOKENS = (
+    300000 - RAG_PROMPT_LENGTH
+)  # Maximum total tokens per embeddings batch
 
 
 PREDICTION_PROMPT = """
@@ -369,10 +372,10 @@ class Document(BaseModel):
 def clean_text(text: str) -> str:
     """Remove emojis and non-printable characters, collapse whitespace."""
     emoji_pattern = re.compile(
-        "[\U0001F600-\U0001F64F"
-        "\U0001F300-\U0001F5FF"
-        "\U0001F680-\U0001F6FF"
-        "\U0001F1E0-\U0001F1FF"
+        "[\U0001f600-\U0001f64f"
+        "\U0001f300-\U0001f5ff"
+        "\U0001f680-\U0001f6ff"
+        "\U0001f1e0-\U0001f1ff"
         "]+",
         flags=re.UNICODE,
     )
@@ -396,7 +399,10 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
 # Utility: count tokens using model-specific tokenizer
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    enc = encoding_for_model(model)
+    if model == "gpt-4.1-2025-04-14":
+        enc = get_encoding("o200k_base")
+    else:
+        enc = encoding_for_model(model)
     return len(enc.encode(text))
 
 
@@ -620,41 +626,60 @@ def find_similar_chunks(
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents: clean, truncate, then batch by token count."""
-    # Preprocessing: clean and truncate each document to DOC_TOKEN_LIMIT
+    # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
     for doc in split_docs:
         cleaned = clean_text(doc.text)
+        # TODO we could summarize instead of truncating
         doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
 
+    # Filter out any documents that exceed the maximum token limit individually
+    filtered_docs = []
+    total_tokens_count = 0
+    for doc in split_docs:
+        doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
+        if total_tokens_count + doc_token_count <= MAX_EMBEDDING_TOKENS:
+            filtered_docs.append(doc)
+            total_tokens_count += doc_token_count
+        else:
+            print(
+                f"Warning: The total tokens count exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS}). Removing this document."
+            )
+
+    # Process documents in batches that respect the total token limit
+    processed_docs = []
     i = 0
-    while i < len(split_docs):
+    while i < len(filtered_docs):
         current_batch_docs = []
         current_batch_tokens = 0
-        while i < len(split_docs):
-            doc = split_docs[i]
+
+        while i < len(filtered_docs):
+            doc = filtered_docs[i]
             doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
-            # If adding this document would exceed the batch token limit and we already have docs in the batch, break
-            if current_batch_docs and (
-                current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS
-            ):
+
+            if current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS:
                 break
-            # If a single document exceeds the limit on its own, raise
-            if not current_batch_docs and (doc_token_count > MAX_EMBEDDING_TOKENS):
-                raise ValueError(
-                    f"Document token count ({doc_token_count}) exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS})."
-                )
+
             current_batch_docs.append(doc)
             current_batch_tokens += doc_token_count
             i += 1
+
+        if not current_batch_docs:
+            # This should not happen after filtering, but just in case
+            i += 1
+            continue
 
         batch_texts = [doc.text for doc in current_batch_docs]
         response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
             input=batch_texts,
         )
+
         for j, emb in enumerate(response.data):
             assert j == emb.index, "Embeddings response out-of-order"
             current_batch_docs[j].embedding = emb.embedding
-    return split_docs
+            processed_docs.append(current_batch_docs[j])
+
+    return processed_docs
 
 
 def recursive_character_text_splitter(text, max_tokens, overlap):
