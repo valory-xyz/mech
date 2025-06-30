@@ -48,6 +48,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -107,15 +114,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -152,11 +162,14 @@ BUFFER_TOKENS = 250
 
 
 class OpenAISchema(BaseModel):  # type: ignore[misc]
+    """OpenAISchema"""
+
     @classmethod  # type: ignore[misc]
     @property
     def openai_schema(cls) -> Dict[str, Any]:
         """
         Return the schema in the format of OpenAI's schema as jsonschema
+
         Note:
             Its important to add a docstring to describe how to best use this class, it will be included in the description attribute and be part of the prompt.
         Returns:
@@ -197,6 +210,7 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
     def from_response(cls, completion: Dict[str, Any]) -> "OpenAISchema":
         """
         Convert the response from OpenAI into the class instance
+
         Args:
             completion (dict): The response from OpenAI
         Returns:
@@ -211,10 +225,14 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
 
 
 class Queries(OpenAISchema):
+    """Queries schema"""
+
     queries: List[str]
 
 
 class Date(OpenAISchema):
+    """Date schema"""
+
     date_available: bool = Field(..., description="Whether the date is available")
     year: Optional[int] = Field(..., description="The year the article was published")
     month: Optional[str] = Field(..., description="The month the article was published")
@@ -222,10 +240,14 @@ class Date(OpenAISchema):
 
 
 class Results(OpenAISchema):
+    """Results schema"""
+
     has_occurred: bool = Field(..., description="Whether the event has occurred.")
 
 
 class Valid(OpenAISchema):
+    """Question validity schema."""
+
     is_valid: bool = Field(..., description="Whether the question is valid.")
     reason: Optional[str] = Field(
         ..., description="Reason that the question is invalid."
@@ -233,6 +255,8 @@ class Valid(OpenAISchema):
 
 
 class Determinable(OpenAISchema):
+    """Question determinability schema."""
+
     is_determinable: bool = Field(
         ...,
         description="Whether it is possible to answer the question based on the information provided and reasoning.",
@@ -240,6 +264,8 @@ class Determinable(OpenAISchema):
 
 
 class Document(BaseModel):
+    """Document model"""
+
     text: str
     date: str
     url: str
@@ -247,10 +273,10 @@ class Document(BaseModel):
 
 
 URL_QUERY_PROMPT = """
- You are an expert fact checker in a team tasked with determining whether an event happened before a given date in the past. 
-* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event occured. 
-* You are provided with the input question about the event under the label "USER_PROMPT". 
-* You must follow the instructions under the label "INSTRUCTIONS". 
+ You are an expert fact checker in a team tasked with determining whether an event happened before a given date in the past.
+* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event occured.
+* You are provided with the input question about the event under the label "USER_PROMPT".
+* You must follow the instructions under the label "INSTRUCTIONS".
 
 INSTRUCTIONS
 * Read the input under the label "USER_PROMPT" delimited by three backticks.
@@ -258,7 +284,7 @@ INSTRUCTIONS
 * The "USER_PROMPT" will contain a date which in the past.
 * The event will only have has two possible outcomes: either the event has happened or the event has not happened.
 * If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event occured. 
+* You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event occured.
 * Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
 * Make sure the queries are in past tense and are in the form of a question.
 * ONLY function calls are allowed in the response.
@@ -271,9 +297,9 @@ USER_PROMPT:
 
 GET_DATE_PROMPT = """
 INSTRUCTIONS
-* You are an expert data analyst that takes in extracted text from a web search result. 
+* You are an expert data analyst that takes in extracted text from a web search result.
 * You are provided with text extracted from a relevant web page under the label "EXTRACTED_TEXT" delimited by three backticks.
-* Your task is to extract the date that the web page was published. 
+* Your task is to extract the date that the web page was published.
 * If there is no date information available, you should not try to guess. Instead indicate that it is not available.
 * Your response should only be a function call with the extracted date information as arguments.
 
@@ -285,8 +311,8 @@ EXTRACTED_TEXT:
 
 PREDICTION_PROMPT = """
 INSTRUCTIONS
-* You are an expert data analyst. 
-* You are provided with the input question about the event under the label "USER_PROMPT". 
+* You are an expert data analyst.
+* You are provided with the input question about the event under the label "USER_PROMPT".
 * You are provided with a colleague's reasoning as to whether the event occurred based on online research under the label "REASONING" delimited by three backticks.
 * Your task is to parse the decision on whether an event occurred.
 * The answer that you give should match the answer that you come to in the reasoning field
@@ -304,7 +330,7 @@ REASONING:
 """
 
 REASONING_PROMPT = """
-You are an expert fact checker that takes in a question asking whether an event will happen before a given date. 
+You are an expert fact checker that takes in a question asking whether an event will happen before a given date.
 That date has now passed and your role is to determine whether the event actually happened before the date.
 You are provided with the input question about the event under the label "USER_PROMPT". You must follow the instructions
 under the label "INSTRUCTIONS".
@@ -321,7 +347,7 @@ possible answers: either the event did happen or it did not happen.
 * If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
 * Ideally, these will be news articles about the event in question.
 * Pay special attention to the date of the article if it is available.
-* You should show your process of thinking through the problem step by step, taking the date and information of the various articles into consideration, and explain your reasoning for your decision as to whether an event occurred by the specified date. 
+* You should show your process of thinking through the problem step by step, taking the date and information of the various articles into consideration, and explain your reasoning for your decision as to whether an event occurred by the specified date.
 * The articles will not always explicitly contain all the information needed to determine the answer. In this case, you may need to make an educated guess based on certain assumptions. If you need to do this, please provide your assumptions in your explanation.
 
 Here are some examples of how you can figure out whether an event occurred by the date:
@@ -340,7 +366,7 @@ ADDITIONAL_INFORMATION:
 """
 
 VALID_PROMPT = """
-* You are an expert data analyst. 
+* You are an expert data analyst.
 * You are provided with a question about an event (submitted to a prediction market) under "USER_PROMPT" delimited by three backticks.
 * Your task is to determine whether the question is valid.
 * You are provided with rules that determine whether a question is invalid (as well as examples) under the label "RULES".
@@ -359,10 +385,10 @@ USER_PROMPT:
 """
 
 DETERMINABLE_PROMPT = """
-* You are an expert data analyst. 
+* You are an expert data analyst.
 * You are provided with a question about an event (submitted to a prediction market) under "USER_PROMPT" delimited by three backticks.
 * You are provided with a colleague's reasoning as to whether the event occurred based on online research under the label "REASONING" delimited by three backticks.
-* Your task is to determine whether it is possible to answer whether the event actually happened before the date based on the content of this reasoning. 
+* Your task is to determine whether it is possible to answer whether the event actually happened before the date based on the content of this reasoning.
 * The answer that you give should reflect the opinion in the reasoning field.
 * Your response should only be a function call with the information about whether a question is valid and reason as arguments.
 
@@ -426,6 +452,7 @@ def multi_queries(
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
+    """Performs a Google Custom Search and returns a list of result links."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
         service.cse()
@@ -587,6 +614,7 @@ def process_in_batches(
 
 
 def recursive_character_text_splitter(text, max_tokens, overlap):
+    """Splits the input text into chunks of size `max_tokens`, with an overlap between chunks."""
     if len(text) <= max_tokens:
         return [text]
     else:
@@ -628,9 +656,9 @@ def find_similar_chunks(
 
     index = faiss.IndexFlatIP(EMBEDDING_SIZE)
     index.add(np.array([doc.embedding for doc in docs_with_embeddings]))
-    D, I = index.search(np.array([query_embedding]), k)
+    D, indices = index.search(np.array([query_embedding]), k)
 
-    return [docs_with_embeddings[i] for i in I[0]]
+    return [docs_with_embeddings[i] for i in indices[0]]
 
 
 def fetch_additional_information(

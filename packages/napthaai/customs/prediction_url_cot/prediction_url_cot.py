@@ -1,3 +1,23 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2024 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+"""This module implements a tool prediction url cot."""
 import functools
 import json
 import re
@@ -23,6 +43,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -78,6 +105,7 @@ class LLMClientManager:
     def __init__(
         self, api_keys: List, model: str = None, embedding_provider: str = None
     ):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.embedding_provider = embedding_provider
         if "gpt" in model:
@@ -88,6 +116,7 @@ class LLMClientManager:
             self.llm_provider = "openrouter"
 
     def __enter__(self):
+        """Initializes and returns LLM and embedding clients."""
         clients = []
         global client
         if self.llm_provider and client is None:
@@ -100,6 +129,7 @@ class LLMClientManager:
         return clients
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.client.close()
@@ -110,6 +140,7 @@ class Usage:
     """Usage class."""
 
     def __init__(self, prompt_tokens=None, completion_tokens=None):
+        """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
 
@@ -118,6 +149,7 @@ class LLMResponse:
     """Response class."""
 
     def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+        """Initializes with content and usage class."""
         self.content = content
         self.usage = Usage()
 
@@ -126,6 +158,7 @@ class LLMClient:
     """Client for LLMs."""
 
     def __init__(self, api_keys: Dict, llm_provider: str):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
@@ -148,7 +181,7 @@ class LLMClient:
     def completions(
         self,
         model: str,
-        messages: List = [],
+        messages: List = [],  # noqa: B006
         timeout: Optional[Union[float, int]] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
@@ -156,6 +189,7 @@ class LLMClient:
         stop=None,
         max_tokens: Optional[float] = None,
     ):
+        """Generate a completion from the specified LLM provider using the given model and messages."""
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
             for i in range(len(messages) - 1, -1, -1):
@@ -209,6 +243,7 @@ class LLMClient:
             return response
 
     def embeddings(self, model, input):
+        """Get embeddings for the split documents: clean, truncate, then batch by token count."""
         if self.llm_provider == "openai" or self.llm_provider == "openrouter":
             response = self.client.embeddings.create(
                 model=model,
@@ -302,6 +337,8 @@ SYSTEM_PROMPT = """You are a world class algorithm for generating structured out
 
 
 class Document(BaseModel):
+    """Document model"""
+
     text: str
     url: str
     embedding: Optional[List[float]] = None
@@ -512,10 +549,11 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
 
 
 def extract_question(prompt: str) -> str:
+    """Uses regexp to extract question from the prompt"""
     pattern = r"\"(.*?)\""
     try:
         question = re.findall(pattern, prompt)[0]
-    except Exception as e:
+    except Exception:
         question = prompt
 
     return question

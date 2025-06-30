@@ -74,7 +74,7 @@ found in 'USER_PROMPT'. The market question is part of a prediction market, wher
 in this scenario has only two possible outcomes: `Yes` or `No`. Each market has a closing date at which the outcome is evaluated. This date is typically stated within the market question.  \
 The closing date is considered to be 23:59:59 of the date provided in the market question. If the event specified in the market question has not occurred before the closing date, the market question's outcome is `No`. \
 If the event has happened before the closing date, the market question's outcome is `Yes`. You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", which is \
-sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your probability estimation. You must adhere to the following 'INSTRUCTIONS'.  
+sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your probability estimation. You must adhere to the following 'INSTRUCTIONS'.
 
 
 INSTRUCTIONS:
@@ -85,7 +85,7 @@ INSTRUCTIONS:
 * Consider the prediction market with the market question, the closing date and the outcomes in an isolated context that has no influence on the protagonists that are involved in the event in the real world, specified in the market question. The closing date is always arbitrarily set by the market creator and has no influence on the real world. So it is likely that the protagonists of the event in the real world are not even aware of the prediction market and do not care about the market's closing date.
 * The probability estimations of the market question outcomes must be as accurate as possible, as an inaccurate estimation will lead to financial loss for the user.
 * Utilize your training data and the information provided under "ADDITIONAL_INFORMATION" to generate probability estimations for the outcomes of the 'market question'.
-* Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago. 
+* Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago.
 * Use any relevant item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation. You can assume that you have been provided with the most current and relevant information available on the internet. Still pay close attention on the release and modification timestamps provided in parentheses right before each information item. Some information might be outdated and not relevant anymore.
 * More recent information indicated by the timestamps provided in parentheses right before each information item overrides older information within ADDITIONAL_INFORMATION and holds more weight for your probability estimation.
 * If there exist contradicting information, evaluate the release and modification dates of those information and prioritize the information that is more recent and adjust your confidence in the probability estimation accordingly.
@@ -148,21 +148,21 @@ QUERY_RERANKING_PROMPT_TEMPLATE = """
 REPORT_PROMPT_TEMPLATE = """
     Your goal is to provide a relevant information report
     in order to make an informed prediction for the question: '{goal}'.
-    
+
     Here are the results of relevant web searches:
-    
+
     {search_results}
-    
+
     Prepare a full comprehensive report that provides relevant information to answer the aforementioned question.
     If that is not possible, state why.
     You will structure your report in the following sections:
-    
+
     - Introduction
     - Background
     - Findings and Analysis
     - Conclusion
     - Caveats
-    
+
     Don't limit yourself to just stating each finding; provide a thorough, full and comprehensive analysis of each finding.
     Use markdown syntax. Include as much relevant information as possible and try not to summarize.
     """
@@ -171,6 +171,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -250,6 +257,8 @@ MAX_TEXT_LENGTH = 7500
 
 
 class WebSearchResult(BaseModel):
+    """WebSearchResult model"""
+
     title: str
     url: str
     description: str
@@ -257,16 +266,20 @@ class WebSearchResult(BaseModel):
     query: str
 
     def __getitem__(self, item):
+        """Retrieves the value of an attribute from the object using the attribute name."""
         return getattr(self, item)
 
 
 class WebScrapeResult(BaseModel):
+    """WebScrapeResult model"""
+
     query: str
     url: str
     title: str
     content: str
 
     def __getitem__(self, item):
+        """Retrieves the value of an attribute from the object using the attribute name."""
         return getattr(self, item)
 
 
@@ -280,6 +293,7 @@ def count_tokens(text: str, model: str) -> int:
 
 
 def fetch_html(url: str, timeout: int) -> Response:
+    """Fetches the HTML content of a URL with a custom User-Agent header."""
     headers = {
         "User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:107.0) Gecko/20100101 Firefox/107.0"
     }
@@ -288,6 +302,7 @@ def fetch_html(url: str, timeout: int) -> Response:
 
 
 def web_scrape(url: str, timeout: int = 10000) -> tuple[str, str]:
+    """Scrapes the HTML content from a URL and returns cleaned text."""
     try:
         response = fetch_html(url=url, timeout=timeout)
 
@@ -318,6 +333,7 @@ def web_scrape(url: str, timeout: int = 10000) -> tuple[str, str]:
 
 
 def scrape_results(results: list[WebSearchResult]) -> list[WebScrapeResult]:
+    """Scrapes the results of a web search using `web_scrape` in parallel."""
     scraped: list[WebScrapeResult] = []
     results_by_url = {result.url: result for result in results}
 
@@ -339,6 +355,7 @@ def scrape_results(results: list[WebSearchResult]) -> list[WebScrapeResult]:
 
 
 def web_search(query: str, api_key: str, max_results=5) -> list[WebSearchResult]:
+    """Performs a web search using the Tavily API and returns search results."""
     tavily = TavilyClient(api_key=api_key)
     response = tavily.search(
         query=query,
@@ -363,6 +380,7 @@ def web_search(query: str, api_key: str, max_results=5) -> list[WebSearchResult]
 def search(
     queries: list[str], api_key: str, filter=lambda x: True
 ) -> list[tuple[str, WebSearchResult]]:
+    """Performs parallel web searches for multiple queries and filters the results."""
     results: list[list[WebSearchResult]] = []
     results_with_queries: list[tuple[str, WebSearchResult]] = []
 
@@ -387,6 +405,7 @@ def search(
 def create_embeddings_from_results(
     results: list[WebScrapeResult], text_splitter, api_key: str
 ) -> Collection:
+    """Creates embeddings from web scrape results and stores them in a collection."""
     client = EphemeralClient()
     openai_ef = CustomOpenAIEmbeddingFunction(
         api_key=api_key, model_name="text-embedding-ada-002"
@@ -420,6 +439,7 @@ def generate_subqueries(
     model: str,
     counter_callback: Optional[Callable] = None,
 ) -> tuple[list[str], Any]:
+    """Generates subqueries based on the input query using OpenAI's API."""
     client = OpenAI(api_key=api_key)
     subquery_generation_prompt = SUBQUERIES_PROMPT_TEMPLATE.format(
         query=query, search_limit=limit
@@ -463,6 +483,7 @@ def rerank_subqueries(
     model: str,
     counter_callback: Optional[Callable] = None,
 ) -> tuple[list[str], Any]:
+    """Reranks a list of queries based on a defined goal using OpenAI's API."""
     client = OpenAI(api_key=api_key)
     rerank_results_prompt = QUERY_RERANKING_PROMPT_TEMPLATE.format(
         goal=goal, queries="\n---query---\n".join(queries)
@@ -504,6 +525,7 @@ def prepare_report(
     api_key: str,
     counter_callback: Optional[Callable] = None,
 ) -> tuple[str, Any]:
+    """Prepares a report based on scraped data and a defined goal using OpenAI's API."""
     evaluation_prompt = REPORT_PROMPT_TEMPLATE.format(search_results=scraped, goal=goal)
 
     client = OpenAI(api_key=api_key)
@@ -541,6 +563,7 @@ def make_prediction(
     openai_api_key: str,
     counter_callback: Optional[Callable] = None,
 ) -> tuple[str, Any]:
+    """Generates a prediction based on a prompt using OpenAI's API."""
     client = OpenAI(api_key=openai_api_key)
 
     response = client.chat.completions.create(

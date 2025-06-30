@@ -34,6 +34,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -68,15 +75,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = OpenAIClient(api_key=self.api_key)
         return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.client.close()
@@ -87,6 +97,7 @@ class Usage:
     """Usage class."""
 
     def __init__(self, prompt_tokens=None, completion_tokens=None):
+        """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
 
@@ -95,19 +106,23 @@ class OpenAIResponse:
     """Response class."""
 
     def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+        """Initializes with content and usage class."""
         self.content = content
         self.usage = Usage()
 
 
 class OpenAIClient:
+    """OpenAI Client"""
+
     def __init__(self, api_key: str):
+        """Initializes with API keys and client."""
         self.api_key = api_key
         self.client = openai.OpenAI(api_key=self.api_key)
 
     def completions(
         self,
         model: str,
-        messages: List = [],
+        messages: List = [],  # noqa: B006
         timeout: Optional[Union[float, int]] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
@@ -115,6 +130,7 @@ class OpenAIClient:
         stop=None,
         max_tokens: Optional[float] = None,
     ):
+        """Generate a completion from the specified LLM provider using the given model and messages."""
         response_provider = self.client.chat.completions.create(
             model=model,
             messages=messages,
@@ -267,6 +283,7 @@ def generate_prediction_with_retry(
 
 
 def fetch_additional_sources(question, serper_api_key):
+    """Fetches additional sources for the given question using the Serper API."""
     url = "https://google.serper.dev/search"
     payload = json.dumps({"q": question})
     headers = {
@@ -280,12 +297,13 @@ def fetch_additional_sources(question, serper_api_key):
 
 
 def format_sources_data(organic_data, misc_data):
+    """Formats organic search results and "People Also Ask" data into a human-readable string."""
     sources = ""
 
     if len(organic_data) > 0:
         print("Adding organic data...")
 
-        sources = f"""
+        sources = """
         Organic Results:
         """
 

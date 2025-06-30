@@ -48,6 +48,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -101,6 +108,7 @@ class LLMClientManager:
     """Client context manager for LLMs."""
 
     def __init__(self, api_keys: List, model: str = None):
+        """Initializes with API keys and llm provider"""
         self.api_keys = api_keys
         if "gpt" in model:
             self.llm_provider = "openai"
@@ -110,12 +118,14 @@ class LLMClientManager:
             self.llm_provider = "openrouter"
 
     def __enter__(self):
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = LLMClient(self.api_keys, self.llm_provider)
         return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.client.close()
@@ -126,6 +136,7 @@ class Usage:
     """Usage class."""
 
     def __init__(self, prompt_tokens=None, completion_tokens=None):
+        """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
 
@@ -134,6 +145,7 @@ class LLMResponse:
     """Response class."""
 
     def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+        """Initializes with content and usage class."""
         self.content = content
         self.usage = Usage()
 
@@ -163,7 +175,7 @@ class LLMClient:
     def completions(
         self,
         model: str,
-        messages: List = [],
+        messages: List = [],  # noqa: B006
         timeout: Optional[Union[float, int]] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
@@ -171,6 +183,7 @@ class LLMClient:
         stop=None,
         max_tokens: Optional[float] = None,
     ):
+        """Generate a completion from the specified LLM provider using the given model and messages."""
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
             for i in range(len(messages) - 1, -1, -1):
@@ -209,7 +222,7 @@ class LLMClient:
 
         if self.llm_provider == "openrouter":
             # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
-            # transform = [] # to desactivate prompt compression
+            # transform = [] # to desactivate prompt compression noqa: E800
             response_provider = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -428,6 +441,7 @@ OUTPUT_FORMAT
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
+    """Search Google using a custom search engine."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
         service.cse()
@@ -521,6 +535,7 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
 
 
 def extract_json_string(text):
+    """Extract's the json string"""
     # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
     pattern = r"(\{[^}]*\})"
     matches = re.findall(pattern, text)
@@ -653,7 +668,7 @@ def fetch_additional_information(
             delay=COMPLETION_DELAY,
             counter_callback=counter_callback,
         )
-    except Exception as e:
+    except Exception:
         json_data = {"queries": [prompt]}
 
     if not source_links:
@@ -824,10 +839,13 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             additional_information = summarize(
                 additional_information, compression_factor, vocab
             )
+
+        # flake8: noqa: E800
         # TODO: Get adjust_additional_information working for Claude
         # additional_information = adjust_additional_information(
         #     prompt, PREDICTION_PROMPT, additional_information, engine
         # )
+        # flake8: enable: E800
         prediction_prompt = active_prompt.format(
             user_prompt=prompt, additional_information=additional_information
         )

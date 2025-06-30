@@ -20,7 +20,6 @@
 """A script that implements the optimization by prompting methodology."""
 import functools
 import json
-import os
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import StringIO
@@ -47,6 +46,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -100,15 +106,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -238,12 +247,13 @@ PROMPT_INSTRUCTOR = PromptTemplate(
 )
 OUTPUT_FORMAT = """
 Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
-The JSON must contain a field "p_yes" which marks the probability of the event happening. 
+The JSON must contain a field "p_yes" which marks the probability of the event happening.
 A valid example is: {{"p_yes": 0.5}}
 """
 
 
 def evaluate_prompt(prompt, df, llm):
+    """Evaluates a prompt on each row of the provided DataFrame and returns probabilities."""
     prompt += OUTPUT_FORMAT
     chain = LLMChain(llm=llm, prompt=prompt)
     probas = []
@@ -254,7 +264,8 @@ def evaluate_prompt(prompt, df, llm):
         )
         try:
             dictionary_match = float(eval(pred_chain)["p_yes"])
-        except:
+        except BaseException as e:
+            print(f"Error occurred while running evaluate_prompt: {e}")
             dictionary_match = float(
                 eval(re.search(r"\{.*\}", pred_chain).group(0))["p_yes"]
             )
@@ -264,10 +275,12 @@ def evaluate_prompt(prompt, df, llm):
 
 
 def calculate_score(df, answer_key="event", prob_key="probability"):
+    """Calculates the ROC AUC score between the true labels and predicted probabilities."""
     return roc_auc_score(df[answer_key], df[prob_key])
 
 
 def create_new_instructions(llm, instructions, score):
+    """Generates new instructions based on the provided score and existing instructions."""
     chain = LLMChain(llm=llm, prompt=PROMPT_INSTRUCTOR)
     evaluations = chain.run({"instructions": instructions, "score": score})
     return evaluations
@@ -280,6 +293,7 @@ def prompt_engineer(
     iterations=3,
     model_name="gpt-4o-2024-08-06",
 ):
+    """Iteratively refines a prompt template using a large language model to maximize performance score."""
     llm = OpenAILLM(model_name=model_name, openai_api_key=openai_api_key)
     score_template = {"template": init_instructions, "score": 0.0}
 
@@ -323,6 +337,7 @@ def prompt_engineer(
 
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
+    """Performs a Google Custom Search and returns a list of result links."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
         service.cse()

@@ -51,6 +51,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -106,6 +113,7 @@ class LLMClientManager:
     def __init__(
         self, api_keys: List, model: str = None, embedding_provider: str = None
     ):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.embedding_provider = embedding_provider
         if "gpt" in model:
@@ -116,6 +124,7 @@ class LLMClientManager:
             self.llm_provider = "openrouter"
 
     def __enter__(self):
+        """Initializes and returns LLM and embedding clients."""
         clients = []
         global client
         if self.llm_provider and client is None:
@@ -128,6 +137,7 @@ class LLMClientManager:
         return clients
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.client.close()
@@ -138,6 +148,7 @@ class Usage:
     """Usage class."""
 
     def __init__(self, prompt_tokens=None, completion_tokens=None):
+        """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
 
@@ -146,6 +157,7 @@ class LLMResponse:
     """Response class."""
 
     def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+        """Initializes with content and usage class."""
         self.content = content
         self.usage = Usage()
 
@@ -154,6 +166,7 @@ class LLMClient:
     """Client for LLMs."""
 
     def __init__(self, api_keys: List, llm_provider: str = None):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
@@ -175,7 +188,7 @@ class LLMClient:
     def completions(
         self,
         model: str,
-        messages: List = [],
+        messages: List = [],  # noqa: B006
         timeout: Optional[Union[float, int]] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
@@ -183,6 +196,7 @@ class LLMClient:
         stop=None,
         max_tokens: Optional[float] = None,
     ):
+        """Generate a completion from the specified LLM provider using the given model and messages."""
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
             for i in range(len(messages) - 1, -1, -1):
@@ -221,7 +235,7 @@ class LLMClient:
 
         if self.llm_provider == "openrouter":
             # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
-            # transform = [] # to desactivate prompt compression
+            # transform = [] # to desactivate prompt compression noqa: E800
             response_provider = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -238,6 +252,7 @@ class LLMClient:
             return response
 
     def embeddings(self, model, input):
+        """Returns the embeddings response"""
         if self.llm_provider == "openai" or self.llm_provider == "openrouter":
             response = self.client.embeddings.create(
                 model=EMBEDDING_MODEL,
@@ -304,7 +319,7 @@ found in 'USER_PROMPT'. The market question is part of a prediction market, wher
 in this scenario has only two possible outcomes: `Yes` or `No`. Each market has a closing date at which the outcome is evaluated. This date is typically stated within the market question.  \
 The closing date is considered to be 23:59:59 of the date provided in the market question. If the event specified in the market question has not occurred before the closing date, the market question's outcome is `No`. \
 If the event has happened before the closing date, the market question's outcome is `Yes`. You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", which is \
-sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your probability estimation. You must adhere to the following 'INSTRUCTIONS'.  
+sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your probability estimation. You must adhere to the following 'INSTRUCTIONS'.
 
 
 INSTRUCTIONS:
@@ -315,7 +330,7 @@ INSTRUCTIONS:
 * Consider the prediction market with the market question, the closing date and the outcomes in an isolated context that has no influence on the protagonists that are involved in the event in the real world, specified in the market question. The closing date is always arbitrarily set by the market creator and has no influence on the real world. So it is likely that the protagonists of the event in the real world are not even aware of the prediction market and do not care about the market's closing date.
 * The probability estimations of the market question outcomes must be as accurate as possible, as an inaccurate estimation will lead to financial loss for the user.
 * Utilize your training data and the information provided under "ADDITIONAL_INFORMATION" to generate probability estimations for the outcomes of the 'market question'.
-* Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago. 
+* Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago.
 * Use any relevant item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation. You can assume that you have been provided with the most current and relevant information available on the internet. Still pay close attention on the release and modification timestamps provided in parentheses right before each information item. Some information might be outdated and not relevant anymore.
 * More recent information indicated by the timestamps provided in parentheses right before each information item overrides older information within ADDITIONAL_INFORMATION and holds more weight for your probability estimation.
 * If there exist contradicting information, evaluate the release and modification dates of those information and prioritize the information that is more recent and adjust your confidence in the probability estimation accordingly.
@@ -554,6 +569,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
 
 
 def extract_json_string(text):
+    """Extract's the json string"""
     # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
     pattern = r"(\{[^}]*\})"
     matches = re.findall(pattern, text)
@@ -771,7 +787,7 @@ def get_context_around_isolated_event_date(
         )
     if max_context > 100:
         raise ValueError(
-            f"The maximum number of words must be less than or equal to 300."
+            "The maximum number of words must be less than or equal to 300."
         )
 
     contexts_list = []
@@ -849,6 +865,7 @@ def get_context_around_isolated_event_date(
 
 
 def concatenate_short_sentences(sentences, len_sentence_threshold):
+    """Concatenates consecutive sentences shorter than the given word count threshold."""
     modified_sentences = []
     i = 0
     while i < len(sentences):
@@ -895,7 +912,7 @@ def extract_similarity_scores(
     len_sentence_threshold = 10
     num_sentences_threshold = 1000
     sentences = []
-    event_date_sentences = []
+    # event_date_sentences = []
     seen = set()
 
     # Truncate text for performance optimization
@@ -914,6 +931,7 @@ def extract_similarity_scores(
             sentences.append(sentence_text)
             seen.add(sentence_text)
 
+    # flake8: noqa: E800
     ## Temporarily deactivated: News sites with a lot of date occurrences lead to false positives
     ## The embedding model is not advanced enough
     # Extract contextual sentences around event date occurrences within too short sentences
@@ -924,6 +942,7 @@ def extract_similarity_scores(
     #         )
     #     )
     # sentences.extend(event_date_sentences)
+    # flake8: enable: E800
 
     if not sentences:
         return []
@@ -937,7 +956,7 @@ def extract_similarity_scores(
     similarities = []
 
     # Encode sentences using spaCy model
-    for i, sentence in enumerate(sentences):
+    for _, sentence in enumerate(sentences):
         doc_sentence = nlp(sentence)
         similarity_score = query_emb.similarity(doc_sentence)
         similarities.append(similarity_score)
@@ -984,12 +1003,14 @@ def get_date(soup):
             release_date = meta_tag.get("content", "")
             break
 
+    # flake8: noqa: E800
     ## Temporarily deactivated
     # # Fallback to using the first time tag if neither release nor modified dates are found
     # if release_date == "unknown" and modified_date == "unknown":
     #     time_tag = soup.find("time")
     #     if time_tag:
     #         release_date = time_tag.get("datetime", "")
+    # flake8: enable: E800
 
     return f"({release_date}, {modified_date})"
 
@@ -1193,7 +1214,7 @@ def extract_and_sort_sentences(
     )  # Assuming the second element is the similarity score
 
     # print similarity scores along with the sentences
-    for sentence, similarity, date in all_sentences:
+    for sentence, similarity, _ in all_sentences:
         if similarity > 0.4:
             print()
             print(f"{similarity}: {sentence}")

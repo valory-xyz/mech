@@ -39,6 +39,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -277,6 +284,7 @@ class CloseMarketBehaviourMock:
                 "temperature", DEFAULT_OPENAI_SETTINGS["temperature"]
             )
             prompt = kwargs.get("prompt")
+            tool = kwargs.get("tool")
             engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
             print(f"ENGINE: {engine}")
             moderation_result = client.moderations.create(input=prompt)

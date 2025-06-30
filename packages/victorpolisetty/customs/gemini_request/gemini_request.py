@@ -85,7 +85,7 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         )
 
         # Ensure response has a .text attribute
-        response_text = getattr(response, "text", None)
+        response_text = getattr(response, "text", None)  # noqa: F841
 
     except Exception as e:
         return f"An error occurred: {str(e)}", None, None, None

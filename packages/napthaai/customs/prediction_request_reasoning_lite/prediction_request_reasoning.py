@@ -47,6 +47,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -101,6 +108,7 @@ class LLMClientManager:
     def __init__(
         self, api_keys: List, model: str = None, embedding_provider: str = None
     ):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.embedding_provider = embedding_provider
         if "gpt" in model:
@@ -111,6 +119,7 @@ class LLMClientManager:
             self.llm_provider = "openrouter"
 
     def __enter__(self):
+        """Initializes and returns LLM and embedding clients."""
         clients = []
         global client
         if self.llm_provider and client is None:
@@ -123,6 +132,7 @@ class LLMClientManager:
         return clients
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.client.close()
@@ -133,6 +143,7 @@ class Usage:
     """Usage class."""
 
     def __init__(self, prompt_tokens=None, completion_tokens=None):
+        """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
 
@@ -141,6 +152,7 @@ class LLMResponse:
     """Response class."""
 
     def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+        """Initializes with content and usage class."""
         self.content = content
         self.usage = Usage()
 
@@ -149,6 +161,7 @@ class LLMClient:
     """Client for LLMs."""
 
     def __init__(self, api_keys: Dict, llm_provider: str):
+        """Initializes with API keys, llm provider, and client. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
@@ -170,7 +183,7 @@ class LLMClient:
     def completions(
         self,
         model: str,
-        messages: List = [],
+        messages: List = [],  # noqa: B006
         timeout: Optional[Union[float, int]] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
@@ -178,6 +191,7 @@ class LLMClient:
         stop=None,
         max_tokens: Optional[float] = None,
     ):
+        """Generate a completion from the specified LLM provider using the given model and messages."""
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
             for i in range(len(messages) - 1, -1, -1):
@@ -231,6 +245,7 @@ class LLMClient:
             return response
 
     def embeddings(self, model, input):
+        """Retrieves embeddings from OpenAI or OpenRouter models."""
         if self.llm_provider == "openai" or self.llm_provider == "openrouter":
             response = self.client.embeddings.create(
                 model=EMBEDDING_MODEL,
@@ -310,6 +325,8 @@ DEFAULT_DELAY = 2
 
 
 class Document(BaseModel):
+    """Document model"""
+
     text: str
     url: str
     embedding: Optional[List[float]] = None
@@ -642,6 +659,7 @@ def process_in_batches(
 
 
 def recursive_character_text_splitter(text, max_tokens, overlap):
+    """Splits the input text into chunks of size `max_tokens`, with an overlap between chunks."""
     if len(text) <= max_tokens:
         return [text]
     else:
@@ -682,9 +700,9 @@ def find_similar_chunks(
 
     index = faiss.IndexFlatIP(EMBEDDING_SIZE)
     index.add(np.array([doc.embedding for doc in docs_with_embeddings]))
-    D, I = index.search(np.array([query_embedding]), k)
+    D, indices = index.search(np.array([query_embedding]), k)
 
-    return [docs_with_embeddings[i] for i in I[0]]
+    return [docs_with_embeddings[i] for i in indices[0]]
 
 
 def multi_questions_response(
@@ -905,6 +923,7 @@ def fetch_additional_information(
 
 
 def extract_question(prompt: str) -> str:
+    """Uses regexp to extract question from the prompt"""
     pattern = r"\"(.*?)\""
     try:
         question = re.findall(pattern, prompt)[0]

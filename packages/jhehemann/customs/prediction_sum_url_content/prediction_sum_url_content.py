@@ -48,6 +48,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -101,15 +108,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM and embedding clients."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -146,7 +156,7 @@ You are a Large Language Model (LLM) within a multi-agent system. Your primary t
 detailed in the 'event question' found in 'USER_PROMPT'. This 'event question' should ideally have only two possible outcomes: the event will either occur or not \
 by the deadline specified in the question, which is 23:59:59 of the date provided. It is critical that you incorporate this deadline date in your \
 probability estimation. You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", which is \
-sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your estimation. You must adhere to the following 'INSTRUCTIONS'.  
+sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your estimation. You must adhere to the following 'INSTRUCTIONS'.
 
 
 INSTRUCTIONS:
@@ -154,9 +164,9 @@ INSTRUCTIONS:
 * If the 'event question' implies more than two outcomes, output the response "Error" and halt further processing.
 * Utilize your training data to generate a probability estimation for the event specified in the 'event question' occurring by the given deadline of 23:59:59 on the specified date.
 * Also rely on your training data to analyze what information would be relevant to make a probability estimation for the event specified in the 'event question' occurring by the given deadline.
-* Examine the itemized list under "ADDITIONAL_INFORMATION". This data is sourced from a Google search engine query done a few seconds ago. 
+* Examine the itemized list under "ADDITIONAL_INFORMATION". This data is sourced from a Google search engine query done a few seconds ago.
 * You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation.
-* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most current and relevant information available on the internet, regardless of its age. Still pay close attention on the release and modification timestamps for each information item provided in parentheses right before it as well as the current time {timestamp}. Even if "ADDITIONAL_INFORMATION" contains the most recent and relevant information about the topic in the event question, it does not imply that it is relevant to make a prediction about the event question. 
+* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most current and relevant information available on the internet, regardless of its age. Still pay close attention on the release and modification timestamps for each information item provided in parentheses right before it as well as the current time {timestamp}. Even if "ADDITIONAL_INFORMATION" contains the most recent and relevant information about the topic in the event question, it does not imply that it is relevant to make a prediction about the event question.
 * If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question', but does not clearly state that the event has already happened, you can assume that the event has not happened by now `{timestamp}`.
 * Given the importance of the deadline for the 'event question,' recent information generally holds more weight for your probability estimation. However, do not disregard older information that provides foundational or contextual relevance to the event in question. Use your judgment to weigh the importance of recency against the relevance of older data.
 * Factor the deadline into your probability estimation. It determines the timeframe by which the event must occur for the 'event question' to be answered affirmatively. For reference, the current time is `{timestamp}`.
@@ -568,7 +578,7 @@ def standardize_date(date_text):
             return parsed_date.strftime("%m-%d")
         else:
             return None
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -598,7 +608,7 @@ def get_context_around_isolated_event_date(
         )
     if max_context > 100:
         raise ValueError(
-            f"The maximum number of words must be less than or equal to 300."
+            "The maximum number of words must be less than or equal to 300."
         )
 
     contexts_list = []
@@ -1002,7 +1012,7 @@ def extract_texts(
 
                 # Append the extracted text if available and increment the count
                 if extracted_text:
-                    # extracted_texts.append(f"{url}\n{extracted_text}")
+                    # extracted_texts.append(f"{url}\n{extracted_text}") noqa: E800
                     extracted_texts.append(extracted_text)
                 count += 1
 

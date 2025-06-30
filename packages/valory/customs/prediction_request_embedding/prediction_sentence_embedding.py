@@ -46,6 +46,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -102,15 +109,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -157,7 +167,7 @@ found in 'USER_PROMPT'. The market question is part of a prediction market, wher
 in this scenario has only two possible outcomes: `Yes` or `No`. Each market has a closing date at which the outcome is evaluated. This date is typically stated within the market question.  \
 The closing date is considered to be 23:59:59 of the date provided in the market question. If the event specified in the market question has not occurred before the closing date, the market question's outcome is `No`. \
 If the event has happened before the closing date, the market question's outcome is `Yes`. You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", which is \
-sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your probability estimation. You must adhere to the following 'INSTRUCTIONS'.  
+sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your probability estimation. You must adhere to the following 'INSTRUCTIONS'.
 
 
 INSTRUCTIONS:
@@ -168,7 +178,7 @@ INSTRUCTIONS:
 * Consider the prediction market with the market question, the closing date and the outcomes in an isolated context that has no influence on the protagonists that are involved in the event in the real world, specified in the market question. The closing date is always arbitrarily set by the market creator and has no influence on the real world. So it is likely that the protagonists of the event in the real world are not even aware of the prediction market and do not care about the market's closing date.
 * The probability estimations of the market question outcomes must be as accurate as possible, as an inaccurate estimation will lead to financial loss for the user.
 * Utilize your training data and the information provided under "ADDITIONAL_INFORMATION" to generate probability estimations for the outcomes of the 'market question'.
-* Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago. 
+* Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago.
 * Use any relevant item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation. You can assume that you have been provided with the most current and relevant information available on the internet. Still pay close attention on the release and modification timestamps provided in parentheses right before each information item. Some information might be outdated and not relevant anymore.
 * More recent information indicated by the timestamps provided in parentheses right before each information item overrides older information within ADDITIONAL_INFORMATION and holds more weight for your probability estimation.
 * If there exist contradicting information, evaluate the release and modification dates of those information and prioritize the information that is more recent and adjust your confidence in the probability estimation accordingly.
@@ -621,7 +631,7 @@ def get_context_around_isolated_event_date(
         )
     if max_context > 100:
         raise ValueError(
-            f"The maximum number of words must be less than or equal to 300."
+            "The maximum number of words must be less than or equal to 300."
         )
 
     contexts_list = []
@@ -745,7 +755,7 @@ def extract_similarity_scores(
     len_sentence_threshold = 10
     num_sentences_threshold = 1000
     sentences = []
-    event_date_sentences = []
+    # event_date_sentences = []
     seen = set()
 
     # Truncate text for performance optimization
@@ -764,6 +774,7 @@ def extract_similarity_scores(
             sentences.append(sentence_text)
             seen.add(sentence_text)
 
+    # flake8: noqa: E800
     ## Temporarily deactivated: News sites with a lot of date occurrences lead to false positives
     ## The embedding model is not advanced enough
     # Extract contextual sentences around event date occurrences within too short sentences
@@ -774,6 +785,7 @@ def extract_similarity_scores(
     #         )
     #     )
     # sentences.extend(event_date_sentences)
+    # flake8: enable: E800
 
     if not sentences:
         return []
@@ -787,7 +799,7 @@ def extract_similarity_scores(
     similarities = []
 
     # Encode sentences using spaCy model
-    for i, sentence in enumerate(sentences):
+    for _, sentence in enumerate(sentences):
         doc_sentence = nlp(sentence)
         similarity_score = query_emb.similarity(doc_sentence)
         similarities.append(similarity_score)
@@ -834,12 +846,14 @@ def get_date(soup):
             release_date = meta_tag.get("content", "")
             break
 
+    # flake8: noqa: E800
     ## Temporarily deactivated
     # # Fallback to using the first time tag if neither release nor modified dates are found
     # if release_date == "unknown" and modified_date == "unknown":
     #     time_tag = soup.find("time")
     #     if time_tag:
     #         release_date = time_tag.get("datetime", "")
+    # flake8: enable: E800
 
     return f"({release_date}, {modified_date})"
 

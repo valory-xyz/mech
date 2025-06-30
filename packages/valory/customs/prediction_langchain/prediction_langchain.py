@@ -20,7 +20,6 @@
 """A mech tool that integrates langchain and langgraph."""
 
 import functools
-import getpass
 import operator
 import os
 from typing import Annotated, Any, Callable, Dict, Literal, Optional, Sequence, Tuple
@@ -41,6 +40,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -140,12 +146,15 @@ def create_agent(tools, system_message: str):
 # This defines the object that is passed between each node
 # in the graph. We will create different nodes for each agent and tool
 class AgentState(TypedDict):
+    """Agent state"""
+
     messages: Annotated[Sequence[BaseMessage], operator.add]
     sender: str
 
 
 # Helper function to create a node for a given agent
 def agent_node(state, agent, name):
+    """Create a node for given agent"""
     result = agent.invoke(state)
     # We convert the agent output into a format that is suitable to append to the global state
     if isinstance(result, ToolMessage):
@@ -161,6 +170,7 @@ def agent_node(state, agent, name):
 
 
 def router(state) -> Literal["call_tool", "__end__", "continue"]:
+    """Router"""
     # This is the router
     messages = state["messages"]
     last_message = messages[-1]
@@ -275,8 +285,10 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
     # hardcode topic and timeframe
     topic = "consumer technology"
     timeframe = "past month"
+    # flake8: noqa: E800
     # topic: Optional[str] = kwargs.get("topic", None)
     # timeframe: Optional[str] = kwargs.get("timeframe", None)
+    # flake8: enable: E800
 
     # Process the kwargs
     question: Optional[str] = kwargs.get("prompt", None)

@@ -19,11 +19,11 @@
 
 """
 This module implements a tool which prepares a transaction for the transaction settlement skill.
+
 Please note that the gnosis safe parameters are missing from the payload, e.g., `safe_tx_hash`, `safe_tx_gas`, etc.
 """
 import ast
 import functools
-import json
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import anthropic
@@ -36,6 +36,13 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
 def with_key_rotation(func: Callable):
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
+    Retries the function on key-related exceptions until retries are exhausted.
+    """
+
     @functools.wraps(func)
     def wrapper(*args, **kwargs) -> MechResponse:
         # this is expected to be a KeyChain object,
@@ -116,15 +123,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -174,7 +184,7 @@ def native_transfer(
         return response, None, None, None
 
     # build the transaction object, unknowns are referenced from parsed_txs
-    transaction = {
+    transaction = {  # noqa: F841
         "to_address": str(parsed_txs["to_address"]),
         "value": int(parsed_txs["wei_value"]),
     }
