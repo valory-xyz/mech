@@ -85,7 +85,7 @@ class ComplementaryServiceMetadata(Contract):
             contract_address=contract_address,
         )
         uri = ledger_api.contract_method_call(
-            contract_interface, "tokenURI", service_id=service_id
+            contract_interface, "tokenURI", serviceId=service_id
         )
         return dict(uri=uri)
 
