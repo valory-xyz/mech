@@ -44,6 +44,34 @@ from tiktoken import encoding_for_model, get_encoding
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+from itertools import islice
+
+
+def batched(iterable, n):
+    """Batch data into tuples of length n. The last batch may be shorter."""
+    # batched('ABCDEFG', 3) --> ABC DEF G
+    if n < 1:
+        raise ValueError("n must be at least one")
+    it = iter(iterable)
+    while batch := tuple(islice(it, n)):
+        yield batch
+
+
+def get_model_encoding(model: str):
+    """Get the appropriate encoding for a model."""
+    # Workaround since tiktoken does not have support yet for gpt4.1
+    # https://github.com/openai/tiktoken/issues/395
+    if model == "gpt-4.1-2025-04-14":
+        return get_encoding("o200k_base")
+
+    return encoding_for_model(model)
+
+
+def chunked_tokens(text, model, chunk_length):
+    enc = get_model_encoding(model)
+    tokens = enc.encode(text)
+    chunks_iterator = batched(tokens, chunk_length)
+    yield from chunks_iterator
 
 
 def with_key_rotation(func: Callable):
@@ -199,23 +227,7 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.output_tokens
             return response
 
-        if self.llm_provider == "openai":
-            response_provider = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                n=1,
-                timeout=150,
-                stop=None,
-            )
-            response = LLMResponse()
-            response.content = response_provider.choices[0].message.content
-            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
-            response.usage.completion_tokens = response_provider.usage.completion_tokens
-            return response
-
-        if self.llm_provider == "openrouter":
+        if self.llm_provider in ["openai", "openrouter"]:
             response_provider = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -233,11 +245,14 @@ class LLMClient:
 
     def embeddings(self, model, input):
         if self.llm_provider == "openai" or self.llm_provider == "openrouter":
-            response = self.client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=input,
-            )
-            return response
+            try:
+                response = self.client.embeddings.create(
+                    model=EMBEDDING_MODEL,
+                    input=input,
+                )
+                return response
+            except Exception as e:
+                print(f"Error in the Embedding request: {e}")
         else:
             print("Only OpenAI embeddings supported currently.")
             return None
@@ -306,6 +321,7 @@ SPLITTER_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-3-large"
 EMBEDDING_BATCH_SIZE = 1000
 EMBEDDING_SIZE = 3072
+EMBEDDING_CTX_LENGTH = 8191  # for this embedding model
 NUM_NEIGHBORS = 3
 BUFFER_TOKENS = 250
 HTTP_TIMEOUT = 20
@@ -323,7 +339,7 @@ BUFFER = 15000  # Buffer to avoid exceeding the limit when adding reasoning
 MAX_EMBEDDING_TOKENS = (
     300000 - PREDICTION_PROMPT_LENGTH - BUFFER  # Total tokens for embeddings
 )  # Maximum total tokens per embeddings batch
-MAX_NR_DOCS = 3000
+MAX_NR_DOCS = 1000
 
 
 class Document(BaseModel):
@@ -412,6 +428,16 @@ Each question version should aim to surface different keywords, concepts or aspe
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
 
+def create_messages(
+    user_content: str, system_content: str = SYSTEM_PROMPT
+) -> List[Dict]:
+    """Create standard message structure for LLM requests."""
+    return [
+        {"role": "system", "content": system_content},
+        {"role": "user", "content": user_content},
+    ]
+
+
 def parser_query_response(response: str, num_queries: int = 5) -> List[str]:
     """Parse the response from the query generation model with optional enhancements."""
     queries = response.split("<queries>")[1].split("</queries>")[0].split("\n")
@@ -487,11 +513,7 @@ def multi_queries(
     url_query_prompt = URL_QUERY_PROMPT.format(
         USER_PROMPT=prompt, NUM_QUERIES=num_queries
     )
-
-    messages = [
-        {"role": "user", "content": url_query_prompt},
-        {"role": "system", "content": SYSTEM_PROMPT},
-    ]
+    messages = create_messages(user_content=url_query_prompt)
 
     response = client.completions(
         model=model,
@@ -666,6 +688,8 @@ def clean_text(text: str) -> str:
         flags=re.UNICODE,
     )
     text = emoji_pattern.sub("", text)
+    # Decode using UTF-8, replacing invalid bytes
+    text = text.encode("utf-8", "replace").decode("utf-8", "replace")
     text = "".join(ch for ch in text if ch.isprintable())
     text = re.sub(r"\s+", " ", text).strip()
     return text
@@ -683,25 +707,29 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents: clean, truncate, then batch by token count."""
     # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
-    for doc in split_docs:
-        cleaned = clean_text(doc.text)
-        # TODO we could summarize instead of truncating
-        doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
-
     # Filter out any documents that exceed the maximum token limit individually
     filtered_docs = []
     total_tokens_count = 0
     for doc in split_docs:
-        doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
-        if total_tokens_count + doc_token_count > MAX_EMBEDDING_TOKENS:
+        # if we are very close to the limit then break the loop
+        if MAX_EMBEDDING_TOKENS - total_tokens_count < 200:
+            break
+        cleaned = clean_text(doc.text)
+        # TODO we could summarize instead of truncating
+        doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
+        # filter empty strings
+        doc.text = doc.text.strip()
+        doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
+        if total_tokens_count + doc.tokens > MAX_EMBEDDING_TOKENS:
             print(
                 f"Warning: The total tokens count exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS}). Removing this document."
             )
             continue
-        filtered_docs.append(doc)
-        total_tokens_count += doc_token_count
+        if doc.text:
+            filtered_docs.append(doc)
+            total_tokens_count += doc.tokens
     print(f"Filtered documents count: {len(filtered_docs)}")
-    print(f"total tokens count: {total_tokens_count}")
+    print(f"Total tokens count ={total_tokens_count}")
     # Process documents in batches that respect the total token limit
     processed_docs = []
     i = 0
@@ -711,20 +739,20 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
 
         while i < len(filtered_docs):
             doc = filtered_docs[i]
-            doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
+            if doc.tokens == 0:
+                doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
 
-            if current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS:
+            if current_batch_tokens + doc.tokens > MAX_EMBEDDING_TOKENS:
                 break
 
             current_batch_docs.append(doc)
-            current_batch_tokens += doc_token_count
+            current_batch_tokens += doc.tokens
             i += 1
 
         if not current_batch_docs:
             # This should not happen after filtering, but just in case
             i += 1
             continue
-
         batch_texts = [doc.text for doc in current_batch_docs]
         response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
@@ -769,10 +797,7 @@ def multi_questions_response(
     """Generate multiple questions for fetching information from the web."""
     try:
         multi_questions_prompt = MULTI_QUESTIONS_PROMPT.format(USER_INPUT=prompt)
-        messages = [
-            {"role": "user", "content": multi_questions_prompt},
-            {"role": "system", "content": SYSTEM_PROMPT},
-        ]
+        messages = create_messages(user_content=multi_questions_prompt)
 
         response = client.completions(
             model=model,
@@ -864,12 +889,7 @@ def do_reasoning_with_retry(
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    # Workaround since tiktoken does not have support yet for gpt4.1
-    # https://github.com/openai/tiktoken/issues/395
-    if model == "gpt-4.1-2025-04-14":
-        enc = get_encoding("o200k_base")
-    else:
-        enc = encoding_for_model(model)
+    enc = get_model_encoding(model)
     return len(enc.encode(text))
 
 
@@ -947,6 +967,7 @@ def fetch_additional_information(
 
     # Remove None values from the list
     split_docs = [doc for doc in split_docs if doc]
+
     print(f"Split Docs: {len(split_docs)}")
     if len(split_docs) > MAX_NR_DOCS:
         # truncate the split_docs to the first MAX_NR_DOCS documents
@@ -998,6 +1019,7 @@ def extract_question(prompt: str) -> str:
         question = re.findall(pattern, prompt)[0]
     except Exception as e:
         print(f"Error extracting question: {e}")
+        print(f"prompt = {prompt}")
         question = prompt
 
     return question
@@ -1010,7 +1032,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     model = kwargs.get("model")
     if "claude" in tool:  # maintain backwards compatibility
         model = "claude-3-5-sonnet-20240620"
-    print(f"MODEL: {model}")
+    print(f"MODEL for prediction request reasoning: {model}")
     with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai"):
         prompt = extract_question(kwargs["prompt"])
         max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[model]["default_max_tokens"])
@@ -1053,10 +1075,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         )
 
         # Do reasoning
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": reasoning_prompt},
-        ]
+        messages = create_messages(user_content=reasoning_prompt)
+        print("Sending reasoning request to the model")
+        print(f"Messages: {messages}")
         reasoning, counter_callback = do_reasoning_with_retry(
             model=model,
             messages=messages,
@@ -1073,11 +1094,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         )
 
         # Make the prediction
-        messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": prediction_prompt},
-        ]
-
+        messages = create_messages(user_content=prediction_prompt)
+        print("Sending prediction request to the model")
+        print(f"Messages: {messages}")
         response_prediction = client.completions(
             model=model,
             messages=messages,

@@ -230,11 +230,16 @@ class LLMClient:
 
     def embeddings(self, model, input):
         if self.llm_provider == "openai" or self.llm_provider == "openrouter":
-            response = self.client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=input,
-            )
-            return response
+            try:
+                response = self.client.embeddings.create(
+                    model=EMBEDDING_MODEL,
+                    input=input,
+                )
+                return response
+            except Exception as e:
+                print(f"length of the input = {len(input)}")
+                print(f"Error = {e}")
+                print(f"Error in the Embedding input: {input}")
         else:
             print("Only OpenAI embeddings supported currently.")
             return None
@@ -316,7 +321,7 @@ BUFFER = 15000  # Buffer for the total tokens in the embeddings batch
 MAX_EMBEDDING_TOKENS = (
     300000 - RAG_PROMPT_LENGTH - BUFFER  # Maximum tokens for the embeddings batch
 )  # Maximum total tokens per embeddings batch
-MAX_NR_DOCS = 3000
+MAX_NR_DOCS = 1000
 
 PREDICTION_PROMPT = """
 You will be evaluating the likelihood of an event based on a user's question and additional information from search results.
@@ -366,6 +371,7 @@ SYSTEM_PROMPT = """You are a world class algorithm for generating structured out
 class Document(BaseModel):
     text: str
     url: str
+    tokens: int = 0
     embedding: Optional[List[float]] = None
 
 
@@ -381,6 +387,8 @@ def clean_text(text: str) -> str:
         flags=re.UNICODE,
     )
     text = emoji_pattern.sub("", text)
+    # Decode using UTF-8, replacing invalid bytes
+    text = text.encode("utf-8", "replace").decode("utf-8", "replace")
     text = "".join(ch for ch in text if ch.isprintable())
     # Collapse whitespace
     text = re.sub(r"\s+", " ", text).strip()
@@ -630,24 +638,29 @@ def find_similar_chunks(
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents: clean, truncate, then batch by token count."""
     # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
-    for doc in split_docs:
-        cleaned = clean_text(doc.text)
-        # TODO we could summarize instead of truncating
-        doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
-
     # Filter out any documents that exceed the maximum token limit individually
     filtered_docs = []
     total_tokens_count = 0
     for doc in split_docs:
-        doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
-        if total_tokens_count + doc_token_count > MAX_EMBEDDING_TOKENS:
+        # if we are very close to the limit then break the loop
+        if MAX_EMBEDDING_TOKENS - total_tokens_count < 200:
+            break
+        cleaned = clean_text(doc.text)
+        # TODO we could summarize instead of truncating
+        doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
+        # filter empty strings
+        doc.text = doc.text.strip()
+        doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
+        if total_tokens_count + doc.tokens > MAX_EMBEDDING_TOKENS:
             print(
                 f"Warning: The total tokens count exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS}). Removing this document."
             )
             continue
-        filtered_docs.append(doc)
-        total_tokens_count += doc_token_count
-
+        if doc.text:
+            filtered_docs.append(doc)
+            total_tokens_count += doc.tokens
+    print(f"Filtered documents count: {len(filtered_docs)}")
+    print(f"Total tokens count ={total_tokens_count}")
     # Process documents in batches that respect the total token limit
     processed_docs = []
     i = 0
@@ -657,20 +670,20 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
 
         while i < len(filtered_docs):
             doc = filtered_docs[i]
-            doc_token_count = count_tokens(doc.text, EMBEDDING_MODEL)
+            if doc.tokens == 0:
+                doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
 
-            if current_batch_tokens + doc_token_count > MAX_EMBEDDING_TOKENS:
+            if current_batch_tokens + doc.tokens > MAX_EMBEDDING_TOKENS:
                 break
 
             current_batch_docs.append(doc)
-            current_batch_tokens += doc_token_count
+            current_batch_tokens += doc.tokens
             i += 1
 
         if not current_batch_docs:
             # This should not happen after filtering, but just in case
             i += 1
             continue
-
         batch_texts = [doc.text for doc in current_batch_docs]
         response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
@@ -840,7 +853,7 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     model = kwargs.get("model")
     if "claude" in tool:  # maintain backwards compatibility
         model = "claude-3-5-sonnet-20240620"
-    print(f"MODEL: {model}")
+    print(f"MODEL for prediction request rag: {model}")
     with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai"):
         prompt = extract_question(kwargs["prompt"])
         max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[model]["default_max_tokens"])
