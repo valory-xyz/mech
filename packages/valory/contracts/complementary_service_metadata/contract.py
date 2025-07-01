@@ -78,7 +78,7 @@ class ComplementaryServiceMetadata(Contract):
         ledger_api: LedgerApi,
         contract_address: str,
         service_id: int,
-    ) -> str:
+    ) -> JSONLike:
         """Returns the CID prefix and metadata hash for a service id."""
         contract_interface = cls.get_instance(
             ledger_api=ledger_api,
