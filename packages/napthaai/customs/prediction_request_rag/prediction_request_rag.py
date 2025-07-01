@@ -237,9 +237,7 @@ class LLMClient:
                 )
                 return response
             except Exception as e:
-                print(f"length of the input = {len(input)}")
-                print(f"Error = {e}")
-                print(f"Error in the Embedding input: {input}")
+                print(f"Error in the Embedding request: {e}")
         else:
             print("Only OpenAI embeddings supported currently.")
             return None

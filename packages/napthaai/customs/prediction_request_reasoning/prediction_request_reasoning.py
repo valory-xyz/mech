@@ -345,6 +345,7 @@ MAX_NR_DOCS = 1000
 class Document(BaseModel):
     text: str
     url: str
+    tokens: int = 0
     embedding: Optional[List[float]] = None
 
 
