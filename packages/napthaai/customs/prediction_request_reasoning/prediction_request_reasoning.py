@@ -47,16 +47,6 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 from itertools import islice
 
 
-def batched(iterable, n):
-    """Batch data into tuples of length n. The last batch may be shorter."""
-    # batched('ABCDEFG', 3) --> ABC DEF G
-    if n < 1:
-        raise ValueError("n must be at least one")
-    it = iter(iterable)
-    while batch := tuple(islice(it, n)):
-        yield batch
-
-
 def get_model_encoding(model: str):
     """Get the appropriate encoding for a model."""
     # Workaround since tiktoken does not have support yet for gpt4.1
@@ -65,13 +55,6 @@ def get_model_encoding(model: str):
         return get_encoding("o200k_base")
 
     return encoding_for_model(model)
-
-
-def chunked_tokens(text, model, chunk_length):
-    enc = get_model_encoding(model)
-    tokens = enc.encode(text)
-    chunks_iterator = batched(tokens, chunk_length)
-    yield from chunks_iterator
 
 
 def with_key_rotation(func: Callable):
@@ -1078,7 +1061,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         # Do reasoning
         messages = create_messages(user_content=reasoning_prompt)
         print("Sending reasoning request to the model")
-        print(f"Messages: {messages}")
+
         reasoning, counter_callback = do_reasoning_with_retry(
             model=model,
             messages=messages,
@@ -1097,7 +1080,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         # Make the prediction
         messages = create_messages(user_content=prediction_prompt)
         print("Sending prediction request to the model")
-        print(f"Messages: {messages}")
+
         response_prediction = client.completions(
             model=model,
             messages=messages,
