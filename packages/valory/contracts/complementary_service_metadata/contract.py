@@ -19,7 +19,7 @@
 
 """This module contains the class to connect to the ComplementaryServiceMetadata contract."""
 
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -78,7 +78,7 @@ class ComplementaryServiceMetadata(Contract):
         ledger_api: LedgerApi,
         contract_address: str,
         service_id: int,
-    ) -> JSONLike:
+    ) -> Dict[str, str]:
         """Returns the token URI for a service id."""
         contract_interface = cls.get_instance(
             ledger_api=ledger_api,
@@ -95,7 +95,7 @@ class ComplementaryServiceMetadata(Contract):
         ledger_api: LedgerApi,
         contract_address: str,
         service_id: int,
-    ) -> JSONLike:
+    ) -> Dict[str, str]:
         """Returns the CID prefix and metadata hash for a service id."""
         contract_interface = cls.get_instance(
             ledger_api=ledger_api,
