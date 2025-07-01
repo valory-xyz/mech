@@ -19,7 +19,7 @@
 
 """This module contains the class to connect to the ComplementaryServiceMetadata contract."""
 
-from typing import Any, Optional
+from typing import Any, Optional, Dict
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -73,12 +73,29 @@ class ComplementaryServiceMetadata(Contract):
         )
 
     @classmethod
+    def get_token_uri(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+        service_id: int,
+    ) -> Dict[str, str]:
+        """Returns the token URI for a service id."""
+        contract_interface = cls.get_instance(
+            ledger_api=ledger_api,
+            contract_address=contract_address,
+        )
+        uri = ledger_api.contract_method_call(
+            contract_interface, "tokenURI", serviceId=service_id
+        )
+        return dict(uri=uri)
+
+    @classmethod
     def get_token_cid_hash(
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
         service_id: int,
-    ) -> str:
+    ) -> Dict[str, str]:
         """Returns the CID prefix and metadata hash for a service id."""
         contract_interface = cls.get_instance(
             ledger_api=ledger_api,
@@ -87,7 +104,7 @@ class ComplementaryServiceMetadata(Contract):
         cid_prefix = contract_interface.functions.CID_PREFIX().call()
         latest_hash = contract_interface.functions.mapServiceHashes(service_id).call()
 
-        return dict(hash=cid_prefix+latest_hash.hex())
+        return dict(hash=cid_prefix + latest_hash.hex())
 
     @classmethod
     def get_token_hash(

@@ -21,7 +21,7 @@ connections: []
 contracts:
 - valory/agent_mech:0.1.0:bafybeibjlxgwwqodubwy3mhstnjqjsyat4ray32xgkkv5adysjwz5mzcau
 - valory/mech_marketplace:0.1.0:bafybeicx4aw7kbp4zxbdsafshkagzb53ji5m2ak537on2ryrzpnoxs2jkq
-- valory/complementary_service_metadata:0.1.0:bafybeie3enmvss2qv3aea47f2gvpjreqtyc6m6hwlqvns4a3rqbpkz4nky
+- valory/complementary_service_metadata:0.1.0:bafybeibu65wpdsbrbrt2wnf2lr3psy26jiaomyjkg4twbupve7o3kso2aa
 - valory/gnosis_safe:0.1.0:bafybeidw3uxuxyp3lso5mh43nhauzvra4jabnuk34bkqd6mrv4ojz37nui
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeibuq4p66jdpnrq7viz4zylydu3zneteukfy3gwdgp273vptnq3dvi
