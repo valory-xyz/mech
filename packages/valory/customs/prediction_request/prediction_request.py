@@ -828,7 +828,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             user_prompt=user_prompt, additional_information=additional_information
         )
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
         ]
 
