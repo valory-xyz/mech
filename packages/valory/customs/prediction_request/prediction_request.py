@@ -309,7 +309,6 @@ COMPLETION_RETRIES = 3
 COMPLETION_DELAY = 2
 
 
-SYSTEM_PROMPT = "You are an expert market forecaster. Your primary function is to generate accurate and insightful predictions in the requested format"
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
 for a given event. You are provided with an input under the label "USER_PROMPT". You must follow the instructions
