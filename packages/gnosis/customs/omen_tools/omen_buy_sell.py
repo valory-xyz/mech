@@ -48,7 +48,8 @@ from web3 import Web3
 from web3.types import TxParams
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 ENGINE = "gpt-3.5-turbo"
 MAX_TOKENS = 500
@@ -110,7 +111,7 @@ class OpenAIClientManager:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Closes the LLM client"""
         global client
         if client is not None:
@@ -241,7 +242,7 @@ def build_sell_tokens_tx_params(
     return tx_params_sell
 
 
-def fetch_params_from_prompt(prompt: str):
+def fetch_params_from_prompt(prompt: str) -> Tuple[BuyOrSell, AgentMarket]:
     """# Fetch the params from the prompt."""
     buy_params = build_params_from_prompt(user_prompt=prompt)
     # Calculate the amount of shares we will get for the given investment amount.
@@ -315,7 +316,7 @@ def build_sell_tx(
         return f"exception occurred - {e}", "", None, None
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -324,16 +325,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except openai.RateLimitError as e:
                 # try with a new key again
@@ -380,7 +381,7 @@ ALLOWED_TOOLS = {
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool: str | None = kwargs.get("tool", None)
 

@@ -36,10 +36,11 @@ from langgraph.prebuilt import ToolNode
 from typing_extensions import TypedDict
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -48,16 +49,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -95,13 +96,13 @@ def with_key_rotation(func: Callable):
     return wrapper
 
 
-def _set_if_undefined(var: str, key: str):
+def _set_if_undefined(var: str, key: str) -> None:
     """Set env vars"""
     if not os.environ.get(var):
         os.environ[var] = key
 
 
-def create_agent(tools, system_message: str):
+def create_agent(tools: Any, system_message: str) -> Any:
     """Create an agent."""
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -153,7 +154,7 @@ class AgentState(TypedDict):
 
 
 # Helper function to create a node for a given agent
-def agent_node(state, agent, name):
+def agent_node(state: Any, agent: Any, name: Any) -> Any:
     """Create a node for given agent"""
     result = agent.invoke(state)
     # We convert the agent output into a format that is suitable to append to the global state
@@ -169,7 +170,7 @@ def agent_node(state, agent, name):
     }
 
 
-def router(state) -> Literal["call_tool", "__end__", "continue"]:
+def router(state: Any) -> Literal["call_tool", "__end__", "continue"]:
     """Router"""
     # This is the router
     messages = state["messages"]
@@ -279,7 +280,7 @@ def error_response(msg: str) -> Tuple[str, None, None, None]:
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[Optional[str], Optional[str], None, None]:
+def run(**kwargs: Any) -> Tuple[Optional[str], Optional[str], None, None]:
     """Run the langchain example."""
 
     # hardcode topic and timeframe

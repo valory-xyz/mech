@@ -36,21 +36,20 @@ import requests
 import spacy
 import spacy.util
 import tiktoken
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup, NavigableString, Tag
 from dateutil import parser
 from googleapiclient.discovery import build
-from openai import OpenAI
 from requests import Session
+from spacy.tokens import Doc
 from tiktoken import encoding_for_model
 from tqdm import tqdm
 
 
-client: Optional[OpenAI] = None
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
-
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -59,16 +58,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -110,9 +109,7 @@ def with_key_rotation(func: Callable):
 class LLMClientManager:
     """Client context manager for LLMs."""
 
-    def __init__(
-        self, api_keys: List, model: str = None, embedding_provider: str = None
-    ):
+    def __init__(self, api_keys: List, model: str, embedding_provider: str):
         """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.embedding_provider = embedding_provider
@@ -123,9 +120,9 @@ class LLMClientManager:
         else:
             self.llm_provider = "openrouter"
 
-    def __enter__(self):
+    def __enter__(self) -> List:
         """Initializes and returns LLM and embedding clients."""
-        clients = []
+        clients: List = []
         global client
         if self.llm_provider and client is None:
             client = LLMClient(self.api_keys, self.llm_provider)
@@ -136,7 +133,7 @@ class LLMClientManager:
             clients.append(client_embedding)
         return clients
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Closes the LLM client"""
         global client
         if client is not None:
@@ -147,7 +144,11 @@ class LLMClientManager:
 class Usage:
     """Usage class."""
 
-    def __init__(self, prompt_tokens=None, completion_tokens=None):
+    def __init__(
+        self,
+        prompt_tokens: Optional[Any] = None,
+        completion_tokens: Optional[Any] = None,
+    ):
         """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
@@ -165,24 +166,24 @@ class LLMResponse:
 class LLMClient:
     """Client for LLMs."""
 
-    def __init__(self, api_keys: List, llm_provider: str = None):
+    def __init__(self, api_keys: List, llm_provider: str):
         """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
             import anthropic
 
-            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
+            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])  # type: ignore
         if self.llm_provider == "openai":
             import openai
 
-            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+            self.client = openai.OpenAI(api_key=self.api_keys["openai"])  # type: ignore
         if self.llm_provider == "openrouter":
             import openai
 
             self.client = openai.OpenAI(
                 base_url="https://openrouter.ai/api/v1",
-                api_key=self.api_keys["openrouter"],
+                api_key=self.api_keys["openrouter"],  # type: ignore
             )
 
     def completions(
@@ -193,9 +194,9 @@ class LLMClient:
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
         n: Optional[int] = None,
-        stop=None,
+        stop: Any = None,
         max_tokens: Optional[float] = None,
-    ):
+    ) -> Optional[LLMResponse]:
         """Generate a completion from the specified LLM provider using the given model and messages."""
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
@@ -251,7 +252,9 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
-    def embeddings(self, model, input):
+        return None
+
+    def embeddings(self, model: Any, input: Any) -> Any:
         """Returns the embeddings response"""
         if self.llm_provider == "openai" or self.llm_provider == "openrouter":
             response = self.client.embeddings.create(
@@ -568,7 +571,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     return [result["link"] for result in search["items"]]
 
 
-def extract_json_string(text):
+def extract_json_string(text: str) -> str:
     """Extract's the json string"""
     # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
     pattern = r"(\{[^}]*\})"
@@ -586,7 +589,7 @@ def download_spacy_model(model_name: str) -> None:
         print(f"{model_name} is already installed.")
 
 
-def extract_event_date(doc_question) -> Optional[str]:
+def extract_event_date(doc_question: Doc) -> Optional[str]:
     """
     Extracts the event date from the event question if present.
 
@@ -606,7 +609,8 @@ def extract_event_date(doc_question) -> Optional[str]:
 
     # If event date not formatted as YMD or not found, return None
     try:
-        datetime.strptime(event_date_ymd, "%Y-%m-%d")
+        if event_date_ymd is not None:
+            datetime.strptime(event_date_ymd, "%Y-%m-%d")
     except (ValueError, TypeError):
         return None
     else:
@@ -720,7 +724,7 @@ def get_urls_from_queries(
     return list(results)
 
 
-def standardize_date(date_text):
+def standardize_date(date_text: str) -> Optional[str]:
     """
     Standardizes a given date string to the format 'YYYY-MM-DD' or 'MM-DD' if possible.
 
@@ -762,8 +766,11 @@ def standardize_date(date_text):
 
 
 def get_context_around_isolated_event_date(
-    doc_text, event_date_ymd, len_sentence_threshold, max_context=50
-):
+    doc_text: Doc,
+    event_date_ymd: str,
+    len_sentence_threshold: int,
+    max_context: int = 50,
+) -> List:
     """
     Extract sentences around isolated dates within the text.
 
@@ -864,7 +871,7 @@ def get_context_around_isolated_event_date(
     return contexts_list
 
 
-def concatenate_short_sentences(sentences, len_sentence_threshold):
+def concatenate_short_sentences(sentences: List, len_sentence_threshold: int) -> List:
     """Concatenates consecutive sentences shorter than the given word count threshold."""
     modified_sentences = []
     i = 0
@@ -890,9 +897,9 @@ def concatenate_short_sentences(sentences, len_sentence_threshold):
 
 def extract_similarity_scores(
     text: str,
-    query_emb,
+    query_emb: Any,
     event_date: str,
-    nlp,
+    nlp: Any,
     date: str,
 ) -> List[Tuple[str, float, str]]:
     """
@@ -971,7 +978,7 @@ def extract_similarity_scores(
     return sentence_similarity_date_tuples
 
 
-def get_date(soup):
+def get_date(soup: BeautifulSoup) -> str:
     """
     Retrieves the release and modification dates from the soup object containing the HTML tree.
 
@@ -990,18 +997,24 @@ def get_date(soup):
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            modified_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, list):
+                modified_date = " ".join(content)
+            else:
+                modified_date = str(content)
 
     # If not found, then look for release or publication date
     for name in RELEASE_DATE_NAMES:
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            release_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, list):
+                release_date = " ".join(content)
+            else:
+                release_date = str(content)
 
     # flake8: noqa: E800
     ## Temporarily deactivated
@@ -1017,9 +1030,9 @@ def get_date(soup):
 
 def extract_sentences(
     html: str,
-    query_emb,
+    query_emb: Any,
     event_date: str,
-    nlp,
+    nlp: Any,
 ) -> List[Tuple[str, float, str]]:
     """
     Extract relevant information from HTML string.
@@ -1075,7 +1088,7 @@ def extract_sentences(
 
 def process_in_batches(
     urls: List[str], batch_size: int = 15, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """
     Process URLs in batches using a generator and thread pool executor.
 
@@ -1147,7 +1160,7 @@ def process_in_batches(
 def extract_and_sort_sentences(
     urls: List[str],
     event_question: str,
-    nlp,
+    nlp: Any,
 ) -> List[Tuple[str, float, str]]:
     """
     Extract texts from a list of URLs using Spacy models.
@@ -1192,7 +1205,7 @@ def extract_and_sort_sentences(
                 extracted_sentences = extract_sentences(
                     html=result.text,
                     query_emb=query_emb,
-                    event_date=event_date,
+                    event_date=event_date,  # type: ignore
                     nlp=nlp,
                 )
 
@@ -1276,8 +1289,11 @@ def generate_prediction_with_retry(
     retries: int = COMPLETION_RETRIES,
     delay: int = COMPLETION_DELAY,
     counter_callback: Optional[Callable] = None,
-):
+) -> Tuple[Any, Optional[Callable]]:
     """Attempt to generate a prediction with retries on failure."""
+    if not client:
+        raise Exception("Client not initialized")
+
     attempt = 0
     while attempt < retries:
         try:
@@ -1291,16 +1307,18 @@ def generate_prediction_with_retry(
                 stop=None,
             )
 
-            if counter_callback is not None:
-                counter_callback(
-                    input_tokens=response.usage.prompt_tokens,
-                    output_tokens=response.usage.completion_tokens,
-                    model=model,
-                    token_counter=count_tokens,
-                )
-            extracted_block = extract_json_string(response.content)
+            if response and response.content is not None:
+                if counter_callback is not None:
+                    counter_callback(
+                        input_tokens=response.usage.prompt_tokens,
+                        output_tokens=response.usage.completion_tokens,
+                        model=model,
+                        token_counter=count_tokens,
+                    )
 
-            return extracted_block, counter_callback
+                    extracted_block = extract_json_string(response.content)
+
+                return extracted_block, counter_callback
         except Exception as e:
             print(f"Attempt {attempt + 1} failed with error: {e}")
             time.sleep(delay)
@@ -1313,7 +1331,7 @@ def fetch_additional_information(
     max_add_words: int,
     google_api_key: str,
     google_engine: str,
-    nlp,
+    nlp: Any,
     engine: str = "gpt-3.5-turbo",
     temperature: float = 0.5,
     max_compl_tokens: int = 500,
@@ -1334,7 +1352,8 @@ def fetch_additional_information(
     Returns:
         str: The relevant information fetched from all the URLs concatenated.
     """
-
+    if not client:
+        return "Client not initialized"
     # Create URL query prompt
     url_query_prompt = URL_QUERY_PROMPT.format(event_question=event_question)
 
@@ -1355,9 +1374,10 @@ def fetch_additional_information(
         stop=None,
     )
 
-    # Parse the response content
-    extracted_block = extract_json_string(response.content)
-    json_data = json.loads(extracted_block)
+    if response and response.content is not None:
+        # Parse the response content
+        extracted_block = extract_json_string(response.content)
+        json_data = json.loads(extracted_block)
 
     # Print queries each on a new line
     print("QUERIES:\n")
@@ -1387,7 +1407,7 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
 
@@ -1411,6 +1431,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
         )
         temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
+        counter_callback = kwargs.get("counter_callback", None)
 
         openai.api_key = kwargs["api_keys"]["openai"]
         if tool not in ALLOWED_TOOLS:
@@ -1430,9 +1451,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         engine = TOOL_TO_ENGINE[tool]
 
         # Extract the event question from the prompt
-        event_question = re.search(r"\"(.+?)\"", prompt).group(1)
-        if not event_question:
+        event_question_match = re.search(r"\"(.+?)\"", prompt)
+        if not event_question_match:
             raise ValueError("No event question found in prompt.")
+        event_question = event_question_match.group(1)
 
         print(f"EVENT_QUESTION: {event_question}")
         print()
@@ -1496,6 +1518,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             max_tokens=max_compl_tokens,
             retries=COMPLETION_RETRIES,
             delay=COMPLETION_DELAY,
+            counter_callback=counter_callback,
         )
         print(f"RESPONSE: {extracted_block}")
         return extracted_block, prediction_prompt, None, counter_callback

@@ -30,10 +30,11 @@ from tiktoken import encoding_for_model
 
 
 client: Optional[OpenAI] = None
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -42,16 +43,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except openai.RateLimitError as e:
                 # try with a new key again
@@ -85,7 +86,7 @@ class OpenAIClientManager:
             client = OpenAIClient(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Closes the LLM client"""
         global client
         if client is not None:
@@ -96,7 +97,11 @@ class OpenAIClientManager:
 class Usage:
     """Usage class."""
 
-    def __init__(self, prompt_tokens=None, completion_tokens=None):
+    def __init__(
+        self,
+        prompt_tokens: Optional[Any] = None,
+        completion_tokens: Optional[Any] = None,
+    ):
         """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
@@ -127,9 +132,9 @@ class OpenAIClient:
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
         n: Optional[int] = None,
-        stop=None,
+        stop: Any = None,
         max_tokens: Optional[float] = None,
-    ):
+    ) -> Optional[OpenAIResponse]:
         """Generate a completion from the specified LLM provider using the given model and messages."""
         response_provider = self.client.chat.completions.create(
             model=model,
@@ -251,8 +256,11 @@ def generate_prediction_with_retry(
     retries: int = COMPLETION_RETRIES,
     delay: int = COMPLETION_DELAY,
     counter_callback: Optional[Callable] = None,
-):
+) -> Tuple[Any, Optional[Callable]]:
     """Attempt to generate a prediction with retries on failure."""
+    if not client:
+        raise Exception("Client not initialized")
+
     attempt = 0
     while attempt < retries:
         try:
@@ -266,15 +274,16 @@ def generate_prediction_with_retry(
                 stop=None,
             )
 
-            if counter_callback is not None:
-                counter_callback(
-                    input_tokens=response.usage.prompt_tokens,
-                    output_tokens=response.usage.completion_tokens,
-                    model=model,
-                    token_counter=count_tokens,
-                )
+            if response and response.content is not None:
+                if counter_callback is not None:
+                    counter_callback(
+                        input_tokens=response.usage.prompt_tokens,
+                        output_tokens=response.usage.completion_tokens,
+                        model=model,
+                        token_counter=count_tokens,
+                    )
 
-            return response.content, counter_callback
+                return response.content, counter_callback
         except Exception as e:
             print(f"Attempt {attempt + 1} failed with error: {e}")
             time.sleep(delay)
@@ -282,7 +291,7 @@ def generate_prediction_with_retry(
     raise Exception("Failed to generate prediction after retries")
 
 
-def fetch_additional_sources(question, serper_api_key):
+def fetch_additional_sources(question: Any, serper_api_key: Any) -> requests.Response:
     """Fetches additional sources for the given question using the Serper API."""
     url = "https://google.serper.dev/search"
     payload = json.dumps({"q": question})
@@ -296,7 +305,7 @@ def fetch_additional_sources(question, serper_api_key):
     return response
 
 
-def format_sources_data(organic_data, misc_data):
+def format_sources_data(organic_data: Any, misc_data: Any) -> str:
     """Formats organic search results and "People Also Ask" data into a human-readable string."""
     sources = ""
 
@@ -330,7 +339,7 @@ def format_sources_data(organic_data, misc_data):
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     openai_api_key = kwargs["api_keys"]["openai"]
     serper_api_key = kwargs["api_keys"]["serperapi"]
@@ -343,6 +352,8 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         counter_callback = kwargs.get("counter_callback", None)
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
+        if engine is None:
+            raise ValueError("Engine not supplied.")
 
         today = date.today()
         d = today.strftime("%d/%m/%Y")

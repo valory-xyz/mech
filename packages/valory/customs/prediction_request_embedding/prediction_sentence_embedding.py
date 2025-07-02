@@ -34,18 +34,20 @@ import requests
 import spacy
 import spacy.util
 import tiktoken
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup, NavigableString, Tag
 from dateutil import parser
 from googleapiclient.discovery import build
 from openai import OpenAI
 from requests import Session
+from spacy.tokens import Doc
 from tiktoken import encoding_for_model
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -54,16 +56,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -119,7 +121,7 @@ class OpenAIClientManager:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Closes the LLM client"""
         global client
         if client is not None:
@@ -433,7 +435,7 @@ def download_spacy_model(model_name: str) -> None:
         print(f"{model_name} is already installed.")
 
 
-def extract_event_date(doc_question) -> Optional[str]:
+def extract_event_date(doc_question: Doc) -> Optional[str]:
     """
     Extracts the event date from the event question if present.
 
@@ -453,7 +455,8 @@ def extract_event_date(doc_question) -> Optional[str]:
 
     # If event date not formatted as YMD or not found, return None
     try:
-        datetime.strptime(event_date_ymd, "%Y-%m-%d")
+        if event_date_ymd is not None:
+            datetime.strptime(event_date_ymd, "%Y-%m-%d")
     except (ValueError, TypeError):
         return None
     else:
@@ -564,7 +567,7 @@ def get_urls_from_queries(
     return list(results)
 
 
-def standardize_date(date_text):
+def standardize_date(date_text: str) -> Optional[str]:
     """
     Standardizes a given date string to the format 'YYYY-MM-DD' or 'MM-DD' if possible.
 
@@ -606,8 +609,11 @@ def standardize_date(date_text):
 
 
 def get_context_around_isolated_event_date(
-    doc_text, event_date_ymd, len_sentence_threshold, max_context=50
-):
+    doc_text: Doc,
+    event_date_ymd: str,
+    len_sentence_threshold: int,
+    max_context: int = 50,
+) -> List:
     """
     Extract sentences around isolated dates within the text.
 
@@ -708,7 +714,7 @@ def get_context_around_isolated_event_date(
     return contexts_list
 
 
-def concatenate_short_sentences(sentences, len_sentence_threshold):
+def concatenate_short_sentences(sentences: List, len_sentence_threshold: int) -> List:
     modified_sentences = []
     i = 0
     while i < len(sentences):
@@ -733,9 +739,9 @@ def concatenate_short_sentences(sentences, len_sentence_threshold):
 
 def extract_similarity_scores(
     text: str,
-    query_emb,
+    query_emb: Any,
     event_date: str,
-    nlp,
+    nlp: Any,
     date: str,
 ) -> List[Tuple[str, float, str]]:
     """
@@ -814,7 +820,7 @@ def extract_similarity_scores(
     return sentence_similarity_date_tuples
 
 
-def get_date(soup):
+def get_date(soup: BeautifulSoup) -> str:
     """
     Retrieves the release and modification dates from the soup object containing the HTML tree.
 
@@ -833,18 +839,24 @@ def get_date(soup):
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            modified_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, list):
+                modified_date = " ".join(content)
+            else:
+                modified_date = str(content)
 
     # If not found, then look for release or publication date
     for name in RELEASE_DATE_NAMES:
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            release_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, list):
+                release_date = " ".join(content)
+            else:
+                release_date = str(content)
 
     # flake8: noqa: E800
     ## Temporarily deactivated
@@ -860,9 +872,9 @@ def get_date(soup):
 
 def extract_sentences(
     html: str,
-    query_emb,
+    query_emb: Any,
     event_date: str,
-    nlp,
+    nlp: Any,
 ) -> List[Tuple[str, float, str]]:
     """
     Extract relevant information from HTML string.
@@ -918,7 +930,7 @@ def extract_sentences(
 
 def process_in_batches(
     urls: List[str], batch_size: int = 15, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """
     Process URLs in batches using a generator and thread pool executor.
 
@@ -990,7 +1002,7 @@ def process_in_batches(
 def extract_and_sort_sentences(
     urls: List[str],
     event_question: str,
-    nlp,
+    nlp: Any,
 ) -> List[Tuple[str, float, str]]:
     """
     Extract texts from a list of URLs using Spacy models.
@@ -1034,7 +1046,7 @@ def extract_and_sort_sentences(
                 extracted_sentences = extract_sentences(
                     html=result.text,
                     query_emb=query_emb,
-                    event_date=event_date,
+                    event_date=event_date,  # type: ignore
                     nlp=nlp,
                 )
 
@@ -1109,7 +1121,7 @@ def fetch_additional_information(
     max_add_words: int,
     google_api_key: str,
     google_engine: str,
-    nlp,
+    nlp: Any,
     engine: str = "gpt-4o-2024-08-06",
     temperature: float = 0.5,
     max_compl_tokens: int = 500,
@@ -1130,7 +1142,8 @@ def fetch_additional_information(
     Returns:
         str: The relevant information fetched from all the URLs concatenated.
     """
-
+    if not client:
+        return "Client not initialized"
     # Create URL query prompt
     url_query_prompt = URL_QUERY_PROMPT.format(event_question=event_question)
 
@@ -1183,7 +1196,7 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
 
@@ -1205,6 +1218,9 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         )
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
 
+        if not client:
+            raise RuntimeError("Client not initialized")
+
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"TOOL {tool} is not supported.")
 
@@ -1217,9 +1233,10 @@ def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
         print(f"ENGINE: {engine}")
 
         # Extract the event question from the prompt
-        event_question = re.search(r"\"(.+?)\"", prompt).group(1)
-        if not event_question:
+        event_question_match = re.search(r"\"(.+?)\"", prompt)
+        if not event_question_match:
             raise ValueError("No event question found in prompt.")
+        event_question = event_question_match.group(1)
 
         # Get the tiktoken base encoding
         enc = tiktoken.get_encoding("cl100k_base")

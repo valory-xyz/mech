@@ -167,10 +167,11 @@ REPORT_PROMPT_TEMPLATE = """
     Use markdown syntax. Include as much relevant information as possible and try not to summarize.
     """
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -179,16 +180,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -265,7 +266,7 @@ class WebSearchResult(BaseModel):
     relevancy: float
     query: str
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Any) -> Any:
         """Retrieves the value of an attribute from the object using the attribute name."""
         return getattr(self, item)
 
@@ -278,7 +279,7 @@ class WebScrapeResult(BaseModel):
     title: str
     content: str
 
-    def __getitem__(self, item):
+    def __getitem__(self, item: Any) -> Any:
         """Retrieves the value of an attribute from the object using the attribute name."""
         return getattr(self, item)
 
@@ -354,7 +355,7 @@ def scrape_results(results: list[WebSearchResult]) -> list[WebScrapeResult]:
     return scraped
 
 
-def web_search(query: str, api_key: str, max_results=5) -> list[WebSearchResult]:
+def web_search(query: str, api_key: str, max_results: int = 5) -> list[WebSearchResult]:
     """Performs a web search using the Tavily API and returns search results."""
     tavily = TavilyClient(api_key=api_key)
     response = tavily.search(
@@ -378,7 +379,7 @@ def web_search(query: str, api_key: str, max_results=5) -> list[WebSearchResult]
 
 
 def search(
-    queries: list[str], api_key: str, filter=lambda x: True
+    queries: list[str], api_key: str, filter: Callable[[Any], bool] = lambda x: True
 ) -> list[tuple[str, WebSearchResult]]:
     """Performs parallel web searches for multiple queries and filters the results."""
     results: list[list[WebSearchResult]] = []
@@ -403,7 +404,9 @@ def search(
 
 
 def create_embeddings_from_results(
-    results: list[WebScrapeResult], text_splitter, api_key: str
+    results: list[WebScrapeResult],
+    text_splitter: RecursiveCharacterTextSplitter,
+    api_key: str,
 ) -> Collection:
     """Creates embeddings from web scrape results and stores them in a collection."""
     client = EphemeralClient()
@@ -415,7 +418,7 @@ def create_embeddings_from_results(
         embedding_function=openai_ef,
         metadata={"hnsw:space": "cosine"},
     )
-    texts = []
+    texts: list = []
     metadatas = []
 
     for scrape_result in results:
@@ -591,7 +594,7 @@ def make_prediction(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     prompt = kwargs["prompt"]

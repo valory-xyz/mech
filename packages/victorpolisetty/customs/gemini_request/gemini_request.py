@@ -42,7 +42,7 @@ def count_tokens(text: str) -> int:
     return genai.count_message_tokens(prompt=text)
 
 
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
 
     api_key = kwargs["api_keys"]["gemini"]

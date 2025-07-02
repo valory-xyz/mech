@@ -31,10 +31,11 @@ class CorcelAPIException(Exception):
     pass
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -43,16 +44,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except CorcelAPIException:
                 # try with a new key again
@@ -121,7 +122,7 @@ AVAILABLE_TOOLS = ["corcel-prediction", "corcel-completion"]
 DEFAULT_VALUES = {"model": "llama-3", "temperature": 0.1, "max_tokens": 500}
 
 
-def send_corcel_request(api_key: str, prompt: str, **kwargs) -> str:
+def send_corcel_request(api_key: str, prompt: str, **kwargs: Any) -> str:
     """Makes a request to Corcel API"""
 
     payload = {
@@ -176,7 +177,7 @@ def response_post_process(response: str, tool_name: str) -> str:
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
 
     api_key = kwargs["api_keys"]["corcel"]

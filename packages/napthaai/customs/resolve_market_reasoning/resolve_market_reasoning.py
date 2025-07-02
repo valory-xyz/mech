@@ -44,10 +44,11 @@ from tiktoken import encoding_for_model
 client: Optional[OpenAI] = None
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -56,16 +57,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -124,7 +125,7 @@ class OpenAIClientManager:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Closes the LLM client"""
         global client
         if client is not None:
@@ -217,7 +218,7 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
             OpenAISchema: The instance of the class
         """
 
-        message = completion.choices[0].message
+        message = completion.choices[0].message  # type: ignore
 
         return cls.model_validate_json(
             message.function_call.arguments,
@@ -412,8 +413,8 @@ def multi_queries(
     prompt: str,
     engine: str,
     num_queries: int,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-) -> List[str]:
+    counter_callback: Optional[Callable] = None,
+) -> Tuple[List[str], Optional[Callable]]:
     """Generate multiple queries for fetching information from the web."""
 
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -489,8 +490,8 @@ def get_urls_from_queries(
 def get_dates(
     client: OpenAI,
     text: str,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-):
+    counter_callback: Optional[Callable] = None,
+) -> Tuple[str, Optional[Callable]]:
     """Get the date from the extracted text"""
     adjusted_text = adjust_additional_information(
         prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo-0125"
@@ -524,14 +525,16 @@ def get_dates(
     return "Date not available", None
 
 
-def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
+def extract_text_from_pdf(
+    url: str, num_words: Optional[int] = None
+) -> Optional[Document]:
     """Extract text from a PDF document at the given URL."""
     try:
         response = requests.get(url, timeout=20)
         response.raise_for_status()
 
         if "application/pdf" not in response.headers.get("Content-Type", ""):
-            return ValueError("URL does not point to a PDF document")
+            raise ValueError("URL does not point to a PDF document")
 
         with BytesIO(response.content) as pdf_file:
             reader = PyPDF2.PdfReader(pdf_file)
@@ -551,8 +554,8 @@ def extract_text(
     client: OpenAI,
     html: str,
     num_words: Optional[int] = None,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-) -> str:
+    counter_callback: Optional[Callable] = None,
+) -> Tuple[Document, Optional[Callable]]:
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
     text = text = md(text, heading_style="ATX")
@@ -566,11 +569,11 @@ def extract_text(
 def extract_texts(
     urls: List[str],
     client: OpenAI,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-) -> Tuple[List[str], Dict[str, str]]:
+    counter_callback: Optional[Callable] = None,
+) -> Tuple[List[Document], Optional[Callable]]:
     """Extract texts from URLs"""
     extracted_texts = []
-    for batch in process_in_batches(urls=urls):
+    for batch in process_in_batches(urls=urls) or []:
         for future, url in batch:
             try:
                 if url.lower().endswith(".pdf"):
@@ -579,19 +582,25 @@ def extract_texts(
                         extracted_texts.append(result)
                     continue
                 result = future.result()
-                if result.status_code != 200:
+                if not result:
+                    print(f"No result returned for {url}")
                     continue
-                # first 4 bytes is pdf
-                if result.content[:4] == b"%PDF":
-                    result = extract_text_from_pdf(url)
-                    if result:
-                        extracted_texts.append(result)
-                    continue
-                doc, counter_callback = extract_text(
-                    html=result.text, client=client, counter_callback=counter_callback
-                )
-                doc.url = url
-                extracted_texts.append(doc)
+                if isinstance(result, requests.Response):
+                    if result.status_code != 200:
+                        continue
+                    # first 4 bytes is pdf
+                    if result.content[:4] == b"%PDF":
+                        result = extract_text_from_pdf(url)
+                        if result:
+                            extracted_texts.append(result)
+                        continue
+                    doc, counter_callback = extract_text(
+                        html=result.text,
+                        client=client,
+                        counter_callback=counter_callback,
+                    )
+                    doc.url = url
+                    extracted_texts.append(doc)
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
@@ -601,7 +610,7 @@ def extract_texts(
 
 def process_in_batches(
     urls: List[str], window: int = 5, timeout: int = 50
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
@@ -613,7 +622,9 @@ def process_in_batches(
             yield futures
 
 
-def recursive_character_text_splitter(text, max_tokens, overlap):
+def recursive_character_text_splitter(
+    text: str, max_tokens: int, overlap: int
+) -> List[str]:
     """Splits the input text into chunks of size `max_tokens`, with an overlap between chunks."""
     if len(text) <= max_tokens:
         return [text]
@@ -625,6 +636,9 @@ def recursive_character_text_splitter(text, max_tokens, overlap):
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents."""
+    if not client:
+        raise RuntimeError("Client not initialized")
+
     for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
         batch_end = batch_start + EMBEDDING_BATCH_SIZE
         batch = [doc.text for doc in split_docs[batch_start:batch_end]]
@@ -644,6 +658,8 @@ def find_similar_chunks(
     query: str, docs_with_embeddings: List[Document], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
+    if not client:
+        raise RuntimeError("Client not initialized")
 
     query_embedding = (
         client.embeddings.create(
@@ -667,9 +683,13 @@ def fetch_additional_information(
     engine: str,
     google_api_key: Optional[str],
     google_engine_id: Optional[str],
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    counter_callback: Optional[Callable] = None,
 ) -> Tuple:
     """Fetch additional information from the web."""
+    if not google_api_key:
+        raise RuntimeError("Google API key not found")
+    if not google_engine_id:
+        raise RuntimeError("Google Engine Id not found")
 
     # generate multiple queries for fetching information from the web
     queries, counter_callback = multi_queries(
@@ -768,7 +788,7 @@ def adjust_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
@@ -780,6 +800,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
+        if not client:
+            raise RuntimeError("Client not initialized")
 
         engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")

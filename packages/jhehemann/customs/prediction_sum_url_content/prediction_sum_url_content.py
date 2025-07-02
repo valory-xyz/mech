@@ -32,22 +32,24 @@ import openai
 import requests
 import spacy
 import tiktoken
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup, NavigableString, Tag
 from dateutil import parser
 from googleapiclient.discovery import build
 from openai import OpenAI
 from requests import Session
 from sentence_transformers import SentenceTransformer, util
+from spacy.tokens import Doc
 from tiktoken import encoding_for_model
 from tqdm import tqdm
 
 
 client: Optional[OpenAI] = None
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -56,16 +58,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -118,7 +120,7 @@ class OpenAIClientManager:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Closes the LLM client"""
         global client
         if client is not None:
@@ -408,7 +410,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     return [result["link"] for result in search["items"]]
 
 
-def extract_event_date(doc_question) -> str:
+def extract_event_date(doc_question: Doc) -> Optional[str]:
     """
     Extracts the event date from the event question if present.
 
@@ -427,7 +429,7 @@ def extract_event_date(doc_question) -> str:
             event_date_ymd = standardize_date(ent.text)
 
     # If event date not formatted as YMD or not found, return None
-    if not datetime.strptime(event_date_ymd, "%Y-%m-%d") or event_date_ymd is None:
+    if event_date_ymd is None or not datetime.strptime(event_date_ymd, "%Y-%m-%d"):
         return None
     else:
         return event_date_ymd
@@ -541,7 +543,7 @@ def get_urls_from_queries(
     return list(results)
 
 
-def standardize_date(date_text):
+def standardize_date(date_text: str) -> Optional[str]:
     """
     Standardizes a given date string to the format 'YYYY-MM-DD' or 'MM-DD' if possible.
 
@@ -583,8 +585,11 @@ def standardize_date(date_text):
 
 
 def get_context_around_isolated_event_date(
-    doc_text, event_date_ymd, len_sentence_threshold, max_context=50
-):
+    doc_text: Doc,
+    event_date_ymd: str,
+    len_sentence_threshold: int,
+    max_context: int = 50,
+) -> List:
     """
     Extract sentences around isolated dates within the text.
 
@@ -686,7 +691,7 @@ def get_context_around_isolated_event_date(
 
 
 def extract_relevant_information(
-    text: str, query_emb, event_date: str, model, nlp, max_words: int
+    text: str, query_emb: Any, event_date: str, model: Any, nlp: Any, max_words: int
 ) -> str:
     """
     Extract relevant information from website text based on a given event question.
@@ -707,7 +712,7 @@ def extract_relevant_information(
     len_sentence_threshold = 5
     num_sentences_threshold = 1000
     sentences = []
-    event_date_sentences = []
+    event_date_sentences: List = []
     seen = set()
 
     # Truncate text for performance optimization
@@ -765,7 +770,7 @@ def extract_relevant_information(
     return output
 
 
-def get_date(soup):
+def get_date(soup: BeautifulSoup) -> str:
     """
     Retrieves the release and modification dates from the soup object containing the HTML tree.
 
@@ -784,34 +789,44 @@ def get_date(soup):
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            modified_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, list):
+                modified_date = " ".join(content)
+            else:
+                modified_date = str(content)
 
     # If not found, then look for release or publication date
     for name in RELEASE_DATE_NAMES:
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            release_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, list):
+                release_date = " ".join(content)
+            else:
+                release_date = str(content)
 
     # Fallback to using the first time tag if neither release nor modified dates are found
     if release_date == "unknown" and modified_date == "unknown":
         time_tag = soup.find("time")
-        if time_tag:
-            release_date = time_tag.get("datetime", "")
+        if time_tag and isinstance(time_tag, Tag):
+            datetime_content = time_tag.get("datetime", "")
+            if isinstance(datetime_content, list):
+                release_date = " ".join(datetime_content)
+            else:
+                release_date = str(datetime_content)
 
     return f"({release_date}, {modified_date})"
 
 
 def extract_text(
     html: str,
-    query_emb,
+    query_emb: Any,
     event_date: str,
-    model,
-    nlp,
+    model: Any,
+    nlp: Any,
     max_words: int,
 ) -> str:
     """
@@ -872,7 +887,7 @@ def extract_text(
 
 def process_in_batches(
     urls: List[str], batch_size: int = 15, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """
     Process URLs in batches using a generator and thread pool executor.
 
@@ -945,7 +960,7 @@ def extract_texts(
     urls: List[str],
     event_question: str,
     max_words_per_url: int,
-    nlp,
+    nlp: Any,
 ) -> List[str]:
     """
     Extract texts from a list of URLs using BERT and Spacy.
@@ -1040,7 +1055,7 @@ def fetch_additional_information(
     max_add_words: int,
     google_api_key: str,
     google_engine: str,
-    nlp,
+    nlp: Any,
     engine: str = "gpt-4o-2024-08-06",
     temperature: float = 1.0,
     max_compl_tokens: int = 500,
@@ -1061,14 +1076,15 @@ def fetch_additional_information(
     Returns:
         str: The relevant information fetched from all the URLs concatenated.
     """
-
+    if not client:
+        return "Client not initialized"
     # Create URL query prompt
     url_query_prompt = URL_QUERY_PROMPT.format(event_question=event_question)
 
     # Perform moderation check
     moderation_result = client.moderations.create(input=url_query_prompt)
     if moderation_result.results[0].flagged:
-        return "Moderation flagged the prompt as in violation of terms.", None
+        return "Moderation flagged the prompt as in violation of terms."
 
     # Create messages for the OpenAI engine
     messages = [
@@ -1120,7 +1136,7 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
 
@@ -1136,6 +1152,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         Tuple[str, Optional[Dict[str, Any]]]: The generated content and any additional data.
     """
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        if not client:
+            raise RuntimeError("Client not initialized")
+
         tool = kwargs["tool"]
         prompt = kwargs["prompt"]
         max_compl_tokens = kwargs.get(
@@ -1160,9 +1179,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         print(f"ENGINE: {engine}")
 
         # Extract the event question from the prompt
-        event_question = re.search(r"\"(.+?)\"", prompt).group(1)
-        if not event_question:
+        event_question_match = re.search(r"\"(.+?)\"", prompt)
+        if not event_question_match:
             raise ValueError("No event question found in prompt.")
+        event_question = event_question_match.group(1)
         print(f"EVENT_QUESTION: {event_question}")
         print()
 
@@ -1209,6 +1229,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         # Extract event date and format it to ISO 8601 with UTC timezone and 23:59:59 time
         doc_question = nlp(event_question)
         raw_event_date = extract_event_date(doc_question)
+        if raw_event_date is None:
+            raise ValueError("Could not extract a valid event date.")
         parsed_event_date = datetime.strptime(raw_event_date, "%Y-%m-%d")
         final_event_date = parsed_event_date.replace(
             hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc

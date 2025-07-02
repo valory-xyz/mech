@@ -22,7 +22,6 @@ import functools
 import json
 import re
 import time
-from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from itertools import islice
@@ -43,10 +42,11 @@ from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import encoding_for_model
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
@@ -55,16 +55,16 @@ def with_key_rotation(func: Callable):
     """
 
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -106,9 +106,7 @@ def with_key_rotation(func: Callable):
 class LLMClientManager:
     """Client context manager for LLMs."""
 
-    def __init__(
-        self, api_keys: List, model: str = None, embedding_provider: str = None
-    ):
+    def __init__(self, api_keys: Dict, model: str, embedding_provider: str):
         """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.embedding_provider = embedding_provider
@@ -119,7 +117,7 @@ class LLMClientManager:
         else:
             self.llm_provider = "openrouter"
 
-    def __enter__(self):
+    def __enter__(self) -> List:
         """Initializes and returns LLM and embedding clients."""
         clients = []
         global client
@@ -132,7 +130,7 @@ class LLMClientManager:
             clients.append(client_embedding)
         return clients
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Closes the LLM client"""
         global client
         if client is not None:
@@ -143,7 +141,11 @@ class LLMClientManager:
 class Usage:
     """Usage class."""
 
-    def __init__(self, prompt_tokens=None, completion_tokens=None):
+    def __init__(
+        self,
+        prompt_tokens: Optional[Any] = None,
+        completion_tokens: Optional[Any] = None,
+    ):
         """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
@@ -168,17 +170,17 @@ class LLMClient:
         if self.llm_provider == "anthropic":
             import anthropic
 
-            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
+            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])  # type: ignore
         if self.llm_provider == "openai":
             import openai
 
-            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+            self.client = openai.OpenAI(api_key=self.api_keys["openai"])  # type: ignore
         if self.llm_provider == "openrouter":
             import openai
 
             self.client = openai.OpenAI(
                 base_url="https://openrouter.ai/api/v1",
-                api_key=self.api_keys["openrouter"],
+                api_key=self.api_keys["openrouter"],  # type: ignore
             )
 
     def completions(
@@ -189,9 +191,9 @@ class LLMClient:
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
         n: Optional[int] = None,
-        stop=None,
+        stop: Any = None,
         max_tokens: Optional[float] = None,
-    ):
+    ) -> Optional[LLMResponse]:
         """Generate a completion from the specified LLM provider using the given model and messages."""
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
@@ -245,7 +247,9 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
-    def embeddings(self, model, input):
+        return None
+
+    def embeddings(self, model: Any, input: Any) -> Any:
         """Get embeddings for the split documents: clean, truncate, then batch by token count."""
         if self.llm_provider == "openai" or self.llm_provider == "openrouter":
             response = self.client.embeddings.create(
@@ -314,8 +318,8 @@ ALLOWED_TOOLS = [
     "prediction-request-reasoning-claude",
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
-DEFAULT_NUM_URLS = defaultdict(lambda: 3)
-DEFAULT_NUM_QUERIES = defaultdict(lambda: 3)
+DEFAULT_NUM_URLS = 3
+DEFAULT_NUM_QUERIES = 3
 SPLITTER_CHUNK_SIZE = 300
 SPLITTER_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-3-large"
@@ -468,8 +472,8 @@ def parser_prediction_response(response: str) -> str:
 
     for key in tags:
         try:
-            value = response.split(f"<{key}>")[1].split(f"</{key}>")[0].strip()
-            value = float(value)
+            value_str = response.split(f"<{key}>")[1].split(f"</{key}>")[0].strip()
+            value = float(value_str)
             results[key] = value
         except Exception:
             print("Not a valid answer from the model")
@@ -483,11 +487,14 @@ def multi_queries(
     prompt: str,
     model: str,
     num_queries: int,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
-) -> List[str]:
+    counter_callback: Optional[Callable] = None,
+    temperature: float = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
+) -> Tuple[List[str], Optional[Callable]]:
     """Generate multiple queries for fetching information from the web."""
+    if not client:
+        raise RuntimeError("Client not initialized")
+
     url_query_prompt = URL_QUERY_PROMPT.format(
         USER_PROMPT=prompt, NUM_QUERIES=num_queries
     )
@@ -503,6 +510,8 @@ def multi_queries(
         temperature=temperature,
         max_tokens=max_tokens,
     )
+    if not response or response.content is None:
+        raise RuntimeError("Response not found")
     if counter_callback:
         counter_callback(
             input_tokens=response.usage.prompt_tokens,
@@ -551,14 +560,16 @@ def get_urls_from_queries(
     return unique_results
 
 
-def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
+def extract_text_from_pdf(
+    url: str, num_words: Optional[int] = None
+) -> Optional[Document]:
     """Extract text from a PDF document at the given URL."""
     try:
         response = requests.get(url, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
 
         if "application/pdf" not in response.headers.get("Content-Type", ""):
-            return ValueError("URL does not point to a PDF document")
+            raise ValueError("URL does not point to a PDF document")
 
         with BytesIO(response.content) as pdf_file:
             reader = PyPDF2.PdfReader(pdf_file)
@@ -578,7 +589,7 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
 def extract_text(
     html: str,
     num_words: Optional[int] = None,
-) -> str:
+) -> Optional[Document]:
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
 
@@ -600,20 +611,26 @@ def extract_text(
 def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Document]:
     """Extract texts from URLs with improved error handling, excluding failed URLs."""
     extracted_texts = []
-    for batch in process_in_batches(urls=urls):
+    for batch in process_in_batches(urls=urls) or []:
         for future, url in batch:
             if future is None:
                 continue
             try:
                 result = future.result()
-                if result.status_code == 200:
-                    # Check if URL ends with .pdf or content starts with %PDF
-                    if url.endswith(".pdf") or result.content[:4] == b"%PDF":
-                        doc = extract_text_from_pdf(url, num_words=num_words)
-                    else:
-                        doc = extract_text(html=result.text, num_words=num_words)
-                    doc.url = url
-                    extracted_texts.append(doc)
+                if not result:
+                    print(f"No result returned for {url}")
+                    continue
+                if isinstance(result, requests.Response):
+                    if result.status_code == 200:
+                        # Check if URL ends with .pdf or content starts with %PDF
+                        if url.endswith(".pdf") or result.content[:4] == b"%PDF":
+                            doc = extract_text_from_pdf(url, num_words=num_words)
+                        else:
+                            doc = extract_text(html=result.text, num_words=num_words)
+
+                        if doc:
+                            doc.url = url
+                            extracted_texts.append(doc)
             except Exception as e:
                 print(f"Error processing {url}: {e}")
                 continue
@@ -626,8 +643,9 @@ def process_in_batches(
     timeout: int = HTTP_TIMEOUT,
     max_redirects: int = HTTP_MAX_REDIRECTS,
     retries: int = HTTP_MAX_RETIES,
-) -> Generator[None, None, List[Tuple[Optional[Future], str]]]:
+) -> Generator[List[Tuple[Optional[Future], str]], None, None]:
     """Iter URLs in batches with improved error handling and retry mechanism."""
+    session: requests.Session
     with ThreadPoolExecutor() as executor, requests.Session() as session:
         session.max_redirects = max_redirects
         for i in range(0, len(urls), window):
@@ -649,7 +667,9 @@ def process_in_batches(
             yield futures
 
 
-def recursive_character_text_splitter(text, max_tokens, overlap):
+def recursive_character_text_splitter(
+    text: str, max_tokens: int, overlap: int
+) -> List[str]:
     """Splits the input text into chunks of size `max_tokens`, with an overlap between chunks."""
     if len(text) <= max_tokens:
         return [text]
@@ -691,13 +711,15 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents: clean, truncate, then batch by token count."""
+    if not client_embedding:
+        raise RuntimeError("Embeddings not intialized")
     # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
     for doc in split_docs:
         cleaned = clean_text(doc.text)
         doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
     i = 0
     while i < len(split_docs):
-        current_batch_docs = []
+        current_batch_docs: List = []
         current_batch_tokens = 0
         while i < len(split_docs):
             doc = split_docs[i]
@@ -728,6 +750,9 @@ def find_similar_chunks(
     query: str, docs_with_embeddings: List[Document], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
+    if not client_embedding:
+        raise RuntimeError("Embeddings not intialized")
+
     query_embedding = (
         client_embedding.embeddings(
             model=EMBEDDING_MODEL,
@@ -749,9 +774,11 @@ def multi_questions_response(
     model: str,
     temperature: float = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
     max_tokens: int = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-) -> List[str]:
+    counter_callback: Optional[Callable] = None,
+) -> Tuple[List[str], Optional[Callable]]:
     """Generate multiple questions for fetching information from the web."""
+    if not client:
+        raise RuntimeError("Client not initialized")
     try:
         multi_questions_prompt = MULTI_QUESTIONS_PROMPT.format(USER_INPUT=prompt)
         messages = [
@@ -765,6 +792,8 @@ def multi_questions_response(
             temperature=temperature,
             max_tokens=max_tokens,
         )
+        if not response or response.content is None:
+            raise RuntimeError("Response not found")
 
         if counter_callback:
             counter_callback(
@@ -791,7 +820,7 @@ def reciprocal_rank_refusion(similar_chunks: List[Document], k: int) -> List[Doc
     for rank, doc in enumerate(similar_chunks):
         doc_text = doc.text
         if doc_text not in fused_chunks:
-            fused_chunks[doc_text] = (doc, 0)
+            fused_chunks[doc_text] = (doc, 0.0)
         fused_chunks[doc_text] = (doc, fused_chunks[doc_text][1] + 1 / (rank + 60))
 
     sorted_fused_chunks = sorted(
@@ -809,8 +838,11 @@ def do_reasoning_with_retry(
     retries: int = DEFAULT_RETRIES,
     delay: int = DEFAULT_DELAY,
     counter_callback: Optional[Callable] = None,
-):
+) -> Tuple[str, Optional[Callable]]:
     """Attempt to do reasoning with retries on failure."""
+    if not client:
+        raise RuntimeError("Client not intialized")
+
     attempt = 0
     tool_errors = []
     while attempt < retries:
@@ -824,6 +856,8 @@ def do_reasoning_with_retry(
                 timeout=90,
                 stop=None,
             )
+            if not response_reasoning or response_reasoning.content is None:
+                return "", counter_callback
 
             if counter_callback is not None:
                 counter_callback(
@@ -858,14 +892,18 @@ def fetch_additional_information(
     model: str,
     google_api_key: Optional[str],
     google_engine_id: Optional[str],
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    source_links: Optional[List[str]] = None,
-    num_urls: Optional[int] = DEFAULT_NUM_URLS,
-    num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
+    counter_callback: Optional[Callable] = None,
+    source_links: Optional[Dict] = None,
+    num_urls: int = DEFAULT_NUM_URLS,
+    num_queries: int = DEFAULT_NUM_QUERIES,
+    temperature: float = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
 ) -> Tuple[str, List[str], Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information from the web."""
+    if not google_api_key:
+        raise RuntimeError("Google API key not found")
+    if not google_engine_id:
+        raise RuntimeError("Google Engine Id not found")
 
     # generate multiple queries for fetching information from the web
     try:
@@ -902,8 +940,9 @@ def fetch_additional_information(
         docs = []
         for url, content in islice(source_links.items(), num_urls or len(source_links)):
             doc = extract_text(html=content)
-            doc.url = url
-            docs.append(doc)
+            if doc:
+                doc.url = url
+                docs.append(doc)
 
     # Remove None values from the list
     docs = [doc for doc in docs if doc]
@@ -980,10 +1019,13 @@ def extract_question(prompt: str) -> str:
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     model = kwargs.get("model")
+    if model is None:
+        raise ValueError("Model must be specified in kwargs")
+
     if "claude" in tool:  # maintain backwards compatibility
         model = "claude-3-5-sonnet-20240620"
     print(f"MODEL: {model}")
@@ -991,12 +1033,15 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         prompt = extract_question(kwargs["prompt"])
         max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[model]["default_max_tokens"])
         temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
-        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
-        num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES[tool])
+        num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS)
+        num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES)
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
+
+        if not client:
+            raise RuntimeError("Client not initialized")
 
         # Make sure the model is supported
         if model not in ALLOWED_MODELS:
@@ -1060,7 +1105,17 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             temperature=temperature,
             max_tokens=max_tokens,
         )
+        if not response_prediction or response_prediction.content is None:
+            return (
+                "Response Prediction Not Valid",
+                prediction_prompt,
+                None,
+                counter_callback,
+            )
+
         prediction = parser_prediction_response(response_prediction.content)
+        if not prediction:
+            return "Prediction Not Valid", prediction_prompt, None, counter_callback
 
         if counter_callback:
             counter_callback(
