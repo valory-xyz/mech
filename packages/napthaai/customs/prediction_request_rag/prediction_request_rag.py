@@ -791,7 +791,6 @@ def fetch_additional_information(
         split_docs = split_docs[:MAX_NR_DOCS]
     # Embed the documents
     docs_with_embeddings = get_embeddings(split_docs)
-    print(f"Docs with embeddings: {len(docs_with_embeddings)}")
 
     # Find similar chunks
     similar_chunks = find_similar_chunks(

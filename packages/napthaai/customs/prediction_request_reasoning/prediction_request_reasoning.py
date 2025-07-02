@@ -960,7 +960,6 @@ def fetch_additional_information(
         split_docs = split_docs[:MAX_NR_DOCS]
     # Embed the documents
     docs_with_embeddings = get_embeddings(split_docs)
-    print(f"Docs with embeddings: {len(docs_with_embeddings)}")
 
     # multi questions prompt
     questions, counter_callback = multi_questions_response(
@@ -1061,7 +1060,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         # Do reasoning
         messages = create_messages(user_content=reasoning_prompt)
-        print("Sending reasoning request to the model")
 
         reasoning, counter_callback = do_reasoning_with_retry(
             model=model,
@@ -1080,7 +1078,6 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         # Make the prediction
         messages = create_messages(user_content=prediction_prompt)
-        print("Sending prediction request to the model")
 
         response_prediction = client.completions(
             model=model,
