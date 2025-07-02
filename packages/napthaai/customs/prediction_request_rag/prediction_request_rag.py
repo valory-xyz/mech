@@ -229,21 +229,18 @@ class LLMClient:
             return response
 
     def embeddings(self, model, input):
-        if self.llm_provider == "anthropic":
+        if self.llm_provider not in ["openai", "openrouter"]:
             print("Only OpenAI embeddings supported currently.")
             return None
 
-        if self.llm_provider == "openai" or self.llm_provider == "openrouter":
-            try:
-                response = self.client.embeddings.create(
-                    model=EMBEDDING_MODEL,
-                    input=input,
-                )
-                return response
-            except Exception as e:
-                raise ValueError(
-                    f"Error while generating the embeddings for the docs {e}"
-                )
+        try:
+            response = self.client.embeddings.create(
+                model=EMBEDDING_MODEL,
+                input=input,
+            )
+            return response
+        except Exception as e:
+            raise ValueError(f"Error while generating the embeddings for the docs {e}")
 
 
 client: Optional[LLMClient] = None
