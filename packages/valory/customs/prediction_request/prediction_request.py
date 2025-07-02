@@ -41,7 +41,7 @@ from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
-from tiktoken import encoding_for_model
+from tiktoken import encoding_for_model, get_encoding
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
@@ -191,23 +191,7 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.output_tokens
             return response
 
-        if self.llm_provider == "openai":
-            response_provider = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                n=1,
-                timeout=150,
-                stop=None,
-            )
-            response = LLMResponse()
-            response.content = response_provider.choices[0].message.content
-            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
-            response.usage.completion_tokens = response_provider.usage.completion_tokens
-            return response
-
-        if self.llm_provider == "openrouter":
+        if self.llm_provider in ["openai", "openrouter"]:
             # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
             # transform = [] # to desactivate prompt compression
             response_provider = self.client.chat.completions.create(
@@ -229,9 +213,19 @@ class LLMClient:
 client: Optional[LLMClient] = None
 
 
+def get_model_encoding(model: str):
+    """Get the appropriate encoding for a model."""
+    # Workaround since tiktoken does not have support yet for gpt4.1
+    # https://github.com/openai/tiktoken/issues/395
+    if model == "gpt-4.1-2025-04-14":
+        return get_encoding("o200k_base")
+
+    return encoding_for_model(model)
+
+
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    enc = encoding_for_model(model)
+    enc = get_model_encoding(model)
     return len(enc.encode(text))
 
 
@@ -314,6 +308,8 @@ DEFAULT_VOCAB = "en_core_web_sm"
 COMPLETION_RETRIES = 3
 COMPLETION_DELAY = 2
 
+
+SYSTEM_PROMPT = "You are an expert market forecaster. Your primary function is to generate accurate and insightful predictions in the requested format"
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
 for a given event. You are provided with an input under the label "USER_PROMPT". You must follow the instructions
@@ -626,7 +622,7 @@ def generate_prediction_with_retry(
 
 
 def fetch_additional_information(
-    prompt: str,
+    user_prompt: str,
     engine: str,
     temperature: float,
     max_tokens: int,
@@ -638,7 +634,7 @@ def fetch_additional_information(
     source_links: Optional[List[str]] = None,
 ) -> Tuple[str, Any]:
     """Fetch additional information."""
-    url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
+    url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=user_prompt)
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": url_query_prompt},
@@ -654,7 +650,7 @@ def fetch_additional_information(
             counter_callback=counter_callback,
         )
     except Exception as e:
-        json_data = {"queries": [prompt]}
+        json_data = {"queries": [user_prompt]}
 
     if not source_links:
         urls = get_urls_from_queries(
@@ -780,9 +776,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     engine = kwargs.get("model")
     if "claude" in tool:  # maintain backwards compatibility
         engine = "claude-3-5-sonnet-20240620"
-    print(f"ENGINE: {engine}")
+    print(f"ENGINE used for {tool}: {engine}")
     with LLMClientManager(kwargs["api_keys"], engine):
-        prompt = kwargs["prompt"]
+        user_prompt = kwargs["prompt"]  # question
         max_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
         )
@@ -803,9 +799,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         active_prompt = PREDICTION_PROMPT
         additional_information = ""
-        if tool.startswith("prediction-online"):
+        if tool in ["prediction-online", "claude-prediction-online"]:
             additional_information, counter_callback = fetch_additional_information(
-                prompt,
+                user_prompt,
                 engine,
                 temperature,
                 max_tokens,
@@ -829,10 +825,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         #     prompt, PREDICTION_PROMPT, additional_information, engine
         # )
         prediction_prompt = active_prompt.format(
-            user_prompt=prompt, additional_information=additional_information
+            user_prompt=user_prompt, additional_information=additional_information
         )
         messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prediction_prompt},
         ]
 
