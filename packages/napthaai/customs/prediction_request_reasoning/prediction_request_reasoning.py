@@ -227,6 +227,9 @@ class LLMClient:
             return response
 
     def embeddings(self, model, input):
+        if self.llm_provider == "anthropic":
+            print("Only OpenAI embeddings supported currently.")
+            return None
         if self.llm_provider == "openai" or self.llm_provider == "openrouter":
             try:
                 response = self.client.embeddings.create(
@@ -236,9 +239,6 @@ class LLMClient:
                 return response
             except Exception as e:
                 print(f"Error in the Embedding request: {e}")
-        else:
-            print("Only OpenAI embeddings supported currently.")
-            return None
 
 
 client: Optional[LLMClient] = None
