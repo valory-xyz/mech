@@ -238,7 +238,9 @@ class LLMClient:
                 )
                 return response
             except Exception as e:
-                print(f"Error in the Embedding request: {e}")
+                raise ValueError(
+                    f"Error while generating the embeddings for the docs {e}"
+                )
 
 
 client: Optional[LLMClient] = None
