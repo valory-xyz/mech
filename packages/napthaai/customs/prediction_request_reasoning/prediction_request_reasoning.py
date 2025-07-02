@@ -323,6 +323,7 @@ MAX_EMBEDDING_TOKENS = (
     300000 - PREDICTION_PROMPT_LENGTH - BUFFER  # Total tokens for embeddings
 )  # Maximum total tokens per embeddings batch
 MAX_NR_DOCS = 1000
+TOKENS_DISTANCE_TO_LIMIT = 200
 
 
 class Document(BaseModel):
@@ -696,7 +697,7 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
     total_tokens_count = 0
     for doc in split_docs:
         # if we are very close to the limit then break the loop
-        if MAX_EMBEDDING_TOKENS - total_tokens_count < 200:
+        if MAX_EMBEDDING_TOKENS - total_tokens_count < TOKENS_DISTANCE_TO_LIMIT:
             break
         cleaned = clean_text(doc.text)
         # TODO we could summarize instead of truncating
