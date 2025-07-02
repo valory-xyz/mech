@@ -652,15 +652,11 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
         doc.text = doc.text.strip()
         doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
         if total_tokens_count + doc.tokens > MAX_EMBEDDING_TOKENS:
-            print(
-                f"Warning: The total tokens count exceeds maximum allowed tokens per request ({MAX_EMBEDDING_TOKENS}). Removing this document."
-            )
             continue
         if doc.text:
             filtered_docs.append(doc)
             total_tokens_count += doc.tokens
-    print(f"Filtered documents count: {len(filtered_docs)}")
-    print(f"Total tokens count ={total_tokens_count}")
+
     # Process documents in batches that respect the total token limit
     processed_docs = []
     i = 0
@@ -787,7 +783,6 @@ def fetch_additional_information(
     print(f"Split Docs: {len(split_docs)}")
     if len(split_docs) > MAX_NR_DOCS:
         # truncate the split_docs to the first MAX_NR_DOCS documents
-        print(f"Truncating split_docs to the first {MAX_NR_DOCS} documents")
         split_docs = split_docs[:MAX_NR_DOCS]
     # Embed the documents
     docs_with_embeddings = get_embeddings(split_docs)
