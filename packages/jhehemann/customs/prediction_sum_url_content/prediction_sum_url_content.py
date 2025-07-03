@@ -56,8 +56,9 @@ def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
-    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
-    Retries the function on key-related exceptions until retries are exhausted.
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
     """
 
     @functools.wraps(func)
@@ -418,11 +419,11 @@ def extract_event_date(doc_question: Doc) -> Optional[str]:
     """
     Extracts the event date from the event question if present.
 
-    Args:
-        doc_question (spaCy Doc): Document text as a spaCy Doc object.
+    :param doc_question: Document text as a spaCy Doc object.
+    :type doc_question: Doc
 
-    Returns:
-        str: The event date in year-month-day format if present, otherwise None.
+    :returns: The event date in year-month-day format if present, otherwise None.
+    :rtype: str or None
     """
 
     event_date_ymd = None
@@ -448,14 +449,17 @@ def get_max_tokens_for_additional_information(
     """
     Calculates the estimated maximum number of tokens that can be consumed by the additional information string.
 
-    Args:
-        max_compl_tokens (int): The maximum number of chat completion output tokens.
-        prompt (str): The user prompt containing the event question.
-        enc (tiktoken.Encoding): The tiktoken encoding to be used.
-        safety_factor (float, optional): The safety factor to be used for prompt variations and message headers. Defaults to 1.05.
+    :param max_compl_tokens: The maximum number of chat completion output tokens.
+    :type max_compl_tokens: int
+    :param prompt: The user prompt containing the event question.
+    :type prompt: str
+    :param enc: The tiktoken encoding to be used.
+    :type enc: tiktoken.Encoding
+    :param safety_factor: The safety factor to be used for prompt variations and message headers.
+    :type safety_factor: float
 
-    Returns:
-        int: The estimated number of tokens that can be consumed by the additional information string.
+    :returns: The estimated number of tokens that can be consumed by the additional information string.
+    :rtype: int
     """
 
     # Encode the strings into tokens
@@ -477,13 +481,15 @@ def truncate_additional_information(
     """
     Truncates additional information string to a specified number of tokens using tiktoken encoding.
 
-    Args:
-        additional_informations (str): The additional information string to be truncated.
-        max_add_tokens (int): The maximum number of tokens allowed for the additional information string.
-        enc (tiktoken.Encoding): The tiktoken encoding to be used.
+    :param additional_informations: The additional information string to be truncated.
+    :type additional_informations: str
+    :param max_add_tokens: The maximum number of tokens allowed for the additional information string.
+    :type max_add_tokens: int
+    :param enc: The tiktoken encoding to be used.
+    :type enc: tiktoken.Encoding
 
-    Returns:
-    - str: The truncated additional information string.
+    :returns: The truncated additional information string.
+    :rtype: str
     """
 
     # Encode the string into tokens
@@ -504,17 +510,19 @@ def get_urls_from_queries(
     """
     Fetch unique URLs from search engine queries, limiting the number of URLs per query.
 
-    Args:
-        queries (List[str]): List of search engine queries.
-        api_key (str): API key for the search engine.
-        engine (str): Custom google search engine ID.
-        num (int, optional): Number of returned URLs per query. Defaults to 3.
+    :param queries: List of search engine queries.
+    :type queries: List[str]
+    :param api_key: API key for the search engine.
+    :type api_key: str
+    :param engine: Custom Google search engine ID.
+    :type engine: str
+    :param num: Number of returned URLs per query (optional, defaults to 3).
+    :type num: int
 
-    Raises:
-        ValueError: If the number of URLs per query exceeds the maximum allowed.
+    :raises ValueError: If the number of URLs per query exceeds the maximum allowed.
 
-    Returns:
-        List[str]: Unique list of URLs, omitting PDF and download-related URLs.
+    :returns: Unique list of URLs, omitting PDF and download-related URLs.
+    :rtype: List[str]
     """
 
     results = set()
@@ -551,14 +559,11 @@ def standardize_date(date_text: str) -> Optional[str]:
     """
     Standardizes a given date string to the format 'YYYY-MM-DD' or 'MM-DD' if possible.
 
-    Args:
-        date_text (str): The date string to be standardized.
+    :param date_text: The date string to be standardized.
+    :type date_text: str
 
-    Raises:
-        ValueError: If the date string cannot be parsed.
-
-    Returns:
-        str: The standardized date string if possible, otherwise None.
+    :returns: The standardized date string if possible, otherwise None.
+    :rtype: str or None
     """
 
     try:
@@ -596,17 +601,19 @@ def get_context_around_isolated_event_date(
     """
     Extract sentences around isolated dates within the text.
 
-    Args:
-        doc_text (spaCy Doc): Document text as a spaCy Doc object.
-        event_date_ymd (str): Event date in year-day-month format.
-        len_sentence_threshold (int): Minimum number of words required for a sentence to be considered contextful.
-        max_context (int, optional): Maximum number of words to include in the context. Defaults to 50.
+    :param doc_text: Document text as a spaCy Doc object.
+    :type doc_text: Doc
+    :param event_date_ymd: Event date in year-month-day format.
+    :type event_date_ymd: str
+    :param len_sentence_threshold: Minimum number of words required for a sentence to be considered contextful.
+    :type len_sentence_threshold: int
+    :param max_context: Maximum number of words to include in the context (optional, defaults to 50).
+    :type max_context: int
 
-    Raises:
-        ValueError: If maximum context is less than threshold or greater than 100.
+    :raises ValueError: If the maximum context is less than the threshold or greater than 100.
 
-    Returns:
-        list: List of sentences surrounding the target date.
+    :returns: List of sentences surrounding the target date.
+    :rtype: List
     """
 
     # Check max_context value constraints
@@ -696,16 +703,21 @@ def extract_relevant_information(
     """
     Extract relevant information from website text based on a given event question.
 
-    Args:
-        text (str): The website text to extract information from.
-        event_question (str): The question to find relevant information to.
-        event_date (str): Event date in year-day-month format.
-        model: The BERT model for text embeddings.
-        nlp: The spaCy NLP model.
-        max_words (int): Maximum number of words allowed for output.
+    :param text: The website text to extract information from.
+    :type text: str
+    :param query_emb: The query embeddings.
+    :type query_emb: Any
+    :param event_date: Event date in year-day-month format.
+    :type event_date: str
+    :param model: The BERT model for text embeddings.
+    :type model: Any
+    :param nlp: The spaCy NLP model.
+    :type nlp: Any
+    :param max_words: Maximum number of words allowed for output.
+    :type max_words: int
 
-    Returns:
-        str: The relevant sentences extracted from the website text.
+    :returns: The relevant sentences extracted from the website text.
+    :rtype: str
     """
 
     # Constants for sentence length and number thresholds
@@ -774,11 +786,11 @@ def get_date(soup: BeautifulSoup) -> str:
     """
     Retrieves the release and modification dates from the soup object containing the HTML tree.
 
-    Args:
-        soup (BeautifulSoup): The BeautifulSoup object for the webpage.
+    :param soup: The BeautifulSoup object for the webpage.
+    :type soup: BeautifulSoup
 
-    Returns:
-        str: A string representing the release and modification dates.
+    :returns: A string representing the release and modification dates.
+    :rtype: str
     """
 
     release_date = "unknown"
@@ -832,20 +844,24 @@ def extract_text(
     """
     Extract relevant information from HTML string.
 
-    Args:
-        html (str): The HTML content to extract text from.
-        event_question (str): Event question for context.
-        event_date (str): Event date in year-month-day format.
-        model: Pre-trained model for sentence transformer.
-        nlp: NLP object for additional text processing.
-        max_words (int): Maximum number of words for the output summary.
+    :param html: The HTML content to extract text from.
+    :type html: str
+    :param query_emb: The query embeddings.
+    :type query_emb: Any
+    :param event_date: Event date in year-month-day format.
+    :type event_date: str
+    :param model: Pre-trained model for sentence transformer.
+    :type model: Any
+    :param nlp: NLP object for additional text processing.
+    :type nlp: Any
+    :param max_words: Maximum number of words for the output summary.
+    :type max_words: int
 
-    Raises:
-        ValueError: If the HTML content is empty.
-        ValueError: If the release or update date could not be extracted from the HTML.
+    :raises ValueError: If the HTML content is empty.
+    :raises ValueError: If the release or update date could not be extracted from the HTML.
 
-    Returns:
-        str: Relevant website information with release date.
+    :returns: Relevant website information with release date.
+    :rtype: str
     """
 
     if not html:
@@ -891,17 +907,18 @@ def process_in_batches(
     """
     Process URLs in batches using a generator and thread pool executor.
 
-    Args:
-        urls (List[str]): List of URLs to process.
-        batch_size (int, optional): Size of the processing batch_size. Default is 5.
-        timeout (int, optional): Timeout for each request in seconds. Default is 10.
+    :param urls: List of URLs to process.
+    :type urls: list of str
+    :param batch_size: Size of the processing batch (optional, defaults to 5).
+    :type batch_size: int
+    :param timeout: Timeout for each request in seconds (optional, defaults to 10).
+    :type timeout: int
 
-    Raises:
-        ValueError: If the batch_size is less than or equal to zero.
-        ValueError: If the timeout is less than or equal to zero.
+    :raises ValueError: If the batch_size is less than or equal to zero.
+    :raises ValueError: If the timeout is less than or equal to zero.
 
-    Yields:
-        List[Tuple[Future, str]]: List containing Future objects and URLs for each batch.
+    :yield: List containing Future objects and URLs for each batch.
+    :rtype: list of tuple(Future, str)
     """
 
     if batch_size <= 0:
@@ -965,17 +982,17 @@ def extract_texts(
     """
     Extract texts from a list of URLs using BERT and Spacy.
 
-    Args:
-        urls (List[str]): List of URLs to extract text from.
-        event_question (str): Event-related question for text extraction.
-        max_words_per_url (int): Maximum number of words allowed to extract for each URL.
+    :param urls: List of URLs to extract text from.
+    :type urls: list of str
+    :param event_question: Event-related question for text extraction.
+    :type event_question: str
+    :param max_words_per_url: Maximum number of words allowed to extract for each URL.
+    :type max_words_per_url: int
+    :param nlp: Maximum number of words allowed to extract for each URL.
+    :type nlp: Any
 
-    Raises:
-        ValueError: If the event date could not be extracted from the event question.
-        Timeout: If the request timed out.
-
-    Returns:
-        List[str]: List of extracted texts.
+    :returns: List of extracted texts.
+    :rtype: list of str
     """
 
     # Maximum number of allowed extractions
@@ -1063,18 +1080,25 @@ def fetch_additional_information(
     """
     Get urls from a web search and extract relevant information based on an event question.
 
-    Args:
-        event_question (str): The question related to the event.
-        max_add_words (int): The maximum number of words allowed for the additional information.
-        google_api_key (str): The API key for the Google service.
-        google_engine (str): The Google engine to be used.
-        temperature (float): The temperature parameter for the engine.
-        engine (str): The openai engine. Defaults to "gpt-3.5-turbo".
-        temperature (float): The temperature parameter for the engine. Defaults to 1.0.
-        max_compl_tokens (int): The maximum number of tokens for the engine's response.
+    :param event_question: The question related to the event.
+    :type event_question: str
+    :param max_add_words: The maximum number of words allowed for additional information.
+    :type max_add_words: int
+    :param google_api_key: The API key for the Google service.
+    :type google_api_key: str
+    :param google_engine: The Google engine to be used.
+    :type google_engine: str
+    :param nlp: The nlp object
+    :type nlp: Any
+    :param engine: The openai engine. Defaults to "gpt-3.5-turbo".
+    :type engine: str
+    :param temperature: The temperature parameter for the engine.
+    :type temperature: float
+    :param max_compl_tokens: The maximum number of tokens for the engine's response.
+    :type max_compl_tokens: int
 
-    Returns:
-        str: The relevant information fetched from all the URLs concatenated.
+    :returns: The relevant information fetched from all the URLs concatenated.
+    :rtype: str
     """
     if not client:
         return "Client not initialized"
@@ -1140,16 +1164,14 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
     """
     Run the task with the given arguments.
 
-    Args:
-        kwargs (Dict): Keyword arguments that specify settings and API keys.
+    :param kwargs: Keyword arguments that specify settings and API keys.
+    :type kwargs: dict
 
-    Raises:
-        ValueError: If the tool or prompt is not provided.
-        ValueError: If the tool is not supported.
-        ValueError: If the event question is not found in the prompt.
+    :raises ValueError: If the tool is not supported.
+    :raises ValueError: If the event question is not found in the prompt.
 
-    Returns:
-        Tuple[str, Optional[Dict[str, Any]]]: The generated content and any additional data.
+    :returns: The generated content and any additional data.
+    :rtype: tuple of str and optional dict[str, any]
     """
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         if not client:

@@ -36,8 +36,9 @@ def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
-    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
-    Retries the function on key-related exceptions until retries are exhausted.
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
     """
 
     @functools.wraps(func)
@@ -105,14 +106,17 @@ def _factcheck(
     """
     Perform fact-checking on a given statement using an LLM and search-based retrieval.
 
-    Args:
-        statement: The text statement to verify.
-        model: The LLM model to use for fact-checking.
-        openai_api_key: API key for OpenAI (if not using default configuration).
-        serper_api_key: API key for Serper (used for retrieval).
+    :param statement: The text statement to verify.
+    :type statement: str
+    :param model: The LLM model to use for fact-checking.
+    :type model: str
+    :param openai_api_key: API key for OpenAI (if not using default configuration).
+    :type openai_api_key: str, optional
+    :param serper_api_key: API key for Serper (used for retrieval).
+    :type serper_api_key: str, optional
 
-    Returns:
-        A FactCheckResult containing structured fact-checking results.
+    :returns: A FactCheckResult containing structured fact-checking results.
+    :rtype: FactCheckResult
     """
     api_config = {
         "OPENAI_API_KEY": openai_api_key,
@@ -141,6 +145,16 @@ def rewrite_as_sentence(
     `Will former Trump Organization CFO Allen Weisselberg be sentenced to jail by 15 April 2024?`
     ->
     `Former Trump Organization CFO Allen Weisselberg was sentenced to jail by 15 April 2024.`
+
+    :param question: The question to rewrite.
+    :type question: str
+    :param model: The language model to use for rewriting the question (defaults to `DEFAULT_OPENAI_MODEL`).
+    :type model: str
+    :param openai_api_key: API key for OpenAI (if not using default configuration).
+    :type openai_api_key: str, optional
+
+    :returns: The question rewritten as a sentence.
+    :rtype: str
     """
     llm = ChatOpenAI(
         model=model,

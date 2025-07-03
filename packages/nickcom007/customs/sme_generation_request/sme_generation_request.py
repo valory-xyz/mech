@@ -41,8 +41,9 @@ def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
-    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
-    Retries the function on key-related exceptions until retries are exhausted.
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
     """
 
     @functools.wraps(func)
@@ -180,12 +181,14 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
     """Generate SME roles for a given market question
 
     Raises:
-        ValueError: _description_
+    ValueError: _description_
 
-    Returns:
-        Tuple[str, Optional[Dict[str, Any]]]: str is the generated SME roles, it can be loaded with `json.loads`
-        to get a list of dict. The dict has two keys: "sme" and "sme_introduction".
-        The value of "sme" is the SME role name, and the value of "sme_introduction" is the introduction of the SME role.
+    :param kwargs: The function kwargs.
+    :type kwargs: Any
+    :returns: A tuple containing the generated SME roles. The first element is a string that can be loaded with `json.loads`
+            to get a list of dict. The dict has two keys: "sme" and "sme_introduction". The value of "sme" is the SME role name,
+            and the value of "sme_introduction" is the introduction of the SME role.
+    :rtype: tuple(str, optional dict[str, any])
     """
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]

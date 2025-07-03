@@ -52,8 +52,9 @@ def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
-    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
-    Retries the function on key-related exceptions until retries are exhausted.
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
     """
 
     @functools.wraps(func)
@@ -169,12 +170,14 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
     @property
     def openai_schema(cls) -> Dict[str, Any]:
         """
-        Return the schema in the format of OpenAI's schema as jsonschema
+        Return the schema in the format of OpenAI's schema as jsonschema.
 
         Note:
-            Its important to add a docstring to describe how to best use this class, it will be included in the description attribute and be part of the prompt.
-        Returns:
-            model_json_schema (dict): A dictionary in the format of OpenAI's schema as jsonschema
+            It's important to add a docstring to describe how to best use this class,
+            it will be included in the description attribute and be part of the prompt.
+
+        :returns: A dictionary in the format of OpenAI's schema as jsonschema.
+        :rtype: dict
         """
         schema = cls.model_json_schema()
         docstring = parse(cls.__doc__ or "")
@@ -210,12 +213,13 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
     @classmethod
     def from_response(cls, completion: Dict[str, Any]) -> "OpenAISchema":
         """
-        Convert the response from OpenAI into the class instance
+        Convert the response from OpenAI into the class instance.
 
-        Args:
-            completion (dict): The response from OpenAI
-        Returns:
-            OpenAISchema: The instance of the class
+        :param completion: The response from OpenAI
+        :type completion: dict
+
+        :returns: The instance of the class
+        :rtype: OpenAISchema
         """
 
         message = completion.choices[0].message  # type: ignore

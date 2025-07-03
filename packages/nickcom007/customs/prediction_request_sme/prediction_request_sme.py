@@ -216,8 +216,9 @@ def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
 
-    Expects `api_keys` in kwargs, supporting `rotate(service)` and `max_retries()`.
-    Retries the function on key-related exceptions until retries are exhausted.
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
     """
 
     @functools.wraps(func)
