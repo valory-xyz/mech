@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeicqdub7wb5n454snmgxymim63itq6st7j2whznnsz6aiyxwaaokbi
-  prediction_sentence_embeddings.py: bafybeidab72pj6zozxzc4pa2mawpaax37jajm6o2bmldoc4w5zoumhyqc4
+  prediction_sentence_embeddings.py: bafybeihzr7vkyypgjhrej2oiaskagz6jgfvg4yki5ecjxdv6524gm7xr4i
 fingerprint_ignore_patterns: []
 entry_point: prediction_sentence_embeddings.py
 callable: run
@@ -39,7 +39,5 @@ dependencies:
     version: ==0.21.3
   types-beautifulsoup4:
     version: ==4.12.0.20250516
-  types-python-dateutil:
-    version: ==2.9.0.20250516
   types-python-dateutil:
     version: ==4.67.0.20250516

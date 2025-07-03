@@ -6,8 +6,8 @@ description: A tool that runs a prompt against the OpenAI DALL-E API.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeiaesxnkadyuhsacvtrz774edwal2ygz3hillffbkdi4yq2z44r5hm
-  dalle_request.py: bafybeifa3bdjkw7fu6l22ustw6wxdkmigx4t4q4cr62nc5hpq6av6uupuq
+  __init__.py: bafybeiesmz5to2eh4fkhoadjkakefoloxpi7syxzm37lsp5uu5f6fopw4y
+  dalle_request.py: bafybeieio5kbmf3sdxq5z6zvm6gak4772twejgbwdyv5iezhywrdci6mb4
 fingerprint_ignore_patterns: []
 entry_point: dalle_request.py
 callable: run
