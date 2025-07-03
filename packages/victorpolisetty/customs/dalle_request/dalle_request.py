@@ -50,11 +50,8 @@ def with_key_rotation(func: Callable) -> Callable:
                 # Ensure the result is a tuple and has the correct length
                 if isinstance(result, tuple) and len(result) == 4:
                     return result + (api_keys,)
-                else:
-                    raise ValueError(
-                        "Function did not return a valid MechResponse tuple."
-                    )
-            except openai.error.RateLimitError as e:
+                raise ValueError("Function did not return a valid MechResponse tuple.")
+            except openai.RateLimitError as e:
                 # try with a new key again
                 if retries_left["openai"] <= 0 and retries_left["openrouter"] <= 0:
                     raise e

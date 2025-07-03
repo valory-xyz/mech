@@ -136,6 +136,7 @@ class LLMClientManager:
             client = None
 
 
+# pylint: disable=too-few-public-methods
 class Usage:
     """Usage class."""
 
@@ -149,6 +150,7 @@ class Usage:
         self.completion_tokens = completion_tokens
 
 
+# pylint: disable=too-few-public-methods
 class LLMResponse:
     """Response class."""
 
@@ -166,16 +168,10 @@ class LLMClient:
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
-            import anthropic
-
             self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])  # type: ignore
         if self.llm_provider == "openai":
-            import openai
-
             self.client = openai.OpenAI(api_key=self.api_keys["openai"])  # type: ignore
         if self.llm_provider == "openrouter":
-            import openai
-
             self.client = openai.OpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=self.api_keys["openrouter"],  # type: ignore
@@ -200,12 +196,14 @@ class LLMClient:
                     system_prompt = messages[i]["content"]
                     del messages[i]
 
-            response_provider = self.client.messages.create(
-                model=model,
-                messages=messages,
-                system=system_prompt,
-                temperature=temperature,
-                max_tokens=max_tokens,
+            response_provider = (
+                self.client.messages.create(  # pylint: disable=no-member
+                    model=model,
+                    messages=messages,
+                    system=system_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
             )
             response = LLMResponse()
             response.content = response_provider.content[0].text
@@ -247,17 +245,16 @@ class LLMClient:
 
         return None
 
-    def embeddings(self, model: Any, input: Any) -> Any:
+    def embeddings(self, model: Any, input_: Any) -> Any:
         """Retrieves embeddings from OpenAI or OpenRouter models."""
-        if self.llm_provider == "openai" or self.llm_provider == "openrouter":
+        if self.llm_provider in ("openai", "openrouter"):
             response = self.client.embeddings.create(
                 model=EMBEDDING_MODEL,
                 input=input,
             )
             return response
-        else:
-            print("Only OpenAI embeddings supported currently.")
-            return None
+        print("Only OpenAI embeddings supported currently.")
+        return None
 
 
 client: Optional[LLMClient] = None
@@ -366,7 +363,6 @@ def multi_queries(
     if not client:
         raise RuntimeError("Client not initialized")
 
-    """Generate multiple queries for fetching information from the web."""
     url_query_prompt = URL_QUERY_PROMPT.format(
         USER_PROMPT=prompt, NUM_QUERIES=num_queries
     )
@@ -425,7 +421,7 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     """Search Google for the given query."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -572,15 +568,19 @@ def find_similar_chunks(
     query_embedding = (
         client_embedding.embeddings(
             model=EMBEDDING_MODEL,
-            input=query,
+            input_=query,
         )
         .data[0]
         .embedding
     )
 
-    index = faiss.IndexFlatIP(EMBEDDING_SIZE)
-    index.add(np.array([doc.embedding for doc in docs_with_embeddings]))
-    D, indices = index.search(np.array([query_embedding]), k)
+    index = faiss.IndexFlatIP(EMBEDDING_SIZE)  # pylint: disable=no-value-for-parameter
+    index.add(  # pylint: disable=no-value-for-parameter
+        np.array([doc.embedding for doc in docs_with_embeddings])
+    )
+    _, indices = index.search(  # pylint: disable=no-value-for-parameter
+        np.array([query_embedding]), k
+    )
 
     return [docs_with_embeddings[i] for i in indices[0]]
 
@@ -594,7 +594,7 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
         batch = [doc.text for doc in split_docs[batch_start:batch_end]]
         response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
-            input=batch,
+            input_=batch,
         )
         for i, be in enumerate(response.data):
             assert i == be.index
@@ -610,10 +610,7 @@ def recursive_character_text_splitter(
     """Splits the input text into chunks of size `max_tokens`, with an overlap between chunks."""
     if len(text) <= max_tokens:
         return [text]
-    else:
-        return [
-            text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)
-        ]
+    return [text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)]
 
 
 def fetch_additional_information(
@@ -750,7 +747,7 @@ def parser_prediction_response(response: str) -> str:
     except Exception as e:
         print(e)
         print(f"response of the model={response}")
-        raise ValueError(f"Error parsing the response of the model {response}")
+        raise ValueError(f"Error parsing the response of the model {response}") from e
 
 
 @with_key_rotation

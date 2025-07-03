@@ -409,7 +409,7 @@ SYSTEM_PROMPT = """You are a world class algorithm for generating structured out
 
 
 def multi_queries(
-    client: OpenAI,
+    client_: OpenAI,
     prompt: str,
     engine: str,
     num_queries: int,
@@ -426,7 +426,7 @@ def multi_queries(
         {"role": "user", "content": url_query_prompt},
     ]
 
-    response = client.chat.completions.create(
+    response = client_.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
@@ -456,7 +456,7 @@ def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
     """Performs a Google Custom Search and returns a list of result links."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -488,7 +488,7 @@ def get_urls_from_queries(
 
 
 def get_dates(
-    client: OpenAI,
+    client_: OpenAI,
     text: str,
     counter_callback: Optional[Callable] = None,
 ) -> Tuple[str, Optional[Callable]]:
@@ -501,7 +501,7 @@ def get_dates(
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": get_date_prompt},
     ]
-    response = client.chat.completions.create(
+    response = client_.chat.completions.create(
         model="gpt-3.5-turbo-0125",
         messages=messages,
         temperature=0,
@@ -551,7 +551,7 @@ def extract_text_from_pdf(
 
 
 def extract_text(
-    client: OpenAI,
+    client_: OpenAI,
     html: str,
     num_words: Optional[int] = None,
     counter_callback: Optional[Callable] = None,
@@ -560,7 +560,7 @@ def extract_text(
     text = ReadabilityDocument(html).summary()
     text = text = md(text, heading_style="ATX")
     date, counter_callback = get_dates(
-        client=client, text=text, counter_callback=counter_callback
+        client_=client_, text=text, counter_callback=counter_callback
     )
     doc = Document(text=text[:num_words] if num_words else text, date=date, url="")
     return doc, counter_callback
@@ -568,7 +568,7 @@ def extract_text(
 
 def extract_texts(
     urls: List[str],
-    client: OpenAI,
+    client_: OpenAI,
     counter_callback: Optional[Callable] = None,
 ) -> Tuple[List[Document], Optional[Callable]]:
     """Extract texts from URLs"""
@@ -596,7 +596,7 @@ def extract_texts(
                         continue
                     doc, counter_callback = extract_text(
                         html=result.text,
-                        client=client,
+                        client_=client_,
                         counter_callback=counter_callback,
                     )
                     doc.url = url
@@ -628,10 +628,7 @@ def recursive_character_text_splitter(
     """Splits the input text into chunks of size `max_tokens`, with an overlap between chunks."""
     if len(text) <= max_tokens:
         return [text]
-    else:
-        return [
-            text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)
-        ]
+    return [text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)]
 
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
@@ -670,15 +667,19 @@ def find_similar_chunks(
         .embedding
     )
 
-    index = faiss.IndexFlatIP(EMBEDDING_SIZE)
-    index.add(np.array([doc.embedding for doc in docs_with_embeddings]))
-    D, indices = index.search(np.array([query_embedding]), k)
+    index = faiss.IndexFlatIP(EMBEDDING_SIZE)  # pylint: disable=no-value-for-parameter
+    index.add(  # pylint: disable=no-value-for-parameter
+        np.array([doc.embedding for doc in docs_with_embeddings])
+    )
+    _, indices = index.search(  # pylint: disable=no-value-for-parameter
+        np.array([query_embedding]), k
+    )
 
     return [docs_with_embeddings[i] for i in indices[0]]
 
 
 def fetch_additional_information(
-    client: OpenAI,
+    client_: OpenAI,
     prompt: str,
     engine: str,
     google_api_key: Optional[str],
@@ -693,7 +694,7 @@ def fetch_additional_information(
 
     # generate multiple queries for fetching information from the web
     queries, counter_callback = multi_queries(
-        client=client,
+        client_=client,
         prompt=prompt,
         engine=engine,
         num_queries=NUM_QUERIES,
@@ -712,7 +713,7 @@ def fetch_additional_information(
 
     # Extract text and dates from the URLs
     docs, counter_callback = extract_texts(
-        urls=urls, client=client, counter_callback=counter_callback
+        urls=urls, client_=client_, counter_callback=counter_callback
     )
 
     # Remove None values from the list
@@ -835,10 +836,10 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
 
         (
             additional_information,
-            queries,
+            _,
             counter_callback,
         ) = fetch_additional_information(
-            client=client,
+            client_=client,
             prompt=prompt,
             engine=engine,
             google_api_key=google_api_key,

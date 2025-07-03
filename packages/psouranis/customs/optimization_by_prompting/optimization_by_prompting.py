@@ -265,12 +265,16 @@ def evaluate_prompt(prompt: str, df: DataFrame, llm: OpenAILLM) -> List:
             {"user_prompt": row.query, "additional_information": OUTPUT_FORMAT}
         )
         try:
-            dictionary_match = float(eval(pred_chain)["p_yes"])
+            dictionary_match = float(
+                eval(pred_chain)["p_yes"]  # pylint: disable=eval-used
+            )
         except BaseException as e:
             print(f"Error occurred while running evaluate_prompt: {e}")
             match = re.search(r"\{.*\}", pred_chain)
             if match:
-                dictionary_match = float(eval(match.group(0))["p_yes"])
+                dictionary_match = float(
+                    eval(match.group(0))["p_yes"]  # pylint: disable=eval-used
+                )
             else:
                 print("No match found in prediction chain")
                 dictionary_match = 0.0
@@ -348,7 +352,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     """Performs a Google Custom Search and returns a list of result links."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,

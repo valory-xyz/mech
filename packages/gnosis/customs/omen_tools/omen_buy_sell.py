@@ -111,7 +111,7 @@ class OpenAIClientManager:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, tb: Any) -> None:
         """Closes the LLM client"""
         global client
         if client is not None:

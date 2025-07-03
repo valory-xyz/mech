@@ -273,7 +273,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     """Performs a Google Custom Search and returns a list of result links."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -284,8 +284,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     items = search.get("items")
     if items is not None:
         return [result["link"] for result in items]
-    else:
-        return []
+    return []
 
 
 def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List[str]:
@@ -538,7 +537,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
         print(f"ENGINE: {engine}")
 
         try:
-            sme, sme_introduction, counter_callback = get_sme_role(
+            _, sme_introduction, counter_callback = get_sme_role(
                 engine,
                 temperature,
                 max_tokens,

@@ -96,7 +96,7 @@ class FactCheckResult(BaseModel):
     claims_details: list[FactCheckClaimDetails] | None
 
 
-def factcheck(
+def _factcheck(
     statement: str,
     model: str = DEFAULT_OPENAI_MODEL,
     openai_api_key: str | None = None,
@@ -253,7 +253,7 @@ def run(
     prompt: str,
     api_keys: Any,
     n_fact_runs: int = 3,
-    **kwargs: Any,  # Just to ignore any other arguments passed to the resolver by the universal benchmark script.
+    **kwargs: Any,  # Just to ignore any other arguments passed to the resolver by the universal benchmark script. pylint: disable=unused-argument
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the prediction market resolver based on Open Fact Verifier."""
     assert (
@@ -282,7 +282,7 @@ def run(
     print(f"Question `{market_question}` rewritten into `{market_sentence}`.")
     # Fact-check the sentence.
     factresults = [
-        factcheck(
+        _factcheck(
             market_sentence,
             openai_api_key=openai_api_key,
             serper_api_key=serper_api_key,

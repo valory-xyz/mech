@@ -141,6 +141,7 @@ class LLMClientManager:
             client = None
 
 
+# pylint: disable=too-few-public-methods
 class Usage:
     """Usage class."""
 
@@ -154,10 +155,13 @@ class Usage:
         self.completion_tokens = completion_tokens
 
 
+# pylint: disable=too-few-public-methods
 class LLMResponse:
     """Response class."""
 
-    def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+    def __init__(
+        self, content: Optional[str] = None, usage: Optional[Usage] = None
+    ):  # pylint: disable=unused-argument
         """Initializes with content and usage class."""
         self.content = content
         self.usage = Usage()
@@ -171,16 +175,10 @@ class LLMClient:
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
-            import anthropic
-
             self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])  # type: ignore
         if self.llm_provider == "openai":
-            import openai
-
             self.client = openai.OpenAI(api_key=self.api_keys["openai"])  # type: ignore
         if self.llm_provider == "openrouter":
-            import openai
-
             self.client = openai.OpenAI(
                 base_url="https://openrouter.ai/api/v1",
                 api_key=self.api_keys["openrouter"],  # type: ignore
@@ -189,7 +187,7 @@ class LLMClient:
     def completions(
         self,
         model: str,
-        messages: List = [],  # noqa: B006
+        messages: List = [],  # noqa: B006 pylint:disable=dangerous-default-value
         timeout: Optional[Union[float, int]] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
@@ -205,12 +203,14 @@ class LLMClient:
                     system_prompt = messages[i]["content"]
                     del messages[i]
 
-            response_provider = self.client.messages.create(
-                model=model,
-                messages=messages,
-                system=system_prompt,
-                temperature=temperature,
-                max_tokens=max_tokens,
+            response_provider = (
+                self.client.messages.create(  # pylint: disable=no-member
+                    model=model,
+                    messages=messages,
+                    system=system_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
             )
             response = LLMResponse()
             response.content = response_provider.content[0].text
@@ -254,17 +254,17 @@ class LLMClient:
 
         return None
 
-    def embeddings(self, model: Any, input: Any) -> Any:
+    def embeddings(self, model: Any, input_: Any) -> Any:
         """Returns the embeddings response"""
-        if self.llm_provider == "openai" or self.llm_provider == "openrouter":
+        if self.llm_provider in ("openai", "openrouter"):
             response = self.client.embeddings.create(
                 model=EMBEDDING_MODEL,
-                input=input,
+                input=input_,
             )
             return response
-        else:
-            print("Only OpenAI embeddings supported currently.")
-            return None
+
+        print("Only OpenAI embeddings supported currently.")
+        return None
 
 
 client: Optional[LLMClient] = None
@@ -560,7 +560,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     """Search Google using a custom search engine."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -671,9 +671,9 @@ def truncate_additional_information(
     # Truncate additional information string if token sum exceeds maximum allowed
     if len_add_enc <= max_add_tokens:
         return additional_informations
-    else:
-        add_trunc_enc = add_enc[: -int(len_add_enc - max_add_tokens)]
-        return enc.decode(add_trunc_enc)
+
+    add_trunc_enc = add_enc[: -int(len_add_enc - max_add_tokens)]
+    return enc.decode(add_trunc_enc)
 
 
 def get_urls_from_queries(
@@ -757,10 +757,9 @@ def standardize_date(date_text: str) -> Optional[str]:
         # Format the parsed date accordingly
         if year_exists and month_exists and day_exists:
             return parsed_date.strftime("%Y-%m-%d")
-        elif month_exists and day_exists:
+        if month_exists and day_exists:
             return parsed_date.strftime("%m-%d")
-        else:
-            return None
+        return None
     except Exception:
         return None
 
@@ -810,10 +809,7 @@ def get_context_around_isolated_event_date(
                 continue
 
             # Check if the entity matches the target date
-            if (
-                standardized_date == event_date_ymd
-                or standardized_date == event_date_md
-            ):
+            if standardized_date in (event_date_ymd, event_date_md):
                 sentence = next(
                     sent
                     for sent in doc_text.sents
@@ -1141,16 +1137,16 @@ def process_in_batches(
                     head_response = head_future.result()
                     if "text/html" not in head_response.headers.get("Content-Type", ""):
                         continue
-                    else:
-                        # Submit a GET request to the url
-                        futures.append(
-                            (
-                                executor.submit(
-                                    session.get, url, headers=headers, timeout=timeout
-                                ),
-                                url,
-                            )
+
+                    # Submit a GET request to the url
+                    futures.append(
+                        (
+                            executor.submit(
+                                session.get, url, headers=headers, timeout=timeout
+                            ),
+                            url,
                         )
+                    )
                 except Exception as e:
                     print(f"An error occurred: {e}")
 

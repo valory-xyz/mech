@@ -28,8 +28,6 @@ import requests
 class CorcelAPIException(Exception):
     """Corcel API Exception"""
 
-    pass
-
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
@@ -55,11 +53,11 @@ def with_key_rotation(func: Callable) -> Callable:
             try:
                 result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
-            except CorcelAPIException:
+            except CorcelAPIException as e:
                 # try with a new key again
                 service = "corcel"
                 if retries_left[service] <= 0:
-                    raise Exception("Error: API retries exhausted")
+                    raise Exception("Error: API retries exhausted") from e
                 retries_left[service] -= 1
                 api_keys.rotate(service)
                 return execute()

@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import anthropic
-import chromadb.utils.embedding_functions as embedding_functions
+import chromadb.utils as embedding_functions
 import googleapiclient
 import openai
 import requests
@@ -228,7 +228,10 @@ def with_key_rotation(func: Callable) -> Callable:
     return wrapper
 
 
-class CustomOpenAIEmbeddingFunction(embedding_functions.OpenAIEmbeddingFunction):
+# pylint: disable=too-few-public-methods
+class CustomOpenAIEmbeddingFunction(
+    embedding_functions.OpenAIEmbeddingFunction
+):  # pylint: disable=no-member
     """Custom OpenAI embedding function"""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
@@ -310,6 +313,7 @@ def web_scrape(url: str, timeout: int = 10000) -> tuple[str, str]:
         if "text/html" in response.headers.get("Content-Type", ""):
             soup = BeautifulSoup(response.content, "html.parser")
 
+            # pylint: disable=expression-not-assigned
             [x.extract() for x in soup.findAll("script")]
             [x.extract() for x in soup.findAll("style")]
             [x.extract() for x in soup.findAll("noscript")]
@@ -317,6 +321,7 @@ def web_scrape(url: str, timeout: int = 10000) -> tuple[str, str]:
             [x.extract() for x in soup.findAll("head")]
             [x.extract() for x in soup.findAll("image")]
             [x.extract() for x in soup.findAll("img")]
+            # pylint: enable=expression-not-assigned
 
             text = soup.get_text()
             text = markdownify(text)
@@ -324,9 +329,9 @@ def web_scrape(url: str, timeout: int = 10000) -> tuple[str, str]:
             text = " ".join([x.strip() for x in text.split("  ")])
 
             return (text, url)
-        else:
-            logging.warning("Non-HTML content received")
-            return ("", url)
+
+        logging.warning("Non-HTML content received")
+        return ("", url)
 
     except requests.RequestException as e:
         logging.error(f"HTTP request failed: {e}")
@@ -379,7 +384,7 @@ def web_search(query: str, api_key: str, max_results: int = 5) -> list[WebSearch
 
 
 def search(
-    queries: list[str], api_key: str, filter: Callable[[Any], bool] = lambda x: True
+    queries: list[str], api_key: str, filter_: Callable[[Any], bool] = lambda x: True
 ) -> list[tuple[str, WebSearchResult]]:
     """Performs parallel web searches for multiple queries and filters the results."""
     results: list[list[WebSearchResult]] = []
@@ -392,13 +397,13 @@ def search(
         for future in as_completed(futures):
             results.append(future.result())
 
-    for i in range(len(results)):
-        for result in results[i]:
-            if result.url not in [
-                existing_result.url for (_, existing_result) in results_with_queries
-            ]:
-                if filter(result):
-                    results_with_queries.append((queries[i], result))
+        for i, result in enumerate(results):
+            for result_ in results[i]:
+                if result_.url not in [
+                    existing_result.url for (_, existing_result) in results_with_queries
+                ]:
+                    if filter_(result):
+                        results_with_queries.append((queries[i], result_))
 
     return results_with_queries
 
@@ -670,7 +675,9 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], An
     vector_result_texts: list[str] = []
 
     for documents_list in query_results["documents"]:  # type: ignore
-        vector_result_texts += [x for x in documents_list]
+        vector_result_texts += [  # pylint: disable=unnecessary-comprehension
+            x for x in documents_list
+        ]
 
     research_report, counter_callback = prepare_report(
         prompt,

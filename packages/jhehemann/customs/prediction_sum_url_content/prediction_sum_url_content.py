@@ -37,7 +37,10 @@ from dateutil import parser
 from googleapiclient.discovery import build
 from openai import OpenAI
 from requests import Session
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import (  # pylint: disable=import-error
+    SentenceTransformer,
+    util,
+)
 from spacy.tokens import Doc
 from tiktoken import encoding_for_model
 from tqdm import tqdm
@@ -120,7 +123,7 @@ class OpenAIClientManager:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, tb: Any) -> None:
         """Closes the LLM client"""
         global client
         if client is not None:
@@ -266,7 +269,8 @@ RELEASE_DATE_NAMES = [
     "article_date",
     "created_date",
     "published_at",
-    "lastPublishedDate" "og:published_time",
+    "lastPublishedDate",
+    "og:published_time",
     "og:release_date",
     "article:published_time",
     "og:publication_date",
@@ -399,7 +403,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     """Search Google using a custom search engine."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -431,8 +435,8 @@ def extract_event_date(doc_question: Doc) -> Optional[str]:
     # If event date not formatted as YMD or not found, return None
     if event_date_ymd is None or not datetime.strptime(event_date_ymd, "%Y-%m-%d"):
         return None
-    else:
-        return event_date_ymd
+
+    return event_date_ymd
 
 
 def get_max_tokens_for_additional_information(
@@ -489,9 +493,9 @@ def truncate_additional_information(
     # Truncate additional information string if token sum exceeds maximum allowed
     if len_add_enc <= max_add_tokens:
         return additional_informations
-    else:
-        add_trunc_enc = add_enc[: -int(len_add_enc - max_add_tokens)]
-        return enc.decode(add_trunc_enc)
+
+    add_trunc_enc = add_enc[: -int(len_add_enc - max_add_tokens)]
+    return enc.decode(add_trunc_enc)
 
 
 def get_urls_from_queries(
@@ -576,10 +580,9 @@ def standardize_date(date_text: str) -> Optional[str]:
         # Format the parsed date accordingly
         if year_exists and month_exists and day_exists:
             return parsed_date.strftime("%Y-%m-%d")
-        elif month_exists and day_exists:
+        if month_exists and day_exists:
             return parsed_date.strftime("%m-%d")
-        else:
-            return None
+        return None
     except Exception:
         return None
 
@@ -629,10 +632,7 @@ def get_context_around_isolated_event_date(
                 continue
 
             # Check if the entity matches the target date
-            if (
-                standardized_date == event_date_ymd
-                or standardized_date == event_date_md
-            ):
+            if standardized_date in (event_date_ymd, event_date_md):
                 sentence = next(
                     sent
                     for sent in doc_text.sents
@@ -940,16 +940,16 @@ def process_in_batches(
                     head_response = head_future.result()
                     if "text/html" not in head_response.headers.get("Content-Type", ""):
                         continue
-                    else:
-                        # Submit a GET request to the url
-                        futures.append(
-                            (
-                                executor.submit(
-                                    session.get, url, headers=headers, timeout=timeout
-                                ),
-                                url,
-                            )
+
+                    # Submit a GET request to the url
+                    futures.append(
+                        (
+                            executor.submit(
+                                session.get, url, headers=headers, timeout=timeout
+                            ),
+                            url,
                         )
+                    )
                 except Exception as e:
                     print(f"An error occurred: {e}")
 
