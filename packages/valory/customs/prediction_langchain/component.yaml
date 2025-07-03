@@ -23,7 +23,7 @@ dependencies:
   langchain_community:
     version: ==0.2.1
   openai:
-    version: ==1.30.2
+    version: ==1.93.0
   anthropic:
     version: ==0.21.3
   google-api-python-client:

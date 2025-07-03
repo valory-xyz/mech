@@ -22,9 +22,9 @@ dependencies:
   pydantic:
     version: '>=1.9.0,<3'
   tiktoken:
-    version: ==0.7.0
+    version: ==0.9.0
   openai:
-    version: ==1.30.2
+    version: ==1.93.0
   docstring-parser:
     version: ==0.15
   numpy:
