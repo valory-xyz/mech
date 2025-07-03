@@ -6,7 +6,7 @@
         "custom/valory/resolve_market/0.1.0": "bafybeibjmdr4vprnzs6bkn4dg5oal4cinp5w5m5jrba4naqohfhr3xjmuy",
         "custom/valory/prediction_request/0.1.0": "bafybeigc4p2nxvuzf45ciwzn262qfcoy4b66qlnrhric7ua7ti6oeppxgi",
         "custom/polywrap/prediction_with_research_report/0.1.0": "bafybeicpxdkdn4vfc4wxbtkz6nelgmub3b4qfu6d25hswh657rflnrgbza",
-        "custom/jhehemann/prediction_sum_url_content/0.1.0": "bafybeics4rjo5ughufcgljhtabzfmmqhp62i7ioytpdve72lxfc27w2zta",
+        "custom/jhehemann/prediction_sum_url_content/0.1.0": "bafybeigucrhf5k2iohukm453by7qra5nccvlpaumfa63kl7shbe3cyxpum",
         "custom/psouranis/optimization_by_prompting/0.1.0": "bafybeihq3psbdj5rst3xmi5idhgzkqjmmk5eldx6fs3udidzdjbopbhnqa",
         "custom/nickcom007/sme_generation_request/0.1.0": "bafybeicailwykraux3cgrieuvpln4enuqdz5k3hglbmbcg5vpfpr4ez4by",
         "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeiarrt6t5c3zw4hfcvrxmbjispiheo6hixtewvoaq7e2zbnk4drt3u",
@@ -23,14 +23,14 @@
         "custom/victorpolisetty/gemini_request/0.1.0": "bafybeifq4x5ofkvmt7pedbokquowrnq3uxvaqucy223zsdvhc3byohitqm",
         "custom/gnosis/omen_tools/0.1.0": "bafybeicwew3jbfos4kl42uqauox5jemk6psp2tyaeizm5ikv5cwtnypjra",
         "custom/victorpolisetty/dalle_request/0.1.0": "bafybeif27debsraz63rodocxklvuzdifvlcozr5uwijaxl4pj75mtjjqpy",
-        "custom/jhehemann/prediction_sentence_embeddings/0.1.0": "bafybeibahujraufhcor4qjogwydqq27thvdp3hm3kixgd5yl3a4q7yw2fy",
+        "custom/jhehemann/prediction_sentence_embeddings/0.1.0": "bafybeicnfjdmplx5vvknlqj3jnx3esrwokoftpm5dahwr44lkuw57quyzu",
         "custom/gnosis/ofv_market_resolver/0.1.0": "bafybeiax26qntla7tohiwxkrj7ro6u7libswvuvubzet47q52r5l24qyou",
         "custom/valory/superforcaster/0.1.0": "bafybeibjxzxm26dfaxbmbjkd5232woz2ntzyc57fm22jke56whexit3n7y",
         "custom/valory/tee_openai_request/0.1.0": "bafybeidpsscza6tz62tencw32m27fmvlyrubbwpeg532aaqijbcm5rsjku",
         "custom/dvilela/corcel_request/0.1.0": "bafybeibt2xjjznyo3hs7zjax2fuhodu5xxybifttmhoxn253dqpdunujjq",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeifzj2sqjdkkkdxojy5th526bkxuybqfguuw3qb6x3biroy3tkjoou",
-        "agent/valory/mech/0.1.0": "bafybeidshitvyikpb6de5ma7zv4jwfjqg5oevkdwyjxjim5vkro577jgsq",
-        "service/valory/mech/0.1.0": "bafybeigokhwd4b6cv7yixd5btbzchvunwrtrdazwm2vkqbqgk54cr37eqm"
+        "agent/valory/mech/0.1.0": "bafybeiemd5cctjgap7asspzhsnbpfqc7bc3hs2ckm6sp5kjsanecu2ady4",
+        "service/valory/mech/0.1.0": "bafybeib6pc6jblr2rbjxby3aeb3bbywkxk5j2h5upbqbwbvrndmft32frm"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",

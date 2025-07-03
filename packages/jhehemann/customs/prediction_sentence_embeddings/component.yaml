@@ -37,7 +37,3 @@ dependencies:
     version: ==3.7.2
   anthropic:
     version: ==0.21.3
-  types-beautifulsoup4:
-    version: ==4.12.0.20250516
-  types-python-dateutil:
-    version: ==4.67.0.20250516
