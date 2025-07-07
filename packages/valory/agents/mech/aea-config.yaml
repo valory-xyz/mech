@@ -164,7 +164,7 @@ dependencies:
   tavily-python:
     version: ==0.3.3
   tiktoken:
-    version: ==0.7.0
+    version: ==0.9.0
   typer:
     version: ==0.9.4
   prediction-market-agent-tooling:
