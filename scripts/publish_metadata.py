@@ -5,6 +5,7 @@ from aea_cli_ipfs.ipfs_utils import IPFSTool
 from scripts.generate_metadata import METADATA_FILE_PATH
 
 PREFIX = "f01701220"
+IPFS_PREFIX_LENGTH = 6
 
 
 def push_metadata_to_ipfs() -> None:
@@ -14,7 +15,7 @@ def push_metadata_to_ipfs() -> None:
     cid_bytes = multibase.decode(to_v1(response["Hash"]))
     multihash_bytes = multicodec.remove_prefix(cid_bytes)
     hex_multihash = multihash_bytes.hex()
-    ipfs_hash = PREFIX + hex_multihash[6:]
+    ipfs_hash = PREFIX + hex_multihash[IPFS_PREFIX_LENGTH:]
     print(f"Metadata successfully pushed to ipfs. The metadata hash is: {ipfs_hash}")
 
 
