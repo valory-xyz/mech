@@ -27,8 +27,9 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
+from io import BytesIO
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
-
+import PyPDF2
 import anthropic
 import googleapiclient
 import openai
@@ -42,7 +43,7 @@ from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
 from tiktoken import encoding_for_model, get_encoding
-
+from pydantic import BaseModel
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
@@ -173,6 +174,8 @@ class LLMClient:
     ):
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
+            # default value if not found
+            system_prompt = SYSTEM_PROMPT_FORECASTER
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]["role"] == "system":
                     system_prompt = messages[i]["content"]
@@ -210,6 +213,13 @@ class LLMClient:
             return response
 
 
+class ExtendedDocument(BaseModel):
+    text: str
+    url: str
+    tokens: int = 0
+    embedding: Optional[List[float]] = None
+
+
 client: Optional[LLMClient] = None
 
 
@@ -245,6 +255,7 @@ def count_tokens(text: str, model: str) -> int:
             return response.input_tokens
         except (AttributeError, Exception):
             # Fallback if the method doesn't exist or fails
+            print("Using fallback enconding for Claude models")
             enc = get_encoding("cl100k_base")
             return len(enc.encode(text))
     # Workaround since tiktoken does not have support yet for gpt4.1
@@ -335,6 +346,7 @@ DEFAULT_VOCAB = "en_core_web_sm"
 COMPLETION_RETRIES = 3
 COMPLETION_DELAY = 2
 MAX_NR_DOCS = 1000
+HTTP_TIMEOUT = 20
 
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -447,7 +459,7 @@ OUTPUT_FORMAT
 * This is incorrect: "```json"{{"queries": []}}"```"
 * This is correct: "{{"queries": []}}"
 """
-SYSTEM_PROMPT = "You are an expert market forecaster. Your primary function is to generate accurate and insightful predictions in the requested format"
+SYSTEM_PROMPT_FORECASTER = "You are an expert market forecaster. Your primary function is to generate accurate and insightful predictions in the requested format"
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
@@ -484,7 +496,7 @@ def get_urls_from_queries(
 def extract_text(
     html: str,
     num_words: Optional[int] = None,
-) -> str:
+) -> ExtendedDocument:
     """Extract text from a single HTML document"""
     text = Document(html).summary()
     text = md(text, heading_style="ATX")
@@ -497,7 +509,34 @@ def extract_text(
         # remove newlines and extra spaces
         text = " ".join(text.split())
     # final cleaning
-    return clean_text(text)
+    doc = ExtendedDocument(text=clean_text(text), url="")
+    return doc
+
+
+def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
+    """Extract text from a PDF document at the given URL."""
+    try:
+        response = requests.get(url, timeout=HTTP_TIMEOUT)
+        response.raise_for_status()
+
+        if "application/pdf" not in response.headers.get("Content-Type", ""):
+            return ValueError("URL does not point to a PDF document")
+
+        with BytesIO(response.content) as pdf_file:
+            reader = PyPDF2.PdfReader(pdf_file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text()
+
+        doc = ExtendedDocument(
+            text=text[:num_words] if num_words else text, date="", url=url
+        )
+        print(f"Using PDF: {url}: {doc.text[:300]}...")
+        return doc
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
 
 
 def process_in_batches(
@@ -514,34 +553,39 @@ def process_in_batches(
             yield futures
 
 
-def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
+def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDocument]:
     """Extract texts from URLs"""
     max_allowed = 5
-    extracted_texts = []
+    extracted_docs = []
     count = 0
     stop = False
     for batch in process_in_batches(urls=urls):
         for future, url in batch:
+            if future is None:
+                continue
             try:
                 result = future.result()
-                if result.status_code != 200:
-                    continue
-                doc = {}
-                doc["text"] = extract_text(html=result.text, num_words=num_words)
-                doc["url"] = url
-                if doc["text"] != "":
-                    extracted_texts.append(doc)
-                    count += 1
-                if count >= max_allowed:
-                    stop = True
-                    break
+                if result.status_code == 200:
+                    # Check if URL ends with .pdf or content starts with %PDF
+                    if url.endswith(".pdf") or result.content[:4] == b"%PDF":
+                        doc = extract_text_from_pdf(url, num_words=num_words)
+                    else:
+                        doc = extract_text(html=result.text, num_words=num_words)
+                    doc.url = url
+                    if doc and doc.text != "":
+                        extracted_docs.append(doc)
+                        count += 1
+                    if count >= max_allowed:
+                        stop = True
+                        break
+
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
-                print(f"An error occurred: {e}")
+                print(f"Error processing {url}: {e}")
         if stop:
             break
-    return extracted_texts
+    return extracted_docs
 
 
 def extract_json_string(text):
@@ -687,26 +731,23 @@ def fetch_additional_information(
             google_engine,
             num_urls,
         )
-        texts = extract_texts(urls, num_words)
+        docs = extract_texts(urls, num_words)
     else:
-        texts = []
+        docs = []
         for url, content in islice(source_links.items(), 3):
-            doc = {}
-            doc["text"], doc["url"] = (
-                extract_text(html=content, num_words=num_words),
-                url,
-            )
-            if doc["text"] != "":
-                texts.append(doc)
+            doc = extract_text(html=content, num_words=num_words)
+            doc.url = url
+            if doc and doc.text != "":
+                docs.append(doc)
 
-    if len(texts) > MAX_NR_DOCS:
+    if len(docs) > MAX_NR_DOCS:
         # truncate the split_docs to the first MAX_NR_DOCS documents
-        texts = texts[:MAX_NR_DOCS]
+        docs = docs[:MAX_NR_DOCS]
     # Format the additional information
     additional_information = "\n".join(
         [
-            f"ARTICLE {i}, URL: {doc['url']}, CONTENT: {doc['text']}\n"
-            for i, doc in enumerate(texts)
+            f"ARTICLE {i}, URL: {doc.url}, CONTENT: {doc.text}\n"
+            for i, doc in enumerate(docs)
         ]
     )
     return additional_information, counter_callback
@@ -772,13 +813,15 @@ def summarize(text: str, compression_factor: float, vocab: str) -> str:
 
 
 def adjust_additional_information(
-    prompt: str, prompt_template: str, additional_information: str, model: str
+    user_prompt: str, prompt_template: str, additional_information: str, model: str
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
     # Encode the user prompt to calculate its token count
-    prompt = prompt_template.format(user_prompt=prompt, additional_information="")
-    prompt_tokens = count_tokens(text=prompt, model=model)
+    user_prompt = prompt_template.format(
+        user_prompt=user_prompt, additional_information=additional_information
+    )
+    prompt_tokens = count_tokens(text=user_prompt, model=model)
 
     # Calculate available tokens for additional_information
     MAX_PREDICTION_PROMPT_TOKENS = (
@@ -857,7 +900,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             user_prompt=user_prompt, additional_information=additional_information
         )
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": SYSTEM_PROMPT_FORECASTER},
             {"role": "user", "content": prediction_prompt},
         ]
 
