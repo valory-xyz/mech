@@ -898,7 +898,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         if additional_information:
             # check the limit of tokens
             additional_information = adjust_additional_information(
-                active_prompt, PREDICTION_PROMPT, additional_information, engine
+                user_prompt, active_prompt, additional_information, engine
             )
         prediction_prompt = active_prompt.format(
             user_prompt=user_prompt, additional_information=additional_information
