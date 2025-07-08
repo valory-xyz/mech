@@ -37,7 +37,6 @@ from typing import (
     Optional,
     Tuple,
     Union,
-    PositiveInt,
 )
 import PyPDF2
 import anthropic
@@ -184,8 +183,6 @@ class LLMClient:
     ):
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
-            # default value if not found
-            system_prompt = SYSTEM_PROMPT_FORECASTER
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]["role"] == "system":
                     system_prompt = messages[i]["content"]
@@ -226,7 +223,7 @@ class LLMClient:
 class ExtendedDocument(BaseModel):
     text: str
     url: str
-    tokens: PositiveInt = 0
+    tokens: int = 0
     embedding: Optional[List[float]] = None
 
 
