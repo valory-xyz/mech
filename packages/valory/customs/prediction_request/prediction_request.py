@@ -582,14 +582,14 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDoc
                     if doc and doc.text != "":
                         extracted_docs.append(doc)
                         count += 1
-                    if count >= max_allowed:
-                        stop = True
-                        break
-
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
                 print(f"Error processing {url}: {e}")
+                # These lines can be outside the try/except
+            if count >= max_allowed:
+                stop = True
+                break
         if stop:
             break
     return extracted_docs
