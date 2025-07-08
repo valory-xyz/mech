@@ -28,7 +28,17 @@ from heapq import nlargest
 from itertools import islice
 from string import punctuation
 from io import BytesIO
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+    PositiveInt,
+)
 import PyPDF2
 import anthropic
 import googleapiclient
@@ -216,7 +226,7 @@ class LLMClient:
 class ExtendedDocument(BaseModel):
     text: str
     url: str
-    tokens: int = 0
+    tokens: PositiveInt = 0
     embedding: Optional[List[float]] = None
 
 
@@ -503,11 +513,8 @@ def extract_text(
     if text is None:
         return ""
 
-    if num_words:
-        text = " ".join(text.split()[:num_words])
-    else:
-        # remove newlines and extra spaces
-        text = " ".join(text.split())
+    words = text.split()
+    text = " ".join(words[:num_words]) if num_words else " ".join(words)
     # final cleaning
     doc = ExtendedDocument(text=clean_text(text), url="")
     return doc
