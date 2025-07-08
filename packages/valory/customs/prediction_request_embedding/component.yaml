@@ -14,9 +14,9 @@ entry_point: prediction_sentence_embedding.py
 callable: run
 dependencies:
   openai:
-    version: ==1.30.2
+    version: ==1.93.0
   tiktoken:
-    version: ==0.7.0
+    version: ==0.9.0
   requests: {}
   google-api-python-client:
     version: ==2.95.0
