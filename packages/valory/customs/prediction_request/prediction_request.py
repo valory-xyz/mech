@@ -569,6 +569,7 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDoc
         for future, url in batch:
             if future is None:
                 continue
+            doc = None
             try:
                 result = future.result()
                 if result.status_code == 200:
@@ -577,15 +578,14 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDoc
                         doc = extract_text_from_pdf(url, num_words=num_words)
                     else:
                         doc = extract_text(html=result.text, num_words=num_words)
-                    doc.url = url
-                    if doc and doc.text != "":
-                        extracted_docs.append(doc)
-                        count += 1
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
                 print(f"Error processing {url}: {e}")
-                # These lines can be outside the try/except
+            if doc and doc.text != "":
+                doc.url = url
+                extracted_docs.append(doc)
+                count += 1
             if count >= max_allowed:
                 stop = True
                 break
