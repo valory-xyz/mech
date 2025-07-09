@@ -183,6 +183,8 @@ class LLMClient:
     ):
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
+            # default value if not found
+            system_prompt = SYSTEM_PROMPT_FORECASTER
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]["role"] == "system":
                     system_prompt = messages[i]["content"]
