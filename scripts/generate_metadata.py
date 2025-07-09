@@ -1,4 +1,3 @@
-import os
 import yaml
 import json
 import importlib.util
@@ -13,6 +12,8 @@ METADATA_FILE_PATH = "metadata.json"
 INIT_PY = "__init__.py"
 COMPONENT_YAML = "component.yaml"
 ALLOWED_TOOLS = "ALLOWED_TOOLS"
+AVAILABLE_TOOLS = "AVAILABLE_TOOLS"
+TOOLS_IDENTIFIERS = frozenset([ALLOWED_TOOLS, AVAILABLE_TOOLS])
 METADATA_TEMPLATE = {
     "name": "Autonolas Mech III",
     "description": "The mech executes AI tasks requested on-chain and delivers the results to the requester.",
@@ -51,32 +52,23 @@ OUTPUT_SCHEMA = {
 }
 
 
-def find_folders_with_name() -> List[str]:
-    matched_folders = []
-    for dirpath, dirnames, _ in os.walk(ROOT_DIR):
-        for dirname in dirnames:
-            if CUSTOMS in dirname:
-                matched_folders.append(os.path.join(dirpath, dirname))
-    return matched_folders
+def find_customs_folders() -> List[str]:
+    return [p for p in Path(ROOT_DIR).rglob("*") if p.is_dir() and CUSTOMS in p.name]
 
 
 def get_immediate_subfolders(folder_path) -> List[str]:
-    subfolders = []
-    for item in os.listdir(folder_path):
-        full_path = os.path.join(folder_path, item)
-        if os.path.isdir(full_path):
-            subfolders.append(full_path)
-    return subfolders
+    folder = Path(folder_path)
+    return [item for item in folder.iterdir() if item.is_dir()]
 
 
 def read_files_in_folder(folder_path) -> Dict[str, str]:
     contents = {}
+    folder = Path(folder_path)
     try:
-        for filename in os.listdir(folder_path):
-            file_path = os.path.join(folder_path, filename)
-            if os.path.isfile(file_path):
+        for file_path in folder.iterdir():
+            if file_path.is_file():
                 with open(file_path, "r", encoding="utf-8") as f:
-                    contents[filename] = f.read()
+                    contents[file_path.name] = f.read()
     except Exception as e:
         print(f"Error reading files in {folder_path}: {e}")
     return contents
@@ -91,7 +83,7 @@ def import_module_from_path(module_name: str, file_path: str) -> ModuleType:
 
 def generate_tools_data() -> List[Dict[str, Any]]:
     tools_data: List[Dict[str, Any]] = []
-    matches = find_folders_with_name()
+    matches = find_customs_folders()
     for folder in matches:
         print(f"\n Matched folder: {folder}")
         subfolders = get_immediate_subfolders(folder)
@@ -112,11 +104,10 @@ def generate_tools_data() -> List[Dict[str, Any]]:
                         print(f"Failed to parse YAML in {sub}: {e}")
                         continue
                 else:
-                    file = Path(sub) / fname
+                    file = str(Path(sub) / fname)
                     try:
                         mod = import_module_from_path(fname, file)
-                        keys = ["ALLOWED_TOOLS", "AVAILABLE_TOOLS"]
-                        for k in keys:
+                        for k in TOOLS_IDENTIFIERS:
                             tools = getattr(mod, k, None)
                             if isinstance(tools, list):
                                 tool_entry["allowed_tools"] = tools
@@ -132,7 +123,7 @@ def generate_tools_data() -> List[Dict[str, Any]]:
 
 
 def build_tools_metadata(tools_data: List[Dict[str, Any]]):
-    result = METADATA_TEMPLATE.copy()
+    result = METADATA_TEMPLATE
 
     for entry in tools_data:
         author = entry.get("author", "")
