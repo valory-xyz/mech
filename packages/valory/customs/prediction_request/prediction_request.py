@@ -52,7 +52,7 @@ from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
 from tiktoken import encoding_for_model, get_encoding
-from pydantic import BaseModel
+from pydantic import BaseModel, PositiveInt
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
@@ -223,7 +223,7 @@ class LLMClient:
 class ExtendedDocument(BaseModel):
     text: str
     url: str
-    tokens: int = 0
+    tokens: PositiveInt = 0
     embedding: Optional[List[float]] = None
 
 
