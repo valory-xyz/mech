@@ -39,7 +39,7 @@ from markdownify import markdownify as md
 from pydantic import BaseModel
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
-from tiktoken import encoding_for_model, get_encoding, Encoding
+from tiktoken import Encoding, encoding_for_model, get_encoding
 
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
