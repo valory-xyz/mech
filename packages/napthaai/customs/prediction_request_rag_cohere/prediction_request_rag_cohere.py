@@ -357,8 +357,10 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable] = None,
-    temperature: float = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
-    max_tokens: int = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
+    temperature: Optional[float] = LLM_SETTINGS["cohere/command-r-plus"]["temperature"],
+    max_tokens: Optional[int] = LLM_SETTINGS["cohere/command-r-plus"][
+        "default_max_tokens"
+    ],
 ) -> Tuple[List[str], Optional[Callable]]:
     """Generate multiple queries for fetching information from the web."""
     if not client:
