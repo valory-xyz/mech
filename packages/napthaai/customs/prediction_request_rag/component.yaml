@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibt7f7crtwvmkg7spy3jhscmlqltvyblzp32g6gj44v7tlo5lycuq
-  prediction_request_rag.py: bafybeigynpmiyreli3pfh3vzkngwg4uqrhxlxddqehliksvrb5z37vdod4
+  prediction_request_rag.py: bafybeidzov7j6ee3s3vgvruqt23hznckcgdxwwi2svfudld5wbzpn2jefm
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_rag.py
 callable: run
@@ -26,13 +26,13 @@ dependencies:
   anthropic:
     version: ==0.21.3
   tiktoken:
-    version: ==0.7.0
+    version: ==0.9.0
   pydantic:
     version: '>=1.9.0,<3'
   faiss-cpu:
     version: ==1.7.4
   openai:
-    version: ==1.30.2
+    version: ==1.93.0
   docstring-parser:
     version: ==0.15
   pypdf2:

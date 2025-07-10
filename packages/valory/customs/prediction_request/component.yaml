@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_request.py: bafybeicgcokmi4qympuo45b33iydfe4nrzxt4cuphcusytimqonnn6np6y
+  prediction_request.py: bafybeidrpv4l5quvobsrfkv4vvit6aqq4zvztkmgnehqw3dp3oitl3j3w4
 fingerprint_ignore_patterns: []
 entry_point: prediction_request.py
 callable: run
@@ -24,11 +24,11 @@ dependencies:
   faiss-cpu:
     version: ==1.7.4
   tiktoken:
-    version: ==0.7.0
+    version: ==0.9.0
   markdownify:
     version: ==0.11.6
   openai:
-    version: ==1.30.2
+    version: ==1.93.0
   docstring-parser:
     version: ==0.15
   readability-lxml:

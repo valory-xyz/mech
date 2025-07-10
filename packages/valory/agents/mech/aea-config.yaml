@@ -50,35 +50,35 @@ skills:
 - valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
 customs:
-- valory/native_transfer_request:0.1.0:bafybeieqewxlmq7ake4pbkkpwr475goudkarbyiqhusb3dkrfdqctfseqm
-- valory/openai_request:0.1.0:bafybeibh45lqftnua2xwudb7sdkloy4sfujgvskte2foruiefzmw7alqje
-- valory/prediction_request_embedding:0.1.0:bafybeihphsuihh565abbp4zkpcr7c3slsbz5rw6cprlpc225ojfg2b5aie
-- valory/resolve_market:0.1.0:bafybeibjmdr4vprnzs6bkn4dg5oal4cinp5w5m5jrba4naqohfhr3xjmuy
-- valory/prediction_request:0.1.0:bafybeigc4p2nxvuzf45ciwzn262qfcoy4b66qlnrhric7ua7ti6oeppxgi
-- polywrap/prediction_with_research_report:0.1.0:bafybeicpxdkdn4vfc4wxbtkz6nelgmub3b4qfu6d25hswh657rflnrgbza
-- jhehemann/prediction_sum_url_content:0.1.0:bafybeigucrhf5k2iohukm453by7qra5nccvlpaumfa63kl7shbe3cyxpum
-- psouranis/optimization_by_prompting:0.1.0:bafybeihq3psbdj5rst3xmi5idhgzkqjmmk5eldx6fs3udidzdjbopbhnqa
-- nickcom007/sme_generation_request:0.1.0:bafybeicailwykraux3cgrieuvpln4enuqdz5k3hglbmbcg5vpfpr4ez4by
-- nickcom007/prediction_request_sme:0.1.0:bafybeiarrt6t5c3zw4hfcvrxmbjispiheo6hixtewvoaq7e2zbnk4drt3u
-- napthaai/resolve_market_reasoning:0.1.0:bafybeifnybzj3qzxgj7utz4igfnqluhcfdyvbvqs26pukgpn7hqfpl6734
-- napthaai/prediction_request_rag:0.1.0:bafybeih7lwcesyyod6z3vt4qkkleb33eyznfwryyi6nycbpfe2mm5qakpu
-- napthaai/prediction_request_reasoning:0.1.0:bafybeihqjtomkvhbfz4qs254kf6ajlfnkssfejkfsiiftdfmswhgr7o22m
-- valory/prepare_tx:0.1.0:bafybeiao6u2e4rbwgxrq3wrfqaimkwwcrgob2cn4sl6rs7oekczxey5s7y
-- napthaai/prediction_url_cot:0.1.0:bafybeidytom2gemmkuxvum3sjozzesqx4whz56qthmdz3mj7ekg4jaechi
-- napthaai/prediction_request_rag_cohere:0.1.0:bafybeibwf42bibw6inaoith76gs5rkxjor6w4nfrnsm3iuopaox4at5vdm
-- valory/prediction_request_lite:0.1.0:bafybeieuefyhummefjno3lnwibxnacd43ngpt7tyghtw6eum5npevmchge
-- nickcom007/prediction_request_sme_lite:0.1.0:bafybeih5eq33kkxl6q3w7f36pmnprcliykzlzcjpqv3n2tei5eq75lg6de
-- napthaai/prediction_request_reasoning_lite:0.1.0:bafybeidvdyes3ssd7s7udvmt4xg2lgfzucselela2muowpywob7vs45ori
-- valory/prediction_langchain:0.1.0:bafybeicnfgdpzwrmtsvaxgkacpuyjifgg77r5xns4qzn6xtcxmf7bseqei
-- victorpolisetty/gemini_request:0.1.0:bafybeifq4x5ofkvmt7pedbokquowrnq3uxvaqucy223zsdvhc3byohitqm
-- gnosis/omen_tools:0.1.0:bafybeicwew3jbfos4kl42uqauox5jemk6psp2tyaeizm5ikv5cwtnypjra
-- victorpolisetty/dalle_request:0.1.0:bafybeif27debsraz63rodocxklvuzdifvlcozr5uwijaxl4pj75mtjjqpy
-- jhehemann/prediction_sentence_embeddings:0.1.0:bafybeicnfjdmplx5vvknlqj3jnx3esrwokoftpm5dahwr44lkuw57quyzu
-- gnosis/ofv_market_resolver:0.1.0:bafybeiax26qntla7tohiwxkrj7ro6u7libswvuvubzet47q52r5l24qyou
-- valory/superforcaster:0.1.0:bafybeibjxzxm26dfaxbmbjkd5232woz2ntzyc57fm22jke56whexit3n7y
-- valory/tee_openai_request:0.1.0:bafybeidpsscza6tz62tencw32m27fmvlyrubbwpeg532aaqijbcm5rsjku
-- dvilela/corcel_request:0.1.0:bafybeibt2xjjznyo3hs7zjax2fuhodu5xxybifttmhoxn253dqpdunujjq
-- dvilela/gemini_prediction:0.1.0:bafybeifzj2sqjdkkkdxojy5th526bkxuybqfguuw3qb6x3biroy3tkjoou
+- valory/native_transfer_request:0.1.0:bafybeif6ipqk6ci44p63qgqoda7p3iria2nriel5wolwmxpesvbfyp2sf4
+- valory/openai_request:0.1.0:bafybeihohttktx6savb3e6tr3jajlfs2iwp6evcddwcthbz64sgw6g2fha
+- valory/prediction_request_embedding:0.1.0:bafybeiblgom65egtiwxxenzqmnebbyblgtuaqvbmoohvdxai24rbo3hx74
+- valory/resolve_market:0.1.0:bafybeifuedne5gzxgor7u3hsclsin7wtlwrtsdiogrguwlyw2ruiazbv64
+- valory/prediction_request:0.1.0:bafybeidkejvaegn2wawqc2wvma3wooqopi7vqi7abbyi6kkdclniezpzaq
+- polywrap/prediction_with_research_report:0.1.0:bafybeifovm77co77pmcx233oe7fly6pugtpyntyksb4ooh46qmqdxdspmy
+- jhehemann/prediction_sum_url_content:0.1.0:bafybeif7nn7fazq5fxggmpsakonw7lo7brovk2ufycdgqa6oujo3x5vmby
+- psouranis/optimization_by_prompting:0.1.0:bafybeibqsm4tbrxodvzcujuwrcdpvvm4emzvttnekdintwj3askxm75pne
+- nickcom007/sme_generation_request:0.1.0:bafybeigfuhzme3wnz6h7ymjb3iesamy2wetyd7gs2jq35vzcv5ai2jyy4e
+- nickcom007/prediction_request_sme:0.1.0:bafybeib3houasldxpi4iagj4glz4datd3rhb4fiskdf65vhdzngitj6bie
+- napthaai/resolve_market_reasoning:0.1.0:bafybeiemse4vfjwtm2t3xxuxw3gdu73to4ni56pje2rrgr2d5ui4wgyqci
+- napthaai/prediction_request_rag:0.1.0:bafybeigk7uky4hrzkuhua6n6udxekfui47lbuk7ukqssqrzfoy2qdv6ogm
+- napthaai/prediction_request_reasoning:0.1.0:bafybeigufdopyqaw52axm4ryyg6hpa5iiaymgkojr4yryjmfkqedixhjkm
+- valory/prepare_tx:0.1.0:bafybeigr2vj5t3lurqyndkhpz6ykryoscaospwftkpxnqi4qhxliji2ose
+- napthaai/prediction_url_cot:0.1.0:bafybeiglrld3c7lefssqvj7hnohl2fnhrw6keipmbmoakimk66wpo7whze
+- napthaai/prediction_request_rag_cohere:0.1.0:bafybeifkfmgzribpsxocuzqaz5nzusouluvsut72xvopa7to5g2lvesiia
+- valory/prediction_request_lite:0.1.0:bafybeic6uwplbj3hi4peo5qdlyoelyijbh3ojgsrjowai3pp5tuh62qvtm
+- nickcom007/prediction_request_sme_lite:0.1.0:bafybeiebwg56kttqk2wgwl7urbmhj2be24zmusjz5jdatfcovtv32zam4m
+- napthaai/prediction_request_reasoning_lite:0.1.0:bafybeie2jevnip2tczjqrarbtfkuvsgebuyjywjptwdozmvusg3t25dnqa
+- valory/prediction_langchain:0.1.0:bafybeig6rm6xexpudusvdevlr72uy2m6w7iljoh5po4iu6xhhe5itc766y
+- victorpolisetty/gemini_request:0.1.0:bafybeicugn3tqd22ccctpo6wgyhzmi5rk2kt4bnkuha6hkwjyuytnwlhtu
+- gnosis/omen_tools:0.1.0:bafybeiagznj6p6quvwxja2s6ycyzhwzi5z6ssdsft2eu6dmw7ty77wyfge
+- victorpolisetty/dalle_request:0.1.0:bafybeia67iuh77x35umwqwpphslzwcxiprqld2x5abmiqgiwcmq55fbjcy
+- jhehemann/prediction_sentence_embeddings:0.1.0:bafybeiai5nw35xxx24kck6hwflbea76u5v7pgu4dji5hdaj5thlma3mxma
+- gnosis/ofv_market_resolver:0.1.0:bafybeibbldcgkif2llsolk6nfhpv7jvxis3eu63wsaiup3xkr42fckdsgi
+- valory/superforcaster:0.1.0:bafybeibudzqqrax3p3so2mjxd4ke45b6cfbc35ss4kjqjbbtqheba7n3xq
+- valory/tee_openai_request:0.1.0:bafybeifr6bnkg6hnc3ndykuw56zxyczla4dmyhnugq6bmk3inxocof37gi
+- dvilela/corcel_request:0.1.0:bafybeibug55d55mk7emd4th3gtufq3xqzbwb7sxbsagy54lg3fhinsprai
+- dvilela/gemini_prediction:0.1.0:bafybeibvhxbzrk4otguc4auxglyany6rijndaxcgoxqd2rshtwmtusnpia
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -164,7 +164,7 @@ dependencies:
   tavily-python:
     version: ==0.3.3
   tiktoken:
-    version: ==0.7.0
+    version: ==0.9.0
   typer:
     version: ==0.9.4
   prediction-market-agent-tooling:
