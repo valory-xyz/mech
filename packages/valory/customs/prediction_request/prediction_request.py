@@ -275,7 +275,7 @@ def count_tokens(text: str, model: str) -> int:
     if "claude" in model.lower() and client and client.llm_provider == "anthropic":
         try:
             # Use Anthropic's tokenizer when available
-            response = client.messages.count_tokens(
+            response = client.messages.count_tokens(  # pylint: disable=no-member
                 model=model, messages=[{"role": "user", "content": text}]
             )
             return response.input_tokens
@@ -523,12 +523,12 @@ def get_urls_from_queries(
 def extract_text(
     html: str,
     num_words: Optional[int] = None,
-) -> ExtendedDocument:
+) -> Optional[ExtendedDocument]:
     """Extract text from a single HTML document"""
     text = Document(html).summary()
     text = md(text, heading_style="ATX")
     if text is None:
-        return ""
+        return None
 
     words = text.split()
     text = " ".join(words[:num_words]) if num_words else " ".join(words)
@@ -537,14 +537,16 @@ def extract_text(
     return doc
 
 
-def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
+def extract_text_from_pdf(
+    url: str, num_words: Optional[int] = None
+) -> Optional[ExtendedDocument]:
     """Extract text from a PDF document at the given URL."""
     try:
         response = requests.get(url, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
 
         if "application/pdf" not in response.headers.get("Content-Type", ""):
-            return ValueError("URL does not point to a PDF document")
+            raise ValueError("URL does not point to a PDF document")
 
         with BytesIO(response.content) as pdf_file:
             reader = PyPDF2.PdfReader(pdf_file)
@@ -580,7 +582,7 @@ def process_in_batches(
 def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDocument]:
     """Extract texts from URLs"""
     max_allowed = 5
-    extracted_docs = []
+    extracted_docs: List[ExtendedDocument] = []
     count = 0
     stop = False
     for batch in process_in_batches(urls=urls):

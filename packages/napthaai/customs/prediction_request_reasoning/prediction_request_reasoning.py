@@ -39,14 +39,14 @@ from markdownify import markdownify as md
 from pydantic import BaseModel
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
-from tiktoken import encoding_for_model, get_encoding
+from tiktoken import encoding_for_model, get_encoding, Encoding
 
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def get_model_encoding(model: str):
+def get_model_encoding(model: str) -> Encoding:
     """Get the appropriate encoding for a model."""
     # Workaround since tiktoken does not have support yet for gpt4.1
     # https://github.com/openai/tiktoken/issues/395
@@ -239,6 +239,8 @@ class LLMClient:
             response.usage.prompt_tokens = response_provider.usage.prompt_tokens
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
+
+        return None
 
     def embeddings(self, model: Any, input_: Any) -> Any:
         """Returns the embeddings response"""
@@ -505,7 +507,7 @@ def multi_queries(
     prompt: str,
     model: str,
     num_queries: int,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    counter_callback: Optional[Callable] = None,
     temperature: Optional[float] = LLM_SETTINGS["gpt-4.1-2025-04-14"]["temperature"],
     max_tokens: Optional[int] = LLM_SETTINGS["gpt-4.1-2025-04-14"][
         "default_max_tokens"
@@ -813,7 +815,7 @@ def multi_questions_response(
     model: str,
     temperature: float = LLM_SETTINGS["gpt-4.1-2025-04-14"]["temperature"],
     max_tokens: int = LLM_SETTINGS["gpt-4.1-2025-04-14"]["default_max_tokens"],
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    counter_callback: Optional[Callable] = None,
 ) -> Tuple[List[str], Optional[Callable]]:
     """Generate multiple questions for fetching information from the web."""
     if not client:
@@ -929,13 +931,11 @@ def fetch_additional_information(
     google_api_key: Optional[str],
     google_engine_id: Optional[str],
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    source_links: Optional[List[str]] = None,
-    num_urls: Optional[int] = DEFAULT_NUM_URLS,
-    num_queries: Optional[int] = DEFAULT_NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["gpt-4.1-2025-04-14"]["temperature"],
-    max_tokens: Optional[int] = LLM_SETTINGS["gpt-4.1-2025-04-14"][
-        "default_max_tokens"
-    ],
+    source_links: Optional[Dict] = None,
+    num_urls: int = DEFAULT_NUM_URLS,
+    num_queries: int = DEFAULT_NUM_QUERIES,
+    temperature: float = LLM_SETTINGS["gpt-4.1-2025-04-14"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["gpt-4.1-2025-04-14"]["default_max_tokens"],
 ) -> Tuple[str, List[str], Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information from the web."""
     if not google_api_key:

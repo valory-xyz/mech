@@ -244,6 +244,8 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
+        return None
+
     def embeddings(self, model: Any, input_: Any) -> Any:
         """Returns the embeddings response"""
         if self.llm_provider not in ["openai", "openrouter"]:
@@ -715,6 +717,9 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
             i += 1
             continue
         batch_texts = [doc.text for doc in current_batch_docs]
+
+        if not client_embedding:
+            raise RuntimeError("Embeddings not intialized")
         response = client_embedding.embeddings(
             model=EMBEDDING_MODEL,
             input_=batch_texts,
