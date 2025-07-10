@@ -241,7 +241,7 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
-    def embeddings(self, model:Any, input_:Any):
+    def embeddings(self, model: Any, input_: Any):
         if self.llm_provider not in ["openai", "openrouter"]:
             print("Only OpenAI embeddings supported currently.")
             return None
@@ -739,7 +739,6 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
         doc.text = doc.text.strip()
         doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
         if total_tokens_count + doc.tokens > MAX_EMBEDDING_TOKENS:
-
             continue
         if doc.text:
             filtered_docs.append(doc)
