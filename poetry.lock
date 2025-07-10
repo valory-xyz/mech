@@ -2908,7 +2908,6 @@ i18n = ["Babel (>=2.7)"]
 name = "jiter"
 version = "0.10.0"
 description = "Fast iterable JSON parser."
-category = "main"
 optional = false
 python-versions = ">=3.9"
 files = [
@@ -8202,4 +8201,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.10,<3.12"
-content-hash = "ce74952b6746ce07f6d8248531900ff890af2dd8b223610ef2ee886b55f0d953"
+content-hash = "1c14ffd464b58cb1479567a06dfb09db760a303e69e3b1b9f9a76c07112b4dd2"
