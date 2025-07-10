@@ -244,7 +244,8 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
-    def embeddings(self, model: Any, input_: Any):
+    def embeddings(self, model: Any, input_: Any) -> Any:
+        """Returns the embeddings response"""
         if self.llm_provider not in ["openai", "openrouter"]:
             print("Only OpenAI embeddings supported currently.")
             return None

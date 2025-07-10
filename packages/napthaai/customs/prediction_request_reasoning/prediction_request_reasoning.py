@@ -44,7 +44,6 @@ from tiktoken import encoding_for_model, get_encoding
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
-from itertools import islice
 
 
 def get_model_encoding(model: str):
@@ -241,7 +240,8 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
-    def embeddings(self, model: Any, input_: Any):
+    def embeddings(self, model: Any, input_: Any) -> Any:
+        """Returns the embeddings response"""
         if self.llm_provider not in ["openai", "openrouter"]:
             print("Only OpenAI embeddings supported currently.")
             return None

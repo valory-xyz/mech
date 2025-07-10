@@ -238,6 +238,8 @@ class LLMClient:
 
 
 class ExtendedDocument(BaseModel):
+    """Extended Document Model"""
+
     text: str
     url: str
     tokens: PositiveInt = 0
@@ -762,6 +764,7 @@ def fetch_additional_information(
             counter_callback=counter_callback,
         )
     except Exception as e:
+        print(f"Fetch multi queries with retry failed with exception: {e}")
         json_data = {"queries": [user_prompt]}
 
     if not source_links:
