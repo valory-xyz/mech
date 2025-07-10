@@ -275,7 +275,7 @@ def count_tokens(text: str, model: str) -> int:
     if "claude" in model.lower() and client and client.llm_provider == "anthropic":
         try:
             # Use Anthropic's tokenizer when available
-            response = client.messages.count_tokens(  # pylint: disable=no-member
+            response = client.messages.count_tokens(  # type: ignore # pylint: disable=no-member
                 model=model, messages=[{"role": "user", "content": text}]
             )
             return response.input_tokens
@@ -781,8 +781,8 @@ def fetch_additional_information(
         docs = []
         for url, content in islice(source_links.items(), 3):
             doc = extract_text(html=content, num_words=num_words)
-            doc.url = url
             if doc and doc.text != "":
+                doc.url = url
                 docs.append(doc)
 
     if len(docs) > MAX_NR_DOCS:
