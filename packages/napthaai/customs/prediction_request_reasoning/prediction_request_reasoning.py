@@ -255,7 +255,9 @@ class LLMClient:
             )
             return response
         except Exception as e:
-            raise ValueError(f"Error while generating the embeddings for the docs {e}")
+            raise ValueError(
+                f"Error while generating the embeddings for the docs {e}"
+            ) from e
 
 
 client: Optional[LLMClient] = None

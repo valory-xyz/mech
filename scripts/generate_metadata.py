@@ -19,6 +19,7 @@
 """The script allows the user to generate the metadata of the tools"""
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, List
@@ -102,7 +103,7 @@ def import_module_from_path(module_name: str, file_path: str) -> ModuleType:
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     if spec is None or spec.loader is None:
         print(f"Cannot load module '{module_name!r}' from '{file_path!r}'")
-        exit(1)
+        sys.exit(1)
 
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -184,7 +185,7 @@ def main() -> None:
     metadata = build_tools_metadata(tools_data)
 
     # Dump the result to the JSON file
-    with open(METADATA_FILE_PATH, "w") as f:
+    with open(METADATA_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=4)
 
     print(f"Metadata has been stored to {METADATA_FILE_PATH}")

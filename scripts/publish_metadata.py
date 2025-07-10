@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 """The script allows the user to publish the metadata of the tools on ipfs"""
 import argparse
+import sys
 
 from aea.helpers.cid import to_v1
 from aea_cli_ipfs.ipfs_utils import IPFSTool
@@ -45,11 +46,11 @@ def push_metadata_to_ipfs() -> None:
         )
     except Exception as e:
         print(f"Error pushing metadata to ipfs: {e}")
-        exit(1)
+        sys.exit(1)
 
     if RESPONSE_KEY not in response:
         print(f"Key '{RESPONSE_KEY!r}' not found in ipfs response")
-        exit(1)
+        sys.exit(1)
 
     cid_bytes = multibase.decode(to_v1(response[RESPONSE_KEY]))
     multihash_bytes = multicodec.remove_prefix(cid_bytes)
