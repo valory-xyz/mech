@@ -29,7 +29,7 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import anthropic
-import googleapiclient
+from googleapiclient import errors
 import openai
 import requests
 from openai import OpenAI
@@ -68,7 +68,7 @@ def with_key_rotation(func: Callable):
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
-            except googleapiclient.errors.HttpError as e:
+            except errors.HttpError as e:
                 # try with a new key again
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:
@@ -120,7 +120,9 @@ DEFAULT_OPENAI_SETTINGS = {
 ALLOWED_TOOLS = [
     "close_market",
 ]
-TOOL_TO_ENGINE = {tool: "gpt-4o-2024-08-06" for tool in ALLOWED_TOOLS}
+TOOL_TO_ENGINE = {
+    tool: "gpt-4.1-2025-04-14" for tool in ALLOWED_TOOLS
+}
 
 NEWSAPI_ENDPOINT = "https://newsapi.org/v2"
 TOP_HEADLINES = "top-headlines"

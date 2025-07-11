@@ -24,8 +24,8 @@ import json
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import anthropic
-import googleapiclient
 import openai
+from googleapiclient import errors
 from openai import OpenAI
 from tiktoken import encoding_for_model
 
@@ -66,7 +66,7 @@ def with_key_rotation(func: Callable):
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
-            except googleapiclient.errors.HttpError as e:
+            except errors.HttpError as e:
                 # try with a new key again
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:

@@ -27,11 +27,11 @@ from io import StringIO
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import anthropic
-import googleapiclient
 import openai
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from googleapiclient import errors
 from googleapiclient.discovery import build
 from langchain.chains import LLMChain
 from langchain.llms import OpenAI as OpenAILLM
@@ -76,7 +76,7 @@ def with_key_rotation(func: Callable):
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
-            except googleapiclient.errors.HttpError as e:
+            except errors.HttpError as e:
                 # try with a new key again
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:

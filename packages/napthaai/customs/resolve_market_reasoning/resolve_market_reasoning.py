@@ -27,24 +27,33 @@ from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 import PyPDF2
 import anthropic
 import faiss
-import googleapiclient
 import numpy as np
 import openai
 import requests
 import tiktoken
 from docstring_parser import parse
 from googleapiclient.discovery import build
+from googleapiclient import errors
 from markdownify import markdownify as md
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
-from tiktoken import encoding_for_model
+from tiktoken import encoding_for_model, get_encoding
 
 
 client: Optional[OpenAI] = None
 
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+
+
+def get_model_encoding(model: str):
+    """Get the appropriate encoding for a model."""
+    # Workaround since tiktoken does not have support yet for gpt4.1
+    # https://github.com/openai/tiktoken/issues/395
+    if model == "gpt-4.1-2025-04-14":
+        return get_encoding("o200k_base")
+    return encoding_for_model(model)
 
 
 def with_key_rotation(func: Callable):
@@ -77,7 +86,7 @@ def with_key_rotation(func: Callable):
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
-            except googleapiclient.errors.HttpError as e:
+            except errors.HttpError as e:
                 # try with a new key again
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:
@@ -99,7 +108,7 @@ def with_key_rotation(func: Callable):
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    enc = encoding_for_model(model)
+    enc = get_model_encoding(model)
     return len(enc.encode(text))
 
 
@@ -126,18 +135,30 @@ DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0,
 }
+OPEN_AI_SETTINGS = {
+    "gpt-4.1-2025-04-14": {
+        """
+        Error code: 400 - {'error': {'message': 'max_tokens is too large: 1047576. This model supports at most 32768 completion tokens, whereas you provided 1047576.', 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'invalid_value'}}
+        """
+        "max_tokens": 32_768,
+        "temperature": 0,
+    },
+}
 MAX_TOKENS = {
     "gpt-3.5-turbo-0125": 4096,
     "gpt-4-0125-preview": 8192,
     "gpt-4o-2024-08-06": 4096,
+    "gpt-4.1-2025-04-14": 4096,
 }
 ALLOWED_TOOLS = [
     "resolve-market-reasoning-gpt-3.5-turbo",
     "resolve-market-reasoning-gpt-4",
+    "resolve-market-reasoning-gpt-4.1",
 ]
 TOOL_TO_ENGINE = {
     "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo-0125",
     "resolve-market-reasoning-gpt-4": "gpt-4o-2024-08-06",
+    "resolve-market-reasoning-gpt-4.1": "gpt-4.1-2025-04-14",
 }
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 NUM_QUERIES = 3
@@ -525,7 +546,7 @@ def extract_text(
     html: str,
     num_words: Optional[int] = None,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-) -> str:
+) -> Tuple[Document, Optional[Callable]]:
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
     text = text = md(text, heading_style="ATX")
@@ -756,6 +777,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")
 
+        max_tokens = OPEN_AI_SETTINGS.get(engine, {}).get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+
         # Check if question is valid
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -769,7 +792,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
@@ -818,7 +841,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
@@ -841,7 +864,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
@@ -870,7 +893,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
@@ -896,7 +919,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,

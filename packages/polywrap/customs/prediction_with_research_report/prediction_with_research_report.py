@@ -27,9 +27,9 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 import anthropic
 import chromadb.utils.embedding_functions as embedding_functions
-import googleapiclient
 import openai
 import requests
+from googleapiclient import errors
 from bs4 import BeautifulSoup
 from chromadb import Collection, Documents, Embeddings, EphemeralClient
 from langchain.text_splitter import RecursiveCharacterTextSplitter
@@ -200,7 +200,7 @@ def with_key_rotation(func: Callable):
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
-            except googleapiclient.errors.HttpError as e:
+            except errors.HttpError as e:
                 # try with a new key again
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:
