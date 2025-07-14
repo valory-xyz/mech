@@ -27,8 +27,18 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
-
+from io import BytesIO
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Tuple,
+    Union,
+)
+import PyPDF2
 import anthropic
 import googleapiclient
 import openai
@@ -42,7 +52,7 @@ from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
 from tiktoken import encoding_for_model, get_encoding
-
+from pydantic import BaseModel, PositiveInt
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
@@ -173,6 +183,8 @@ class LLMClient:
     ):
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
+            # default value if not found
+            system_prompt = SYSTEM_PROMPT_FORECASTER
             for i in range(len(messages) - 1, -1, -1):
                 if messages[i]["role"] == "system":
                     system_prompt = messages[i]["content"]
@@ -210,22 +222,57 @@ class LLMClient:
             return response
 
 
+class ExtendedDocument(BaseModel):
+    text: str
+    url: str
+    tokens: PositiveInt = 0
+    embedding: Optional[List[float]] = None
+
+
 client: Optional[LLMClient] = None
 
 
-def get_model_encoding(model: str):
-    """Get the appropriate encoding for a model."""
-    # Workaround since tiktoken does not have support yet for gpt4.1
-    # https://github.com/openai/tiktoken/issues/395
-    if model == "gpt-4.1-2025-04-14":
-        return get_encoding("o200k_base")
-
-    return encoding_for_model(model)
+# Clean text by removing emojis and non-printable characters.
+def clean_text(text: str) -> str:
+    """Remove emojis and non-printable characters, collapse whitespace."""
+    emoji_pattern = re.compile(
+        "[\U0001f600-\U0001f64f"
+        "\U0001f300-\U0001f5ff"
+        "\U0001f680-\U0001f6ff"
+        "\U0001f1e0-\U0001f1ff"
+        "]+",
+        flags=re.UNICODE,
+    )
+    text = emoji_pattern.sub("", text)
+    # Decode using UTF-8, replacing invalid bytes
+    text = text.encode("utf-8", "replace").decode("utf-8", "replace")
+    text = "".join(ch for ch in text if ch.isprintable())
+    # Collapse whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    enc = get_model_encoding(model)
+    # Check if we're using a Claude model and we have an active client
+    if "claude" in model.lower() and client and client.llm_provider == "anthropic":
+        try:
+            # Use Anthropic's tokenizer when available
+            response = client.messages.count_tokens(
+                model=model, messages=[{"role": "user", "content": text}]
+            )
+            return response.input_tokens
+        except (AttributeError, Exception):
+            # Fallback if the method doesn't exist or fails
+            print("Using fallback enconding for Claude models")
+            enc = get_encoding("cl100k_base")
+            return len(enc.encode(text))
+    # Workaround since tiktoken does not have support yet for gpt4.1
+    # https://github.com/openai/tiktoken/issues/395
+    if model == "gpt-4.1-2025-04-14":
+        enc = get_encoding("o200k_base")
+    else:
+        enc = encoding_for_model(model)
     return len(enc.encode(text))
 
 
@@ -307,7 +354,8 @@ DEFAULT_VOCAB = "en_core_web_sm"
 # number of retries and delay for completion
 COMPLETION_RETRIES = 3
 COMPLETION_DELAY = 2
-
+MAX_NR_DOCS = 1000
+HTTP_TIMEOUT = 20
 
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -420,6 +468,7 @@ OUTPUT_FORMAT
 * This is incorrect: "```json"{{"queries": []}}"```"
 * This is correct: "{{"queries": []}}"
 """
+SYSTEM_PROMPT_FORECASTER = "You are an expert market forecaster. Your primary function is to generate accurate and insightful predictions in the requested format"
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
@@ -456,20 +505,44 @@ def get_urls_from_queries(
 def extract_text(
     html: str,
     num_words: Optional[int] = None,
-) -> str:
+) -> ExtendedDocument:
     """Extract text from a single HTML document"""
     text = Document(html).summary()
     text = md(text, heading_style="ATX")
     if text is None:
         return ""
 
-    if num_words:
-        return " ".join(text.split()[:num_words])
+    words = text.split()
+    text = " ".join(words[:num_words]) if num_words else " ".join(words)
+    # final cleaning
+    doc = ExtendedDocument(text=clean_text(text), url="")
+    return doc
 
-    # remove newlines and extra spaces
-    text = " ".join(text.split())
 
-    return text
+def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
+    """Extract text from a PDF document at the given URL."""
+    try:
+        response = requests.get(url, timeout=HTTP_TIMEOUT)
+        response.raise_for_status()
+
+        if "application/pdf" not in response.headers.get("Content-Type", ""):
+            return ValueError("URL does not point to a PDF document")
+
+        with BytesIO(response.content) as pdf_file:
+            reader = PyPDF2.PdfReader(pdf_file)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text()
+
+        doc = ExtendedDocument(
+            text=text[:num_words] if num_words else text, date="", url=url
+        )
+        print(f"Using PDF: {url}: {doc.text[:300]}...")
+        return doc
+
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
 
 
 def process_in_batches(
@@ -486,33 +559,39 @@ def process_in_batches(
             yield futures
 
 
-def extract_texts(urls: List[str], num_words: Optional[int]) -> List[str]:
+def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDocument]:
     """Extract texts from URLs"""
     max_allowed = 5
-    extracted_texts = []
+    extracted_docs = []
     count = 0
     stop = False
     for batch in process_in_batches(urls=urls):
         for future, url in batch:
+            if future is None:
+                continue
+            doc = None
             try:
                 result = future.result()
-                if result.status_code != 200:
-                    continue
-                doc = {}
-                doc["text"] = extract_text(html=result.text, num_words=num_words)
-                doc["url"] = url
-                extracted_texts.append(doc)
-                count += 1
-                if count >= max_allowed:
-                    stop = True
-                    break
+                if result.status_code == 200:
+                    # Check if URL ends with .pdf or content starts with %PDF
+                    if url.endswith(".pdf") or result.content[:4] == b"%PDF":
+                        doc = extract_text_from_pdf(url, num_words=num_words)
+                    else:
+                        doc = extract_text(html=result.text, num_words=num_words)
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
-                print(f"An error occurred: {e}")
+                print(f"Error processing {url}: {e}")
+            if doc and doc.text != "":
+                doc.url = url
+                extracted_docs.append(doc)
+                count += 1
+            if count >= max_allowed:
+                stop = True
+                break
         if stop:
             break
-    return extracted_texts
+    return extracted_docs
 
 
 def extract_json_string(text):
@@ -658,21 +737,23 @@ def fetch_additional_information(
             google_engine,
             num_urls,
         )
-        texts = extract_texts(urls, num_words)
+        docs = extract_texts(urls, num_words)
     else:
-        texts = []
+        docs = []
         for url, content in islice(source_links.items(), 3):
-            doc = {}
-            doc["text"], doc["url"] = (
-                extract_text(html=content, num_words=num_words),
-                url,
-            )
-            texts.append(doc)
+            doc = extract_text(html=content, num_words=num_words)
+            doc.url = url
+            if doc and doc.text != "":
+                docs.append(doc)
+
+    if len(docs) > MAX_NR_DOCS:
+        # truncate the split_docs to the first MAX_NR_DOCS documents
+        docs = docs[:MAX_NR_DOCS]
     # Format the additional information
     additional_information = "\n".join(
         [
-            f"ARTICLE {i}, URL: {doc['url']}, CONTENT: {doc['text']}\n"
-            for i, doc in enumerate(texts)
+            f"ARTICLE {i}, URL: {doc.url}, CONTENT: {doc.text}\n"
+            for i, doc in enumerate(docs)
         ]
     )
     return additional_information, counter_callback
@@ -738,16 +819,15 @@ def summarize(text: str, compression_factor: float, vocab: str) -> str:
 
 
 def adjust_additional_information(
-    prompt: str, prompt_template: str, additional_information: str, model: str
+    user_prompt: str, prompt_template: str, additional_information: str, model: str
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
-    # Initialize tiktoken encoder for the specified model
-    enc = encoding_for_model(model)
-
     # Encode the user prompt to calculate its token count
-    prompt = prompt_template.format(user_prompt=prompt, additional_information="")
-    prompt_tokens = len(enc.encode(prompt))
+    user_prompt = prompt_template.format(
+        user_prompt=user_prompt, additional_information=additional_information
+    )
+    prompt_tokens = count_tokens(text=user_prompt, model=model)
 
     # Calculate available tokens for additional_information
     MAX_PREDICTION_PROMPT_TOKENS = (
@@ -757,13 +837,11 @@ def adjust_additional_information(
     available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
 
     # Encode the additional_information
-    additional_info_tokens = enc.encode(additional_information)
+    additional_info_tokens = count_tokens(text=additional_information, model=model)
 
     # If additional_information exceeds available tokens, truncate it
-    if len(additional_info_tokens) > available_tokens:
-        truncated_info_tokens = additional_info_tokens[:available_tokens]
-        # Decode tokens back to text, ensuring the output fits within the budget
-        additional_information = enc.decode(truncated_info_tokens)
+    if additional_info_tokens > available_tokens:
+        return additional_information[:available_tokens]
 
     return additional_information
 
@@ -819,15 +897,16 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             additional_information = summarize(
                 additional_information, compression_factor, vocab
             )
-        # TODO: Get adjust_additional_information working for Claude
-        # additional_information = adjust_additional_information(
-        #     prompt, PREDICTION_PROMPT, additional_information, engine
-        # )
+        if additional_information:
+            # check the limit of tokens
+            additional_information = adjust_additional_information(
+                user_prompt, active_prompt, additional_information, engine
+            )
         prediction_prompt = active_prompt.format(
             user_prompt=user_prompt, additional_information=additional_information
         )
         messages = [
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": SYSTEM_PROMPT_FORECASTER},
             {"role": "user", "content": prediction_prompt},
         ]
 
