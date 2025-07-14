@@ -737,7 +737,7 @@ def adjust_additional_information(
     """Adjust the additional_information to fit within the token budget"""
 
     # Initialize tiktoken encoder for the specified model
-    enc = tiktoken.encoding_for_model(model)
+    enc = get_model_encoding(model)
 
     # Encode the user prompt to calculate its token count
     prompt_tokens = len(enc.encode(prompt))
