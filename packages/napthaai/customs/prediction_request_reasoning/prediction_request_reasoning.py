@@ -871,6 +871,19 @@ def do_reasoning_with_retry(
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
+    # Check if we're using a Claude model and we have an active client
+    if "claude" in model.lower() and client and client.llm_provider == "anthropic":
+        try:
+            # Use Anthropic's tokenizer when available
+            response = client.messages.count_tokens(
+                model=model, messages=[{"role": "user", "content": text}]
+            )
+            return response.input_tokens
+        except (AttributeError, Exception):
+            # Fallback if the method doesn't exist or fails
+            print("Using fallback enconding for Claude models")
+            enc = get_encoding("cl100k_base")
+            return len(enc.encode(text))
     enc = get_model_encoding(model)
     return len(enc.encode(text))
 

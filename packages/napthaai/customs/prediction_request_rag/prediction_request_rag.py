@@ -407,6 +407,19 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
 # Utility: count tokens using model-specific tokenizer
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
+    # Check if we're using a Claude model and we have an active client
+    if "claude" in model.lower() and client and client.llm_provider == "anthropic":
+        try:
+            # Use Anthropic's tokenizer when available
+            response = client.messages.count_tokens(
+                model=model, messages=[{"role": "user", "content": text}]
+            )
+            return response.input_tokens
+        except (AttributeError, Exception):
+            # Fallback if the method doesn't exist or fails
+            print("Using fallback enconding for Claude models")
+            enc = get_encoding("cl100k_base")
+            return len(enc.encode(text))
     # Workaround since tiktoken does not have support yet for gpt4.1
     # https://github.com/openai/tiktoken/issues/395
     if model == "gpt-4.1-2025-04-14":
