@@ -354,7 +354,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
         if engine is None:
-            raise ValueError("Engine not supplied.")
+            raise ValueError("Model not supplied.")
 
         today = date.today()
         d = today.strftime("%d/%m/%Y")

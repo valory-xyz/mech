@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -444,8 +444,8 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable] = None,
-    temperature: float = LLM_SETTINGS["gpt-4o-2024-08-06"]["temperature"],
-    max_tokens: int = LLM_SETTINGS["gpt-4o-2024-08-06"]["default_max_tokens"],
+    temperature: float = LLM_SETTINGS["claude-3-5-sonnet-20240620"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["claude-3-5-sonnet-20240620"]["default_max_tokens"],
 ) -> Tuple[List[str], Optional[Callable]]:
     """Generate multiple queries for fetching information from the web."""
     if not client:
