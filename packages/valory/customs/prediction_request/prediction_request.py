@@ -25,19 +25,11 @@ import time
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
+from io import BytesIO
 from itertools import islice
 from string import punctuation
-from io import BytesIO
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
+
 import PyPDF2
 import anthropic
 import googleapiclient
@@ -46,13 +38,14 @@ import requests
 import spacy
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
+from pydantic import BaseModel, PositiveInt
 from readability import Document
 from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
 from tiktoken import encoding_for_model, get_encoding
-from pydantic import BaseModel, PositiveInt
+
 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 

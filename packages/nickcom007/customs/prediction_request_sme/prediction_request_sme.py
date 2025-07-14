@@ -29,8 +29,8 @@ import anthropic
 import openai
 import requests
 import tiktoken
-from googleapiclient.discovery import build
 from googleapiclient import errors
+from googleapiclient.discovery import build
 from markdownify import markdownify as md
 from openai import OpenAI
 from readability import Document

@@ -29,9 +29,9 @@ import anthropic
 import chromadb.utils.embedding_functions as embedding_functions
 import openai
 import requests
-from googleapiclient import errors
 from bs4 import BeautifulSoup
 from chromadb import Collection, Documents, Embeddings, EphemeralClient
+from googleapiclient import errors
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from markdownify import markdownify
 from openai import OpenAI

@@ -1,9 +1,12 @@
 import argparse
-from multibase import multibase
-from multicodec import multicodec
+
 from aea.helpers.cid import to_v1
 from aea_cli_ipfs.ipfs_utils import IPFSTool
+from multibase import multibase
+from multicodec import multicodec
+
 from scripts.generate_metadata import METADATA_FILE_PATH
+
 
 PREFIX = "f01701220"
 IPFS_PREFIX_LENGTH = 6
@@ -12,7 +15,6 @@ DEFAULT_IPFS_NODE = "/dns/registry.autonolas.tech/tcp/443/https"
 
 
 def push_metadata_to_ipfs() -> None:
-
     parser = argparse.ArgumentParser(description="Pushes metadata.json to ipfs")
     parser.add_argument("--ipfs-node", type=str, default=DEFAULT_IPFS_NODE)
     args = parser.parse_args()

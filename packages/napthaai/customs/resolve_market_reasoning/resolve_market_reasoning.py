@@ -32,8 +32,8 @@ import openai
 import requests
 import tiktoken
 from docstring_parser import parse
-from googleapiclient.discovery import build
 from googleapiclient import errors
+from googleapiclient.discovery import build
 from markdownify import markdownify as md
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -777,7 +777,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")
 
-        max_tokens = OPEN_AI_SETTINGS.get(engine, {}).get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+        max_tokens = OPEN_AI_SETTINGS.get(engine, {}).get(
+            "max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"]
+        )
 
         # Check if question is valid
         messages = [

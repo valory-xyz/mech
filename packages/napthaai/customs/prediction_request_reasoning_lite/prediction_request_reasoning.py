@@ -34,8 +34,8 @@ import faiss
 import numpy as np
 import openai
 import requests
-from googleapiclient.discovery import build
 from googleapiclient import errors
+from googleapiclient.discovery import build
 from markdownify import markdownify as md
 from pydantic import BaseModel
 from readability import Document as ReadabilityDocument

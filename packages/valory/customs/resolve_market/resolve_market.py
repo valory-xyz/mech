@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -29,9 +29,9 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import anthropic
-from googleapiclient import errors
 import openai
 import requests
+from googleapiclient import errors
 from openai import OpenAI
 
 
@@ -120,9 +120,7 @@ DEFAULT_OPENAI_SETTINGS = {
 ALLOWED_TOOLS = [
     "close_market",
 ]
-TOOL_TO_ENGINE = {
-    tool: "gpt-4.1-2025-04-14" for tool in ALLOWED_TOOLS
-}
+TOOL_TO_ENGINE = {tool: "gpt-4.1-2025-04-14" for tool in ALLOWED_TOOLS}
 
 NEWSAPI_ENDPOINT = "https://newsapi.org/v2"
 TOP_HEADLINES = "top-headlines"
