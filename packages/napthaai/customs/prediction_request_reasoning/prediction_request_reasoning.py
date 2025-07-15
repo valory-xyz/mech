@@ -37,7 +37,7 @@ import openai
 import requests
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
-from pydantic import BaseModel
+from pydantic import BaseModel, PositiveInt
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import encoding_for_model, get_encoding
@@ -326,10 +326,10 @@ MAX_NR_DOCS = 1000
 TOKENS_DISTANCE_TO_LIMIT = 200
 
 
-class Document(BaseModel):
+class ExtendedDocument(BaseModel):
     text: str
     url: str
-    tokens: int = 0
+    tokens: PositiveInt = 0
     embedding: Optional[List[float]] = None
 
 
@@ -569,7 +569,9 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
             for page in reader.pages:
                 text += page.extract_text()
 
-        doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
+        doc = ExtendedDocument(
+            text=text[:num_words] if num_words else text, date="", url=url
+        )
         print(f"Using PDF: {url}: {doc.text[:300]}...")
         return doc
 
@@ -596,11 +598,13 @@ def extract_text(
     else:
         text = " ".join(text.split())
 
-    doc = Document(text=text, url="")
+    doc = ExtendedDocument(text=text, url="")
     return doc
 
 
-def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Document]:
+def extract_texts(
+    urls: List[str], num_words: Optional[int] = None
+) -> List[ExtendedDocument]:
     """Extract texts from URLs with improved error handling, excluding failed URLs."""
     extracted_texts = []
     for batch in process_in_batches(urls=urls):
@@ -689,7 +693,7 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
     return enc.decode(tokens[:max_tokens])
 
 
-def get_embeddings(split_docs: List[Document]) -> List[Document]:
+def get_embeddings(split_docs: List[ExtendedDocument]) -> List[ExtendedDocument]:
     """Get embeddings for the split documents: clean, truncate, then batch by token count."""
     # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
     # Filter out any documents that exceed the maximum token limit individually
@@ -750,7 +754,7 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
 
 
 def find_similar_chunks(
-    query: str, docs_with_embeddings: List[Document], k: int = 4
+    query: str, docs_with_embeddings: List[ExtendedDocument], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
     query_embedding = (
@@ -807,7 +811,9 @@ def multi_questions_response(
         return [prompt], counter_callback
 
 
-def reciprocal_rank_refusion(similar_chunks: List[Document], k: int) -> List[Document]:
+def reciprocal_rank_refusion(
+    similar_chunks: List[ExtendedDocument], k: int
+) -> List[ExtendedDocument]:
     """Reciprocal rank refusion to re-rank the similar chunks based on the text."""
     fused_chunks = {}
     for rank, doc in enumerate(similar_chunks):
@@ -955,7 +961,9 @@ def fetch_additional_information(
             t = recursive_character_text_splitter(
                 doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
             )
-            split_docs.extend([Document(text=chunk, url=doc.url) for chunk in t])
+            split_docs.extend(
+                [ExtendedDocument(text=chunk, url=doc.url) for chunk in t]
+            )
         except Exception as e:
             print(f"Error splitting document: {e}")
             continue
