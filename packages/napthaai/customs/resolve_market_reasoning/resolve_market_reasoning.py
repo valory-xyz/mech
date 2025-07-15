@@ -56,15 +56,6 @@ def get_model_encoding(model: str):
     return encoding_for_model(model)
 
 
-def get_model_encoding(model: str):
-    """Get the appropriate encoding for a model."""
-    # Workaround since tiktoken does not have support yet for gpt4.1
-    # https://github.com/openai/tiktoken/issues/395
-    if model == "gpt-4.1-2025-04-14":
-        return get_encoding("o200k_base")
-    return encoding_for_model(model)
-
-
 def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.

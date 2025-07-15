@@ -32,7 +32,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 import anthropic
 import openai
 import requests
-from googleapiclient import errors
 from openai import OpenAI
 
 
@@ -78,7 +77,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
-            except errors.HttpError as e:
+            except googleapiclient.errors.HttpError as e:
                 # try with a new key again
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:

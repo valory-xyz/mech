@@ -26,7 +26,7 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Optional, Tuple
 
 import anthropic
-import chromadb.utils.embedding_functions as embedding_functions
+import chromadb.utils as embedding_functions
 import googleapiclient
 import openai
 import requests

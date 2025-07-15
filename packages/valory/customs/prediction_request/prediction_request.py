@@ -28,18 +28,8 @@ from heapq import nlargest
 from io import BytesIO
 from itertools import islice
 from string import punctuation
-from io import BytesIO
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
 import PyPDF2
 import anthropic
 import googleapiclient
