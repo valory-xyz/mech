@@ -275,16 +275,19 @@ def generate_prediction_with_retry(
                 stop=None,
             )
 
-            if response and response.content is not None:
-                if counter_callback is not None:
-                    counter_callback(
-                        input_tokens=response.usage.prompt_tokens,
-                        output_tokens=response.usage.completion_tokens,
-                        model=model,
-                        token_counter=count_tokens,
-                    )
+            if (
+                response
+                and response.content is not None
+                and counter_callback is not None
+            ):
+                counter_callback(
+                    input_tokens=response.usage.prompt_tokens,
+                    output_tokens=response.usage.completion_tokens,
+                    model=model,
+                    token_counter=count_tokens,
+                )
 
-                return response.content, counter_callback
+            return response.content, counter_callback
         except Exception as e:
             print(f"Attempt {attempt + 1} failed with error: {e}")
             time.sleep(delay)

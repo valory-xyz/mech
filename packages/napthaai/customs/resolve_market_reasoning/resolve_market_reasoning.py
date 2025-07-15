@@ -589,22 +589,23 @@ def extract_texts(
                 if not result:
                     print(f"No result returned for {url}")
                     continue
-                if isinstance(result, requests.Response):
-                    if result.status_code != 200:
-                        continue
-                    # first 4 bytes is pdf
-                    if result.content[:4] == b"%PDF":
-                        result = extract_text_from_pdf(url)
-                        if result:
-                            extracted_texts.append(result)
-                        continue
-                    doc, counter_callback = extract_text(
-                        html=result.text,
-                        client_=client_,
-                        counter_callback=counter_callback,
-                    )
-                    doc.url = url
-                    extracted_texts.append(doc)
+                if not isinstance(result, requests.Response):
+                    continue
+                if result.status_code != 200:
+                    continue
+                # first 4 bytes is pdf
+                if result.content[:4] == b"%PDF":
+                    result = extract_text_from_pdf(url)
+                    if result:
+                        extracted_texts.append(result)
+                    continue
+                doc, counter_callback = extract_text(
+                    html=result.text,
+                    client_=client_,
+                    counter_callback=counter_callback,
+                )
+                doc.url = url
+                extracted_texts.append(doc)
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:

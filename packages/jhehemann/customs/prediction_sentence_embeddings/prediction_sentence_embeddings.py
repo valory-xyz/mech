@@ -23,6 +23,7 @@ import functools
 import json
 import re
 import time
+from collections.abc import Iterable
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from itertools import groupby
@@ -1007,7 +1008,7 @@ def get_date(soup: BeautifulSoup) -> str:
         )
         if meta_tag and isinstance(meta_tag, Tag):
             content = meta_tag.get("content", "")
-            if isinstance(content, list):
+            if isinstance(content, Iterable):
                 modified_date = " ".join(content)
             else:
                 modified_date = str(content)
@@ -1019,7 +1020,7 @@ def get_date(soup: BeautifulSoup) -> str:
         )
         if meta_tag and isinstance(meta_tag, Tag):
             content = meta_tag.get("content", "")
-            if isinstance(content, list):
+            if isinstance(content, Iterable):
                 release_date = " ".join(content)
             else:
                 release_date = str(content)

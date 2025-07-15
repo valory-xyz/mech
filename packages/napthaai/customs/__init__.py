@@ -17,4 +17,4 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""Contains packages by napthaai"""
+"""Contains custom packages by napthaai"""

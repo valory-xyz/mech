@@ -17,4 +17,4 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""Contains packages by victorpolisetty"""
+"""Contains custom packages by victorpolisetty"""

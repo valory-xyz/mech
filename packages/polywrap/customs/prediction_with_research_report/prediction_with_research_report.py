@@ -398,13 +398,13 @@ def search(
         for future in as_completed(futures):
             results.append(future.result())
 
-        for i, result in enumerate(results):
-            for result_ in results[i]:
-                if result_.url not in [
-                    existing_result.url for (_, existing_result) in results_with_queries
-                ]:
-                    if filter_(result):
-                        results_with_queries.append((queries[i], result_))
+    for i, result in enumerate(results):
+        for result_ in results[i]:
+            if result_.url not in [
+                existing_result.url for (_, existing_result) in results_with_queries
+            ]:
+                if filter_(result):
+                    results_with_queries.append((queries[i], result_))
 
     return results_with_queries
 

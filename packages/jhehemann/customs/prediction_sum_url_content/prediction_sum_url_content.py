@@ -22,6 +22,7 @@ import functools
 import json
 import re
 import traceback
+from collections.abc import Iterable
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
@@ -803,7 +804,7 @@ def get_date(soup: BeautifulSoup) -> str:
         )
         if meta_tag and isinstance(meta_tag, Tag):
             content = meta_tag.get("content", "")
-            if isinstance(content, list):
+            if isinstance(content, Iterable):
                 modified_date = " ".join(content)
             else:
                 modified_date = str(content)
@@ -815,7 +816,7 @@ def get_date(soup: BeautifulSoup) -> str:
         )
         if meta_tag and isinstance(meta_tag, Tag):
             content = meta_tag.get("content", "")
-            if isinstance(content, list):
+            if isinstance(content, Iterable):
                 release_date = " ".join(content)
             else:
                 release_date = str(content)
@@ -825,7 +826,7 @@ def get_date(soup: BeautifulSoup) -> str:
         time_tag = soup.find("time")
         if time_tag and isinstance(time_tag, Tag):
             datetime_content = time_tag.get("datetime", "")
-            if isinstance(datetime_content, list):
+            if isinstance(datetime_content, Iterable):
                 release_date = " ".join(datetime_content)
             else:
                 release_date = str(datetime_content)

@@ -122,7 +122,7 @@ class OpenAIClientManager:
 def build_approval_for_all_tx_params(
     buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
-    """# Approve the market maker to withdraw our collateral token."""
+    """Approve the market maker to withdraw our collateral token."""
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     market_contract: OmenFixedProductMarketMakerContract = market.get_contract()
     conditional_tokens_contract = OmenConditionalTokenContract()
@@ -144,7 +144,7 @@ def build_approval_for_all_tx_params(
 def build_approval_tx_params(
     buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
-    """# Approve the market maker to withdraw our collateral token."""
+    """Approve the market maker to withdraw our collateral token."""
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
 
@@ -168,7 +168,7 @@ def build_approval_tx_params(
 def build_buy_tokens_tx_params(
     buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
-    """# Build buy token tx."""
+    """Build buy token tx."""
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
 
@@ -201,7 +201,7 @@ def build_buy_tokens_tx_params(
 def build_sell_tokens_tx_params(
     buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
-    """# Build sell token tx."""
+    """Build sell token tx."""
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
     market_contract: OmenFixedProductMarketMakerContract = market.get_contract()
@@ -243,7 +243,7 @@ def build_sell_tokens_tx_params(
 
 
 def fetch_params_from_prompt(prompt: str) -> Tuple[BuyOrSell, AgentMarket]:
-    """# Fetch the params from the prompt."""
+    """Fetch the params from the prompt."""
     buy_params = build_params_from_prompt(user_prompt=prompt)
     # Calculate the amount of shares we will get for the given investment amount.
     market: AgentMarket = OmenAgentMarket.get_binary_market(buy_params.market_id)
@@ -276,7 +276,7 @@ def build_buy_tx(
 def build_return_from_tx_params(
     tx_params: list[TxParams], prompt: str
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
-    """# Build return tx."""
+    """Build return tx."""
     # We return the transactions_dict below in order to be able to return multiple transactions for later execution instead of just one.
     transaction_dict = {}
     for i, tx_dict in enumerate(tx_params):

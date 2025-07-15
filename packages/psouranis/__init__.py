@@ -17,4 +17,4 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""Contains packages by psouranis"""
+"""Contains custom packages by psouranis"""

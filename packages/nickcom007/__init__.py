@@ -17,4 +17,4 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""Contains packages by nickcom007"""
+"""Contains custom packages by nickcom007"""

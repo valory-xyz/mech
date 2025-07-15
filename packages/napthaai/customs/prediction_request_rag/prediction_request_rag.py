@@ -630,17 +630,18 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
                 if not result:
                     print(f"No result returned for {url}")
                     continue
-                if isinstance(result, requests.Response):
-                    if result.status_code == 200:
-                        # Check if URL ends with .pdf or content starts with %PDF
-                        if url.endswith(".pdf") or result.content[:4] == b"%PDF":
-                            doc = extract_text_from_pdf(url, num_words=num_words)
-                        else:
-                            doc = extract_text(html=result.text, num_words=num_words)
+                if isinstance(result, requests.Response) and result.status_code == 200:
+                    # Check if URL ends with .pdf or content starts with %PDF
+                    is_pdf = url.endswith(".pdf") or result.content[:4] == b"%PDF"
+                    doc = (
+                        extract_text_from_pdf(url, num_words=num_words)
+                        if is_pdf
+                        else extract_text(html=result.text, num_words=num_words)
+                    )
 
-                        if doc:
-                            doc.url = url
-                            extracted_texts.append(doc)
+                    if doc:
+                        doc.url = url
+                        extracted_texts.append(doc)
             except Exception as e:
                 print(f"Error processing {url}: {e}")
                 continue

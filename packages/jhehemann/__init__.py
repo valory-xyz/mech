@@ -17,4 +17,4 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""Contains packages by jhehemann"""
+"""Contains custom packages by jhehemann"""
