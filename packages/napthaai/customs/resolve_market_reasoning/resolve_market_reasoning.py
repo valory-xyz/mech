@@ -31,7 +31,6 @@ import googleapiclient
 import numpy as np
 import openai
 import requests
-import tiktoken
 from docstring_parser import parse
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
