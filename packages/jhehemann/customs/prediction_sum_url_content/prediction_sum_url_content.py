@@ -804,7 +804,7 @@ def get_date(soup: BeautifulSoup) -> str:
         )
         if meta_tag and isinstance(meta_tag, Tag):
             content = meta_tag.get("content", "")
-            if isinstance(content, Iterable):
+            if isinstance(content, Iterable) and not isinstance(content, (str, bytes)):
                 modified_date = " ".join(content)
             else:
                 modified_date = str(content)
@@ -816,7 +816,7 @@ def get_date(soup: BeautifulSoup) -> str:
         )
         if meta_tag and isinstance(meta_tag, Tag):
             content = meta_tag.get("content", "")
-            if isinstance(content, Iterable):
+            if isinstance(content, Iterable) and not isinstance(content, (str, bytes)):
                 release_date = " ".join(content)
             else:
                 release_date = str(content)
@@ -826,7 +826,9 @@ def get_date(soup: BeautifulSoup) -> str:
         time_tag = soup.find("time")
         if time_tag and isinstance(time_tag, Tag):
             datetime_content = time_tag.get("datetime", "")
-            if isinstance(datetime_content, Iterable):
+            if isinstance(datetime_content, Iterable) and not isinstance(
+                datetime_content, (str, bytes)
+            ):
                 release_date = " ".join(datetime_content)
             else:
                 release_date = str(datetime_content)
