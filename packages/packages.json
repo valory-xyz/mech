@@ -11,8 +11,8 @@
         "custom/nickcom007/sme_generation_request/0.1.0": "bafybeigfuhzme3wnz6h7ymjb3iesamy2wetyd7gs2jq35vzcv5ai2jyy4e",
         "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeib3houasldxpi4iagj4glz4datd3rhb4fiskdf65vhdzngitj6bie",
         "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeiemse4vfjwtm2t3xxuxw3gdu73to4ni56pje2rrgr2d5ui4wgyqci",
-        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeief37wwrufam6io6prwegjpevage573nroh5h44bqryu75xgsbfei",
-        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeic2ldwdtqe4tnelxa2nl76av5gx7kr235sd3gsd4btnz2vxhnuray",
+        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeiajhgonfz4urbeagrdderf3kjoxlm27mc2tlxicag2pjdrduorkgu",
+        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeigtkmrq6xcjyhr42wmjroxkke3jenejlbrsyliu5itpv7wbbkkgky",
         "custom/valory/prepare_tx/0.1.0": "bafybeigr2vj5t3lurqyndkhpz6ykryoscaospwftkpxnqi4qhxliji2ose",
         "custom/napthaai/prediction_url_cot/0.1.0": "bafybeiglrld3c7lefssqvj7hnohl2fnhrw6keipmbmoakimk66wpo7whze",
         "custom/napthaai/prediction_request_rag_cohere/0.1.0": "bafybeifkfmgzribpsxocuzqaz5nzusouluvsut72xvopa7to5g2lvesiia",
@@ -29,8 +29,8 @@
         "custom/valory/tee_openai_request/0.1.0": "bafybeifr6bnkg6hnc3ndykuw56zxyczla4dmyhnugq6bmk3inxocof37gi",
         "custom/dvilela/corcel_request/0.1.0": "bafybeibug55d55mk7emd4th3gtufq3xqzbwb7sxbsagy54lg3fhinsprai",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeibvhxbzrk4otguc4auxglyany6rijndaxcgoxqd2rshtwmtusnpia",
-        "agent/valory/mech/0.1.0": "bafybeictssjbhtdr6kcy3evu57edv63jqx72w5llf2edxz5x64ta2e7h4i",
-        "service/valory/mech/0.1.0": "bafybeid4a4hkj63hoxgrquwgcdrd4ynx4lxjoh3ehtexkttibjh7lztdni"
+        "agent/valory/mech/0.1.0": "bafybeicgqju4jtaz5t2bqesv35v5dx2hqurtqtgkco3f7xfxbmbuzlgfi4",
+        "service/valory/mech/0.1.0": "bafybeiej4xcqjwbydehjkl6fgvvtqbqg2uqf3i4usi4f2nd7klyofaaw3y"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
