@@ -23,6 +23,7 @@ import functools
 import json
 import re
 import time
+from collections.abc import Iterable
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from itertools import groupby
@@ -36,32 +37,39 @@ import requests
 import spacy
 import spacy.util
 import tiktoken
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup, NavigableString, Tag
 from dateutil import parser
 from googleapiclient.discovery import build
-from openai import OpenAI
 from requests import Session
+from spacy.tokens import Doc
 from tiktoken import encoding_for_model
 from tqdm import tqdm
 
 
-client: Optional[OpenAI] = None
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
 
-def with_key_rotation(func: Callable):
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -103,9 +111,8 @@ def with_key_rotation(func: Callable):
 class LLMClientManager:
     """Client context manager for LLMs."""
 
-    def __init__(
-        self, api_keys: List, model: str = None, embedding_provider: str = None
-    ):
+    def __init__(self, api_keys: List, model: str, embedding_provider: str):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.embedding_provider = embedding_provider
         if "gpt" in model:
@@ -115,8 +122,9 @@ class LLMClientManager:
         else:
             self.llm_provider = "openrouter"
 
-    def __enter__(self):
-        clients = []
+    def __enter__(self) -> List:
+        """Initializes and returns LLM and embedding clients."""
+        clients: List = []
         global client
         if self.llm_provider and client is None:
             client = LLMClient(self.api_keys, self.llm_provider)
@@ -127,25 +135,36 @@ class LLMClientManager:
             clients.append(client_embedding)
         return clients
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.client.close()
             client = None
 
 
+# pylint: disable=too-few-public-methods
 class Usage:
     """Usage class."""
 
-    def __init__(self, prompt_tokens=None, completion_tokens=None):
+    def __init__(
+        self,
+        prompt_tokens: Optional[Any] = None,
+        completion_tokens: Optional[Any] = None,
+    ):
+        """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
 
 
+# pylint: disable=too-few-public-methods
 class LLMResponse:
     """Response class."""
 
-    def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+    def __init__(
+        self, content: Optional[str] = None, usage: Optional[Usage] = None
+    ):  # pylint: disable=unused-argument
+        """Initializes with content and usage class."""
         self.content = content
         self.usage = Usage()
 
@@ -153,36 +172,32 @@ class LLMResponse:
 class LLMClient:
     """Client for LLMs."""
 
-    def __init__(self, api_keys: List, llm_provider: str = None):
+    def __init__(self, api_keys: List, llm_provider: str):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
-            import anthropic
-
-            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
+            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])  # type: ignore
         if self.llm_provider == "openai":
-            import openai
-
-            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+            self.client = openai.OpenAI(api_key=self.api_keys["openai"])  # type: ignore
         if self.llm_provider == "openrouter":
-            import openai
-
             self.client = openai.OpenAI(
                 base_url="https://openrouter.ai/api/v1",
-                api_key=self.api_keys["openrouter"],
+                api_key=self.api_keys["openrouter"],  # type: ignore
             )
 
     def completions(
         self,
         model: str,
-        messages: List = [],
+        messages: List = [],  # noqa: B006 pylint:disable=dangerous-default-value
         timeout: Optional[Union[float, int]] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
         n: Optional[int] = None,
-        stop=None,
+        stop: Any = None,
         max_tokens: Optional[float] = None,
-    ):
+    ) -> Optional[LLMResponse]:
+        """Generate a completion from the specified LLM provider using the given model and messages."""
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
             for i in range(len(messages) - 1, -1, -1):
@@ -190,12 +205,14 @@ class LLMClient:
                     system_prompt = messages[i]["content"]
                     del messages[i]
 
-            response_provider = self.client.messages.create(
-                model=model,
-                messages=messages,
-                system=system_prompt,
-                temperature=temperature,
-                max_tokens=max_tokens,
+            response_provider = (
+                self.client.messages.create(  # pylint: disable=no-member
+                    model=model,
+                    messages=messages,
+                    system=system_prompt,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
             )
             response = LLMResponse()
             response.content = response_provider.content[0].text
@@ -221,7 +238,7 @@ class LLMClient:
 
         if self.llm_provider == "openrouter":
             # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
-            # transform = [] # to desactivate prompt compression
+            # transform = [] # to desactivate prompt compression noqa: E800
             response_provider = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -237,16 +254,19 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
-    def embeddings(self, model, input):
-        if self.llm_provider == "openai" or self.llm_provider == "openrouter":
+        return None
+
+    def embeddings(self, model: Any, input_: Any) -> Any:
+        """Returns the embeddings response"""
+        if self.llm_provider in ("openai", "openrouter"):
             response = self.client.embeddings.create(
                 model=EMBEDDING_MODEL,
-                input=input,
+                input=input_,
             )
             return response
-        else:
-            print("Only OpenAI embeddings supported currently.")
-            return None
+
+        print("Only OpenAI embeddings supported currently.")
+        return None
 
 
 client: Optional[LLMClient] = None
@@ -304,7 +324,7 @@ found in 'USER_PROMPT'. The market question is part of a prediction market, wher
 in this scenario has only two possible outcomes: `Yes` or `No`. Each market has a closing date at which the outcome is evaluated. This date is typically stated within the market question.  \
 The closing date is considered to be 23:59:59 of the date provided in the market question. If the event specified in the market question has not occurred before the closing date, the market question's outcome is `No`. \
 If the event has happened before the closing date, the market question's outcome is `Yes`. You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", which is \
-sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your probability estimation. You must adhere to the following 'INSTRUCTIONS'.  
+sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your probability estimation. You must adhere to the following 'INSTRUCTIONS'.
 
 
 INSTRUCTIONS:
@@ -315,7 +335,7 @@ INSTRUCTIONS:
 * Consider the prediction market with the market question, the closing date and the outcomes in an isolated context that has no influence on the protagonists that are involved in the event in the real world, specified in the market question. The closing date is always arbitrarily set by the market creator and has no influence on the real world. So it is likely that the protagonists of the event in the real world are not even aware of the prediction market and do not care about the market's closing date.
 * The probability estimations of the market question outcomes must be as accurate as possible, as an inaccurate estimation will lead to financial loss for the user.
 * Utilize your training data and the information provided under "ADDITIONAL_INFORMATION" to generate probability estimations for the outcomes of the 'market question'.
-* Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago. 
+* Examine the itemized list under "ADDITIONAL_INFORMATION" thoroughly and use all the relevant information for your probability estimation. This data is sourced from a Google search engine query done a few seconds ago.
 * Use any relevant item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation. You can assume that you have been provided with the most current and relevant information available on the internet. Still pay close attention on the release and modification timestamps provided in parentheses right before each information item. Some information might be outdated and not relevant anymore.
 * More recent information indicated by the timestamps provided in parentheses right before each information item overrides older information within ADDITIONAL_INFORMATION and holds more weight for your probability estimation.
 * If there exist contradicting information, evaluate the release and modification dates of those information and prioritize the information that is more recent and adjust your confidence in the probability estimation accordingly.
@@ -542,7 +562,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     """Search Google using a custom search engine."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -553,7 +573,8 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     return [result["link"] for result in search["items"]]
 
 
-def extract_json_string(text):
+def extract_json_string(text: str) -> str:
+    """Extract's the json string"""
     # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
     pattern = r"(\{[^}]*\})"
     matches = re.findall(pattern, text)
@@ -570,15 +591,15 @@ def download_spacy_model(model_name: str) -> None:
         print(f"{model_name} is already installed.")
 
 
-def extract_event_date(doc_question) -> Optional[str]:
+def extract_event_date(doc_question: Doc) -> Optional[str]:
     """
     Extracts the event date from the event question if present.
 
-    Args:
-        doc_question (spaCy Doc): Document text as a spaCy Doc object.
+    :param doc_question: Document text as a spaCy Doc object.
+    :type doc_question: Doc
 
-    Returns:
-        str: The event date in year-month-day format if present, otherwise None.
+    :returns: The event date in year-month-day format if present, otherwise None.
+    :rtype: str or None
     """
 
     event_date_ymd = None
@@ -590,7 +611,8 @@ def extract_event_date(doc_question) -> Optional[str]:
 
     # If event date not formatted as YMD or not found, return None
     try:
-        datetime.strptime(event_date_ymd, "%Y-%m-%d")
+        if event_date_ymd is not None:
+            datetime.strptime(event_date_ymd, "%Y-%m-%d")
     except (ValueError, TypeError):
         return None
     else:
@@ -606,14 +628,17 @@ def get_max_tokens_for_additional_information(
     """
     Calculates the estimated maximum number of tokens that can be consumed by the additional information string.
 
-    Args:
-        max_compl_tokens (int): The maximum number of chat completion output tokens.
-        prompt (str): The user prompt containing the event question.
-        enc (tiktoken.Encoding): The tiktoken encoding to be used.
-        safety_factor (float, optional): The safety factor to be used for prompt variations and message headers. Defaults to 1.05.
+    :param max_compl_tokens: The maximum number of chat completion output tokens.
+    :type max_compl_tokens: int
+    :param prompt: The user prompt containing the event question.
+    :type prompt: str
+    :param enc: The tiktoken encoding to be used.
+    :type enc: tiktoken.Encoding
+    :param safety_factor: The safety factor to be used for prompt variations and message headers.
+    :type safety_factor: float
 
-    Returns:
-        int: The estimated number of tokens that can be consumed by the additional information string.
+    :returns: The estimated number of tokens that can be consumed by the additional information string.
+    :rtype: int
     """
 
     # Encode the strings into tokens
@@ -635,13 +660,15 @@ def truncate_additional_information(
     """
     Truncates additional information string to a specified number of tokens using tiktoken encoding.
 
-    Args:
-        additional_informations (str): The additional information string to be truncated.
-        max_add_tokens (int): The maximum number of tokens allowed for the additional information string.
-        enc (tiktoken.Encoding): The tiktoken encoding to be used.
+    :param additional_informations: The additional information string to be truncated.
+    :type additional_informations: str
+    :param max_add_tokens: The maximum number of tokens allowed for the additional information string.
+    :type max_add_tokens: int
+    :param enc: The tiktoken encoding to be used.
+    :type enc: tiktoken.Encoding
 
-    Returns:
-    - str: The truncated additional information string.
+    :returns: The truncated additional information string.
+    :rtype: str
     """
 
     # Encode the string into tokens
@@ -651,9 +678,9 @@ def truncate_additional_information(
     # Truncate additional information string if token sum exceeds maximum allowed
     if len_add_enc <= max_add_tokens:
         return additional_informations
-    else:
-        add_trunc_enc = add_enc[: -int(len_add_enc - max_add_tokens)]
-        return enc.decode(add_trunc_enc)
+
+    add_trunc_enc = add_enc[: -int(len_add_enc - max_add_tokens)]
+    return enc.decode(add_trunc_enc)
 
 
 def get_urls_from_queries(
@@ -662,17 +689,19 @@ def get_urls_from_queries(
     """
     Fetch unique URLs from search engine queries, limiting the number of URLs per query.
 
-    Args:
-        queries (List[str]): List of search engine queries.
-        api_key (str): API key for the search engine.
-        engine (str): Custom google search engine ID.
-        num (int, optional): Number of returned URLs per query. Defaults to 3.
+    :param queries: List of search engine queries.
+    :type queries: List[str]
+    :param api_key: API key for the search engine.
+    :type api_key: str
+    :param engine: Custom Google search engine ID.
+    :type engine: str
+    :param num: Number of returned URLs per query (optional, defaults to 3).
+    :type num: int
 
-    Raises:
-        ValueError: If the number of URLs per query exceeds the maximum allowed.
+    :raises ValueError: If the number of URLs per query exceeds the maximum allowed.
 
-    Returns:
-        List[str]: Unique list of URLs, omitting PDF and download-related URLs.
+    :returns: Unique list of URLs, omitting PDF and download-related URLs.
+    :rtype: List[str]
     """
 
     results = set()
@@ -704,18 +733,15 @@ def get_urls_from_queries(
     return list(results)
 
 
-def standardize_date(date_text):
+def standardize_date(date_text: str) -> Optional[str]:
     """
     Standardizes a given date string to the format 'YYYY-MM-DD' or 'MM-DD' if possible.
 
-    Args:
-        date_text (str): The date string to be standardized.
+    :param date_text: The date string to be standardized.
+    :type date_text: str
 
-    Raises:
-        ValueError: If the date string cannot be parsed.
-
-    Returns:
-        str: The standardized date string if possible, otherwise None.
+    :returns: The standardized date string if possible, otherwise None.
+    :rtype: str or None
     """
 
     try:
@@ -737,31 +763,35 @@ def standardize_date(date_text):
         # Format the parsed date accordingly
         if year_exists and month_exists and day_exists:
             return parsed_date.strftime("%Y-%m-%d")
-        elif month_exists and day_exists:
+        if month_exists and day_exists:
             return parsed_date.strftime("%m-%d")
-        else:
-            return None
+        return None
     except Exception:
         return None
 
 
 def get_context_around_isolated_event_date(
-    doc_text, event_date_ymd, len_sentence_threshold, max_context=50
-):
+    doc_text: Doc,
+    event_date_ymd: str,
+    len_sentence_threshold: int,
+    max_context: int = 50,
+) -> List:
     """
     Extract sentences around isolated dates within the text.
 
-    Args:
-        doc_text (spaCy Doc): Document text as a spaCy Doc object.
-        event_date_ymd (str): Event date in year-day-month format.
-        len_sentence_threshold (int): Minimum number of words required for a sentence to be considered contextful.
-        max_context (int, optional): Maximum number of words to include in the context. Defaults to 50.
+    :param doc_text: Document text as a spaCy Doc object.
+    :type doc_text: Doc
+    :param event_date_ymd: Event date in year-month-day format.
+    :type event_date_ymd: str
+    :param len_sentence_threshold: Minimum number of words required for a sentence to be considered contextful.
+    :type len_sentence_threshold: int
+    :param max_context: Maximum number of words to include in the context (optional, defaults to 50).
+    :type max_context: int
 
-    Raises:
-        ValueError: If maximum context is less than threshold or greater than 100.
+    :raises ValueError: If the maximum context is less than the threshold or greater than 100.
 
-    Returns:
-        list: List of sentences surrounding the target date.
+    :returns: List of sentences surrounding the target date.
+    :rtype: List
     """
 
     # Check max_context value constraints
@@ -771,7 +801,7 @@ def get_context_around_isolated_event_date(
         )
     if max_context > 100:
         raise ValueError(
-            f"The maximum number of words must be less than or equal to 300."
+            "The maximum number of words must be less than or equal to 300."
         )
 
     contexts_list = []
@@ -787,10 +817,7 @@ def get_context_around_isolated_event_date(
                 continue
 
             # Check if the entity matches the target date
-            if (
-                standardized_date == event_date_ymd
-                or standardized_date == event_date_md
-            ):
+            if standardized_date in (event_date_ymd, event_date_md):
                 sentence = next(
                     sent
                     for sent in doc_text.sents
@@ -848,7 +875,8 @@ def get_context_around_isolated_event_date(
     return contexts_list
 
 
-def concatenate_short_sentences(sentences, len_sentence_threshold):
+def concatenate_short_sentences(sentences: List, len_sentence_threshold: int) -> List:
+    """Concatenates consecutive sentences shorter than the given word count threshold."""
     modified_sentences = []
     i = 0
     while i < len(sentences):
@@ -873,29 +901,34 @@ def concatenate_short_sentences(sentences, len_sentence_threshold):
 
 def extract_similarity_scores(
     text: str,
-    query_emb,
+    query_emb: Any,
     event_date: str,
-    nlp,
+    nlp: Any,
     date: str,
 ) -> List[Tuple[str, float, str]]:
     """
     Extract relevant information from website text based on a given event question.
 
-    Args:
-        text (str): The website text to extract information from.
-        event_date (str): Event date in year-day-month format.
-        nlp: The spaCy NLP model.
-        date (str): The release and modification dates of the website.
+    :param text: The website text to extract information from.
+    :type text: str
+    :param query_emb: The query embeddings
+    :type query_emb: Any
+    :param event_date: Event date in year-day-month format.
+    :type event_date: str
+    :param nlp: The spaCy NLP model.
+    :type nlp: Any
+    :param date: The release and modification dates of the website.
+    :type date: str
 
-    Returns:
-        List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
+    :returns: List of tuples containing the ex
+    :rtype: list of tuple(str, float, str)
     """
 
     # Constants for sentence length and number thresholds
     len_sentence_threshold = 10
     num_sentences_threshold = 1000
     sentences = []
-    event_date_sentences = []
+    # event_date_sentences = []
     seen = set()
 
     # Truncate text for performance optimization
@@ -914,6 +947,7 @@ def extract_similarity_scores(
             sentences.append(sentence_text)
             seen.add(sentence_text)
 
+    # flake8: noqa: E800
     ## Temporarily deactivated: News sites with a lot of date occurrences lead to false positives
     ## The embedding model is not advanced enough
     # Extract contextual sentences around event date occurrences within too short sentences
@@ -924,6 +958,7 @@ def extract_similarity_scores(
     #         )
     #     )
     # sentences.extend(event_date_sentences)
+    # flake8: enable: E800
 
     if not sentences:
         return []
@@ -937,7 +972,7 @@ def extract_similarity_scores(
     similarities = []
 
     # Encode sentences using spaCy model
-    for i, sentence in enumerate(sentences):
+    for _, sentence in enumerate(sentences):
         doc_sentence = nlp(sentence)
         similarity_score = query_emb.similarity(doc_sentence)
         similarities.append(similarity_score)
@@ -952,15 +987,15 @@ def extract_similarity_scores(
     return sentence_similarity_date_tuples
 
 
-def get_date(soup):
+def get_date(soup: BeautifulSoup) -> str:
     """
     Retrieves the release and modification dates from the soup object containing the HTML tree.
 
-    Args:
-        soup (BeautifulSoup): The BeautifulSoup object for the webpage.
+    :param soup: The BeautifulSoup object for the webpage.
+    :type soup: BeautifulSoup
 
-    Returns:
-        str: A string representing the release and modification dates.
+    :returns: A string representing the release and modification dates.
+    :rtype: str
     """
 
     release_date = "unknown"
@@ -971,49 +1006,60 @@ def get_date(soup):
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            modified_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, Iterable) and not isinstance(content, (str, bytes)):
+                modified_date = " ".join(content)
+            else:
+                modified_date = str(content)
 
     # If not found, then look for release or publication date
     for name in RELEASE_DATE_NAMES:
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            release_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, Iterable) and not isinstance(content, (str, bytes)):
+                release_date = " ".join(content)
+            else:
+                release_date = str(content)
 
+    # flake8: noqa: E800
     ## Temporarily deactivated
     # # Fallback to using the first time tag if neither release nor modified dates are found
     # if release_date == "unknown" and modified_date == "unknown":
     #     time_tag = soup.find("time")
     #     if time_tag:
     #         release_date = time_tag.get("datetime", "")
+    # flake8: enable: E800
 
     return f"({release_date}, {modified_date})"
 
 
 def extract_sentences(
     html: str,
-    query_emb,
+    query_emb: Any,
     event_date: str,
-    nlp,
+    nlp: Any,
 ) -> List[Tuple[str, float, str]]:
     """
     Extract relevant information from HTML string.
 
-    Args:
-        html (str): The HTML content to extract text from.
-        event_date (str): Event date in year-month-day format.
-        nlp: NLP object for additional text processing.
+    :param html: The HTML content to extract text from.
+    :type html: str
+    :param query_emb: The query embeddings
+    :type query_emb: Any
+    :param event_date: Event date in year-month-day format.
+    :type event_date: str
+    :param nlp: The spaCy NLP model.
+    :type nlp: Any
 
-    Raises:
-        ValueError: If the HTML content is empty.
-        ValueError: If the release or update date could not be extracted from the HTML.
+    :raises ValueError: If the HTML content is empty.
+    :raises ValueError: If the release or update date could not be extracted from the HTML.
 
-    Returns:
-        List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
+    :returns: List of tuples containing the extracted sentences, their similarity scores, and release dates.
+    :rtype: list of tuple(str, float, str)
     """
 
     if not html:
@@ -1054,21 +1100,22 @@ def extract_sentences(
 
 def process_in_batches(
     urls: List[str], batch_size: int = 15, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """
     Process URLs in batches using a generator and thread pool executor.
 
-    Args:
-        urls (List[str]): List of URLs to process.
-        batch_size (int, optional): Size of the processing batch_size. Default is 5.
-        timeout (int, optional): Timeout for each request in seconds. Default is 10.
+    :param urls: List of URLs to process.
+    :type urls: list of str
+    :param batch_size: Size of the processing batch (optional, defaults to 5).
+    :type batch_size: int
+    :param timeout: Timeout for each request in seconds (optional, defaults to 10).
+    :type timeout: int
 
-    Raises:
-        ValueError: If the batch_size is less than or equal to zero.
-        ValueError: If the timeout is less than or equal to zero.
+    :raises ValueError: If the batch_size is less than or equal to zero.
+    :raises ValueError: If the timeout is less than or equal to zero.
 
-    Yields:
-        List[Tuple[Future, str]]: List containing Future objects and URLs for each batch.
+    :yield: List containing Future objects and URLs for each batch.
+    :rtype: list of tuple(Future, str)
     """
 
     if batch_size <= 0:
@@ -1107,16 +1154,16 @@ def process_in_batches(
                     head_response = head_future.result()
                     if "text/html" not in head_response.headers.get("Content-Type", ""):
                         continue
-                    else:
-                        # Submit a GET request to the url
-                        futures.append(
-                            (
-                                executor.submit(
-                                    session.get, url, headers=headers, timeout=timeout
-                                ),
-                                url,
-                            )
+
+                    # Submit a GET request to the url
+                    futures.append(
+                        (
+                            executor.submit(
+                                session.get, url, headers=headers, timeout=timeout
+                            ),
+                            url,
                         )
+                    )
                 except Exception as e:
                     print(f"An error occurred: {e}")
 
@@ -1126,21 +1173,20 @@ def process_in_batches(
 def extract_and_sort_sentences(
     urls: List[str],
     event_question: str,
-    nlp,
+    nlp: Any,
 ) -> List[Tuple[str, float, str]]:
     """
     Extract texts from a list of URLs using Spacy models.
 
-    Args:
-        urls (List[str]): List of URLs to extract text from.
-        event_question (str): Event-related question for text extraction.
+    :param urls: List of URLs to extract text from.
+    :type urls: list of str
+    :param event_question: Event-related question for text extraction.
+    :type event_question: str
+    :param nlp: The spaCy NLP model.
+    :type nlp: Any
 
-    Raises:
-        ValueError: If the event date could not be extracted from the event question.
-        Timeout: If the request timed out.
-
-    Returns:
-        List[Tuple[str, float, str]]: List of tuples containing the extracted sentences, their similarity scores, and release dates.
+    :returns: List of tuples containing the extracted sentences, their similarity scores, and release dates.
+    :rtype: list of tuple(str, float, str)
     """
 
     # Initialize empty list for storing extracted sentences along with their similarity scores and release dates
@@ -1171,7 +1217,7 @@ def extract_and_sort_sentences(
                 extracted_sentences = extract_sentences(
                     html=result.text,
                     query_emb=query_emb,
-                    event_date=event_date,
+                    event_date=event_date,  # type: ignore
                     nlp=nlp,
                 )
 
@@ -1193,7 +1239,7 @@ def extract_and_sort_sentences(
     )  # Assuming the second element is the similarity score
 
     # print similarity scores along with the sentences
-    for sentence, similarity, date in all_sentences:
+    for sentence, similarity, _ in all_sentences:
         if similarity > 0.4:
             print()
             print(f"{similarity}: {sentence}")
@@ -1207,12 +1253,13 @@ def join_and_group_sentences(
     """
     Join the sentences and group them by date.
 
-    Args:
-        sentences (List[Tuple[str, float, str]]): List of tuples containing the extracted sentences, their similarity scores, and release dates.
-        max_words (int): Maximum number of words allowed for the output summary.
+    :param sentences: List of tuples containing the extracted sentences, their similarity scores, and release dates.
+    :type sentences: list of tuple(str, float, str)
+    :param max_words: Maximum number of words allowed for the output summary.
+    :type max_words: int
 
-    Returns:
-        str: The joined sentences grouped by date.
+    :returns: The joined sentences grouped by date.
+    :rtype: str
     """
     # Initialize final output string and word count
     final_output = ""
@@ -1255,8 +1302,11 @@ def generate_prediction_with_retry(
     retries: int = COMPLETION_RETRIES,
     delay: int = COMPLETION_DELAY,
     counter_callback: Optional[Callable] = None,
-):
+) -> Tuple[Any, Optional[Callable]]:
     """Attempt to generate a prediction with retries on failure."""
+    if not client:
+        raise Exception("Client not initialized")
+
     attempt = 0
     while attempt < retries:
         try:
@@ -1270,16 +1320,18 @@ def generate_prediction_with_retry(
                 stop=None,
             )
 
-            if counter_callback is not None:
-                counter_callback(
-                    input_tokens=response.usage.prompt_tokens,
-                    output_tokens=response.usage.completion_tokens,
-                    model=model,
-                    token_counter=count_tokens,
-                )
-            extracted_block = extract_json_string(response.content)
+            if response and response.content is not None:
+                if counter_callback is not None:
+                    counter_callback(
+                        input_tokens=response.usage.prompt_tokens,
+                        output_tokens=response.usage.completion_tokens,
+                        model=model,
+                        token_counter=count_tokens,
+                    )
 
-            return extracted_block, counter_callback
+                    extracted_block = extract_json_string(response.content)
+
+                return extracted_block, counter_callback
         except Exception as e:
             print(f"Attempt {attempt + 1} failed with error: {e}")
             time.sleep(delay)
@@ -1292,7 +1344,7 @@ def fetch_additional_information(
     max_add_words: int,
     google_api_key: str,
     google_engine: str,
-    nlp,
+    nlp: Any,
     engine: str = "gpt-3.5-turbo",
     temperature: float = 0.5,
     max_compl_tokens: int = 500,
@@ -1300,20 +1352,28 @@ def fetch_additional_information(
     """
     Get urls from a web search and extract relevant information based on an event question.
 
-    Args:
-        event_question (str): The question related to the event.
-        max_add_words (int): The maximum number of words allowed for additional information.
-        google_api_key (str): The API key for the Google service.
-        google_engine (str): The Google engine to be used.
-        temperature (float): The temperature parameter for the engine.
-        engine (str): The openai engine. Defaults to "gpt-3.5-turbo".
-        temperature (float): The temperature parameter for the engine. Defaults to 1.0.
-        max_compl_tokens (int): The maximum number of tokens for the engine's response.
+    :param event_question: The question related to the event.
+    :type event_question: str
+    :param max_add_words: The maximum number of words allowed for additional information.
+    :type max_add_words: int
+    :param google_api_key: The API key for the Google service.
+    :type google_api_key: str
+    :param google_engine: The Google engine to be used.
+    :type google_engine: str
+    :param temperature: The temperature parameter for the engine.
+    :type temperature: float
+    :param nlp: The spaCy NLP model.
+    :type nlp: Any
+    :param engine: The openai engine. Defaults to "gpt-3.5-turbo".
+    :type engine: str
+    :param max_compl_tokens: The maximum number of tokens for the engine's response.
+    :type max_compl_tokens: int
 
-    Returns:
-        str: The relevant information fetched from all the URLs concatenated.
+    :returns: The relevant information fetched from all the URLs concatenated.
+    :rtype: str
     """
-
+    if not client:
+        return "Client not initialized"
     # Create URL query prompt
     url_query_prompt = URL_QUERY_PROMPT.format(event_question=event_question)
 
@@ -1334,9 +1394,10 @@ def fetch_additional_information(
         stop=None,
     )
 
-    # Parse the response content
-    extracted_block = extract_json_string(response.content)
-    json_data = json.loads(extracted_block)
+    if response and response.content is not None:
+        # Parse the response content
+        extracted_block = extract_json_string(response.content)
+        json_data = json.loads(extracted_block)
 
     # Print queries each on a new line
     print("QUERIES:\n")
@@ -1366,19 +1427,18 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
 
-    Args:
-        kwargs (Dict): Keyword arguments that specify settings and API keys.
+    :param kwargs: Keyword arguments that specify settings and API keys.
+    :type kwargs: dict
 
-    Raises:
-        ValueError: If the tool is not supported.
-        ValueError: If the event question is not found in the prompt.
+    :raises ValueError: If the tool is not supported.
+    :raises ValueError: If the event question is not found in the prompt.
 
-    Returns:
-        Tuple[str, Optional[Dict[str, Any]]]: The generated content and any additional data.
+    :returns: The generated content and any additional data.
+    :rtype: tuple of str and optional dict[str, any]
     """
 
     tool = kwargs["tool"]
@@ -1390,6 +1450,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
         )
         temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
+        counter_callback = kwargs.get("counter_callback", None)
 
         openai.api_key = kwargs["api_keys"]["openai"]
         if tool not in ALLOWED_TOOLS:
@@ -1409,9 +1470,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         engine = TOOL_TO_ENGINE[tool]
 
         # Extract the event question from the prompt
-        event_question = re.search(r"\"(.+?)\"", prompt).group(1)
-        if not event_question:
+        event_question_match = re.search(r"\"(.+?)\"", prompt)
+        if not event_question_match:
             raise ValueError("No event question found in prompt.")
+        event_question = event_question_match.group(1)
 
         print(f"EVENT_QUESTION: {event_question}")
         print()
@@ -1475,6 +1537,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
             max_tokens=max_compl_tokens,
             retries=COMPLETION_RETRIES,
             delay=COMPLETION_DELAY,
+            counter_callback=counter_callback,
         )
         print(f"RESPONSE: {extracted_block}")
         return extracted_block, prediction_prompt, None, counter_callback

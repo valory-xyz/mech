@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 
 """
 This module implements a tool which prepares a transaction for the transaction settlement skill.
+
 Please note that the gnosis safe parameters are missing from the payload, e.g., `safe_tx_hash`, `safe_tx_gas`, etc.
 """
 import functools
@@ -47,7 +48,8 @@ from web3 import Web3
 from web3.types import TxParams
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 ENGINE = "gpt-3.5-turbo"
 MAX_TOKENS = 500
@@ -71,6 +73,8 @@ client: Optional[OpenAI] = None
 
 
 class BuyOrSell(BaseModel):
+    """Buy or Sell Model"""
+
     sender: str
     market_id: str
     outcome: bool
@@ -78,6 +82,10 @@ class BuyOrSell(BaseModel):
 
 
 def build_params_from_prompt(user_prompt: str) -> BuyOrSell:
+    """Build the params from the prompt"""
+    if client is None or client.api_key is None:
+        raise ValueError("Client or client.api_key must not be None")
+
     model = ChatOpenAI(temperature=0, api_key=client.api_key)
     parser = PydanticOutputParser(pydantic_object=BuyOrSell)
     prompt = PromptTemplate(
@@ -93,15 +101,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM and embedding clients."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, tb: Any) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -111,9 +122,7 @@ class OpenAIClientManager:
 def build_approval_for_all_tx_params(
     buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
-    """
-    # Approve the market maker to withdraw our collateral token.
-    """
+    """Approve the market maker to withdraw our collateral token."""
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     market_contract: OmenFixedProductMarketMakerContract = market.get_contract()
     conditional_tokens_contract = OmenConditionalTokenContract()
@@ -135,9 +144,7 @@ def build_approval_for_all_tx_params(
 def build_approval_tx_params(
     buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
-    """
-    # Approve the market maker to withdraw our collateral token.
-    """
+    """Approve the market maker to withdraw our collateral token."""
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
 
@@ -161,6 +168,7 @@ def build_approval_tx_params(
 def build_buy_tokens_tx_params(
     buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
+    """Build buy token tx."""
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
 
@@ -193,6 +201,7 @@ def build_buy_tokens_tx_params(
 def build_sell_tokens_tx_params(
     buy_or_sell: BuyOrSell, market: AgentMarket, w3: Web3
 ) -> TxParams:
+    """Build sell token tx."""
     from_address_checksummed = Web3.to_checksum_address(buy_or_sell.sender)
     amount_wei = Web3.to_wei(buy_or_sell.amount_to_buy, "ether")
     market_contract: OmenFixedProductMarketMakerContract = market.get_contract()
@@ -233,7 +242,8 @@ def build_sell_tokens_tx_params(
     return tx_params_sell
 
 
-def fetch_params_from_prompt(prompt: str):
+def fetch_params_from_prompt(prompt: str) -> Tuple[BuyOrSell, AgentMarket]:
+    """Fetch the params from the prompt."""
     buy_params = build_params_from_prompt(user_prompt=prompt)
     # Calculate the amount of shares we will get for the given investment amount.
     market: AgentMarket = OmenAgentMarket.get_binary_market(buy_params.market_id)
@@ -266,6 +276,7 @@ def build_buy_tx(
 def build_return_from_tx_params(
     tx_params: list[TxParams], prompt: str
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+    """Build return tx."""
     # We return the transactions_dict below in order to be able to return multiple transactions for later execution instead of just one.
     transaction_dict = {}
     for i, tx_dict in enumerate(tx_params):
@@ -275,6 +286,7 @@ def build_return_from_tx_params(
 
 
 def get_web3(gnosis_rpc_url: str) -> Web3:
+    """Returns the web3 object"""
     return Web3(Web3.HTTPProvider(gnosis_rpc_url))
 
 
@@ -304,18 +316,26 @@ def build_sell_tx(
         return f"exception occurred - {e}", "", None, None
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except openai.RateLimitError as e:
                 # try with a new key again
@@ -362,7 +382,7 @@ ALLOWED_TOOLS = {
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool: str | None = kwargs.get("tool", None)
 

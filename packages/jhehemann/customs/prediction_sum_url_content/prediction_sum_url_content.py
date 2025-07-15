@@ -22,6 +22,7 @@ import functools
 import json
 import re
 import traceback
+from collections.abc import Iterable
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
@@ -32,33 +33,46 @@ import openai
 import requests
 import spacy
 import tiktoken
-from bs4 import BeautifulSoup, NavigableString
+from bs4 import BeautifulSoup, NavigableString, Tag
 from dateutil import parser
 from googleapiclient.discovery import build
 from openai import OpenAI
 from requests import Session
-from sentence_transformers import SentenceTransformer, util
+from sentence_transformers import (  # pylint: disable=import-error
+    SentenceTransformer,
+    util,
+)
+from spacy.tokens import Doc
 from tiktoken import encoding_for_model
 from tqdm import tqdm
 
 
 client: Optional[OpenAI] = None
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -101,15 +115,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM and embedding clients."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, tb: Any) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -146,7 +163,7 @@ You are a Large Language Model (LLM) within a multi-agent system. Your primary t
 detailed in the 'event question' found in 'USER_PROMPT'. This 'event question' should ideally have only two possible outcomes: the event will either occur or not \
 by the deadline specified in the question, which is 23:59:59 of the date provided. It is critical that you incorporate this deadline date in your \
 probability estimation. You are provided an itemized list of information under the label "ADDITIONAL_INFORMATION", which is \
-sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your estimation. You must adhere to the following 'INSTRUCTIONS'.  
+sourced from a Google search engine query performed a few seconds ago and is meant to assist you in your estimation. You must adhere to the following 'INSTRUCTIONS'.
 
 
 INSTRUCTIONS:
@@ -154,9 +171,9 @@ INSTRUCTIONS:
 * If the 'event question' implies more than two outcomes, output the response "Error" and halt further processing.
 * Utilize your training data to generate a probability estimation for the event specified in the 'event question' occurring by the given deadline of 23:59:59 on the specified date.
 * Also rely on your training data to analyze what information would be relevant to make a probability estimation for the event specified in the 'event question' occurring by the given deadline.
-* Examine the itemized list under "ADDITIONAL_INFORMATION". This data is sourced from a Google search engine query done a few seconds ago. 
+* Examine the itemized list under "ADDITIONAL_INFORMATION". This data is sourced from a Google search engine query done a few seconds ago.
 * You can use any item in "ADDITIONAL_INFORMATION" in addition to your training data to make the probability estimation.
-* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most current and relevant information available on the internet, regardless of its age. Still pay close attention on the release and modification timestamps for each information item provided in parentheses right before it as well as the current time {timestamp}. Even if "ADDITIONAL_INFORMATION" contains the most recent and relevant information about the topic in the event question, it does not imply that it is relevant to make a prediction about the event question. 
+* If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question' you can assume that you have been provided with the most current and relevant information available on the internet, regardless of its age. Still pay close attention on the release and modification timestamps for each information item provided in parentheses right before it as well as the current time {timestamp}. Even if "ADDITIONAL_INFORMATION" contains the most recent and relevant information about the topic in the event question, it does not imply that it is relevant to make a prediction about the event question.
 * If there exist any information in "ADDITIONAL_INFORMATION" that is related to the 'event question', but does not clearly state that the event has already happened, you can assume that the event has not happened by now `{timestamp}`.
 * Given the importance of the deadline for the 'event question,' recent information generally holds more weight for your probability estimation. However, do not disregard older information that provides foundational or contextual relevance to the event in question. Use your judgment to weigh the importance of recency against the relevance of older data.
 * Factor the deadline into your probability estimation. It determines the timeframe by which the event must occur for the 'event question' to be answered affirmatively. For reference, the current time is `{timestamp}`.
@@ -254,7 +271,8 @@ RELEASE_DATE_NAMES = [
     "article_date",
     "created_date",
     "published_at",
-    "lastPublishedDate" "og:published_time",
+    "lastPublishedDate",
+    "og:published_time",
     "og:release_date",
     "article:published_time",
     "og:publication_date",
@@ -387,7 +405,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     """Search Google using a custom search engine."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -398,15 +416,15 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     return [result["link"] for result in search["items"]]
 
 
-def extract_event_date(doc_question) -> str:
+def extract_event_date(doc_question: Doc) -> Optional[str]:
     """
     Extracts the event date from the event question if present.
 
-    Args:
-        doc_question (spaCy Doc): Document text as a spaCy Doc object.
+    :param doc_question: Document text as a spaCy Doc object.
+    :type doc_question: Doc
 
-    Returns:
-        str: The event date in year-month-day format if present, otherwise None.
+    :returns: The event date in year-month-day format if present, otherwise None.
+    :rtype: str or None
     """
 
     event_date_ymd = None
@@ -417,10 +435,10 @@ def extract_event_date(doc_question) -> str:
             event_date_ymd = standardize_date(ent.text)
 
     # If event date not formatted as YMD or not found, return None
-    if not datetime.strptime(event_date_ymd, "%Y-%m-%d") or event_date_ymd is None:
+    if event_date_ymd is None or not datetime.strptime(event_date_ymd, "%Y-%m-%d"):
         return None
-    else:
-        return event_date_ymd
+
+    return event_date_ymd
 
 
 def get_max_tokens_for_additional_information(
@@ -432,14 +450,17 @@ def get_max_tokens_for_additional_information(
     """
     Calculates the estimated maximum number of tokens that can be consumed by the additional information string.
 
-    Args:
-        max_compl_tokens (int): The maximum number of chat completion output tokens.
-        prompt (str): The user prompt containing the event question.
-        enc (tiktoken.Encoding): The tiktoken encoding to be used.
-        safety_factor (float, optional): The safety factor to be used for prompt variations and message headers. Defaults to 1.05.
+    :param max_compl_tokens: The maximum number of chat completion output tokens.
+    :type max_compl_tokens: int
+    :param prompt: The user prompt containing the event question.
+    :type prompt: str
+    :param enc: The tiktoken encoding to be used.
+    :type enc: tiktoken.Encoding
+    :param safety_factor: The safety factor to be used for prompt variations and message headers.
+    :type safety_factor: float
 
-    Returns:
-        int: The estimated number of tokens that can be consumed by the additional information string.
+    :returns: The estimated number of tokens that can be consumed by the additional information string.
+    :rtype: int
     """
 
     # Encode the strings into tokens
@@ -461,13 +482,15 @@ def truncate_additional_information(
     """
     Truncates additional information string to a specified number of tokens using tiktoken encoding.
 
-    Args:
-        additional_informations (str): The additional information string to be truncated.
-        max_add_tokens (int): The maximum number of tokens allowed for the additional information string.
-        enc (tiktoken.Encoding): The tiktoken encoding to be used.
+    :param additional_informations: The additional information string to be truncated.
+    :type additional_informations: str
+    :param max_add_tokens: The maximum number of tokens allowed for the additional information string.
+    :type max_add_tokens: int
+    :param enc: The tiktoken encoding to be used.
+    :type enc: tiktoken.Encoding
 
-    Returns:
-    - str: The truncated additional information string.
+    :returns: The truncated additional information string.
+    :rtype: str
     """
 
     # Encode the string into tokens
@@ -477,9 +500,9 @@ def truncate_additional_information(
     # Truncate additional information string if token sum exceeds maximum allowed
     if len_add_enc <= max_add_tokens:
         return additional_informations
-    else:
-        add_trunc_enc = add_enc[: -int(len_add_enc - max_add_tokens)]
-        return enc.decode(add_trunc_enc)
+
+    add_trunc_enc = add_enc[: -int(len_add_enc - max_add_tokens)]
+    return enc.decode(add_trunc_enc)
 
 
 def get_urls_from_queries(
@@ -488,17 +511,19 @@ def get_urls_from_queries(
     """
     Fetch unique URLs from search engine queries, limiting the number of URLs per query.
 
-    Args:
-        queries (List[str]): List of search engine queries.
-        api_key (str): API key for the search engine.
-        engine (str): Custom google search engine ID.
-        num (int, optional): Number of returned URLs per query. Defaults to 3.
+    :param queries: List of search engine queries.
+    :type queries: List[str]
+    :param api_key: API key for the search engine.
+    :type api_key: str
+    :param engine: Custom Google search engine ID.
+    :type engine: str
+    :param num: Number of returned URLs per query (optional, defaults to 3).
+    :type num: int
 
-    Raises:
-        ValueError: If the number of URLs per query exceeds the maximum allowed.
+    :raises ValueError: If the number of URLs per query exceeds the maximum allowed.
 
-    Returns:
-        List[str]: Unique list of URLs, omitting PDF and download-related URLs.
+    :returns: Unique list of URLs, omitting PDF and download-related URLs.
+    :rtype: List[str]
     """
 
     results = set()
@@ -531,18 +556,15 @@ def get_urls_from_queries(
     return list(results)
 
 
-def standardize_date(date_text):
+def standardize_date(date_text: str) -> Optional[str]:
     """
     Standardizes a given date string to the format 'YYYY-MM-DD' or 'MM-DD' if possible.
 
-    Args:
-        date_text (str): The date string to be standardized.
+    :param date_text: The date string to be standardized.
+    :type date_text: str
 
-    Raises:
-        ValueError: If the date string cannot be parsed.
-
-    Returns:
-        str: The standardized date string if possible, otherwise None.
+    :returns: The standardized date string if possible, otherwise None.
+    :rtype: str or None
     """
 
     try:
@@ -564,31 +586,35 @@ def standardize_date(date_text):
         # Format the parsed date accordingly
         if year_exists and month_exists and day_exists:
             return parsed_date.strftime("%Y-%m-%d")
-        elif month_exists and day_exists:
+        if month_exists and day_exists:
             return parsed_date.strftime("%m-%d")
-        else:
-            return None
-    except Exception as e:
+        return None
+    except Exception:
         return None
 
 
 def get_context_around_isolated_event_date(
-    doc_text, event_date_ymd, len_sentence_threshold, max_context=50
-):
+    doc_text: Doc,
+    event_date_ymd: str,
+    len_sentence_threshold: int,
+    max_context: int = 50,
+) -> List:
     """
     Extract sentences around isolated dates within the text.
 
-    Args:
-        doc_text (spaCy Doc): Document text as a spaCy Doc object.
-        event_date_ymd (str): Event date in year-day-month format.
-        len_sentence_threshold (int): Minimum number of words required for a sentence to be considered contextful.
-        max_context (int, optional): Maximum number of words to include in the context. Defaults to 50.
+    :param doc_text: Document text as a spaCy Doc object.
+    :type doc_text: Doc
+    :param event_date_ymd: Event date in year-month-day format.
+    :type event_date_ymd: str
+    :param len_sentence_threshold: Minimum number of words required for a sentence to be considered contextful.
+    :type len_sentence_threshold: int
+    :param max_context: Maximum number of words to include in the context (optional, defaults to 50).
+    :type max_context: int
 
-    Raises:
-        ValueError: If maximum context is less than threshold or greater than 100.
+    :raises ValueError: If the maximum context is less than the threshold or greater than 100.
 
-    Returns:
-        list: List of sentences surrounding the target date.
+    :returns: List of sentences surrounding the target date.
+    :rtype: List
     """
 
     # Check max_context value constraints
@@ -598,7 +624,7 @@ def get_context_around_isolated_event_date(
         )
     if max_context > 100:
         raise ValueError(
-            f"The maximum number of words must be less than or equal to 300."
+            "The maximum number of words must be less than or equal to 300."
         )
 
     contexts_list = []
@@ -614,10 +640,7 @@ def get_context_around_isolated_event_date(
                 continue
 
             # Check if the entity matches the target date
-            if (
-                standardized_date == event_date_ymd
-                or standardized_date == event_date_md
-            ):
+            if standardized_date in (event_date_ymd, event_date_md):
                 sentence = next(
                     sent
                     for sent in doc_text.sents
@@ -676,28 +699,33 @@ def get_context_around_isolated_event_date(
 
 
 def extract_relevant_information(
-    text: str, query_emb, event_date: str, model, nlp, max_words: int
+    text: str, query_emb: Any, event_date: str, model: Any, nlp: Any, max_words: int
 ) -> str:
     """
     Extract relevant information from website text based on a given event question.
 
-    Args:
-        text (str): The website text to extract information from.
-        event_question (str): The question to find relevant information to.
-        event_date (str): Event date in year-day-month format.
-        model: The BERT model for text embeddings.
-        nlp: The spaCy NLP model.
-        max_words (int): Maximum number of words allowed for output.
+    :param text: The website text to extract information from.
+    :type text: str
+    :param query_emb: The query embeddings.
+    :type query_emb: Any
+    :param event_date: Event date in year-day-month format.
+    :type event_date: str
+    :param model: The BERT model for text embeddings.
+    :type model: Any
+    :param nlp: The spaCy NLP model.
+    :type nlp: Any
+    :param max_words: Maximum number of words allowed for output.
+    :type max_words: int
 
-    Returns:
-        str: The relevant sentences extracted from the website text.
+    :returns: The relevant sentences extracted from the website text.
+    :rtype: str
     """
 
     # Constants for sentence length and number thresholds
     len_sentence_threshold = 5
     num_sentences_threshold = 1000
     sentences = []
-    event_date_sentences = []
+    event_date_sentences: List = []
     seen = set()
 
     # Truncate text for performance optimization
@@ -755,15 +783,15 @@ def extract_relevant_information(
     return output
 
 
-def get_date(soup):
+def get_date(soup: BeautifulSoup) -> str:
     """
     Retrieves the release and modification dates from the soup object containing the HTML tree.
 
-    Args:
-        soup (BeautifulSoup): The BeautifulSoup object for the webpage.
+    :param soup: The BeautifulSoup object for the webpage.
+    :type soup: BeautifulSoup
 
-    Returns:
-        str: A string representing the release and modification dates.
+    :returns: A string representing the release and modification dates.
+    :rtype: str
     """
 
     release_date = "unknown"
@@ -774,53 +802,69 @@ def get_date(soup):
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            modified_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, Iterable) and not isinstance(content, (str, bytes)):
+                modified_date = " ".join(content)
+            else:
+                modified_date = str(content)
 
     # If not found, then look for release or publication date
     for name in RELEASE_DATE_NAMES:
         meta_tag = soup.find("meta", {"name": name}) or soup.find(
             "meta", {"property": name}
         )
-        if meta_tag:
-            release_date = meta_tag.get("content", "")
-            break
+        if meta_tag and isinstance(meta_tag, Tag):
+            content = meta_tag.get("content", "")
+            if isinstance(content, Iterable) and not isinstance(content, (str, bytes)):
+                release_date = " ".join(content)
+            else:
+                release_date = str(content)
 
     # Fallback to using the first time tag if neither release nor modified dates are found
     if release_date == "unknown" and modified_date == "unknown":
         time_tag = soup.find("time")
-        if time_tag:
-            release_date = time_tag.get("datetime", "")
+        if time_tag and isinstance(time_tag, Tag):
+            datetime_content = time_tag.get("datetime", "")
+            if isinstance(datetime_content, Iterable) and not isinstance(
+                datetime_content, (str, bytes)
+            ):
+                release_date = " ".join(datetime_content)
+            else:
+                release_date = str(datetime_content)
 
     return f"({release_date}, {modified_date})"
 
 
 def extract_text(
     html: str,
-    query_emb,
+    query_emb: Any,
     event_date: str,
-    model,
-    nlp,
+    model: Any,
+    nlp: Any,
     max_words: int,
 ) -> str:
     """
     Extract relevant information from HTML string.
 
-    Args:
-        html (str): The HTML content to extract text from.
-        event_question (str): Event question for context.
-        event_date (str): Event date in year-month-day format.
-        model: Pre-trained model for sentence transformer.
-        nlp: NLP object for additional text processing.
-        max_words (int): Maximum number of words for the output summary.
+    :param html: The HTML content to extract text from.
+    :type html: str
+    :param query_emb: The query embeddings.
+    :type query_emb: Any
+    :param event_date: Event date in year-month-day format.
+    :type event_date: str
+    :param model: Pre-trained model for sentence transformer.
+    :type model: Any
+    :param nlp: NLP object for additional text processing.
+    :type nlp: Any
+    :param max_words: Maximum number of words for the output summary.
+    :type max_words: int
 
-    Raises:
-        ValueError: If the HTML content is empty.
-        ValueError: If the release or update date could not be extracted from the HTML.
+    :raises ValueError: If the HTML content is empty.
+    :raises ValueError: If the release or update date could not be extracted from the HTML.
 
-    Returns:
-        str: Relevant website information with release date.
+    :returns: Relevant website information with release date.
+    :rtype: str
     """
 
     if not html:
@@ -862,21 +906,22 @@ def extract_text(
 
 def process_in_batches(
     urls: List[str], batch_size: int = 15, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """
     Process URLs in batches using a generator and thread pool executor.
 
-    Args:
-        urls (List[str]): List of URLs to process.
-        batch_size (int, optional): Size of the processing batch_size. Default is 5.
-        timeout (int, optional): Timeout for each request in seconds. Default is 10.
+    :param urls: List of URLs to process.
+    :type urls: list of str
+    :param batch_size: Size of the processing batch (optional, defaults to 5).
+    :type batch_size: int
+    :param timeout: Timeout for each request in seconds (optional, defaults to 10).
+    :type timeout: int
 
-    Raises:
-        ValueError: If the batch_size is less than or equal to zero.
-        ValueError: If the timeout is less than or equal to zero.
+    :raises ValueError: If the batch_size is less than or equal to zero.
+    :raises ValueError: If the timeout is less than or equal to zero.
 
-    Yields:
-        List[Tuple[Future, str]]: List containing Future objects and URLs for each batch.
+    :yield: List containing Future objects and URLs for each batch.
+    :rtype: list of tuple(Future, str)
     """
 
     if batch_size <= 0:
@@ -915,16 +960,16 @@ def process_in_batches(
                     head_response = head_future.result()
                     if "text/html" not in head_response.headers.get("Content-Type", ""):
                         continue
-                    else:
-                        # Submit a GET request to the url
-                        futures.append(
-                            (
-                                executor.submit(
-                                    session.get, url, headers=headers, timeout=timeout
-                                ),
-                                url,
-                            )
+
+                    # Submit a GET request to the url
+                    futures.append(
+                        (
+                            executor.submit(
+                                session.get, url, headers=headers, timeout=timeout
+                            ),
+                            url,
                         )
+                    )
                 except Exception as e:
                     print(f"An error occurred: {e}")
 
@@ -935,22 +980,22 @@ def extract_texts(
     urls: List[str],
     event_question: str,
     max_words_per_url: int,
-    nlp,
+    nlp: Any,
 ) -> List[str]:
     """
     Extract texts from a list of URLs using BERT and Spacy.
 
-    Args:
-        urls (List[str]): List of URLs to extract text from.
-        event_question (str): Event-related question for text extraction.
-        max_words_per_url (int): Maximum number of words allowed to extract for each URL.
+    :param urls: List of URLs to extract text from.
+    :type urls: list of str
+    :param event_question: Event-related question for text extraction.
+    :type event_question: str
+    :param max_words_per_url: Maximum number of words allowed to extract for each URL.
+    :type max_words_per_url: int
+    :param nlp: Maximum number of words allowed to extract for each URL.
+    :type nlp: Any
 
-    Raises:
-        ValueError: If the event date could not be extracted from the event question.
-        Timeout: If the request timed out.
-
-    Returns:
-        List[str]: List of extracted texts.
+    :returns: List of extracted texts.
+    :rtype: list of str
     """
 
     # Maximum number of allowed extractions
@@ -1002,7 +1047,7 @@ def extract_texts(
 
                 # Append the extracted text if available and increment the count
                 if extracted_text:
-                    # extracted_texts.append(f"{url}\n{extracted_text}")
+                    # extracted_texts.append(f"{url}\n{extracted_text}") noqa: E800
                     extracted_texts.append(extracted_text)
                 count += 1
 
@@ -1030,7 +1075,7 @@ def fetch_additional_information(
     max_add_words: int,
     google_api_key: str,
     google_engine: str,
-    nlp,
+    nlp: Any,
     engine: str = "gpt-4o-2024-08-06",
     temperature: float = 1.0,
     max_compl_tokens: int = 500,
@@ -1038,27 +1083,35 @@ def fetch_additional_information(
     """
     Get urls from a web search and extract relevant information based on an event question.
 
-    Args:
-        event_question (str): The question related to the event.
-        max_add_words (int): The maximum number of words allowed for the additional information.
-        google_api_key (str): The API key for the Google service.
-        google_engine (str): The Google engine to be used.
-        temperature (float): The temperature parameter for the engine.
-        engine (str): The openai engine. Defaults to "gpt-3.5-turbo".
-        temperature (float): The temperature parameter for the engine. Defaults to 1.0.
-        max_compl_tokens (int): The maximum number of tokens for the engine's response.
+    :param event_question: The question related to the event.
+    :type event_question: str
+    :param max_add_words: The maximum number of words allowed for additional information.
+    :type max_add_words: int
+    :param google_api_key: The API key for the Google service.
+    :type google_api_key: str
+    :param google_engine: The Google engine to be used.
+    :type google_engine: str
+    :param nlp: The nlp object
+    :type nlp: Any
+    :param engine: The openai engine. Defaults to "gpt-3.5-turbo".
+    :type engine: str
+    :param temperature: The temperature parameter for the engine.
+    :type temperature: float
+    :param max_compl_tokens: The maximum number of tokens for the engine's response.
+    :type max_compl_tokens: int
 
-    Returns:
-        str: The relevant information fetched from all the URLs concatenated.
+    :returns: The relevant information fetched from all the URLs concatenated.
+    :rtype: str
     """
-
+    if not client:
+        return "Client not initialized"
     # Create URL query prompt
     url_query_prompt = URL_QUERY_PROMPT.format(event_question=event_question)
 
     # Perform moderation check
     moderation_result = client.moderations.create(input=url_query_prompt)
     if moderation_result.results[0].flagged:
-        return "Moderation flagged the prompt as in violation of terms.", None
+        return "Moderation flagged the prompt as in violation of terms."
 
     # Create messages for the OpenAI engine
     messages = [
@@ -1110,22 +1163,23 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """
     Run the task with the given arguments.
 
-    Args:
-        kwargs (Dict): Keyword arguments that specify settings and API keys.
+    :param kwargs: Keyword arguments that specify settings and API keys.
+    :type kwargs: dict
 
-    Raises:
-        ValueError: If the tool or prompt is not provided.
-        ValueError: If the tool is not supported.
-        ValueError: If the event question is not found in the prompt.
+    :raises ValueError: If the tool is not supported.
+    :raises ValueError: If the event question is not found in the prompt.
 
-    Returns:
-        Tuple[str, Optional[Dict[str, Any]]]: The generated content and any additional data.
+    :returns: The generated content and any additional data.
+    :rtype: tuple of str and optional dict[str, any]
     """
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        if not client:
+            raise RuntimeError("Client not initialized")
+
         tool = kwargs["tool"]
         prompt = kwargs["prompt"]
         max_compl_tokens = kwargs.get(
@@ -1150,9 +1204,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         print(f"ENGINE: {engine}")
 
         # Extract the event question from the prompt
-        event_question = re.search(r"\"(.+?)\"", prompt).group(1)
-        if not event_question:
+        event_question_match = re.search(r"\"(.+?)\"", prompt)
+        if not event_question_match:
             raise ValueError("No event question found in prompt.")
+        event_question = event_question_match.group(1)
         print(f"EVENT_QUESTION: {event_question}")
         print()
 
@@ -1199,6 +1254,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         # Extract event date and format it to ISO 8601 with UTC timezone and 23:59:59 time
         doc_question = nlp(event_question)
         raw_event_date = extract_event_date(doc_question)
+        if raw_event_date is None:
+            raise ValueError("Could not extract a valid event date.")
         parsed_event_date = datetime.strptime(raw_event_date, "%Y-%m-%d")
         final_event_date = parsed_event_date.replace(
             hour=23, minute=59, second=59, microsecond=0, tzinfo=timezone.utc

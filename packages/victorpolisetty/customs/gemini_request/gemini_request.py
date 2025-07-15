@@ -42,7 +42,7 @@ def count_tokens(text: str) -> int:
     return genai.count_message_tokens(prompt=text)
 
 
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
 
     api_key = kwargs["api_keys"]["gemini"]
@@ -85,7 +85,9 @@ def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
         )
 
         # Ensure response has a .text attribute
-        response_text = getattr(response, "text", None)
+        response_text = getattr(  # noqa: F841 # pylint: disable=unused-variable
+            response, "text", None
+        )
 
     except Exception as e:
         return f"An error occurred: {str(e)}", None, None, None

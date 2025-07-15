@@ -25,19 +25,11 @@ import time
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
+from io import BytesIO
 from itertools import islice
 from string import punctuation
-from io import BytesIO
-from typing import (
-    Any,
-    Callable,
-    Dict,
-    Generator,
-    List,
-    Optional,
-    Tuple,
-    Union,
-)
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
+
 import PyPDF2
 import anthropic
 import googleapiclient
@@ -46,29 +38,39 @@ import requests
 import spacy
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
+from pydantic import BaseModel, PositiveInt
 from readability import Document
 from spacy import Language
 from spacy.cli import download
 from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
 from tiktoken import encoding_for_model, get_encoding
-from pydantic import BaseModel, PositiveInt
-
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 
 
-def with_key_rotation(func: Callable):
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+
+
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -110,7 +112,8 @@ def with_key_rotation(func: Callable):
 class LLMClientManager:
     """Client context manager for LLMs."""
 
-    def __init__(self, api_keys: List, model: str = None):
+    def __init__(self, api_keys: List, model: str):
+        """Initializes with API keys and llm provider"""
         self.api_keys = api_keys
         if "gpt" in model:
             self.llm_provider = "openai"
@@ -119,13 +122,15 @@ class LLMClientManager:
         else:
             self.llm_provider = "openrouter"
 
-    def __enter__(self):
+    def __enter__(self) -> Any:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = LLMClient(self.api_keys, self.llm_provider)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.client.close()
@@ -135,7 +140,12 @@ class LLMClientManager:
 class Usage:
     """Usage class."""
 
-    def __init__(self, prompt_tokens=None, completion_tokens=None):
+    def __init__(
+        self,
+        prompt_tokens: Optional[Any] = None,
+        completion_tokens: Optional[Any] = None,
+    ):
+        """Initializes with prompt tokens and completion tokens."""
         self.prompt_tokens = prompt_tokens
         self.completion_tokens = completion_tokens
 
@@ -144,6 +154,7 @@ class LLMResponse:
     """Response class."""
 
     def __init__(self, content: Optional[str] = None, usage: Optional[Usage] = None):
+        """Initializes with content and usage class."""
         self.content = content
         self.usage = Usage()
 
@@ -151,36 +162,38 @@ class LLMResponse:
 class LLMClient:
     """Client for LLMs."""
 
-    def __init__(self, api_keys: List, llm_provider: str = None):
+    def __init__(self, api_keys: List, llm_provider: str):
+        """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.llm_provider = llm_provider
         if self.llm_provider == "anthropic":
             import anthropic
 
-            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])
+            self.client = anthropic.Anthropic(api_key=self.api_keys["anthropic"])  # type: ignore
         if self.llm_provider == "openai":
             import openai
 
-            self.client = openai.OpenAI(api_key=self.api_keys["openai"])
+            self.client = openai.OpenAI(api_key=self.api_keys["openai"])  # type: ignore
         if self.llm_provider == "openrouter":
             import openai
 
             self.client = openai.OpenAI(
                 base_url="https://openrouter.ai/api/v1",
-                api_key=self.api_keys["openrouter"],
+                api_key=self.api_keys["openrouter"],  # type: ignore
             )
 
     def completions(
         self,
         model: str,
-        messages: List = [],
+        messages: List = [],  # noqa: B006
         timeout: Optional[Union[float, int]] = None,
         temperature: Optional[float] = None,
         top_p: Optional[float] = None,
         n: Optional[int] = None,
-        stop=None,
+        stop: Any = None,
         max_tokens: Optional[float] = None,
-    ):
+    ) -> Optional[LLMResponse]:
+        """Generate a completion from the specified LLM provider using the given model and messages."""
         if self.llm_provider == "anthropic":
             # anthropic can't take system prompt in messages
             # default value if not found
@@ -205,7 +218,7 @@ class LLMClient:
 
         if self.llm_provider in ["openai", "openrouter"]:
             # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
-            # transform = [] # to desactivate prompt compression
+            # transform = [] # to desactivate prompt compression noqa: E800
             response_provider = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -221,8 +234,12 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
+        return None
+
 
 class ExtendedDocument(BaseModel):
+    """Extended Document Model"""
+
     text: str
     url: str
     tokens: PositiveInt = 0
@@ -258,7 +275,7 @@ def count_tokens(text: str, model: str) -> int:
     if "claude" in model.lower() and client and client.llm_provider == "anthropic":
         try:
             # Use Anthropic's tokenizer when available
-            response = client.messages.count_tokens(
+            response = client.messages.count_tokens(  # type: ignore # pylint: disable=no-member
                 model=model, messages=[{"role": "user", "content": text}]
             )
             return response.input_tokens
@@ -472,6 +489,7 @@ SYSTEM_PROMPT_FORECASTER = "You are an expert market forecaster. Your primary fu
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
+    """Search Google using a custom search engine."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
         service.cse()
@@ -505,12 +523,12 @@ def get_urls_from_queries(
 def extract_text(
     html: str,
     num_words: Optional[int] = None,
-) -> ExtendedDocument:
+) -> Optional[ExtendedDocument]:
     """Extract text from a single HTML document"""
     text = Document(html).summary()
     text = md(text, heading_style="ATX")
     if text is None:
-        return ""
+        return None
 
     words = text.split()
     text = " ".join(words[:num_words]) if num_words else " ".join(words)
@@ -519,14 +537,16 @@ def extract_text(
     return doc
 
 
-def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
+def extract_text_from_pdf(
+    url: str, num_words: Optional[int] = None
+) -> Optional[ExtendedDocument]:
     """Extract text from a PDF document at the given URL."""
     try:
         response = requests.get(url, timeout=HTTP_TIMEOUT)
         response.raise_for_status()
 
         if "application/pdf" not in response.headers.get("Content-Type", ""):
-            return ValueError("URL does not point to a PDF document")
+            raise ValueError("URL does not point to a PDF document")
 
         with BytesIO(response.content) as pdf_file:
             reader = PyPDF2.PdfReader(pdf_file)
@@ -547,7 +567,7 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
 
 def process_in_batches(
     urls: List[str], window: int = 5, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
@@ -562,7 +582,7 @@ def process_in_batches(
 def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDocument]:
     """Extract texts from URLs"""
     max_allowed = 5
-    extracted_docs = []
+    extracted_docs: List[ExtendedDocument] = []
     count = 0
     stop = False
     for batch in process_in_batches(urls=urls):
@@ -594,7 +614,8 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDoc
     return extracted_docs
 
 
-def extract_json_string(text):
+def extract_json_string(text: str) -> str:
+    """Extract's the json string"""
     # This regex looks for triple backticks, captures everything in between until it finds another set of triple backticks.
     pattern = r"(\{[^}]*\})"
     matches = re.findall(pattern, text)
@@ -621,7 +642,11 @@ def fetch_multi_queries_with_retry(
     retries: int = COMPLETION_RETRIES,
     delay: int = COMPLETION_DELAY,
     counter_callback: Optional[Callable] = None,
-):
+) -> Tuple[dict, Optional[Callable]]:
+    """Attempt to fetch multi-queries with retries on failure."""
+    if not client:
+        raise RuntimeError("Client not initialized")
+
     """Attempt to fetch multi-queries with retries on failure."""
     attempt = 0
     while attempt < retries:
@@ -635,6 +660,8 @@ def fetch_multi_queries_with_retry(
                 timeout=90,
                 stop=None,
             )
+            if not response or response.content is None:
+                raise RuntimeError("Response not found")
             # Attempt to extract JSON data from the response
             json_data = extract_multi_queries(response.content)
 
@@ -661,8 +688,10 @@ def generate_prediction_with_retry(
     retries: int = COMPLETION_RETRIES,
     delay: int = COMPLETION_DELAY,
     counter_callback: Optional[Callable] = None,
-):
+) -> Tuple[Any, Optional[Callable]]:
     """Attempt to generate a prediction with retries on failure."""
+    if not client:
+        raise Exception("Client not initialized")
     attempt = 0
     tool_errors = []
     while attempt < retries:
@@ -677,14 +706,19 @@ def generate_prediction_with_retry(
                 stop=None,
             )
 
-            if counter_callback is not None:
+            if (
+                response
+                and response.content is not None
+                and counter_callback is not None
+            ):
                 counter_callback(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
                     model=model,
                     token_counter=count_tokens,
                 )
-            extracted_block = extract_json_string(response.content)
+
+                extracted_block = extract_json_string(response.content)
 
             return extracted_block, counter_callback
         except Exception as e:
@@ -706,12 +740,19 @@ def fetch_additional_information(
     max_tokens: int,
     google_api_key: Optional[str],
     google_engine: Optional[str],
-    num_urls: Optional[int],
-    num_words: Optional[int],
+    num_urls: int,
+    num_words: int,
     counter_callback: Optional[Callable] = None,
-    source_links: Optional[List[str]] = None,
+    source_links: Optional[Dict] = None,
 ) -> Tuple[str, Any]:
     """Fetch additional information."""
+    if not google_api_key:
+        raise RuntimeError("Google API key not found")
+    if not google_engine:
+        raise RuntimeError("Google Engine Id not found")
+    if not client:
+        raise RuntimeError("Client not initialized")
+
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=user_prompt)
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
@@ -728,6 +769,7 @@ def fetch_additional_information(
             counter_callback=counter_callback,
         )
     except Exception as e:
+        print(f"Fetch multi queries with retry failed with exception: {e}")
         json_data = {"queries": [user_prompt]}
 
     if not source_links:
@@ -742,8 +784,8 @@ def fetch_additional_information(
         docs = []
         for url, content in islice(source_links.items(), 3):
             doc = extract_text(html=content, num_words=num_words)
-            doc.url = url
             if doc and doc.text != "":
+                doc.url = url
                 docs.append(doc)
 
     if len(docs) > MAX_NR_DOCS:
@@ -771,7 +813,7 @@ def load_model(vocab: str) -> Language:
 
 def calc_word_frequencies(doc: Doc) -> FrequenciesType:
     """Get the frequency of each word in the given text, excluding stop words and punctuations."""
-    word_frequencies = defaultdict(lambda: 0)
+    word_frequencies: Dict = defaultdict(lambda: 0)
     for token in doc:
         word = token.text
         lower = word.lower()
@@ -793,7 +835,7 @@ def calc_sentence_scores(
     sentence_tokens: List[Span], word_frequencies: FrequenciesType
 ) -> ScoresType:
     """Calculate the sentence scores."""
-    sentence_scores = defaultdict(lambda: 0)
+    sentence_scores: Dict = defaultdict(lambda: 0)
     for sentence in sentence_tokens:
         for token in sentence:
             sentence_scores[sentence] += word_frequencies[token.text.lower()]
@@ -812,7 +854,7 @@ def summarize(text: str, compression_factor: float, vocab: str) -> str:
     sentence_tokens = list(doc.sents)
     sentence_scores = calc_sentence_scores(sentence_tokens, word_frequencies)
     n = int(len(sentence_tokens) * compression_factor)
-    summary = nlargest(n, sentence_scores, key=sentence_scores.get)
+    summary = nlargest(n, sentence_scores, key=lambda k: sentence_scores[k])
     summary_words = [word.text for word in summary]
     summary_text = "".join(summary_words)
     return summary_text
@@ -834,7 +876,7 @@ def adjust_additional_information(
         LLM_SETTINGS[model]["limit_max_tokens"]
         - LLM_SETTINGS[model]["default_max_tokens"]
     )
-    available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
+    available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens
 
     # Encode the additional_information
     additional_info_tokens = count_tokens(text=additional_information, model=model)
@@ -847,10 +889,13 @@ def adjust_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
     engine = kwargs.get("model")
+    if engine is None:
+        raise ValueError("Model must be specified in kwargs")
+
     if "claude" in tool:  # maintain backwards compatibility
         engine = "claude-3-5-sonnet-20240620"
     print(f"ENGINE used for {tool}: {engine}")
