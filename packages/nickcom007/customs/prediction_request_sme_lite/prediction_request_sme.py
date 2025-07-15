@@ -23,7 +23,7 @@ import json
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import islice
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
 
 import anthropic
 import openai
@@ -44,15 +44,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -179,7 +182,7 @@ task question: "Will Apple release iphone 15 by 1 October 2023?"
 ---
 task question: "Will the newly elected ceremonial president of Singapore face any political scandals by 13 September 2023?"
 [
-        { 
+        {
             "sme":  "Political Commentator",
             "sme_introduction": "You are an experienced political commentator in Asia. Your main objective is to produce comprehensive, insightful and impartial analysis based on the relevant political news and your politic expertise to form an answer to the question releted to a political event or politician."
         }
@@ -199,21 +202,30 @@ task question: "Will the air strike conflict in Sudan be resolved by 13 Septembe
 """
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -252,9 +264,10 @@ def with_key_rotation(func: Callable):
 
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
+    """Performs a Google Custom Search and returns a list of result links."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -265,8 +278,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
     items = search.get("items")
     if items is not None:
         return [result["link"] for result in items]
-    else:
-        return []
+    return []
 
 
 def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List[str]:
@@ -306,6 +318,7 @@ def extract_text(
 def get_with_length_limit(
     url: str, timeout: int = 10, max_length: int = 25_000_000
 ) -> requests.Response:
+    """Fetches the content of a URL if its size is within the specified limit."""
     response = requests.head(url)
     if response.status_code != 200:
         raise Exception(f"HEAD request failed with status code {response.status_code}")
@@ -322,7 +335,7 @@ def get_with_length_limit(
 
 def process_in_batches(
     urls: List[str], window: int = 5, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
@@ -334,7 +347,7 @@ def process_in_batches(
             yield futures
 
 
-def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
+def extract_texts(urls: List[str], num_words: int = 300) -> List[Dict]:
     """Extract texts from URLs"""
     max_allowed = 5
     extracted_texts = []
@@ -346,8 +359,9 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                doc = {}
-                doc["text"] = extract_text(html=result.text, num_words=num_words)
+                doc: Dict = {}
+                text = extract_text(html=result.text, num_words=num_words)
+                doc["text"] = text
                 doc["url"] = url
                 extracted_texts.append(doc)
                 count += 1
@@ -370,16 +384,23 @@ def fetch_additional_information(
     max_tokens: int,
     google_api_key: Optional[str],
     google_engine: Optional[str],
-    num_urls: Optional[int],
-    num_words: Optional[int],
+    num_urls: int,
+    num_words: int,
     counter_callback: Optional[Callable] = None,
-    source_links: Optional[List[str]] = None,
-) -> str:
+    source_links: Optional[Dict] = None,
+) -> Tuple[str, Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information."""
+    if not google_api_key:
+        raise RuntimeError("Google API key not found")
+    if not google_engine:
+        raise RuntimeError("Google Engine Id not found")
+    if not client:
+        raise RuntimeError("Client not initialized")
+
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
     moderation_result = client.moderations.create(input=url_query_prompt)
     if moderation_result.results[0].flagged:
-        return ""
+        return "", counter_callback
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": url_query_prompt},
@@ -405,11 +426,13 @@ def fetch_additional_information(
     else:
         texts = []
         for url, content in islice(source_links.items(), 3):
-            doc = {}
-            doc["text"], doc["url"] = (
+            doc: dict = {}
+            text = (
                 extract_text(html=content, num_words=num_words),
                 url,
             )
+            doc["text"] = text
+            doc["url"] = url
             texts.append(doc)
     # Format the additional information
     additional_information = "\n".join(
@@ -430,9 +453,16 @@ def fetch_additional_information(
 
 
 def get_sme_role(
-    engine, temperature, max_tokens, prompt, counter_callback=None
-) -> Tuple[str, str]:
+    engine: str,
+    temperature: float,
+    max_tokens: int,
+    prompt: str,
+    counter_callback: Optional[Callable] = None,
+) -> Tuple[str, str, Optional[Callable]]:
     """Get SME title and introduction"""
+    if not client:
+        raise RuntimeError("Client not initialized")
+
     market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
     system_prompt = SME_GENERATION_SYSTEM_PROMPT
 
@@ -479,7 +509,7 @@ def adjust_additional_information(
     MAX_PREDICTION_PROMPT_TOKENS = (
         MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
     )
-    available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens
+    available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens
 
     # Encode the additional_information
     additional_info_tokens = enc.encode(additional_information)
@@ -494,7 +524,7 @@ def adjust_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         # get rid of -lite suffix
@@ -510,6 +540,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
 
+        if not client:
+            raise RuntimeError("Client not initialized")
+
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
@@ -517,7 +550,7 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         print(f"ENGINE: {engine}")
 
         try:
-            sme, sme_introduction, counter_callback = get_sme_role(
+            _, sme_introduction, counter_callback = get_sme_role(
                 engine,
                 temperature,
                 max_tokens,

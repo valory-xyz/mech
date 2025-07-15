@@ -1,3 +1,22 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2025 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+"""Contains the job definitions"""
 import functools
 import json
 import re
@@ -7,30 +26,39 @@ import requests
 
 
 class CorcelAPIException(Exception):
-    pass
+    """Corcel API Exception"""
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
-            except CorcelAPIException:
+            except CorcelAPIException as e:
                 # try with a new key again
                 service = "corcel"
                 if retries_left[service] <= 0:
-                    raise Exception("Error: API retries exhausted")
+                    raise Exception("Error: API retries exhausted") from e
                 retries_left[service] -= 1
                 api_keys.rotate(service)
                 return execute()
@@ -93,7 +121,7 @@ AVAILABLE_TOOLS = ["corcel-prediction", "corcel-completion"]
 DEFAULT_VALUES = {"model": "llama-3", "temperature": 0.1, "max_tokens": 500}
 
 
-def send_corcel_request(api_key: str, prompt: str, **kwargs) -> str:
+def send_corcel_request(api_key: str, prompt: str, **kwargs: Any) -> str:
     """Makes a request to Corcel API"""
 
     payload = {
@@ -148,7 +176,7 @@ def response_post_process(response: str, tool_name: str) -> str:
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
 
     api_key = kwargs["api_keys"]["corcel"]

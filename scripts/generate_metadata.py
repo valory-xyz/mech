@@ -1,5 +1,25 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2025 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+"""The script allows the user to generate the metadata of the tools"""
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Dict, List
@@ -53,16 +73,19 @@ OUTPUT_SCHEMA = {
 }
 
 
-def find_customs_folders() -> List[str]:
+def find_customs_folders() -> List[Path]:
+    """Finds all the customs folders inside the packages dir"""
     return [p for p in Path(ROOT_DIR).rglob("*") if p.is_dir() and CUSTOMS in p.name]
 
 
-def get_immediate_subfolders(folder_path) -> List[str]:
+def get_immediate_subfolders(folder_path: Path) -> List[Path]:
+    """Finds all the subfolders inside the dir"""
     folder = Path(folder_path)
     return [item for item in folder.iterdir() if item.is_dir()]
 
 
-def read_files_in_folder(folder_path) -> Dict[str, str]:
+def read_files_in_folder(folder_path: Path) -> Dict[str, str]:
+    """Reads contents of all the files inside the dir"""
     contents = {}
     folder = Path(folder_path)
     try:
@@ -76,13 +99,19 @@ def read_files_in_folder(folder_path) -> Dict[str, str]:
 
 
 def import_module_from_path(module_name: str, file_path: str) -> ModuleType:
+    """Imports the py file as a module"""
     spec = importlib.util.spec_from_file_location(module_name, file_path)
+    if spec is None or spec.loader is None:
+        print(f"Cannot load module '{module_name!r}' from '{file_path!r}'")
+        sys.exit(1)
+
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
 
 
 def generate_tools_data() -> List[Dict[str, Any]]:
+    """Generates the tools data needed for the metadata.json"""
     tools_data: List[Dict[str, Any]] = []
     matches = find_customs_folders()
     for folder in matches:
@@ -123,8 +152,9 @@ def generate_tools_data() -> List[Dict[str, Any]]:
     return tools_data
 
 
-def build_tools_metadata(tools_data: List[Dict[str, Any]]):
-    result = METADATA_TEMPLATE
+def build_tools_metadata(tools_data: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Builds the metadata.json from the tools data"""
+    result: dict[str, Any] = METADATA_TEMPLATE
 
     for entry in tools_data:
         author = entry.get("author", "")
@@ -132,7 +162,7 @@ def build_tools_metadata(tools_data: List[Dict[str, Any]]):
         allowed_tools = entry.get("allowed_tools", [])
         if not allowed_tools:
             print(
-                f"Warning: '{tool_name}' by '{author}' has no allowed tools/invalid format!"
+                f"Warning: '{tool_name!r}' by '{author!r}' has no allowed tools/invalid format!"
             )
 
         for tool in entry.get("allowed_tools", []):
@@ -150,11 +180,12 @@ def build_tools_metadata(tools_data: List[Dict[str, Any]]):
 
 
 def main() -> None:
+    """Run the generate_metadata script."""
     tools_data = generate_tools_data()
     metadata = build_tools_metadata(tools_data)
 
     # Dump the result to the JSON file
-    with open(METADATA_FILE_PATH, "w") as f:
+    with open(METADATA_FILE_PATH, "w", encoding="utf-8") as f:
         json.dump(metadata, f, indent=4)
 
     print(f"Metadata has been stored to {METADATA_FILE_PATH}")

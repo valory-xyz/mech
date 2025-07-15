@@ -25,6 +25,7 @@ This module tries to mimic the current logic on the market-creator service
 import functools
 import json
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -35,21 +36,30 @@ from googleapiclient import errors
 from openai import OpenAI
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -201,23 +211,37 @@ class Object(object):
     """Object"""
 
 
+@dataclass
+class Context:
+    """Context"""
+
+    logger: logging.Logger
+
+
+@dataclass
+class Params:
+    """Params"""
+
+    market_closing_newsapi_api_key: str
+    newsapi_endpoint: str
+
+
 class CloseMarketBehaviourMock:
     """CloseMarketBehaviourMock"""
 
-    params: Object
-    context: Object
+    params: Params
+    context: Context
     kwargs: Dict[str, Any]
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any):
         """Init the object."""
         self.kwargs = kwargs
-        self.context = Object()
+        self.context = Context(logger=logging.getLogger(__name__))
         self.context.logger = logging.getLogger(__name__)
-        self.params = Object()
-        self.params.market_closing_newsapi_api_key = kwargs.get("api_keys", {})[
-            "newsapi"
-        ]
-        self.params.newsapi_endpoint = NEWSAPI_ENDPOINT
+        self.params = Params(
+            market_closing_newsapi_api_key=kwargs.get("api_keys", {})["newsapi"],
+            newsapi_endpoint=NEWSAPI_ENDPOINT,
+        )
 
     def get_http_response(
         self,
@@ -269,7 +293,7 @@ class CloseMarketBehaviourMock:
             input_string += current_article
         return input_string
 
-    def do_llm_request(self, **kwargs) -> str:
+    def do_llm_request(self, **kwargs: Any) -> str:
         """Do LLM request."""
         with OpenAIClientManager(kwargs["api_keys"]["openai"]):
             max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
@@ -277,15 +301,16 @@ class CloseMarketBehaviourMock:
                 "temperature", DEFAULT_OPENAI_SETTINGS["temperature"]
             )
             prompt = kwargs.get("prompt")
+            tool = kwargs["tool"]
             engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
             print(f"ENGINE: {engine}")
+
+            if not client:
+                raise RuntimeError("Client not initialized")
+
             moderation_result = client.moderations.create(input=prompt)
             if moderation_result.results[0].flagged:
-                return (
-                    "Moderation flagged the prompt as in violation of terms.",
-                    None,
-                    None,
-                )
+                return "Moderation flagged the prompt as in violation of terms."
 
             messages = [
                 {"role": "system", "content": "You are a helpful assistant."},
@@ -300,12 +325,9 @@ class CloseMarketBehaviourMock:
                 timeout=120,
                 stop=None,
             )
-            res = Object()
-            res.value = response.choices[0].message.content
+            return response.choices[0].message.content
 
-            return res
-
-    def _get_answer(self, question: str) -> Optional[str]:
+    def _get_answer(self, question: str) -> Any:
         """Get an answer for the provided questions"""
 
         # An initial query is made to Newsapi to detect ratelimit issue
@@ -332,7 +354,7 @@ class CloseMarketBehaviourMock:
         kwargs1.update(self.kwargs)
         llm_response_message = self.do_llm_request(**kwargs1)
 
-        result_str = llm_response_message.value.replace("OUTPUT:", "").rstrip().lstrip()
+        result_str = llm_response_message.replace("OUTPUT:", "").rstrip().lstrip()
         self.context.logger.info(f"Got LLM response: {result_str}")
         result = self._parse_llm_output(result_str, required_fields=["queries"])
         if result is None:
@@ -367,7 +389,7 @@ class CloseMarketBehaviourMock:
         kwargs2.update(self.kwargs)
         llm_response_message = self.do_llm_request(**kwargs2)
 
-        result_str = llm_response_message.value.replace("OUTPUT:", "").rstrip().lstrip()
+        result_str = llm_response_message.replace("OUTPUT:", "").rstrip().lstrip()
         self.context.logger.info(f"Got LLM response: {result_str}")
         json_data = self._parse_llm_output(result_str, required_fields=["has_occurred"])
         if json_data is None:
@@ -382,7 +404,7 @@ class CloseMarketBehaviourMock:
 
         return json_data
 
-    def _get_news(self, query: str) -> List[Dict[str, Any]]:
+    def _get_news(self, query: str) -> Optional[List[Dict[str, Any]]]:
         """Auxiliary method to collect data from endpoint."""
 
         headers = {"X-Api-Key": self.params.market_closing_newsapi_api_key}
@@ -414,7 +436,7 @@ class CloseMarketBehaviourMock:
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool = kwargs["tool"]
 

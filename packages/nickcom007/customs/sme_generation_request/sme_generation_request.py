@@ -21,7 +21,7 @@
 """This module implements a Mech tool to generate Subject Matter Expert (SME) roles for a given market question"""
 import functools
 import json
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 import anthropic
 import openai
@@ -33,21 +33,30 @@ from tiktoken import encoding_for_model
 client: Optional[OpenAI] = None
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -90,15 +99,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -140,7 +152,7 @@ task question: "Will Apple release iphone 15 by 1 October 2023?"
 ---
 task question: "Will the newly elected ceremonial president of Singapore face any political scandals by 13 September 2023?"
 [
-        { 
+        {
             "sme":  "Political Commentator",
             "sme_introduction": "You are an experienced political commentator in Asia. Your main objective is to produce comprehensive, insightful and impartial analysis based on the relevant political news and your politic expertise to form an answer to the question releted to a political event or politician."
         }
@@ -165,16 +177,18 @@ task question: "{question}"
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Generate SME roles for a given market question
 
     Raises:
-        ValueError: _description_
+    ValueError: _description_
 
-    Returns:
-        Tuple[str, Optional[Dict[str, Any]]]: str is the generated SME roles, it can be loaded with `json.loads`
-        to get a list of dict. The dict has two keys: "sme" and "sme_introduction".
-        The value of "sme" is the SME role name, and the value of "sme_introduction" is the introduction of the SME role.
+    :param kwargs: The function kwargs.
+    :type kwargs: Any
+    :returns: A tuple containing the generated SME roles. The first element is a string that can be loaded with `json.loads`
+            to get a list of dict. The dict has two keys: "sme" and "sme_introduction". The value of "sme" is the SME role name,
+            and the value of "sme_introduction" is the introduction of the SME role.
+    :rtype: tuple(str, optional dict[str, any])
     """
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
@@ -182,6 +196,9 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
         prompt = kwargs["prompt"]
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+
+        if not client:
+            raise RuntimeError("Client not initialized")
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"tool must be one of {ALLOWED_TOOLS}")

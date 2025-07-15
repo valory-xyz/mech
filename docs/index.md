@@ -21,7 +21,7 @@ Consider the [Trader service](https://github.com/valory-xyz/trader), an autonomo
 
 Here is how the agent and the Mech interact:
 
-1. The trader agent submits a question to the ‘prediction_request’  tool.
+1. The trader agent submits a question to the ‘prediction_request’ tool.
 2. The Mech then runs the tool which gathers the most recent news using the Google Search API.
 3. Leveraging OpenAI’s API, the tool calculates the probabilities of specific outcomes related to the query.
 4. In response, the trader agent receives from the Mech the probabilities in a delivery event.
@@ -51,7 +51,7 @@ In order to run a local demo service based on the MechKit:
     poetry install && poetry shell
 
     autonomy init --remote --ipfs --reset --author=your_name
-    autonomy packages sync --update-packages 
+    autonomy packages sync --update-packages
     ```
 
 2. Configure the service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
@@ -90,10 +90,10 @@ In order to run a local demo service based on the MechKit:
 
 1. Fork the [MechKit repository](https://github.com/valory-xyz/mech).
 2. Make the necessary adjustments to tailor the service to your needs. This could include:
-    * Adjust configuration parameters (e.g., in the `service.yaml` file).
-    * Expand the service finite-state machine with your custom states.
+    - Adjust configuration parameters (e.g., in the `service.yaml` file).
+    - Expand the service finite-state machine with your custom states.
 3. Run your service as detailed above.
 
 !!! tip "Looking for help building your own?"
 
-    Refer to the [Autonolas Discord community](https://discord.com/invite/z2PT65jKqQ), or consider ecosystem services like [Valory Propel](https://propel.valory.xyz) for the fastest way to get your first autonomous service in production.
+    Refer to the [Autonolas Discord community](https://discord.com/invite/z2PT65jKqQ), or consider ecosystem services like [Valory Propel](https://app.propel.valory.xyz/) for the fastest way to get your first autonomous service in production.

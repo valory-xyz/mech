@@ -6,8 +6,8 @@ description: A tool that runs a prompt against Google Gemini.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeidlhllgpf65xwk357wukpguuaz6hxhkyh7dwplv2xkxlrlk4b7zty
-  gemini_request.py: bafybeicxgoltoo6mj5m2nqrzv7jm33aqasrqsobcraqx4gwofp2o76lvjm
+  __init__.py: bafybeicgnyqp374atbkpfjxcv6ydw2wnrn7bnwi7sxyczjqgmpb27xabvm
+  gemini_request.py: bafybeif3eemu26edbdcsq5nhjijpybz7m7dh2jvkabyujbc55pn4d2xt2m
 fingerprint_ignore_patterns: []
 entry_point: gemini_request.py
 callable: run

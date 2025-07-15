@@ -43,8 +43,8 @@ from tiktoken import encoding_for_model, get_encoding
 
 client: Optional[OpenAI] = None
 
-
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
 def get_model_encoding(model: str):
@@ -56,18 +56,35 @@ def get_model_encoding(model: str):
     return encoding_for_model(model)
 
 
-def with_key_rotation(func: Callable):
+def get_model_encoding(model: str):
+    """Get the appropriate encoding for a model."""
+    # Workaround since tiktoken does not have support yet for gpt4.1
+    # https://github.com/openai/tiktoken/issues/395
+    if model == "gpt-4.1-2025-04-14":
+        return get_encoding("o200k_base")
+    return encoding_for_model(model)
+
+
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -116,15 +133,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -173,15 +193,20 @@ BUFFER_TOKENS = 250
 
 
 class OpenAISchema(BaseModel):  # type: ignore[misc]
+    """OpenAISchema"""
+
     @classmethod  # type: ignore[misc]
     @property
     def openai_schema(cls) -> Dict[str, Any]:
         """
-        Return the schema in the format of OpenAI's schema as jsonschema
+        Return the schema in the format of OpenAI's schema as jsonschema.
+
         Note:
-            Its important to add a docstring to describe how to best use this class, it will be included in the description attribute and be part of the prompt.
-        Returns:
-            model_json_schema (dict): A dictionary in the format of OpenAI's schema as jsonschema
+            It's important to add a docstring to describe how to best use this class,
+            it will be included in the description attribute and be part of the prompt.
+
+        :returns: A dictionary in the format of OpenAI's schema as jsonschema.
+        :rtype: dict
         """
         schema = cls.model_json_schema()
         docstring = parse(cls.__doc__ or "")
@@ -217,14 +242,16 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
     @classmethod
     def from_response(cls, completion: Dict[str, Any]) -> "OpenAISchema":
         """
-        Convert the response from OpenAI into the class instance
-        Args:
-            completion (dict): The response from OpenAI
-        Returns:
-            OpenAISchema: The instance of the class
+        Convert the response from OpenAI into the class instance.
+
+        :param completion: The response from OpenAI
+        :type completion: dict
+
+        :returns: The instance of the class
+        :rtype: OpenAISchema
         """
 
-        message = completion.choices[0].message
+        message = completion.choices[0].message  # type: ignore
 
         return cls.model_validate_json(
             message.function_call.arguments,
@@ -232,10 +259,14 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
 
 
 class Queries(OpenAISchema):
+    """Queries schema"""
+
     queries: List[str]
 
 
 class Date(OpenAISchema):
+    """Date schema"""
+
     date_available: bool = Field(..., description="Whether the date is available")
     year: Optional[int] = Field(..., description="The year the article was published")
     month: Optional[str] = Field(..., description="The month the article was published")
@@ -243,10 +274,14 @@ class Date(OpenAISchema):
 
 
 class Results(OpenAISchema):
+    """Results schema"""
+
     has_occurred: bool = Field(..., description="Whether the event has occurred.")
 
 
 class Valid(OpenAISchema):
+    """Question validity schema."""
+
     is_valid: bool = Field(..., description="Whether the question is valid.")
     reason: Optional[str] = Field(
         ..., description="Reason that the question is invalid."
@@ -254,6 +289,8 @@ class Valid(OpenAISchema):
 
 
 class Determinable(OpenAISchema):
+    """Question determinability schema."""
+
     is_determinable: bool = Field(
         ...,
         description="Whether it is possible to answer the question based on the information provided and reasoning.",
@@ -261,6 +298,8 @@ class Determinable(OpenAISchema):
 
 
 class Document(BaseModel):
+    """Document model"""
+
     text: str
     date: str
     url: str
@@ -268,10 +307,10 @@ class Document(BaseModel):
 
 
 URL_QUERY_PROMPT = """
- You are an expert fact checker in a team tasked with determining whether an event happened before a given date in the past. 
-* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event occured. 
-* You are provided with the input question about the event under the label "USER_PROMPT". 
-* You must follow the instructions under the label "INSTRUCTIONS". 
+ You are an expert fact checker in a team tasked with determining whether an event happened before a given date in the past.
+* Your role in the team to come up with search queries to be used to find relevant news articles that may help in determining whether the event occured.
+* You are provided with the input question about the event under the label "USER_PROMPT".
+* You must follow the instructions under the label "INSTRUCTIONS".
 
 INSTRUCTIONS
 * Read the input under the label "USER_PROMPT" delimited by three backticks.
@@ -279,7 +318,7 @@ INSTRUCTIONS
 * The "USER_PROMPT" will contain a date which in the past.
 * The event will only have has two possible outcomes: either the event has happened or the event has not happened.
 * If the event has more than two possible outcomes, you must ignore the rest of the instructions and output the response "Error".
-* You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event occured. 
+* You should come up with {num_queries} diverse queries to search for relevant news articles that may help in determining whether the event occured.
 * Focus on capturing different aspects and interpretations of the question to ensure comprehensive coverage of the topic.
 * Make sure the queries are in past tense and are in the form of a question.
 * ONLY function calls are allowed in the response.
@@ -292,9 +331,9 @@ USER_PROMPT:
 
 GET_DATE_PROMPT = """
 INSTRUCTIONS
-* You are an expert data analyst that takes in extracted text from a web search result. 
+* You are an expert data analyst that takes in extracted text from a web search result.
 * You are provided with text extracted from a relevant web page under the label "EXTRACTED_TEXT" delimited by three backticks.
-* Your task is to extract the date that the web page was published. 
+* Your task is to extract the date that the web page was published.
 * If there is no date information available, you should not try to guess. Instead indicate that it is not available.
 * Your response should only be a function call with the extracted date information as arguments.
 
@@ -306,8 +345,8 @@ EXTRACTED_TEXT:
 
 PREDICTION_PROMPT = """
 INSTRUCTIONS
-* You are an expert data analyst. 
-* You are provided with the input question about the event under the label "USER_PROMPT". 
+* You are an expert data analyst.
+* You are provided with the input question about the event under the label "USER_PROMPT".
 * You are provided with a colleague's reasoning as to whether the event occurred based on online research under the label "REASONING" delimited by three backticks.
 * Your task is to parse the decision on whether an event occurred.
 * The answer that you give should match the answer that you come to in the reasoning field
@@ -325,7 +364,7 @@ REASONING:
 """
 
 REASONING_PROMPT = """
-You are an expert fact checker that takes in a question asking whether an event will happen before a given date. 
+You are an expert fact checker that takes in a question asking whether an event will happen before a given date.
 That date has now passed and your role is to determine whether the event actually happened before the date.
 You are provided with the input question about the event under the label "USER_PROMPT". You must follow the instructions
 under the label "INSTRUCTIONS".
@@ -342,7 +381,7 @@ possible answers: either the event did happen or it did not happen.
 * If an item in "ADDITIONAL_INFORMATION" is not relevant, you must ignore that item for the estimation.
 * Ideally, these will be news articles about the event in question.
 * Pay special attention to the date of the article if it is available.
-* You should show your process of thinking through the problem step by step, taking the date and information of the various articles into consideration, and explain your reasoning for your decision as to whether an event occurred by the specified date. 
+* You should show your process of thinking through the problem step by step, taking the date and information of the various articles into consideration, and explain your reasoning for your decision as to whether an event occurred by the specified date.
 * The articles will not always explicitly contain all the information needed to determine the answer. In this case, you may need to make an educated guess based on certain assumptions. If you need to do this, please provide your assumptions in your explanation.
 
 Here are some examples of how you can figure out whether an event occurred by the date:
@@ -361,7 +400,7 @@ ADDITIONAL_INFORMATION:
 """
 
 VALID_PROMPT = """
-* You are an expert data analyst. 
+* You are an expert data analyst.
 * You are provided with a question about an event (submitted to a prediction market) under "USER_PROMPT" delimited by three backticks.
 * Your task is to determine whether the question is valid.
 * You are provided with rules that determine whether a question is invalid (as well as examples) under the label "RULES".
@@ -380,10 +419,10 @@ USER_PROMPT:
 """
 
 DETERMINABLE_PROMPT = """
-* You are an expert data analyst. 
+* You are an expert data analyst.
 * You are provided with a question about an event (submitted to a prediction market) under "USER_PROMPT" delimited by three backticks.
 * You are provided with a colleague's reasoning as to whether the event occurred based on online research under the label "REASONING" delimited by three backticks.
-* Your task is to determine whether it is possible to answer whether the event actually happened before the date based on the content of this reasoning. 
+* Your task is to determine whether it is possible to answer whether the event actually happened before the date based on the content of this reasoning.
 * The answer that you give should reflect the opinion in the reasoning field.
 * Your response should only be a function call with the information about whether a question is valid and reason as arguments.
 
@@ -403,12 +442,12 @@ SYSTEM_PROMPT = """You are a world class algorithm for generating structured out
 
 
 def multi_queries(
-    client: OpenAI,
+    client_: OpenAI,
     prompt: str,
     engine: str,
     num_queries: int,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-) -> List[str]:
+    counter_callback: Optional[Callable] = None,
+) -> Tuple[List[str], Optional[Callable]]:
     """Generate multiple queries for fetching information from the web."""
 
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -420,7 +459,7 @@ def multi_queries(
         {"role": "user", "content": url_query_prompt},
     ]
 
-    response = client.chat.completions.create(
+    response = client_.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
@@ -447,9 +486,10 @@ def multi_queries(
 
 
 def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
+    """Performs a Google Custom Search and returns a list of result links."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -481,10 +521,10 @@ def get_urls_from_queries(
 
 
 def get_dates(
-    client: OpenAI,
+    client_: OpenAI,
     text: str,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-):
+    counter_callback: Optional[Callable] = None,
+) -> Tuple[str, Optional[Callable]]:
     """Get the date from the extracted text"""
     adjusted_text = adjust_additional_information(
         prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo-0125"
@@ -494,7 +534,7 @@ def get_dates(
         {"role": "system", "content": SYSTEM_PROMPT},
         {"role": "user", "content": get_date_prompt},
     ]
-    response = client.chat.completions.create(
+    response = client_.chat.completions.create(
         model="gpt-3.5-turbo-0125",
         messages=messages,
         temperature=0,
@@ -518,14 +558,16 @@ def get_dates(
     return "Date not available", None
 
 
-def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
+def extract_text_from_pdf(
+    url: str, num_words: Optional[int] = None
+) -> Optional[Document]:
     """Extract text from a PDF document at the given URL."""
     try:
         response = requests.get(url, timeout=20)
         response.raise_for_status()
 
         if "application/pdf" not in response.headers.get("Content-Type", ""):
-            return ValueError("URL does not point to a PDF document")
+            raise ValueError("URL does not point to a PDF document")
 
         with BytesIO(response.content) as pdf_file:
             reader = PyPDF2.PdfReader(pdf_file)
@@ -542,7 +584,7 @@ def extract_text_from_pdf(url: str, num_words: Optional[int] = None) -> str:
 
 
 def extract_text(
-    client: OpenAI,
+    client_: OpenAI,
     html: str,
     num_words: Optional[int] = None,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
@@ -551,7 +593,7 @@ def extract_text(
     text = ReadabilityDocument(html).summary()
     text = text = md(text, heading_style="ATX")
     date, counter_callback = get_dates(
-        client=client, text=text, counter_callback=counter_callback
+        client_=client_, text=text, counter_callback=counter_callback
     )
     doc = Document(text=text[:num_words] if num_words else text, date=date, url="")
     return doc, counter_callback
@@ -559,12 +601,12 @@ def extract_text(
 
 def extract_texts(
     urls: List[str],
-    client: OpenAI,
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
-) -> Tuple[List[str], Dict[str, str]]:
+    client_: OpenAI,
+    counter_callback: Optional[Callable] = None,
+) -> Tuple[List[Document], Optional[Callable]]:
     """Extract texts from URLs"""
     extracted_texts = []
-    for batch in process_in_batches(urls=urls):
+    for batch in process_in_batches(urls=urls) or []:
         for future, url in batch:
             try:
                 if url.lower().endswith(".pdf"):
@@ -573,6 +615,11 @@ def extract_texts(
                         extracted_texts.append(result)
                     continue
                 result = future.result()
+                if not result:
+                    print(f"No result returned for {url}")
+                    continue
+                if not isinstance(result, requests.Response):
+                    continue
                 if result.status_code != 200:
                     continue
                 # first 4 bytes is pdf
@@ -582,7 +629,9 @@ def extract_texts(
                         extracted_texts.append(result)
                     continue
                 doc, counter_callback = extract_text(
-                    html=result.text, client=client, counter_callback=counter_callback
+                    html=result.text,
+                    client_=client_,
+                    counter_callback=counter_callback,
                 )
                 doc.url = url
                 extracted_texts.append(doc)
@@ -595,7 +644,7 @@ def extract_texts(
 
 def process_in_batches(
     urls: List[str], window: int = 5, timeout: int = 50
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
@@ -607,17 +656,20 @@ def process_in_batches(
             yield futures
 
 
-def recursive_character_text_splitter(text, max_tokens, overlap):
+def recursive_character_text_splitter(
+    text: str, max_tokens: int, overlap: int
+) -> List[str]:
+    """Splits the input text into chunks of size `max_tokens`, with an overlap between chunks."""
     if len(text) <= max_tokens:
         return [text]
-    else:
-        return [
-            text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)
-        ]
+    return [text[i : i + max_tokens] for i in range(0, len(text), max_tokens - overlap)]
 
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
     """Get embeddings for the split documents."""
+    if not client:
+        raise RuntimeError("Client not initialized")
+
     for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
         batch_end = batch_start + EMBEDDING_BATCH_SIZE
         batch = [doc.text for doc in split_docs[batch_start:batch_end]]
@@ -637,6 +689,8 @@ def find_similar_chunks(
     query: str, docs_with_embeddings: List[Document], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
+    if not client:
+        raise RuntimeError("Client not initialized")
 
     query_embedding = (
         client.embeddings.create(
@@ -647,26 +701,34 @@ def find_similar_chunks(
         .embedding
     )
 
-    index = faiss.IndexFlatIP(EMBEDDING_SIZE)
-    index.add(np.array([doc.embedding for doc in docs_with_embeddings]))
-    D, I = index.search(np.array([query_embedding]), k)
+    index = faiss.IndexFlatIP(EMBEDDING_SIZE)  # pylint: disable=no-value-for-parameter
+    index.add(  # pylint: disable=no-value-for-parameter
+        np.array([doc.embedding for doc in docs_with_embeddings])
+    )
+    _, indices = index.search(  # pylint: disable=no-value-for-parameter
+        np.array([query_embedding]), k
+    )
 
-    return [docs_with_embeddings[i] for i in I[0]]
+    return [docs_with_embeddings[i] for i in indices[0]]
 
 
 def fetch_additional_information(
-    client: OpenAI,
+    client_: OpenAI,
     prompt: str,
     engine: str,
     google_api_key: Optional[str],
     google_engine_id: Optional[str],
-    counter_callback: Optional[Callable[[int, int, str], None]] = None,
+    counter_callback: Optional[Callable] = None,
 ) -> Tuple:
     """Fetch additional information from the web."""
+    if not google_api_key:
+        raise RuntimeError("Google API key not found")
+    if not google_engine_id:
+        raise RuntimeError("Google Engine Id not found")
 
     # generate multiple queries for fetching information from the web
     queries, counter_callback = multi_queries(
-        client=client,
+        client_=client,
         prompt=prompt,
         engine=engine,
         num_queries=NUM_QUERIES,
@@ -685,7 +747,7 @@ def fetch_additional_information(
 
     # Extract text and dates from the URLs
     docs, counter_callback = extract_texts(
-        urls=urls, client=client, counter_callback=counter_callback
+        urls=urls, client_=client_, counter_callback=counter_callback
     )
 
     # Remove None values from the list
@@ -761,7 +823,7 @@ def adjust_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
@@ -773,6 +835,8 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
+        if not client:
+            raise RuntimeError("Client not initialized")
 
         engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")
@@ -810,10 +874,10 @@ def run(**kwargs) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
 
         (
             additional_information,
-            queries,
+            _,
             counter_callback,
         ) = fetch_additional_information(
-            client=client,
+            client_=client,
             prompt=prompt,
             engine=engine,
             google_api_key=google_api_key,
