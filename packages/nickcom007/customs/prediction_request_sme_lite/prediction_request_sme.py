@@ -26,10 +26,10 @@ from itertools import islice
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
 
 import anthropic
+import googleapiclient
 import openai
 import requests
 import tiktoken
-from googleapiclient import errors
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
 from openai import OpenAI
@@ -244,7 +244,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
-            except errors.HttpError as e:
+            except googleapiclient.errors.HttpError as e:
                 # try with a new key again
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:

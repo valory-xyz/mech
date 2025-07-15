@@ -28,13 +28,13 @@ from datetime import datetime, timezone
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import anthropic
+import googleapiclient
 import openai
 import requests
 import spacy
 import tiktoken
 from bs4 import BeautifulSoup, NavigableString, Tag
 from dateutil import parser
-from googleapiclient import errors
 from googleapiclient.discovery import build
 from openai import OpenAI
 from requests import Session
@@ -91,7 +91,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
                 return execute()
-            except errors.HttpError as e:
+            except googleapiclient.errors.HttpError as e:
                 # try with a new key again
                 rate_limit_exceeded_code = 429
                 if e.status_code != rate_limit_exceeded_code:

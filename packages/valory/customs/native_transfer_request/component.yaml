@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  native_transfer_request.py: bafybeig5h64v2hkwwhtlx26xjd6fwauc6haeevz6kwyr4hs3roi5h2kvna
+  native_transfer_request.py: bafybeidq57da6kw6xbpfcxmettax5lfkeahp5ci4eoynttotzi7cf5qady
 fingerprint_ignore_patterns: []
 entry_point: native_transfer_request.py
 callable: run

@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  optimization_by_prompting.py: bafybeia3gahmapm7ccltatqofrjjcw2sci5ownncfkifiu6zdidfxdvwfq
+  optimization_by_prompting.py: bafybeig73nkwqn7jidhmzma42udqrsa2egggky4di23m337f7v4hidxpia
 fingerprint_ignore_patterns: []
 entry_point: optimization_by_prompting.py
 callable: run
