@@ -34,7 +34,7 @@ import openai
 import requests
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
-from pydantic import BaseModel
+from pydantic import BaseModel, PositiveInt
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import encoding_for_model, get_encoding
@@ -212,23 +212,7 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.output_tokens
             return response
 
-        if self.llm_provider == "openai":
-            response_provider = self.client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                n=1,
-                timeout=150,
-                stop=None,
-            )
-            response = LLMResponse()
-            response.content = response_provider.choices[0].message.content
-            response.usage.prompt_tokens = response_provider.usage.prompt_tokens
-            response.usage.completion_tokens = response_provider.usage.completion_tokens
-            return response
-
-        if self.llm_provider == "openrouter":
+        if self.llm_provider in ["openai", "openrouter"]:
             response_provider = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -336,12 +320,12 @@ HTTP_MAX_REDIRECTS = 5
 HTTP_MAX_RETIES = 2
 DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
 RAG_PROMPT_LENGTH = 320
+DEFAULT_MAX_EMBEDDING_TOKENS = 300000
 BUFFER = 15000  # Buffer for the total tokens in the embeddings batch
-MAX_EMBEDDING_TOKENS = (
-    300000 - RAG_PROMPT_LENGTH - BUFFER  # Maximum tokens for the embeddings batch
-)  # Maximum total tokens per embeddings batch
 MAX_NR_DOCS = 1000
 TOKENS_DISTANCE_TO_LIMIT = 200
+if DEFAULT_MAX_EMBEDDING_TOKENS - RAG_PROMPT_LENGTH - BUFFER <= 0:
+    raise ValueError("Wrong MAX_EMBEDDING_TOKENS configuration")
 
 PREDICTION_PROMPT = """
 You will be evaluating the likelihood of an event based on a user's question and additional information from search results.
@@ -388,12 +372,12 @@ After you have written all {NUM_QUERIES} search queries, please submit your fina
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
 
-class Document(BaseModel):
+class ExtendedDocument(BaseModel):
     """Document model"""
 
     text: str
     url: str
-    tokens: int = 0
+    tokens: PositiveInt = 0
     embedding: Optional[List[float]] = None
 
 
@@ -427,9 +411,41 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
     return enc.decode(token_ids[:max_tokens])
 
 
+def get_max_embeddings_tokens(model: str) -> int:
+    """Get the maximum number of tokens for embeddings based on the model."""
+
+    if model in LLM_SETTINGS:
+        # Maximum tokens for the embeddings batch
+        # there are models with values under 300000
+        limit_max_tokens = min(
+            LLM_SETTINGS[model]["limit_max_tokens"], DEFAULT_MAX_EMBEDDING_TOKENS
+        )
+        max_embeddings_tokens = limit_max_tokens - RAG_PROMPT_LENGTH - BUFFER
+        if max_embeddings_tokens <= 0:
+            raise ValueError(
+                f"Model {model} has a limit_max_tokens that is too low for embeddings."
+            )
+        return max_embeddings_tokens
+
+    return DEFAULT_MAX_EMBEDDING_TOKENS - RAG_PROMPT_LENGTH - BUFFER
+
+
 # Utility: count tokens using model-specific tokenizer
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
+    # Check if we're using a Claude model and we have an active client
+    if "claude" in model.lower() and client and client.llm_provider == "anthropic":
+        try:
+            # Use Anthropic's tokenizer when available
+            response = client.client.messages.count_tokens(
+                model=model, messages=[{"role": "user", "content": text}]
+            )
+            return response.input_tokens
+        except (AttributeError, Exception):
+            # Fallback if the method doesn't exist or fails
+            print("Using fallback enconding for Claude models")
+            enc = get_encoding("cl100k_base")
+            return len(enc.encode(text))
     # Workaround since tiktoken does not have support yet for gpt4.1
     # https://github.com/openai/tiktoken/issues/395
     if model == "gpt-4.1-2025-04-14":
@@ -543,7 +559,7 @@ def get_urls_from_queries(
 def extract_text(
     html: str,
     num_words: Optional[int] = None,
-) -> Optional[Document]:
+) -> Optional[ExtendedDocument]:
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
 
@@ -558,13 +574,13 @@ def extract_text(
     else:
         text = " ".join(text.split())
 
-    doc = Document(text=text, url="")
+    doc = ExtendedDocument(text=text, url="")
     return doc
 
 
 def extract_text_from_pdf(
     url: str, num_words: Optional[int] = None
-) -> Optional[Document]:
+) -> Optional[ExtendedDocument]:
     """Extract text from a PDF document at the given URL."""
     try:
         response = requests.get(url, timeout=HTTP_TIMEOUT)
@@ -579,7 +595,9 @@ def extract_text_from_pdf(
             for page in reader.pages:
                 text += page.extract_text()
 
-        doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
+        doc = ExtendedDocument(
+            text=text[:num_words] if num_words else text, date="", url=url
+        )
         print(f"Using PDF: {url}: {doc.text[:300]}...")
         return doc
 
@@ -618,7 +636,9 @@ def process_in_batches(
             yield futures
 
 
-def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Document]:
+def extract_texts(
+    urls: List[str], num_words: Optional[int] = None
+) -> List[ExtendedDocument]:
     """Extract texts from URLs with improved error handling, excluding failed URLs."""
     extracted_texts = []
     for batch in process_in_batches(urls=urls) or []:
@@ -649,7 +669,7 @@ def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Docu
 
 
 def find_similar_chunks(
-    query: str, docs_with_embeddings: List[Document], k: int = 4
+    query: str, docs_with_embeddings: List[ExtendedDocument], k: int = 4
 ) -> List:
     """Similarity search to find similar chunks to a query"""
     if not client_embedding:
@@ -674,15 +694,18 @@ def find_similar_chunks(
     return [docs_with_embeddings[i] for i in indices[0]]
 
 
-def get_embeddings(split_docs: List[Document]) -> List[Document]:
+def get_embeddings(
+    split_docs: List[ExtendedDocument], model: str
+) -> List[ExtendedDocument]:
     """Get embeddings for the split documents: clean, truncate, then batch by token count."""
     # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
     # Filter out any documents that exceed the maximum token limit individually
     filtered_docs = []
     total_tokens_count = 0
+    max_embeddings_tokens = get_max_embeddings_tokens(model)
     for doc in split_docs:
         # if we are very close to the limit then break the loop
-        if MAX_EMBEDDING_TOKENS - total_tokens_count < TOKENS_DISTANCE_TO_LIMIT:
+        if max_embeddings_tokens - total_tokens_count < TOKENS_DISTANCE_TO_LIMIT:
             break
         cleaned = clean_text(doc.text)
         # TODO we could summarize instead of truncating
@@ -690,7 +713,7 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
         # filter empty strings
         doc.text = doc.text.strip()
         doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
-        if total_tokens_count + doc.tokens > MAX_EMBEDDING_TOKENS:
+        if total_tokens_count + doc.tokens > max_embeddings_tokens:
             continue
         if doc.text:
             filtered_docs.append(doc)
@@ -708,7 +731,7 @@ def get_embeddings(split_docs: List[Document]) -> List[Document]:
             if doc.tokens == 0:
                 doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
 
-            if current_batch_tokens + doc.tokens > MAX_EMBEDDING_TOKENS:
+            if current_batch_tokens + doc.tokens > max_embeddings_tokens:
                 break
 
             current_batch_docs.append(doc)
@@ -816,7 +839,9 @@ def fetch_additional_information(
             t = recursive_character_text_splitter(
                 doc.text, SPLITTER_CHUNK_SIZE, SPLITTER_OVERLAP
             )
-            split_docs.extend([Document(text=chunk, url=doc.url) for chunk in t])
+            split_docs.extend(
+                [ExtendedDocument(text=chunk, url=doc.url) for chunk in t]
+            )
         except Exception as e:
             print(f"Error splitting document: {e}")
             continue
@@ -828,7 +853,7 @@ def fetch_additional_information(
         # truncate the split_docs to the first MAX_NR_DOCS documents
         split_docs = split_docs[:MAX_NR_DOCS]
     # Embed the documents
-    docs_with_embeddings = get_embeddings(split_docs)
+    docs_with_embeddings = get_embeddings(split_docs, model)
 
     # Find similar chunks
     similar_chunks = find_similar_chunks(
