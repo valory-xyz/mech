@@ -213,8 +213,6 @@ class LLMClient:
             return response
 
         if self.llm_provider in ["openai", "openrouter"]:
-            # TODO investigate the transform parameter https://openrouter.ai/docs#transforms
-            # transform = [] # to desactivate prompt compression
             response_provider = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
