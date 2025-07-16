@@ -1306,6 +1306,7 @@ class TransactionPreparationBehaviour(
                     OffchainKeys.DELIVERY_RATES_CAMEL.value: delivery_rates,
                     OffchainKeys.PAYMENT_DATA.value: b"",
                 }
+                self.context.logger.info(f"Mech address is: {mech_address}")
                 self.context.logger.info(
                     f"Preparing deliver with signature data: {contract_data}"
                 )
