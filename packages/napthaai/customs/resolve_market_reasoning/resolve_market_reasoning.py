@@ -16,9 +16,10 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module implements a Mech tool for binary predictions."""
+
 import functools
+import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
@@ -31,21 +32,66 @@ import googleapiclient
 import numpy as np
 import openai
 import requests
-import tiktoken
 from docstring_parser import parse
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
-from tiktoken import encoding_for_model
+from tiktoken import Encoding, encoding_for_model, get_encoding
+
+
+TOKENS_DISTANCE_TO_LIMIT = 200
+DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
+BUFFER = 15000  # Buffer for the total tokens in the embeddings batch
+MAX_EMBEDDING_TOKENS = (
+    300000 - BUFFER  # Maximum tokens for the embeddings batch
+)  # Maximum total tokens per embeddings batch
 
 
 client: Optional[OpenAI] = None
 
-
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+
+
+def get_model_encoding(model: str) -> Encoding:
+    """Get the appropriate encoding for a model."""
+    # Workaround since tiktoken does not have support yet for gpt4.1
+    # https://github.com/openai/tiktoken/issues/395
+    if model == "gpt-4.1-2025-04-14":
+        return get_encoding("o200k_base")
+    return encoding_for_model(model)
+
+
+# Clean text by removing emojis and non-printable characters.
+def clean_text(text: str) -> str:
+    """Remove emojis and non-printable characters, collapse whitespace."""
+    emoji_pattern = re.compile(
+        "[\U0001f600-\U0001f64f"
+        "\U0001f300-\U0001f5ff"
+        "\U0001f680-\U0001f6ff"
+        "\U0001f1e0-\U0001f1ff"
+        "]+",
+        flags=re.UNICODE,
+    )
+    text = emoji_pattern.sub("", text)
+    # Decode using UTF-8, replacing invalid bytes
+    text = text.encode("utf-8", "replace").decode("utf-8", "replace")
+    text = "".join(ch for ch in text if ch.isprintable())
+    # Collapse whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+# Utility: truncate text to a maximum number of tokens.
+def truncate_text(text: str, model: str, max_tokens: int) -> str:
+    """Truncate text to the first max_tokens tokens based on model encoding."""
+    enc = get_model_encoding(model)
+    token_ids = enc.encode(text)
+    if len(token_ids) <= max_tokens:
+        return text
+    return enc.decode(token_ids[:max_tokens])
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -108,7 +154,7 @@ def with_key_rotation(func: Callable) -> Callable:
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    enc = encoding_for_model(model)
+    enc = get_model_encoding(model)
     return len(enc.encode(text))
 
 
@@ -138,18 +184,30 @@ DEFAULT_OPENAI_SETTINGS = {
     "max_tokens": 500,
     "temperature": 0,
 }
+OPEN_AI_SETTINGS = {
+    "gpt-4.1-2025-04-14": {
+        """
+        Error code: 400 - {'error': {'message': 'max_tokens is too large: 1047576. This model supports at most 32768 completion tokens, whereas you provided 1047576.', 'type': 'invalid_request_error', 'param': 'max_tokens', 'code': 'invalid_value'}}
+        """
+        "max_tokens": 32_768,
+        "temperature": 0,
+    },
+}
 MAX_TOKENS = {
     "gpt-3.5-turbo-0125": 4096,
     "gpt-4-0125-preview": 8192,
     "gpt-4o-2024-08-06": 4096,
+    "gpt-4.1-2025-04-14": 4096,
 }
 ALLOWED_TOOLS = [
     "resolve-market-reasoning-gpt-3.5-turbo",
     "resolve-market-reasoning-gpt-4",
+    "resolve-market-reasoning-gpt-4.1",
 ]
 TOOL_TO_ENGINE = {
     "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo-0125",
     "resolve-market-reasoning-gpt-4": "gpt-4o-2024-08-06",
+    "resolve-market-reasoning-gpt-4.1": "gpt-4.1-2025-04-14",
 }
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
 NUM_QUERIES = 3
@@ -221,7 +279,6 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
         :returns: The instance of the class
         :rtype: OpenAISchema
         """
-
         message = completion.choices[0].message  # type: ignore
 
         return cls.model_validate_json(
@@ -275,6 +332,7 @@ class Document(BaseModel):
     date: str
     url: str
     embedding: Optional[List[float]] = None
+    tokens: int = 0
 
 
 URL_QUERY_PROMPT = """
@@ -558,7 +616,7 @@ def extract_text(
     client_: OpenAI,
     html: str,
     num_words: Optional[int] = None,
-    counter_callback: Optional[Callable] = None,
+    counter_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> Tuple[Document, Optional[Callable]]:
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
@@ -637,23 +695,65 @@ def recursive_character_text_splitter(
 
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
-    """Get embeddings for the split documents."""
-    if not client:
-        raise RuntimeError("Client not initialized")
+    """Get embeddings for the split documents: clean, truncate, then batch by token count."""
+    # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
+    # Filter out any documents that exceed the maximum token limit individually
+    filtered_docs = []
+    total_tokens_count = 0
+    for doc in split_docs:
+        # if we are very close to the limit then break the loop
+        if MAX_EMBEDDING_TOKENS - total_tokens_count < TOKENS_DISTANCE_TO_LIMIT:
+            break
+        cleaned = clean_text(doc.text)
+        # TODO we could summarize instead of truncating
+        doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
+        # filter empty strings
+        doc.text = doc.text.strip()
+        doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
+        if total_tokens_count + doc.tokens > MAX_EMBEDDING_TOKENS:
+            continue
+        if doc.text:
+            filtered_docs.append(doc)
+            total_tokens_count += doc.tokens
 
-    for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
-        batch_end = batch_start + EMBEDDING_BATCH_SIZE
-        batch = [doc.text for doc in split_docs[batch_start:batch_end]]
+    # Process documents in batches that respect the total token limit
+    processed_docs = []
+    i = 0
+    while i < len(filtered_docs):
+        current_batch_docs = []
+        current_batch_tokens = 0
+
+        while i < len(filtered_docs):
+            doc = filtered_docs[i]
+            if doc.tokens == 0:
+                doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
+
+            if current_batch_tokens + doc.tokens > MAX_EMBEDDING_TOKENS:
+                break
+
+            current_batch_docs.append(doc)
+            current_batch_tokens += doc.tokens
+            i += 1
+
+        if not current_batch_docs:
+            # This should not happen after filtering, but just in case
+            i += 1
+            continue
+        batch_texts = [doc.text for doc in current_batch_docs]
+
+        if not client:
+            raise RuntimeError("Embeddings not intialized")
         response = client.embeddings.create(
             model=EMBEDDING_MODEL,
-            input=batch,
+            input=batch_texts,
         )
-        for i, be in enumerate(response.data):
-            assert i == be.index
-        batch_embeddings = [e.embedding for e in response.data]
-        for i, doc in enumerate(split_docs[batch_start:batch_end]):
-            doc.embedding = batch_embeddings[i]
-    return split_docs
+
+        for j, emb in enumerate(response.data):
+            assert j == emb.index, "Embeddings response out-of-order"
+            current_batch_docs[j].embedding = emb.embedding
+            processed_docs.append(current_batch_docs[j])
+
+    return processed_docs
 
 
 def find_similar_chunks(
@@ -770,7 +870,7 @@ def adjust_additional_information(
     """Adjust the additional_information to fit within the token budget"""
 
     # Initialize tiktoken encoder for the specified model
-    enc = tiktoken.encoding_for_model(model)
+    enc = get_model_encoding(model)
 
     # Encode the user prompt to calculate its token count
     prompt_tokens = len(enc.encode(prompt))
@@ -812,6 +912,10 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
         engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
         print(f"ENGINE: {engine}")
 
+        max_tokens = OPEN_AI_SETTINGS.get(engine, {}).get(
+            "max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"]
+        )
+
         # Check if question is valid
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -825,7 +929,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
@@ -874,7 +978,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
@@ -897,7 +1001,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
@@ -926,7 +1030,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,
@@ -952,7 +1056,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
             model=engine,
             messages=messages,
             temperature=DEFAULT_OPENAI_SETTINGS["temperature"],
-            max_tokens=DEFAULT_OPENAI_SETTINGS["max_tokens"],
+            max_tokens=max_tokens,
             n=1,
             timeout=150,
             stop=None,

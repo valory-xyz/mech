@@ -27,5 +27,8 @@ cp $PWD/../keys.json .
 
 autonomy deploy build -ltm
 
-# Run the deployment
-autonomy deploy run --build-dir abci_build/
+# Get the latest abci_build directory
+BUILD_DIR=$(ls -d abci_build_* | sort -V | tail -n1)
+
+# Run the deployment with the found directory
+autonomy deploy run --build-dir $BUILD_DIR
