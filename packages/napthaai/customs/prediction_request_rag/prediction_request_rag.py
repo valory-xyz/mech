@@ -324,6 +324,8 @@ DEFAULT_MAX_EMBEDDING_TOKENS = 300000
 BUFFER = 15000  # Buffer for the total tokens in the embeddings batch
 MAX_NR_DOCS = 1000
 TOKENS_DISTANCE_TO_LIMIT = 200
+if DEFAULT_MAX_EMBEDDING_TOKENS - RAG_PROMPT_LENGTH - BUFFER <= 0:
+    raise ValueError("Wrong MAX_EMBEDDING_TOKENS configuration")
 
 PREDICTION_PROMPT = """
 You will be evaluating the likelihood of an event based on a user's question and additional information from search results.
@@ -411,11 +413,7 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
 
 def get_max_embeddings_tokens(model: str) -> int:
     """Get the maximum number of tokens for embeddings based on the model."""
-    default_max_tokens = DEFAULT_MAX_EMBEDDING_TOKENS - RAG_PROMPT_LENGTH - BUFFER
-    if default_max_tokens <= 0:
-        raise ValueError(
-            f"{DEFAULT_MAX_EMBEDDING_TOKENS} too low for embeddings limit config"
-        )
+
     if model in LLM_SETTINGS:
         # Maximum tokens for the embeddings batch
         # there are models with values under 300000
@@ -429,7 +427,7 @@ def get_max_embeddings_tokens(model: str) -> int:
             )
         return max_embeddings_tokens
 
-    return default_max_tokens
+    return DEFAULT_MAX_EMBEDDING_TOKENS - RAG_PROMPT_LENGTH - BUFFER
 
 
 # Utility: count tokens using model-specific tokenizer
