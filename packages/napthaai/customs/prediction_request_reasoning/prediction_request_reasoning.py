@@ -441,8 +441,8 @@ def get_max_embeddings_tokens(model: str) -> int:
             LLM_SETTINGS[model]["limit_max_tokens"], DEFAULT_MAX_EMBEDDING_TOKENS
         )
         return limit_max_tokens - PREDICTION_PROMPT_LENGTH - BUFFER
-    else:
-        raise ValueError(f"Model {model} not found in LLM settings.")
+
+    return DEFAULT_MAX_EMBEDDING_TOKENS
 
 
 def create_messages(
