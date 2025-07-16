@@ -949,7 +949,7 @@ def count_tokens(text: str, model: str) -> int:
     if "claude" in model.lower() and client and client.llm_provider == "anthropic":
         try:
             # Use Anthropic's tokenizer when available
-            response = client.messages.count_tokens(
+            response = client.client.messages.count_tokens(
                 model=model, messages=[{"role": "user", "content": text}]
             )
             return response.input_tokens
