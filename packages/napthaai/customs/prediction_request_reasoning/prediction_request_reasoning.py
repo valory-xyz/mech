@@ -445,7 +445,7 @@ def get_max_embeddings_tokens(model: str) -> int:
             raise ValueError(
                 f"Model {model} has a limit_max_tokens that is too low for embeddings."
             )
-        return
+        return max_embeddings_tokens
 
     return DEFAULT_MAX_EMBEDDING_TOKENS
 
