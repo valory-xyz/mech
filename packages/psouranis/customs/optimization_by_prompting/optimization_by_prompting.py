@@ -20,11 +20,10 @@
 """A script that implements the optimization by prompting methodology."""
 import functools
 import json
-import os
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import StringIO
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
 
 import anthropic
 import googleapiclient
@@ -37,27 +36,37 @@ from langchain.chains import LLMChain
 from langchain.llms import OpenAI as OpenAILLM
 from langchain.prompts import PromptTemplate
 from openai import OpenAI
+from pandas import DataFrame
 from sklearn.metrics import roc_auc_score
 from tiktoken import encoding_for_model
 
 
 client: Optional[OpenAI] = None
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -100,15 +109,18 @@ class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
+        """Initializes with API keys"""
         self.api_key = api_key
 
     def __enter__(self) -> OpenAI:
+        """Initializes and returns LLM client."""
         global client
         if client is None:
             client = OpenAI(api_key=self.api_key)
         return client
 
-    def __exit__(self, exc_type, exc_value, traceback) -> None:
+    def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
+        """Closes the LLM client"""
         global client
         if client is not None:
             client.close()
@@ -238,12 +250,13 @@ PROMPT_INSTRUCTOR = PromptTemplate(
 )
 OUTPUT_FORMAT = """
 Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
-The JSON must contain a field "p_yes" which marks the probability of the event happening. 
+The JSON must contain a field "p_yes" which marks the probability of the event happening.
 A valid example is: {{"p_yes": 0.5}}
 """
 
 
-def evaluate_prompt(prompt, df, llm):
+def evaluate_prompt(prompt: str, df: DataFrame, llm: OpenAILLM) -> List:
+    """Evaluates a prompt on each row of the provided DataFrame and returns probabilities."""
     prompt += OUTPUT_FORMAT
     chain = LLMChain(llm=llm, prompt=prompt)
     probas = []
@@ -253,33 +266,47 @@ def evaluate_prompt(prompt, df, llm):
             {"user_prompt": row.query, "additional_information": OUTPUT_FORMAT}
         )
         try:
-            dictionary_match = float(eval(pred_chain)["p_yes"])
-        except:
             dictionary_match = float(
-                eval(re.search(r"\{.*\}", pred_chain).group(0))["p_yes"]
+                eval(pred_chain)["p_yes"]  # pylint: disable=eval-used
             )
+        except BaseException as e:
+            print(f"Error occurred while running evaluate_prompt: {e}")
+            match = re.search(r"\{.*\}", pred_chain)
+            if match:
+                dictionary_match = float(
+                    eval(match.group(0))["p_yes"]  # pylint: disable=eval-used
+                )
+            else:
+                print("No match found in prediction chain")
+                dictionary_match = 0.0
+
         probas.append(dictionary_match)
 
     return probas
 
 
-def calculate_score(df, answer_key="event", prob_key="probability"):
+def calculate_score(
+    df: DataFrame, answer_key: str = "event", prob_key: str = "probability"
+) -> float:
+    """Calculates the ROC AUC score between the true labels and predicted probabilities."""
     return roc_auc_score(df[answer_key], df[prob_key])
 
 
-def create_new_instructions(llm, instructions, score):
+def create_new_instructions(llm: OpenAILLM, instructions: Any, score: float) -> Any:
+    """Generates new instructions based on the provided score and existing instructions."""
     chain = LLMChain(llm=llm, prompt=PROMPT_INSTRUCTOR)
     evaluations = chain.run({"instructions": instructions, "score": score})
     return evaluations
 
 
 def prompt_engineer(
-    openai_api_key,
-    init_instructions,
-    instructions_format,
-    iterations=3,
-    model_name="gpt-4o-2024-08-06",
-):
+    openai_api_key: str,
+    init_instructions: str,
+    instructions_format: str,
+    iterations: int = 3,
+    model_name: str = "gpt-4o-2024-08-06",
+) -> Any:
+    """Iteratively refines a prompt template using a large language model to maximize performance score."""
     llm = OpenAILLM(model_name=model_name, openai_api_key=openai_api_key)
     score_template = {"template": init_instructions, "score": 0.0}
 
@@ -301,7 +328,7 @@ def prompt_engineer(
             template = create_new_instructions(
                 llm=llm,
                 instructions=score_template["template"],
-                score=score_template["score"],
+                score=cast(float, score_template["score"]),
             )
             continue
 
@@ -309,23 +336,24 @@ def prompt_engineer(
 
         score = calculate_score(df)
         print(f"Score: {score}\n")
-        if score > score_template["score"]:
+        if score > cast(float, score_template["score"]):
             print(f"Best template score: {score} \nTemplate: {template}\n")
             score_template["template"] = template
             score_template["score"] = score
         template = create_new_instructions(
             llm=llm,
             instructions=score_template["template"],
-            score=score_template["score"],
+            score=cast(float, score_template["score"]),
         )
 
     return score_template["template"]
 
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
+    """Performs a Google Custom Search and returns a list of result links."""
     service = build("customsearch", "v1", developerKey=api_key)
     search = (
-        service.cse()
+        service.cse()  # pylint: disable=no-member
         .list(
             q=query,
             cx=engine,
@@ -368,7 +396,7 @@ def extract_text(
 
 def process_in_batches(
     urls: List[str], window: int = 5, timeout: int = 10
-) -> Generator[None, None, List[Tuple[Future, str]]]:
+) -> Generator[List[Tuple[Future, str]], None, None]:
     """Iter URLs in batches."""
     with ThreadPoolExecutor() as executor:
         for i in range(0, len(urls), window):
@@ -386,7 +414,7 @@ def extract_texts(urls: List[str], num_words: int = 300) -> List[str]:
     extracted_texts = []
     count = 0
     stop = False
-    for batch in process_in_batches(urls=urls):
+    for batch in process_in_batches(urls=urls) or []:
         for future, url in batch:
             try:
                 result = future.result()
@@ -417,6 +445,9 @@ def fetch_additional_information(
     google_engine: str,
 ) -> str:
     """Fetch additional information."""
+    if not client:
+        raise RuntimeError("Client not initialized")
+
     url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=prompt)
     moderation_result = client.moderations.create(input=url_query_prompt)
     if moderation_result.results[0].flagged:
@@ -446,13 +477,16 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         tool = kwargs["tool"]
         prompt = kwargs["prompt"]
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+
+        if not client:
+            raise RuntimeError("Client not initialized")
 
         openai_key = kwargs["api_keys"]["openai"]
         if tool not in ALLOWED_TOOLS:

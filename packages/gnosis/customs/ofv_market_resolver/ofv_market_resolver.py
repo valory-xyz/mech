@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -28,21 +28,30 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, BeforeValidator
 
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def with_key_rotation(func: Callable):
+def with_key_rotation(func: Callable) -> Callable:
+    """
+    Decorator that retries a function with API key rotation on failure.
+
+    :param func: The function to be decorated.
+    :type func: Callable
+    :returns: Callable -- the wrapped function that handles retries with key rotation.
+    """
+
     @functools.wraps(func)
-    def wrapper(*args, **kwargs) -> MechResponse:
+    def wrapper(*args: Any, **kwargs: Any) -> MechResponseWithKeys:
         # this is expected to be a KeyChain object,
         # although it is not explicitly typed as such
         api_keys = kwargs["api_keys"]
         retries_left: Dict[str, int] = api_keys.max_retries()
 
-        def execute() -> MechResponse:
+        def execute() -> MechResponseWithKeys:
             """Retry the function with a new key."""
             try:
-                result = func(*args, **kwargs)
+                result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
             except openai.RateLimitError as e:
                 # try with a new key again
@@ -73,6 +82,8 @@ Factuality = Annotated[
 
 
 class FactCheckClaimDetails(BaseModel):
+    """FactCheck Claim Details Model"""
+
     claim: str
     factuality: Factuality
     correction: str | None
@@ -80,16 +91,33 @@ class FactCheckClaimDetails(BaseModel):
 
 
 class FactCheckResult(BaseModel):
+    """FactCheck Result Model"""
+
     factuality: Factuality
     claims_details: list[FactCheckClaimDetails] | None
 
 
-def factcheck(
+def _factcheck(
     statement: str,
     model: str = DEFAULT_OPENAI_MODEL,
     openai_api_key: str | None = None,
     serper_api_key: str | None = None,
 ) -> FactCheckResult:
+    """
+    Perform fact-checking on a given statement using an LLM and search-based retrieval.
+
+    :param statement: The text statement to verify.
+    :type statement: str
+    :param model: The LLM model to use for fact-checking.
+    :type model: str
+    :param openai_api_key: API key for OpenAI (if not using default configuration).
+    :type openai_api_key: str, optional
+    :param serper_api_key: API key for Serper (used for retrieval).
+    :type serper_api_key: str, optional
+
+    :returns: A FactCheckResult containing structured fact-checking results.
+    :rtype: FactCheckResult
+    """
     api_config = {
         "OPENAI_API_KEY": openai_api_key,
         "SERPER_API_KEY": serper_api_key,
@@ -113,9 +141,20 @@ def rewrite_as_sentence(
 ) -> str:
     """
     Rewrites the question into a sentence, example:
+
     `Will former Trump Organization CFO Allen Weisselberg be sentenced to jail by 15 April 2024?`
     ->
     `Former Trump Organization CFO Allen Weisselberg was sentenced to jail by 15 April 2024.`
+
+    :param question: The question to rewrite.
+    :type question: str
+    :param model: The language model to use for rewriting the question (defaults to `DEFAULT_OPENAI_MODEL`).
+    :type model: str
+    :param openai_api_key: API key for OpenAI (if not using default configuration).
+    :type openai_api_key: str, optional
+
+    :returns: The question rewritten as a sentence.
+    :rtype: str
     """
     llm = ChatOpenAI(
         model=model,
@@ -124,18 +163,18 @@ def rewrite_as_sentence(
     )
 
     prompt = f"""
-Rewrite the question into a simple announcement sentence stating a fact or prediction like it is already known.  
-Make future tense into past tense.
-For future questions that ask if something will happen "by" some date, rewrite it to "before" that date or any time sooner.
-For future questions that ask if something will happen "on" some date, rewrite it to "on" that date.
-If the question is both "on" and "by" some date, rewrite it as "before or any time sooner than" that date.
-If the question is about exact date, keep it exact. 
-If the question is about a date range, keep it a range.
-Always keep the same meaning.                          
-Never negate the sentence into opposite meaning of the question.                  
-Question: {question}
-Sentence:                                         
-"""
+    Rewrite the question into a simple announcement sentence stating a fact or prediction like it is already known.
+    Make future tense into past tense.
+    For future questions that ask if something will happen "by" some date, rewrite it to "before" that date or any time sooner.
+    For future questions that ask if something will happen "on" some date, rewrite it to "on" that date.
+    If the question is both "on" and "by" some date, rewrite it as "before or any time sooner than" that date.
+    If the question is about exact date, keep it exact.
+    If the question is about a date range, keep it a range.
+    Always keep the same meaning.
+    Never negate the sentence into opposite meaning of the question.
+    Question: {question!r}
+    Sentence:
+    """
     completion = str(llm.invoke(prompt, max_tokens=512).content)
 
     return completion
@@ -148,9 +187,7 @@ def is_predictable_binary(
     model: str = DEFAULT_OPENAI_MODEL,
     openai_api_key: str | None = None,
 ) -> bool:
-    """
-    Evaluate if the question is actually answerable.
-    """
+    """Evaluate if the question is actually answerable."""
     llm = ChatOpenAI(
         model=model,
         temperature=0.0,
@@ -169,7 +206,7 @@ def is_predictable_binary(
 - The potential asnwer can be only "Yes" or "No".
 Follow a chain of thought to evaluate if the question is fully qualified:
 First, write the parts of the following question:
-"{question}"
+"{question!r}"
 Then, write down what is the future event of the question, what it refers to and when that event will happen if the question contains it.
 Then, explain why do you think it is or isn't fully qualified.
 Finally, write your final decision, write `decision: ` followed by either "yes it is fully qualified" or "no it isn't fully qualified" about the question. Don't write anything else after that. You must include "yes" or "no".
@@ -200,6 +237,7 @@ def build_run_result(
     is_determinable: bool | None,
     is_valid: bool | None,
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+    """Returns the run result"""
     return (
         json.dumps(
             {
@@ -215,9 +253,7 @@ def build_run_result(
 
 
 def most_common_fact_result(results: list[FactCheckResult]) -> FactCheckResult:
-    """
-    Given a list of fact check results, return the first `FactCheckResult` in the list with `factuality` being the most common.
-    """
+    """Given a list of fact check results, return the first `FactCheckResult` in the list with `factuality` being the most common."""
     factualities = [fact.factuality for fact in results]
     most_common_fact = max(set(factualities), key=factualities.count)
     first_most_common_fact = [
@@ -231,11 +267,9 @@ def run(
     prompt: str,
     api_keys: Any,
     n_fact_runs: int = 3,
-    **kwargs: Any,  # Just to ignore any other arguments passed to the resolver by the universal benchmark script.
+    **kwargs: Any,  # Just to ignore any other arguments passed to the resolver by the universal benchmark script. pylint: disable=unused-argument
 ) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
-    """
-    Run the prediction market resolver based on Open Fact Verifier.
-    """
+    """Run the prediction market resolver based on Open Fact Verifier."""
     assert (
         n_fact_runs > 0 and n_fact_runs % 2 != 0
     ), "n_fact_runs must be greater than 0 and an odd number"
@@ -262,7 +296,7 @@ def run(
     print(f"Question `{market_question}` rewritten into `{market_sentence}`.")
     # Fact-check the sentence.
     factresults = [
-        factcheck(
+        _factcheck(
             market_sentence,
             openai_api_key=openai_api_key,
             serper_api_key=serper_api_key,
