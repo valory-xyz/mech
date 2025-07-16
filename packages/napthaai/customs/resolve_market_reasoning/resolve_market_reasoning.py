@@ -113,7 +113,6 @@ def with_key_rotation(func: Callable) -> Callable:
             """Retry the function with a new key."""
             try:
                 result: MechResponse = func(*args, **kwargs)
-                print("Response from the MECH tool: ", result)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -279,9 +278,6 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
         :returns: The instance of the class
         :rtype: OpenAISchema
         """
-
-        print("Completion: ", completion)
-
         message = completion.choices[0].message  # type: ignore
 
         return cls.model_validate_json(
