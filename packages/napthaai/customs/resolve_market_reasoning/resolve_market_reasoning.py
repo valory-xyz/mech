@@ -16,8 +16,8 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-
 """This module implements a Mech tool for binary predictions."""
+
 import functools
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -37,7 +37,7 @@ from markdownify import markdownify as md
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
-from tiktoken import encoding_for_model, get_encoding
+from tiktoken import Encoding, encoding_for_model, get_encoding
 
 
 client: Optional[OpenAI] = None
@@ -46,7 +46,7 @@ MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
-def get_model_encoding(model: str):
+def get_model_encoding(model: str) -> Encoding:
     """Get the appropriate encoding for a model."""
     # Workaround since tiktoken does not have support yet for gpt4.1
     # https://github.com/openai/tiktoken/issues/395
