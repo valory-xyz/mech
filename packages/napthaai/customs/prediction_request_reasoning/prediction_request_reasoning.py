@@ -762,7 +762,6 @@ def get_embeddings(
         doc.text = doc.text.strip()
         doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
         if total_tokens_count + doc.tokens > max_embeddings_tokens:
-
             continue
         if doc.text:
             filtered_docs.append(doc)
