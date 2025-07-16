@@ -19,10 +19,10 @@
 """This module implements a Mech tool for binary predictions."""
 
 import functools
+import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
-import re
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import PyPDF2
@@ -39,6 +39,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
 from tiktoken import Encoding, encoding_for_model, get_encoding
+
 
 TOKENS_DISTANCE_TO_LIMIT = 200
 DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
