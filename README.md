@@ -170,7 +170,6 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 - **OpenAI request** (`openai_request.py`). Executes requests to the OpenAI API through the engine associated with the specific tool. It receives as input an arbitrary prompt and outputs the returned output by the OpenAI API.
   - `openai-gpt-3.5-turbo`
   - `openai-gpt-4`
-  - `gpt-4.1-2025-04-14`
   - `openai-gpt-3.5-turbo-instruct`
 
 - **Stability AI request** (`stabilityai_request.py`): Executes requests to the Stability AI through the engine associated with the specific tool. It receives as input an arbitrary prompt and outputs the image data corresponding to the output of Stability AI.

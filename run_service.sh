@@ -25,7 +25,7 @@ autonomy build-image
 # Copy keys and build the deployment
 cp $PWD/../keys.json .
 
-autonomy deploy build --n 1 -ltm
+autonomy deploy build -ltm
 
 # Get the latest abci_build directory
 BUILD_DIR=$(ls -d abci_build_* | sort -V | tail -n1)
