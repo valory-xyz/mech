@@ -378,6 +378,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self.params.in_flight_req = False
                 self.params.is_cold_start = False
                 self._last_deadline = self._fetch_deadline()
+                self.pending_tasks.append(self._executing_task)
+                self._executing_task = None
                 return self._execute_task()
             return
 

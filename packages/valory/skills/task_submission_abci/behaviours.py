@@ -1015,7 +1015,9 @@ class TransactionPreparationBehaviour(
             all_txs.extend(split_profit_txs)
 
         offchain_deliver_txs = yield from self._get_offchain_tasks_deliver_data()
+        self.context.logger.info(f"{offchain_deliver_txs=}")
         if offchain_deliver_txs is not None:
+            self.context.logger.info("Offchain_deliver_txs is not None. appending to all transactions")
             # in case of None, the agent will procced ahead as there are no offchain tasks to deliver
             all_txs.extend(offchain_deliver_txs)
 
