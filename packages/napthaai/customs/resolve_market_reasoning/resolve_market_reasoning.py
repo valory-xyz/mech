@@ -22,6 +22,7 @@ import functools
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
+import re
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 
 import PyPDF2
@@ -39,6 +40,13 @@ from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
 from tiktoken import Encoding, encoding_for_model, get_encoding
 
+TOKENS_DISTANCE_TO_LIMIT = 200
+DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
+BUFFER = 15000  # Buffer for the total tokens in the embeddings batch
+MAX_EMBEDDING_TOKENS = (
+    300000 - BUFFER  # Maximum tokens for the embeddings batch
+)  # Maximum total tokens per embeddings batch
+
 
 client: Optional[OpenAI] = None
 
@@ -53,6 +61,36 @@ def get_model_encoding(model: str) -> Encoding:
     if model == "gpt-4.1-2025-04-14":
         return get_encoding("o200k_base")
     return encoding_for_model(model)
+
+
+# Clean text by removing emojis and non-printable characters.
+def clean_text(text: str) -> str:
+    """Remove emojis and non-printable characters, collapse whitespace."""
+    emoji_pattern = re.compile(
+        "[\U0001f600-\U0001f64f"
+        "\U0001f300-\U0001f5ff"
+        "\U0001f680-\U0001f6ff"
+        "\U0001f1e0-\U0001f1ff"
+        "]+",
+        flags=re.UNICODE,
+    )
+    text = emoji_pattern.sub("", text)
+    # Decode using UTF-8, replacing invalid bytes
+    text = text.encode("utf-8", "replace").decode("utf-8", "replace")
+    text = "".join(ch for ch in text if ch.isprintable())
+    # Collapse whitespace
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+# Utility: truncate text to a maximum number of tokens.
+def truncate_text(text: str, model: str, max_tokens: int) -> str:
+    """Truncate text to the first max_tokens tokens based on model encoding."""
+    enc = get_model_encoding(model)
+    token_ids = enc.encode(text)
+    if len(token_ids) <= max_tokens:
+        return text
+    return enc.decode(token_ids[:max_tokens])
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -75,6 +113,7 @@ def with_key_rotation(func: Callable) -> Callable:
             """Retry the function with a new key."""
             try:
                 result: MechResponse = func(*args, **kwargs)
+                print("Response from the MECH tool: ", result)
                 return result + (api_keys,)
             except anthropic.RateLimitError as e:
                 # try with a new key again
@@ -241,6 +280,8 @@ class OpenAISchema(BaseModel):  # type: ignore[misc]
         :rtype: OpenAISchema
         """
 
+        print("Completion: ", completion)
+
         message = completion.choices[0].message  # type: ignore
 
         return cls.model_validate_json(
@@ -294,6 +335,7 @@ class Document(BaseModel):
     date: str
     url: str
     embedding: Optional[List[float]] = None
+    tokens: int = 0
 
 
 URL_QUERY_PROMPT = """
@@ -656,23 +698,65 @@ def recursive_character_text_splitter(
 
 
 def get_embeddings(split_docs: List[Document]) -> List[Document]:
-    """Get embeddings for the split documents."""
-    if not client:
-        raise RuntimeError("Client not initialized")
+    """Get embeddings for the split documents: clean, truncate, then batch by token count."""
+    # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
+    # Filter out any documents that exceed the maximum token limit individually
+    filtered_docs = []
+    total_tokens_count = 0
+    for doc in split_docs:
+        # if we are very close to the limit then break the loop
+        if MAX_EMBEDDING_TOKENS - total_tokens_count < TOKENS_DISTANCE_TO_LIMIT:
+            break
+        cleaned = clean_text(doc.text)
+        # TODO we could summarize instead of truncating
+        doc.text = truncate_text(cleaned, EMBEDDING_MODEL, DOC_TOKEN_LIMIT)
+        # filter empty strings
+        doc.text = doc.text.strip()
+        doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
+        if total_tokens_count + doc.tokens > MAX_EMBEDDING_TOKENS:
+            continue
+        if doc.text:
+            filtered_docs.append(doc)
+            total_tokens_count += doc.tokens
 
-    for batch_start in range(0, len(split_docs), EMBEDDING_BATCH_SIZE):
-        batch_end = batch_start + EMBEDDING_BATCH_SIZE
-        batch = [doc.text for doc in split_docs[batch_start:batch_end]]
+    # Process documents in batches that respect the total token limit
+    processed_docs = []
+    i = 0
+    while i < len(filtered_docs):
+        current_batch_docs = []
+        current_batch_tokens = 0
+
+        while i < len(filtered_docs):
+            doc = filtered_docs[i]
+            if doc.tokens == 0:
+                doc.tokens = count_tokens(doc.text, EMBEDDING_MODEL)
+
+            if current_batch_tokens + doc.tokens > MAX_EMBEDDING_TOKENS:
+                break
+
+            current_batch_docs.append(doc)
+            current_batch_tokens += doc.tokens
+            i += 1
+
+        if not current_batch_docs:
+            # This should not happen after filtering, but just in case
+            i += 1
+            continue
+        batch_texts = [doc.text for doc in current_batch_docs]
+
+        if not client:
+            raise RuntimeError("Embeddings not intialized")
         response = client.embeddings.create(
             model=EMBEDDING_MODEL,
-            input=batch,
+            input=batch_texts,
         )
-        for i, be in enumerate(response.data):
-            assert i == be.index
-        batch_embeddings = [e.embedding for e in response.data]
-        for i, doc in enumerate(split_docs[batch_start:batch_end]):
-            doc.embedding = batch_embeddings[i]
-    return split_docs
+
+        for j, emb in enumerate(response.data):
+            assert j == emb.index, "Embeddings response out-of-order"
+            current_batch_docs[j].embedding = emb.embedding
+            processed_docs.append(current_batch_docs[j])
+
+    return processed_docs
 
 
 def find_similar_chunks(
