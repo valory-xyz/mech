@@ -440,7 +440,12 @@ def get_max_embeddings_tokens(model: str) -> int:
         limit_max_tokens = min(
             LLM_SETTINGS[model]["limit_max_tokens"], DEFAULT_MAX_EMBEDDING_TOKENS
         )
-        return limit_max_tokens - PREDICTION_PROMPT_LENGTH - BUFFER
+        max_embeddings_tokens = limit_max_tokens - PREDICTION_PROMPT_LENGTH - BUFFER
+        if max_embeddings_tokens <= 0:
+            raise ValueError(
+                f"Model {model} has a limit_max_tokens that is too low for embeddings."
+            )
+        return
 
     return DEFAULT_MAX_EMBEDDING_TOKENS
 
