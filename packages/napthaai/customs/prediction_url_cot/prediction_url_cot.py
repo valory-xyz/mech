@@ -291,8 +291,7 @@ HTTP_MAX_RETIES = 2
 MIN_WORDS = 100
 MAX_DOC_WORDS = 10000
 N_DOCS = 5
-SPLITTER_CHUNK_SIZE = 1800
-SPLITTER_OVERLAP = 50
+BUFFER = 10000
 
 PREDICTION_PROMPT = """
 You will be evaluating the likelihood of an event based on a user's question and additional information from search results.
@@ -648,9 +647,9 @@ def adjust_additional_information(
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
-    # Encode the user prompt to calculate its token count
+    # Encode the user prompt to calculate its token count without additional information
     final_prompt = prompt_template.format(
-        USER_PROMPT=user_prompt, ADDITIONAL_INFORMATION=additional_information
+        USER_PROMPT=user_prompt, ADDITIONAL_INFORMATION=""
     )
     prompt_tokens = count_tokens(text=final_prompt, model=model)
 
@@ -659,7 +658,7 @@ def adjust_additional_information(
         LLM_SETTINGS[model]["limit_max_tokens"]
         - LLM_SETTINGS[model]["default_max_tokens"]
     )
-    available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens
+    available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens - BUFFER
 
     # Encode the additional_information
     additional_info_tokens = count_tokens(text=additional_information, model=model)
@@ -858,7 +857,7 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], An
             max_tokens=max_tokens,
             n_docs=n_docs,
         )
-        print("Checking additional information")
+
         if additional_information:
             # check the limit of tokens
             additional_information = adjust_additional_information(
