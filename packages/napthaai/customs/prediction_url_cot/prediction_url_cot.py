@@ -685,6 +685,20 @@ def clean_text(text: str) -> str:
     text = emoji_pattern.sub("", text)
     # Decode using UTF-8, replacing invalid bytes
     text = text.encode("utf-8", "replace").decode("utf-8", "replace")
+    replacements = {
+        "\u201c": '"',  # Left double quotation mark
+        "\u201d": '"',  # Right double quotation mark
+        "\u2018": "'",  # Left single quotation mark
+        "\u2019": "'",  # Right single quotation mark
+        "\u2013": "-",  # En dash
+        "\u2014": "-",  # Em dash
+        "\u00a0": " ",  # Non-breaking space
+        "\u00b6": "",  # Pilcrow sign (paragraph mark)
+        "\u2026": "...",  # Horizontal ellipsis
+    }
+
+    for unicode_char, replacement in replacements.items():
+        text = text.replace(unicode_char, replacement)
     # Modified: Allow common whitespace characters (\n, \t, \r) to pass through
     # so they can be handled by the subsequent regex for whitespace collapsing.
     # All other non-printable characters will still be removed.
