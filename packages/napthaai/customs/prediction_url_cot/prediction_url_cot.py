@@ -24,7 +24,7 @@ import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from itertools import islice
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 
 import PyPDF2
 import anthropic
@@ -33,10 +33,10 @@ import openai
 import requests
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
-from pydantic import BaseModel
+from pydantic import BaseModel, PositiveInt
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
-from tiktoken import encoding_for_model
+from tiktoken import Encoding, encoding_for_model, get_encoding
 
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
@@ -228,7 +228,7 @@ class LLMClient:
             response.usage.completion_tokens = response_provider.usage.completion_tokens
             return response
 
-        if self.llm_provider == "openrouter":
+        if self.llm_provider in ["openai", "openrouter"]:
             response_provider = self.client.chat.completions.create(
                 model=model,
                 messages=messages,
@@ -291,6 +291,8 @@ HTTP_MAX_RETIES = 2
 MIN_WORDS = 100
 MAX_DOC_WORDS = 10000
 N_DOCS = 5
+SPLITTER_CHUNK_SIZE = 1800
+SPLITTER_OVERLAP = 50
 
 PREDICTION_PROMPT = """
 You will be evaluating the likelihood of an event based on a user's question and additional information from search results.
@@ -338,17 +340,41 @@ After you have written all {NUM_QUERIES} search queries, please submit your fina
 SYSTEM_PROMPT = """You are a world class algorithm for generating structured output from a given input."""
 
 
-class Document(BaseModel):
+class ExtendedDocument(BaseModel):
     """Document model"""
 
     text: str
     url: str
+    tokens: PositiveInt = 0
     embedding: Optional[List[float]] = None
+
+
+def get_model_encoding(model: str) -> Encoding:
+    """Get the appropriate encoding for a model."""
+    # Workaround since tiktoken does not have support yet for gpt4.1
+    # https://github.com/openai/tiktoken/issues/395
+    if model == "gpt-4.1-2025-04-14":
+        return get_encoding("o200k_base")
+
+    return encoding_for_model(model)
 
 
 def count_tokens(text: str, model: str) -> int:
     """Count the number of tokens in a text."""
-    enc = encoding_for_model(model)
+    # Check if we're using a Claude model and we have an active client
+    if "claude" in model.lower() and client and client.llm_provider == "anthropic":
+        try:
+            # Use Anthropic's tokenizer when available
+            response = client.client.messages.count_tokens(
+                model=model, messages=[{"role": "user", "content": text}]
+            )
+            return response.input_tokens
+        except (AttributeError, Exception):
+            # Fallback if the method doesn't exist or fails
+            print("Using fallback enconding for Claude models")
+            enc = get_encoding("cl100k_base")
+            return len(enc.encode(text))
+    enc = get_model_encoding(model)
     return len(enc.encode(text))
 
 
@@ -461,7 +487,7 @@ def get_urls_from_queries(
 def extract_text(
     html: str,
     num_words: Optional[int] = None,
-) -> Optional[Document]:
+) -> Optional[ExtendedDocument]:
     """Extract text from a single HTML document"""
     text = ReadabilityDocument(html).summary()
 
@@ -476,13 +502,13 @@ def extract_text(
     else:
         text = " ".join(text.split())
 
-    doc = Document(text=text, url="")
+    doc = ExtendedDocument(text=text, url="")
     return doc
 
 
 def extract_text_from_pdf(
     url: str, num_words: Optional[int] = None
-) -> Optional[Document]:
+) -> Optional[ExtendedDocument]:
     """Extract text from a PDF document at the given URL."""
     try:
         response = requests.get(url, timeout=HTTP_TIMEOUT)
@@ -497,7 +523,9 @@ def extract_text_from_pdf(
             for page in reader.pages:
                 text += page.extract_text()
 
-        doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
+        doc = ExtendedDocument(
+            text=text[:num_words] if num_words else text, date="", url=url
+        )
         print(f"Using PDF: {url}: {doc.text[:300]}...")
         return doc
 
@@ -536,7 +564,9 @@ def process_in_batches(
             yield futures
 
 
-def extract_texts(urls: List[str], num_words: Optional[int] = None) -> List[Document]:
+def extract_texts(
+    urls: List[str], num_words: Optional[int] = None
+) -> List[ExtendedDocument]:
     """Extract texts from URLs with improved error handling, excluding failed URLs."""
     extracted_texts = []
     for batch in process_in_batches(urls=urls) or []:
@@ -583,11 +613,11 @@ def count_words(text: str) -> int:
 
 
 def select_docs(
-    docs: List[Document],
+    docs: List[ExtendedDocument],
     n_docs: int,
     min_words: int = MIN_WORDS,
     max_words: int = MAX_DOC_WORDS,
-) -> List[Document]:
+) -> List[ExtendedDocument]:
     """Select N documents from the list."""
 
     word_counts = {doc.url: count_words(doc.text) for doc in docs}
@@ -611,6 +641,58 @@ def select_docs(
             doc.text = " ".join(doc.text.split()[:10000])
 
     return selected_docs
+
+
+def adjust_additional_information(
+    user_prompt: str, prompt_template: str, additional_information: str, model: str
+) -> str:
+    """Adjust the additional_information to fit within the token budget"""
+
+    # Encode the user prompt to calculate its token count
+    final_prompt = prompt_template.format(
+        USER_PROMPT=user_prompt, ADDITIONAL_INFORMATION=additional_information
+    )
+    prompt_tokens = count_tokens(text=final_prompt, model=model)
+
+    # Calculate available tokens for additional_information
+    MAX_PREDICTION_PROMPT_TOKENS = (
+        LLM_SETTINGS[model]["limit_max_tokens"]
+        - LLM_SETTINGS[model]["default_max_tokens"]
+    )
+    available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens
+
+    # Encode the additional_information
+    additional_info_tokens = count_tokens(text=additional_information, model=model)
+
+    # If additional_information exceeds available tokens, truncate it
+    if additional_info_tokens > available_tokens:
+        return additional_information[:available_tokens]
+
+    return additional_information
+
+
+def clean_text(text: str) -> str:
+    """Remove emojis and non-printable characters, collapse whitespace."""
+    emoji_pattern = re.compile(
+        "["
+        "\U0001f300-\U0001f5ff"
+        "\U0001f600-\U0001f64f"
+        "\U0001f680-\U0001f6ff"
+        "\U0001f1e0-\U0001f1ff"
+        "]+",
+        flags=re.UNICODE,
+    )
+    text = emoji_pattern.sub("", text)
+    # Decode using UTF-8, replacing invalid bytes
+    text = text.encode("utf-8", "replace").decode("utf-8", "replace")
+    # Modified: Allow common whitespace characters (\n, \t, \r) to pass through
+    # so they can be handled by the subsequent regex for whitespace collapsing.
+    # All other non-printable characters will still be removed.
+    text = "".join(ch for ch in text if ch.isprintable() or ch in ("\n", "\t", "\r"))
+
+    # This line will now correctly collapse newlines, tabs, and spaces into a single space.
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
 
 
 def fetch_additional_information(
@@ -674,20 +756,23 @@ def fetch_additional_information(
                 doc.url = url
                 docs.append(doc)
 
-    # Remove None values from the list
-    docs = [doc for doc in docs if doc]
-
-    # remove empty documents ""
-    filtered_docs = [doc for doc in docs if hasattr(doc, "text") and doc.text != ""]
-
-    # Select N urls to be used
-    selected_docs = select_docs(filtered_docs, n_docs)
+    # Remove None values and empty documents from the list
+    filtered_docs = [
+        doc for doc in docs if doc and hasattr(doc, "text") and doc.text != ""
+    ]
+    cleaned_docs = []
+    # Cleaned the documents
+    for doc in filtered_docs:
+        doc.text = clean_text(doc.text)
+        doc.text = doc.text.strip()
+        if doc and doc.text:
+            cleaned_docs.append(doc)
 
     # Format the additional information
     additional_information = "\n".join(
         [
             f"ARTICLE {i}, URL: {doc.url}, CONTENT: {doc.text}\n"
-            for i, doc in enumerate(selected_docs)
+            for i, doc in enumerate(cleaned_docs)
         ]
     )
 
@@ -722,9 +807,9 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], An
         raise ValueError("Model must be specified in kwargs")
     if "claude" in tool:  # maintain backwards compatibility
         model = "claude-3-5-sonnet-20240620"
-    print(f"MODEL: {model}")
+    print(f"MODEL for prediction url cot: {model}")
     with LLMClientManager(kwargs["api_keys"], model, embedding_provider):
-        prompt = extract_question(kwargs["prompt"])
+        user_prompt = extract_question(kwargs["prompt"])
         max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[model]["default_max_tokens"])
         temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
         num_urls = kwargs.get("num_urls", NUM_URLS_PER_QUERY)
@@ -747,7 +832,7 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], An
             raise ValueError(f"Tool {tool} not supported.")
 
         additional_information, counter_callback = fetch_additional_information(
-            prompt=prompt,
+            prompt=user_prompt,
             model=model,
             google_api_key=google_api_key,
             google_engine_id=google_engine_id,
@@ -759,13 +844,19 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], An
             max_tokens=max_tokens,
             n_docs=n_docs,
         )
+        print("Checking additional information")
+        if additional_information:
+            # check the limit of tokens
+            additional_information = adjust_additional_information(
+                user_prompt, PREDICTION_PROMPT, additional_information, model
+            )
 
         # Generate the prediction prompt
         prediction_prompt = PREDICTION_PROMPT.format(
             ADDITIONAL_INFORMATION=additional_information,
-            USER_PROMPT=prompt,
+            USER_PROMPT=user_prompt,
         )
-
+        print(f"Prediction prompt: {prediction_prompt}")
         # Generate the prediction
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},

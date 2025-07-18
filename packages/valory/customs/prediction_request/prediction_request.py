@@ -866,10 +866,10 @@ def adjust_additional_information(
     """Adjust the additional_information to fit within the token budget"""
 
     # Encode the user prompt to calculate its token count
-    user_prompt = prompt_template.format(
+    final_prompt = prompt_template.format(
         user_prompt=user_prompt, additional_information=additional_information
     )
-    prompt_tokens = count_tokens(text=user_prompt, model=model)
+    prompt_tokens = count_tokens(text=final_prompt, model=model)
 
     # Calculate available tokens for additional_information
     MAX_PREDICTION_PROMPT_TOKENS = (
