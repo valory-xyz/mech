@@ -377,7 +377,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 )
                 self.params.in_flight_req = False
                 self.params.is_cold_start = False
-                self._last_deadline = self._fetch_deadline()
+                self._last_deadline = None
+                self._handle_timeout_task()
                 return self._execute_task()
             return
 
@@ -422,7 +423,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
-        self.params.req_to_deadline[nonce] = cast(float, self._last_deadline)
+        if self._last_deadline is None:
+            self._last_deadline = self._fetch_deadline()
+        self.params.req_to_deadline[nonce] = self._last_deadline
         self.params.in_flight_req = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
@@ -435,6 +438,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_done_task(self, task_result: Any) -> None:
         """Handle done tasks"""
+        self.context.logger.info(f"Inside handle done task {self._executing_task=}")
+        self.context.logger.info(f"Inside handle done task {task_result=}")
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
         request_id_nonce = executing_task.get("requestIdWithNonce", None)
@@ -518,6 +523,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.info(f"Adding task {req_id} to the end of the queue")
             self.pending_tasks.append(executing_task)
             self._executing_task = None
+            self._last_deadline = None
             return None
 
         self.context.logger.info(
@@ -652,11 +658,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(
             f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
         )
-        self.send_data_via_acn(
-            sender_address=sender,
-            request_id=str(req_id),
-            data=ipfs_hash,
-        )
         done_task = cast(Dict[str, Any], self._done_task)
         if done_task is None or not isinstance(done_task, Dict):
             self.context.logger.error(
@@ -665,6 +666,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._executing_task = None
             self._done_task = None
             self._invalid_request = False
+            self._last_deadline = None
             return None
 
         task_result = to_multihash(ipfs_hash)
@@ -689,6 +691,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executing_task = None
         self._done_task = None
         self._invalid_request = False
+        self._last_deadline = None
 
     def _handle_ipfs_tasks_response(
         self, message: IpfsMessage, dialogue: Dialogue
