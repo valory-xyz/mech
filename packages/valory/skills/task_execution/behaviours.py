@@ -26,14 +26,18 @@ from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from enum import Enum
+from string import Template
 from typing import Any, Callable, Dict, List, Optional, Tuple, cast
 
+import requests
 from aea.helpers.cid import to_v1
 from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
 from eth_abi import encode
+from requests.adapters import HTTPAdapter
+from urllib3 import Retry
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
@@ -70,8 +74,18 @@ IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
-
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
+HTTPS = "https://"
+MODELS_INFO_TEMPLATE = Template(
+    HTTPS
+    + "raw.githubusercontent.com/BerriAI/litellm/refs/tags/${version}/model_prices_and_context_window.json"
+)
+RETRY_STRATEGY = Retry(
+    total=3,
+    backoff_factor=1,
+    status_forcelist=[429, 500, 502, 503, 504],
+    allowed_methods=["GET"],
+)
 
 
 class RequestType(Enum):
@@ -99,12 +113,35 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._invalid_request = False
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
+        self._models_info: Optional[dict] = None
+
+    def _fetch_models_info(self) -> None:
+        """Get the model prices and context window information."""
+        session = requests.Session()
+        adapter = HTTPAdapter(max_retries=RETRY_STRATEGY)
+        session.mount(HTTPS, adapter)
+        info_version = self.params.models_info_version
+        url = MODELS_INFO_TEMPLATE.substitute(version=info_version)
+
+        try:
+            response = session.get(url)
+            response.raise_for_status()
+            self._models_info = response.json()
+        except (requests.exceptions.RequestException, json.JSONDecodeError) as exc:
+            self.context.logger.error(
+                "An error occurred while trying to fetch the model prices and context window information using "
+                f"{info_version=}: {exc}"
+            )
+            self.context.logger.warning(
+                "Could not successfully get the model prices and context window. The default will be used."
+            )
 
     def setup(self) -> None:
         """Implement the setup."""
         self.context.logger.info("Setting up TaskExecutionBehaviour")
         self._tools_to_package_hash = self.params.tools_to_package_hash
         self._keychain = KeyChain(self.params.api_keys)
+        self._fetch_models_info()
 
     def act(self) -> None:
         """Implement the act."""
