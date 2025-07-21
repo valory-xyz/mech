@@ -676,11 +676,8 @@ def adjust_additional_information(
     # Encode the additional_information
     additional_info_tokens = count_tokens(text=additional_information, model=model)
 
-    # If additional_information exceeds available tokens, truncate it
-    if additional_info_tokens > available_tokens:
-        return additional_information[:available_tokens]
-
-    return additional_information
+    tokens_limit = min(additional_info_tokens, available_tokens)
+    return additional_information[:tokens_limit]
 
 
 def clean_text(text: str) -> str:
