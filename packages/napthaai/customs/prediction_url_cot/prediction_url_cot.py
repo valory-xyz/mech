@@ -682,6 +682,7 @@ def adjust_additional_information(
 
 def clean_text(text: str) -> str:
     """Remove emojis and non-printable characters, collapse whitespace."""
+    ALLOWED_WHITESPACE_CHARS = ("\n", "\t", "\r")
     emoji_pattern = re.compile(
         "["
         "\U0001f300-\U0001f5ff"
@@ -711,7 +712,9 @@ def clean_text(text: str) -> str:
     # Modified: Allow common whitespace characters (\n, \t, \r) to pass through
     # so they can be handled by the subsequent regex for whitespace collapsing.
     # All other non-printable characters will still be removed.
-    text = "".join(ch for ch in text if ch.isprintable() or ch in ("\n", "\t", "\r"))
+    text = "".join(
+        ch for ch in text if ch.isprintable() or ch in ALLOWED_WHITESPACE_CHARS
+    )
 
     # This line will now correctly collapse newlines, tabs, and spaces into a single space.
     text = re.sub(r"\s+", " ", text).strip()

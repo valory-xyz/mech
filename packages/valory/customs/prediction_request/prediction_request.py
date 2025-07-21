@@ -252,10 +252,11 @@ client: Optional[LLMClient] = None
 # Clean text by removing emojis and non-printable characters.
 def clean_text(text: str) -> str:
     """Remove emojis and non-printable characters, collapse whitespace."""
-
+    ALLOWED_WHITESPACE_CHARS = ("\n", "\t", "\r")
     emoji_pattern = re.compile(
-        "[\U0001f600-\U0001f64f"
+        "["
         "\U0001f300-\U0001f5ff"
+        "\U0001f600-\U0001f64f"
         "\U0001f680-\U0001f6ff"
         "\U0001f1e0-\U0001f1ff"
         "]+",
@@ -264,7 +265,6 @@ def clean_text(text: str) -> str:
     text = emoji_pattern.sub("", text)
     # Decode using UTF-8, replacing invalid bytes
     text = text.encode("utf-8", "replace").decode("utf-8", "replace")
-    # Replace common problematic Unicode characters
     replacements = {
         "\u201c": '"',  # Left double quotation mark
         "\u201d": '"',  # Right double quotation mark
@@ -282,7 +282,9 @@ def clean_text(text: str) -> str:
     # Modified: Allow common whitespace characters (\n, \t, \r) to pass through
     # so they can be handled by the subsequent regex for whitespace collapsing.
     # All other non-printable characters will still be removed.
-    text = "".join(ch for ch in text if ch.isprintable() or ch in ("\n", "\t", "\r"))
+    text = "".join(
+        ch for ch in text if ch.isprintable() or ch in ALLOWED_WHITESPACE_CHARS
+    )
 
     # This line will now correctly collapse newlines, tabs, and spaces into a single space.
     text = re.sub(r"\s+", " ", text).strip()
