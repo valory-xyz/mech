@@ -667,11 +667,11 @@ def adjust_additional_information(
     prompt_tokens = count_tokens(text=final_prompt, model=model)
 
     # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = (
+    max_prediction_prompt_tokens = (
         LLM_SETTINGS[model]["limit_max_tokens"]
         - LLM_SETTINGS[model]["default_max_tokens"]
     )
-    available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens - BUFFER
+    available_tokens = cast(int, max_prediction_prompt_tokens) - prompt_tokens - BUFFER
 
     # Encode the additional_information
     additional_info_tokens = count_tokens(text=additional_information, model=model)
