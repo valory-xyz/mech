@@ -54,7 +54,7 @@ customs:
 - valory/openai_request:0.1.0:bafybeiffdgoq4okj7wn6rgmmfzgak26zcrapzqzq6dtosr5atgjpcbpbba
 - valory/prediction_request_embedding:0.1.0:bafybeibb6tl2cbdqcuak2srpkr4c6wol2cj2vtirbokuq47o55d5pm3u3q
 - valory/resolve_market:0.1.0:bafybeics7sesschy4sc3zbifhqbbcs5prvoopkrfmvl7o4v7wurz5mlypi
-- valory/prediction_request:0.1.0:bafybeihdmiecgqgdm2a5qv75kow7nxx4y5kh3gbtplbinogz275wg3x4sa
+- valory/prediction_request:0.1.0:bafybeidiqmuduqezjhodxubt4grfkoia6jenowocibkt4gzxbn3sq7nusq
 - polywrap/prediction_with_research_report:0.1.0:bafybeidfsjcnvjhhjivu54rcghvaklay6tmcc7x4ge2tovv6efe2wvlzpe
 - jhehemann/prediction_sum_url_content:0.1.0:bafybeifzatoi4fn2nfdf6l64ophwu2bbhh7pyenn2ut7cna3npsdlcqooe
 - psouranis/optimization_by_prompting:0.1.0:bafybeib7utntgjleuqtkwo4z2elwlapvyuwgnwxlkjvyajnjfvdmuytgum
@@ -64,7 +64,7 @@ customs:
 - napthaai/prediction_request_rag:0.1.0:bafybeie7hoyq4llwvohdatgzpkg4z7ftfvioif7fqyf7kmsezbbvobc7ki
 - napthaai/prediction_request_reasoning:0.1.0:bafybeibu5loidl4uvm4ebrt7zqpuxiup4ut6batd5aax6moep6whkkoyni
 - valory/prepare_tx:0.1.0:bafybeiadkv3ufvd27e2aqxusjzh7eesvmjc672ahk54fb3hajwurrfuqpe
-- napthaai/prediction_url_cot:0.1.0:bafybeid5br35ejz3srcdqhnljso3pccofoh4evjxt32t5xwl5hhjtumxvq
+- napthaai/prediction_url_cot:0.1.0:bafybeifklvymsdm37o7lrxj3rgzogvjyrrodgqvfntqsvbdsdmvubwqkdm
 - napthaai/prediction_request_rag_cohere:0.1.0:bafybeif2cchdg5fx4apht7ki556qh52ndf2zmqrm63wlwgrm6kat5ruh7a
 - valory/prediction_request_lite:0.1.0:bafybeickjs4g2utdfsyah5suh2qvhptqa4cpjqt2ndat5n7z3ijfqbalam
 - nickcom007/prediction_request_sme_lite:0.1.0:bafybeicfyznt5xet47mo6qvocdr7pluy7k24o67k3mh5lsst6lzw7rv2ue

@@ -671,7 +671,7 @@ def adjust_additional_information(
         LLM_SETTINGS[model]["limit_max_tokens"]
         - LLM_SETTINGS[model]["default_max_tokens"]
     )
-    available_tokens = cast(int, max_prediction_prompt_tokens) - prompt_tokens - BUFFER
+    available_tokens = max_prediction_prompt_tokens - prompt_tokens - BUFFER
 
     # Encode the additional_information
     additional_info_tokens = count_tokens(text=additional_information, model=model)
