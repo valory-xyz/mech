@@ -368,11 +368,24 @@ def count_tokens(text: str, model: str) -> int:
                 model=model, messages=[{"role": "user", "content": text}]
             )
             return response.input_tokens
-        except (AttributeError, Exception):
-            # Fallback if the method doesn't exist or fails
-            print("Using fallback enconding for Claude models")
-            enc = get_encoding("cl100k_base")
-            return len(enc.encode(text))
+        except AttributeError:
+            # Fallback if the method doesn't exist
+            print(
+                "Anthropic tokenizer method not available, using fallback encoding for Claude models"
+            )
+        except (ConnectionError, TimeoutError) as e:
+            # Handle network-related issues
+            print(f"Network error when counting tokens: {e}, using fallback encoding")
+        except Exception as e:
+            # Log unexpected errors but still provide fallback
+            print(
+                f"Unexpected error with Anthropic tokenizer: {type(e).__name__}: {e}, using fallback encoding"
+            )
+
+        # Fallback encoding
+        enc = get_encoding("cl100k_base")
+        return len(enc.encode(text))
+
     enc = get_model_encoding(model)
     return len(enc.encode(text))
 
