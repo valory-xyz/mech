@@ -198,6 +198,7 @@ models:
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
       default_chain_id: ${str:gnosis}
+      model_prices_and_context_window_version: ${str:v1.73.6-stable}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
