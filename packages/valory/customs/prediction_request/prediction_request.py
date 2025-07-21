@@ -295,15 +295,27 @@ def count_tokens(text: str, model: str) -> int:
     if "claude" in model.lower() and client and client.llm_provider == "anthropic":
         try:
             # Use Anthropic's tokenizer when available
-            response = client.messages.count_tokens(  # type: ignore # pylint: disable=no-member
+            response = client.client.messages.count_tokens(  # type: ignore # pylint: disable=no-member
                 model=model, messages=[{"role": "user", "content": text}]
             )
             return response.input_tokens
-        except (AttributeError, Exception):
-            # Fallback if the method doesn't exist or fails
-            print("Using fallback enconding for Claude models")
-            enc = get_encoding("cl100k_base")
-            return len(enc.encode(text))
+        except AttributeError:
+            # Fallback if the method doesn't exist
+            print(
+                "Anthropic tokenizer method not available, using fallback encoding for Claude models"
+            )
+        except (ConnectionError, TimeoutError) as e:
+            # Handle network-related issues
+            print(f"Network error when counting tokens: {e}, using fallback encoding")
+        except Exception as e:
+            # Log unexpected errors but still provide fallback
+            print(
+                f"Unexpected error with Anthropic tokenizer: {type(e).__name__}: {e}, using fallback encoding"
+            )
+
+        # Fallback encoding
+        enc = get_encoding("cl100k_base")
+        return len(enc.encode(text))
     # Workaround since tiktoken does not have support yet for gpt4.1
     # https://github.com/openai/tiktoken/issues/395
     if model == "gpt-4.1-2025-04-14":
