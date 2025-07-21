@@ -869,7 +869,7 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], An
             ADDITIONAL_INFORMATION=additional_information,
             USER_PROMPT=user_prompt,
         )
-        print(f"Prediction prompt: {prediction_prompt}")
+
         # Generate the prediction
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
