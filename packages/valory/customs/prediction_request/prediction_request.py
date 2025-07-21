@@ -49,6 +49,17 @@ from tiktoken import encoding_for_model, get_encoding
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001f300-\U0001f5ff"
+    "\U0001f600-\U0001f64f"
+    "\U0001f680-\U0001f6ff"
+    "\U0001f1e0-\U0001f1ff"
+    "]+",
+    flags=re.UNICODE,
+)
+WHITESPACE_COLLAPSE_PATTERN = re.compile(r"\s+")
+ALLOWED_WHITESPACE_CHARS = ("\n", "\t", "\r")
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -252,17 +263,7 @@ client: Optional[LLMClient] = None
 # Clean text by removing emojis and non-printable characters.
 def clean_text(text: str) -> str:
     """Remove emojis and non-printable characters, collapse whitespace."""
-    ALLOWED_WHITESPACE_CHARS = ("\n", "\t", "\r")
-    emoji_pattern = re.compile(
-        "["
-        "\U0001f300-\U0001f5ff"
-        "\U0001f600-\U0001f64f"
-        "\U0001f680-\U0001f6ff"
-        "\U0001f1e0-\U0001f1ff"
-        "]+",
-        flags=re.UNICODE,
-    )
-    text = emoji_pattern.sub("", text)
+    text = EMOJI_PATTERN.sub("", text)
     # Decode using UTF-8, replacing invalid bytes
     text = text.encode("utf-8", "replace").decode("utf-8", "replace")
     replacements = {
@@ -287,7 +288,8 @@ def clean_text(text: str) -> str:
     )
 
     # This line will now correctly collapse newlines, tabs, and spaces into a single space.
-    text = re.sub(r"\s+", " ", text).strip()
+    # Collapse all whitespace (including newlines, tabs, and spaces) into single spaces
+    text = WHITESPACE_COLLAPSE_PATTERN.sub(" ", text).strip()
     return text
 
 
