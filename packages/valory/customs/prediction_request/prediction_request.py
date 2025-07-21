@@ -521,14 +521,28 @@ def get_urls_from_queries(
 
 
 def extract_text(
-    html: str,
-    num_words: Optional[int] = None,
+    html: str, num_words: Optional[int] = None
 ) -> Optional[ExtendedDocument]:
     """Extract text from a single HTML document"""
+    # Remove image tags and their content
+    html = re.sub(r"<img[^>]*>", "", html)
+    # Remove markdown image syntax
+    html = re.sub(r"!\[.*?\]\(.*?\)", "", html)
+    # Remove data URI images
+    html = re.sub(r'data:image/[^;]*;base64,[^"]*', "", html)
+
     text = Document(html).summary()
     text = md(text, heading_style="ATX")
     if text is None:
         return None
+
+    # Remove any remaining image-related content
+    text = re.sub(
+        r"!\[.*?\]\(.*?\)", "", text
+    )  # Remove markdown images again after conversion
+    text = re.sub(r"\[.*?\]\(.*?\)", "", text)  # Remove markdown links
+    text = re.sub(r"Photo:.*?\n", "", text)  # Remove photo credits
+    text = re.sub(r"Image:.*?\n", "", text)  # Remove image credits
 
     words = text.split()
     text = " ".join(words[:num_words]) if num_words else " ".join(words)
