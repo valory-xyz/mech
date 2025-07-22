@@ -370,6 +370,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._last_deadline = self._fetch_deadline()
 
             # check if the executing task is within deadline or not
+            # 5minutes.
             if self._executing_task and time.time() > self._last_deadline:
                 # Deadline reached, restart the task execution
                 self.context.logger.info(
@@ -379,7 +380,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self.params.is_cold_start = False
                 self._last_deadline = None
                 self._handle_timeout_task()
-                return self._execute_task()
+                # return self._execute_task()
             return
 
         if self._executing_task is not None:
@@ -503,13 +504,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle timeout tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
-        self.count_timeout(req_id)
+        self.count_timeout(req_id) # 1
         self.context.logger.info(f"Task timed out for request {req_id}")
         self.context.logger.info(
             f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times"
         )
-        async_result = cast(Future, self._async_result)
-        async_result.cancel()
+        if self._async_result:
+            async_result = cast(Future, self._async_result)
+            async_result.cancel()
 
         # we restart the executor in case of a timeout.
         # we do this because its possible the .cancel() call above is not respected
@@ -518,25 +520,26 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._restart_executor()
 
         # check if we can add the task to the end of the queue
-        if not self.timeout_limit_reached(req_id):
+        if self.timeout_limit_reached(req_id): # it is one so we go in.
             # added to end of queue
-            self.context.logger.info(f"Adding task {req_id} to the end of the queue")
-            self.pending_tasks.append(executing_task)
-            self._executing_task = None
-            self._last_deadline = None
-            return None
+            self.context.logger.info(
+                f"Task {req_id} has reached the timeout limit of{self.params.timeout_limit}. "
+                f"It won't be added to the end of the queue again."
+            )
+            task_result = (
+                f"Task timed out {self.params.timeout_limit} times during execution. ",
+                "",
+                None,
+                None,
+            )
+            self._handle_done_task(task_result)
 
-        self.context.logger.info(
-            f"Task {req_id} has reached the timeout limit of{self.params.timeout_limit}. "
-            f"It won't be added to the end of the queue again."
-        )
-        task_result = (
-            f"Task timed out {self.params.timeout_limit} times during execution. ",
-            "",
-            None,
-            None,
-        )
-        self._handle_done_task(task_result)
+        self.context.logger.info(f"Adding task {req_id} to the end of the queue")
+        self.pending_tasks.append(executing_task)
+        self._executing_task = None
+        self._last_deadline = None
+        self._async_result = None
+        return None
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a task request."""
@@ -667,6 +670,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._done_task = None
             self._invalid_request = False
             self._last_deadline = None
+            self._async_result = None
             return None
 
         task_result = to_multihash(ipfs_hash)
@@ -692,6 +696,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._done_task = None
         self._invalid_request = False
         self._last_deadline = None
+        self._async_result = None
 
     def _handle_ipfs_tasks_response(
         self, message: IpfsMessage, dialogue: Dialogue
