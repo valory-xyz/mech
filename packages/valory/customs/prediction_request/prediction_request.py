@@ -49,6 +49,17 @@ from tiktoken import encoding_for_model, get_encoding
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+EMOJI_PATTERN = re.compile(
+    "["
+    "\U0001f300-\U0001f5ff"
+    "\U0001f600-\U0001f64f"
+    "\U0001f680-\U0001f6ff"
+    "\U0001f1e0-\U0001f1ff"
+    "]+",
+    flags=re.UNICODE,
+)
+WHITESPACE_COLLAPSE_PATTERN = re.compile(r"\s+")
+ALLOWED_WHITESPACE_CHARS = ("\n", "\t", "\r")
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -252,20 +263,33 @@ client: Optional[LLMClient] = None
 # Clean text by removing emojis and non-printable characters.
 def clean_text(text: str) -> str:
     """Remove emojis and non-printable characters, collapse whitespace."""
-    emoji_pattern = re.compile(
-        "[\U0001f600-\U0001f64f"
-        "\U0001f300-\U0001f5ff"
-        "\U0001f680-\U0001f6ff"
-        "\U0001f1e0-\U0001f1ff"
-        "]+",
-        flags=re.UNICODE,
-    )
-    text = emoji_pattern.sub("", text)
+    text = EMOJI_PATTERN.sub("", text)
     # Decode using UTF-8, replacing invalid bytes
     text = text.encode("utf-8", "replace").decode("utf-8", "replace")
-    text = "".join(ch for ch in text if ch.isprintable())
-    # Collapse whitespace
-    text = re.sub(r"\s+", " ", text).strip()
+    replacements = {
+        "\u201c": '"',  # Left double quotation mark
+        "\u201d": '"',  # Right double quotation mark
+        "\u2018": "'",  # Left single quotation mark
+        "\u2019": "'",  # Right single quotation mark
+        "\u2013": "-",  # En dash
+        "\u2014": "-",  # Em dash
+        "\u00a0": " ",  # Non-breaking space
+        "\u00b6": "",  # Pilcrow sign (paragraph mark)
+        "\u2026": "...",  # Horizontal ellipsis
+    }
+
+    for unicode_char, replacement in replacements.items():
+        text = text.replace(unicode_char, replacement)
+    # Modified: Allow common whitespace characters (\n, \t, \r) to pass through
+    # so they can be handled by the subsequent regex for whitespace collapsing.
+    # All other non-printable characters will still be removed.
+    text = "".join(
+        ch for ch in text if ch.isprintable() or ch in ALLOWED_WHITESPACE_CHARS
+    )
+
+    # This line will now correctly collapse newlines, tabs, and spaces into a single space.
+    # Collapse all whitespace (including newlines, tabs, and spaces) into single spaces
+    text = WHITESPACE_COLLAPSE_PATTERN.sub(" ", text).strip()
     return text
 
 
@@ -275,15 +299,27 @@ def count_tokens(text: str, model: str) -> int:
     if "claude" in model.lower() and client and client.llm_provider == "anthropic":
         try:
             # Use Anthropic's tokenizer when available
-            response = client.messages.count_tokens(  # type: ignore # pylint: disable=no-member
+            response = client.client.messages.count_tokens(  # type: ignore # pylint: disable=no-member
                 model=model, messages=[{"role": "user", "content": text}]
             )
             return response.input_tokens
-        except (AttributeError, Exception):
-            # Fallback if the method doesn't exist or fails
-            print("Using fallback enconding for Claude models")
-            enc = get_encoding("cl100k_base")
-            return len(enc.encode(text))
+        except AttributeError:
+            # Fallback if the method doesn't exist
+            print(
+                "Anthropic tokenizer method not available, using fallback encoding for Claude models"
+            )
+        except (ConnectionError, TimeoutError) as e:
+            # Handle network-related issues
+            print(f"Network error when counting tokens: {e}, using fallback encoding")
+        except Exception as e:
+            # Log unexpected errors but still provide fallback
+            print(
+                f"Unexpected error with Anthropic tokenizer: {type(e).__name__}: {e}, using fallback encoding"
+            )
+
+        # Fallback encoding
+        enc = get_encoding("cl100k_base")
+        return len(enc.encode(text))
     # Workaround since tiktoken does not have support yet for gpt4.1
     # https://github.com/openai/tiktoken/issues/395
     if model == "gpt-4.1-2025-04-14":
@@ -373,6 +409,7 @@ COMPLETION_RETRIES = 3
 COMPLETION_DELAY = 2
 MAX_NR_DOCS = 1000
 HTTP_TIMEOUT = 20
+BUFFER = 10000
 
 PREDICTION_PROMPT = """
 You are an LLM inside a multi-agent system that takes in a prompt of a user requesting a probability estimation
@@ -879,18 +916,18 @@ def adjust_additional_information(
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
-    # Encode the user prompt to calculate its token count
-    user_prompt = prompt_template.format(
-        user_prompt=user_prompt, additional_information=additional_information
+    # Encode the user prompt to calculate its token count without additional information
+    final_prompt = prompt_template.format(
+        user_prompt=user_prompt, additional_information=""
     )
-    prompt_tokens = count_tokens(text=user_prompt, model=model)
+    prompt_tokens = count_tokens(text=final_prompt, model=model)
 
     # Calculate available tokens for additional_information
     MAX_PREDICTION_PROMPT_TOKENS = (
         LLM_SETTINGS[model]["limit_max_tokens"]
         - LLM_SETTINGS[model]["default_max_tokens"]
     )
-    available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens
+    available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens - BUFFER
 
     # Encode the additional_information
     additional_info_tokens = count_tokens(text=additional_information, model=model)
