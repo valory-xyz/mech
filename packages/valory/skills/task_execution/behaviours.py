@@ -647,7 +647,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         executing_task = self._executing_task
         # if sender is not present, use mech address
-        req_id, sender = (
+        req_id, _ = (
             executing_task["requestId"],
             executing_task.get("sender", executing_task.get("mech")),
         )
