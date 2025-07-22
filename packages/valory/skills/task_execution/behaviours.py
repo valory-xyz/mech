@@ -494,7 +494,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle timeout tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
-        self.count_timeout(req_id)  # 1
+        self.count_timeout(req_id)
         self.context.logger.info(f"Task timed out for request {req_id}")
         self.context.logger.info(
             f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times"
@@ -510,7 +510,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._restart_executor()
 
         # check if we can add the task to the end of the queue
-        if self.timeout_limit_reached(req_id):  # it is one so we go in.
+        if self.timeout_limit_reached(req_id):
             # added to end of queue
             self.context.logger.info(
                 f"Task {req_id} has reached the timeout limit of{self.params.timeout_limit}. "
