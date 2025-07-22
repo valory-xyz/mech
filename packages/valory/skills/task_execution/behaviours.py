@@ -371,6 +371,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
             # check if the executing task is within deadline or not
             if self._executing_task and time.time() > self._last_deadline:
+                # Deadline reached, restart the task execution
                 self.context.logger.info(
                     f"Deadline reached for task {self._executing_task}. Restarting task execution..."
                 )
@@ -389,10 +390,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if len(self.pending_tasks) == 0:
+            # not tasks (requests) to execute
             return
 
+        # create new task
         task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
+        # convert request id to int if it's bytes
         if type(task_data.get("requestId")) == bytes:
             request_id = task_data["requestId"]
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
