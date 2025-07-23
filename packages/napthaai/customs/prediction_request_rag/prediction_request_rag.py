@@ -48,6 +48,7 @@ IMG_TAG_PATTERN = r"<img[^>]*>"
 MARKDOWN_IMG_PATTERN = r"!\[.*?\]\(.*?\)"
 DATA_URI_IMG_PATTERN = r'data:image/[^;]*;base64,[^"]*'
 MARKDOWN_LINK_PATTERN = r"\[.*?\]\(.*?\)"
+IMAGE_PATTERNS = [IMG_TAG_PATTERN, MARKDOWN_IMG_PATTERN, DATA_URI_IMG_PATTERN]
 PHOTO_CREDIT_PATTERN = r"Photo:.*?\n"
 IMAGE_CREDIT_PATTERN = r"Image:.*?\n"
 
@@ -568,12 +569,9 @@ def extract_text(
     html: str, num_words: Optional[int] = None
 ) -> Optional[ExtendedDocument]:
     """Extract text from a single HTML document"""
-    # Remove image tags and their content
-    html = re.sub(IMG_TAG_PATTERN, "", html)
-    # Remove markdown image syntax
-    html = re.sub(MARKDOWN_IMG_PATTERN, "", html)
-    # Remove data URI images
-    html = re.sub(DATA_URI_IMG_PATTERN, "", html)
+    # Remove image patterns
+    for pattern in IMAGE_PATTERNS:
+        html = re.sub(pattern, "", html)
 
     text = ReadabilityDocument(html).summary()
     text = md(text, heading_style="ATX")
