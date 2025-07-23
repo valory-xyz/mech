@@ -123,6 +123,7 @@ class TokenCounterCallback:
             tokens = kwargs[token_key]
         else:
             logging.warning(f"No {token_key}_tokens or {tokens_type}_prompt found.")
+            return
         cost = self.token_to_cost(tokens, model, tokens_type)
         self.cost_dict[token_key] += tokens
         self.cost_dict[f"{tokens_type}_cost"] += cost
