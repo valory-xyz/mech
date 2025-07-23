@@ -43,6 +43,14 @@ from tiktoken import encoding_for_model, get_encoding
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
+# Regular expression patterns
+IMG_TAG_PATTERN = r"<img[^>]*>"
+MARKDOWN_IMG_PATTERN = r"!\[.*?\]\(.*?\)"
+DATA_URI_IMG_PATTERN = r'data:image/[^;]*;base64,[^"]*'
+MARKDOWN_LINK_PATTERN = r"\[.*?\]\(.*?\)"
+PHOTO_CREDIT_PATTERN = r"Photo:.*?\n"
+IMAGE_CREDIT_PATTERN = r"Image:.*?\n"
+
 
 def with_key_rotation(func: Callable) -> Callable:
     """
@@ -557,23 +565,32 @@ def get_urls_from_queries(
 
 
 def extract_text(
-    html: str,
-    num_words: Optional[int] = None,
+    html: str, num_words: Optional[int] = None
 ) -> Optional[ExtendedDocument]:
     """Extract text from a single HTML document"""
+    # Remove image tags and their content
+    html = re.sub(IMG_TAG_PATTERN, "", html)
+    # Remove markdown image syntax
+    html = re.sub(MARKDOWN_IMG_PATTERN, "", html)
+    # Remove data URI images
+    html = re.sub(DATA_URI_IMG_PATTERN, "", html)
+
     text = ReadabilityDocument(html).summary()
-
-    # use html2text to convert HTML to markdown
     text = md(text, heading_style="ATX")
-
     if text is None:
         return None
 
-    if num_words:
-        text = " ".join(text.split()[:num_words])
-    else:
-        text = " ".join(text.split())
+    # Remove any remaining image-related content
+    text = re.sub(
+        MARKDOWN_IMG_PATTERN, "", text
+    )  # Remove markdown images again after conversion
+    text = re.sub(MARKDOWN_LINK_PATTERN, "", text)  # Remove markdown links
+    text = re.sub(PHOTO_CREDIT_PATTERN, "", text)  # Remove photo credits
+    text = re.sub(IMAGE_CREDIT_PATTERN, "", text)  # Remove image credits
 
+    words = text.split()
+    text = " ".join(words[:num_words]) if num_words else " ".join(words)
+    # final cleaning
     doc = ExtendedDocument(text=text, url="")
     return doc
 

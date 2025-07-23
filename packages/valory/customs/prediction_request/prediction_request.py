@@ -49,6 +49,13 @@ from tiktoken import encoding_for_model, get_encoding
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+# Regular expression patterns
+IMG_TAG_PATTERN = r"<img[^>]*>"
+MARKDOWN_IMG_PATTERN = r"!\[.*?\]\(.*?\)"
+DATA_URI_IMG_PATTERN = r'data:image/[^;]*;base64,[^"]*'
+MARKDOWN_LINK_PATTERN = r"\[.*?\]\(.*?\)"
+PHOTO_CREDIT_PATTERN = r"Photo:.*?\n"
+IMAGE_CREDIT_PATTERN = r"Image:.*?\n"
 EMOJI_PATTERN = re.compile(
     "["
     "\U0001f300-\U0001f5ff"
@@ -562,11 +569,11 @@ def extract_text(
 ) -> Optional[ExtendedDocument]:
     """Extract text from a single HTML document"""
     # Remove image tags and their content
-    html = re.sub(r"<img[^>]*>", "", html)
+    html = re.sub(IMG_TAG_PATTERN, "", html)
     # Remove markdown image syntax
-    html = re.sub(r"!\[.*?\]\(.*?\)", "", html)
+    html = re.sub(MARKDOWN_IMG_PATTERN, "", html)
     # Remove data URI images
-    html = re.sub(r'data:image/[^;]*;base64,[^"]*', "", html)
+    html = re.sub(DATA_URI_IMG_PATTERN, "", html)
 
     text = Document(html).summary()
     text = md(text, heading_style="ATX")
@@ -575,11 +582,11 @@ def extract_text(
 
     # Remove any remaining image-related content
     text = re.sub(
-        r"!\[.*?\]\(.*?\)", "", text
+        MARKDOWN_IMG_PATTERN, "", text
     )  # Remove markdown images again after conversion
-    text = re.sub(r"\[.*?\]\(.*?\)", "", text)  # Remove markdown links
-    text = re.sub(r"Photo:.*?\n", "", text)  # Remove photo credits
-    text = re.sub(r"Image:.*?\n", "", text)  # Remove image credits
+    text = re.sub(MARKDOWN_LINK_PATTERN, "", text)  # Remove markdown links
+    text = re.sub(PHOTO_CREDIT_PATTERN, "", text)  # Remove photo credits
+    text = re.sub(IMAGE_CREDIT_PATTERN, "", text)  # Remove image credits
 
     words = text.split()
     text = " ".join(words[:num_words]) if num_words else " ".join(words)
