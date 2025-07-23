@@ -86,8 +86,11 @@ class TokenCounterCallback:
         },
     }
 
-    def __init__(self) -> None:
+    def __init__(self, info: Optional[dict] = None) -> None:
         """Initialize the callback."""
+        if info:
+            self.TOKEN_PRICES = info
+
         self.cost_dict: Dict[str, Union[int, float]] = {
             "input_tokens": 0,
             "output_tokens": 0,

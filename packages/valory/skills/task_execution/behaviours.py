@@ -609,7 +609,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         task_data["tool_py"] = tool_py
         task_data["callable_method"] = callable_method
         task_data["api_keys"] = self._keychain
-        task_data["counter_callback"] = TokenCounterCallback()
+        task_data["counter_callback"] = TokenCounterCallback(self._models_info)
         task_data["model"] = task_data.get(
             "model", tool_params.get("default_model", None)
         )
