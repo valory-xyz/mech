@@ -49,6 +49,20 @@ from tiktoken import encoding_for_model, get_encoding
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+# Regular expression patterns
+IMG_TAG_PATTERN = r"<img[^>]*>"
+MARKDOWN_IMG_PATTERN = r"!\[.*?\]\(.*?\)"
+DATA_URI_IMG_PATTERN = r'data:image/[^;]*;base64,[^"]*'
+IMAGE_PATTERNS = [IMG_TAG_PATTERN, MARKDOWN_IMG_PATTERN, DATA_URI_IMG_PATTERN]
+MARKDOWN_LINK_PATTERN = r"\[.*?\]\(.*?\)"
+PHOTO_CREDIT_PATTERN = r"Photo:.*?\n"
+IMAGE_CREDIT_PATTERN = r"Image:.*?\n"
+IMAGE_RELATED_PATTERNS = [
+    MARKDOWN_IMG_PATTERN,
+    MARKDOWN_LINK_PATTERN,
+    PHOTO_CREDIT_PATTERN,
+    IMAGE_CREDIT_PATTERN,
+]
 EMOJI_PATTERN = re.compile(
     "["
     "\U0001f300-\U0001f5ff"
@@ -558,14 +572,20 @@ def get_urls_from_queries(
 
 
 def extract_text(
-    html: str,
-    num_words: Optional[int] = None,
+    html: str, num_words: Optional[int] = None
 ) -> Optional[ExtendedDocument]:
     """Extract text from a single HTML document"""
+    # Remove image patterns
+    for pattern in IMAGE_PATTERNS:
+        html = re.sub(pattern, "", html)
     text = Document(html).summary()
     text = md(text, heading_style="ATX")
     if text is None:
         return None
+
+    # Remove any remaining image-related content
+    for pattern in IMAGE_RELATED_PATTERNS:
+        text = re.sub(pattern, "", text)
 
     words = text.split()
     text = " ".join(words[:num_words]) if num_words else " ".join(words)
