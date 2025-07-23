@@ -57,6 +57,12 @@ IMAGE_PATTERNS = [IMG_TAG_PATTERN, MARKDOWN_IMG_PATTERN, DATA_URI_IMG_PATTERN]
 MARKDOWN_LINK_PATTERN = r"\[.*?\]\(.*?\)"
 PHOTO_CREDIT_PATTERN = r"Photo:.*?\n"
 IMAGE_CREDIT_PATTERN = r"Image:.*?\n"
+IMAGE_RELATED_PATTERNS = [
+    MARKDOWN_IMG_PATTERN,
+    MARKDOWN_LINK_PATTERN,
+    PHOTO_CREDIT_PATTERN,
+    IMAGE_CREDIT_PATTERN,
+]
 EMOJI_PATTERN = re.compile(
     "["
     "\U0001f300-\U0001f5ff"
@@ -578,12 +584,8 @@ def extract_text(
         return None
 
     # Remove any remaining image-related content
-    text = re.sub(
-        MARKDOWN_IMG_PATTERN, "", text
-    )  # Remove markdown images again after conversion
-    text = re.sub(MARKDOWN_LINK_PATTERN, "", text)  # Remove markdown links
-    text = re.sub(PHOTO_CREDIT_PATTERN, "", text)  # Remove photo credits
-    text = re.sub(IMAGE_CREDIT_PATTERN, "", text)  # Remove image credits
+    for pattern in IMAGE_RELATED_PATTERNS:
+        text = re.sub(pattern, "", text)
 
     words = text.split()
     text = " ".join(words[:num_words]) if num_words else " ".join(words)
