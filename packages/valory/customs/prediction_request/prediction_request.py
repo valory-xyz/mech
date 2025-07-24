@@ -51,10 +51,11 @@ MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 # Regular expression patterns
 IMG_TAG_PATTERN = r"<img[^>]*>"
-MARKDOWN_IMG_PATTERN = r"!\[.*?\]\(.*?\)"
+MARKDOWN_IMG_PATTERN = r"!\[.*?\]\((?:data:image/[^;]*;base64,[^)]*|.*?)\)"
 DATA_URI_IMG_PATTERN = r'data:image/[^;]*;base64,[^"]*'
-IMAGE_PATTERNS = [IMG_TAG_PATTERN, MARKDOWN_IMG_PATTERN, DATA_URI_IMG_PATTERN]
 MARKDOWN_LINK_PATTERN = r"\[.*?\]\(.*?\)"
+IMAGE_PATTERNS = [DATA_URI_IMG_PATTERN, MARKDOWN_IMG_PATTERN, IMG_TAG_PATTERN]
+
 PHOTO_CREDIT_PATTERN = r"Photo:.*?\n"
 IMAGE_CREDIT_PATTERN = r"Image:.*?\n"
 IMAGE_RELATED_PATTERNS = [
