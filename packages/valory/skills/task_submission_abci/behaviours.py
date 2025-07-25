@@ -252,7 +252,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                 List[Dict[str, Any]], self.synchronized_data.done_tasks
             )
             self.context.logger.info(
-                f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}"
+                f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}. "
                 f"Removing them from the list of tasks to be processed."
             )
             self.remove_tasks(submitted_tasks)
