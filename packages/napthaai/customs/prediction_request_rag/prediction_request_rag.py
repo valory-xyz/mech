@@ -297,6 +297,11 @@ LLM_SETTINGS = {
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
+    "claude-4-sonnet-20250514": {
+        "default_max_tokens": 4096,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
     "claude-3-opus-20240229": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
@@ -475,8 +480,8 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable] = None,
-    temperature: float = LLM_SETTINGS["claude-3-5-sonnet-20240620"]["temperature"],
-    max_tokens: int = LLM_SETTINGS["claude-3-5-sonnet-20240620"]["default_max_tokens"],
+    temperature: float = LLM_SETTINGS["claude-4-sonnet-20250514"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["claude-4-sonnet-20250514"]["default_max_tokens"],
 ) -> Tuple[List[str], Optional[Callable]]:
     """Generate multiple queries for fetching information from the web."""
     if not client:
@@ -794,8 +799,8 @@ def fetch_additional_information(
     source_links: Optional[Dict] = None,
     num_urls: int = DEFAULT_NUM_URLS,
     num_queries: int = DEFAULT_NUM_QUERIES,
-    temperature: float = LLM_SETTINGS["claude-3-5-sonnet-20240620"]["temperature"],
-    max_tokens: int = LLM_SETTINGS["claude-3-5-sonnet-20240620"]["default_max_tokens"],
+    temperature: float = LLM_SETTINGS["claude-4-sonnet-20250514"]["temperature"],
+    max_tokens: int = LLM_SETTINGS["claude-4-sonnet-20250514"]["default_max_tokens"],
 ) -> Tuple[str, Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information to help answer the user prompt."""
     if not google_api_key:
@@ -930,7 +935,7 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], An
         raise ValueError("Model must be specified in kwargs")
 
     if "claude" in tool:  # maintain backwards compatibility
-        model = "claude-3-5-sonnet-20240620"
+        model = "claude-4-sonnet-20250514"
     print(f"MODEL for prediction request rag: {model}")
     with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai"):
         prompt = extract_question(kwargs["prompt"])

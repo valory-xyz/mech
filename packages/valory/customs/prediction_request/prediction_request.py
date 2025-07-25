@@ -379,6 +379,11 @@ LLM_SETTINGS = {
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
+    "claude-4-sonnet-20250514": {
+        "default_max_tokens": 4096,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
     "claude-3-opus-20240229": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
@@ -955,7 +960,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
         raise ValueError("Model must be specified in kwargs")
 
     if "claude" in tool:  # maintain backwards compatibility
-        engine = "claude-3-5-sonnet-20240620"
+        engine = "claude-4-sonnet-20250514"
     print(f"ENGINE used for {tool}: {engine}")
     with LLMClientManager(kwargs["api_keys"], engine):
         user_prompt = kwargs["prompt"]  # question
