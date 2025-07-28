@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module implements a Mech tool for binary predictions."""
+
 import functools
 import json
 import re
@@ -27,7 +28,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from heapq import nlargest
 from itertools import islice
 from string import punctuation
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
@@ -46,6 +47,15 @@ from tiktoken import encoding_for_model
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = int
+
+
+TOKEN_COSTS_PER_MODEL_ATTR = "TOKEN_PRICES"
+INPUT_KEY = "output"
+OUTPUT_KEY = "output"
+MAX_TOKENS = "max_tokens"
+MAX_OUTPUT_TOKENS = "max_output_tokens"
+TEMPERATURE = 0
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -260,48 +270,6 @@ FrequenciesType = Dict[str, float]
 ScoresType = Dict[Span, float]
 
 
-LLM_SETTINGS = {
-    "gpt-3.5-turbo-0125": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 4096,
-        "temperature": 0,
-    },
-    "gpt-4-0125-preview": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 8192,
-        "temperature": 0,
-    },
-    "gpt-4o-2024-08-06": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 4096,
-        "temperature": 0,
-    },
-    "claude-3-haiku-20240307": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "claude-3-opus-20240229": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "claude-3-5-sonnet-20240620": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "databricks/dbrx-instruct:nitro": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 32_768,
-        "temperature": 0,
-    },
-    "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 32_000,
-        "temperature": 0,
-    },
-}
 ALLOWED_TOOLS = [
     "prediction-offline",
     "prediction-online",
@@ -751,7 +719,11 @@ def summarize(text: str, compression_factor: float, vocab: str) -> str:
 
 
 def adjust_additional_information(
-    prompt: str, prompt_template: str, additional_information: str, model: str
+    prompt: str,
+    prompt_template: str,
+    additional_information: str,
+    model: str,
+    model_config: dict,
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
@@ -763,11 +735,10 @@ def adjust_additional_information(
     prompt_tokens = len(enc.encode(prompt))
 
     # Calculate available tokens for additional_information
-    MAX_PREDICTION_PROMPT_TOKENS = (
-        LLM_SETTINGS[model]["limit_max_tokens"]
-        - LLM_SETTINGS[model]["default_max_tokens"]
+    max_prediction_prompt_tokens = (
+        model_config[MAX_OUTPUT_TOKENS] - model_config[MAX_TOKENS]
     )
-    available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens
+    available_tokens = max_prediction_prompt_tokens - prompt_tokens
 
     # Encode the additional_information
     additional_info_tokens = enc.encode(additional_information)
@@ -809,10 +780,14 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
     with LLMClientManager(kwargs["api_keys"], engine):
         prompt = kwargs["prompt"]
-        max_tokens = kwargs.get(
-            "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
-        )
-        temperature = kwargs.get("temperature", LLM_SETTINGS[engine]["temperature"])
+        token_prices = getattr(counter_callback, "TOKEN_PRICES", {})
+        model_config = token_prices.get(engine, {})
+        if not model_config:
+            raise ValueError("The tool cannot run without models' configurations.")
+
+        default_max_tokens = model_config.get(MAX_TOKENS)
+        max_tokens = kwargs.get(MAX_TOKENS, default_max_tokens)
+        temperature = kwargs.get("temperature", TEMPERATURE)
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
         num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS[tool])
         compression_factor = kwargs.get(
@@ -850,7 +825,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         # flake8: noqa: E800
         # TODO: Get adjust_additional_information working for Claude
         # additional_information = adjust_additional_information(
-        #     prompt, PREDICTION_PROMPT, additional_information, engine
+        #     prompt, PREDICTION_PROMPT, additional_information, engine, model_config
         # )
         # flake8: enable: E800
         prediction_prompt = PREDICTION_PROMPT.format(
