@@ -16,7 +16,7 @@
         "custom/valory/prepare_tx/0.1.0": "bafybeiadkv3ufvd27e2aqxusjzh7eesvmjc672ahk54fb3hajwurrfuqpe",
         "custom/napthaai/prediction_url_cot/0.1.0": "bafybeiesfn22v5j4iozvd2w6arohpidsahne37mosev6lzly243vpwi2aq",
         "custom/napthaai/prediction_request_rag_cohere/0.1.0": "bafybeif2cchdg5fx4apht7ki556qh52ndf2zmqrm63wlwgrm6kat5ruh7a",
-        "custom/valory/prediction_request_lite/0.1.0": "bafybeickjs4g2utdfsyah5suh2qvhptqa4cpjqt2ndat5n7z3ijfqbalam",
+        "custom/valory/prediction_request_lite/0.1.0": "bafybeib5uuwzuvkcku6wtnxrrlv2o72cnfssjhcn2mxcueiqxopyavggqq",
         "custom/nickcom007/prediction_request_sme_lite/0.1.0": "bafybeicfyznt5xet47mo6qvocdr7pluy7k24o67k3mh5lsst6lzw7rv2ue",
         "custom/napthaai/prediction_request_reasoning_lite/0.1.0": "bafybeid5qxj5whj6erfyh5h44sttwctsaduczrxpml6yljqukpnyp4vdpi",
         "custom/valory/prediction_langchain/0.1.0": "bafybeie5sskbzdlqr5farduhxracpvh3r4ayeqjv5lobaphhdbhtbuugzy",
@@ -29,8 +29,8 @@
         "custom/valory/tee_openai_request/0.1.0": "bafybeiew5cbr2kswtw3gvgqrjqdzkqtedjmvwjdzlllglqbq2tpofrwb4e",
         "custom/dvilela/corcel_request/0.1.0": "bafybeibt2xjjznyo3hs7zjax2fuhodu5xxybifttmhoxn253dqpdunujjq",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeifzj2sqjdkkkdxojy5th526bkxuybqfguuw3qb6x3biroy3tkjoou",
-        "agent/valory/mech/0.1.0": "bafybeicgupj47i5rga6lci6mwapse3yamqdllh4zrcsbpkj2p6jpp2rkvm",
-        "service/valory/mech/0.1.0": "bafybeifunevdssxztou5jihsexxragwkoedfekmaawsd5a4k3ccasvurd4"
+        "agent/valory/mech/0.1.0": "bafybeidpllrvaz7znhiszohutsmjczu6zsoiqfndmv7iefkmotvsm5wbq4",
+        "service/valory/mech/0.1.0": "bafybeihybftmfxjglqt4evyuduwkfmlsvjgbz37m6znnnfdn7ezjvmqqau"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
