@@ -104,6 +104,9 @@ class Params(Model):
         )
         self.offchain_tx_list: List = list()
         self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
+        self.models_info_version: str = self._ensure_get(
+            "model_prices_and_context_window_version", kwargs, str
+        )
         super().__init__(*args, **kwargs)
 
     @classmethod

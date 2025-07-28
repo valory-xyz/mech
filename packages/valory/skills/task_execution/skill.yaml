@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeidps7mfbiog4k35ow6weq363n2qwc3p4yqzlwnoljacvvnhf2op24
+  behaviours.py: bafybeighaexijlfoiej5bzxzeyte4xpg5vwh4imgjvdvg36pqfpv62cyuy
   dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
   handlers.py: bafybeifcagftjvcgkva76iisq7ymfuvwna43jsyrgl24tu5v6qzaa6aoje
-  models.py: bafybeiedvetvbvd3hd455kfg7ms476r5qigji4dns4m4wdnipac726dus4
+  models.py: bafybeicr3tny3d74hfqyde4mckdlsz7p3f2qjhibvvunpir6durnhvbvc4
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
-  utils/benchmarks.py: bafybeihodiskufkukb3azzy5e4i2nnao7534wuojnurb4b3asv5oynugrq
+  utils/benchmarks.py: bafybeic3dsx667pw3xpg44fpcpiuwxhmdmcik4sm4ee4eddpckfc2r7lja
   utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
   utils/ipfs.py: bafybeiev3mtt5ubsiykigmsxxyf4abevi7qsektcrxbgrirvidc36zjlve
   utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
@@ -91,6 +91,7 @@ models:
       serious_slash_unit_amount: 8000000000000000
       mech_marketplace_address: '0x0000000000000000000000000000000000000000'
       default_chain_id: gnosis
+      model_prices_and_context_window_version: v1.73.6-stable
     class_name: Params
 dependencies:
   py-multibase:
@@ -101,4 +102,8 @@ dependencies:
     version: ==4.0.0
   PyYAML:
     version: ==6.0.1
+  requests:
+    version: ==2.28.2
+  urllib3:
+    version: ==1.26.20
 is_abstract: false
