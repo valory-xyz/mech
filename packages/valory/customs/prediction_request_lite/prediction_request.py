@@ -310,7 +310,6 @@ ALLOWED_TOOLS = [
     "claude-prediction-offline",
     "claude-prediction-online",
 ]
-ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 # the default number of URLs to fetch online information for
 DEFAULT_NUM_URLS = defaultdict(lambda: 3)
 DEFAULT_NUM_URLS["prediction-online-summarized-info"] = 7
