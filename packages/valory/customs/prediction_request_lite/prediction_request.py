@@ -782,7 +782,7 @@ def adjust_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
     tool = kwargs["tool"].replace("-lite", "")
     engine = kwargs.get("model")
@@ -792,6 +792,21 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
     if "claude" in tool:  # maintain backwards compatibility
         engine = "claude-3-5-sonnet-20240620"
     print(f"ENGINE: {engine}")
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,),
+        )
+        return max_cost
+
     with LLMClientManager(kwargs["api_keys"], engine):
         prompt = kwargs["prompt"]
         max_tokens = kwargs.get(
@@ -804,7 +819,6 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
             "compression_factor", DEFAULT_COMPRESSION_FACTOR
         )
         vocab = kwargs.get("vocab", DEFAULT_VOCAB)
-        counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
