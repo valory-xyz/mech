@@ -768,21 +768,20 @@ def generate_prediction_with_retry(
                 timeout=90,
                 stop=None,
             )
+            if not response or response.content is None:
+                return (
+                    "Response Not Valid",
+                    counter_callback,
+                )
 
-            if (
-                response
-                and response.content is not None
-                and counter_callback is not None
-            ):
+            extracted_block = extract_json_string(response.content)
+            if counter_callback is not None:
                 counter_callback(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
                     model=model,
                     token_counter=count_tokens,
                 )
-
-                extracted_block = extract_json_string(response.content)
-
             return extracted_block, counter_callback
         except Exception as e:
             error = f"Attempt {attempt + 1} failed with error: {e}"

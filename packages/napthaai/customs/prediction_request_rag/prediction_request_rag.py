@@ -944,6 +944,7 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], An
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS)
         num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES)
         counter_callback = kwargs.get("counter_callback", None)
+
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
