@@ -309,6 +309,11 @@ LLM_SETTINGS = {
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
+    "claude-4-sonnet-20250514": {
+        "default_max_tokens": 4096,
+        "limit_max_tokens": 200_000,
+        "temperature": 0,
+    },
     "claude-3-opus-20240229": {
         "default_max_tokens": 1000,
         "limit_max_tokens": 200_000,
@@ -1130,7 +1135,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
         raise ValueError("Model must be specified in kwargs")
 
     if "claude" in tool:  # maintain backwards compatibility
-        model = "claude-3-5-sonnet-20240620"
+        model = "claude-4-sonnet-20250514"
     print(f"MODEL for prediction request reasoning: {model}")
     with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai"):
         prompt = extract_question(kwargs["prompt"])
@@ -1139,6 +1144,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS)
         num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES)
         counter_callback = kwargs.get("counter_callback", None)
+
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
