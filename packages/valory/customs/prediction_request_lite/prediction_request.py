@@ -780,7 +780,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
     with LLMClientManager(kwargs["api_keys"], engine):
         prompt = kwargs["prompt"]
-        token_prices = getattr(counter_callback, "TOKEN_PRICES", {})
+        token_prices = getattr(counter_callback, TOKEN_COSTS_PER_MODEL_ATTR, {})
         model_config = token_prices.get(engine, {})
         if not model_config:
             raise ValueError("The tool cannot run without models' configurations.")
