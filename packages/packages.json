@@ -29,8 +29,8 @@
         "custom/valory/tee_openai_request/0.1.0": "bafybeiew5cbr2kswtw3gvgqrjqdzkqtedjmvwjdzlllglqbq2tpofrwb4e",
         "custom/dvilela/corcel_request/0.1.0": "bafybeibt2xjjznyo3hs7zjax2fuhodu5xxybifttmhoxn253dqpdunujjq",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeifzj2sqjdkkkdxojy5th526bkxuybqfguuw3qb6x3biroy3tkjoou",
-        "agent/valory/mech/0.1.0": "bafybeiea4gxswcipiqr2uy24ldziqtvmktgnly6kiv4ntn7w3nfcfxfmti",
-        "service/valory/mech/0.1.0": "bafybeihd3mcctl6ljqhyuiluls3akdrsqvrggnqi2hgtoln2r4dix7rea4"
+        "agent/valory/mech/0.1.0": "bafybeibmvb7t7ihxjzjxm72hsydflkwtfezppxfthithxraze73zc3slim",
+        "service/valory/mech/0.1.0": "bafybeidnp4ilepqejou4wp6uh35uju4ix7berup7oilawlguuzira2oyrq"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
@@ -62,7 +62,7 @@
         "connection/valory/http_server/0.22.0": "bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy",
         "skill/valory/contract_subscription/0.1.0": "bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy",
         "skill/valory/mech_abci/0.1.0": "bafybeicwlabwslttfiwytkyiv2y3rewfd5egfwbjfikytsc772hrrr555u",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeib3g2yhtzroq2ayr7xvmtyssn5dfk4ujzlt5zf4pnbdmkkai52x4i",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeiccfwicaru2eahriv5mbuazjnt4grhn4rjdzbd62ckpbpswychryq",
         "skill/valory/task_execution/0.1.0": "bafybeihvr7amrtff4jread63tv4lofixsf2alcipkcx2pxe2akuyzmcl3i",
         "skill/valory/websocket_client/0.1.0": "bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m",
         "skill/valory/delivery_rate_abci/0.1.0": "bafybeifz6mo5w62lkxw4p5ph7zrifircy5jj2w2pq6m5daukmaazjxl6ga",
