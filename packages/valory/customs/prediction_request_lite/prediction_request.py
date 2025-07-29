@@ -723,7 +723,7 @@ def adjust_additional_information(
     prompt_template: str,
     additional_information: str,
     model: str,
-    model_config: dict,
+    tokens_config: dict,
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
@@ -736,7 +736,7 @@ def adjust_additional_information(
 
     # Calculate available tokens for additional_information
     max_prediction_prompt_tokens = (
-        model_config[MAX_OUTPUT_TOKENS] - model_config[MAX_TOKENS]
+        tokens_config[MAX_OUTPUT_TOKENS] - tokens_config[MAX_TOKENS]
     )
     available_tokens = max_prediction_prompt_tokens - prompt_tokens
 
@@ -781,11 +781,11 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     with LLMClientManager(kwargs["api_keys"], engine):
         prompt = kwargs["prompt"]
         token_prices = getattr(counter_callback, TOKEN_COSTS_PER_MODEL_ATTR, {})
-        model_config = token_prices.get(engine, {})
-        if not model_config:
+        tokens_config = token_prices.get(engine, {})
+        if not tokens_config:
             raise ValueError("The tool cannot run without models' configurations.")
 
-        default_max_tokens = model_config.get(MAX_TOKENS)
+        default_max_tokens = tokens_config.get(MAX_TOKENS)
         max_tokens = kwargs.get(MAX_TOKENS, default_max_tokens)
         temperature = kwargs.get("temperature", TEMPERATURE)
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS[tool])
@@ -825,7 +825,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         # flake8: noqa: E800
         # TODO: Get adjust_additional_information working for Claude
         # additional_information = adjust_additional_information(
-        #     prompt, PREDICTION_PROMPT, additional_information, engine, model_config
+        #     prompt, PREDICTION_PROMPT, additional_information, engine, tokens_config
         # )
         # flake8: enable: E800
         prediction_prompt = PREDICTION_PROMPT.format(
