@@ -23,7 +23,7 @@ import json
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import islice
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 
 import anthropic
 import googleapiclient
@@ -513,29 +513,43 @@ def adjust_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(
+    **kwargs: Any,
+) -> Union[float, Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]]:
     """Run the task"""
+    tool = kwargs["tool"]
+    if tool not in ALLOWED_TOOLS:
+        raise ValueError(f"Tool {tool} is not supported.")
+
+    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,) * 2,
+        )
+        return max_cost
+
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
-        tool = kwargs["tool"]
         prompt = kwargs["prompt"]
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
         source_links = kwargs.get("source_links", None)
         num_urls = kwargs.get("num_urls", NUM_URLS_EXTRACT)
         num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS)
-        counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
 
         if not client:
             raise RuntimeError("Client not initialized")
-
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"Tool {tool} is not supported.")
-
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-        print(f"ENGINE: {engine}")
 
         try:
             _, sme_introduction, counter_callback = get_sme_role(

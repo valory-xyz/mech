@@ -801,7 +801,7 @@ def fetch_additional_information(
     num_queries: int = DEFAULT_NUM_QUERIES,
     temperature: float = LLM_SETTINGS["claude-4-sonnet-20250514"]["temperature"],
     max_tokens: int = LLM_SETTINGS["claude-4-sonnet-20250514"]["default_max_tokens"],
-) -> Tuple[str, Optional[Callable[[int, int, str], None]]]:
+) -> Tuple[str, Optional[Callable[..., None]]]:
     """Fetch additional information to help answer the user prompt."""
     if not google_api_key:
         raise RuntimeError("Google API key not found")
@@ -927,12 +927,30 @@ def parser_prediction_response(response: str) -> str:
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
+def run(
+    **kwargs: Any,
+) -> Union[float, Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]]:
     """Run the task"""
     tool = kwargs["tool"]
     model = kwargs.get("model")
     if model is None:
         raise ValueError("Model must be specified in kwargs")
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable[..., Any]] = kwargs.get(
+        "counter_callback", None
+    )
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(model,) * 2,
+        )
+        return max_cost
 
     if "claude" in tool:  # maintain backwards compatibility
         model = "claude-4-sonnet-20250514"
@@ -943,7 +961,6 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], An
         temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
         num_urls = kwargs.get("num_urls", DEFAULT_NUM_URLS)
         num_queries = kwargs.get("num_queries", DEFAULT_NUM_QUERIES)
-        counter_callback = kwargs.get("counter_callback", None)
 
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)

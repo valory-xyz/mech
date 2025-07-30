@@ -19,7 +19,7 @@
 """This module contains the ofv market resolver."""
 import functools
 import json
-from typing import Annotated, Any, Callable, Dict, Optional, Tuple
+from typing import Annotated, Any, Callable, Dict, Optional, Tuple, Union
 
 import openai
 from factcheck import FactCheck
@@ -30,6 +30,7 @@ from pydantic import BaseModel, BeforeValidator
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -236,7 +237,7 @@ def build_run_result(
     has_occurred: bool | None,
     is_determinable: bool | None,
     is_valid: bool | None,
-) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+) -> MechResponse:
     """Returns the run result"""
     return (
         json.dumps(
@@ -268,8 +269,23 @@ def run(
     api_keys: Any,
     n_fact_runs: int = 3,
     **kwargs: Any,  # Just to ignore any other arguments passed to the resolver by the universal benchmark script. pylint: disable=unused-argument
-) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+) -> Union[MaxCostResponse, MechResponse]:
     """Run the prediction market resolver based on Open Fact Verifier."""
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(DEFAULT_OPENAI_MODEL,),
+        )
+        return max_cost
+
     assert (
         n_fact_runs > 0 and n_fact_runs % 2 != 0
     ), "n_fact_runs must be greater than 0 and an odd number"

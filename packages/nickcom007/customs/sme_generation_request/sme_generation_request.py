@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -19,9 +19,10 @@
 # ------------------------------------------------------------------------------
 
 """This module implements a Mech tool to generate Subject Matter Expert (SME) roles for a given market question"""
+
 import functools
 import json
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
@@ -35,6 +36,7 @@ client: Optional[OpenAI] = None
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -177,7 +179,7 @@ task question: "{question}"
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Generate SME roles for a given market question
 
     Raises:
@@ -190,8 +192,23 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
             and the value of "sme_introduction" is the introduction of the SME role.
     :rtype: tuple(str, optional dict[str, any])
     """
+    tool = kwargs["tool"]
+    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,),
+        )
+        return max_cost
+
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
-        tool = kwargs["tool"]
         # prompt is the actual question
         prompt = kwargs["prompt"]
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
@@ -202,9 +219,6 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"tool must be one of {ALLOWED_TOOLS}")
-
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-        print(f"ENGINE: {engine}")
 
         market_question = SME_GENERATION_MARKET_PROMPT.format(question=prompt)
         system_prompt = SME_GENERATION_SYSTEM_PROMPT

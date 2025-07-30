@@ -24,7 +24,7 @@ Please note that the gnosis safe parameters are missing from the payload, e.g., 
 """
 import ast
 import functools
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
@@ -34,6 +34,10 @@ from openai import OpenAI
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
+
+
+TX_PREP_COST = 0.01
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -177,7 +181,7 @@ def make_request_openai_request(
 
 def native_transfer(
     prompt: str,
-) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+) -> MechResponse:
     """Perform native transfer."""
     tool_prompt = NATIVE_TRANSFER_PROMPT.format(user_prompt=prompt)
     response = make_request_openai_request(prompt=tool_prompt)
@@ -207,8 +211,13 @@ def error_response(msg: str) -> Tuple[str, None, None, None]:
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    if delivery_rate == 0:
+        return TX_PREP_COST
+
     tool = kwargs.get("tool", None)
 
     if tool is None:

@@ -21,7 +21,7 @@
 
 import ast
 import functools
-from typing import Any, Callable, Dict, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Optional, Tuple, Union, cast
 
 import anthropic
 import googleapiclient
@@ -34,6 +34,7 @@ client: Optional[OpenAI] = None
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -181,7 +182,7 @@ def make_request_openai_request(
 def native_transfer(
     prompt: str,
     api_key: str,
-) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+) -> MechResponse:
     """Perform native transfer."""
     tool_prompt = NATIVE_TRANSFER_PROMPT.format(user_prompt=prompt)
     response = make_request_openai_request(prompt=tool_prompt)
@@ -206,8 +207,22 @@ AVAILABLE_TOOLS = {
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(ENGINE,),
+        )
+        return max_cost
+
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         prompt = kwargs["prompt"]
         api_key = kwargs["api_keys"]["openai"]

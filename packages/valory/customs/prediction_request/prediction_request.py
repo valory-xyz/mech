@@ -49,6 +49,7 @@ from tiktoken import encoding_for_model, get_encoding
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
 # Regular expression patterns
 IMG_TAG_PATTERN = r"<img[^>]*>"
 MARKDOWN_IMG_PATTERN = r"!\[.*?\]\((?:data:image/[^;]*;base64,[^)]*|.*?)\)"
@@ -951,12 +952,26 @@ def adjust_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
     tool = kwargs["tool"]
     engine = kwargs.get("model")
     if engine is None:
         raise ValueError("Model must be specified in kwargs")
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,) * 2,
+        )
+        return max_cost
 
     if "claude" in tool:  # maintain backwards compatibility
         engine = "claude-4-sonnet-20250514"

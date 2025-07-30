@@ -47,7 +47,7 @@ from tiktoken import encoding_for_model
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
-MaxCostResponse = int
+MaxCostResponse = float
 
 
 TOKEN_COSTS_PER_MODEL_ATTR = "TOKEN_PRICES"

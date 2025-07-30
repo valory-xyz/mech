@@ -27,7 +27,7 @@ import json
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
@@ -436,12 +436,30 @@ class CloseMarketBehaviourMock:
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any]:
+def run(
+    **kwargs: Any,
+) -> Union[float, Tuple[Optional[str], Optional[Dict[str, Any]], Any]]:
     """Run the task"""
     tool = kwargs["tool"]
 
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
+
+    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,),
+        )
+        return max_cost
 
     market_behavior = CloseMarketBehaviourMock(**kwargs)
     question = kwargs.pop("prompt", None)
