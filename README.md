@@ -124,7 +124,7 @@ Follow these instructions to have your local environment prepared to run the dem
 
 ## Run the demo
 
-### Using Mech Quickstart (Preffered Method)
+### Using Mech Quickstart (Preferred Method)
 
 To help you integrate your own tools more easily, we’ve created a new base repository that serves as a minimal example of how to run the project. It’s designed to minimize setup time and provide a more intuitive starting point. This new repo is streamlined to give you a clean slate, making it easier than ever to get started.
 
