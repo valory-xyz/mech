@@ -389,14 +389,15 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
 
     if tool is None:
         return error_response("No tool has been specified.", prompt)
-    
+
     if prompt is None:
         return error_response("No prompt has been given.", prompt)
 
     transaction_builder = ALLOWED_TOOLS.get(tool)
     if transaction_builder is None:
         return error_response(
-            f"Tool {tool!r} is not in supported tools: {tuple(ALLOWED_TOOLS.keys())}.", prompt
+            f"Tool {tool!r} is not in supported tools: {tuple(ALLOWED_TOOLS.keys())}.",
+            prompt,
         )
 
     api_key: str | None = kwargs.get("api_keys", {}).get("openai", None)
