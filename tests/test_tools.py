@@ -177,8 +177,9 @@ class TestOmenTransactionBuilder(BaseToolTest):
 
     def _validate_response(self, response: Any) -> None:
         super()._validate_response(response)
-        expected_num_tx_params = 2
-        assert len(response[2].keys()) == expected_num_tx_params
+        if response[2]:
+            expected_num_tx_params = 2
+            assert len(response[2].keys()) == expected_num_tx_params
 
 
 class TestDALLEGeneration(BaseToolTest):

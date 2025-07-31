@@ -355,9 +355,9 @@ def with_key_rotation(func: Callable) -> Callable:
     return wrapper
 
 
-def error_response(msg: str) -> Tuple[str, None, None, None]:
+def error_response(msg: str, prompt: str) -> Tuple[str, str, None, None]:
     """Return an error mech response."""
-    return msg, None, None, None
+    return msg, prompt, None, None
 
 
 LLM_SETTINGS = {
@@ -385,27 +385,27 @@ ALLOWED_TOOLS = {
 def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
     """Run the task"""
     tool: str | None = kwargs.get("tool", None)
+    prompt: str = kwargs.get("prompt", "")
 
     if tool is None:
-        return error_response("No tool has been specified.")
-
-    prompt: str | None = kwargs.get("prompt", None)
+        return error_response("No tool has been specified.", prompt)
+    
     if prompt is None:
-        return error_response("No prompt has been given.")
+        return error_response("No prompt has been given.", prompt)
 
     transaction_builder = ALLOWED_TOOLS.get(tool)
     if transaction_builder is None:
         return error_response(
-            f"Tool {tool!r} is not in supported tools: {tuple(ALLOWED_TOOLS.keys())}."
+            f"Tool {tool!r} is not in supported tools: {tuple(ALLOWED_TOOLS.keys())}.", prompt
         )
 
     api_key: str | None = kwargs.get("api_keys", {}).get("openai", None)
     if api_key is None:
-        return error_response("No api key has been given.")
+        return error_response("No api key has been given.", prompt)
 
     gnosis_rpc_url: str | None = kwargs.get("api_keys", {}).get("gnosis_rpc_url", None)
     if gnosis_rpc_url is None:
-        return error_response("No gnosis rpc url has been given.")
+        return error_response("No gnosis rpc url has been given.", prompt)
 
     with OpenAIClientManager(api_key):
         return transaction_builder(prompt, gnosis_rpc_url)
