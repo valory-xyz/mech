@@ -404,9 +404,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id = task_data["requestId"]
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
 
-        self.params.request_id_to_delivery_rate_info[
-            task_data["requestId"]
-        ] = task_data["request_delivery_rate"]
+        self.params.request_id_to_delivery_rate_info[task_data["requestId"]] = (
+            task_data["request_delivery_rate"]
+        )
         self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
@@ -569,8 +569,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     )
                     self._invalid_request = True
                     is_pricing_valid = False
-                    # added to fetch the tool's pricing while delivering for nvm mech
-                    self._executing_task["tool"] = task_data["tool"]
 
             if is_pricing_valid:
                 self._prepare_task(task_data)
