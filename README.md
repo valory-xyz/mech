@@ -29,6 +29,9 @@ AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to p
 
 **AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).**
 
+## :gear: Current Service Hash: 
+`bafybeieov6x3lqozxmikk6tbvoh5povjrkcdq7fo3zeryswcscevozw2fe`
+
 ## AI Mechs components
 
 The project consists of three components:
@@ -121,7 +124,7 @@ Follow these instructions to have your local environment prepared to run the dem
 
 ## Run the demo
 
-### Using Mech Quickstart (Preffered Method)
+### Using Mech Quickstart (Preferred Method)
 
 To help you integrate your own tools more easily, we’ve created a new base repository that serves as a minimal example of how to run the project. It’s designed to minimize setup time and provide a more intuitive starting point. This new repo is streamlined to give you a clean slate, making it easier than ever to get started.
 
@@ -231,7 +234,7 @@ Use the [mech-client](https://github.com/valory-xyz/mech-client), which can be u
 
 ### For other autonomous services
 
-To perform mech requests from your service, use the [mech_interact_abci skill](https://github.com/valory-xyz/IEKit/tree/main/packages/valory/skills/mech_interact_abci). This skill abstracts away all the IPFS and contract interactions so you only need to care about the following:
+To perform mech requests from your service, use the [mech_interact_abci skill](https://github.com/valory-xyz/mech-interact). This skill abstracts away all the IPFS and contract interactions so you only need to care about the following:
 
 - Add the mech_interact_abci skill to your dependency list, both in `packages.json`, `aea-config.yaml` and any composed `skill.yaml`.
 
@@ -291,3 +294,19 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 ### Mechs receiving requests via the Mech Marketplace
 
 There is no Mech deployed on the Mech Marketplace at the moment.
+
+### TroubleShooting
+
+If the mech has problems connecting to tendermint make sure that not all the instances are configured
+to connect to `${TM_P2P_ENDPOINT_NODE_0:str:node0:26656}`.
+
+You can update these information inside the :
+`packages/valory/services/mech/service.yaml`
+
+If we have more than one agent in the service, these agents should not share the same configuration.
+You can use different nodes like so : 
+```
+-${TM_P2P_ENDPOINT_NODE_1
+-${TM_P2P_ENDPOINT_NODE_2
+-${TM_P2P_ENDPOINT_NODE_3
+```

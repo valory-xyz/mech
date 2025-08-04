@@ -380,8 +380,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 )
                 self.params.in_flight_req = False
                 self.params.is_cold_start = False
-                self._last_deadline = self._fetch_deadline()
-                return self._execute_task()
+                self._last_deadline = None
+                self._handle_timeout_task()
             return
 
         if self._executing_task is not None:
@@ -428,7 +428,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
-        self.params.req_to_deadline[nonce] = cast(float, self._last_deadline)
+        if self._last_deadline is None:
+            self._last_deadline = self._fetch_deadline()
+        self.params.req_to_deadline[nonce] = self._last_deadline
         self.params.in_flight_req = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
@@ -441,6 +443,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_done_task(self, task_result: Any) -> None:
         """Handle done tasks"""
+        self.context.logger.info(f"Inside handle done task {self._executing_task=}")
+        self.context.logger.info(f"Inside handle done task {task_result=}")
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
         request_id_nonce = executing_task.get("requestIdWithNonce", None)
@@ -509,8 +513,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(
             f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times"
         )
-        async_result = cast(Future, self._async_result)
-        async_result.cancel()
+        if self._async_result:
+            async_result = cast(Future, self._async_result)
+            async_result.cancel()
 
         # we restart the executor in case of a timeout.
         # we do this because its possible the .cancel() call above is not respected
@@ -519,24 +524,26 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._restart_executor()
 
         # check if we can add the task to the end of the queue
-        if not self.timeout_limit_reached(req_id):
+        if self.timeout_limit_reached(req_id):
             # added to end of queue
-            self.context.logger.info(f"Adding task {req_id} to the end of the queue")
-            self.pending_tasks.append(executing_task)
-            self._executing_task = None
-            return None
+            self.context.logger.info(
+                f"Task {req_id} has reached the timeout limit of{self.params.timeout_limit}. "
+                f"It won't be added to the end of the queue again."
+            )
+            task_result = (
+                f"Task timed out {self.params.timeout_limit} times during execution. ",
+                "",
+                None,
+                None,
+            )
+            self._handle_done_task(task_result)
 
-        self.context.logger.info(
-            f"Task {req_id} has reached the timeout limit of{self.params.timeout_limit}. "
-            f"It won't be added to the end of the queue again."
-        )
-        task_result = (
-            f"Task timed out {self.params.timeout_limit} times during execution. ",
-            "",
-            None,
-            None,
-        )
-        self._handle_done_task(task_result)
+        self.context.logger.info(f"Adding task {req_id} to the end of the queue")
+        self.pending_tasks.append(executing_task)
+        self._executing_task = None
+        self._last_deadline = None
+        self._async_result = None
+        return None
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a task request."""
@@ -669,18 +676,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         executing_task = self._executing_task
         # if sender is not present, use mech address
-        req_id, sender = (
+        req_id, _ = (
             executing_task["requestId"],
             executing_task.get("sender", executing_task.get("mech")),
         )
         ipfs_hash = to_v1(message.ipfs_hash)
         self.context.logger.info(
             f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
-        )
-        self.send_data_via_acn(
-            sender_address=sender,
-            request_id=str(req_id),
-            data=ipfs_hash,
         )
         done_task = cast(Dict[str, Any], self._done_task)
         if done_task is None or not isinstance(done_task, Dict):
@@ -690,6 +692,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._executing_task = None
             self._done_task = None
             self._invalid_request = False
+            self._last_deadline = None
+            self._async_result = None
             return None
 
         task_result = to_multihash(ipfs_hash)
@@ -718,6 +722,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executing_task = None
         self._done_task = None
         self._invalid_request = False
+        self._last_deadline = None
+        self._async_result = None
 
     def _handle_ipfs_tasks_response(
         self, message: IpfsMessage, dialogue: Dialogue

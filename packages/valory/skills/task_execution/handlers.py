@@ -122,7 +122,9 @@ class IpfsHandler(BaseHandler):
 
         if deadline and time.time() > deadline:
             # Deadline reached
-            self.context.logger.info(f"Deadline reached for task with nonce {nonce}.")
+            self.context.logger.info(
+                f"Ipfs task deadline reached for task with nonce {nonce}."
+            )
             self.params.in_flight_req = False
             self.params.is_cold_start = False
             return

@@ -1,0 +1,17 @@
+name: complementary_service_metadata
+author: valory
+version: 0.1.0
+type: contract
+description: Complementary Service Metadata contract
+license: Apache-2.0
+aea_version: '>=1.0.0, <2.0.0'
+fingerprint:
+  __init__.py: bafybeie5gvlvdam464ch7zknawcq6zvhaqwncau4ehhngjmigto537go2q
+  build/ComplementaryServiceMetadata.json: bafybeia4jozxbrjpofs72c3dm3k64btsvlzxkqts5wblgo4b2rieeq57ee
+  contract.py: bafybeicw2rx3ixweg2zrv2uxktiyhe5s5b6ftf2jfa3hpnyxsiyoriltxe
+fingerprint_ignore_patterns: []
+contracts: []
+class_name: ComplementaryServiceMetadata
+contract_interface_paths:
+  ethereum: build/ComplementaryServiceMetadata.json
+dependencies: {}

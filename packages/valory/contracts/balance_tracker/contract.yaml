@@ -15,7 +15,7 @@ contract_interface_paths:
   ethereum: build/BalanceTracker.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.63.0
+    version: ==1.65.0
   web3:
     version: <7,>=6.0.0
 contracts: []

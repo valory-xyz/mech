@@ -11,8 +11,10 @@ fingerprint:
   composition.py: bafybeia4nd5pyk7p6jlpjj4yw4wj2oo4no5khowpzougq7bg45w5f2q53e
   dialogues.py: bafybeifhydd6xmstbh2jx5igj33upip5a3hhlcaxttfsc77heszqmru7ri
   fsm_specification.yaml: bafybeibac4bsjjhmxljzptuus3xlkufsiaofgg77g7nq7qgeju7fa6lh3u
-  handlers.py: bafybeiequcuyjmcvv6slouptdtalzgwfmuevytbh5m4bkafowpisbp3xu4
+  handlers.py: bafybeiguarn4lzovodwhdmvee2m3zirydqlm6wpre4ihpwvmlxddcpzcsu
   models.py: bafybeid5pljpqrhdw6w4lkxiu7wufmjey44hev6rybvlgkgc4qg4xh7che
+  tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
+  tests/test_handlers.py: bafybeihkbnvbcdstqoe23yj3ryhudh6h6rifuxqyp3j76e7uxsjvdhrboq
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
@@ -20,13 +22,14 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeiba3zhx5drsf7ailfboeuvwykocmkffs2j426u4q7d4erig67lyhm
-- valory/registration_abci:0.1.0:bafybeigp2g6uhhgjlkqyhjlk4abfjuecmulnwlki6acbpfu45thslqujlu
-- valory/reset_pause_abci:0.1.0:bafybeidhqvc4cl6alvkql5kadiv7snudl7o2ctfqbmhrihtejm3zhkmbby
-- valory/task_submission_abci:0.1.0:bafybeibr4vgsavxbqapkvzstb4orecxglbhsr3up6i5kp3t3opuzwvfhla
-- valory/termination_abci:0.1.0:bafybeig4stz7s6phndruvrgqptbc62ue2filttj4wbnempkur5ybso5edu
-- valory/transaction_settlement_abci:0.1.0:bafybeicvfbyp4lfqcohmvw6ozlvsbp2eugl2wxqxsdpp36ro7bk3waxjky
-- valory/delivery_rate_abci:0.1.0:bafybeib6geas3qqoge6uoejy3yyhjwywtpiygqns656apfr6ohvmond6vq
+- valory/abstract_round_abci:0.1.0:bafybeia7lzwbmcmf3u7mn3673345klkyyp7ln62gqx6hcqlbjracxmrqlm
+- valory/registration_abci:0.1.0:bafybeigoomgcphpjc32wlx5j3fjm27bgiw4o7hqtj62hv54hpwtfbvxkma
+- valory/reset_pause_abci:0.1.0:bafybeigtq7etpplx2yjdobrutv2fwosc7jw5etfb44n44nexciicrs7m4i
+- valory/task_submission_abci:0.1.0:bafybeihidlwohrscerzqs4hwu4q6nrrcu7oabgzm26jxaja3xtbgew6xdu
+- valory/termination_abci:0.1.0:bafybeiam7v3kicazjq6rr3ijjc5nsqzp4sjrysmsevnxbhiqdv6ltyxope
+- valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
+- valory/delivery_rate_abci:0.1.0:bafybeiheuxmktw2k5bameonw3yq4o4w36ohrvbxvkw2ku5ie23trgbnq6m
+- valory/task_execution:0.1.0:bafybeiajjsxifx5cam3a3p2fnapzgfmcql3dx5cihub5dw3hrdaxdnbdzy
 behaviours:
   main:
     args: {}
@@ -147,8 +150,7 @@ models:
       manual_gas_limit: 1000000
       mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
       mech_marketplace_address: '0x0000000000000000000000000000000000000000'
-      agent_registry_address: '0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA'
-      agent_id: 3
+      complementary_service_metadata_address: '0x0000000000000000000000000000000000000000'
       metadata_hash: '00000000000000000000000000000000000000000000000000'
       slash_cooldown_hours: 3
       hash_checkpoint_address: '0x0000000000000000000000000000000000000000'
@@ -190,5 +192,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==1.63.0
+    version: ==1.65.0
 is_abstract: false

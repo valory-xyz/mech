@@ -36,8 +36,10 @@ from packages.valory.contracts.agent_mech.contract import (
     AgentMechContract,
     MechOperation,
 )
-from packages.valory.contracts.agent_registry.contract import AgentRegistryContract
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
+from packages.valory.contracts.complementary_service_metadata.contract import (
+    ComplementaryServiceMetadata,
+)
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
@@ -252,7 +254,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                 List[Dict[str, Any]], self.synchronized_data.done_tasks
             )
             self.context.logger.info(
-                f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}"
+                f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}. "
                 f"Removing them from the list of tasks to be processed."
             )
             self.remove_tasks(submitted_tasks)
@@ -907,10 +909,10 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         """Get latest update hash."""
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
-            contract_id=str(AgentRegistryContract.contract_id),
+            contract_address=self.params.complementary_service_metadata_address,
+            contract_id=str(ComplementaryServiceMetadata.contract_id),
             contract_callable="get_token_hash",
-            token_id=self.params.agent_id,
+            service_id=self.params.on_chain_service_id,
             chain_id=self.params.default_chain_id,
         )
         if (
@@ -948,6 +950,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         if not should_update_hash:
             return None
 
+        self.context.logger.info("Updating metadata hash")
         # reset the latest hash, this will be updated after the tx is sent
         self.params.task_mutable_params.latest_metadata_hash = None
 
@@ -955,10 +958,10 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         metadata = bytes.fromhex(metadata_str)
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=self.params.agent_registry_address,
-            contract_id=str(AgentRegistryContract.contract_id),
+            contract_address=self.params.complementary_service_metadata_address,
+            contract_id=str(ComplementaryServiceMetadata.contract_id),
             contract_callable="get_update_hash_tx_data",
-            token_id=self.params.agent_id,
+            service_id=self.params.on_chain_service_id,
             metadata_hash=metadata,
             chain_id=self.params.default_chain_id,
         )
@@ -972,7 +975,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
 
         data = cast(bytes, contract_api_msg.state.body["data"])
         return {
-            "to": self.params.agent_registry_address,
+            "to": self.params.complementary_service_metadata_address,
             "value": ZERO_ETHER_VALUE,
             "data": data,
         }
