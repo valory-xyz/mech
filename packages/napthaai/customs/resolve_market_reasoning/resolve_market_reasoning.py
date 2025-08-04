@@ -194,19 +194,13 @@ OPEN_AI_SETTINGS = {
     },
 }
 MAX_TOKENS = {
-    "gpt-3.5-turbo-0125": 4096,
-    "gpt-4-0125-preview": 8192,
     "gpt-4o-2024-08-06": 4096,
     "gpt-4.1-2025-04-14": 4096,
 }
 ALLOWED_TOOLS = [
-    "resolve-market-reasoning-gpt-3.5-turbo",
-    "resolve-market-reasoning-gpt-4",
     "resolve-market-reasoning-gpt-4.1",
 ]
 TOOL_TO_ENGINE = {
-    "resolve-market-reasoning-gpt-3.5-turbo": "gpt-3.5-turbo-0125",
-    "resolve-market-reasoning-gpt-4": "gpt-4o-2024-08-06",
     "resolve-market-reasoning-gpt-4.1": "gpt-4.1-2025-04-14",
 }
 DEFAULT_NUM_WORDS: Dict[str, Optional[int]] = defaultdict(lambda: 300)
