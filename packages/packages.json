@@ -9,13 +9,13 @@
         "contract/valory/balance_tracker/0.1.0": "bafybeia66jlh37qjo2sdky5ugsirohk7t3xmwir5y7xzgb4qx3npfcbobi",
         "connection/valory/websocket_client/0.1.0": "bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli",
         "skill/valory/contract_subscription/0.1.0": "bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy",
-        "skill/valory/mech_abci/0.1.0": "bafybeibdkp3kxbs7qvlbunvayzv6qwabcurvro62vvy7anlq6didopwb3i",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeiep4667uqnqw4frpqufp3j2anoyibobg3glwsrwcnivreie34klxy",
-        "skill/valory/task_execution/0.1.0": "bafybeiadiw3ndy35y3pzrdlub53kxlwrk7w75vr35eiginjh4qqwi72p4i",
+        "skill/valory/mech_abci/0.1.0": "bafybeiayfqcav5x5j6vp6l55kesu64azjftrcyv5yuj7jb74uvn32zpwcy",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeidpwrqnhmakasgkwqlkbifdhxe4kfoqrvbmvfnghgqk6o4yuwvr24",
+        "skill/valory/task_execution/0.1.0": "bafybeib5wxgff24jnc23patbz3zfktz5pvp247vrko3fqwn2ioporkbphq",
         "skill/valory/websocket_client/0.1.0": "bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m",
         "skill/valory/delivery_rate_abci/0.1.0": "bafybeie653ijqwqfhrsmzfww5ik2zct4ztmktvw7tzscd4ibxy7wcm6554",
-        "agent/valory/mech/0.1.0": "bafybeiar325r5e7pmg5qi4wyz4pj2hnxme66hxkhuvqh2nepmslp2f7xki",
-        "service/valory/mech/0.1.0": "bafybeicjonfpijouohh3dplh3heb6sgkta74yfdv5emfvfutytrynucdgy"
+        "agent/valory/mech/0.1.0": "bafybeiamzzdslwkvl43uel2ottr2oday2skhb3cdhid5ptaxc24edq6jcm",
+        "service/valory/mech/0.1.0": "bafybeiga4nshhk6uxc7do53w6pooeplmzkqb7xga5gd3xbwu3rhc64zvli"
     },
     "third_party": {
         "protocol/valory/default/1.0.0": "bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq",
