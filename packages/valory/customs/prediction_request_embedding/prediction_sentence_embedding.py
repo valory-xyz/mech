@@ -25,7 +25,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import datetime, timezone
 from itertools import groupby
 from operator import itemgetter
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
@@ -45,6 +45,10 @@ from tiktoken import encoding_for_model
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
+
+
+N_MODEL_CALLS = 2
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -1219,7 +1223,7 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """
     Run the task with the given arguments.
 
@@ -1232,8 +1236,28 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
     :returns: The generated content and any additional data.
     :rtype: tuple of str and optional dict[str, any]
     """
+
+    tool = kwargs["tool"]
+    if tool not in ALLOWED_TOOLS:
+        raise ValueError(f"TOOL {tool} is not supported.")
+
+    # Get the LLM engine to be used
+    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,) * N_MODEL_CALLS,
+        )
+        return max_cost
+
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
-        tool = kwargs["tool"]
         prompt = kwargs["prompt"]
         max_compl_tokens = kwargs.get(
             "max_tokens", DEFAULT_OPENAI_SETTINGS["max_compl_tokens"]
@@ -1243,16 +1267,9 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
         if not client:
             raise RuntimeError("Client not initialized")
 
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"TOOL {tool} is not supported.")
-
         # Load the spacy model
         download_spacy_model("en_core_web_md")
         nlp = spacy.load("en_core_web_md")
-
-        # Get the LLM engine to be used
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-        print(f"ENGINE: {engine}")
 
         # Extract the event question from the prompt
         event_question_match = re.search(r"\"(.+?)\"", prompt)
@@ -1274,7 +1291,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
         # Fetch additional information
         additional_information = fetch_additional_information(
             event_question=event_question,
-            engine="gpt-4o-2024-08-06",
+            engine=engine,
             temperature=0.5,
             max_compl_tokens=max_compl_tokens,
             nlp=nlp,

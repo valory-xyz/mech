@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 import functools
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
@@ -105,12 +105,11 @@ AGENT_URL = "https://wapo-testnet.phala.network/ipfs/QmeUiNKgsHiAK3WM57XYd7ssqMw
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(
+    **kwargs: Any,
+) -> Union[float, Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]]:
     """Run the task"""
-    api_key = kwargs["api_keys"]["openai"]
-    prompt = kwargs["prompt"]
     tool = kwargs["tool"]
-    counter_callback = kwargs.get("counter_callback", None)
     if tool not in ALLOWED_TOOLS:
         return (
             f"Tool {tool} is not in the list of supported tools.",
@@ -120,6 +119,23 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, An
         )
 
     engine = tool.replace(PREFIX, "")
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,),
+        )
+        return max_cost
+
+    api_key = kwargs["api_keys"]["openai"]
+    prompt = kwargs["prompt"]
 
     params = {"openaiApiKey": api_key, "chatQuery": prompt, "openAiModel": engine}
 

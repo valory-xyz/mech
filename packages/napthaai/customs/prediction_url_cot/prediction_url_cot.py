@@ -43,6 +43,7 @@ MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
+N_MODEL_CALLS = 2
 USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
 
 
@@ -838,10 +839,26 @@ def parser_prediction_response(response: str) -> str:
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]:
+def run(
+    **kwargs: Any,
+) -> Union[float, Tuple[Optional[str], Any, Optional[Dict[str, Any]], Any]]:
     """Run the task"""
     tool = kwargs["tool"]
     model = kwargs.get("model")
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(model,) * N_MODEL_CALLS,
+        )
+        return max_cost
+
     embedding_provider = kwargs.get("embedding_provider")
     if model is None:
         raise ValueError("Model must be specified in kwargs")

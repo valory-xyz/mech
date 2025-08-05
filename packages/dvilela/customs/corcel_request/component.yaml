@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeicuohbwuyxqyv5ovgimdz326ivvvzatnw7mczil5n3tktur56cw6u
-  corcel_request.py: bafybeifnnlnpiyba4aewtgisrfwvgxv7vuotnddnizmhrwkeoggzs7y4im
+  corcel_request.py: bafybeihrmgk7isiol54okpifh5vnad2ophg5sz3zeldaxbbtnrpf7qbm3i
 fingerprint_ignore_patterns: []
 entry_point: corcel_request.py
 callable: run

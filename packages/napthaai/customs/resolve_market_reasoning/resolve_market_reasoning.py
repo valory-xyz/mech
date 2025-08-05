@@ -23,7 +23,7 @@ import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import PyPDF2
 import anthropic
@@ -47,12 +47,14 @@ BUFFER = 15000  # Buffer for the total tokens in the embeddings batch
 MAX_EMBEDDING_TOKENS = (
     300000 - BUFFER  # Maximum tokens for the embeddings batch
 )  # Maximum total tokens per embeddings batch
+N_MODEL_CALLS = 6
 
 
 client: Optional[OpenAI] = None
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
 
 
 def get_model_encoding(model: str) -> Encoding:
@@ -894,10 +896,25 @@ def adjust_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
+    tool = kwargs["tool"]
+    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,) * N_MODEL_CALLS,
+        )
+        return max_cost
+
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
-        tool = kwargs["tool"]
         prompt = kwargs["prompt"]
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
@@ -908,9 +925,6 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
             raise ValueError(f"Tool {tool} is not supported.")
         if not client:
             raise RuntimeError("Client not initialized")
-
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-        print(f"ENGINE: {engine}")
 
         max_tokens = OPEN_AI_SETTINGS.get(engine, {}).get(
             "max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"]

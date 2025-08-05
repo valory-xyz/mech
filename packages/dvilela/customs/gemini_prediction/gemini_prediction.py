@@ -20,7 +20,7 @@
 
 import functools
 import json
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import google.generativeai as genai
 from google.api_core.exceptions import GoogleAPIError
@@ -131,17 +131,36 @@ def response_post_process(response: str) -> str:
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(  # pylint: disable=too-many-return-statements
+    **kwargs: Any,
+) -> Union[float, Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]]:
     """Run the task"""
 
-    api_key = kwargs["api_keys"]["gemini"]
-    tool_name = kwargs.get("tool", None)
-    prompt = kwargs.get("prompt", None)
     model = kwargs.get("model", "gemini-1.5-flash")
+    if model not in AVAILABLE_MODELS:
+        return error_response(
+            f"Model {model} is not an available model: {AVAILABLE_MODELS}"
+        )
 
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    if delivery_rate == 0:
+        counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(model,),
+        )
+        return max_cost
+
+    api_key = kwargs["api_keys"]["gemini"]
     if api_key is None:
         return error_response("Gemini API key is not available.")
 
+    tool_name = kwargs.get("tool", None)
     if tool_name is None:
         return error_response("No tool name has been specified.")
 
@@ -150,13 +169,9 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, An
             f"Tool {tool_name} is not an available tool [{AVAILABLE_TOOLS}]."
         )
 
+    prompt = kwargs.get("prompt", None)
     if prompt is None:
         return error_response("No prompt has been given.")
-
-    if model not in AVAILABLE_MODELS:
-        return error_response(
-            f"Model {model} is not an avaliable model: {AVAILABLE_MODELS}"
-        )
 
     if tool_name == "gemini-prediction":
         prompt = PREDICTION_OFFLINE_PROMPT.format(user_prompt=prompt)

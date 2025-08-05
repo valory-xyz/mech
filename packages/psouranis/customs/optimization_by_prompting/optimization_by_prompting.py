@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -23,7 +23,7 @@ import json
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import StringIO
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union, cast
 
 import anthropic
 import googleapiclient
@@ -47,6 +47,7 @@ MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
+N_MODEL_CALLS = 2
 USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
 
 
@@ -488,10 +489,30 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(
+    **kwargs: Any,
+) -> Union[float, Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]]:
     """Run the task"""
+    tool = kwargs["tool"]
+    if tool not in ALLOWED_TOOLS:
+        raise ValueError(f"Tool {tool} is not supported.")
+
+    engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,) * N_MODEL_CALLS,
+        )
+        return max_cost
+
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
-        tool = kwargs["tool"]
         prompt = kwargs["prompt"]
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
@@ -500,11 +521,7 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, An
             raise RuntimeError("Client not initialized")
 
         openai_key = kwargs["api_keys"]["openai"]
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"Tool {tool} is not supported.")
 
-        engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
-        print(f"ENGINE: {engine}")
         additional_information = fetch_additional_information(
             prompt=prompt,
             engine=engine,
