@@ -40,6 +40,9 @@ from tiktoken import encoding_for_model
 client: Optional[OpenAI] = None
 
 
+USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+
+
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
@@ -319,7 +322,10 @@ def get_with_length_limit(
     url: str, timeout: int = 10, max_length: int = 25_000_000
 ) -> requests.Response:
     """Fetches the content of a URL if its size is within the specified limit."""
-    response = requests.head(url)
+    response = requests.head(
+        url,
+        headers={"User-Agent": USER_AGENT_HEADER},
+    )
     if response.status_code != 200:
         raise Exception(f"HEAD request failed with status code {response.status_code}")
 
@@ -329,7 +335,11 @@ def get_with_length_limit(
             f"Content length ({content_length} bytes) exceeds the limit of {max_length} bytes"
         )
 
-    response = requests.get(url, timeout=timeout)
+    response = requests.get(
+        url,
+        timeout=timeout,
+        headers={"User-Agent": USER_AGENT_HEADER},
+    )
     return response
 
 

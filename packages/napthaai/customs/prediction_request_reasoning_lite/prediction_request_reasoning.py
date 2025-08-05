@@ -45,6 +45,8 @@ from tiktoken import encoding_for_model
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
+USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+
 
 def with_key_rotation(func: Callable) -> Callable:
     """
@@ -557,7 +559,11 @@ def extract_text_from_pdf(
     """Extract text from a PDF document at the given URL."""
     try:
         # get the content length of the PDF
-        response = requests.head(url, timeout=HTTP_TIMEOUT)
+        response = requests.head(
+            url,
+            timeout=HTTP_TIMEOUT,
+            headers={"User-Agent": USER_AGENT_HEADER},
+        )
         if response.status_code != 200:
             raise Exception(
                 f"HEAD request failed with status code {response.status_code}"
@@ -569,7 +575,11 @@ def extract_text_from_pdf(
                 f"Content length ({content_length} bytes) exceeds the limit of {max_length} bytes"
             )
 
-        response = requests.get(url, timeout=HTTP_TIMEOUT)
+        response = requests.get(
+            url,
+            timeout=HTTP_TIMEOUT,
+            headers={"User-Agent": USER_AGENT_HEADER},
+        )
         response.raise_for_status()
 
         if "application/pdf" not in response.headers.get("Content-Type", ""):
@@ -661,7 +671,12 @@ def process_in_batches(
                 attempt = 0
                 while attempt < retries:
                     try:
-                        future = executor.submit(session.get, url, timeout=timeout)
+                        future = executor.submit(
+                            session.get,
+                            url,
+                            timeout=timeout,
+                            headers={"User-Agent": USER_AGENT_HEADER},
+                        )
                         break
                     except (TooManyRedirects, RequestException) as e:
                         print(f"Attempt {attempt + 1} failed for {url}: {e}")
