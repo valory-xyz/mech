@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module implements a Mech tool for binary predictions."""
+
 import functools
 import json
 import re
@@ -76,6 +77,7 @@ EMOJI_PATTERN = re.compile(
 )
 WHITESPACE_COLLAPSE_PATTERN = re.compile(r"\s+")
 ALLOWED_WHITESPACE_CHARS = ("\n", "\t", "\r")
+N_MODEL_CALLS = 2
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -969,7 +971,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         max_cost = counter_callback(
             max_cost=True,
-            models_calls=(engine,) * 2,
+            models_calls=(engine,) * N_MODEL_CALLS,
         )
         return max_cost
 

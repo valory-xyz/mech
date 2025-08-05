@@ -57,6 +57,7 @@ IMAGE_RELATED_PATTERNS = [
     PHOTO_CREDIT_PATTERN,
     IMAGE_CREDIT_PATTERN,
 ]
+N_MODEL_CALLS = 2
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -948,7 +949,7 @@ def run(
 
         max_cost = counter_callback(
             max_cost=True,
-            models_calls=(model,) * 2,
+            models_calls=(model,) * N_MODEL_CALLS,
         )
         return max_cost
 

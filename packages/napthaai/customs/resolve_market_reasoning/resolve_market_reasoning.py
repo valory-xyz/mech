@@ -47,6 +47,7 @@ BUFFER = 15000  # Buffer for the total tokens in the embeddings batch
 MAX_EMBEDDING_TOKENS = (
     300000 - BUFFER  # Maximum tokens for the embeddings batch
 )  # Maximum total tokens per embeddings batch
+N_MODEL_CALLS = 6
 
 
 client: Optional[OpenAI] = None
@@ -909,7 +910,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         max_cost = counter_callback(
             max_cost=True,
-            models_calls=(engine,) * 6,
+            models_calls=(engine,) * N_MODEL_CALLS,
         )
         return max_cost
 

@@ -168,6 +168,9 @@ REPORT_PROMPT_TEMPLATE = """
     Use markdown syntax. Include as much relevant information as possible and try not to summarize.
     """
 
+N_MODEL_CALLS = 4
+
+
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
@@ -618,7 +621,7 @@ def run(
 
         max_cost = counter_callback(
             max_cost=True,
-            models_calls=(model,) * 4,
+            models_calls=(model,) * N_MODEL_CALLS,
         )
         return max_cost
 

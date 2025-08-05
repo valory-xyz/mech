@@ -40,6 +40,9 @@ from tiktoken import encoding_for_model
 client: Optional[OpenAI] = None
 
 
+N_MODEL_CALLS = 2
+
+
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
@@ -533,7 +536,7 @@ def run(
 
         max_cost = counter_callback(
             max_cost=True,
-            models_calls=(engine,) * 2,
+            models_calls=(engine,) * N_MODEL_CALLS,
         )
         return max_cost
 

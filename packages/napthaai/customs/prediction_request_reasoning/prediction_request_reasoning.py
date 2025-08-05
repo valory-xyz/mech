@@ -61,6 +61,7 @@ IMAGE_RELATED_PATTERNS = [
     PHOTO_CREDIT_PATTERN,
     IMAGE_CREDIT_PATTERN,
 ]
+N_MODEL_CALLS = 3
 
 
 def get_model_encoding(model: str) -> Encoding:
@@ -1146,7 +1147,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         max_cost = counter_callback(
             max_cost=True,
-            models_calls=(model,) * 3,
+            models_calls=(model,) * N_MODEL_CALLS,
         )
         return max_cost
 

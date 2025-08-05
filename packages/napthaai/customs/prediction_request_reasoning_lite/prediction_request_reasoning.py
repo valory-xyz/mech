@@ -47,6 +47,9 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 MaxCostResponse = float
 
 
+N_MODEL_CALLS = 3
+
+
 def with_key_rotation(func: Callable) -> Callable:
     """
     Decorator that retries a function with API key rotation on failure.
@@ -992,7 +995,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         max_cost = counter_callback(
             max_cost=True,
-            models_calls=(model,) * 3,
+            models_calls=(model,) * N_MODEL_CALLS,
         )
         return max_cost
 
