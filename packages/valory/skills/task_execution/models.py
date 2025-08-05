@@ -104,7 +104,7 @@ class Params(Model):
         )
         self.offchain_tx_list: List = list()
         self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
-        self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing")
+        self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing", {})
         if self.tools_to_pricing:
             self._ensure_same_keys(
                 kwargs, self.tools_to_package_hash, self.tools_to_pricing

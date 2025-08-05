@@ -33,7 +33,6 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
-from eth_abi import encode
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
@@ -404,9 +403,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id = task_data["requestId"]
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
 
-        self.params.request_id_to_delivery_rate_info[task_data["requestId"]] = (
-            task_data["request_delivery_rate"]
-        )
+        self.params.request_id_to_delivery_rate_info[
+            task_data["requestId"]
+        ] = task_data["request_delivery_rate"]
         self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
@@ -696,8 +695,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         task_result = to_multihash(ipfs_hash)
         tool = done_task.get("tool")
-        dynamic_tool_cost = self._tools_to_pricing.get(tool)
-        if dynamic_tool_cost:
+        dynamic_tool_cost = self._tools_to_pricing.get(cast(str, tool))
+        if dynamic_tool_cost is not None:
             self.context.logger.info(
                 f"Tools to pricing found for tool {tool}. Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}"
             )
