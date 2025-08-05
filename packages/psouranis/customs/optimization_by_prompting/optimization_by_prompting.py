@@ -48,6 +48,7 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
 N_MODEL_CALLS = 2
+USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -405,7 +406,15 @@ def process_in_batches(
         for i in range(0, len(urls), window):
             batch = urls[i : i + window]
             futures = [
-                (executor.submit(requests.get, url, timeout=timeout), url)
+                (
+                    executor.submit(
+                        requests.get,
+                        url,
+                        timeout=timeout,
+                        headers={"User-Agent": USER_AGENT_HEADER},
+                    ),
+                    url,
+                )
                 for url in batch
             ]
             yield futures

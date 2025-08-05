@@ -44,6 +44,7 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
 N_MODEL_CALLS = 2
+USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -537,7 +538,11 @@ def extract_text_from_pdf(
 ) -> Optional[ExtendedDocument]:
     """Extract text from a PDF document at the given URL."""
     try:
-        response = requests.get(url, timeout=HTTP_TIMEOUT)
+        response = requests.get(
+            url,
+            timeout=HTTP_TIMEOUT,
+            headers={"User-Agent": USER_AGENT_HEADER},
+        )
         response.raise_for_status()
 
         if "application/pdf" not in response.headers.get("Content-Type", ""):
@@ -579,7 +584,12 @@ def process_in_batches(
                 attempt = 0
                 while attempt < retries:
                     try:
-                        future = executor.submit(session.get, url, timeout=timeout)
+                        future = executor.submit(
+                            session.get,
+                            url,
+                            timeout=timeout,
+                            headers={"User-Agent": USER_AGENT_HEADER},
+                        )
                         break
                     except (TooManyRedirects, RequestException) as e:
                         print(f"Attempt {attempt + 1} failed for {url}: {e}")

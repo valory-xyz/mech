@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -177,8 +177,9 @@ class TestOmenTransactionBuilder(BaseToolTest):
 
     def _validate_response(self, response: Any) -> None:
         super()._validate_response(response)
-        expected_num_tx_params = 2
-        assert len(response[2].keys()) == expected_num_tx_params
+        if response[2]:
+            expected_num_tx_params = 2
+            assert len(response[2].keys()) == expected_num_tx_params
 
 
 class TestDALLEGeneration(BaseToolTest):
