@@ -135,7 +135,6 @@ TOOL_TO_ENGINE = {tool: "gpt-4.1-2025-04-14" for tool in ALLOWED_TOOLS}
 NEWSAPI_ENDPOINT = "https://newsapi.org/v2"
 TOP_HEADLINES = "top-headlines"
 EVERYTHING = "everything"
-
 ARTICLE_LIMIT = 1_000
 ADDITIONAL_INFO_LIMIT = 5_000
 HTTP_OK = 200
