@@ -50,12 +50,12 @@ skills:
 - valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
 customs:
-- valory/openai_request:0.1.0:bafybeigluylosgobew3laqlwsevnkfuzv2xq5tqmjzhqau4jrx4ilmopoi
+- valory/openai_request:0.1.0:bafybeichhw5khyqh27l7gf36yr6soflphde4kzmcmi2vgq5mmuqoigq3fu
 - valory/resolve_market:0.1.0:bafybeicbjzedmkkkddqqffa24ma2y42z5x4grnubxc5naeecuagtnijuzq
 - valory/prediction_request:0.1.0:bafybeifmutr4szkez4m6ewzdxyrvk4fepb2l6yfnvslrdh4msks7zsz4qy
 - jhehemann/prediction_sum_url_content:0.1.0:bafybeidqfhxg2q7wogiacc7rhwaagfzuz74uaxwheurluflfvtu2ir424q
 - psouranis/optimization_by_prompting:0.1.0:bafybeictfa5pjn4v7si3ybw5ddolqm3ho3j3655fopidnikngqcbeawbuq
-- napthaai/resolve_market_reasoning:0.1.0:bafybeibdl4tckjpqmkdyhurs2iayrecjsdl34hqk3uqpajtrnsmo64hdg4
+- napthaai/resolve_market_reasoning:0.1.0:bafybeicjaphnhhsqvbkz57d4lwrwsgfx7rmlaue4eay2ndbgcdlzqy7ggm
 - napthaai/prediction_request_rag:0.1.0:bafybeicm3nrfzdimcfsxulmv5pjbqewvn4aazxzefozghahf6dv3dihd44
 - napthaai/prediction_request_reasoning:0.1.0:bafybeic463lrhke37mh3jhrik2gza7f2cq6wtxfgifxylzgl5ggg6lrqqm
 - valory/prepare_tx:0.1.0:bafybeibjzexmjct6ledxezfa54usa3o4abdafm6e2u2xxjzaji3l6sw6b4

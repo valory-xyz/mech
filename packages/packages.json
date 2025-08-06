@@ -1,12 +1,12 @@
 {
     "dev": {
-        "custom/valory/openai_request/0.1.0": "bafybeigluylosgobew3laqlwsevnkfuzv2xq5tqmjzhqau4jrx4ilmopoi",
+        "custom/valory/openai_request/0.1.0": "bafybeichhw5khyqh27l7gf36yr6soflphde4kzmcmi2vgq5mmuqoigq3fu",
         "custom/valory/resolve_market/0.1.0": "bafybeicbjzedmkkkddqqffa24ma2y42z5x4grnubxc5naeecuagtnijuzq",
         "custom/valory/prediction_request/0.1.0": "bafybeifmutr4szkez4m6ewzdxyrvk4fepb2l6yfnvslrdh4msks7zsz4qy",
         "custom/jhehemann/prediction_sum_url_content/0.1.0": "bafybeidqfhxg2q7wogiacc7rhwaagfzuz74uaxwheurluflfvtu2ir424q",
         "custom/psouranis/optimization_by_prompting/0.1.0": "bafybeictfa5pjn4v7si3ybw5ddolqm3ho3j3655fopidnikngqcbeawbuq",
         "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeicyc4wrd5v5iql5p7x2lmwkbhszhw7dg54szutxqnsjwx2xenrup4",
-        "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeibdl4tckjpqmkdyhurs2iayrecjsdl34hqk3uqpajtrnsmo64hdg4",
+        "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeicjaphnhhsqvbkz57d4lwrwsgfx7rmlaue4eay2ndbgcdlzqy7ggm",
         "custom/napthaai/prediction_request_rag/0.1.0": "bafybeicm3nrfzdimcfsxulmv5pjbqewvn4aazxzefozghahf6dv3dihd44",
         "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeic463lrhke37mh3jhrik2gza7f2cq6wtxfgifxylzgl5ggg6lrqqm",
         "custom/valory/prepare_tx/0.1.0": "bafybeibjzexmjct6ledxezfa54usa3o4abdafm6e2u2xxjzaji3l6sw6b4",
@@ -21,8 +21,8 @@
         "custom/valory/tee_openai_request/0.1.0": "bafybeigtbzt7qnzzcds33r6kz34jn6i57djh2mx7zrzcffq3vdkaik6uka",
         "custom/dvilela/corcel_request/0.1.0": "bafybeidk3lht6yaaasobigkyjzbjvh7mm3lqcbgzwzzngjbxnrvumigdte",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeidxq54wpslnnzymifdho323q7cpvgi7oo2vptzmycuzuhetfu57ri",
-        "agent/valory/mech/0.1.0": "bafybeihxdpbasdbg6vzoxx2ao4y3gmwnqxjhvjt5p2ovznixmffyo3fqxu",
-        "service/valory/mech/0.1.0": "bafybeidpt47djg2pwo5lctcjjqxwxjw5gdsuvgwxsh56t5u42saa3axshy"
+        "agent/valory/mech/0.1.0": "bafybeif7l65a7q7kq24movmse2zium5iob2qoln5qigeqnv662te2yibmu",
+        "service/valory/mech/0.1.0": "bafybeib22d2txchp7gweilmqhw5ncnnz32gpne7ooi5pob5xaqwes3ygue"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
