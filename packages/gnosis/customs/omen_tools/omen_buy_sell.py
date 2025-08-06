@@ -24,7 +24,7 @@ Please note that the gnosis safe parameters are missing from the payload, e.g., 
 """
 import functools
 import traceback
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import openai
 from langchain_core.output_parsers import PydanticOutputParser
@@ -50,10 +50,9 @@ from web3.types import TxParams
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
+TX_BUILD_COST = 0.01
 
-ENGINE = "gpt-3.5-turbo"
-MAX_TOKENS = 500
-TEMPERATURE = 0.7
 
 """NOTE: An LLM is used for generating a dict containing interpreted parameters from the response, such as "recipient_address", "market_address", etc. This could also be done if we could somehow publish the parameters needed by the run method and make it discoverable by the caller."""
 
@@ -250,9 +249,7 @@ def fetch_params_from_prompt(prompt: str) -> Tuple[BuyOrSell, AgentMarket]:
     return buy_params, market
 
 
-def build_buy_tx(
-    prompt: str, rpc_url: str
-) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def build_buy_tx(prompt: str, rpc_url: str) -> MechResponse:
     """Builds buy transaction request."""
 
     try:
@@ -273,9 +270,7 @@ def build_buy_tx(
         return f"exception occurred - {e}", "", None, None
 
 
-def build_return_from_tx_params(
-    tx_params: list[TxParams], prompt: str
-) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def build_return_from_tx_params(tx_params: list[TxParams], prompt: str) -> MechResponse:
     """Build return tx."""
     # We return the transactions_dict below in order to be able to return multiple transactions for later execution instead of just one.
     transaction_dict = {}
@@ -290,9 +285,7 @@ def get_web3(gnosis_rpc_url: str) -> Web3:
     return Web3(Web3.HTTPProvider(gnosis_rpc_url))
 
 
-def build_sell_tx(
-    prompt: str, rpc_url: str
-) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def build_sell_tx(prompt: str, rpc_url: str) -> MechResponse:
     """Builds sell transaction request."""
 
     try:
@@ -382,8 +375,25 @@ ALLOWED_TOOLS = {
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(  # pylint: disable=too-many-return-statements
+    **kwargs: Any,
+) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(TX_BUILD_COST,),
+        )
+        return max_cost
+
     tool: str | None = kwargs.get("tool", None)
     prompt: str = kwargs.get("prompt", "")
 

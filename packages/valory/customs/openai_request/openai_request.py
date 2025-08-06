@@ -18,7 +18,7 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 import functools
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import anthropic
 import googleapiclient
@@ -138,25 +138,43 @@ ALLOWED_TOOLS = [PREFIX + value for values in ENGINES.values() for value in valu
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(
+    **kwargs: Any,
+) -> Union[float, Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]]:
     """Run the task"""
+    tool = kwargs["tool"]
+    if tool not in ALLOWED_TOOLS:
+        return (
+            f"Tool {tool} is not in the list of supported tools.",
+            None,
+            None,
+            None,
+        )
+
+    engine = tool.replace(PREFIX, "")
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,),
+        )
+        return max_cost
+
     with OpenAIClientManager(kwargs["api_keys"]["openai"]):
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
         prompt = kwargs["prompt"]
-        tool = kwargs["tool"]
         counter_callback = kwargs.get("counter_callback", None)
         if not client:
             raise RuntimeError("Client not initialized")
-        if tool not in ALLOWED_TOOLS:
-            return (
-                f"Tool {tool} is not in the list of supported tools.",
-                None,
-                None,
-                None,
-            )
 
-        engine = tool.replace(PREFIX, "")
         moderation_result = client.moderations.create(input=prompt)
         if moderation_result.results[0].flagged:
             return (

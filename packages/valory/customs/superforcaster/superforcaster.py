@@ -32,6 +32,7 @@ from tiktoken import encoding_for_model
 client: Optional[OpenAI] = None
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -343,21 +344,36 @@ def format_sources_data(organic_data: Any, misc_data: Any) -> str:
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
+    tool = kwargs["tool"]
+    if tool not in ALLOWED_TOOLS:
+        raise ValueError(f"Tool {tool} is not supported.")
+
+    engine = kwargs.get("model")
+    if engine is None:
+        raise ValueError("Model not supplied.")
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,),
+        )
+        return max_cost
+
     openai_api_key = kwargs["api_keys"]["openai"]
     serper_api_key = kwargs["api_keys"]["serperapi"]
     with OpenAIClientManager(openai_api_key):
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
         prompt = kwargs["prompt"]
-        tool = kwargs["tool"]
-        engine = kwargs.get("model")
-        counter_callback = kwargs.get("counter_callback", None)
-        if tool not in ALLOWED_TOOLS:
-            raise ValueError(f"Tool {tool} is not supported.")
-        if engine is None:
-            raise ValueError("Model not supplied.")
 
         today = date.today()
         d = today.strftime("%d/%m/%Y")

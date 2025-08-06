@@ -48,6 +48,10 @@ from tqdm import tqdm
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
+
+
+ADDITIONAL_INFO_ENGINE = "gpt-3.5-turbo"
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -1345,7 +1349,7 @@ def fetch_additional_information(
     google_api_key: str,
     google_engine: str,
     nlp: Any,
-    engine: str = "gpt-3.5-turbo",
+    engine: str = ADDITIONAL_INFO_ENGINE,
     temperature: float = 0.5,
     max_compl_tokens: int = 500,
 ) -> str:
@@ -1427,7 +1431,7 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """
     Run the task with the given arguments.
 
@@ -1443,6 +1447,23 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
 
     tool = kwargs["tool"]
     engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(
+                ADDITIONAL_INFO_ENGINE,
+                engine,
+            ),
+        )
+        return max_cost
 
     with LLMClientManager(kwargs["api_keys"], engine, embedding_provider="openai"):
         prompt = kwargs["prompt"]
@@ -1492,7 +1513,7 @@ def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], An
         # Fetch additional information
         additional_information = fetch_additional_information(
             event_question=event_question,
-            engine="gpt-3.5-turbo",
+            engine=ADDITIONAL_INFO_ENGINE,
             temperature=0.5,
             max_compl_tokens=max_compl_tokens,
             nlp=nlp,

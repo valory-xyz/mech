@@ -20,9 +20,12 @@
 import functools
 import json
 import re
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import requests
+
+
+CORCEL_CALL_COST = 0.01
 
 
 class CorcelAPIException(Exception):
@@ -176,8 +179,14 @@ def response_post_process(response: str, tool_name: str) -> str:
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(
+    **kwargs: Any,
+) -> Union[float, Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]]:
     """Run the task"""
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    if delivery_rate == 0:
+        return CORCEL_CALL_COST
 
     api_key = kwargs["api_keys"]["corcel"]
     tool_name = kwargs.get("tool", None)

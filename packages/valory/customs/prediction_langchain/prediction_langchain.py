@@ -22,7 +22,17 @@
 import functools
 import operator
 import os
-from typing import Annotated, Any, Callable, Dict, Literal, Optional, Sequence, Tuple
+from typing import (
+    Annotated,
+    Any,
+    Callable,
+    Dict,
+    Literal,
+    Optional,
+    Sequence,
+    Tuple,
+    Union,
+)
 
 import anthropic
 import openai
@@ -38,6 +48,9 @@ from typing_extensions import TypedDict
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+
+
+MODEL = "gpt-4-1106-preview"
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -141,7 +154,7 @@ def create_agent(tools: Any, system_message: str) -> Any:
     )
     prompt = prompt.partial(system_message=system_message)
     prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
-    llm = ChatOpenAI(model="gpt-4-1106-preview", temperature=0.1)
+    llm = ChatOpenAI(model=MODEL, temperature=0.1)
     return prompt | llm.bind_tools(tools)
 
 
@@ -281,8 +294,22 @@ def error_response(msg: str) -> Tuple[str, None, None, None]:
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[Optional[str], Optional[str], None, None]:
+def run(**kwargs: Any) -> Union[float, Tuple[Optional[str], Optional[str], None, None]]:
     """Run the langchain example."""
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(MODEL,),
+        )
+        return max_cost
 
     # hardcode topic and timeframe
     topic = "consumer technology"

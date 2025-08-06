@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module implements a Mech tool for binary predictions."""
+
 import functools
 import json
 import re
@@ -49,6 +50,7 @@ from tiktoken import encoding_for_model, get_encoding
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MaxCostResponse = float
 # Regular expression patterns
 IMG_TAG_PATTERN = r"<img[^>]*>"
 MARKDOWN_IMG_PATTERN = r"!\[.*?\]\((?:data:image/[^;]*;base64,[^)]*|.*?)\)"
@@ -75,6 +77,7 @@ EMOJI_PATTERN = re.compile(
 )
 WHITESPACE_COLLAPSE_PATTERN = re.compile(r"\s+")
 ALLOWED_WHITESPACE_CHARS = ("\n", "\t", "\r")
+N_MODEL_CALLS = 2
 
 USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
 
@@ -965,12 +968,26 @@ def adjust_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]:
+def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
     tool = kwargs["tool"]
     engine = kwargs.get("model")
     if engine is None:
         raise ValueError("Model must be specified in kwargs")
+
+    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    if delivery_rate == 0:
+        if not counter_callback:
+            raise ValueError(
+                "A delivery rate of `0` was passed, but no counter callback was given to calculate the max cost with."
+            )
+
+        max_cost = counter_callback(
+            max_cost=True,
+            models_calls=(engine,) * N_MODEL_CALLS,
+        )
+        return max_cost
 
     if "claude" in tool:  # maintain backwards compatibility
         engine = "claude-4-sonnet-20250514"
