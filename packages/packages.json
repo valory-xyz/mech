@@ -1,6 +1,6 @@
 {
     "dev": {
-        "custom/valory/openai_request/0.1.0": "bafybeigrfzhkhliczzha5lxyfhefez34rsl6lpzcy3uw4xsv3emx2thv4a",
+        "custom/valory/openai_request/0.1.0": "bafybeig7cuzmlkyo6afsldpkry6qlra76kie3ln6jyqmyud2vbrzdy25ji",
         "custom/valory/resolve_market/0.1.0": "bafybeie7x7mrleq5k6mxievoju3oqgzvtzjqfyawihv7d6ps6fek2wdrei",
         "custom/valory/prediction_request/0.1.0": "bafybeifmutr4szkez4m6ewzdxyrvk4fepb2l6yfnvslrdh4msks7zsz4qy",
         "custom/jhehemann/prediction_sum_url_content/0.1.0": "bafybeidqfhxg2q7wogiacc7rhwaagfzuz74uaxwheurluflfvtu2ir424q",
@@ -21,8 +21,8 @@
         "custom/valory/tee_openai_request/0.1.0": "bafybeigtbzt7qnzzcds33r6kz34jn6i57djh2mx7zrzcffq3vdkaik6uka",
         "custom/dvilela/corcel_request/0.1.0": "bafybeidk3lht6yaaasobigkyjzbjvh7mm3lqcbgzwzzngjbxnrvumigdte",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeidxq54wpslnnzymifdho323q7cpvgi7oo2vptzmycuzuhetfu57ri",
-        "agent/valory/mech/0.1.0": "bafybeih7fbmj2xedxo2ztr74c46syxk2od6aan6tk6rzwg55kezg44gg2y",
-        "service/valory/mech/0.1.0": "bafybeiblu5rfefbd5xieaugnaru6gp3zqa7tm6eo3wn3trq5n26glkgzey"
+        "agent/valory/mech/0.1.0": "bafybeiaj4dloerctnv4zz5j3rhyo3m24h753cxti5rwiufrn66qaivoy3u",
+        "service/valory/mech/0.1.0": "bafybeidm3ew3bpmgvh6in6dvtspckkhvtn7lgywaxytmrw72h7z54rwv4m"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",

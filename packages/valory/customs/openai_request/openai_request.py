@@ -24,7 +24,7 @@ import anthropic
 import googleapiclient
 import openai
 from openai import OpenAI
-from tiktoken import encoding_for_model, get_encoding
+from tiktoken import encoding_for_model
 
 
 client: Optional[OpenAI] = None
