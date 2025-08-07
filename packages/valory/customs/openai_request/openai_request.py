@@ -19,6 +19,7 @@
 """Contains the job definitions"""
 import functools
 from typing import Any, Callable, Dict, Optional, Tuple, Union
+
 import anthropic
 import googleapiclient
 import openai
