@@ -420,7 +420,10 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 )
                 return None
 
-            _, balance_tracker_address, profits = data
+            _, balance_tracker_address, mech_balance = data
+            profits = yield from self._calculate_mech_profits(
+                balance_tracker_address, mech_balance
+            )
 
             process_payment_tx = yield from self._get_process_payment_tx(
                 mech_address, balance_tracker_address
@@ -610,6 +613,78 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             "data": data,
             "simulation_ok": simulation_ok,
         }
+
+    def _calculate_mech_profits(
+        self, balance_tracker_address: str, mech_balance: int
+    ) -> Generator[None, None, int]:
+        """Calculate mech profits"""
+        fee = yield from self._get_fee()
+        if fee is None:
+            self.context.logger.error(
+                f"Could not get marketplace fee. Skipping profit split"
+            )
+            return None
+
+        MAX_FEE_FACTOR = yield from self._get_max_fee_factor(balance_tracker_address)
+        if MAX_FEE_FACTOR is None:
+            self.context.logger.error(
+                f"Could not get MAX_FEE_FACTOR. Skipping profit split"
+            )
+            return None
+
+        marketplace_fee = int(
+            (mech_balance * fee + (MAX_FEE_FACTOR - 1)) / MAX_FEE_FACTOR
+        )
+        profits = mech_balance - marketplace_fee
+
+        self.context.logger.info(f"Contract Marketplace fee: {fee}")
+        self.context.logger.info(f"MAX_FEE_FACTOR: {MAX_FEE_FACTOR}")
+        self.context.logger.info(f"Calculated Marketplace fee: {marketplace_fee}")
+        self.context.logger.info(f"Mech profits: {profits}")
+
+        return profits
+
+    def _get_fee(self) -> Generator[None, None, Optional[int]]:
+        """Get the fee from marketplace."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.mech_marketplace_address,
+            contract_id=str(MechMarketplaceContract.contract_id),
+            contract_callable="get_fee",
+            chain_id=self.params.default_chain_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_mech_balance unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        fee = cast(int, contract_api_msg.state.body["data"])
+        return fee
+
+    def _get_max_fee_factor(
+        self, balance_tracker_address: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get the MAX_FEE_FACTOR from balancetracker."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=balance_tracker_address,
+            contract_id=str(BalanceTrackerContract.contract_id),
+            contract_callable="get_max_fee_factor",
+            chain_id=self.params.default_chain_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_mech_balance unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        max_fee_factor = cast(int, contract_api_msg.state.body["max_fee_factor"])
+        return max_fee_factor
 
     def _split_funds(
         self, profits: int
