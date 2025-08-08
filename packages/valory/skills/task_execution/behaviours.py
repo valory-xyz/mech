@@ -67,6 +67,7 @@ PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
+REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
@@ -152,6 +153,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def ipfs_tasks(self) -> List[Dict[str, Any]]:
         """Get ipfs_tasks."""
         return self.context.shared_state[IPFS_TASKS]
+
+    @property
+    def request_id_to_delivery_rate_info(self) -> List[Dict[str, int]]:
+        """Get request_id_to_delivery_rate_info."""
+        return self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO]
 
     def _should_poll(self, req_type: str) -> bool:
         """If we should poll the contract."""
@@ -403,9 +409,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id = task_data["requestId"]
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
 
-        self.params.request_id_to_delivery_rate_info[
-            task_data["requestId"]
-        ] = task_data["request_delivery_rate"]
+        request_id = task_data["requestId"]
+        delivery_rate = task_data["request_delivery_rate"]
+        self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
@@ -554,12 +560,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             and "tool" in task_data
         )  # pylint: disable=C0301
         if is_data_valid and task_data["tool"] in self._tools_to_package_hash:
-            is_pricing_valid = True
-
             if self._tools_to_pricing:
                 executing_task = cast(Dict[str, Any], self._executing_task)
                 tool_pricing = self._tools_to_pricing[task_data["tool"]]
-                request_id_delivery_rate = self.params.request_id_to_delivery_rate_info[
+                request_id_delivery_rate = self.request_id_to_delivery_rate_info[
                     executing_task["requestId"]
                 ]
                 if request_id_delivery_rate < tool_pricing:
@@ -567,10 +571,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                         f"Requested pricing is not valid. Actual {request_id_delivery_rate} Needed {tool_pricing}"
                     )
                     self._invalid_request = True
-                    is_pricing_valid = False
+                    return
 
-            if is_pricing_valid:
-                self._prepare_task(task_data)
+            self._prepare_task(task_data)
         elif is_data_valid:
             tool = task_data["tool"]
             executing_task = cast(Dict[str, Any], self._executing_task)
@@ -694,8 +697,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return None
 
         task_result = to_multihash(ipfs_hash)
-        tool = done_task.get("tool")
-        dynamic_tool_cost = self._tools_to_pricing.get(cast(str, tool))
+        tool = str(done_task.get("tool"))
+        dynamic_tool_cost = self._tools_to_pricing.get(tool)
         if dynamic_tool_cost is not None:
             self.context.logger.info(
                 f"Tools to pricing found for tool {tool}. Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}"

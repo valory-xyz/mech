@@ -70,6 +70,7 @@ TOPIC_BYTES = 32
 TOPIC_CHARS = TOPIC_BYTES * 2
 Ox = "0x"
 Ox_CHARS = len(Ox)
+DELIVERY_RATE_INDEX = 4
 
 
 class MechOperation(Enum):
@@ -374,7 +375,9 @@ class MechMarketplaceContract(Contract):
         request_id_info = cls.get_request_id_info(
             ledger_api, contract_address, request_id
         )
-        final_delivery_rate = min(request_id_info["data"][4], delivery_rate)
+        final_delivery_rate = min(
+            request_id_info["data"][DELIVERY_RATE_INDEX], delivery_rate
+        )
         encoded_data = ledger_api.api.codec.encode(
             ["uint256", "bytes"], [final_delivery_rate, data]
         )

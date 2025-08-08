@@ -46,6 +46,7 @@ PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
+REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -145,6 +146,7 @@ class ContractHandler(BaseHandler):
         self.context.shared_state[PENDING_TASKS] = []
         self.context.shared_state[DONE_TASKS] = []
         self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
+        self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO] = {}
         super().setup()
 
     @property

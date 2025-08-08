@@ -109,7 +109,6 @@ class Params(Model):
             self._ensure_same_keys(
                 kwargs, self.tools_to_package_hash, self.tools_to_pricing
             )
-        self.request_id_to_delivery_rate_info: Dict[str, int] = {}
 
         super().__init__(*args, **kwargs)
 
@@ -135,13 +134,13 @@ class Params(Model):
     @classmethod
     def _ensure_same_keys(
         cls, kwargs: Dict, hash_dict: Dict, pricing_dict: Dict
-    ) -> Any:
+    ) -> None:
         """Ensure that the same keys are available inside two dicts"""
         enforce("skill_context" in kwargs, "Only use on models!")
-        hash_keys = hash_dict.keys()
-        pricing_keys = pricing_dict.keys()
-        extra_keys_in_hash_dict = hash_keys - pricing_keys
-        extra_keys_in_pricing_dict = pricing_keys - hash_keys
+        hash_keys = set(hash_dict)
+        pricing_keys = set(pricing_dict)
+        extra_keys_in_hash_dict = sorted(hash_keys - pricing_keys)
+        extra_keys_in_pricing_dict = sorted(pricing_keys - hash_keys)
 
         if extra_keys_in_hash_dict or extra_keys_in_pricing_dict:
             errors = []
