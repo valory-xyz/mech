@@ -424,6 +424,12 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             profits = yield from self._calculate_mech_profits(
                 balance_tracker_address, mech_balance
             )
+            if profits is None:
+                self.context.logger.error(
+                    f"Could not get profits for mech {mech_address}. "
+                    f"Don't split profits."
+                )
+                return None
 
             process_payment_tx = yield from self._get_process_payment_tx(
                 mech_address, balance_tracker_address
@@ -616,19 +622,19 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
 
     def _calculate_mech_profits(
         self, balance_tracker_address: str, mech_balance: int
-    ) -> Generator[None, None, int]:
+    ) -> Generator[None, None, Optional[int]]:
         """Calculate mech profits"""
         fee = yield from self._get_fee()
         if fee is None:
             self.context.logger.error(
-                f"Could not get marketplace fee. Skipping profit split"
+                "Could not get marketplace fee. Skipping profit split"
             )
             return None
 
         MAX_FEE_FACTOR = yield from self._get_max_fee_factor(balance_tracker_address)
         if MAX_FEE_FACTOR is None:
             self.context.logger.error(
-                f"Could not get MAX_FEE_FACTOR. Skipping profit split"
+                "Could not get MAX_FEE_FACTOR. Skipping profit split"
             )
             return None
 
