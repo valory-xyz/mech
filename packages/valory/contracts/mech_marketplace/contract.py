@@ -84,7 +84,6 @@ def pad_address_for_topic(address: str) -> HexBytes:
     return HexBytes(Ox + address[Ox_CHARS:].zfill(TOPIC_CHARS))
 
 
-
 class MechMarketplaceContract(Contract):
     """The scaffold contract class for a smart contract."""
 
@@ -398,6 +397,18 @@ class MechMarketplaceContract(Contract):
             contract_instance.functions.mapPaymentTypeBalanceTrackers(mech_type).call()
         )
         return dict(data=balance_tracker_address)
+
+    @classmethod
+    def get_fee(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Fetch marketplace fee"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+
+        fee = contract_instance.functions.fee().call()
+        return dict(data=fee)
 
     @classmethod
     def get_event_entries(

@@ -51,6 +51,17 @@ class BalanceTrackerContract(Contract):
         return {"mech_balance": mech_balance}
 
     @classmethod
+    def get_max_fee_factor(
+        cls,
+        ledger_api: LedgerApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get mech balance"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        max_fee_factor = contract_instance.functions.MAX_FEE_FACTOR().call()
+        return {"max_fee_factor": max_fee_factor}
+
+    @classmethod
     def simulate_tx(
         cls,
         ledger_api: EthereumApi,
