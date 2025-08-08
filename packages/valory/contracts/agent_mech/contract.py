@@ -35,6 +35,11 @@ from web3 import Web3
 from web3._utils.events import get_event_data
 from web3.types import BlockIdentifier, FilterParams, TxReceipt
 
+from packages.valory.contracts.mech_marketplace.contract import (
+    DELIVERY_RATE_INDEX,
+    MechMarketplaceContract,
+)
+
 
 PUBLIC_ID = PublicId.from_str("valory/agent_mech:0.1.0")
 
@@ -624,6 +629,7 @@ class AgentMechContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
+        marketplace_address: str,
         from_block: BlockIdentifier = "earliest",
         to_block: BlockIdentifier = "latest",
         max_block_window: int = 1000,
@@ -667,6 +673,13 @@ class AgentMechContract(Contract):
             if request["requestId"] not in [
                 deliver["requestId"] for deliver in delivers
             ]:
+                # fetch and store max delivery rate for each request id
+                request_id_info = MechMarketplaceContract.get_request_id_info(
+                    ledger_api, marketplace_address, request["requestId"]
+                )
+                request["request_delivery_rate"] = request_id_info["data"][
+                    DELIVERY_RATE_INDEX
+                ]
                 # store each requests in the pending_tasks list, make sure each req is stored once
                 pending_tasks.append(request)
 

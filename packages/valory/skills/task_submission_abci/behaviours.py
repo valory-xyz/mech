@@ -124,6 +124,7 @@ class MarketplaceKeys(Enum):
 
     REQUEST_IDS = "requestIds"
     DATAS = "datas"
+    DELIVERY_RATES = "delivery_rates"
 
 
 class MarketplaceData(Enum):
@@ -131,6 +132,7 @@ class MarketplaceData(Enum):
 
     REQUEST_ID = "requestId"
     TASK_RESULT = "task_result"
+    DYNAMIC_TOOL_COST = "dynamic_tool_cost"
 
 
 class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
@@ -1361,11 +1363,11 @@ class TransactionPreparationBehaviour(
         return is_nvm_mech
 
     def _get_encoded_deliver_data(
-        self, request_ids: List, datas: List
+        self, request_ids: List, datas: List, delivery_rates: List
     ) -> Generator[None, None, Tuple]:
         final_request_ids = []
         final_datas = []
-        for request_id, data in zip(request_ids, datas):
+        for request_id, data, delivery_rate in zip(request_ids, datas, delivery_rates):
             contract_api_msg = yield from self.get_contract_api_response(
                 performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
                 contract_address=self.params.mech_marketplace_address,
@@ -1373,6 +1375,7 @@ class TransactionPreparationBehaviour(
                 contract_callable="get_encoded_data_for_request",
                 request_id=request_id,
                 data=data,
+                delivery_rate=delivery_rate,
                 chain_id=self.params.default_chain_id,
             )
             if (
@@ -1402,6 +1405,7 @@ class TransactionPreparationBehaviour(
                 lambda: {
                     MarketplaceKeys.REQUEST_IDS.value: [],
                     MarketplaceKeys.DATAS.value: [],
+                    MarketplaceKeys.DELIVERY_RATES.value: [],
                 }
             )
 
@@ -1417,12 +1421,17 @@ class TransactionPreparationBehaviour(
                 marketplace_deliver_by_mech[mech][MarketplaceKeys.DATAS.value].append(
                     bytes.fromhex(data[MarketplaceData.TASK_RESULT.value])
                 )
+                # default is set to 0 as for regular mechs this key is not being used in deliveries
+                marketplace_deliver_by_mech[mech][
+                    MarketplaceKeys.DELIVERY_RATES.value
+                ].append(data.get(MarketplaceData.DYNAMIC_TOOL_COST.value, 0))
 
             for mech, details in marketplace_deliver_by_mech.items():
                 self.context.logger.info(f"Preparing deliver data for mech: {mech}")
 
                 request_ids = details[MarketplaceKeys.REQUEST_IDS.value]
                 deliver_datas = details[MarketplaceKeys.DATAS.value]
+                delivery_rates = details[MarketplaceKeys.DELIVERY_RATES.value]
 
                 # check if mech is nvm mech or not
                 # if yes, encode delivery rate and deliver data
@@ -1436,7 +1445,7 @@ class TransactionPreparationBehaviour(
                         final_request_ids,
                         final_datas,
                     ) = yield from self._get_encoded_deliver_data(
-                        request_ids, deliver_datas
+                        request_ids, deliver_datas, delivery_rates
                     )
                     if final_request_ids and final_datas:
                         request_ids = final_request_ids
