@@ -36,8 +36,8 @@ from web3._utils.events import get_event_data
 from web3.types import BlockIdentifier, FilterParams, TxReceipt
 
 from packages.valory.contracts.mech_marketplace.contract import (
-    MechMarketplaceContract,
     DELIVERY_RATE_INDEX,
+    MechMarketplaceContract,
 )
 
 
