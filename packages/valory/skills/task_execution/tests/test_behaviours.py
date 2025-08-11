@@ -161,15 +161,17 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
 
 
 def test_broken_process_pool_restart(
-    behaviour, shared_state, params_stub, fake_dialogue, done_future, monkeypatch
+    behaviour,
+    shared_state,
+    params_stub,
+    fake_dialogue,
+    done_future,
+    monkeypatch,
+    patch_ipfs_multihash,
+    disable_polling,
 ):
-    monkeypatch.setattr(beh_mod, "get_ipfs_file_hash", lambda data: "cid-task")
-    monkeypatch.setattr(beh_mod, "to_v1", lambda cid: cid)
-    monkeypatch.setattr(beh_mod, "to_multihash", lambda cid: f"mh:{cid}")
-    monkeypatch.setattr(type(behaviour), "_check_for_new_reqs", lambda self: None)
-    monkeypatch.setattr(
-        type(behaviour), "_check_for_new_marketplace_reqs", lambda self: None
-    )
+    patch_ipfs_multihash()
+    disable_polling()
 
     behaviour._all_tools["sum"] = ("py", "run", {"params": {}})
     behaviour._tools_to_package_hash["sum"] = "fake-package-hash"
