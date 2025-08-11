@@ -5,15 +5,17 @@ import packages.valory.skills.task_execution.behaviours as beh_mod
 
 
 def test_happy_path_executes_and_stores(
-    behaviour, shared_state, params_stub, fake_dialogue, done_future, monkeypatch
+    behaviour,
+    shared_state,
+    params_stub,
+    fake_dialogue,
+    done_future,
+    monkeypatch,
+    patch_ipfs_multihash,
+    disable_polling,
 ):
-    monkeypatch.setattr(beh_mod, "get_ipfs_file_hash", lambda data: "cid-for-task")
-    monkeypatch.setattr(beh_mod, "to_v1", lambda cid: cid)
-    monkeypatch.setattr(beh_mod, "to_multihash", lambda cid: f"mh:{cid}")
-    monkeypatch.setattr(type(behaviour), "_check_for_new_reqs", lambda self: None)
-    monkeypatch.setattr(
-        type(behaviour), "_check_for_new_marketplace_reqs", lambda self: None
-    )
+    patch_ipfs_multihash()
+    disable_polling()
 
     valid_cid = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
 
@@ -87,15 +89,17 @@ def test_happy_path_executes_and_stores(
 
 
 def test_pricing_too_low_marks_invalid_and_stores_stub(
-    behaviour, shared_state, params_stub, fake_dialogue, monkeypatch, done_future
+    behaviour,
+    shared_state,
+    params_stub,
+    fake_dialogue,
+    monkeypatch,
+    done_future,
+    patch_ipfs_multihash,
+    disable_polling,
 ):
-    monkeypatch.setattr(beh_mod, "get_ipfs_file_hash", lambda data: "cid-for-task")
-    monkeypatch.setattr(beh_mod, "to_v1", lambda cid: cid)
-    monkeypatch.setattr(beh_mod, "to_multihash", lambda cid: f"mh:{cid}")
-    monkeypatch.setattr(type(behaviour), "_check_for_new_reqs", lambda self: None)
-    monkeypatch.setattr(
-        type(behaviour), "_check_for_new_marketplace_reqs", lambda self: None
-    )
+    patch_ipfs_multihash()
+    disable_polling()
     behaviour._tools_to_package_hash = {"sum": "fakehash"}
     behaviour._tools_to_pricing["sum"] = 200
     behaviour._all_tools["sum"] = ("tool_py_src", "run", {"params": {}})
@@ -156,43 +160,60 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     assert behaviour._executing_task is None
 
 
-def test_broken_process_pool_restart(behaviour, shared_state, params_stub, fake_dialogue, done_future, monkeypatch):
+def test_broken_process_pool_restart(
+    behaviour, shared_state, params_stub, fake_dialogue, done_future, monkeypatch
+):
     monkeypatch.setattr(beh_mod, "get_ipfs_file_hash", lambda data: "cid-task")
     monkeypatch.setattr(beh_mod, "to_v1", lambda cid: cid)
     monkeypatch.setattr(beh_mod, "to_multihash", lambda cid: f"mh:{cid}")
     monkeypatch.setattr(type(behaviour), "_check_for_new_reqs", lambda self: None)
-    monkeypatch.setattr(type(behaviour), "_check_for_new_marketplace_reqs", lambda self: None)
+    monkeypatch.setattr(
+        type(behaviour), "_check_for_new_marketplace_reqs", lambda self: None
+    )
 
     behaviour._all_tools["sum"] = ("py", "run", {"params": {}})
     behaviour._tools_to_package_hash["sum"] = "fake-package-hash"
 
     req_id = 1
-    shared_state[beh_mod.PENDING_TASKS].append({
-        "requestId": req_id,
-        "request_delivery_rate": 100,
-        "data": b"x",
-        "contract_address": "0xmech",
-    })
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": req_id,
+            "request_delivery_rate": 100,
+            "data": b"x",
+            "contract_address": "0xmech",
+        }
+    )
     params_stub.request_id_to_num_timeouts[req_id] = 0
     shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][req_id] = 100
 
-    monkeypatch.setattr(behaviour, "_build_ipfs_get_file_req",
-                        lambda *a, **k: (object(), fake_dialogue))
-    monkeypatch.setattr(behaviour, "_build_ipfs_store_file_req",
-                        lambda files, **k: (object(), fake_dialogue))
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    monkeypatch.setattr(
+        behaviour,
+        "_build_ipfs_store_file_req",
+        lambda files, **k: (object(), fake_dialogue),
+    )
 
     calls = {"n": 0}
+
     class BrokenOnceExec:
         def submit(self, *a, **k):
             calls["n"] += 1
             if calls["n"] == 1:
                 from concurrent.futures.process import BrokenProcessPool
+
                 raise BrokenProcessPool("boom")
-            return done_future(("ok", "p", {"tx": 1}, type("CB", (), {"cost_dict": {}})(), object()))
+            return done_future(
+                ("ok", "p", {"tx": 1}, type("CB", (), {"cost_dict": {}})(), object())
+            )
+
     monkeypatch.setattr(behaviour, "_executor", BrokenOnceExec())
 
     restarted = {"flag": False}
-    monkeypatch.setattr(behaviour, "_restart_executor", lambda: restarted.__setitem__("flag", True))
+    monkeypatch.setattr(
+        behaviour, "_restart_executor", lambda: restarted.__setitem__("flag", True)
+    )
 
     # Shape the fake messages based on WHICH callback is used
     def send_message_stub(msg, dlg, cb):
@@ -215,7 +236,9 @@ def test_broken_process_pool_restart(behaviour, shared_state, params_stub, fake_
     params_stub.in_flight_req = False
     behaviour.act()
 
-    assert restarted["flag"], "executor should have been restarted after BrokenProcessPool"
+    assert restarted[
+        "flag"
+    ], "executor should have been restarted after BrokenProcessPool"
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id

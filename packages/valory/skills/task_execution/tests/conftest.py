@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+import packages.valory.skills.task_execution.behaviours as beh_mod
 from packages.valory.skills.task_execution.behaviours import (
     DONE_TASKS,
     DONE_TASKS_LOCK,
@@ -133,3 +134,35 @@ def done_future():
         return f
 
     return _make
+
+
+@pytest.fixture
+def patch_ipfs_multihash(monkeypatch):
+    """
+    Stubs out multihash/CID helpers so tests don't need real CIDs
+    and 'data' doesn't need to be a real IPFS pointer.
+    """
+
+    def _apply(file_hash="cid-for-task"):
+        monkeypatch.setattr(beh_mod, "get_ipfs_file_hash", lambda data: file_hash)
+        monkeypatch.setattr(beh_mod, "to_v1", lambda cid: cid)
+        monkeypatch.setattr(beh_mod, "to_multihash", lambda cid: f"mh:{cid}")
+
+    return _apply
+
+
+@pytest.fixture
+def disable_polling(monkeypatch):
+    """
+    Turns off on-chain polling paths so tests don't need ledger/contract dialogues.
+    """
+
+    def _apply():
+        monkeypatch.setattr(
+            TaskExecutionBehaviour, "_check_for_new_reqs", lambda self: None
+        )
+        monkeypatch.setattr(
+            TaskExecutionBehaviour, "_check_for_new_marketplace_reqs", lambda self: None
+        )
+
+    return _apply
