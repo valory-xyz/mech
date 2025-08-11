@@ -318,7 +318,6 @@ def test_invalid_tool_is_recorded_and_no_execution(
             cb(SimpleNamespace(ipfs_hash="bafyinval"), dlg)
         else:
             raise AssertionError(f"Unexpected callback: {cb}")
-        # keep in-flight True within this tick to suppress polling
         params_stub.in_flight_req = True
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
@@ -328,7 +327,6 @@ def test_invalid_tool_is_recorded_and_no_execution(
     params_stub.in_flight_req = False
     behaviour.act()
 
-    # Now DONE_TASKS has one item
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id

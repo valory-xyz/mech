@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 import threading
+import time
 from collections import defaultdict
 from concurrent.futures import Future
 from types import SimpleNamespace
@@ -65,6 +66,8 @@ def params_stub():
         in_flight_req=False,
         req_to_callback={},
         req_to_deadline={},
+        request_count=0,
+        cleanup_freq=1000,
         req_type=None,
         default_chain_id=100,
         agent_mech_contract_addresses=["0x0000000000000000000000000000000000000000"],
@@ -185,3 +188,71 @@ def disable_polling(monkeypatch):
         )
 
     return _apply
+
+
+class SentOutbox:
+    def __init__(self):
+        self.sent = []
+
+    def put_message(self, message, *_, **__):
+        self.sent.append(message)
+
+
+@pytest.fixture
+def handler_context(shared_state, params_stub):
+    """
+    Minimal context for handlers (separate from the behaviour's context if you prefer).
+    """
+    ctx = SimpleNamespace(
+        logger=SimpleNamespace(
+            info=lambda *a, **k: None,
+            warning=lambda *a, **k: None,
+            error=lambda *a, **k: None,
+        ),
+        shared_state=shared_state,
+        params=params_stub,
+        default_ledger_id="ethereum",
+        outbox=SentOutbox(),
+    )
+
+    class HandlersBag:
+        pass
+
+    ctx.handlers = HandlersBag()
+    ctx.ipfs_dialogues = SimpleNamespace(
+        update=lambda msg: SimpleNamespace(
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+        ),
+        cleanup=lambda: None,
+    )
+    ctx.contract_dialogues = SimpleNamespace(cleanup=lambda: None)
+    ctx.ledger_dialogues = SimpleNamespace(cleanup=lambda: None)
+    return ctx
+
+
+@pytest.fixture
+def http_dialogue():
+    """Fake HttpDialogue with a `reply` that returns a response object."""
+
+    class FakeHttpDialogue:
+        def reply(
+            self,
+            performative,
+            target_message,
+            version,
+            status_code,
+            status_text,
+            headers,
+            body,
+        ):
+            return SimpleNamespace(
+                performative=performative,
+                version=version,
+                status_code=status_code,
+                status_text=status_text,
+                headers=headers,
+                body=body,
+                target=target_message,
+            )
+
+    return FakeHttpDialogue()
