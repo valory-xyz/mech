@@ -62,6 +62,27 @@ class BalanceTrackerContract(Contract):
         return {"max_fee_factor": max_fee_factor}
 
     @classmethod
+    def get_token_address(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Get tx data"""
+
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        token_address = contract_instance.functions.token().call()
+        return {"token_address": token_address}  # type: ignore
+
+    @classmethod
+    def get_token_credit_ratio(
+        cls, ledger_api: LedgerApi, contract_address: str
+    ) -> JSONLike:
+        """Get token credit ratio"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        token_credit_ratio = contract_instance.functions.tokenCreditRatio().call()
+        return {"token_credit_ratio": token_credit_ratio}  # type: ignore
+
+    @classmethod
     def simulate_tx(
         cls,
         ledger_api: EthereumApi,
