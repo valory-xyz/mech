@@ -18,14 +18,15 @@
 # ------------------------------------------------------------------------------
 
 import threading
-import time
 from collections import defaultdict
 from concurrent.futures import Future
 from types import SimpleNamespace
 
 import pytest
+from openai import models
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
+from packages.valory.skills.task_execution import models
 from packages.valory.skills.task_execution.behaviours import (
     DONE_TASKS,
     DONE_TASKS_LOCK,
@@ -256,3 +257,49 @@ def http_dialogue():
             )
 
     return FakeHttpDialogue()
+
+
+@pytest.fixture
+def dialogue_skill_context(shared_state):
+    # minimal skill_context the Model base expects
+    return SimpleNamespace(
+        skill_id="valory/task_execution:0.1.0",
+        agent_address="0xagent",
+        logger=SimpleNamespace(
+            debug=lambda *a, **k: None,
+            info=lambda *a, **k: None,
+            warning=lambda *a, **k: None,
+            error=lambda *a, **k: None,
+        ),
+        shared_state=shared_state,
+    )
+
+
+def _get_self_addr(dialogues_obj):
+    return getattr(
+        dialogues_obj, "self_address", getattr(dialogues_obj, "_self_address", None)
+    )
+
+
+@pytest.fixture
+def params_kwargs(dialogue_skill_context):
+    """Minimal good kwargs for Params; tests mutate this per-case."""
+    return dict(
+        skill_context=dialogue_skill_context,
+        api_keys={},
+        tools_to_package_hash={"sum": "hashsum"},
+        num_agents=2,
+        agent_index=0,
+        from_block_range=1000,
+        timeout_limit=3,
+        max_block_window=10_000,
+        mech_to_config={
+            "0xMeCh": {"use_dynamic_pricing": True, "is_marketplace_mech": False}
+        },
+        mech_marketplace_address=models.ZERO_ADDRESS,  # default: disables marketplace
+        default_chain_id="1",
+        tools_to_pricing={},
+        polling_interval=12.5,
+        task_deadline=111.0,
+        cleanup_freq=77,
+    )
