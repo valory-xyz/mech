@@ -245,3 +245,63 @@ def test_broken_process_pool_restart(
     done = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
     assert done["task_result"] == "mh:bafyok"
+
+def test_invalid_tool_is_recorded_and_no_execution(
+    behaviour, shared_state, params_stub, fake_dialogue, monkeypatch,
+    patch_ipfs_multihash, disable_polling
+):
+    patch_ipfs_multihash()
+    disable_polling()
+
+    req_id = 5
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {"requestId": req_id, "request_delivery_rate": 100, "data": b"x", "contract_address": "0xmech"}
+    )
+    params_stub.request_id_to_num_timeouts[req_id] = 0
+    shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][req_id] = 100
+
+    monkeypatch.setattr(behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue))
+    monkeypatch.setattr(behaviour, "_build_ipfs_store_file_req", lambda *a, **k: (object(), fake_dialogue))
+
+    monkeypatch.setattr(
+        behaviour, "_submit_task",
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not execute"))
+    )
+
+
+    def send_message_stub(msg, dlg, cb):
+        func = getattr(cb, "__func__", cb)
+        if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
+            cb(SimpleNamespace(files={"task.json": json.dumps({"prompt": "p", "tool": "unknown"})}), dlg)
+        elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
+            cb(SimpleNamespace(ipfs_hash="bafyinval"), dlg)
+        else:
+            raise AssertionError(f"Unexpected callback: {cb}")
+        # keep in-flight True within this tick to suppress polling
+        params_stub.in_flight_req = True
+
+    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
+
+    params_stub.in_flight_req = False
+    behaviour.act()
+    params_stub.in_flight_req = False
+    behaviour.act()
+
+    # Now DONE_TASKS has one item
+    assert len(shared_state[beh_mod.DONE_TASKS]) == 1
+    done = shared_state[beh_mod.DONE_TASKS][0]
+    assert done["request_id"] == req_id
+    assert done["tool"] == "unknown"
+    assert done["task_result"] == "mh:bafyinval"
+
+def test_ipfs_aux_task_removed_from_queue(
+    behaviour, shared_state, params_stub, fake_dialogue, monkeypatch, disable_polling, patch_ipfs_multihash
+):
+    disable_polling(); patch_ipfs_multihash()
+    shared_state[beh_mod.IPFS_TASKS].append({"request_id": "aux-1", "ipfs_data": '{"foo":"bar"}'})
+    monkeypatch.setattr(behaviour, "_build_ipfs_store_file_req", lambda *a, **k: (object(), fake_dialogue))
+    monkeypatch.setattr(behaviour, "send_message", lambda msg, dlg, cb: (cb(SimpleNamespace(ipfs_hash="bafyaux"), dlg), setattr(params_stub, "in_flight_req", True)))
+    params_stub.in_flight_req = False
+    behaviour.act()
+    assert shared_state[beh_mod.IPFS_TASKS] == []
+
