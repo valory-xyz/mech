@@ -11,6 +11,10 @@ fingerprint:
   dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
   handlers.py: bafybeifgrzuacpi5uccsmyhpgelneqqnccy4jwfrtefon3jwxbp4cup3oi
   models.py: bafybeibtky2px5dwua2xkxwjaemasojqkvofqqwhi6y36y6acrzgda7ahm
+  tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
+  tests/conftest.py: bafybeiamlwbq2hdpr2pqymzl53pbzps74kl4hggyhmcll5ipnhfy2te4rq
+  tests/test_behaviours.py: bafybeigwvfqu5pmslcmz322moelyz3rybgphb74ghvygm3by6zgfi2ytvm
+  tests/test_handlers.py: bafybeietruaoe3g5lhqa2gwceufrxitjbojhx3yzse4dz4dutbea6at5dy
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeib42vlnvv2lpfs3icjn2aoxwzw7z7wip5br2yj6p3lcgcz3ymrwcu

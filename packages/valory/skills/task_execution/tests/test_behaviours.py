@@ -19,6 +19,7 @@
 
 import json
 from types import SimpleNamespace
+from typing import Any
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
 
@@ -32,7 +33,7 @@ def test_happy_path_executes_and_stores(
     monkeypatch,
     patch_ipfs_multihash,
     disable_polling,
-):
+) -> None:
     patch_ipfs_multihash()
     disable_polling()
 
@@ -68,7 +69,7 @@ def test_happy_path_executes_and_stores(
 
     call_no = {"n": 0}
 
-    def send_message_stub(msg, dlg, callback):
+    def send_message_stub(msg, dlg, callback) -> None:
         call_no["n"] += 1
         if call_no["n"] == 1:
             task_body = {"prompt": "add 2+2", "tool": "sum"}
@@ -116,7 +117,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     done_future,
     patch_ipfs_multihash,
     disable_polling,
-):
+) -> None:
     patch_ipfs_multihash()
     disable_polling()
     behaviour._tools_to_package_hash = {"sum": "fakehash"}
@@ -145,7 +146,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
         lambda files, **k: (object(), fake_dialogue),
     )
 
-    def _fail_submit(*a, **k):
+    def _fail_submit(*a, **k) -> None:
         raise AssertionError("_submit_task must not be called for invalid pricing")
 
     monkeypatch.setattr(behaviour, "_submit_task", _fail_submit)
@@ -153,7 +154,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     valid_cid = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
     calls = {"n": 0}
 
-    def send_message_stub(msg, dlg, callback):
+    def send_message_stub(msg, dlg, callback) -> None:
         calls["n"] += 1
         if calls["n"] == 1:
             body = {"prompt": "add 2+2", "tool": "sum"}
@@ -188,7 +189,7 @@ def test_broken_process_pool_restart(
     monkeypatch,
     patch_ipfs_multihash,
     disable_polling,
-):
+) -> None:
     patch_ipfs_multihash()
     disable_polling()
 
@@ -219,7 +220,7 @@ def test_broken_process_pool_restart(
     calls = {"n": 0}
 
     class BrokenOnceExec:
-        def submit(self, *a, **k):
+        def submit(self, *a, **k) -> Any:
             calls["n"] += 1
             if calls["n"] == 1:
                 from concurrent.futures.process import BrokenProcessPool
@@ -237,7 +238,7 @@ def test_broken_process_pool_restart(
     )
 
     # Shape the fake messages based on WHICH callback is used
-    def send_message_stub(msg, dlg, cb):
+    def send_message_stub(msg, dlg, cb) -> None:
         func = getattr(cb, "__func__", cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             body = {"prompt": "p", "tool": "sum"}
@@ -274,7 +275,7 @@ def test_invalid_tool_is_recorded_and_no_execution(
     monkeypatch,
     patch_ipfs_multihash,
     disable_polling,
-):
+) -> None:
     patch_ipfs_multihash()
     disable_polling()
 
@@ -305,7 +306,7 @@ def test_invalid_tool_is_recorded_and_no_execution(
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not execute")),
     )
 
-    def send_message_stub(msg, dlg, cb):
+    def send_message_stub(msg, dlg, cb) -> None:
         func = getattr(cb, "__func__", cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             cb(
@@ -342,7 +343,7 @@ def test_ipfs_aux_task_removed_from_queue(
     monkeypatch,
     disable_polling,
     patch_ipfs_multihash,
-):
+) -> None:
     disable_polling()
     patch_ipfs_multihash()
     shared_state[beh_mod.IPFS_TASKS].append(

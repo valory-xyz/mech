@@ -38,9 +38,7 @@ from packages.valory.skills.task_execution.handlers import (
 def test_ipfs_handler_error_sets_flags(handler_context):
     handler = IpfsHandler(name="ipfs", skill_context=handler_context)
     handler.setup()
-    # simulate in-flight
     handler_context.params.in_flight_req = True
-    # message with ERROR performative
     msg = SimpleNamespace(performative=IpfsMessage.Performative.ERROR)
     handler.handle(msg)
     assert handler_context.params.in_flight_req is False
@@ -51,7 +49,6 @@ def test_ipfs_handler_calls_callback_and_clears(handler_context, monkeypatch):
     handler.setup()
 
     called = {"ok": False}
-    # map nonce -> callback and deadline in the future
     handler_context.params.req_to_callback[
         "nonce-1"
     ] = lambda msg, dlg: called.__setitem__("ok", True)
@@ -89,7 +86,6 @@ def test_ipfs_handler_deadline_expired_skips_callback(handler_context):
     assert called["ok"] is False
     assert handler_context.params.in_flight_req is False
     assert handler_context.params.is_cold_start is False
-    # entries are popped even on timeout
     assert "nonce-1" not in handler_context.params.req_to_callback
     assert "nonce-1" not in handler_context.params.req_to_deadline
 
@@ -117,7 +113,6 @@ def test_contract_handler_state_enqueues_and_updates_from_block(handler_context)
     ch = ContractHandler(name="contract", skill_context=handler_context)
     ch.setup()
 
-    # Two reqs; only block_number % 2 == 1 should be kept (agent_index=1)
     reqs = [
         {"block_number": 10, "requestId": 1},
         {"block_number": 11, "requestId": 2},
@@ -130,9 +125,7 @@ def test_contract_handler_state_enqueues_and_updates_from_block(handler_context)
 
     ch.handle(msg)
 
-    # from_block updated to max+1
     assert params.req_params.from_block["legacy"] == 12
-    # Only one req enqueued (block 11)
     assert len(ch.pending_tasks) == 1
     assert ch.pending_tasks[0]["requestId"] == 2
     assert params.in_flight_req is False
@@ -167,7 +160,7 @@ def test_ledger_handler_updates_from_block(handler_context):
     assert params.in_flight_req is False
 
 
-def test_ledger_handler_non_state_sets_flag(handler_context):
+def test_ledger_handler_non_state_sets_flag(handler_context) -> None:
     params = handler_context.params
     params.in_flight_req = True
     lh = LedgerHandler(name="ledger", skill_context=handler_context)
@@ -177,8 +170,7 @@ def test_ledger_handler_non_state_sets_flag(handler_context):
     assert params.in_flight_req is False
 
 
-def make_http_msg(body_dict: dict, headers=""):
-    # They do parse_qs on the decoded body
+def make_http_msg(body_dict: dict, headers="") -> SimpleNamespace:
     body = urllib.parse.urlencode(body_dict).encode("utf-8")
     return SimpleNamespace(
         body=body,
@@ -192,8 +184,7 @@ def test_signed_requests_success(handler_context, http_dialogue):
     mh = MechHttpHandler(name="http", skill_context=handler_context)
     mh.setup()
 
-    # minimal valid fields
-    ipfs_hash = "0x" + "ab" * 64  # even-length hex
+    ipfs_hash = "0x" + "ab" * 64
     body = {
         "ipfs_hash": ipfs_hash,
         "request_id": "req-1",
@@ -201,9 +192,8 @@ def test_signed_requests_success(handler_context, http_dialogue):
         "delivery_rate": "123",
     }
     http_msg = make_http_msg(body)
-    mh._handle_signed_requests(http_msg, http_dialogue)  # call directly
+    mh._handle_signed_requests(http_msg, http_dialogue)
 
-    # pending & ipfs_tasks updated
     pend = handler_context.shared_state["pending_tasks"]
     ipfsq = handler_context.shared_state["ipfs_tasks"]
     assert len(pend) == 1 and len(ipfsq) == 1
@@ -211,7 +201,6 @@ def test_signed_requests_success(handler_context, http_dialogue):
     assert pend[0]["requestId"] == "req-1"
     assert ipfsq[0]["request_id"] == "req-1"
 
-    # response sent
     assert handler_context.outbox.sent, "no HTTP response sent"
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.OK_CODE.value
@@ -219,10 +208,9 @@ def test_signed_requests_success(handler_context, http_dialogue):
     assert data["request_id"] == "req-1"
 
 
-def test_signed_requests_bad_request(handler_context, http_dialogue):
+def test_signed_requests_bad_request(handler_context, http_dialogue) -> None:
     mh = MechHttpHandler(name="http", skill_context=handler_context)
     mh.setup()
-    # missing fields → KeyError → handled as bad request
     http_msg = make_http_msg({"only": "one"})
     mh._handle_signed_requests(http_msg, http_dialogue)
 
@@ -230,10 +218,9 @@ def test_signed_requests_bad_request(handler_context, http_dialogue):
     assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
 
 
-def test_fetch_offchain_request_info_found(handler_context, http_dialogue):
+def test_fetch_offchain_request_info_found(handler_context, http_dialogue) -> None:
     mh = MechHttpHandler(name="http", skill_context=handler_context)
     mh.setup()
-    # Seed a done_task with string request_id (handler compares as string)
     handler_context.shared_state["ready_tasks"].append(
         {"request_id": "abc", "value": 7}
     )
@@ -245,7 +232,7 @@ def test_fetch_offchain_request_info_found(handler_context, http_dialogue):
     assert payload["request_id"] == "abc" and payload["value"] == 7
 
 
-def test_fetch_offchain_request_info_not_found(handler_context, http_dialogue):
+def test_fetch_offchain_request_info_not_found(handler_context, http_dialogue) -> None:
     mh = MechHttpHandler(name="http", skill_context=handler_context)
     mh.setup()
     http_msg = make_http_msg({"request_id": "missing"})
@@ -256,11 +243,9 @@ def test_fetch_offchain_request_info_not_found(handler_context, http_dialogue):
     assert payload == {}
 
 
-def test_on_message_handled_triggers_cleanup(handler_context, monkeypatch):
-    # Set cleanup every request
+def test_on_message_handled_triggers_cleanup(handler_context, monkeypatch) -> None:
     handler_context.params.cleanup_freq = 1
 
-    # Track cleanup calls on dialogues created from handlers listing
     class Handlers:
         pass
 
@@ -274,6 +259,6 @@ def test_on_message_handled_triggers_cleanup(handler_context, monkeypatch):
 
     h = IpfsHandler(name="ipfs", skill_context=handler_context)
     h.setup()
-    h.on_message_handled(SimpleNamespace())  # should trigger cleanup
+    h.on_message_handled(SimpleNamespace())
 
     assert cleaned["ipfs"] == 1
