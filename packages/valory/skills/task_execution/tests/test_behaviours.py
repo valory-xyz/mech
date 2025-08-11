@@ -1,4 +1,5 @@
 import json
+from types import SimpleNamespace
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
 
@@ -57,7 +58,6 @@ def test_happy_path_executes_and_stores(
         else:
             fake_store_response = type("Msg", (), {"ipfs_hash": valid_cid})()
             callback(fake_store_response, dlg)
-        # Set to true so polling doesn't run.
         params_stub.in_flight_req = True
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
@@ -69,9 +69,8 @@ def test_happy_path_executes_and_stores(
         behaviour, "_submit_task", lambda *a, **k: done_future(result_tuple)
     )
 
-    params_stub.in_flight_req = False  # allow _execute_task to start on first tick
+    params_stub.in_flight_req = False
     behaviour.act()
-    # next tick: allow it to proceed again
     params_stub.in_flight_req = False
     behaviour.act()
 
@@ -138,7 +137,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
             callback(type("Msg", (), {"files": {"task.json": json.dumps(body)}})(), dlg)
         else:
             callback(type("Msg", (), {"ipfs_hash": valid_cid})(), dlg)
-        params_stub.in_flight_req = True  # keep polling suppressed within the tick
+        params_stub.in_flight_req = True
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
@@ -155,3 +154,69 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     assert "dynamic_tool_cost" not in done
     assert done["task_result"] == f"mh:{valid_cid}"
     assert behaviour._executing_task is None
+
+
+def test_broken_process_pool_restart(behaviour, shared_state, params_stub, fake_dialogue, done_future, monkeypatch):
+    monkeypatch.setattr(beh_mod, "get_ipfs_file_hash", lambda data: "cid-task")
+    monkeypatch.setattr(beh_mod, "to_v1", lambda cid: cid)
+    monkeypatch.setattr(beh_mod, "to_multihash", lambda cid: f"mh:{cid}")
+    monkeypatch.setattr(type(behaviour), "_check_for_new_reqs", lambda self: None)
+    monkeypatch.setattr(type(behaviour), "_check_for_new_marketplace_reqs", lambda self: None)
+
+    behaviour._all_tools["sum"] = ("py", "run", {"params": {}})
+    behaviour._tools_to_package_hash["sum"] = "fake-package-hash"
+
+    req_id = 1
+    shared_state[beh_mod.PENDING_TASKS].append({
+        "requestId": req_id,
+        "request_delivery_rate": 100,
+        "data": b"x",
+        "contract_address": "0xmech",
+    })
+    params_stub.request_id_to_num_timeouts[req_id] = 0
+    shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][req_id] = 100
+
+    monkeypatch.setattr(behaviour, "_build_ipfs_get_file_req",
+                        lambda *a, **k: (object(), fake_dialogue))
+    monkeypatch.setattr(behaviour, "_build_ipfs_store_file_req",
+                        lambda files, **k: (object(), fake_dialogue))
+
+    calls = {"n": 0}
+    class BrokenOnceExec:
+        def submit(self, *a, **k):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                from concurrent.futures.process import BrokenProcessPool
+                raise BrokenProcessPool("boom")
+            return done_future(("ok", "p", {"tx": 1}, type("CB", (), {"cost_dict": {}})(), object()))
+    monkeypatch.setattr(behaviour, "_executor", BrokenOnceExec())
+
+    restarted = {"flag": False}
+    monkeypatch.setattr(behaviour, "_restart_executor", lambda: restarted.__setitem__("flag", True))
+
+    # Shape the fake messages based on WHICH callback is used
+    def send_message_stub(msg, dlg, cb):
+        func = getattr(cb, "__func__", cb)
+        if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
+            body = {"prompt": "p", "tool": "sum"}
+            cb(SimpleNamespace(files={"task.json": json.dumps(body)}), dlg)
+        elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
+            cb(SimpleNamespace(ipfs_hash="bafyok"), dlg)
+        else:
+            raise AssertionError(f"Unexpected callback: {cb}")
+        # keep in-flight True during this tick so polling doesn't run
+        params_stub.in_flight_req = True
+
+    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
+
+    params_stub.in_flight_req = False
+    behaviour.act()
+
+    params_stub.in_flight_req = False
+    behaviour.act()
+
+    assert restarted["flag"], "executor should have been restarted after BrokenProcessPool"
+    assert len(shared_state[beh_mod.DONE_TASKS]) == 1
+    done = shared_state[beh_mod.DONE_TASKS][0]
+    assert done["request_id"] == req_id
+    assert done["task_result"] == "mh:bafyok"
