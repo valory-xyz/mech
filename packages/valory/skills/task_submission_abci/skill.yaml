@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeicokfpu5jngpfhn6jsbimjvgj6p62vuj3ulpuucbtfw6x5hpgmneu
+  behaviours.py: bafybeihwa6gctsq3msbzxasplgfwnfxwmsfwewbtptigyeavplo52oavga
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
@@ -19,14 +19,15 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeic3n2bjt3vdtye34a6mfqsdxuavcoodqlekzn7itlvmbtsqpc3qme
-- valory/mech_marketplace:0.1.0:bafybeicbtmlkzj5stuuwylotdx6kw3hr63cul3wjbrjcw3oo5vm2jdpfhe
+- valory/agent_mech:0.1.0:bafybeia3ye4uhml5mz3jf3fuchm3nrndwkae6mcg5bmovgzngtruh6mf24
+- valory/mech_marketplace:0.1.0:bafybeigs4p5dsxdnxjilxelbafm4gdftdonyddwraxfq72qb276vjiynge
 - valory/complementary_service_metadata:0.1.0:bafybeibu65wpdsbrbrt2wnf2lr3psy26jiaomyjkg4twbupve7o3kso2aa
 - valory/gnosis_safe:0.1.0:bafybeibjpgpvyvkqeugr7yv4ijze365legdwc5exvaedak7druv646qowe
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeiauvchyehaks6pxnk4b6u5sfduwjnbqjm6br4ie5vhna25nzgkcky
 - valory/hash_checkpoint:0.1.0:bafybeiaqnq2wmk4d2skbsh53rek5qncvygclxr3ktenc246qovth5emupe
-- valory/balance_tracker:0.1.0:bafybeia66jlh37qjo2sdky5ugsirohk7t3xmwir5y7xzgb4qx3npfcbobi
+- valory/balance_tracker:0.1.0:bafybeign3mbjn5lpvqz6hght3f3slex7tplulyzub5w3zfe7zvpor4lv6q
+- valory/erc20:0.1.0:bafybeiblm2r2opxkqom3hb3qsmm746r55ujx44jh3plrip45p5sekdnnvi
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
@@ -34,7 +35,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia7lzwbmcmf3u7mn3673345klkyyp7ln62gqx6hcqlbjracxmrqlm
 - valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
-- valory/task_execution:0.1.0:bafybeifgrzvv47ntnvpboolvtldl7pnose443ft3ukoyoqaijqh6xfi2au
+- valory/task_execution:0.1.0:bafybeidasolski7idfwetdaig4cac4q2oeinxgaeebcfplwgz2rduwqpeq
 behaviours:
   main:
     args: {}

@@ -416,6 +416,18 @@ class MechMarketplaceContract(Contract):
         return dict(data=balance_tracker_address)
 
     @classmethod
+    def get_fee(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+    ) -> JSONLike:
+        """Fetch marketplace fee"""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+
+        fee = contract_instance.functions.fee().call()
+        return dict(data=fee)
+
+    @classmethod
     def get_event_entries(
         cls,
         ledger_api: EthereumApi,
