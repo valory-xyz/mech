@@ -180,9 +180,9 @@ You may customize the agent's behaviour by setting these environment variables.
 | `PROFIT_SPLIT_BALANCE`     | `int`  | 1000000000000000000                                                                                                                                                                                                                                                 | Minimun mech balance to trigger the profit split functionality.        |
 
 :note: The value of `PROFIT_SPLIT_BALANCE` should correspond to the units of payment based on payment model. 
- - For fixed price mechs, it will be the native currency
- - For token mechs, it will be the token used as payment
- - For NVM mechs, it will correspond to credits
+ - For fixed price mechs, it corresponds to native currency units
+ - For token mechs, it corresponds to OLAS units
+ - For NVM mechs, it corresponds to credits. (1 xDAI on Gnosis and 1 USDC on Base correspond to 10^6 credits)
 
 The rest of the common environment variables are present in the [service.yaml](https://github.com/valory-xyz/mech/blob/main/packages/valory/services/mech/service.yaml), which are customizable too.
 
