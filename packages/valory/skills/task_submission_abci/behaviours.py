@@ -417,7 +417,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 self.context.logger.error(
                     f"Could not get data for mech {mech_address}. Skipping Profit Split."
                 )
-                return None
+                return False
             _, _, mech_balance = mech_info
             mech_balances += mech_balance
 

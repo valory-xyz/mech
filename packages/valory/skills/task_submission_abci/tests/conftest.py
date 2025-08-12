@@ -19,9 +19,8 @@
 
 """Conftest for the task_submission_abci."""
 
-
 from types import SimpleNamespace
-from typing import Any, Dict, Generator, Optional, Type
+from typing import Any, Callable, Dict, Generator, Optional, Tuple, Type, cast
 
 import pytest
 
@@ -32,14 +31,19 @@ from packages.valory.skills.task_submission_abci.behaviours import (
 
 
 @pytest.fixture
-def run_to_completion() -> Any:
-    """Return a helper that exhausts a generator and yields its final value."""
+def run_to_completion() -> Callable[[Generator[Any, None, Any]], Any]:
+    """
+    Return a helper that exhausts a generator and yields its final value.
+
+    :returns: A function that runs a generator until completion and returns the StopIteration value.
+    :rtype: Callable[[Generator[Any, None, Any]], Any]
+    """
 
     def _run(gen: Generator[Any, None, Any]) -> Any:
         try:
             while True:
                 next(gen)
-        except StopIteration as e:
+        except StopIteration as e:  # pragma: no cover - control path end
             return e.value
 
     return _run
@@ -48,12 +52,13 @@ def run_to_completion() -> Any:
 class DummyFundsSplit(FundsSplittingBehaviour):
     """Concrete subclass to allow instantiation for unit testing only."""
 
-    # Not used by these tests, but BaseBehaviour expects the attribute.
-    matching_round: Type[AbstractRound] = AbstractRound
+    matching_round: Type[AbstractRound] = cast(
+        Type[AbstractRound], type("DummyRound", (), {})
+    )
 
     def async_act(self) -> Generator[None, None, None]:
         """Satisfy abstract method for BaseBehaviour."""
-        if False:
+        if False:  # pragma: no cover - keep it a generator
             yield
         return None
 
@@ -61,7 +66,7 @@ class DummyFundsSplit(FundsSplittingBehaviour):
 @pytest.fixture
 def fs_ctx() -> SimpleNamespace:
     """
-    Minimal skill context with logger and params used by _should_split_profits.
+    Return a minimal skill context with logger and params used by _should_split_profits.
 
     :returns: A context namespace exposing logger and params (profit_split_balance, agent_mech_contract_addresses).
     :rtype: SimpleNamespace
@@ -82,7 +87,7 @@ def fs_ctx() -> SimpleNamespace:
 @pytest.fixture
 def fs_behaviour(fs_ctx: SimpleNamespace) -> DummyFundsSplit:
     """
-    Behaviour instance bound to the minimal context.
+    Create a behaviour instance bound to the minimal context.
 
     :param fs_ctx: The fake skill context.
     :type fs_ctx: SimpleNamespace
@@ -93,15 +98,18 @@ def fs_behaviour(fs_ctx: SimpleNamespace) -> DummyFundsSplit:
 
 
 @pytest.fixture
-def patch_mech_info(monkeypatch: pytest.MonkeyPatch, fs_behaviour: DummyFundsSplit):
+def patch_mech_info(
+    monkeypatch: pytest.MonkeyPatch, fs_behaviour: DummyFundsSplit
+) -> Callable[[Dict[str, int]], None]:
     """
-    Helper to stub _get_mech_info to return balances per mech address.
+    Return a helper to stub _get_mech_info to return balances per mech address.
 
     :param monkeypatch: Pytest monkeypatch fixture.
     :type monkeypatch: pytest.MonkeyPatch
     :param fs_behaviour: The behaviour instance under test.
     :type fs_behaviour: DummyFundsSplit
     :returns: A function that accepts a mapping {mech_address: balance} and applies the stub.
+    :rtype: Callable[[Dict[str, int]], None]
     """
 
     def _apply(balances_by_addr: Dict[str, int]) -> None:
@@ -112,8 +120,10 @@ def patch_mech_info(monkeypatch: pytest.MonkeyPatch, fs_behaviour: DummyFundsSpl
         :type balances_by_addr: Dict[str, int]
         """
 
-        def _fake(self, mech_address: str) -> Generator[None, None, Optional[tuple]]:
-            if False:
+        def _fake(
+            self: DummyFundsSplit, mech_address: str
+        ) -> Generator[None, None, Optional[Tuple[bytes, str, int]]]:
+            if False:  # pragma: no cover - make this a generator
                 yield
             bal = balances_by_addr.get(mech_address)
             if bal is None:
