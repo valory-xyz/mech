@@ -37,10 +37,10 @@ from packages.valory.contracts.agent_mech.contract import (
     MechOperation,
 )
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
-from packages.valory.contracts.erc20.contract import ERC20TokenContract
 from packages.valory.contracts.complementary_service_metadata.contract import (
     ComplementaryServiceMetadata,
 )
+from packages.valory.contracts.erc20.contract import ERC20TokenContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
@@ -869,7 +869,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         }
 
     def _get_token_address(
-        self, balance_tracker_address
+        self, balance_tracker_address: str
     ) -> Generator[None, None, Optional[str]]:
         """Get the fee from marketplace."""
         contract_api_msg = yield from self.get_contract_api_response(
