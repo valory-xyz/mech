@@ -177,6 +177,12 @@ You may customize the agent's behaviour by setting these environment variables.
 | `MECH_MARKETPLACE_ADDRESS` | `str`  | `"0x4554fE75c1f5576c1d7F765B2A036c199Adae329"`                                                                                                                                                                                                                      | Marketplace for posting and delivering requests served by agent mechs. |
 | `MECH_TO_SUBSCRIPTION`     | `dict` | `{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000","tokenId":"1"}}`                                                                                                                                        | Tracks mech's subscription details.                                    |
 | `MECH_TO_CONFIG`           | `dict` | `{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}`                                                                                                                                                          | Tracks mech's config.                                                  |
+| `PROFIT_SPLIT_BALANCE`     | `int`  | 1000000000000000000                                                                                                                                                                                                                                                 | Minimun mech balance to trigger the profit split functionality.        |
+
+:note: The value of `PROFIT_SPLIT_BALANCE` should correspond to the units of payment based on payment model. 
+ - For fixed price mechs, it will be the native currency
+ - For token mechs, it will be the token used as payment
+ - For NVM mechs, it will correspond to credits
 
 The rest of the common environment variables are present in the [service.yaml](https://github.com/valory-xyz/mech/blob/main/packages/valory/services/mech/service.yaml), which are customizable too.
 
