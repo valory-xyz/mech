@@ -40,6 +40,7 @@ from packages.valory.contracts.balance_tracker.contract import BalanceTrackerCon
 from packages.valory.contracts.complementary_service_metadata.contract import (
     ComplementaryServiceMetadata,
 )
+from packages.valory.contracts.erc20.contract import ERC20TokenContract
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
@@ -83,6 +84,20 @@ ZERO_IPFS_HASH = (
 )
 FILENAME = "usage"
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
+
+PAYMENT_TYPE_NATIVE = (
+    "ba699a34be8fe0e7725e93dcbce1701b0211a8ca61330aaeb8a05bf2ec7abed1"  # nosec
+)
+PAYMENT_TYPE_TOKEN = (
+    "3679d66ef546e66ce9057c4a052f317b135bc8e8c509638f7966edfd4fcf45e9"  # nosec
+)
+PAYMENT_TYPE_NATIVE_NVM = (
+    "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"  # nosec
+)
+PAYMENT_TYPE_TOKEN_NVM = (
+    "0d6fd99afa9c4c580fab5e341922c2a5c4b61d880da60506193d7bf88944dd14"  # nosec
+)
 
 IS_MARKETPLACE_MECH_KEY = "is_marketplace_mech"
 
@@ -422,7 +437,33 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 )
                 return None
 
-            _, balance_tracker_address, profits = data
+            mech_type, balance_tracker_address, mech_balance = data
+            final_mech_balance = mech_balance
+            if mech_type.hex() in [PAYMENT_TYPE_NATIVE_NVM, PAYMENT_TYPE_TOKEN_NVM]:
+                self.context.logger.info("NVM Mech detected, adjusting mech balance.")
+                adjusted_balance = yield from self._adjust_mech_balance(
+                    balance_tracker_address, mech_balance
+                )
+                if adjusted_balance is None:
+                    self.context.logger.error(
+                        f"Could not adjust balance for mech {mech_address}. "
+                        f"Don't split profits."
+                    )
+                    return None
+                final_mech_balance = adjusted_balance
+
+            self.context.logger.info(
+                f"Final mech balance to calculate profits is: {final_mech_balance}"
+            )
+            profits = yield from self._calculate_mech_profits(
+                balance_tracker_address, final_mech_balance
+            )
+            if profits is None:
+                self.context.logger.error(
+                    f"Could not get profits for mech {mech_address}. "
+                    f"Don't split profits."
+                )
+                return None
 
             process_payment_tx = yield from self._get_process_payment_tx(
                 mech_address, balance_tracker_address
@@ -458,9 +499,32 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             for receiver_address, amount in split_funds.items():
                 if amount == 0:
                     continue
-                tx = yield from self._get_transfer_tx(
-                    mech_address, receiver_address, amount
-                )
+
+                if mech_type.hex() in [PAYMENT_TYPE_TOKEN_NVM, PAYMENT_TYPE_TOKEN]:
+                    self.context.logger.info(
+                        f"Token type mech detected {mech_address}. Preparing token transfer tx"
+                    )
+                    token_address = yield from self._get_token_address(
+                        balance_tracker_address
+                    )
+                    if token_address is None:
+                        self.context.logger.error(
+                            f"Could not get token address for mech {mech_address}. "
+                            f"Don't split profits."
+                        )
+                        return None
+
+                    self.context.logger.info(
+                        f"Found token address for mech {mech_address}: {token_address}"
+                    )
+                    tx = yield from self._get_token_transfer_tx(
+                        mech_address, token_address, receiver_address, amount
+                    )
+                else:
+                    tx = yield from self._get_transfer_tx(
+                        mech_address, receiver_address, amount
+                    )
+
                 if tx is None:
                     self.context.logger.error(
                         f"Could not get transfer tx from mech {mech_address} to {receiver_address}. "
@@ -529,6 +593,33 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             f"Fetched balance tracker balance for mech {address}: {mech_balance}"
         )
         return mech_type, balance_tracker_address, mech_balance
+
+    def _adjust_mech_balance(
+        self, balance_tracker_address: str, mech_balance: int
+    ) -> Generator[None, None, Optional[int]]:
+        """Adjusts mech balance based on tokenCreditRatio for nvm mechs"""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=balance_tracker_address,
+            contract_id=str(BalanceTrackerContract.contract_id),
+            contract_callable="get_token_credit_ratio",
+            chain_id=self.params.default_chain_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_token_credit_ratio unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        token_credit_ratio = cast(
+            int, contract_api_msg.state.body["token_credit_ratio"]
+        )
+        self.context.logger.info(f"Fetched token_credit_ratio: {token_credit_ratio}")
+        adjusted_balance = int((mech_balance * token_credit_ratio) / 1e18)
+        self.context.logger.info(f"Adjusted mech balance is: {adjusted_balance}")
+        return adjusted_balance
 
     def _get_mech_payment_type(
         self, address: str
@@ -612,6 +703,78 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             "data": data,
             "simulation_ok": simulation_ok,
         }
+
+    def _calculate_mech_profits(
+        self, balance_tracker_address: str, mech_balance: int
+    ) -> Generator[None, None, Optional[int]]:
+        """Calculate mech profits"""
+        fee = yield from self._get_fee()
+        if fee is None:
+            self.context.logger.error(
+                "Could not get marketplace fee. Skipping profit split"
+            )
+            return None
+
+        MAX_FEE_FACTOR = yield from self._get_max_fee_factor(balance_tracker_address)
+        if MAX_FEE_FACTOR is None:
+            self.context.logger.error(
+                "Could not get MAX_FEE_FACTOR. Skipping profit split"
+            )
+            return None
+
+        marketplace_fee = int(
+            (mech_balance * fee + (MAX_FEE_FACTOR - 1)) / MAX_FEE_FACTOR
+        )
+        profits = mech_balance - marketplace_fee
+
+        self.context.logger.info(f"Contract Marketplace fee: {fee}")
+        self.context.logger.info(f"MAX_FEE_FACTOR: {MAX_FEE_FACTOR}")
+        self.context.logger.info(f"Calculated Marketplace fee: {marketplace_fee}")
+        self.context.logger.info(f"Mech profits: {profits}")
+
+        return profits
+
+    def _get_fee(self) -> Generator[None, None, Optional[int]]:
+        """Get the fee from marketplace."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=self.params.mech_marketplace_address,
+            contract_id=str(MechMarketplaceContract.contract_id),
+            contract_callable="get_fee",
+            chain_id=self.params.default_chain_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_mech_balance unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        fee = cast(int, contract_api_msg.state.body["data"])
+        return fee
+
+    def _get_max_fee_factor(
+        self, balance_tracker_address: str
+    ) -> Generator[None, None, Optional[int]]:
+        """Get the MAX_FEE_FACTOR from balancetracker."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=balance_tracker_address,
+            contract_id=str(BalanceTrackerContract.contract_id),
+            contract_callable="get_max_fee_factor",
+            chain_id=self.params.default_chain_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_mech_balance unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        max_fee_factor = cast(int, contract_api_msg.state.body["max_fee_factor"])
+        return max_fee_factor
 
     def _split_funds(
         self, profits: int
@@ -701,6 +864,93 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         return {
             "to": mech_address,
             # the safe is not moving any funds, the mech contract is
+            "value": ZERO_ETHER_VALUE,
+            "data": data,
+        }
+
+    def _get_token_address(
+        self, balance_tracker_address: str
+    ) -> Generator[None, None, Optional[str]]:
+        """Get the fee from marketplace."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=balance_tracker_address,
+            contract_id=str(BalanceTrackerContract.contract_id),
+            contract_callable="get_token_address",
+            chain_id=self.params.default_chain_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_token_address unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        token_address = cast(str, contract_api_msg.state.body["token_address"])
+        return token_address
+
+    def _get_token_transfer_tx_data(
+        self, token_address: str, receiver_address: str, amount: int
+    ) -> Generator[None, None, Optional[bytes]]:
+        """Get the transfer tx."""
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=token_address,
+            contract_id=str(ERC20TokenContract.contract_id),
+            contract_callable="get_transfer_tx_data",
+            receiver=receiver_address,
+            amount=amount,
+            chain_id=self.params.default_chain_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_transfer_tx_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return data
+
+    def _get_token_transfer_tx(
+        self, mech_address: str, token_address: str, receiver_address: str, amount: int
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
+        """Get the token transfer tx."""
+
+        token_transfer_data = yield from self._get_token_transfer_tx_data(
+            token_address, receiver_address, amount
+        )
+        if token_transfer_data is None:
+            self.context.logger.warning(
+                f"get_token_transfer_data unsuccessful!: {token_transfer_data}"
+            )
+            return None
+
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=mech_address,
+            contract_id=str(AgentMechContract.contract_id),
+            contract_callable="get_exec_tx_data",
+            to=token_address,
+            value=ZERO_ETHER_VALUE,
+            data=token_transfer_data,
+            tx_gas=AUTO_GAS,
+            operation=MechOperation.CALL.value,
+            chain_id=self.params.default_chain_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_exec_tx_data unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        data = cast(bytes, contract_api_msg.state.body["data"])
+        return {
+            "to": mech_address,
             "value": ZERO_ETHER_VALUE,
             "data": data,
         }
