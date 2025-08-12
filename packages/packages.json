@@ -7,16 +7,16 @@
         "contract/valory/hash_checkpoint/0.1.0": "bafybeiaqnq2wmk4d2skbsh53rek5qncvygclxr3ktenc246qovth5emupe",
         "contract/valory/mech_marketplace/0.1.0": "bafybeibyl6q2sxrc4gs42ivgo72klusi4fxacatenili5m5tnh5ga7zgwy",
         "contract/valory/balance_tracker/0.1.0": "bafybeign3mbjn5lpvqz6hght3f3slex7tplulyzub5w3zfe7zvpor4lv6q",
-        "contract/valory/erc20/0.1.0": "bafybeibkz5oo3wfz6igudihv3vu6hrwtagwng2sqmbyvy5rvuz2givsc3q",
+        "contract/valory/erc20/0.1.0": "bafybeib6zugr2tkrmm7yqxefjjwepxeyrraly3ndwhfxf4xdjbpypopvq4",
         "connection/valory/websocket_client/0.1.0": "bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli",
         "skill/valory/contract_subscription/0.1.0": "bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy",
-        "skill/valory/mech_abci/0.1.0": "bafybeickvymtuwo2absyapjcp4n4ig2ndijt2zyukm45fgmqzsjblxyu5y",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeiegkx666o4kbcl7oqm3b276hqw5hyewkeso2pc6qfstd26tcwoxrq",
+        "skill/valory/mech_abci/0.1.0": "bafybeiglp6zr5sfbogkdufthimz24ps5ylr3kerlcyco7u3fgqdu57wwfq",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeiaei75pn7yzzsy4pgmoizlpvrxaef4hh65omgyzd5onsidyhqy3ya",
         "skill/valory/task_execution/0.1.0": "bafybeiajjsxifx5cam3a3p2fnapzgfmcql3dx5cihub5dw3hrdaxdnbdzy",
         "skill/valory/websocket_client/0.1.0": "bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m",
         "skill/valory/delivery_rate_abci/0.1.0": "bafybeiheuxmktw2k5bameonw3yq4o4w36ohrvbxvkw2ku5ie23trgbnq6m",
-        "agent/valory/mech/0.1.0": "bafybeig2gs6tclt2odrxpyy5xxsly5hr7v4hfn7t6fsjpcy552gdu6n3da",
-        "service/valory/mech/0.1.0": "bafybeih7z54m5umz5gqje3lvwgjf6uwbg7vtsa4xp46nypliqknekkqyqi"
+        "agent/valory/mech/0.1.0": "bafybeifo2mlro5zbq3jviaweaz7dylmn3evpj64du7n6qnjzpd25fueyvi",
+        "service/valory/mech/0.1.0": "bafybeiewyw2imieyoqwgnsvriuljmd2iyl6hp5q3ovoch35mcdfuzuetjm"
     },
     "third_party": {
         "protocol/valory/default/1.0.0": "bafybeifqcqy5hfbnd7fjv4mqdjrtujh2vx3p2xhe33y67zoxa6ph7wdpaq",
