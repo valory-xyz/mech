@@ -46,9 +46,5 @@ def test_should_split_profits_missed_on_jump(
     request happened within the batch.
     """
     # Simulate we 'observe' after the batch (current total=11).
-    # (If you want to show both observations:)
-    # patch_num_requests([9]); assert run_to_completion(...) is False
-    # patch_num_requests([11]); assert run_to_completion(...) is True  <-- desired, but will be False
-    patch_num_requests([11])
-    # We *want* a split (because boundary 10 was crossed), but current code returns False.
-    assert run_to_completion(fs_behaviour._should_split_profits()) is True
+    patch_num_requests([9]); assert run_to_completion(fs_behaviour._should_split_profits()) is False
+    patch_num_requests([11]); assert run_to_completion(fs_behaviour._should_split_profits()) is True # <-- desired, but will be False
