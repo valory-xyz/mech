@@ -24,27 +24,31 @@ from typing import Any
 import pytest
 
 
+@pytest.mark.usefixtures("fs_behaviour")
 def test_should_split_profits_happy_path(
-    fs_behaviour: Any,
-    run_to_completion,
-    patch_num_requests,
+    fs_behaviour: Any, run_to_completion, patch_num_requests
 ) -> None:
-    """Return True when total requests is an exact multiple of the split frequency."""
-    patch_num_requests(10)  # 10 % 5 == 0
+    """Return True when total is exactly a multiple (e.g., 10)."""
+    patch_num_requests([10])
     assert run_to_completion(fs_behaviour._should_split_profits()) is True
 
 
-def test_should_split_profits_flaky_boundary(
-    fs_behaviour: Any,
-    run_to_completion,
-    patch_num_requests,
+@pytest.mark.xfail(
+    reason="Modulo-only check misses split when counts jump over the boundary (e.g., 9→11).",
+    strict=True,
+)
+def test_should_split_profits_missed_on_jump(
+    fs_behaviour: Any, run_to_completion, patch_num_requests
 ) -> None:
     """
-    Show flakiness at the modulo boundary: a +/-1 jitter flips the decision.
-
-    First call returns 9 (False), second returns 10 (True). If upstream counting
-    is eventually-consistent or races, the exact multiple-only check is brittle.
+    Document flakiness: if last observed total was 9 and batch delivery bumps to 11,
+    the current logic sees 11 % 10 != 0 and skips splitting — even though the 10th
+    request happened within the batch.
     """
-    patch_num_requests([9, 10])
-    assert run_to_completion(fs_behaviour._should_split_profits()) is False
+    # Simulate we 'observe' after the batch (current total=11).
+    # (If you want to show both observations:)
+    # patch_num_requests([9]); assert run_to_completion(...) is False
+    # patch_num_requests([11]); assert run_to_completion(...) is True  <-- desired, but will be False
+    patch_num_requests([11])
+    # We *want* a split (because boundary 10 was crossed), but current code returns False.
     assert run_to_completion(fs_behaviour._should_split_profits()) is True
