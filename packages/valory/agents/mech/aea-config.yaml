@@ -24,6 +24,7 @@ contracts:
 - valory/service_registry:0.1.0:bafybeiauvchyehaks6pxnk4b6u5sfduwjnbqjm6br4ie5vhna25nzgkcky
 - valory/mech_marketplace:0.1.0:bafybeigs4p5dsxdnxjilxelbafm4gdftdonyddwraxfq72qb276vjiynge
 - valory/balance_tracker:0.1.0:bafybeign3mbjn5lpvqz6hght3f3slex7tplulyzub5w3zfe7zvpor4lv6q
+- valory/erc20:0.1.0:bafybeib6zugr2tkrmm7yqxefjjwepxeyrraly3ndwhfxf4xdjbpypopvq4
 protocols:
 - open_aea/signing:1.0.0:bafybeig2d36zxy65vd7fwhs7scotuktydcarm74aprmrb5nioiymr3yixm
 - valory/abci:0.1.0:bafybeiatodhboj6a3p35x4f4b342lzk6ckxpud23awnqbxwjeon3k5y36u
