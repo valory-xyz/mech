@@ -2,7 +2,7 @@
     "dev": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
         "protocol/valory/websocket_client/0.1.0": "bafybeifjk254sy65rna2k32kynzenutujwqndap2r222afvr3zezi27mx4",
-        "contract/valory/agent_mech/0.1.0": "bafybeib2ehwlui7ihlp6j3fyq5htqpquzyuipr64q4giyhntovjjhqkipy",
+        "contract/valory/agent_mech/0.1.0": "bafybeic3n2bjt3vdtye34a6mfqsdxuavcoodqlekzn7itlvmbtsqpc3qme",
         "contract/valory/complementary_service_metadata/0.1.0": "bafybeibu65wpdsbrbrt2wnf2lr3psy26jiaomyjkg4twbupve7o3kso2aa",
         "contract/valory/hash_checkpoint/0.1.0": "bafybeiaqnq2wmk4d2skbsh53rek5qncvygclxr3ktenc246qovth5emupe",
         "contract/valory/mech_marketplace/0.1.0": "bafybeibyl6q2sxrc4gs42ivgo72klusi4fxacatenili5m5tnh5ga7zgwy",

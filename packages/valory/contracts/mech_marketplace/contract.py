@@ -70,6 +70,7 @@ TOPIC_BYTES = 32
 TOPIC_CHARS = TOPIC_BYTES * 2
 Ox = "0x"
 Ox_CHARS = len(Ox)
+DELIVERY_RATE_INDEX = 4
 
 
 class MechOperation(Enum):
@@ -368,20 +369,36 @@ class MechMarketplaceContract(Contract):
         contract_address: str,
         request_id: bytes,
         data: str,
+        delivery_rate: int,
     ) -> JSONLike:
         """Fetch info for a given request id."""
-        contract_instance = cls.get_instance(ledger_api, contract_address)
+        request_id_info = cls.get_request_id_info(
+            ledger_api, contract_address, request_id
+        )
+        final_delivery_rate = min(
+            request_id_info["data"][DELIVERY_RATE_INDEX], delivery_rate
+        )
+        encoded_data = ledger_api.api.codec.encode(
+            ["uint256", "bytes"], [final_delivery_rate, data]
+        )
 
+        return dict(data=encoded_data)
+
+    @classmethod
+    def get_request_id_info(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        request_id: bytes,
+    ) -> JSONLike:
+        """Fetch info for a given request id."""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
         request_id_info = contract_instance.functions.mapRequestIdInfos(
             request_id
         ).call()
 
-        delivery_rate = request_id_info[4]
-        encoded_data = ledger_api.api.codec.encode(
-            ["uint256", "bytes"], [delivery_rate, data]
-        )
-
-        return dict(data=encoded_data)
+        return dict(data=request_id_info)
 
     @classmethod
     def get_balance_tracker_for_mech_type(

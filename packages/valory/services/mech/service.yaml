@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeifo2mlro5zbq3jviaweaz7dylmn3evpj64du7n6qnjzpd25fueyvi
+agent: valory/mech:0.1.0:bafybeiacuqmea5iwrolvam5levxfp5ul2ceb4jh6p4yb34ik3pfqhamp5u
 number_of_agents: 4
 deployment:
   agent:
@@ -198,6 +198,7 @@ type: skill
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
+        tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 1:
@@ -212,6 +213,7 @@ type: skill
         agent_index: ${AGENT_INDEX_1:int:1}
         num_agents: ${NUM_AGENTS:int:4}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
+        tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
@@ -227,6 +229,7 @@ type: skill
         agent_index: ${AGENT_INDEX_2:int:2}
         num_agents: ${NUM_AGENTS:int:4}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
+        tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
@@ -243,6 +246,7 @@ type: skill
         num_agents: ${NUM_AGENTS:int:4}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
+        tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 ---

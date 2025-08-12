@@ -33,7 +33,6 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
-from eth_abi import encode
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
@@ -68,6 +67,7 @@ PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
+REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
@@ -91,6 +91,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executor = ProcessPoolExecutor(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
         self._tools_to_package_hash: Dict[str, str] = {}
+        self._tools_to_pricing: Dict[str, int] = {}
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
@@ -104,6 +105,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Implement the setup."""
         self.context.logger.info("Setting up TaskExecutionBehaviour")
         self._tools_to_package_hash = self.params.tools_to_package_hash
+        self._tools_to_pricing = self.params.tools_to_pricing
         self._keychain = KeyChain(self.params.api_keys)
 
     def act(self) -> None:
@@ -151,6 +153,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def ipfs_tasks(self) -> List[Dict[str, Any]]:
         """Get ipfs_tasks."""
         return self.context.shared_state[IPFS_TASKS]
+
+    @property
+    def request_id_to_delivery_rate_info(self) -> List[Dict[str, int]]:
+        """Get request_id_to_delivery_rate_info."""
+        return self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO]
 
     def _should_poll(self, req_type: str) -> bool:
         """If we should poll the contract."""
@@ -323,6 +330,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     ),
                     chain_id=self.params.default_chain_id,
                     max_block_window=self.params.max_block_window,
+                    marketplace_address=self.params.mech_marketplace_address,
                 )
             ),
             counterparty=LEDGER_API_ADDRESS,
@@ -401,6 +409,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id = task_data["requestId"]
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
 
+        request_id = task_data["requestId"]
+        delivery_rate = task_data["request_delivery_rate"]
+        self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
         task_data_ = task_data["data"]
         ipfs_hash = get_ipfs_file_hash(task_data_)
@@ -450,7 +461,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         model = executing_task.get("model", None)
         tool_params = executing_task.get("params", None)
         is_offchain = executing_task.get("is_offchain", False)
-        response = {"requestId": req_id, "result": "Invalid response"}
+        response = {"requestId": req_id, "result": "Invalid response", "tool": tool}
         task_executor = self.context.agent_address
         self._done_task = {
             "request_id": req_id,
@@ -549,6 +560,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             and "tool" in task_data
         )  # pylint: disable=C0301
         if is_data_valid and task_data["tool"] in self._tools_to_package_hash:
+            if self._tools_to_pricing:
+                executing_task = cast(Dict[str, Any], self._executing_task)
+                tool_pricing = self._tools_to_pricing[task_data["tool"]]
+                request_id_delivery_rate = self.request_id_to_delivery_rate_info[
+                    executing_task["requestId"]
+                ]
+                if request_id_delivery_rate < tool_pricing:
+                    self.context.logger.warning(
+                        f"Requested pricing is not valid. Actual {request_id_delivery_rate} Needed {tool_pricing}"
+                    )
+                    self._invalid_request = True
+                    return
+
             self._prepare_task(task_data)
         elif is_data_valid:
             tool = task_data["tool"]
@@ -573,6 +597,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
+        self.context.logger.info(f"Preparing tool task with data: {task_data}")
         tool_task = AnyToolAsTask()
         tool_py, callable_method, component_yaml = self._all_tools[task_data["tool"]]
         tool_params = component_yaml.get("params", {})
@@ -672,15 +697,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return None
 
         task_result = to_multihash(ipfs_hash)
-        cost = get_cost_for_done_task(done_task)
-        self.context.logger.info(f"Cost for task {req_id}: {cost}")
-        mech_config = self.params.mech_to_config[done_task["mech_address"].lower()]
-        if mech_config.use_dynamic_pricing:
-            self.context.logger.info(f"Dynamic pricing is enabled for task {req_id}.")
-            task_result = encode(
-                ["uint256", "bytes"], [cost, bytes.fromhex(task_result)]
-            ).hex()
+        tool = str(done_task.get("tool"))
+        dynamic_tool_cost = self._tools_to_pricing.get(tool)
+        if dynamic_tool_cost is not None:
+            self.context.logger.info(
+                f"Tools to pricing found for tool {tool}. Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}"
+            )
+            done_task["dynamic_tool_cost"] = dynamic_tool_cost
+        else:
+            dynamic_tool_cost = 0
+            cost = get_cost_for_done_task(done_task)
+            self.context.logger.info(f"Cost for task {req_id}: {cost}")
 
+        mech_config = self.params.mech_to_config[done_task["mech_address"].lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
         # pop the data key value as it's bytes which causes issues
