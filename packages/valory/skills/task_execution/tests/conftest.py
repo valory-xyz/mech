@@ -145,7 +145,7 @@ def context_stub(
 @pytest.fixture
 def behaviour(context_stub: SimpleNamespace) -> TaskExecutionBehaviour:
     """
-    TaskExecutionBehaviour instance wired to the stub context.
+    Create a TaskExecutionBehaviour instance wired to the stub context.
 
     :param context_stub: The fake AEA context.
     :type context_stub: SimpleNamespace
