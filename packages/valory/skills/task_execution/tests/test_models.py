@@ -33,14 +33,10 @@ def test_params_init_derivations(
     """
     Initialize Params and verify derived fields and defaults.
 
-    Ensures:
-      - numeric mirrors (polling_interval, task_deadline, cleanup_freq)
-      - mech key lowercasing + dataclass conversion
-      - agent_mech_contract_addresses derived from keys
-      - marketplace flag computed from address
-      - defaultdict behaviour for request_id_to_num_timeouts
-      - empty callback/deadline maps
-      - RequestParams structures
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    :param dialogue_skill_context: Minimal skill context passed through in kwargs.
+    :type dialogue_skill_context: Any
     """
     p: m.Params = m.Params(name="params", **params_kwargs)
 
@@ -94,24 +90,39 @@ def test_request_params_defaults() -> None:
 
 
 def test_params_marketplace_flag_true(params_kwargs: Dict[str, Any]) -> None:
-    """Set a non-zero marketplace address and ensure use_mech_marketplace is True."""
+    """
+    Set a non-zero marketplace address and ensure use_mech_marketplace is True.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    """
     params_kwargs["mech_marketplace_address"] = "0xabc123"
     p: m.Params = m.Params(name="params", **params_kwargs)
     assert p.use_mech_marketplace is True
 
 
 def test_params_tools_pricing_keys_match_ok(params_kwargs: Dict[str, Any]) -> None:
-    """When tools_to_pricing keys match tools_to_package_hash, initialization succeeds."""
+    """
+    When tools_to_pricing keys match tools_to_package_hash, initialization succeeds.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    """
     params_kwargs["tools_to_package_hash"] = {"sum": "h1", "mul": "h2"}
     params_kwargs["tools_to_pricing"] = {"sum": 10, "mul": 20}
     p: m.Params = m.Params(name="params", **params_kwargs)
-    assert p.tools_to_pricing == {"sum": 10, "mul": 20}  # no exception
+    assert p.tools_to_pricing == {"sum": 10, "mul": 20}
 
 
 def test_params_tools_pricing_keys_mismatch_raises(
     params_kwargs: Dict[str, Any]
 ) -> None:
-    """Mismatched pricing/package keys should raise an enforcement error."""
+    """
+    Mismatched pricing/package keys should raise an enforcement error.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    """
     params_kwargs["tools_to_package_hash"] = {"sum": "h1"}
     params_kwargs["tools_to_pricing"] = {"mul": 20}  # mismatch
     with pytest.raises(AEAEnforceError) as ei:
@@ -122,7 +133,14 @@ def test_params_tools_pricing_keys_mismatch_raises(
 def test_params_missing_required_key_raises(
     dialogue_skill_context: Any, params_kwargs: Dict[str, Any]
 ) -> None:
-    """Missing a required key (e.g., num_agents) should raise an enforcement error."""
+    """
+    Missing a required key (e.g., num_agents) should raise an enforcement error.
+
+    :param dialogue_skill_context: Minimal skill context passed through in kwargs.
+    :type dialogue_skill_context: Any
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    """
     bad: Dict[str, Any] = params_kwargs.copy()
     bad.pop("num_agents")
     with pytest.raises(AEAEnforceError):
@@ -132,7 +150,14 @@ def test_params_missing_required_key_raises(
 def test_params_wrong_type_raises(
     dialogue_skill_context: Any, params_kwargs: Dict[str, Any]
 ) -> None:
-    """Wrong type for a required key (e.g., agent_index as str) should raise an enforcement error."""
+    """
+    Wrong type for a required key (e.g., agent_index as str) should raise an enforcement error.
+
+    :param dialogue_skill_context: Minimal skill context passed through in kwargs.
+    :type dialogue_skill_context: Any
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    """
     bad: Dict[str, Any] = params_kwargs.copy()
     bad["agent_index"] = "not-an-int"
     with pytest.raises(AEAEnforceError):

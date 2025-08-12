@@ -40,16 +40,7 @@ from packages.valory.skills.task_execution.handlers import (
 
 
 def test_ipfs_handler_error_sets_flags(handler_context: Any) -> None:
-    """
-    Clear `in_flight_req` when the IPFS handler receives an ERROR.
-
-    Given:
-        - `params.in_flight_req` is True.
-    When:
-        - `IpfsHandler.handle()` is called with a message whose performative is ERROR.
-    Then:
-        - `params.in_flight_req` is set to False.
-    """
+    """Clear `in_flight_req` when the IPFS handler receives an ERROR."""
     handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
     handler.setup()
 
@@ -64,20 +55,7 @@ def test_ipfs_handler_error_sets_flags(handler_context: Any) -> None:
 def test_ipfs_handler_calls_callback_and_clears(
     handler_context: Any, monkeypatch: Any
 ) -> None:
-    """
-    Invoke the stored IPFS callback and clear bookkeeping afterward.
-
-    Given:
-        - `req_to_callback["nonce-1"]` points to a callable.
-        - `req_to_deadline["nonce-1"]` is in the future.
-        - `in_flight_req` is True and `is_cold_start` is True.
-    When:
-        - `IpfsHandler.handle()` receives a non-error IPFS message (e.g., GET_FILES).
-    Then:
-        - The stored callback is executed.
-        - `in_flight_req` becomes False and `is_cold_start` becomes False.
-        - The nonce is removed from `req_to_callback` and `req_to_deadline`.
-    """
+    """Invoke the stored IPFS callback and clear bookkeeping afterward."""
     handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
     handler.setup()
 
@@ -93,10 +71,8 @@ def test_ipfs_handler_calls_callback_and_clears(
         performative=IpfsMessage.Performative.GET_FILES
     )
 
-    # Act
     handler.handle(msg)
 
-    # Assert
     assert called["ok"] is True
     assert handler_context.params.in_flight_req is False
     assert handler_context.params.is_cold_start is False
@@ -105,21 +81,7 @@ def test_ipfs_handler_calls_callback_and_clears(
 
 
 def test_ipfs_handler_deadline_expired_skips_callback(handler_context: Any) -> None:
-    """
-    Skip the stored IPFS callback when its deadline has already expired.
-
-    Given:
-        - `req_to_callback["nonce-1"]` is set.
-        - `req_to_deadline["nonce-1"]` is in the past.
-        - `in_flight_req` and `is_cold_start` are True.
-    When:
-        - `IpfsHandler.handle()` receives a non-error IPFS message.
-    Then:
-        - The callback is NOT executed.
-        - `in_flight_req` is set to False.
-        - `is_cold_start` is set to False.
-        - The nonce is removed from `req_to_callback` and `req_to_deadline`.
-    """
+    """Skip the stored IPFS callback when its deadline has already expired."""
     handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
     handler.setup()
 
@@ -127,7 +89,7 @@ def test_ipfs_handler_deadline_expired_skips_callback(handler_context: Any) -> N
     handler_context.params.req_to_callback["nonce-1"] = lambda *_: called.__setitem__(
         "ok", True
     )
-    handler_context.params.req_to_deadline["nonce-1"] = time.time() - 1.0  # expired
+    handler_context.params.req_to_deadline["nonce-1"] = time.time() - 1.0
     handler_context.params.in_flight_req = True
     handler_context.params.is_cold_start = True
 
@@ -146,14 +108,7 @@ def test_ipfs_handler_deadline_expired_skips_callback(handler_context: Any) -> N
 def test_contract_handler_setup_initializes_shared(
     handler_context: SimpleNamespace,
 ) -> None:
-    """
-    Initialize `shared_state` collections on setup.
-
-    When:
-        - `ContractHandler.setup()` is invoked.
-    Then:
-        - `shared_state` contains the expected keys with the correct container types.
-    """
+    """Initialize `shared_state` collections on setup."""
     ch: ContractHandler = ContractHandler(
         name="contract", skill_context=handler_context
     )
@@ -171,20 +126,7 @@ def test_contract_handler_setup_initializes_shared(
 def test_contract_handler_state_enqueues_and_updates_from_block(
     handler_context: SimpleNamespace,
 ) -> None:
-    """
-    Enqueue filtered requests and update `from_block` on STATE.
-
-    Given:
-        - Two requests with block numbers 10 and 11.
-        - `num_agents = 2`, `agent_index = 1` (keep only blocks where block_number % 2 == 1).
-        - `req_type = "legacy"` and starting `from_block["legacy"] = 0`.
-    When:
-        - ContractHandler.handle() receives a STATE with those requests.
-    Then:
-        - `from_block["legacy"]` becomes max(block)+1 (i.e., 12).
-        - Only the request for block 11 is enqueued to pending_tasks.
-        - `in_flight_req` is set to False.
-    """
+    """Enqueue filtered requests and update `from_block` on STATE."""
     params: Any = handler_context.params
     params.in_flight_req = True
     params.num_agents = 2
@@ -216,17 +158,7 @@ def test_contract_handler_state_enqueues_and_updates_from_block(
 
 
 def test_contract_handler_non_state_sets_flag(handler_context: SimpleNamespace) -> None:
-    """
-    Clear `in_flight_req` on non-STATE performative.
-
-    Given:
-        - `params.in_flight_req` is True.
-    When:
-        - ContractHandler receives a ContractApiMessage with performative != STATE
-          (e.g., GET_STATE).
-    Then:
-        - `params.in_flight_req` is set to False.
-    """
+    """Clear `in_flight_req` on non-STATE performative."""
     params: Any = handler_context.params
     params.in_flight_req = True
 
@@ -244,18 +176,7 @@ def test_contract_handler_non_state_sets_flag(handler_context: SimpleNamespace) 
 
 
 def test_ledger_handler_updates_from_block(handler_context: SimpleNamespace) -> None:
-    """
-    Update `from_block` from a ledger STATE message.
-
-    Given:
-        - `params.req_type` is "legacy"
-        - `params.from_block_range` is 500
-    When:
-        - `LedgerHandler.handle()` receives a STATE with block number 12345
-    Then:
-        - `params.req_params.from_block["legacy"]` becomes 12345 - 500
-        - `params.in_flight_req` is set to False
-    """
+    """Update `from_block` from a ledger STATE message."""
     params: Any = handler_context.params
     params.in_flight_req = True
     params.req_type = "legacy"
@@ -275,17 +196,7 @@ def test_ledger_handler_updates_from_block(handler_context: SimpleNamespace) -> 
 
 
 def test_ledger_handler_non_state_sets_flag(handler_context: SimpleNamespace) -> None:
-    """
-    Clear `in_flight_req` when a non-STATE ledger message is handled.
-
-    Given:
-        - `params.in_flight_req` is True.
-    When:
-        - `LedgerHandler.handle()` receives a message whose performative is not STATE
-          (e.g., GET_STATE).
-    Then:
-        - `params.in_flight_req` is set to False.
-    """
+    """Clear `in_flight_req` when a non-STATE ledger message is handled."""
     params: SimpleNamespace = handler_context.params
     params.in_flight_req = True
 
@@ -304,16 +215,12 @@ def make_http_msg(body_dict: Dict[str, str], headers: str = "") -> SimpleNamespa
     """
     Build a minimal HttpMessage-like object for handler tests.
 
-    Args:
-        body_dict: Key–value form fields to be URL-encoded into the request body.
-        headers: Optional raw headers string to attach to the message.
-
-    Returns:
-        SimpleNamespace: An object with the fields used by `MechHttpHandler`:
-            - body (bytes): URL-encoded form body.
-            - version (str): HTTP version (e.g., "1.1").
-            - headers (str): Raw headers string.
-            - performative: `HttpMessage.Performative.REQUEST`.
+    :param body_dict: Key–value form fields to be URL-encoded into the request body.
+    :type body_dict: Dict[str, str]
+    :param headers: Optional raw headers string to attach to the message.
+    :type headers: str
+    :returns: An object with the fields used by `MechHttpHandler`.
+    :rtype: SimpleNamespace
     """
     body = urllib.parse.urlencode(body_dict).encode("utf-8")
     return SimpleNamespace(
@@ -325,19 +232,7 @@ def make_http_msg(body_dict: Dict[str, str], headers: str = "") -> SimpleNamespa
 
 
 def test_signed_requests_success(handler_context: Any, http_dialogue: Any) -> None:
-    """
-    Enqueue off-chain request & respond 200 on valid signed POST.
-
-    Given:
-        - A well-formed body containing `ipfs_hash`, `request_id`,
-          `ipfs_data`, and `delivery_rate`.
-    When:
-        - `MechHttpHandler._handle_signed_requests` is invoked.
-    Then:
-        - A pending task is appended with `is_offchain=True` and the request id.
-        - An IPFS upload task is queued with the same request id.
-        - An HTTP 200 response is sent with JSON `{"request_id": <id>}`.
-    """
+    """Enqueue off-chain request & respond 200 on valid signed POST."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     mh.setup()
 
@@ -367,16 +262,7 @@ def test_signed_requests_success(handler_context: Any, http_dialogue: Any) -> No
 
 
 def test_signed_requests_bad_request(handler_context: Any, http_dialogue: Any) -> None:
-    """
-    Return HTTP 400 when required POST fields are missing.
-
-    Given:
-        - A POST body missing required keys (e.g., only "only" provided).
-    When:
-        - `MechHttpHandler._handle_signed_requests` is invoked.
-    Then:
-        - The handler responds with HTTP 400 (Bad Request).
-    """
+    """Return HTTP 400 when required POST fields are missing."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     mh.setup()
 
@@ -390,16 +276,7 @@ def test_signed_requests_bad_request(handler_context: Any, http_dialogue: Any) -
 def test_fetch_offchain_request_info_found(
     handler_context: Any, http_dialogue: Any
 ) -> None:
-    """
-    Return stored result for an off-chain request when present.
-
-    Given:
-        - `ready_tasks` contains an entry with `request_id="abc"`.
-    When:
-        - `_handle_offchain_request_info` is called with `request_id=abc`.
-    Then:
-        - The handler responds 200 with the JSON body of the matching done task.
-    """
+    """Return stored result for an off-chain request when present."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     mh.setup()
 
@@ -418,16 +295,7 @@ def test_fetch_offchain_request_info_found(
 def test_fetch_offchain_request_info_not_found(
     handler_context: Any, http_dialogue: Any
 ) -> None:
-    """
-    Return empty JSON when no off-chain result exists for the given request_id.
-
-    Given:
-        - `ready_tasks` does not contain an entry with the requested id.
-    When:
-        - `_handle_offchain_request_info` is invoked with that `request_id`.
-    Then:
-        - The handler responds 200 with an empty JSON object `{}`.
-    """
+    """Return empty JSON when no off-chain result exists for the given request_id."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     mh.setup()
 
@@ -442,20 +310,7 @@ def test_fetch_offchain_request_info_not_found(
 def test_on_message_handled_triggers_cleanup(
     handler_context: Any, monkeypatch: Any
 ) -> None:
-    """
-    Invoke dialogues cleanup when the cleanup threshold is reached.
-
-    Given:
-        - `cleanup_freq = 1` so every handled message triggers cleanup.
-        - `handler_context.handlers` contains an `ipfs_handler`, so the
-          corresponding `ipfs_dialogues.cleanup()` will be called by
-          `BaseHandler.cleanup_dialogues()`.
-    When:
-        - `on_message_handled()` is called.
-    Then:
-        - `ipfs_dialogues.cleanup()` is invoked exactly once.
-    """
-    # Ensure every on_message_handled triggers cleanup
+    """Invoke dialogues cleanup when the cleanup threshold is reached."""
     handler_context.params.cleanup_freq = 1
 
     class Handlers:

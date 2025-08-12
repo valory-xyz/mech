@@ -20,6 +20,7 @@
 """This package contains the tests for the behaviours."""
 
 import json
+from concurrent.futures import Future
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, Tuple
 
@@ -75,7 +76,16 @@ def test_happy_path_executes_and_stores(
     def send_message_stub(
         msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
     ) -> None:
-        """Stub send_message to deliver GET/STORE callbacks."""
+        """
+        Stub send_message to deliver GET/STORE callbacks.
+
+        :param msg: Message-like object passed by the behaviour.
+        :type msg: Any
+        :param dlg: Dialogue-like object passed to the callback.
+        :type dlg: Any
+        :param callback: Callback to invoke with a fake IPFS response.
+        :type callback: Callable[[Any, Any], None]
+        """
         call_no["n"] += 1
         if call_no["n"] == 1:
             task_body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
@@ -153,7 +163,14 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     )
 
     def _fail_submit(*a: Any, **k: Any) -> None:
-        """Ensure execution is not attempted for invalid pricing."""
+        """
+        Ensure execution is not attempted for invalid pricing.
+
+        :param a: Ignored positional arguments.
+        :type a: Any
+        :param k: Ignored keyword arguments.
+        :type k: Any
+        """
         raise AssertionError("_submit_task must not be called for invalid pricing")
 
     monkeypatch.setattr(behaviour, "_submit_task", _fail_submit)
@@ -164,7 +181,16 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     def send_message_stub(
         msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
     ) -> None:
-        """Stub send_message to deliver GET/STORE callbacks for invalid pricing."""
+        """
+        Stub send_message to deliver GET/STORE callbacks for invalid pricing.
+
+        :param msg: Message-like object passed by the behaviour.
+        :type msg: Any
+        :param dlg: Dialogue-like object passed to the callback.
+        :type dlg: Any
+        :param callback: Callback to invoke with a fake IPFS response.
+        :type callback: Callable[[Any, Any], None]
+        """
         calls["n"] += 1
         if calls["n"] == 1:
             body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
@@ -195,7 +221,7 @@ def test_broken_process_pool_restart(
     shared_state: Dict[str, Any],
     params_stub: Any,
     fake_dialogue: Any,
-    done_future: Callable[[Tuple[Any, ...]], Any],
+    done_future: Callable[[Tuple[Any, ...]], Future],
     monkeypatch: Any,
     patch_ipfs_multihash: Callable[[], None],
     disable_polling: Callable[[], None],
@@ -231,8 +257,19 @@ def test_broken_process_pool_restart(
     calls: Dict[str, int] = {"n": 0}
 
     class BrokenOnceExec:
-        def submit(self, *a: Any, **k: Any) -> Any:
-            """Raise once then return a done future."""
+        """Executor stub that fails once and then succeeds."""
+
+        def submit(self, *a: Any, **k: Any) -> Future:
+            """
+            Raise once then return a done future.
+
+            :param a: Ignored positional arguments.
+            :type a: Any
+            :param k: Ignored keyword arguments.
+            :type k: Any
+            :returns: A completed Future on the second invocation.
+            :rtype: Future
+            """
             calls["n"] += 1
             if calls["n"] == 1:
                 from concurrent.futures.process import BrokenProcessPool
@@ -250,7 +287,16 @@ def test_broken_process_pool_restart(
     )
 
     def send_message_stub(msg: Any, dlg: Any, cb: Callable[[Any, Any], None]) -> None:
-        """Stub send_message to dispatch based on callback identity."""
+        """
+        Stub send_message to dispatch based on callback identity.
+
+        :param msg: Message-like object passed by the behaviour.
+        :type msg: Any
+        :param dlg: Dialogue-like object passed to the callback.
+        :type dlg: Any
+        :param cb: Callback to invoke with a fake IPFS response.
+        :type cb: Callable[[Any, Any], None]
+        """
         func = getattr(cb, "__func__", cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             body: Dict[str, Any] = {"prompt": "p", "tool": "sum"}
@@ -319,7 +365,16 @@ def test_invalid_tool_is_recorded_and_no_execution(
     )
 
     def send_message_stub(msg: Any, dlg: Any, cb: Callable[[Any, Any], None]) -> None:
-        """Stub send_message to produce unknown tool on GET and store afterwards."""
+        """
+        Stub send_message to produce unknown tool on GET and store afterwards.
+
+        :param msg: Message-like object passed by the behaviour.
+        :type msg: Any
+        :param dlg: Dialogue-like object passed to the callback.
+        :type dlg: Any
+        :param cb: Callback to invoke with a fake IPFS response.
+        :type cb: Callable[[Any, Any], None]
+        """
         func = getattr(cb, "__func__", cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             cb(
@@ -370,7 +425,16 @@ def test_ipfs_aux_task_removed_from_queue(
     )
 
     def send_message_stub(msg: Any, dlg: Any, cb: Callable[[Any, Any], None]) -> None:
-        """Stub send_message: invoke STORE_FILES callback and mark request as in-flight."""
+        """
+        Stub send_message and mark request as in-flight.
+
+        :param msg: Message-like object passed by the behaviour.
+        :type msg: Any
+        :param dlg: Dialogue-like object passed to the callback.
+        :type dlg: Any
+        :param cb: Callback to invoke with a fake STORE_FILES response.
+        :type cb: Callable[[Any, Any], None]
+        """
         cb(SimpleNamespace(ipfs_hash="bafyaux"), dlg)
         params_stub.in_flight_req = True
 
