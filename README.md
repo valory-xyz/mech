@@ -179,7 +179,7 @@ You may customize the agent's behaviour by setting these environment variables.
 | `MECH_TO_CONFIG`           | `dict` | `{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}`                                                                                                                                                          | Tracks mech's config.                                                  |
 | `PROFIT_SPLIT_BALANCE`     | `int`  | 1000000000000000000                                                                                                                                                                                                                                                 | Minimun mech balance to trigger the profit split functionality.        |
 
-:note: The value of `PROFIT_SPLIT_BALANCE` should correspond to the units of payment based on payment model. 
+:note: The value of `PROFIT_SPLIT_BALANCE` should correspond to the units of payment based on payment model. By default it will trigger at 10^18 units
  - For fixed price mechs, it corresponds to native currency units
  - For token mechs, it corresponds to OLAS units
  - For NVM mechs, it corresponds to credits. (1 xDAI on Gnosis and 1 USDC on Base correspond to 10^6 credits)
