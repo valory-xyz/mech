@@ -17,13 +17,15 @@
 #
 # ------------------------------------------------------------------------------
 
+"""This package contains the fixtures for the rest of the tests."""
+
 import threading
 from collections import defaultdict
 from concurrent.futures import Future
 from types import SimpleNamespace
+from typing import Any, Callable, Dict
 
 import pytest
-from openai import models
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
 from packages.valory.skills.task_execution import models
@@ -38,11 +40,8 @@ from packages.valory.skills.task_execution.behaviours import (
 
 
 @pytest.fixture
-def shared_state():
-    """
-    The behaviour reads/writes these keys on context.shared_state.
-    Start with empty lists and a lock.
-    """
+def shared_state() -> Dict[str, Any]:
+    """Return initial shared_state mapping used by behaviours/handlers."""
     return {
         PENDING_TASKS: [],
         DONE_TASKS: [],
@@ -53,14 +52,11 @@ def shared_state():
 
 
 @pytest.fixture
-def params_stub():
-    """
-    Minimal Params-like object with only the attributes the behaviour touches.
-    We use SimpleNamespace to avoid pulling in the real Params class.
-    """
+def params_stub() -> SimpleNamespace:
+    """Return a minimal Params-like namespace with attributes the code touches."""
     return SimpleNamespace(
-        tools_to_package_hash={},  # e.g. {"sum": "bafy..."}
-        tools_to_pricing={},  # e.g. {"sum": 100}
+        tools_to_package_hash={},
+        tools_to_pricing={},
         api_keys={},
         req_params=SimpleNamespace(from_block={}, last_polling={}),
         polling_interval=10.0,
@@ -80,18 +76,21 @@ def params_stub():
         timeout_limit=2,
         request_id_to_num_timeouts=defaultdict(int),
         is_cold_start=True,
+        num_agents=1,
+        agent_index=0,
+        from_block_range=0,
     )
 
 
 @pytest.fixture
-def context_stub(shared_state, params_stub):
-    """
-    Bare-bones AEA context with just enough for this behaviour.
-    We stub the logger and outbox to no-ops so tests don't need real connections.
-    """
+def context_stub(
+    shared_state: Dict[str, Any], params_stub: SimpleNamespace
+) -> SimpleNamespace:
+    """Return a bare-bones AEA-like context with logger/outbox stubs."""
 
     class Outbox:
-        def put_message(self, *_, **__):
+        def put_message(self, *_: Any, **__: Any) -> None:
+            """No-op outbox for tests."""
             pass
 
     logger = SimpleNamespace(
@@ -115,44 +114,48 @@ def context_stub(shared_state, params_stub):
 
 
 @pytest.fixture
-def behaviour(context_stub):
-    """
-    An instance of TaskExecutionBehaviour wired up with our stub context.
-    We call setup() so it pulls params/api keys like it would at runtime.
-    """
+def behaviour(context_stub: SimpleNamespace) -> TaskExecutionBehaviour:
+    """Return a TaskExecutionBehaviour instance wired to the stub context."""
     b = TaskExecutionBehaviour(name="task_execution", skill_context=context_stub)
     b.setup()
     return b
 
 
 class FakeDialogue:
-    """Mimics a dialogue label with a stable nonce (the behaviour stores callbacks by nonce)."""
+    """Mimic a dialogue with a stable nonce used for callback mapping."""
 
     class Label:
+        """Mock label with a fixed dialogue reference."""
+
         dialogue_reference = ("nonce-1", "x")
 
     dialogue_label = Label()
 
 
 class FakeIpfsMsg:
-    """Minimal shape of an IpfsMessage used by the behaviour in callbacks."""
+    """Minimal IpfsMessage-like shape for callback paths."""
 
-    def __init__(self, files=None, ipfs_hash=None):
+    def __init__(
+        self, files: Dict[str, Any] | None = None, ipfs_hash: str | None = None
+    ) -> None:
+        """Initialize with optional files/ipfs_hash fields."""
         self.files = files or {}
         self.ipfs_hash = ipfs_hash
 
 
 @pytest.fixture
-def fake_dialogue():
+def fake_dialogue() -> FakeDialogue:
+    """Return a fake dialogue object with a fixed nonce."""
     return FakeDialogue()
 
 
 @pytest.fixture
-def done_future():
-    """Factory: return a Future already completed with the given value."""
+def done_future() -> Callable[[Any], Future]:
+    """Return a factory that produces an already-completed Future with the given value."""
 
-    def _make(value):
-        f = Future()
+    def _make(value: Any) -> Future:
+        """Create a Future completed with `value`."""
+        f: Future = Future()
         f.set_result(value)
         return f
 
@@ -160,13 +163,10 @@ def done_future():
 
 
 @pytest.fixture
-def patch_ipfs_multihash(monkeypatch):
-    """
-    Stubs out multihash/CID helpers so tests don't need real CIDs
-    and 'data' doesn't need to be a real IPFS pointer.
-    """
+def patch_ipfs_multihash(monkeypatch: Any) -> Callable[[str], None]:
+    """Return a helper that stubs CID/multihash helpers for tests."""
 
-    def _apply(file_hash="cid-for-task"):
+    def _apply(file_hash: str = "cid-for-task") -> None:
         monkeypatch.setattr(beh_mod, "get_ipfs_file_hash", lambda data: file_hash)
         monkeypatch.setattr(beh_mod, "to_v1", lambda cid: cid)
         monkeypatch.setattr(beh_mod, "to_multihash", lambda cid: f"mh:{cid}")
@@ -175,12 +175,10 @@ def patch_ipfs_multihash(monkeypatch):
 
 
 @pytest.fixture
-def disable_polling(monkeypatch):
-    """
-    Turns off on-chain polling paths so tests don't need ledger/contract dialogues.
-    """
+def disable_polling(monkeypatch: Any) -> Callable[[], None]:
+    """Return a helper that disables polling paths on the behaviour."""
 
-    def _apply():
+    def _apply() -> None:
         monkeypatch.setattr(
             TaskExecutionBehaviour, "_check_for_new_reqs", lambda self: None
         )
@@ -192,18 +190,22 @@ def disable_polling(monkeypatch):
 
 
 class SentOutbox:
-    def __init__(self):
-        self.sent = []
+    """Collect messages sent to outbox for later assertions."""
 
-    def put_message(self, message, *_, **__):
+    def __init__(self) -> None:
+        """Initialize the sent list."""
+        self.sent: list[Any] = []
+
+    def put_message(self, message: Any, *_: Any, **__: Any) -> None:
+        """Append a message to the sent list."""
         self.sent.append(message)
 
 
 @pytest.fixture
-def handler_context(shared_state, params_stub):
-    """
-    Minimal context for handlers (separate from the behaviour's context if you prefer).
-    """
+def handler_context(
+    shared_state: Dict[str, Any], params_stub: SimpleNamespace
+) -> SimpleNamespace:
+    """Return a minimal handler context with stubbed dialogues and outbox."""
     ctx = SimpleNamespace(
         logger=SimpleNamespace(
             info=lambda *a, **k: None,
@@ -217,6 +219,8 @@ def handler_context(shared_state, params_stub):
     )
 
     class HandlersBag:
+        """Container for handler attributes to drive cleanup logic."""
+
         pass
 
     ctx.handlers = HandlersBag()
@@ -232,20 +236,20 @@ def handler_context(shared_state, params_stub):
 
 
 @pytest.fixture
-def http_dialogue():
-    """Fake HttpDialogue with a `reply` that returns a response object."""
+def http_dialogue() -> Any:
+    """Return a fake HttpDialogue whose reply() returns a SimpleNamespace response."""
 
     class FakeHttpDialogue:
         def reply(
             self,
-            performative,
-            target_message,
-            version,
-            status_code,
-            status_text,
-            headers,
-            body,
-        ):
+            performative: Any,
+            target_message: Any,
+            version: str,
+            status_code: int,
+            status_text: str,
+            headers: str,
+            body: bytes,
+        ) -> SimpleNamespace:
             return SimpleNamespace(
                 performative=performative,
                 version=version,
@@ -260,8 +264,8 @@ def http_dialogue():
 
 
 @pytest.fixture
-def dialogue_skill_context(shared_state):
-    # minimal skill_context the Model base expects
+def dialogue_skill_context(shared_state: Dict[str, Any]) -> SimpleNamespace:
+    """Return a minimal skill_context Model expects (skill_id, agent_address, logger, shared_state)."""
     return SimpleNamespace(
         skill_id="valory/task_execution:0.1.0",
         agent_address="0xagent",
@@ -275,15 +279,16 @@ def dialogue_skill_context(shared_state):
     )
 
 
-def _get_self_addr(dialogues_obj):
+def _get_self_addr(dialogues_obj: Any) -> str | None:
+    """Return self address from dialogues object handling different attribute names."""
     return getattr(
         dialogues_obj, "self_address", getattr(dialogues_obj, "_self_address", None)
     )
 
 
 @pytest.fixture
-def params_kwargs(dialogue_skill_context):
-    """Minimal good kwargs for Params; tests mutate this per-case."""
+def params_kwargs(dialogue_skill_context: SimpleNamespace) -> Dict[str, Any]:
+    """Return minimal good kwargs for Params; individual tests mutate per-case."""
     return dict(
         skill_context=dialogue_skill_context,
         api_keys={},
@@ -296,7 +301,7 @@ def params_kwargs(dialogue_skill_context):
         mech_to_config={
             "0xMeCh": {"use_dynamic_pricing": True, "is_marketplace_mech": False}
         },
-        mech_marketplace_address=models.ZERO_ADDRESS,  # default: disables marketplace
+        mech_marketplace_address=models.ZERO_ADDRESS,
         default_chain_id="1",
         tools_to_pricing={},
         polling_interval=12.5,

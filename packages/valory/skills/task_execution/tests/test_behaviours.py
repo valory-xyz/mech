@@ -17,27 +17,30 @@
 #
 # ------------------------------------------------------------------------------
 
+"""This package contains the tests for the behaviours."""
+
 import json
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Callable, Dict, Tuple
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
 
 
 def test_happy_path_executes_and_stores(
-    behaviour,
-    shared_state,
-    params_stub,
-    fake_dialogue,
-    done_future,
-    monkeypatch,
-    patch_ipfs_multihash,
-    disable_polling,
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    done_future: Callable[[Tuple[Any, ...]], Any],
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    disable_polling: Callable[[], None],
 ) -> None:
+    """Execute a valid task and store the result."""
     patch_ipfs_multihash()
     disable_polling()
 
-    valid_cid = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
+    valid_cid: str = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
 
     behaviour._all_tools["sum"] = (
         "tool_py_src",
@@ -46,7 +49,7 @@ def test_happy_path_executes_and_stores(
     )
     params_stub.tools_to_pricing = {"sum": 0}
 
-    req_id = 42
+    req_id: int = 42
     shared_state[beh_mod.PENDING_TASKS].append(
         {
             "requestId": req_id,
@@ -67,25 +70,28 @@ def test_happy_path_executes_and_stores(
         lambda files, **k: (object(), fake_dialogue),
     )
 
-    call_no = {"n": 0}
+    call_no: Dict[str, int] = {"n": 0}
 
-    def send_message_stub(msg, dlg, callback) -> None:
+    def send_message_stub(
+        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+    ) -> None:
+        """Stub send_message to deliver GET/STORE callbacks."""
         call_no["n"] += 1
         if call_no["n"] == 1:
-            task_body = {"prompt": "add 2+2", "tool": "sum"}
-            fake_get_response = type(
+            task_body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
+            fake_get_response: Any = type(
                 "Msg", (), {"files": {"task.json": json.dumps(task_body)}}
             )()
             callback(fake_get_response, dlg)
         else:
-            fake_store_response = type("Msg", (), {"ipfs_hash": valid_cid})()
+            fake_store_response: Any = type("Msg", (), {"ipfs_hash": valid_cid})()
             callback(fake_store_response, dlg)
         params_stub.in_flight_req = True
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
-    token_cb = type("CB", (), {"cost_dict": {"input": 10, "output": 5}})()
-    keychain = object()
+    token_cb: Any = type("CB", (), {"cost_dict": {"input": 10, "output": 5}})()
+    keychain: object = object()
     result_tuple = ("4", "add 2+2", {"tx": "0xabc"}, token_cb, keychain)
     monkeypatch.setattr(
         behaviour, "_submit_task", lambda *a, **k: done_future(result_tuple)
@@ -97,7 +103,7 @@ def test_happy_path_executes_and_stores(
     behaviour.act()
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
-    done = shared_state[beh_mod.DONE_TASKS][0]
+    done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
     assert done["tool"] == "sum"
     assert done["mech_address"] == "0xmech"
@@ -109,22 +115,23 @@ def test_happy_path_executes_and_stores(
 
 
 def test_pricing_too_low_marks_invalid_and_stores_stub(
-    behaviour,
-    shared_state,
-    params_stub,
-    fake_dialogue,
-    monkeypatch,
-    done_future,
-    patch_ipfs_multihash,
-    disable_polling,
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    done_future: Callable[[Tuple[Any, ...]], Any],
+    patch_ipfs_multihash: Callable[[], None],
+    disable_polling: Callable[[], None],
 ) -> None:
+    """Reject underpriced task and store invalid response."""
     patch_ipfs_multihash()
     disable_polling()
     behaviour._tools_to_package_hash = {"sum": "fakehash"}
     behaviour._tools_to_pricing["sum"] = 200
     behaviour._all_tools["sum"] = ("tool_py_src", "run", {"params": {}})
 
-    req_id = 99
+    req_id: int = 99
     shared_state[beh_mod.PENDING_TASKS].append(
         {
             "requestId": req_id,
@@ -136,7 +143,6 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     params_stub.request_id_to_num_timeouts[req_id] = 0
     shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][req_id] = 100
 
-    # Stub builders
     monkeypatch.setattr(
         behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
     )
@@ -146,18 +152,22 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
         lambda files, **k: (object(), fake_dialogue),
     )
 
-    def _fail_submit(*a, **k) -> None:
+    def _fail_submit(*a: Any, **k: Any) -> None:
+        """Ensure execution is not attempted for invalid pricing."""
         raise AssertionError("_submit_task must not be called for invalid pricing")
 
     monkeypatch.setattr(behaviour, "_submit_task", _fail_submit)
 
-    valid_cid = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
-    calls = {"n": 0}
+    valid_cid: str = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
+    calls: Dict[str, int] = {"n": 0}
 
-    def send_message_stub(msg, dlg, callback) -> None:
+    def send_message_stub(
+        msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
+    ) -> None:
+        """Stub send_message to deliver GET/STORE callbacks for invalid pricing."""
         calls["n"] += 1
         if calls["n"] == 1:
-            body = {"prompt": "add 2+2", "tool": "sum"}
+            body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
             callback(type("Msg", (), {"files": {"task.json": json.dumps(body)}})(), dlg)
         else:
             callback(type("Msg", (), {"ipfs_hash": valid_cid})(), dlg)
@@ -172,7 +182,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
 
     assert calls["n"] == 2
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
-    done = shared_state[beh_mod.DONE_TASKS][0]
+    done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
     assert done.get("tool") is None
     assert "dynamic_tool_cost" not in done
@@ -181,22 +191,23 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
 
 
 def test_broken_process_pool_restart(
-    behaviour,
-    shared_state,
-    params_stub,
-    fake_dialogue,
-    done_future,
-    monkeypatch,
-    patch_ipfs_multihash,
-    disable_polling,
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    done_future: Callable[[Tuple[Any, ...]], Any],
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    disable_polling: Callable[[], None],
 ) -> None:
+    """Restart executor and retry when BrokenProcessPool is raised."""
     patch_ipfs_multihash()
     disable_polling()
 
     behaviour._all_tools["sum"] = ("py", "run", {"params": {}})
     behaviour._tools_to_package_hash["sum"] = "fake-package-hash"
 
-    req_id = 1
+    req_id: int = 1
     shared_state[beh_mod.PENDING_TASKS].append(
         {
             "requestId": req_id,
@@ -217,10 +228,11 @@ def test_broken_process_pool_restart(
         lambda files, **k: (object(), fake_dialogue),
     )
 
-    calls = {"n": 0}
+    calls: Dict[str, int] = {"n": 0}
 
     class BrokenOnceExec:
-        def submit(self, *a, **k) -> Any:
+        def submit(self, *a: Any, **k: Any) -> Any:
+            """Raise once then return a done future."""
             calls["n"] += 1
             if calls["n"] == 1:
                 from concurrent.futures.process import BrokenProcessPool
@@ -232,22 +244,21 @@ def test_broken_process_pool_restart(
 
     monkeypatch.setattr(behaviour, "_executor", BrokenOnceExec())
 
-    restarted = {"flag": False}
+    restarted: Dict[str, bool] = {"flag": False}
     monkeypatch.setattr(
         behaviour, "_restart_executor", lambda: restarted.__setitem__("flag", True)
     )
 
-    # Shape the fake messages based on WHICH callback is used
-    def send_message_stub(msg, dlg, cb) -> None:
+    def send_message_stub(msg: Any, dlg: Any, cb: Callable[[Any, Any], None]) -> None:
+        """Stub send_message to dispatch based on callback identity."""
         func = getattr(cb, "__func__", cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
-            body = {"prompt": "p", "tool": "sum"}
+            body: Dict[str, Any] = {"prompt": "p", "tool": "sum"}
             cb(SimpleNamespace(files={"task.json": json.dumps(body)}), dlg)
         elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
             cb(SimpleNamespace(ipfs_hash="bafyok"), dlg)
         else:
             raise AssertionError(f"Unexpected callback: {cb}")
-        # keep in-flight True during this tick so polling doesn't run
         params_stub.in_flight_req = True
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
@@ -262,24 +273,25 @@ def test_broken_process_pool_restart(
         "flag"
     ], "executor should have been restarted after BrokenProcessPool"
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
-    done = shared_state[beh_mod.DONE_TASKS][0]
+    done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
     assert done["task_result"] == "mh:bafyok"
 
 
 def test_invalid_tool_is_recorded_and_no_execution(
-    behaviour,
-    shared_state,
-    params_stub,
-    fake_dialogue,
-    monkeypatch,
-    patch_ipfs_multihash,
-    disable_polling,
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    disable_polling: Callable[[], None],
 ) -> None:
+    """Record invalid tool and store without executing."""
     patch_ipfs_multihash()
     disable_polling()
 
-    req_id = 5
+    req_id: int = 5
     shared_state[beh_mod.PENDING_TASKS].append(
         {
             "requestId": req_id,
@@ -306,7 +318,8 @@ def test_invalid_tool_is_recorded_and_no_execution(
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not execute")),
     )
 
-    def send_message_stub(msg, dlg, cb) -> None:
+    def send_message_stub(msg: Any, dlg: Any, cb: Callable[[Any, Any], None]) -> None:
+        """Stub send_message to produce unknown tool on GET and store afterwards."""
         func = getattr(cb, "__func__", cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             cb(
@@ -329,21 +342,22 @@ def test_invalid_tool_is_recorded_and_no_execution(
     behaviour.act()
 
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
-    done = shared_state[beh_mod.DONE_TASKS][0]
+    done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
     assert done["tool"] == "unknown"
     assert done["task_result"] == "mh:bafyinval"
 
 
 def test_ipfs_aux_task_removed_from_queue(
-    behaviour,
-    shared_state,
-    params_stub,
-    fake_dialogue,
-    monkeypatch,
-    disable_polling,
-    patch_ipfs_multihash,
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    disable_polling: Callable[[], None],
+    patch_ipfs_multihash: Callable[[], None],
 ) -> None:
+    """Remove aux IPFS task from queue after successful store."""
     disable_polling()
     patch_ipfs_multihash()
     shared_state[beh_mod.IPFS_TASKS].append(
@@ -354,14 +368,13 @@ def test_ipfs_aux_task_removed_from_queue(
         "_build_ipfs_store_file_req",
         lambda *a, **k: (object(), fake_dialogue),
     )
-    monkeypatch.setattr(
-        behaviour,
-        "send_message",
-        lambda msg, dlg, cb: (
-            cb(SimpleNamespace(ipfs_hash="bafyaux"), dlg),
-            setattr(params_stub, "in_flight_req", True),
-        ),
-    )
+
+    def send_message_stub(msg: Any, dlg: Any, cb: Callable[[Any, Any], None]) -> None:
+        """Stub send_message: invoke STORE_FILES callback and mark request as in-flight."""
+        cb(SimpleNamespace(ipfs_hash="bafyaux"), dlg)
+        params_stub.in_flight_req = True
+
+    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
     params_stub.in_flight_req = False
     behaviour.act()
     assert shared_state[beh_mod.IPFS_TASKS] == []
