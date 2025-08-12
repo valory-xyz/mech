@@ -21,7 +21,7 @@
 
 
 from types import SimpleNamespace
-from typing import Any, Callable, Generator, Optional, Type
+from typing import Any, Dict, Generator, Optional, Type
 
 import pytest
 
@@ -31,84 +31,11 @@ from packages.valory.skills.task_submission_abci.behaviours import (
 )
 
 
-class DummyFundsSplit(FundsSplittingBehaviour):
-    """Concrete subclass to allow instantiation for unit testing only."""
-
-    matching_round: Type[AbstractRound] = AbstractRound
-
-    def async_act(self) -> Generator:
-        """No-op async act to satisfy the abstract method requirement."""
-        if False:
-            yield
-
-
 @pytest.fixture
-def logger_stub() -> SimpleNamespace:
-    """
-    No-op logger object.
-
-    :returns: SimpleNamespace with info/warning/error callables.
-    :rtype: SimpleNamespace
-    """
-    return SimpleNamespace(
-        info=lambda *a, **k: None,
-        warning=lambda *a, **k: None,
-        error=lambda *a, **k: None,
-    )
-
-
-@pytest.fixture
-def params_profit5() -> SimpleNamespace:
-    """
-    Params stub with profit_split_freq = 5.
-
-    :returns: SimpleNamespace exposing profit_split_freq.
-    :rtype: SimpleNamespace
-    """
-    return SimpleNamespace(profit_split_freq=5)
-
-
-@pytest.fixture
-def behaviour_context(
-    logger_stub: SimpleNamespace, params_profit5: SimpleNamespace
-) -> SimpleNamespace:
-    """
-    Minimal skill_context for FundsSplittingBehaviour.
-
-    :param logger_stub: No-op logger.
-    :type logger_stub: SimpleNamespace
-    :param params_profit5: Params with profit_split_freq set to 5.
-    :type params_profit5: SimpleNamespace
-    :returns: Context exposing logger and params.
-    :rtype: SimpleNamespace
-    """
-    return SimpleNamespace(logger=logger_stub, params=params_profit5)
-
-
-@pytest.fixture
-def fs_behaviour(behaviour_context: SimpleNamespace) -> DummyFundsSplit:
-    """
-    Instantiated FundsSplittingBehaviour under test.
-
-    :param behaviour_context: Minimal skill_context.
-    :type behaviour_context: SimpleNamespace
-    :returns: Concrete behaviour instance.
-    :rtype: DummyFundsSplit
-    """
-    return DummyFundsSplit(name="fs", skill_context=behaviour_context)
-
-
-@pytest.fixture
-def run_to_completion() -> Callable[[Generator[Any, None, Any]], Any]:
-    """
-    Exhaust a behaviour generator and return its final value.
-
-    :returns: Callable that runs a generator to completion and returns StopIteration.value.
-    :rtype: Callable[[Generator[Any, None, Any]], Any]
-    """
+def run_to_completion() -> Any:
+    """Return a helper that exhausts a generator and yields its final value."""
 
     def _run(gen: Generator[Any, None, Any]) -> Any:
-        """Run the generator until completion and return its result."""
         try:
             while True:
                 next(gen)
@@ -118,36 +45,81 @@ def run_to_completion() -> Callable[[Generator[Any, None, Any]], Any]:
     return _run
 
 
+class DummyFundsSplit(FundsSplittingBehaviour):
+    """Concrete subclass to allow instantiation for unit testing only."""
+
+    # Not used by these tests, but BaseBehaviour expects the attribute.
+    matching_round: Type[AbstractRound] = AbstractRound
+
+    def async_act(self) -> Generator[None, None, None]:
+        """Satisfy abstract method for BaseBehaviour."""
+        if False:
+            yield
+        return None
+
+
 @pytest.fixture
-def patch_num_requests(
-    monkeypatch: pytest.MonkeyPatch,
-) -> Callable[[int | list[int]], None]:
+def fs_ctx() -> SimpleNamespace:
     """
-    Stub `_get_num_requests_delivered` to return a value or sequence.
+    Minimal skill context with logger and params used by _should_split_profits.
+
+    :returns: A context namespace exposing logger and params (profit_split_balance, agent_mech_contract_addresses).
+    :rtype: SimpleNamespace
+    """
+    return SimpleNamespace(
+        logger=SimpleNamespace(
+            info=lambda *a, **k: None,
+            warning=lambda *a, **k: None,
+            error=lambda *a, **k: None,
+        ),
+        params=SimpleNamespace(
+            profit_split_balance=10,
+            agent_mech_contract_addresses=["0xA"],
+        ),
+    )
+
+
+@pytest.fixture
+def fs_behaviour(fs_ctx: SimpleNamespace) -> DummyFundsSplit:
+    """
+    Behaviour instance bound to the minimal context.
+
+    :param fs_ctx: The fake skill context.
+    :type fs_ctx: SimpleNamespace
+    :returns: A DummyFundsSplit behaviour ready for testing.
+    :rtype: DummyFundsSplit
+    """
+    return DummyFundsSplit(name="fs", skill_context=fs_ctx)
+
+
+@pytest.fixture
+def patch_mech_info(monkeypatch: pytest.MonkeyPatch, fs_behaviour: DummyFundsSplit):
+    """
+    Helper to stub _get_mech_info to return balances per mech address.
 
     :param monkeypatch: Pytest monkeypatch fixture.
     :type monkeypatch: pytest.MonkeyPatch
-    :returns: Function that applies a stub returning a single int or successive ints.
-    :rtype: Callable[[int | list[int]], None]
+    :param fs_behaviour: The behaviour instance under test.
+    :type fs_behaviour: DummyFundsSplit
+    :returns: A function that accepts a mapping {mech_address: balance} and applies the stub.
     """
 
-    def _apply(value_or_seq: int | list[int]) -> None:
-        """Apply the stub with either a single value or a sequence across calls."""
-        if isinstance(value_or_seq, list):
-            it = iter(value_or_seq)
+    def _apply(balances_by_addr: Dict[str, int]) -> None:
+        """
+        Apply the stub for _get_mech_info, returning tuples (mech_type, balance_tracker, balance).
 
-            def _fn(self) -> Generator[None, None, Optional[int]]:
-                if False:  # ensure generator type
-                    yield
-                return next(it)
+        :param balances_by_addr: Mapping from mech address to desired balance.
+        :type balances_by_addr: Dict[str, int]
+        """
 
-        else:
+        def _fake(self, mech_address: str) -> Generator[None, None, Optional[tuple]]:
+            if False:
+                yield
+            bal = balances_by_addr.get(mech_address)
+            if bal is None:
+                return None
+            return (b"\x00", "0xBalanceTracker", bal)
 
-            def _fn(self) -> Generator[None, None, Optional[int]]:
-                if False:
-                    yield
-                return int(value_or_seq)
-
-        monkeypatch.setattr(DummyFundsSplit, "_get_num_requests_delivered", _fn)
+        monkeypatch.setattr(DummyFundsSplit, "_get_mech_info", _fake)
 
     return _apply
