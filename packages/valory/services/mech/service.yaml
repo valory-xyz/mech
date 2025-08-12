@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeigt4owrsvx6xvzlwmsdxzvakrtoqn2hz7ehb5akfrhrg7ldatvjoa
+agent: valory/mech:0.1.0:bafybeibiu4bpobrvr5zry7eqbiilwea5garaaql43t424ovylgkur3prmm
 number_of_agents: 4
 deployment:
   agent:
@@ -56,7 +56,7 @@ type: skill
         serious_slash_unit_amount: ${SERIOUS_SLASH_UNIT_AMOUNT:int:8000000000000000}
         complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
-        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        profit_split_balance: ${PROFIT_SPLIT_BALANCE:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
@@ -93,7 +93,7 @@ type: skill
         serious_slash_unit_amount: ${SERIOUS_SLASH_UNIT_AMOUNT:int:8000000000000000}
         complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
-        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        profit_split_balance: ${PROFIT_SPLIT_BALANCE:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
@@ -134,7 +134,7 @@ type: skill
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
-        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        profit_split_balance: ${PROFIT_SPLIT_BALANCE:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
@@ -172,7 +172,7 @@ type: skill
         complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0xE49CB081e8d96920C38aA7AB90cb0294ab4Bc8EA}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
-        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        profit_split_balance: ${PROFIT_SPLIT_BALANCE:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}

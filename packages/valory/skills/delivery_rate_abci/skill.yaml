@@ -134,7 +134,7 @@ models:
       validate_timeout: 1205
       use_slashing: false
       service_owner_share: 0.1
-      profit_split_freq: 1000
+      profit_split_balance: 1000
       slash_cooldown_hours: 3
       slash_threshold_amount: 10000000000000000
       light_slash_unit_amount: 5000000000000000

@@ -8,14 +8,17 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeihwa6gctsq3msbzxasplgfwnfxwmsfwewbtptigyeavplo52oavga
+  behaviours.py: bafybeia2rigrbzainl2czzov2ged5fl5xjzryua3ahsfw3yhva7iutofnu
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeibp2x2idkevldhjyz6cdzceohvh4odxvanz5vjvklacpmjija3yh4
+  models.py: bafybeielhcieeadobs2zp5pmwu5zgt7h3qd6atpjlvnd2srirrcd3xdmuy
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
   rounds.py: bafybeig7rio35qvs25lvnyfeehazcdiosvnsb7mloh2agdwvoqx3ncybau
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
+  tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
+  tests/conftest.py: bafybeia5e5zrtdj6jb6v2rl7awubrjmzmzen4kf3im4b56wizkjomm6bki
+  tests/test_funds_split.py: bafybeie4rjti7flgbqgs4u5xvse57zmg7eeci3vx5mlqt7dueiavwlkaxi
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -148,7 +151,7 @@ models:
       validate_timeout: 1205
       use_slashing: false
       service_owner_share: 0.1
-      profit_split_freq: 1000
+      profit_split_balance: 1000
       slash_cooldown_hours: 3
       agent_funding_amount: 200000000000000000
       minimum_agent_balance: 100000000000000000
