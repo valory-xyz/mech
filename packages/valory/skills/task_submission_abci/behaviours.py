@@ -404,19 +404,28 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         """
         Returns true if profits from the mech should be split.
 
-        Profits will be split based on the number of requests that have been delivered.
-        I.e. We will be splitting every n-th request. Where, n- is configurable
+        Profits will be split based on the mech balance.
+        I.e. We will be splitting if there is more than n balance. Where, n- is configurable
 
         :returns: True if profits should be split, False otherwise.
         :yields: None
         """
-        total_reqs = yield from self._get_num_requests_delivered()
-        if total_reqs is None:
-            self.context.logger.warning(
-                "Could not get number of requests delivered. Don't split profits."
-            )
-            return False
-        return total_reqs % self.params.profit_split_freq == 0
+        mech_balances = 0
+        for mech_address in self.mech_addresses:
+            mech_info = yield from self._get_mech_info(mech_address)
+            if mech_info is None:
+                self.context.logger.error(
+                    f"Could not get data for mech {mech_address}. Skipping Profit Split."
+                )
+                return None
+            _, _, mech_balance = mech_info
+            mech_balances += mech_balance
+
+        self.context.logger.info(f"Total mechs balances: {mech_balances}")
+        self.context.logger.info(
+            f"Profit split balance: {self.params.profit_split_balance}"
+        )
+        return mech_balances >= self.params.profit_split_balance
 
     def get_split_profit_txs(
         self,

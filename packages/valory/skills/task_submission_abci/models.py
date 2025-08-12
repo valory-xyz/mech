@@ -67,7 +67,7 @@ class Params(BaseParams):
         self.task_mutable_params = MutableParams()
         self.manual_gas_limit = self._ensure_get("manual_gas_limit", kwargs, int)
         self.service_owner_share = self._ensure("service_owner_share", kwargs, float)
-        self.profit_split_freq = self._ensure("profit_split_freq", kwargs, int)
+        self.profit_split_balance = self._ensure("profit_split_balance", kwargs, int)
         mech_to_config_dict: Dict[str, Dict[str, bool]] = self._ensure_get(
             "mech_to_config", kwargs, Dict[str, Dict[str, bool]]
         )
