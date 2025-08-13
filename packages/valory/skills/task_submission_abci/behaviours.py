@@ -410,6 +410,11 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         :returns: True if profits should be split, False otherwise.
         :yields: None
         """
+        # If any agent is under min, run the split now (best-effort).
+        deficits = yield from self._get_agent_funding_amounts()
+        if deficits and sum(deficits.values()) > 0:
+            return True
+
         mech_balances = 0
         for mech_address in self.mech_addresses:
             mech_info = yield from self._get_mech_info(mech_address)
