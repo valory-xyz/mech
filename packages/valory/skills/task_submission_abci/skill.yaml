@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeia2rigrbzainl2czzov2ged5fl5xjzryua3ahsfw3yhva7iutofnu
+  behaviours.py: bafybeicg4du5ztvvrsku6muptbfntfc7nyltgeiosoucvugf3aflbapv7i
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
@@ -17,8 +17,8 @@ fingerprint:
   rounds.py: bafybeig7rio35qvs25lvnyfeehazcdiosvnsb7mloh2agdwvoqx3ncybau
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
-  tests/conftest.py: bafybeia5e5zrtdj6jb6v2rl7awubrjmzmzen4kf3im4b56wizkjomm6bki
-  tests/test_funds_split.py: bafybeie7nrpjw6draor6cuy7yssxdjcibpwuqpol2k5t52vilkv3cy3d2e
+  tests/conftest.py: bafybeibuhdffaek2pq7x6diszqhjvogrpysg2zqraw3ri4xzy7xiixyz6e
+  tests/test_funds_split.py: bafybeifsxnulc6b5ueiicxzelltpggqrduzry6vlhgk5jyblug3pqbjzeq
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
