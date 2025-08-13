@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 
+echo "Stopping potentially orphaned mech containers..."
+docker stop $(docker ps -q --filter "name=mech.*_abci_0") 2>/dev/null || true
+docker stop $(docker ps -q --filter "name=mech.*_tm_0") 2>/dev/null || true
+echo "Removing potentially orphaned mech containers..."
+docker rm $(docker ps -aq --filter "name=mech.*_abci_0") 2>/dev/null || true
+docker rm $(docker ps -aq --filter "name=mech.*_tm_0") 2>/dev/null || true
+
 rm -r mech
 
 # Load env vars
@@ -15,7 +22,7 @@ set -o allexport; source .1env; set +o allexport
 # make generators
 make clean
 
-autonomy push-all
+# autonomy push-all
 
 autonomy fetch --local --service valory/mech && cd mech
 
