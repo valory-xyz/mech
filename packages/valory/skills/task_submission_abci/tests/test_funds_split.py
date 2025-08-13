@@ -20,7 +20,9 @@
 """Tests for funds splitting behaviour."""
 
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, Dict, Generator, Optional, Tuple
+
+import pytest
 
 
 def test_split_true_at_exact_threshold(
@@ -73,3 +75,111 @@ def test_error_on_missing_mech_info_returns_false(
     fs_ctx.params.agent_mech_contract_address = ["0xMissing"]
     patch_mech_info({})
     assert run_to_completion(fs_behaviour._should_split_profits()) is False
+
+
+def test_split_owner_operator_at_t0(
+    fs_behaviour: Any,
+    fs_ctx: Any,
+    run_to_completion: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Verify T=0 split with service_owner_share = 0.1.
+
+    Asserts:
+      - Owner receives exactly 10% of profits (0.2 xDAI).
+      - Operator bucket gets the remainder (1.8 xDAI).
+    """
+    ONE_XDAI: int = 10**18
+
+    # Configure params as per defaults
+    fs_ctx.params.profit_split_balance = ONE_XDAI  # 1 xDAI threshold
+    fs_ctx.params.service_owner_share = 0.1  # 10%
+    fs_ctx.params.on_chain_service_id = 1
+
+    # No agent funding required at T=0 -> all profits go owner/operators.
+    def _get_agent_funding_amounts_none(
+        self: Any,
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return {}
+
+    def _get_service_owner(
+        self: Any, service_id: int
+    ) -> Generator[None, None, Optional[str]]:
+        if False:
+            yield
+        return "0xOWNER"
+
+    def _get_funds_by_operator(
+        self: Any, operator_share: int
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return {"0xOP": operator_share}
+
+    monkeypatch.setattr(
+        type(fs_behaviour),
+        "_get_agent_funding_amounts",
+        _get_agent_funding_amounts_none,
+    )
+    monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _get_service_owner)
+    monkeypatch.setattr(
+        type(fs_behaviour), "_get_funds_by_operator", _get_funds_by_operator
+    )
+
+    profits: int = 2 * ONE_XDAI  # 2 xDAI
+    split = run_to_completion(fs_behaviour._split_funds(profits))
+
+    expected_owner: int = int(fs_ctx.params.service_owner_share * profits)  # 0.2 xDAI
+    expected_operator: int = profits - expected_owner  # 1.8 xDAI
+    assert split == {"0xOWNER": expected_owner, "0xOP": expected_operator}
+
+
+def test_agent_dips_below_minimum_no_auto_refund_until_threshold(
+    fs_behaviour: Any,
+    fs_ctx: Any,
+    run_to_completion: Any,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Edge case on Gnosis (xDAI): after a split, an agent falls below minimum; no auto-refund
+
+    occurs until the mech balance crosses the split threshold again.
+    """
+    ONE_XDAI: int = 10**18
+
+    fs_ctx.params.minimum_agent_balance = 10**17  # 0.1 xDAI
+    fs_ctx.params.agent_funding_amount = 2 * 10**17  # 0.2 xDAI
+    fs_ctx.params.profit_split_balance = ONE_XDAI  # 1 xDAI threshold
+    fs_ctx.params.agent_mech_contract_addresses = ["0xMECH"]
+
+    # Agent needs funds (below minimum).
+    def _get_agent_funding_amounts_deficit(
+        self: Any,
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return {"0xAGENT": fs_ctx.params.agent_funding_amount}
+
+    # Mech balance is below threshold, so we don't split yet.
+    def _get_mech_info_low_balance(
+        self: Any, mech: str
+    ) -> Generator[None, None, Optional[Tuple[bytes, str, int]]]:
+        if False:
+            yield
+        return b"\x00", "0xTRACKER", 5 * 10**17  # 0.5 xDAI < 1 xDAI threshold
+
+    monkeypatch.setattr(
+        type(fs_behaviour),
+        "_get_agent_funding_amounts",
+        _get_agent_funding_amounts_deficit,
+    )
+    monkeypatch.setattr(
+        type(fs_behaviour), "_get_mech_info", _get_mech_info_low_balance
+    )
+
+    # Because balance < threshold, no split/top-up will occur now.
+    should_split = run_to_completion(fs_behaviour._should_split_profits())
+    assert should_split is False
