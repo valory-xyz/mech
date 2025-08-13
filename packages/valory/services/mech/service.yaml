@@ -56,7 +56,7 @@ type: skill
         serious_slash_unit_amount: ${SERIOUS_SLASH_UNIT_AMOUNT:int:8000000000000000}
         complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
-        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        profit_split_balance: ${PROFIT_SPLIT_BALANCE:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
@@ -93,7 +93,7 @@ type: skill
         serious_slash_unit_amount: ${SERIOUS_SLASH_UNIT_AMOUNT:int:8000000000000000}
         complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
-        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        profit_split_balance: ${PROFIT_SPLIT_BALANCE:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
@@ -134,7 +134,7 @@ type: skill
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
-        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        profit_split_balance: ${PROFIT_SPLIT_BALANCE:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
@@ -172,7 +172,7 @@ type: skill
         complementary_service_metadata_address: ${COMPLEMENTARY_SERVICE_METADATA_ADDRESS:str:0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69}
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         metadata_hash: ${METADATA_HASH:str:f01701220caa53607238e340da63b296acab232c18a48e954f0af6ff2b835b2d93f1962f0}
-        profit_split_freq: ${PROFIT_SPLIT_FREQ:int:100}
+        profit_split_balance: ${PROFIT_SPLIT_BALANCE:int:100}
         hash_checkpoint_address: ${CHECKPOINT_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_endpoint_base: ${SERVICE_ENDPOINT_BASE:str:https://dummy_service.autonolas.tech/}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
@@ -198,6 +198,7 @@ type: skill
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
+        tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 1:
@@ -212,6 +213,7 @@ type: skill
         agent_index: ${AGENT_INDEX_1:int:1}
         num_agents: ${NUM_AGENTS:int:4}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
+        tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
@@ -227,6 +229,7 @@ type: skill
         agent_index: ${AGENT_INDEX_2:int:2}
         num_agents: ${NUM_AGENTS:int:4}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
+        tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
@@ -243,6 +246,7 @@ type: skill
         num_agents: ${NUM_AGENTS:int:4}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
+        tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 ---
