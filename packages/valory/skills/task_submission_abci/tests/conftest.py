@@ -68,7 +68,7 @@ def fs_ctx() -> SimpleNamespace:
     """
     Return a minimal skill context with logger and params used by _should_split_profits.
 
-    :returns: A context namespace exposing logger and params (profit_split_balance, agent_mech_contract_addresseses).
+    :returns: A context namespace exposing logger and params (profit_split_balance, agent_mech_contract_addresses).
     :rtype: SimpleNamespace
     """
     return SimpleNamespace(
@@ -137,21 +137,13 @@ def patch_mech_info(
 
 @pytest.fixture(autouse=True)
 def _no_agent_deficits(monkeypatch: pytest.MonkeyPatch) -> None:
-    """
-    Default stub: no agent deficits.
-
-    :param monkeypatch: pytest monkeypatch.
-    """
+    """Default: no agent needs funding; tests can override via monkeypatch."""
 
     def _stub(
         self: FundsSplittingBehaviour,
     ) -> Generator[None, None, Optional[Dict[str, int]]]:
-        if False:  # keep as generator
+        if False:
             yield
-        return {}  # no one needs funding
+        return {}
 
-    monkeypatch.setattr(
-        type(DummyFundsSplit(name="x", skill_context=SimpleNamespace())),  # type: ignore[arg-type]
-        "_get_agent_funding_amounts",
-        _stub,
-    )
+    monkeypatch.setattr(DummyFundsSplit, "_get_agent_funding_amounts", _stub)
