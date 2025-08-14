@@ -28,7 +28,7 @@ skills:
 - valory/task_submission_abci:0.1.0:bafybeia7bfyccygfovndz2axfe3cakvj3ntp7krjcynlkjvrzrhjvlfjh4
 - valory/termination_abci:0.1.0:bafybeiam7v3kicazjq6rr3ijjc5nsqzp4sjrysmsevnxbhiqdv6ltyxope
 - valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
-- valory/delivery_rate_abci:0.1.0:bafybeickowazriehvvqy3e3qamjcyb7gdl3r6p4wtzvehyh5nb4pefybdq
+- valory/delivery_rate_abci:0.1.0:bafybeigxslyrf5ijwageidt34pice63b56cwg7p5s7djpqdysfbfaiof7y
 - valory/task_execution:0.1.0:bafybeidasolski7idfwetdaig4cac4q2oeinxgaeebcfplwgz2rduwqpeq
 behaviours:
   main:
@@ -157,7 +157,7 @@ models:
       slash_threshold_amount: 10000000000000000
       termination_from_block: 0
       light_slash_unit_amount: 5000000000000000
-      service_owner_share: 0.1
+      service_owner_share: 1000
       profit_split_balance: 100
       serious_slash_unit_amount: 8000000000000000
       agent_funding_amount: 200000000000000000
