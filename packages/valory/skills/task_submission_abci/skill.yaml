@@ -150,7 +150,7 @@ models:
       use_termination: false
       validate_timeout: 1205
       use_slashing: false
-      service_owner_share: 1000
+      service_owner_share: 1000  # We are using 10_000 for 100% so 1000 == 0.1
       profit_split_balance: 1000
       slash_cooldown_hours: 3
       agent_funding_amount: 200000000000000000
