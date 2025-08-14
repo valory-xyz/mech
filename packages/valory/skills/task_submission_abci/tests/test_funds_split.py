@@ -239,7 +239,7 @@ def test_split_never_over_allocates(
     assert total_out <= profits  # must not over-allocate
 
 
-def test_owner_share_rounding_wei_error_xfail(
+def test_owner_share_rounding_wei_error(
     fs_behaviour: Any,
     fs_ctx: Any,
     run_to_completion: Callable[[Generator[Any, None, Any]], Any],

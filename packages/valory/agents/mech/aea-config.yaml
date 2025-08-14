@@ -168,7 +168,7 @@ models:
       gas_params: ${dict:{"gas_price":null, "max_fee_per_gas":null, "max_priority_fee_per_gas":null}}
       init_fallback_gas: ${int:500000}
       manual_gas_limit: ${int:1000000}
-      service_owner_share: ${float:0.1}
+      service_owner_share: ${int:1000}
       profit_split_balance: ${int:1000000000000000000}
       agent_funding_amount: ${int:200000000000000000}
       minimum_agent_balance: ${int:100000000000000000}
