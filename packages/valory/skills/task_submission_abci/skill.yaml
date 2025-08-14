@@ -18,7 +18,7 @@ fingerprint:
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeihmmkkrov5wediwbc62euqvovmixlpwemc5cq3olqfx652kbs7nie
-  tests/test_funds_split.py: bafybeiautttv4cpz5qlr2infzxw6cfx3qxdjzbcrvbh5mxnfiwcwkrdwf4
+  tests/test_funds_split.py: bafybeihpn2gtcgqmmuwzjadujkuwf6u7n67idt3xtalqwdwkyy43gjtdne
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
