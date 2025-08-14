@@ -79,6 +79,7 @@ def fs_ctx() -> SimpleNamespace:
         ),
         params=SimpleNamespace(
             profit_split_balance=10,
+            on_chain_service_id=100,
             agent_mech_contract_addresses=["0xA"],
         ),
     )
