@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeigsm33ifr2v7vh7ksl4kwigl3do5slwfxswdxxcigs5p4tgjvgali
+agent: valory/mech:0.1.0:bafybeihht4d26too5fxrvqrd4nzeikwj4odyx3gznvfz4uufbvc2wes4ra
 number_of_agents: 4
 deployment:
   agent:
@@ -63,7 +63,7 @@ type: skill
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        service_owner_share: ${SERVICE_SHARE:float:0}
+        service_owner_share: ${SERVICE_SHARE:int:0}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 1:
   models:
@@ -102,7 +102,7 @@ type: skill
         mech_marketplace_address: ${MECH_MARKETPLACE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        service_owner_share: ${SERVICE_SHARE:float:0}
+        service_owner_share: ${SERVICE_SHARE:int:0}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 2:
   models:
@@ -141,7 +141,7 @@ type: skill
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        service_owner_share: ${SERVICE_SHARE:float:0}
+        service_owner_share: ${SERVICE_SHARE:int:0}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 3:
   models:
@@ -180,7 +180,7 @@ type: skill
         agent_funding_amount: ${AGENT_FUNDING_AMOUNT:int:200000000000000000}
         minimum_agent_balance: ${MINIMUM_AGENT_BALANCE:int:100000000000000000}
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
-        service_owner_share: ${SERVICE_SHARE:float:0}
+        service_owner_share: ${SERVICE_SHARE:int:0}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 ---
 public_id: valory/task_execution:0.1.0
