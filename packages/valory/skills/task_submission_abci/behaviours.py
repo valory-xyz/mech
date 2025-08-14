@@ -631,7 +631,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             int, contract_api_msg.state.body["token_credit_ratio"]
         )
         self.context.logger.info(f"Fetched token_credit_ratio: {token_credit_ratio}")
-        adjusted_balance = int((mech_balance * token_credit_ratio) / 1e18)
+        adjusted_balance = (mech_balance * token_credit_ratio) // (10**18)
         self.context.logger.info(f"Adjusted mech balance is: {adjusted_balance}")
         return adjusted_balance
 
@@ -736,9 +736,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             )
             return None
 
-        marketplace_fee = int(
-            (mech_balance * fee + (MAX_FEE_FACTOR - 1)) / MAX_FEE_FACTOR
-        )
+        marketplace_fee = (mech_balance * fee + (MAX_FEE_FACTOR - 1)) // MAX_FEE_FACTOR
         profits = mech_balance - marketplace_fee
 
         self.context.logger.info(f"Contract Marketplace fee: {fee}")
@@ -826,7 +824,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             # if it's the case that the required amount for the agents is greater than the profits
             # split all the funds among the agent, proportional to their intended funding amount
             for agent, amount in agent_funding_amounts.items():
-                agent_share = int((amount / total_required_amount_for_agents) * profits)
+                agent_share = (amount * profits) // total_required_amount_for_agents
                 funds_by_address[agent] = agent_share
 
             # return here because we don't have any funds left to split
@@ -836,7 +834,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         # split the rest among the service owner and the operator
         profits = profits - total_required_amount_for_agents
 
-        service_owner_share = int(self.params.service_owner_share * profits)
+        service_owner_share = (profits * self.params.service_owner_share) // 10_000
         funds_by_address[service_owner] = service_owner_share
         operator_share = profits - service_owner_share
         funds_by_operator = yield from self._get_funds_by_operator(operator_share)
@@ -1029,10 +1027,8 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         total_reqs -= invalid_operator_reqs
 
         for agent, reqs in accumulated_reqs_by_operator.items():
-            accumulated_reqs_by_operator[agent] = int(
-                operator_share * (reqs / total_reqs)
-            )
-
+            share = (operator_share * reqs) // total_reqs
+            accumulated_reqs_by_operator[agent] = share
         return accumulated_reqs_by_operator
 
     def _accumulate_reqs_by_operator(

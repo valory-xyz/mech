@@ -20,7 +20,7 @@
 """Tests for funds splitting behaviour."""
 
 from types import SimpleNamespace
-from typing import Any, Dict, Generator, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, Optional, Tuple
 
 import pytest
 
@@ -77,66 +77,6 @@ def test_error_on_missing_mech_info_returns_false(
     assert run_to_completion(fs_behaviour._should_split_profits()) is False
 
 
-def test_split_owner_operator_at_t0(
-    fs_behaviour: Any,
-    fs_ctx: Any,
-    run_to_completion: Any,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """
-    Verify T=0 split with service_owner_share = 0.1.
-
-    Asserts:
-      - Owner receives exactly 10% of profits (0.2 xDAI).
-      - Operator bucket gets the remainder (1.8 xDAI).
-    """
-    ONE_XDAI: int = 10**18
-
-    # Configure params as per defaults
-    fs_ctx.params.profit_split_balance = ONE_XDAI  # 1 xDAI threshold
-    fs_ctx.params.service_owner_share = 0.1  # 10%
-    fs_ctx.params.on_chain_service_id = 1
-
-    # No agent funding required at T=0 -> all profits go owner/operators.
-    def _get_agent_funding_amounts_none(
-        self: Any,
-    ) -> Generator[None, None, Optional[Dict[str, int]]]:
-        if False:
-            yield
-        return {}
-
-    def _get_service_owner(
-        self: Any, service_id: int
-    ) -> Generator[None, None, Optional[str]]:
-        if False:
-            yield
-        return "0xOWNER"
-
-    def _get_funds_by_operator(
-        self: Any, operator_share: int
-    ) -> Generator[None, None, Optional[Dict[str, int]]]:
-        if False:
-            yield
-        return {"0xOP": operator_share}
-
-    monkeypatch.setattr(
-        type(fs_behaviour),
-        "_get_agent_funding_amounts",
-        _get_agent_funding_amounts_none,
-    )
-    monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _get_service_owner)
-    monkeypatch.setattr(
-        type(fs_behaviour), "_get_funds_by_operator", _get_funds_by_operator
-    )
-
-    profits: int = 2 * ONE_XDAI  # 2 xDAI
-    split = run_to_completion(fs_behaviour._split_funds(profits))
-
-    expected_owner: int = int(fs_ctx.params.service_owner_share * profits)  # 0.2 xDAI
-    expected_operator: int = profits - expected_owner  # 1.8 xDAI
-    assert split == {"0xOWNER": expected_owner, "0xOP": expected_operator}
-
-
 def test_agent_dips_below_minimum_triggers_split_via_deficit(
     fs_behaviour: Any,
     fs_ctx: Any,
@@ -185,3 +125,216 @@ def test_agent_dips_below_minimum_triggers_split_via_deficit(
     should_split = run_to_completion(fs_behaviour._should_split_profits())
     assert should_split is True
     assert calls["funds"] == 1, "Deficit path not evaluated"
+
+
+def test_owner_share_rounding_wei_error(
+    fs_behaviour: Any,
+    fs_ctx: Any,
+    run_to_completion: Callable[[Generator[Any, None, Any]], Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Expose rounding: int(0.1 * profits) != profits // 10 for large integers.
+
+    With profits = 1_000_000_000_000_003_139:
+      - profits // 10 = 100_000_000_000_000_313
+      - int(0.1 * profits) becomes 100_000_000_000_000_320 (off by +7 wei)
+    """
+    profits: int = 1_000_000_000_000_003_139
+
+    fs_ctx.params.service_owner_share = 1000
+    fs_ctx.params.on_chain_service_id = 1
+
+    def _no_deficits(self: Any) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return {}
+
+    def _owner(self: Any, _sid: int) -> Generator[None, None, Optional[str]]:
+        if False:
+            yield
+        return "0xOWNER"
+
+    def _ops(
+        self: Any, operator_share: int
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return {"0xOP": operator_share}
+
+    monkeypatch.setattr(type(fs_behaviour), "_get_agent_funding_amounts", _no_deficits)
+    monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _owner)
+    monkeypatch.setattr(type(fs_behaviour), "_get_funds_by_operator", _ops)
+
+    split = run_to_completion(fs_behaviour._split_funds(profits))
+    assert split is not None
+
+    owner_actual: int = split["0xOWNER"]  # calculated by current code
+    owner_expected: int = profits // 10  # integer 10% benchmark
+
+    assert owner_actual == owner_expected
+
+
+def test_split_exact_allocation_no_deficits_bps(
+    fs_behaviour: Any,
+    fs_ctx: Any,
+    run_to_completion: Callable[[Generator[Any, None, Any]], Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    No agent deficits: owner gets bps share, operator gets the remainder.
+
+    Sum of payouts must equal profits exactly (no over-allocation, no dust).
+    """
+    profits: int = 1_000_000_000_000_003_139
+
+    fs_ctx.params.service_owner_share = 1_000  # 10% in basis points
+    fs_ctx.params.on_chain_service_id = 1
+
+    def _no_deficits(self: Any) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return {}
+
+    def _owner(self: Any, _sid: int) -> Generator[None, None, Optional[str]]:
+        if False:
+            yield
+        return "0xOWNER"
+
+    # Give 100% of operator share to a single operator for exact equality
+    def _ops(
+        self: Any, operator_share: int
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return {"0xOP": operator_share}
+
+    monkeypatch.setattr(type(fs_behaviour), "_get_agent_funding_amounts", _no_deficits)
+    monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _owner)
+    monkeypatch.setattr(type(fs_behaviour), "_get_funds_by_operator", _ops)
+
+    split = run_to_completion(fs_behaviour._split_funds(profits))
+    assert split is not None
+
+    owner_expected: int = profits * fs_ctx.params.service_owner_share // 10_000
+    operator_expected: int = profits - owner_expected
+
+    assert split == {"0xOWNER": owner_expected, "0xOP": operator_expected}
+    assert sum(split.values()) == profits  # exact, proves no over-allocation
+
+
+def test_split_with_agent_deficits_exact_totals_bps(
+    fs_behaviour: Any,
+    fs_ctx: Any,
+    run_to_completion: Callable[[Generator[Any, None, Any]], Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    With agent deficits present (total < profits), we first fund agents,
+
+    then split the remainder between owner (bps) and operator. Total out == profits.
+    """
+    profits: int = 2_000_000_000_000_000_000  # 2 xDAI
+    fs_ctx.params.service_owner_share = 1_000  # 10% in bps
+    fs_ctx.params.on_chain_service_id = 1
+
+    # Two agents each need 0.2 xDAI, total deficits = 0.4 xDAI
+    agent_funding_amount: int = 200_000_000_000_000_000
+    deficits_map: Dict[str, int] = {
+        "0xA1": agent_funding_amount,
+        "0xA2": agent_funding_amount,
+    }
+    total_deficits: int = sum(deficits_map.values())
+
+    def _deficits(self: Any) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return dict(deficits_map)
+
+    def _owner(self: Any, _sid: int) -> Generator[None, None, Optional[str]]:
+        if False:
+            yield
+        return "0xOWNER"
+
+    # All operator share goes to a single operator for exact equality checks
+    def _ops(
+        self: Any, operator_share: int
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return {"0xOP": operator_share}
+
+    monkeypatch.setattr(type(fs_behaviour), "_get_agent_funding_amounts", _deficits)
+    monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _owner)
+    monkeypatch.setattr(type(fs_behaviour), "_get_funds_by_operator", _ops)
+
+    split = run_to_completion(fs_behaviour._split_funds(profits))
+    assert split is not None
+
+    # Remainder after funding agents
+    remainder: int = profits - total_deficits
+    owner_expected: int = remainder * fs_ctx.params.service_owner_share // 10_000
+    operator_expected: int = remainder - owner_expected
+
+    # Build expected dict
+    expected: Dict[str, int] = dict(deficits_map)
+    expected["0xOWNER"] = owner_expected
+    expected["0xOP"] = operator_expected
+
+    assert split == expected
+    assert sum(split.values()) == profits  # nothing more than available funds
+
+
+def test_split_when_deficits_exceed_profits_proportional_only_to_agents(
+    fs_behaviour: Any,
+    fs_ctx: Any,
+    run_to_completion: Callable[[Generator[Any, None, Any]], Any],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    If total agent deficits > profits, we split profits proportionally among agents
+
+    and do NOT allocate anything to owner/operators. Sum of payouts <= profits.
+    """
+    profits: int = 900  # small number to make math obvious
+
+    # Two agents require a total of 1200 > 900
+    deficits_map: Dict[str, int] = {"0xA": 600, "0xB": 600}
+
+    def _deficits(self: Any) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        return dict(deficits_map)
+
+    def _owner(self: Any, _sid: int) -> Generator[None, None, Optional[str]]:
+        if False:
+            yield
+        return "0xOWNER"
+
+    def _ops(
+        self: Any, operator_share: int
+    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+        if False:
+            yield
+        # Should never be called in this path, but return empty if it is
+        return {}
+
+    monkeypatch.setattr(type(fs_behaviour), "_get_agent_funding_amounts", _deficits)
+    monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _owner)
+    monkeypatch.setattr(type(fs_behaviour), "_get_funds_by_operator", _ops)
+
+    split = run_to_completion(fs_behaviour._split_funds(profits))
+    assert split is not None
+
+    # Proportional shares: floor((need_i * profits) / total_need)
+    total_need: int = sum(deficits_map.values())
+    expected_a: int = (deficits_map["0xA"] * profits) // total_need
+    expected_b: int = (deficits_map["0xB"] * profits) // total_need
+
+    # Owner/operator should not appear when deficits consume all profits
+    assert "0xOWNER" not in split
+    assert "0xOP" not in split
+
+    # Exact agent results (may leave ≤ 1 wei of dust due to flooring, never > profits)
+    assert split == {"0xA": expected_a, "0xB": expected_b}
+    assert sum(split.values()) <= profits
