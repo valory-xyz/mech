@@ -43,6 +43,7 @@ from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
 from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -113,7 +114,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._download_tools()
         self._execute_ipfs_tasks()
         self._execute_task()
-        self._check_for_new_reqs()
         self._check_for_new_marketplace_reqs()
 
     @property
@@ -243,25 +243,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=ledger_api_msg)
         self.params.in_flight_req = True
 
-    def _check_for_new_reqs(self) -> None:
-        """Check for new reqs."""
-        if self.params.in_flight_req or not self._should_poll(RequestType.LEGACY.value):
-            # do nothing if there is an in flight request
-            # or if we should not poll yet
-            return
-
-        from_block = self.params.req_params.from_block.get(
-            RequestType.LEGACY.value, None
-        )
-        if from_block is None:
-            # set the initial from block
-            self._populate_from_block()
-            self.params.req_type = RequestType.LEGACY.value
-            return
-        self._check_undelivered_reqs()
-        self.params.in_flight_req = True
-        self.params.req_params.last_polling[RequestType.LEGACY.value] = time.time()
-
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""
         if self.params.in_flight_req or not self._should_poll(
@@ -283,45 +264,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.in_flight_req = True
         self.params.req_params.last_polling[RequestType.MARKETPLACE.value] = time.time()
 
-    def _check_undelivered_reqs(self) -> None:
-        """Check for undelivered mech reqs."""
-        target_mechs = [
-            mech
-            for mech, config in self.params.mech_to_config.items()
-            if not config.is_marketplace_mech
-        ]
-        contract_api_msg, _ = self.context.contract_dialogues.create(
-            performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.agent_mech_contract_addresses[0],
-            contract_id=str(AgentMechContract.contract_id),
-            callable="get_multiple_undelivered_reqs",
-            kwargs=ContractApiMessage.Kwargs(
-                dict(
-                    from_block=self.params.req_params.from_block.get(
-                        RequestType.LEGACY.value
-                    ),
-                    chain_id=self.params.default_chain_id,
-                    contract_addresses=target_mechs,
-                    max_block_window=self.params.max_block_window,
-                )
-            ),
-            counterparty=LEDGER_API_ADDRESS,
-            ledger_id=self.context.default_ledger_id,
-        )
-        self.params.req_type = RequestType.LEGACY.value
-        self.context.outbox.put_message(message=contract_api_msg)
-
     def _check_undelivered_reqs_marketplace(self) -> None:
         """Check for undelivered mech reqs."""
         if not self.params.use_mech_marketplace:
             return
 
-        # we are quering requests from marketplace mech as it contains the relevant data
-        # instead of the marketplace itself
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.agent_mech_contract_addresses[0],
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(MechMarketplaceContract.contract_id),
             callable="get_marketplace_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
@@ -398,6 +349,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if len(self.pending_tasks) == 0:
+            # task = self.other_pending_tasks.pop()    #
             # not tasks (requests) to execute
             return
 
@@ -709,7 +661,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             cost = get_cost_for_done_task(done_task)
             self.context.logger.info(f"Cost for task {req_id}: {cost}")
 
-        mech_config = self.params.mech_to_config[done_task["mech_address"].lower()]
+        mech_config = self.params.mech_to_config[self.params.agent_mech_contract_addresses[0].lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
         # pop the data key value as it's bytes which causes issues

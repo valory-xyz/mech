@@ -24,7 +24,7 @@ import threading
 import time
 import urllib.parse
 from enum import Enum
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Dict, List, Union, cast, Tuple
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -33,6 +33,7 @@ from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
 )
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
+from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.protocols.ipfs import IpfsMessage
@@ -46,6 +47,7 @@ PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
+WAIT_FOR_TIMEOUT = "wait_for_timeout"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
@@ -144,6 +146,7 @@ class ContractHandler(BaseHandler):
     def setup(self) -> None:
         """Setup the contract handler."""
         self.context.shared_state[PENDING_TASKS] = []
+        self.context.shared_state[WAIT_FOR_TIMEOUT] = []
         self.context.shared_state[DONE_TASKS] = []
         self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
         self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO] = {}
@@ -153,6 +156,11 @@ class ContractHandler(BaseHandler):
     def pending_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks."""
         return self.context.shared_state[PENDING_TASKS]
+
+    @property
+    def wait_for_timeout_tasks(self)-> List[Dict[str, Any]]:
+        """Get pending_tasks from other mechs"""
+        return self.context.shared_state[WAIT_FOR_TIMEOUT]
 
     def handle(self, message: Message) -> None:
         """
@@ -174,9 +182,10 @@ class ContractHandler(BaseHandler):
         self.params.in_flight_req = False
         self.on_message_handled(message)
 
+
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""
-        reqs = body.get("data", [])
+        reqs = self.validate_and_flatten(body=body)
         if len(reqs) == 0:
             return
 
@@ -190,12 +199,18 @@ class ContractHandler(BaseHandler):
             for req in reqs
             if req["block_number"] % self.params.num_agents == self.params.agent_index
         ]
-
         self.context.logger.info(f"Processing only {len(reqs)} of the new requests.")
-        self.pending_tasks.extend(reqs)
+        self.filter_requests(reqs)
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
         )
+
+    def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
+        for req in reqs:
+            if req["priorityMech"] == self.params.agent_mech_contract_addresses[0]:
+                self.pending_tasks.append(req)
+            else:
+                self.wait_for_timeout_tasks.append(req)
 
 
 class LedgerHandler(BaseHandler):

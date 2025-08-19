@@ -32,6 +32,7 @@ from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
+from web3 import Web3
 from web3.types import BlockIdentifier, FilterParams, TxReceipt
 from web3._utils.events import get_event_data
 
@@ -244,6 +245,134 @@ class MechMarketplaceContract(Contract):
         return {"data": request_events}
 
     @classmethod
+    def get_marketplace_undelivered_reqs(
+            cls,
+            ledger_api: LedgerApi,
+            contract_address: str,
+            marketplace_address: str,
+            from_block: BlockIdentifier = "earliest",
+            to_block: BlockIdentifier = "latest",
+            max_block_window: int = 1000,
+            **kwargs: Any,
+    ) -> JSONLike:
+        """Get the requests that are not delivered."""
+        if from_block == "earliest":
+            from_block = 0
+        print("From block: ", from_block)
+        current_block = ledger_api.api.eth.block_number
+        checksumed_contract_address = Web3.to_checksum_address(marketplace_address)
+        requests, delivers = [], []
+        for from_block_batch in range(int(from_block), current_block, max_block_window):
+            to_block_batch = (from_block_batch + max_block_window) - 1
+            if to_block_batch >= current_block:
+                to_block_batch = "latest"
+            requests_batch: List[
+                Dict[str, Any]
+            ] = cls.get_marketplace_request_events(
+                ledger_api,
+                checksumed_contract_address,
+                from_block_batch,
+                to_block_batch,
+            )[
+                "data"
+            ]
+            delivers_batch: List[
+                Dict[str, Any]
+            ] = cls.get_marketplace_deliver_events(
+                ledger_api,
+                checksumed_contract_address,
+                from_block_batch,
+                to_block_batch,
+            )[
+                "data"
+            ]
+            requests.extend(requests_batch)
+            delivers.extend(delivers_batch)
+        existing_ids = {rid for d in delivers for rid in d["requestIds"]}
+        pending_tasks: List[Dict[str, Any]] = []
+        print("Got the requests and deliveries")
+        for request in requests:
+            for i, request_id in enumerate(request["requestIds"]):
+                if request_id not in existing_ids:
+                    print("Found undelivered request with id:", request)
+                    status = cls.get_request_id_status(ledger_api, contract_address, request_id)
+                    print(f"Request's status is : {status}")
+                    # fetch and store max delivery rate for each request id
+                    request_id_info = MechMarketplaceContract.get_request_id_info(
+                        ledger_api, marketplace_address, request_id
+                    )
+                    request["request_delivery_rate"] = request_id_info["data"][
+                        DELIVERY_RATE_INDEX
+                    ]
+                    # store each requests in the pending_tasks list, make sure each req is stored once
+                    pending_tasks.append(request)
+        pending_tasks = cls._validate_and_flatten(requests=pending_tasks, contract_address=contract_address)
+        return {"data": pending_tasks}
+
+    @classmethod
+    def get_marketplace_request_events(
+            cls,
+            ledger_api: LedgerApi,
+            contract_address: str,
+            from_block: BlockIdentifier = "earliest",
+            to_block: BlockIdentifier = "latest",
+    ) -> JSONLike:
+        """Get the Request events emitted by the contract."""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        event_abi = contract_instance.events.MarketplaceRequest().abi
+        entries = cls.get_event_entries(
+            ledger_api=ledger_api,
+            from_block=from_block,
+            to_block=to_block,
+            event_abi=event_abi,
+            address=contract_instance.address,
+        )
+
+        request_events = list(
+            {
+                "tx_hash": entry.transactionHash.hex(),
+                "block_number": entry.blockNumber,
+                **entry["args"],
+                "contract_address": contract_address,
+            }
+            for entry in entries
+        )
+        return {"data": request_events}
+
+    @classmethod
+    def get_marketplace_deliver_events(
+            cls,
+            ledger_api: LedgerApi,
+            contract_address: str,
+            from_block: BlockIdentifier = "earliest",
+            to_block: BlockIdentifier = "latest",
+    ) -> JSONLike:
+        """Get the Deliver events emitted by the contract."""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        event_abi = contract_instance.events.MarketplaceDelivery().abi
+        entries = cls.get_event_entries(
+            ledger_api=ledger_api,
+            event_abi=event_abi,
+            address=contract_instance.address,
+            from_block=from_block,
+            to_block=to_block,
+        )
+
+        deliver_events = list(
+            {
+                "tx_hash": entry.transactionHash.hex(),
+                "block_number": entry.blockNumber,
+                **entry["args"],
+                "contract_address": contract_address,
+            }
+            for entry in entries
+        )
+        return {"data": deliver_events}
+
+
+    @classmethod
     def process_tx_receipt(
         cls,
         ledger_api: LedgerApi,
@@ -401,6 +530,24 @@ class MechMarketplaceContract(Contract):
         return dict(data=request_id_info)
 
     @classmethod
+    def get_request_id_status(
+        cls,
+        ledger_api:LedgerApi,
+        contract_address: str,
+        request_id: bytes,
+    ) -> JSONLike:
+        """Fetch status for a given request id."""
+        ledger_api = cast(EthereumApi, ledger_api)
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        print("Getting the status of the request")
+        status = contract_instance.functions.getRequestStatus(
+            request_id
+        ).call()
+        print(status)
+        return dict(data=status)
+
+
+    @classmethod
     def get_balance_tracker_for_mech_type(
         cls,
         ledger_api: EthereumApi,
@@ -451,3 +598,53 @@ class MechMarketplaceContract(Contract):
         logs = w3.get_logs(filter_params)
         entries = [get_event_data(w3.codec, event_abi, log) for log in logs]
         return entries
+
+
+    @classmethod
+    def _validate_and_flatten(cls, requests: List[Dict[str, Any]], contract_address: str) -> List[Dict[str, Any]]:
+        """Validate and flatten the requests body to single request."""
+        items: List[Dict[str, Any]] = []
+        # check_timeout and drop
+        for req in requests:
+            req_ids = req.get("requestIds", [])
+            req_data = req.get("requestDatas", [])
+            n_meta = int(req.get("numRequests", 0))
+
+            # length checks
+            n_ids = len(req_ids)
+            n_datas = len(req_data)
+
+            if n_ids != n_datas:
+                raise ValueError(f"Length mismatch: requestIds={n_ids} requestDatas={n_datas}")
+
+            if n_meta and n_meta != n_ids:
+                _logger.warning("numRequests (%d) != actual count (%d)", n_meta, n_ids)
+
+            rate = req.get("request_delivery_rate")
+            if rate is None:
+                _logger.warning("Missing request_delivery_rate; defaulting to 0")
+                rate = 0
+
+            for i, (rid, data) in enumerate(zip(req_ids, req_data)):
+                if not isinstance(rid, (bytes, bytearray)) or not isinstance(data, (bytes, bytearray)):
+                    raise TypeError(f"requestIds/requestDatas must be bytes at index {i}")
+
+            # flatten
+            base = {
+                "tx_hash": req.get("tx_hash"),
+                "block_number": req.get("block_number"),
+                "priorityMech": req.get("priorityMech"),
+                "requester": req.get("requester"),
+                # We need to deliver based on our mech event if we are stepping in.
+                "contract_address": contract_address,
+            }
+            for rid, data in zip(req_ids, req_data):
+                item = dict(base)
+                item.update({
+                    "requestId": rid,
+                    "data": data,
+                    "request_delivery_rate": int(rate),
+                })
+                items.append(item)
+
+        return items
