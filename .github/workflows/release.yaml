@@ -19,14 +19,23 @@ jobs:
           python-version: ${{ matrix.python-versions }}
       - uses: addnab/docker-run-action@v3
         with:
-            image: valory/open-autonomy-user:latest
-            options: -v ${{ github.workspace }}:/work
-            run: |
-              echo "Pushing Packages"
-              cd /work
-              export AUTHOR=$(grep 'service' packages/packages.json | awk -F/ '{print $2}' | head -1)
-              autonomy init --reset --author $AUTHOR --ipfs --remote
-              autonomy push-all
+          image: valory/open-autonomy-user:latest
+          options: -v ${{ github.workspace }}:/work
+          run: |
+            set -e
+            # ensure aea 1.65.0 in this container session
+            python -m pip uninstall -y open-aea || true
+            python -m pip install --no-cache-dir "open-aea==1.65.0"
+            printf '#!/usr/bin/env bash\nexec python -m aea.cli "$@"\n' > /usr/local/bin/aea
+            chmod +x /usr/local/bin/aea
+            export PATH="/usr/local/bin:$PATH"
+            which aea && aea --version
+
+            echo "Pushing Packages"
+            cd /work
+            export AUTHOR=$(grep 'service' packages/packages.json | awk -F/ '{print $2}' | head -1)
+            autonomy init --reset --author $AUTHOR --ipfs --remote
+            autonomy push-all
   publish-images:
     name: Publish Docker Images
     runs-on: ${{ matrix.os }}
@@ -68,21 +77,29 @@ jobs:
       - uses: addnab/docker-run-action@v3
         name: Build Images
         with:
-            image: valory/open-autonomy-user:latest
-            options: -v ${{ github.workspace }}:/work
-            shell: bash
-            run: |
-              echo "Building Docker Images"
-              cd /work
-              source env.sh || exit 1
-              pip install requests==2.28.1
-              echo "Building images for $AUTHOR for service $SERVICE"
-              autonomy init --reset --author $AUTHOR --ipfs --remote
-              autonomy fetch $AUTHOR/$SERVICE --service --local || exit 1
-              cd $SERVICE || exit 1
-              autonomy build-image || exit 1
-              autonomy build-image --version $VERSION || exit 1
-
+          image: valory/open-autonomy-user:latest
+          options: -v ${{ github.workspace }}:/work
+          shell: bash
+          run: |
+            set -e
+            # ensure aea 1.65.0 in this container session
+            python -m pip uninstall -y open-aea || true
+            python -m pip install --no-cache-dir "open-aea==1.65.0"
+            printf '#!/usr/bin/env bash\nexec python -m aea.cli "$@"\n' > /usr/local/bin/aea
+            chmod +x /usr/local/bin/aea
+            export PATH="/usr/local/bin:$PATH"
+            which aea && aea --version
+            
+            echo "Building Docker Images"
+            cd /work
+            source env.sh || exit 1
+            pip install requests==2.28.1
+            echo "Building images for $AUTHOR for service $SERVICE"
+            autonomy init --reset --author $AUTHOR --ipfs --remote
+            autonomy fetch $AUTHOR/$SERVICE --service --local || exit 1
+            cd $SERVICE || exit 1
+            autonomy build-image || exit 1
+            autonomy build-image --version $VERSION || exit 1
       - name: Docker login
         run: |
             echo  $DOCKER_PASSWORD | docker login -u $DOCKER_USER --password-stdin
