@@ -1,8 +1,18 @@
 ARG AUTONOMY_IMAGE_VERSION="latest"
 ARG AUTONOMY_IMAGE_NAME="valory/open-autonomy"
 FROM ${AUTONOMY_IMAGE_NAME}:${AUTONOMY_IMAGE_VERSION}
-RUN pip install --no-cache-dir "open-autonomy>=1.37.0,<2.0.0" && \
-    autonomy --version
+
+# Make sure we use the desired CLI versions (AEA 1.65.0) before any script runs
+ENV PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# Remove any pipx-installed aea (if present), then install the exact versions we want.
+# Also create a wrapper so "aea" always resolves to the python module (bypasses pipx shims).
+RUN bash -lc 'command -v pipx >/dev/null && pipx uninstall aea || true' && \
+    python -m pip uninstall -y open-aea autonomy open-autonomy || true && \
+    python -m pip install --no-cache-dir "open-aea==1.65.0" "autonomy>=1.37.0,<2.0.0" && \
+    printf "#!/usr/bin/env bash\nexec python -m aea.cli \"\$@\"\n" > /usr/local/bin/aea && \
+    chmod +x /usr/local/bin/aea && \
+    aea --version && python -m aea.cli --version
 
 ARG AEA_AGENT
 ARG AUTHOR
@@ -12,14 +22,14 @@ RUN aea init --reset --remote --ipfs --author ${AUTHOR}
 
 WORKDIR /root
 
+# This now runs with AEA 1.65.0
 RUN AEA_AGENT=${AEA_AGENT} EXTRA_DEPENDENCIES=${EXTRA_DEPENDENCIES} bash /root/scripts/install.sh
 
 RUN pip uninstall -y opencv-python || echo "opencv-python not installed"
-RUN pip uninstall opencv-python-headless || echo "opencv-python-headless not installed"
-
-# re-install headless opencv
-RUN pip install opencv-python-headless==4.10.0.84
+RUN pip uninstall -y opencv-python-headless || echo "opencv-python-headless not installed"
+RUN pip install --no-cache-dir opencv-python-headless==4.10.0.84
 
 CMD ["/root/scripts/start.sh"]
 
-HEALTHCHECK --interval=3s --timeout=600s --retries=600 CMD netstat -ltn | grep -c 26658 > /dev/null; if [ 0 != $? ]; then exit 1; fi;
+HEALTHCHECK --interval=3s --timeout=600s --retries=600 \
+  CMD netstat -ltn | grep -c 26658 > /dev/null || exit 1
