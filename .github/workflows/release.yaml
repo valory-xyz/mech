@@ -76,6 +76,7 @@ jobs:
               cd /work
               source env.sh || exit 1
               pip install requests==2.28.1
+              pip install "open-autonomy>=1.37.0,<2.0.0"
               echo "Building images for $AUTHOR for service $SERVICE"
               autonomy init --reset --author $AUTHOR --ipfs --remote
               autonomy fetch $AUTHOR/$SERVICE --service --local || exit 1
