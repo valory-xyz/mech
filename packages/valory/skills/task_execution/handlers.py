@@ -24,7 +24,7 @@ import threading
 import time
 import urllib.parse
 from enum import Enum
-from typing import Any, Dict, List, Union, cast, Tuple
+from typing import Any, Dict, List, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -157,7 +157,7 @@ class ContractHandler(BaseHandler):
         return self.context.shared_state[PENDING_TASKS]
 
     @property
-    def wait_for_timeout_tasks(self)-> List[Dict[str, Any]]:
+    def wait_for_timeout_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks from other mechs"""
         return self.context.shared_state[WAIT_FOR_TIMEOUT]
 
@@ -181,7 +181,6 @@ class ContractHandler(BaseHandler):
         self.params.in_flight_req = False
         self.on_message_handled(message)
 
-
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""
         reqs = self._validate_and_flatten(body=body)
@@ -203,6 +202,7 @@ class ContractHandler(BaseHandler):
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
         )
+
     def _validate_and_flatten(self, body: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Validate and flatten the requests body to single request."""
         items: List[Dict[str, Any]] = []
@@ -218,10 +218,14 @@ class ContractHandler(BaseHandler):
             n_datas = len(req_data)
 
             if n_ids != n_datas:
-                raise ValueError(f"Length mismatch: requestIds={n_ids} requestDatas={n_datas}")
+                raise ValueError(
+                    f"Length mismatch: requestIds={n_ids} requestDatas={n_datas}"
+                )
 
             if n_meta and n_meta != n_ids:
-                self.context.warning("numRequests (%d) != actual count (%d)", n_meta, n_ids)
+                self.context.warning(
+                    "numRequests (%d) != actual count (%d)", n_meta, n_ids
+                )
 
             rate = req.get("request_delivery_rate")
             if rate is None:
@@ -229,8 +233,12 @@ class ContractHandler(BaseHandler):
                 rate = 0
 
             for i, (rid, data) in enumerate(zip(req_ids, req_data)):
-                if not isinstance(rid, (bytes, bytearray)) or not isinstance(data, (bytes, bytearray)):
-                    raise TypeError(f"requestIds/requestDatas must be bytes at index {i}")
+                if not isinstance(rid, (bytes, bytearray)) or not isinstance(
+                    data, (bytes, bytearray)
+                ):
+                    raise TypeError(
+                        f"requestIds/requestDatas must be bytes at index {i}"
+                    )
 
             # flatten
             base = {
@@ -240,26 +248,29 @@ class ContractHandler(BaseHandler):
                 "requester": req.get("requester"),
                 # We need to deliver based on our mech event if we are stepping in.
                 "contract_address": self.params.agent_mech_contract_addresses[0],
-                "status": req.get("status")
+                "status": req.get("status"),
             }
             for rid, data in zip(req_ids, req_data):
                 item = dict(base)
-                item.update({
-                    "requestId": rid,
-                    "data": data,
-                    "request_delivery_rate": int(rate),
-                })
+                item.update(
+                    {
+                        "requestId": rid,
+                        "data": data,
+                        "request_delivery_rate": int(rate),
+                    }
+                )
                 items.append(item)
 
         return items
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
+        """Filtering requests based on priority mech and status."""
         for req in reqs:
             if req["priorityMech"] == self.params.agent_mech_contract_addresses[0]:
                 self.pending_tasks.append(req)
             else:
                 self.context.logger.info(f"Other's mech request is: {req}")
-                if req['status'] == 2:
+                if req["status"] == 2:
                     self.wait_for_timeout_tasks.append(req)
                 else:
                     self.context.logger.info("Dropping message")

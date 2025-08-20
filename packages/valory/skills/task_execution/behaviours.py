@@ -42,7 +42,6 @@ from packages.valory.connections.ledger.connection import (
 from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
-from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
@@ -355,7 +354,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if len(self.pending_tasks) == 0:
-            if len(self.wait_for_timeout_tasks)==0:
+            if len(self.wait_for_timeout_tasks) == 0:
                 return
             task_data = self.wait_for_timeout_tasks.pop(0)
         else:
@@ -666,7 +665,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             cost = get_cost_for_done_task(done_task)
             self.context.logger.info(f"Cost for task {req_id}: {cost}")
 
-        mech_config = self.params.mech_to_config[self.params.agent_mech_contract_addresses[0].lower()]
+        mech_config = self.params.mech_to_config[
+            self.params.agent_mech_contract_addresses[0].lower()
+        ]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
         # pop the data key value as it's bytes which causes issues
