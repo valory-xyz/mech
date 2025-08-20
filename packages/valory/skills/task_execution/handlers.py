@@ -271,9 +271,8 @@ class ContractHandler(BaseHandler):
         for req in reqs:
             if req["priorityMech"] == self.params.agent_mech_contract_addresses[0]:
                 self.pending_tasks.append(req)
-            else:
-                if req["status"] == TIMED_OUT_STATUS:
-                    self.wait_for_timeout_tasks.append(req)
+            elif req["status"] == TIMED_OUT_STATUS:
+                self.wait_for_timeout_tasks.append(req)
 
 
 class LedgerHandler(BaseHandler):
