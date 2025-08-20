@@ -69,6 +69,7 @@ DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
+WAIT_FOR_TIMEOUT = "wait_for_timeout"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
@@ -143,6 +144,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def pending_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks."""
         return self.context.shared_state[PENDING_TASKS]
+
+    @property
+    def wait_for_timeout_tasks(self) -> List[Dict[str, Any]]:
+        """Get pending_tasks from other mechs"""
+        return self.context.shared_state[WAIT_FOR_TIMEOUT]
 
     @property
     def done_tasks(self) -> List[Dict[str, Any]]:
@@ -349,12 +355,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if len(self.pending_tasks) == 0:
-            # task = self.other_pending_tasks.pop()    #
-            # not tasks (requests) to execute
-            return
-
-        # create new task
-        task_data = self.pending_tasks.pop(0)
+            if len(self.wait_for_timeout_tasks)==0:
+                return
+            task_data = self.wait_for_timeout_tasks.pop(0)
+        else:
+            task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
         # convert request id to int if it's bytes
         if type(task_data.get("requestId")) == bytes:

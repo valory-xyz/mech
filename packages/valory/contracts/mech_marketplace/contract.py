@@ -295,8 +295,8 @@ class MechMarketplaceContract(Contract):
             for i, request_id in enumerate(request["requestIds"]):
                 if request_id not in existing_ids:
                     print("Found undelivered request with id:", request)
-                    status = cls.get_request_id_status(ledger_api, contract_address, request_id)
-                    print(f"Request's status is : {status}")
+                    status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)
+                    request["status"] = status["data"]
                     # fetch and store max delivery rate for each request id
                     request_id_info = MechMarketplaceContract.get_request_id_info(
                         ledger_api, marketplace_address, request_id
@@ -306,7 +306,6 @@ class MechMarketplaceContract(Contract):
                     ]
                     # store each requests in the pending_tasks list, make sure each req is stored once
                     pending_tasks.append(request)
-        pending_tasks = cls._validate_and_flatten(requests=pending_tasks, contract_address=contract_address)
         return {"data": pending_tasks}
 
     @classmethod
@@ -539,11 +538,9 @@ class MechMarketplaceContract(Contract):
         """Fetch status for a given request id."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        print("Getting the status of the request")
         status = contract_instance.functions.getRequestStatus(
             request_id
         ).call()
-        print(status)
         return dict(data=status)
 
 
@@ -598,53 +595,3 @@ class MechMarketplaceContract(Contract):
         logs = w3.get_logs(filter_params)
         entries = [get_event_data(w3.codec, event_abi, log) for log in logs]
         return entries
-
-
-    @classmethod
-    def _validate_and_flatten(cls, requests: List[Dict[str, Any]], contract_address: str) -> List[Dict[str, Any]]:
-        """Validate and flatten the requests body to single request."""
-        items: List[Dict[str, Any]] = []
-        # check_timeout and drop
-        for req in requests:
-            req_ids = req.get("requestIds", [])
-            req_data = req.get("requestDatas", [])
-            n_meta = int(req.get("numRequests", 0))
-
-            # length checks
-            n_ids = len(req_ids)
-            n_datas = len(req_data)
-
-            if n_ids != n_datas:
-                raise ValueError(f"Length mismatch: requestIds={n_ids} requestDatas={n_datas}")
-
-            if n_meta and n_meta != n_ids:
-                _logger.warning("numRequests (%d) != actual count (%d)", n_meta, n_ids)
-
-            rate = req.get("request_delivery_rate")
-            if rate is None:
-                _logger.warning("Missing request_delivery_rate; defaulting to 0")
-                rate = 0
-
-            for i, (rid, data) in enumerate(zip(req_ids, req_data)):
-                if not isinstance(rid, (bytes, bytearray)) or not isinstance(data, (bytes, bytearray)):
-                    raise TypeError(f"requestIds/requestDatas must be bytes at index {i}")
-
-            # flatten
-            base = {
-                "tx_hash": req.get("tx_hash"),
-                "block_number": req.get("block_number"),
-                "priorityMech": req.get("priorityMech"),
-                "requester": req.get("requester"),
-                # We need to deliver based on our mech event if we are stepping in.
-                "contract_address": contract_address,
-            }
-            for rid, data in zip(req_ids, req_data):
-                item = dict(base)
-                item.update({
-                    "requestId": rid,
-                    "data": data,
-                    "request_delivery_rate": int(rate),
-                })
-                items.append(item)
-
-        return items

@@ -9,7 +9,7 @@ fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
   behaviours.py: bafybeiaqxkyvb3jdqmhevdkx6zaxfbvxtzhbvk7dbvnvt646qf7wvkqc64
   dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
-  handlers.py: bafybeiht2lf32u5vnp3ejfhxdx4szl3rwur2gfzklwwiprei3tyf6jxhlm
+  handlers.py: bafybeigevtjxglfyczxgxsiikazryrvoq5urcupxpi2ccwltnvhvmaz6rq
   models.py: bafybeibtky2px5dwua2xkxwjaemasojqkvofqqwhi6y36y6acrzgda7ahm
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeigejp2wxvrzb3c4mtexuk7qjlyqs3utbtvspcc7lvde2mpqmtbo7u
@@ -29,8 +29,8 @@ connections:
 - valory/ipfs:0.1.0:bafybeiamz23olgtow4wqf7zpsfnfzf7pxiognrxl2mhn5kvqutlwhgukxa
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 contracts:
-- valory/agent_mech:0.1.0:bafybeidrmnhxgsttvvi4ohctbfcnzzyzaxadcbnqnartzsvar2qigeybia
-- valory/mech_marketplace:0.1.0:bafybeiawum4wvlv6ev6jfput6bszxkmokqytiilnw4uvkurtujb4przxla
+- valory/agent_mech:0.1.0:bafybeie4i5vaukfffbqveop7u4jr5hetdfwoo6zxsihfwyjkrwhetlrrdq
+- valory/mech_marketplace:0.1.0:bafybeicjrqljf5442q6gwru3nu6gq4sdkszicnt5usjffegwgdzhypkgxu
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4

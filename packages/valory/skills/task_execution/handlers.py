@@ -33,7 +33,6 @@ from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
 )
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
-from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.protocols.ipfs import IpfsMessage
@@ -185,7 +184,7 @@ class ContractHandler(BaseHandler):
 
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""
-        reqs = self.validate_and_flatten(body=body)
+        reqs = self._validate_and_flatten(body=body)
         if len(reqs) == 0:
             return
 
@@ -204,13 +203,66 @@ class ContractHandler(BaseHandler):
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
         )
+    def _validate_and_flatten(self, body: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Validate and flatten the requests body to single request."""
+        items: List[Dict[str, Any]] = []
+        requests = body.get("data", [])
+        # check_timeout and drop
+        for req in requests:
+            req_ids = req.get("requestIds", [])
+            req_data = req.get("requestDatas", [])
+            n_meta = int(req.get("numRequests", 0))
+
+            # length checks
+            n_ids = len(req_ids)
+            n_datas = len(req_data)
+
+            if n_ids != n_datas:
+                raise ValueError(f"Length mismatch: requestIds={n_ids} requestDatas={n_datas}")
+
+            if n_meta and n_meta != n_ids:
+                self.context.warning("numRequests (%d) != actual count (%d)", n_meta, n_ids)
+
+            rate = req.get("request_delivery_rate")
+            if rate is None:
+                self.context.warning("Missing request_delivery_rate; defaulting to 0")
+                rate = 0
+
+            for i, (rid, data) in enumerate(zip(req_ids, req_data)):
+                if not isinstance(rid, (bytes, bytearray)) or not isinstance(data, (bytes, bytearray)):
+                    raise TypeError(f"requestIds/requestDatas must be bytes at index {i}")
+
+            # flatten
+            base = {
+                "tx_hash": req.get("tx_hash"),
+                "block_number": req.get("block_number"),
+                "priorityMech": req.get("priorityMech"),
+                "requester": req.get("requester"),
+                # We need to deliver based on our mech event if we are stepping in.
+                "contract_address": self.params.agent_mech_contract_addresses[0],
+                "status": req.get("status")
+            }
+            for rid, data in zip(req_ids, req_data):
+                item = dict(base)
+                item.update({
+                    "requestId": rid,
+                    "data": data,
+                    "request_delivery_rate": int(rate),
+                })
+                items.append(item)
+
+        return items
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
         for req in reqs:
             if req["priorityMech"] == self.params.agent_mech_contract_addresses[0]:
                 self.pending_tasks.append(req)
             else:
-                self.wait_for_timeout_tasks.append(req)
+                self.context.logger.info(f"Other's mech request is: {req}")
+                if req['status'] == 2:
+                    self.wait_for_timeout_tasks.append(req)
+                else:
+                    self.context.logger.info("Dropping message")
 
 
 class LedgerHandler(BaseHandler):
