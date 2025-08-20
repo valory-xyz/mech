@@ -272,7 +272,6 @@ class ContractHandler(BaseHandler):
             if req["priorityMech"] == self.params.agent_mech_contract_addresses[0]:
                 self.pending_tasks.append(req)
             else:
-                self.context.logger.info(f"Other's mech request is: {req}")
                 if req["status"] == TIMED_OUT_STATUS:
                     self.wait_for_timeout_tasks.append(req)
 

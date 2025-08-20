@@ -276,7 +276,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.agent_mech_contract_addresses[0],
+            contract_address=self._get_designated_marketplace_mech_address(),
             contract_id=str(MechMarketplaceContract.contract_id),
             callable="get_marketplace_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
@@ -664,10 +664,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             dynamic_tool_cost = 0
             cost = get_cost_for_done_task(done_task)
             self.context.logger.info(f"Cost for task {req_id}: {cost}")
-
-        mech_config = self.params.mech_to_config[
-            self.params.agent_mech_contract_addresses[0].lower()
-        ]
+        mech_address = self._get_designated_marketplace_mech_address()
+        mech_config = self.params.mech_to_config[mech_address.lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
         # pop the data key value as it's bytes which causes issues
