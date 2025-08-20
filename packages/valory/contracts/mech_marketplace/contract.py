@@ -289,7 +289,6 @@ class MechMarketplaceContract(Contract):
             delivers.extend(delivers_batch)
         existing_ids = {rid for d in delivers for rid in d["requestIds"]}
         pending_tasks: List[Dict[str, Any]] = []
-        print("Got the requests and deliveries")
         for request in requests:
             for i, request_id in enumerate(request["requestIds"]):
                 if request_id not in existing_ids:
