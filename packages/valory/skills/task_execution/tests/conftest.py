@@ -17,13 +17,15 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains the fixtures for the rest of the tests."""
+"""Shared test fixtures for the task_execution skill."""
+
+from __future__ import annotations
 
 import threading
 from collections import defaultdict
 from concurrent.futures import Future
 from types import SimpleNamespace
-from typing import Any, Callable, Dict
+from typing import Any, Callable, Dict, List, Tuple
 
 import pytest
 
@@ -36,19 +38,19 @@ from packages.valory.skills.task_execution.behaviours import (
     PENDING_TASKS,
     REQUEST_ID_TO_DELIVERY_RATE_INFO,
     TaskExecutionBehaviour,
+    WAIT_FOR_TIMEOUT,
 )
+
+
+# ----------------------------- Shared state ----------------------------------
 
 
 @pytest.fixture
 def shared_state() -> Dict[str, Any]:
-    """
-    Return initial shared_state mapping used by behaviours/handlers.
-
-    :returns: Mapping with lists/lock for pending/done/ipfs tasks and pricing info.
-    :rtype: Dict[str, Any]
-    """
+    """Return the initial shared_state mapping used by behaviours/handlers."""
     return {
         PENDING_TASKS: [],
+        WAIT_FOR_TIMEOUT: [],
         DONE_TASKS: [],
         IPFS_TASKS: [],
         DONE_TASKS_LOCK: threading.Lock(),
@@ -56,17 +58,18 @@ def shared_state() -> Dict[str, Any]:
     }
 
 
+# ----------------------------- Params stub -----------------------------------
+
+
 @pytest.fixture
 def params_stub() -> SimpleNamespace:
-    """
-    A minimal Params-like namespace with attributes the code touches.
+    """Return a minimal Params-like namespace with the attributes the code uses."""
+    mech_addr = "0xMechAddr"
+    mech_addr_lower = mech_addr.lower()
 
-    :returns: Parameters stub emulating the real Params model for tests.
-    :rtype: SimpleNamespace
-    """
-    return SimpleNamespace(
-        tools_to_package_hash={},
-        tools_to_pricing={},
+    ns = SimpleNamespace(
+        tools_to_package_hash={},  # {tool_name: ipfs_cid}
+        tools_to_pricing={},  # {tool_name: price}
         api_keys={},
         req_params=SimpleNamespace(from_block={}, last_polling={}),
         polling_interval=10.0,
@@ -77,12 +80,17 @@ def params_stub() -> SimpleNamespace:
         cleanup_freq=1000,
         req_type=None,
         default_chain_id=100,
-        agent_mech_contract_addresses=["0x0000000000000000000000000000000000000000"],
-        mech_to_config={"0xmech": SimpleNamespace(is_marketplace_mech=False)},
-        use_mech_marketplace=False,
-        mech_marketplace_address=None,
+        agent_mech_contract_addresses=[mech_addr],
+        mech_to_config={
+            mech_addr_lower: SimpleNamespace(
+                is_marketplace_mech=True,
+                use_dynamic_pricing=False,
+            )
+        },
+        use_mech_marketplace=True,
+        mech_marketplace_address="0xMarketplace",
         max_block_window=10_000,
-        task_deadline=10.0,
+        task_deadline=15.0,
         timeout_limit=2,
         request_id_to_num_timeouts=defaultdict(int),
         is_cold_start=True,
@@ -91,155 +99,148 @@ def params_stub() -> SimpleNamespace:
         from_block_range=0,
     )
 
+    # Provide a logger object sometimes accessed via params.
+    ns.logger = SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+    return ns
+
+
+# ----------------------------- Context stub ----------------------------------
+
+
+class _Outbox:
+    """Outbox stub which discards messages."""
+
+    def put_message(self, *args: Any, **kwargs: Any) -> None:
+        """Drop an outgoing message."""
+        return None
+
+
+class _SentOutbox:
+    """Collect messages if you need to assert what was sent in handler tests."""
+
+    def __init__(self) -> None:
+        """Initialize the container."""
+        self.sent: List[Any] = []
+
+    def put_message(self, message: Any, *args: Any, **kwargs: Any) -> None:
+        """Append a message to the sent list."""
+        self.sent.append(message)
+
 
 @pytest.fixture
 def context_stub(
     shared_state: Dict[str, Any], params_stub: SimpleNamespace
 ) -> SimpleNamespace:
-    """
-    A bare-bones AEA-like context with logger/outbox stubs.
-
-    :param shared_state: The shared state mapping used by the skill.
-    :type shared_state: Dict[str, Any]
-    :param params_stub: The parameters stub object.
-    :type params_stub: SimpleNamespace
-    :returns: A minimal context exposing attributes accessed by the code.
-    :rtype: SimpleNamespace
-    """
-
-    class Outbox:
-        """Outbox stub which discards messages."""
-
-        def put_message(self, *args: Any, **kwargs: Any) -> None:
-            """
-            Drop an outgoing message.
-
-            :param args: Ignored positional arguments.
-            :type args: tuple[Any, ...]
-            :param kwargs: Ignored keyword arguments.
-            :type kwargs: dict[str, Any]
-            :returns
-            """
-            pass
-
+    """Return a minimal AEA-like context with logger/outbox/dialogue stubs."""
     logger = SimpleNamespace(
         info=lambda *a, **k: None,
         warning=lambda *a, **k: None,
         error=lambda *a, **k: None,
     )
 
-    return SimpleNamespace(
+    class _DLG:
+        """Generic dialogue stub."""
+
+        def cleanup(self) -> None:
+            """No-op cleanup."""
+            return None
+
+    class _IpfsDLG(_DLG):
+        """IPFS dialogue stub with update/create helpers."""
+
+        def update(self, _msg: Any) -> Any:
+            """Return an object with a stable dialogue reference."""
+            return SimpleNamespace(
+                dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+            )
+
+        def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
+            """Return a (message, dialogue) pair with a stable reference."""
+            msg = SimpleNamespace()
+            dlg = SimpleNamespace(
+                dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+            )
+            return msg, dlg
+
+    ctx = SimpleNamespace(
         logger=logger,
         shared_state=shared_state,
         params=params_stub,
         agent_address="0xagent",
         default_ledger_id="ethereum",
-        outbox=Outbox(),
-        ipfs_dialogues=None,
-        contract_dialogues=None,
-        ledger_dialogues=None,
-        acn_data_share_dialogues=None,
+        outbox=_Outbox(),
+        ipfs_dialogues=_IpfsDLG(),
+        contract_dialogues=_DLG(),
+        ledger_dialogues=_DLG(),
+        acn_data_share_dialogues=_DLG(),
     )
+
+    class _HandlersBag:
+        """Container listing handler attributes (for dialogue cleanup)."""
+
+        ipfs_handler: object = object()
+        contract_handler: object = object()
+        ledger_handler: object = object()
+
+    ctx.handlers = _HandlersBag()
+    ctx.params.logger = ctx.logger  # optional: some code uses params.logger
+    return ctx
+
+
+# ----------------------------- Behaviour fixture -----------------------------
 
 
 @pytest.fixture
 def behaviour(context_stub: SimpleNamespace) -> TaskExecutionBehaviour:
-    """
-    Create a TaskExecutionBehaviour instance wired to the stub context.
-
-    :param context_stub: The fake AEA context.
-    :type context_stub: SimpleNamespace
-    :returns: The behaviour instance after setup().
-    :rtype: TaskExecutionBehaviour
-    """
+    """Create a TaskExecutionBehaviour instance wired to the stub context."""
     b = TaskExecutionBehaviour(name="task_execution", skill_context=context_stub)
     b.setup()
     return b
 
 
+# ----------------------------- Helpers ---------------------------------------
+
+
 class FakeDialogue:
-    """Mimic a dialogue with a stable nonce used for callback mapping."""
+    """Dialogue with a stable nonce used by behaviour.send_message mapping."""
 
     class Label:
-        """Mock label with a fixed dialogue reference."""
+        """Label with fixed dialogue reference."""
 
         dialogue_reference = ("nonce-1", "x")
 
     dialogue_label = Label()
 
 
-class FakeIpfsMsg:
-    """Minimal IpfsMessage-like shape for callback paths."""
-
-    def __init__(
-        self, files: Dict[str, Any] | None = None, ipfs_hash: str | None = None
-    ) -> None:
-        """
-        Initialize with optional files/ipfs_hash fields.
-
-        :param files: Optional mapping of filename to content bytes/str.
-        :type files: Dict[str, Any]
-        :param ipfs_hash: IPFS hash string to emulate a store response.
-        :type ipfs_hash: str
-        """
-        self.files = files or {}
-        self.ipfs_hash = ipfs_hash
-
-
 @pytest.fixture
 def fake_dialogue() -> FakeDialogue:
-    """
-    Fake dialogue object with a fixed nonce.
-
-    :returns: Dialogue stub with a static nonce.
-    :rtype: FakeDialogue
-    """
+    """Return a dialogue stub with a stable nonce."""
     return FakeDialogue()
 
 
 @pytest.fixture
 def done_future() -> Callable[[Any], Future]:
-    """
-    Factory that produces an already-completed Future.
-
-    :returns: A maker function which sets the result immediately.
-    :rtype: Callable[[Any], concurrent.futures.Future]
-    """
+    """Return a factory that produces an already-completed Future."""
 
     def _make(value: Any) -> Future:
-        """
-        Create a Future completed with `value`.
-
-        :param value: The value to set on the Future.
-        :type value: Any
-        :returns: A Future already completed with the given value.
-        :rtype: Future
-        """
-        f: Future = Future()
-        f.set_result(value)
-        return f
+        """Create a Future that is already completed with the given value."""
+        fut: Future = Future()
+        fut.set_result(value)
+        return fut
 
     return _make
 
 
 @pytest.fixture
 def patch_ipfs_multihash(monkeypatch: Any) -> Callable[[str], None]:
-    """
-    A helper that stubs CID/multihash helpers for tests.
-
-    :param monkeypatch: Pytest monkeypatch fixture.
-    :type monkeypatch: Any
-    :returns: Function to apply the stubs with an optional fake file hash.
-    :rtype: Callable[[str], None]
-    """
+    """Patch CID/multihash helpers to deterministic stubs for tests."""
 
     def _apply(file_hash: str = "cid-for-task") -> None:
-        """
-        Apply monkeypatches for IPFS helpers.
-
-        :param file_hash: Fake CID returned by get_ipfs_file_hash.
-        :type file_hash: str
-        """
+        """Apply monkeypatches for IPFS helper functions."""
         monkeypatch.setattr(beh_mod, "get_ipfs_file_hash", lambda data: file_hash)
         monkeypatch.setattr(beh_mod, "to_v1", lambda cid: cid)
         monkeypatch.setattr(beh_mod, "to_multihash", lambda cid: f"mh:{cid}")
@@ -249,62 +250,28 @@ def patch_ipfs_multihash(monkeypatch: Any) -> Callable[[str], None]:
 
 @pytest.fixture
 def disable_polling(monkeypatch: Any) -> Callable[[], None]:
-    """
-    A helper that disables polling paths on the behaviour.
-
-    :param monkeypatch: Pytest monkeypatch fixture.
-    :type monkeypatch: Any
-    :returns: Function which, when called, disables polling methods.
-    :rtype: Callable[[], None]
-    """
+    """Disable marketplace polling to keep behaviour tests deterministic."""
 
     def _apply() -> None:
-        """Disable polling-related methods on the behaviour."""
+        """Apply monkeypatch to skip polling in behaviour.act()."""
         monkeypatch.setattr(
-            TaskExecutionBehaviour, "_check_for_new_reqs", lambda self: None
-        )
-        monkeypatch.setattr(
-            TaskExecutionBehaviour, "_check_for_new_marketplace_reqs", lambda self: None
+            TaskExecutionBehaviour,
+            "_check_for_new_marketplace_reqs",
+            lambda self: None,
+            raising=False,
         )
 
     return _apply
 
 
-class SentOutbox:
-    """Collect messages sent to outbox for later assertions."""
-
-    def __init__(self) -> None:
-        """Initialize the sent list."""
-        self.sent: list[Any] = []
-
-    def put_message(self, message: Any, *args: Any, **kwargs: Any) -> None:
-        """
-        Append a message to the sent list.
-
-        :param message: The message to store.
-        :type message: Any
-        :param *args: Ignored positional arguments.
-        :type *args: Any
-        :param **kwargs: Ignored keyword arguments.
-        :type **kwargs: Any
-        """
-        self.sent.append(message)
+# ----------------------- Handler-specific context (optional) ------------------
 
 
 @pytest.fixture
 def handler_context(
     shared_state: Dict[str, Any], params_stub: SimpleNamespace
 ) -> SimpleNamespace:
-    """
-    A minimal handler context with stubbed dialogues and outbox.
-
-    :param shared_state: The shared state mapping used by the skill.
-    :type shared_state: Dict[str, Any]
-    :param params_stub: The parameters stub object.
-    :type params_stub: SimpleNamespace
-    :returns: Context exposing handler dependencies and fake dialogues.
-    :rtype: SimpleNamespace
-    """
+    """Return a context variant that records sent messages (for handler tests)."""
     ctx = SimpleNamespace(
         logger=SimpleNamespace(
             info=lambda *a, **k: None,
@@ -314,34 +281,40 @@ def handler_context(
         shared_state=shared_state,
         params=params_stub,
         default_ledger_id="ethereum",
-        outbox=SentOutbox(),
+        outbox=_SentOutbox(),
     )
 
-    class HandlersBag:
-        """Container for handler attributes to drive cleanup logic."""
+    class _DLG:
+        """Dialogue stub with cleanup."""
 
-        pass
+        def cleanup(self) -> None:
+            """No-op cleanup."""
+            return None
 
-    ctx.handlers = HandlersBag()
+    ctx.handlers = SimpleNamespace(
+        ipfs_handler=object(), contract_handler=object(), ledger_handler=object()
+    )
     ctx.ipfs_dialogues = SimpleNamespace(
-        update=lambda msg: SimpleNamespace(
+        update=lambda _msg: SimpleNamespace(
             dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
         ),
         cleanup=lambda: None,
+        create=lambda *a, **k: (
+            SimpleNamespace(),  # msg
+            SimpleNamespace(
+                dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+            ),
+        ),
     )
-    ctx.contract_dialogues = SimpleNamespace(cleanup=lambda: None)
-    ctx.ledger_dialogues = SimpleNamespace(cleanup=lambda: None)
+    ctx.contract_dialogues = _DLG()
+    ctx.ledger_dialogues = _DLG()
+    ctx.params.logger = ctx.logger
     return ctx
 
 
 @pytest.fixture
 def http_dialogue() -> Any:
-    """
-    A fake HttpDialogue whose reply() returns a SimpleNamespace response.
-
-    :returns: Fake dialogue object with a reply() method.
-    :rtype: Any
-    """
+    """Return a fake HttpDialogue whose reply() returns a SimpleNamespace."""
 
     class FakeHttpDialogue:
         """Minimal HTTP dialogue stub."""
@@ -359,20 +332,13 @@ def http_dialogue() -> Any:
             """
             Build a fake HTTP response object.
 
-            :param performative: Performative enum/value to set on the response.
-            :type performative: Any
+            :param performative: Response performative.
             :param target_message: The originating HTTP request message.
-            :type target_message: Any
             :param version: HTTP version string (e.g., "1.1").
-            :type version: str
             :param status_code: Numeric HTTP status code.
-            :type status_code: int
             :param status_text: Human-readable status string.
-            :type status_text: str
             :param headers: Raw headers string to include.
-            :type headers: str
             :param body: Raw response body bytes.
-            :type body: bytes
             :returns: A response-like object with the given fields.
             """
             return SimpleNamespace(
@@ -390,50 +356,28 @@ def http_dialogue() -> Any:
 
 @pytest.fixture
 def dialogue_skill_context(shared_state: Dict[str, Any]) -> SimpleNamespace:
-    """
-    A minimal skill_context expected by Model.
-
-    :param shared_state: The shared state mapping passed through to the context.
-    :type shared_state: Dict[str, Any]
-    :returns: Context with skill_id, agent_address, logger, and shared_state.
-    :rtype: SimpleNamespace
-    """
+    """Return a minimal skill_context used by dialogue classes in tests."""
+    logger = SimpleNamespace(
+        debug=lambda *a, **k: None,
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
     return SimpleNamespace(
         skill_id="valory/task_execution:0.1.0",
         agent_address="0xagent",
-        logger=SimpleNamespace(
-            debug=lambda *a, **k: None,
-            info=lambda *a, **k: None,
-            warning=lambda *a, **k: None,
-            error=lambda *a, **k: None,
-        ),
+        logger=logger,
         shared_state=shared_state,
-    )
-
-
-def _get_self_addr(dialogues_obj: Any) -> str | None:
-    """
-    Self address from dialogues object handling different attribute names.
-
-    :param dialogues_obj: The dialogues instance (IpfsDialogues, etc.).
-    :type dialogues_obj: Any
-    :returns: The configured self address string, or None if not found.
-    :rtype: Optional[str]
-    """
-    return getattr(
-        dialogues_obj, "self_address", getattr(dialogues_obj, "_self_address", None)
     )
 
 
 @pytest.fixture
 def params_kwargs(dialogue_skill_context: SimpleNamespace) -> Dict[str, Any]:
     """
-    Minimal good kwargs for Params; individual tests mutate per-case.
+    Return minimal good kwargs for Params; individual tests can mutate per-case.
 
     :param dialogue_skill_context: The fake Model skill_context.
-    :type dialogue_skill_context: SimpleNamespace
     :returns: Keyword arguments suitable for constructing Params().
-    :rtype: Dict[str, Any]
     """
     return dict(
         skill_context=dialogue_skill_context,

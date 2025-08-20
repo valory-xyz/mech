@@ -48,6 +48,7 @@ def test_happy_path_executes_and_stores(
         "run",
         {"params": {"default_model": "gpt-4o-mini"}},
     )
+    behaviour._tools_to_package_hash["sum"] = "hashsum"
     params_stub.tools_to_pricing = {"sum": 0}
 
     req_id: int = 42

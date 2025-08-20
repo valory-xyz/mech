@@ -42,7 +42,7 @@ from packages.valory.connections.ledger.connection import (
 from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
-from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -68,6 +68,7 @@ DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
+WAIT_FOR_TIMEOUT = "wait_for_timeout"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
@@ -113,7 +114,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._download_tools()
         self._execute_ipfs_tasks()
         self._execute_task()
-        self._check_for_new_reqs()
         self._check_for_new_marketplace_reqs()
 
     @property
@@ -143,6 +143,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def pending_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks."""
         return self.context.shared_state[PENDING_TASKS]
+
+    @property
+    def wait_for_timeout_tasks(self) -> List[Dict[str, Any]]:
+        """Get pending_tasks from other mechs"""
+        return self.context.shared_state[WAIT_FOR_TIMEOUT]
 
     @property
     def done_tasks(self) -> List[Dict[str, Any]]:
@@ -243,25 +248,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=ledger_api_msg)
         self.params.in_flight_req = True
 
-    def _check_for_new_reqs(self) -> None:
-        """Check for new reqs."""
-        if self.params.in_flight_req or not self._should_poll(RequestType.LEGACY.value):
-            # do nothing if there is an in flight request
-            # or if we should not poll yet
-            return
-
-        from_block = self.params.req_params.from_block.get(
-            RequestType.LEGACY.value, None
-        )
-        if from_block is None:
-            # set the initial from block
-            self._populate_from_block()
-            self.params.req_type = RequestType.LEGACY.value
-            return
-        self._check_undelivered_reqs()
-        self.params.in_flight_req = True
-        self.params.req_params.last_polling[RequestType.LEGACY.value] = time.time()
-
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""
         if self.params.in_flight_req or not self._should_poll(
@@ -283,45 +269,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.in_flight_req = True
         self.params.req_params.last_polling[RequestType.MARKETPLACE.value] = time.time()
 
-    def _check_undelivered_reqs(self) -> None:
-        """Check for undelivered mech reqs."""
-        target_mechs = [
-            mech
-            for mech, config in self.params.mech_to_config.items()
-            if not config.is_marketplace_mech
-        ]
-        contract_api_msg, _ = self.context.contract_dialogues.create(
-            performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.agent_mech_contract_addresses[0],
-            contract_id=str(AgentMechContract.contract_id),
-            callable="get_multiple_undelivered_reqs",
-            kwargs=ContractApiMessage.Kwargs(
-                dict(
-                    from_block=self.params.req_params.from_block.get(
-                        RequestType.LEGACY.value
-                    ),
-                    chain_id=self.params.default_chain_id,
-                    contract_addresses=target_mechs,
-                    max_block_window=self.params.max_block_window,
-                )
-            ),
-            counterparty=LEDGER_API_ADDRESS,
-            ledger_id=self.context.default_ledger_id,
-        )
-        self.params.req_type = RequestType.LEGACY.value
-        self.context.outbox.put_message(message=contract_api_msg)
-
     def _check_undelivered_reqs_marketplace(self) -> None:
         """Check for undelivered mech reqs."""
         if not self.params.use_mech_marketplace:
             return
 
-        # we are quering requests from marketplace mech as it contains the relevant data
-        # instead of the marketplace itself
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self._get_designated_marketplace_mech_address(),
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(MechMarketplaceContract.contract_id),
             callable="get_marketplace_undelivered_reqs",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
@@ -398,11 +354,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if len(self.pending_tasks) == 0:
-            # not tasks (requests) to execute
-            return
-
-        # create new task
-        task_data = self.pending_tasks.pop(0)
+            if len(self.wait_for_timeout_tasks) == 0:
+                return
+            task_data = self.wait_for_timeout_tasks.pop(0)
+        else:
+            task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
         # convert request id to int if it's bytes
         if type(task_data.get("requestId")) == bytes:
@@ -708,8 +664,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             dynamic_tool_cost = 0
             cost = get_cost_for_done_task(done_task)
             self.context.logger.info(f"Cost for task {req_id}: {cost}")
-
-        mech_config = self.params.mech_to_config[done_task["mech_address"].lower()]
+        mech_address = self._get_designated_marketplace_mech_address()
+        mech_config = self.params.mech_to_config[mech_address.lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
         # pop the data key value as it's bytes which causes issues

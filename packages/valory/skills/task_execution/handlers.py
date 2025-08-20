@@ -46,7 +46,9 @@ PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
+WAIT_FOR_TIMEOUT = "wait_for_timeout"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
+TIMED_OUT_STATUS = 2
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -69,6 +71,11 @@ class BaseHandler(Handler):
     def params(self) -> Params:
         """Get the parameters."""
         return cast(Params, self.context.params)
+
+    @property
+    def mech_address(self) -> str:
+        """Return the mech address from the list of contract addresses."""
+        return self.params.agent_mech_contract_addresses[0]
 
     def teardown(self) -> None:
         """Teardown the handler."""
@@ -144,6 +151,7 @@ class ContractHandler(BaseHandler):
     def setup(self) -> None:
         """Setup the contract handler."""
         self.context.shared_state[PENDING_TASKS] = []
+        self.context.shared_state[WAIT_FOR_TIMEOUT] = []
         self.context.shared_state[DONE_TASKS] = []
         self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
         self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO] = {}
@@ -153,6 +161,11 @@ class ContractHandler(BaseHandler):
     def pending_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks."""
         return self.context.shared_state[PENDING_TASKS]
+
+    @property
+    def wait_for_timeout_tasks(self) -> List[Dict[str, Any]]:
+        """Get pending_tasks from other mechs"""
+        return self.context.shared_state[WAIT_FOR_TIMEOUT]
 
     def handle(self, message: Message) -> None:
         """
@@ -176,7 +189,7 @@ class ContractHandler(BaseHandler):
 
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""
-        reqs = body.get("data", [])
+        reqs = self._validate_and_flatten(body=body)
         if len(reqs) == 0:
             return
 
@@ -190,12 +203,81 @@ class ContractHandler(BaseHandler):
             for req in reqs
             if req["block_number"] % self.params.num_agents == self.params.agent_index
         ]
-
         self.context.logger.info(f"Processing only {len(reqs)} of the new requests.")
-        self.pending_tasks.extend(reqs)
+        self.filter_requests(reqs)
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
         )
+
+    def _validate_and_flatten(self, body: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Validate and flatten the requests body to single request."""
+        items: List[Dict[str, Any]] = []
+        requests = body.get("data", [])
+        # check_timeout and drop
+        for req in requests:
+            req_ids = req.get("requestIds", [])
+            req_data = req.get("requestDatas", [])
+            n_meta = int(req.get("numRequests", 0))
+
+            # length checks
+            n_ids = len(req_ids)
+            n_datas = len(req_data)
+
+            if n_ids != n_datas:
+                raise ValueError(
+                    f"Length mismatch: requestIds={n_ids} requestDatas={n_datas}"
+                )
+
+            if n_meta and n_meta != n_ids:
+                self.context.logger.warning(
+                    "numRequests (%d) != actual count (%d)", n_meta, n_ids
+                )
+
+            rate = req.get("request_delivery_rate")
+            if rate is None:
+                self.context.logger.warning(
+                    "Missing request_delivery_rate; defaulting to 0"
+                )
+                rate = 0
+
+            for i, (rid, data) in enumerate(zip(req_ids, req_data)):
+                if not isinstance(rid, (bytes, bytearray)) or not isinstance(
+                    data, (bytes, bytearray)
+                ):
+                    raise TypeError(
+                        f"requestIds/requestDatas must be bytes at index {i}"
+                    )
+
+            # flatten
+            base = {
+                "tx_hash": req.get("tx_hash"),
+                "block_number": req.get("block_number"),
+                "priorityMech": req.get("priorityMech"),
+                "requester": req.get("requester"),
+                # We need to deliver based on our mech event if we are stepping in.
+                "contract_address": self.mech_address,
+                "status": req.get("status"),
+            }
+            for rid, data in zip(req_ids, req_data):
+                item = dict(base)
+                item.update(
+                    {
+                        "requestId": rid,
+                        "data": data,
+                        "request_delivery_rate": int(rate),
+                    }
+                )
+                items.append(item)
+
+        return items
+
+    def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
+        """Filtering requests based on priority mech and status."""
+        for req in reqs:
+            if req["priorityMech"] == self.mech_address:
+                self.pending_tasks.append(req)
+            elif req["status"] == TIMED_OUT_STATUS:
+                self.wait_for_timeout_tasks.append(req)
 
 
 class LedgerHandler(BaseHandler):

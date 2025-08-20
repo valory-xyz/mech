@@ -7,15 +7,15 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeid3a6n2jhf3gr27bg6xxenvcwbupiu3hxqgnb3rg3lnsh7jtovyw4
+  behaviours.py: bafybeia6m6h67oomhwqpng7pycvqw6yni3lae3rq5n3e6xbnvyu7zeqz5i
   dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
-  handlers.py: bafybeifgrzuacpi5uccsmyhpgelneqqnccy4jwfrtefon3jwxbp4cup3oi
+  handlers.py: bafybeifyvzq3pkfr67flwdrpbvpyubs2pkixoek7y77lt7w5tnxbwsw4gy
   models.py: bafybeibtky2px5dwua2xkxwjaemasojqkvofqqwhi6y36y6acrzgda7ahm
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
-  tests/conftest.py: bafybeigejp2wxvrzb3c4mtexuk7qjlyqs3utbtvspcc7lvde2mpqmtbo7u
-  tests/test_behaviours.py: bafybeifbay7b5cutzrr5t6bu27p25x47xcbjdcl2f6lsfnqctoibsrvs44
+  tests/conftest.py: bafybeieqhf365qgxfgetkdclgiwkjgg6jh6sbzoxholrz6rjn27wv4jp6i
+  tests/test_behaviours.py: bafybeigl2byfpse7szxjmnsyahsgvdl3ulysskyahtrcmlmdsfj7dfwsdm
   tests/test_dialogues.py: bafybeihrghdkt7xjcr3gsj5xb274h2wn42f4sijag3xbopijp4v3yktau4
-  tests/test_handlers.py: bafybeiclq6nsyx6cn7a6humoo7nbq7sldgk3burvgajorduovbmqrznm7u
+  tests/test_handlers.py: bafybeiaktby2q6a4kq6uuyvfxam33ipzz6u5hngaap5qawmpyg7qh4t4vy
   tests/test_models.py: bafybeidfkrmoh5awqvsfgxmjwkf5p6i7te5rm32tlacf7gzv4ohe6jdlce
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
@@ -29,7 +29,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeiamz23olgtow4wqf7zpsfnfzf7pxiognrxl2mhn5kvqutlwhgukxa
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 contracts:
-- valory/agent_mech:0.1.0:bafybeia3ye4uhml5mz3jf3fuchm3nrndwkae6mcg5bmovgzngtruh6mf24
+- valory/mech_marketplace:0.1.0:bafybeic5du75n5ck4cheayyib32siov3il37zleqtifnphp73lbrounzb4
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4
