@@ -72,6 +72,11 @@ class BaseHandler(Handler):
         """Get the parameters."""
         return cast(Params, self.context.params)
 
+    @property
+    def mech_address(self) -> str:
+        """Return the mech address from the list of contract addresses."""
+        return self.params.agent_mech_contract_addresses[0]
+
     def teardown(self) -> None:
         """Teardown the handler."""
         self.context.logger.info(f"{self.__class__.__name__}: teardown called.")
@@ -250,7 +255,7 @@ class ContractHandler(BaseHandler):
                 "priorityMech": req.get("priorityMech"),
                 "requester": req.get("requester"),
                 # We need to deliver based on our mech event if we are stepping in.
-                "contract_address": self.params.agent_mech_contract_addresses[0],
+                "contract_address": self.mech_address,
                 "status": req.get("status"),
             }
             for rid, data in zip(req_ids, req_data):
@@ -269,7 +274,7 @@ class ContractHandler(BaseHandler):
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
         """Filtering requests based on priority mech and status."""
         for req in reqs:
-            if req["priorityMech"] == self.params.agent_mech_contract_addresses[0]:
+            if req["priorityMech"] == self.mech_address:
                 self.pending_tasks.append(req)
             elif req["status"] == TIMED_OUT_STATUS:
                 self.wait_for_timeout_tasks.append(req)
