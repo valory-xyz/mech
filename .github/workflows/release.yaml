@@ -118,7 +118,7 @@ jobs:
           sudo apt-get autoremove
           sudo apt-get autoclean
           python -m pip install --upgrade pip
-          pip install propel-client open-autonomy
+          pip install propel-client "open-autonomy>=1.37.0,<2.0.0"
 
       - name: Make use proxy instead of actual nlb by dns override
         run: |
