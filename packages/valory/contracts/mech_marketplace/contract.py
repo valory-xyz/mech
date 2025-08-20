@@ -293,7 +293,6 @@ class MechMarketplaceContract(Contract):
         for request in requests:
             for i, request_id in enumerate(request["requestIds"]):
                 if request_id not in existing_ids:
-                    print("Found undelivered request with id:", request)
                     status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)
                     request["status"] = status["data"]
                     # fetch and store max delivery rate for each request id
