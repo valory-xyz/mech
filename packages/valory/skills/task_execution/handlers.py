@@ -48,6 +48,7 @@ IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
+TIMED_OUT_STATUS = 2
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -223,13 +224,15 @@ class ContractHandler(BaseHandler):
                 )
 
             if n_meta and n_meta != n_ids:
-                self.context.warning(
+                self.context.logger.warning(
                     "numRequests (%d) != actual count (%d)", n_meta, n_ids
                 )
 
             rate = req.get("request_delivery_rate")
             if rate is None:
-                self.context.warning("Missing request_delivery_rate; defaulting to 0")
+                self.context.logger.warning(
+                    "Missing request_delivery_rate; defaulting to 0"
+                )
                 rate = 0
 
             for i, (rid, data) in enumerate(zip(req_ids, req_data)):
@@ -270,10 +273,8 @@ class ContractHandler(BaseHandler):
                 self.pending_tasks.append(req)
             else:
                 self.context.logger.info(f"Other's mech request is: {req}")
-                if req["status"] == 2:
+                if req["status"] == TIMED_OUT_STATUS:
                     self.wait_for_timeout_tasks.append(req)
-                else:
-                    self.context.logger.info("Dropping message")
 
 
 class LedgerHandler(BaseHandler):

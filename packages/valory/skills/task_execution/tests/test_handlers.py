@@ -106,7 +106,7 @@ def test_ipfs_handler_deadline_expired_skips_callback(handler_context: Any) -> N
 
 
 def test_contract_handler_setup_initializes_shared(
-    handler_context: SimpleNamespace,
+    handler_context: Any,
 ) -> None:
     """Initialize `shared_state` collections on setup."""
     ch: ContractHandler = ContractHandler(
@@ -126,24 +126,100 @@ def test_contract_handler_setup_initializes_shared(
 def test_contract_handler_state_enqueues_and_updates_from_block(
     handler_context: SimpleNamespace,
 ) -> None:
-    """Enqueue filtered requests and update `from_block` on STATE."""
+    """Enqueue filtered requests and update `from_block` on STATE (marketplace shape)."""
     params: Any = handler_context.params
     params.in_flight_req = True
     params.num_agents = 2
     params.agent_index = 1
-    params.req_type = "legacy"
-    params.req_params.from_block["legacy"] = 0
+    params.req_type = "marketplace"
+    params.req_params.from_block["marketplace"] = 0
 
-    ch: ContractHandler = ContractHandler(
-        name="contract", skill_context=handler_context
-    )
+    # Make priorityMech match our mech so it goes to pending_tasks (not wait list)
+    my_mech = params.agent_mech_contract_addresses[0]
+
+    # Build marketplace-shaped body: each item has arrays requestIds/requestDatas
+    reqs: List[Dict[str, Any]] = [
+        {
+            "tx_hash": "0xaaa",
+            "block_number": 10,  # 10 % 2 == 0 -> filtered out by shard
+            "priorityMech": my_mech,
+            "requester": "0xR1",
+            "numRequests": 1,
+            "requestIds": [b"\x01" * 32],
+            "requestDatas": [b"\x02" * 32],
+            "status": 2,
+            "request_delivery_rate": 100,
+        },
+        {
+            "tx_hash": "0xbbb",
+            "block_number": 11,  # 11 % 2 == 1 -> kept by shard
+            "priorityMech": my_mech,
+            "requester": "0xR2",
+            "numRequests": 1,
+            "requestIds": [b"\x03" * 32],
+            "requestDatas": [b"\x04" * 32],
+            "status": 2,
+            "request_delivery_rate": 100,
+        },
+    ]
+    body: Dict[str, Any] = {"data": reqs}
+
+    ch = ContractHandler(name="contract", skill_context=handler_context)
     ch.setup()
 
-    reqs: List[Dict[str, int]] = [
-        {"block_number": 10, "requestId": 1},
-        {"block_number": 11, "requestId": 2},
-    ]
-    body: Dict[str, List[Dict[str, int]]] = {"data": reqs}
+    msg = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=body),
+    )
+
+    ch.handle(msg)
+
+    # from_block should advance to max(block_number)+1 == 12
+    assert params.req_params.from_block["marketplace"] == 12
+
+    # Sharding keeps only block 11; and priorityMech == our mech puts it into pending_tasks
+    assert len(ch.pending_tasks) == 1
+    kept = ch.pending_tasks[0]
+    assert kept["block_number"] == 11
+    assert kept["priorityMech"] == my_mech
+    assert kept["request_delivery_rate"] == 100
+
+    # in_flight flag must be cleared
+    assert params.in_flight_req is False
+
+
+def test_contract_handler_other_mech_goes_to_wait_list(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Requests for a different mech go to wait_for_timeout_tasks (status == 2)."""
+    params: Any = handler_context.params
+    params.in_flight_req = True
+    params.req_type = "marketplace"
+    params.req_params.from_block["marketplace"] = 0
+
+    other_mech: str = "0xDEAD"  # different from our mech
+    my_mech: str = params.agent_mech_contract_addresses[0]
+    assert other_mech != my_mech
+
+    body: Dict[str, List[Dict[str, Any]]] = {
+        "data": [
+            {
+                "tx_hash": "0xccc",
+                "block_number": 21,
+                "priorityMech": other_mech,
+                "requester": "0xR3",
+                "numRequests": 1,
+                "requestIds": [b"\xaa" * 32],
+                "requestDatas": [b"\xbb" * 32],
+                "status": 2,  # kept in wait_for_timeout_tasks
+                "request_delivery_rate": 50,
+            }
+        ]
+    }
+
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+
     msg: SimpleNamespace = SimpleNamespace(
         performative=ContractApiMessage.Performative.STATE,
         state=SimpleNamespace(body=body),
@@ -151,9 +227,10 @@ def test_contract_handler_state_enqueues_and_updates_from_block(
 
     ch.handle(msg)
 
-    assert params.req_params.from_block["legacy"] == 12
-    assert len(ch.pending_tasks) == 1
-    assert ch.pending_tasks[0]["requestId"] == 2
+    assert params.req_params.from_block["marketplace"] == 22
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 1
+    assert ch.wait_for_timeout_tasks[0]["priorityMech"] == other_mech
     assert params.in_flight_req is False
 
 
