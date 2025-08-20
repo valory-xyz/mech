@@ -258,7 +258,6 @@ class MechMarketplaceContract(Contract):
         """Get the requests that are not delivered."""
         if from_block == "earliest":
             from_block = 0
-        print("From block: ", from_block)
         current_block = ledger_api.api.eth.block_number
         checksumed_contract_address = Web3.to_checksum_address(marketplace_address)
         requests, delivers = [], []
