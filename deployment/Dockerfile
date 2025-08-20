@@ -1,7 +1,8 @@
 ARG AUTONOMY_IMAGE_VERSION="latest"
 ARG AUTONOMY_IMAGE_NAME="valory/open-autonomy"
 FROM ${AUTONOMY_IMAGE_NAME}:${AUTONOMY_IMAGE_VERSION}
-RUN pip install "autonomy<2.0.0,>=1.37.0"
+RUN pip install --no-cache-dir "open-autonomy>=1.37.0,<2.0.0" && \
+    autonomy --version
 
 ARG AEA_AGENT
 ARG AUTHOR
