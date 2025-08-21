@@ -497,7 +497,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 None,
                 None,
             )
-            self._handle_done_task(task_result)
+            return self._handle_done_task(task_result)
 
         self.context.logger.info(f"Adding task {req_id} to the end of the queue")
         self.pending_tasks.append(executing_task)
