@@ -274,7 +274,7 @@ class ContractHandler(BaseHandler):
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
         """Filtering requests based on priority mech and status."""
         for req in reqs:
-            if req["priorityMech"] == self.mech_address:
+            if req["priorityMech"].lower() == self.mech_address.lower():
                 self.pending_tasks.append(req)
             elif req["status"] == TIMED_OUT_STATUS:
                 self.wait_for_timeout_tasks.append(req)
