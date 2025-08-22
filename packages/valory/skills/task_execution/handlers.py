@@ -283,8 +283,8 @@ class ContractHandler(BaseHandler):
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
         """Filtering requests based on priority mech and status."""
-        for req in reqs:  # 50_000
-            if req["priorityMech"].lower() == self.mech_address.lower():  # 10_000
+        for req in reqs:
+            if req["priorityMech"].lower() == self.mech_address.lower():
                 self.pending_tasks.append(req)
             elif req["status"] == TIMED_OUT_STATUS:
                 self.timed_out_tasks.append(req)
