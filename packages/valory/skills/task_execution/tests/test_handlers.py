@@ -229,8 +229,8 @@ def test_contract_handler_other_mech_goes_to_wait_list(
 
     assert params.req_params.from_block["marketplace"] == 22
     assert len(ch.pending_tasks) == 0
-    assert len(ch.wait_for_timeout_tasks) == 1
-    assert ch.wait_for_timeout_tasks[0]["priorityMech"] == other_mech
+    assert len(ch.timed_out_tasks) == 1
+    assert ch.timed_out_tasks[0]["priorityMech"] == other_mech
     assert params.in_flight_req is False
 
 

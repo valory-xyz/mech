@@ -1591,7 +1591,11 @@ class TransactionPreparationBehaviour(
 
                 data_ = cast(bytes, contract_api_msg.state.body["data"])
                 simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
-
+                if not simulation_ok:
+                    self.context.logger.info(
+                        f"Simulation failed for offchain dropping the transaction: {contract_data}"
+                    )
+                    continue
                 tx_list.append(
                     {
                         "to": mech_address,
@@ -1739,7 +1743,11 @@ class TransactionPreparationBehaviour(
 
                 data_ = cast(bytes, contract_api_msg.state.body["data"])
                 simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
-
+                if not simulation_ok:
+                    self.context.logger.info(
+                        f"Simulation failed for onchain dropping the transaction: {contract_data}"
+                    )
+                    continue
                 tx_list.append(
                     {
                         "to": mech,
