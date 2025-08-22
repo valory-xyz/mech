@@ -29,7 +29,7 @@ AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to p
 
 **AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).**
 
-## :gear: Current Service Hash: 
+## :gear: Current Service Hash:
 `bafybeihezf7s7v34x6gm3n7sn7odsziaxvrsmjtaehbg2aijz7iwumrum4`
 
 ## AI Mechs components
@@ -46,54 +46,6 @@ The project consists of three components:
 
 _Note that Mechs which were deployed before the Mech Marketplace contracts (called legacy Mechs) receive request and deliver services directly via their Mech contract._
 
-## Mech request-response flow
-
-This section presents the workflow for Mech agents independently from the Mech Marketplace. For Mechs which receive requests
-via the Marketplace, check this [document](https://github.com/valory-xyz/ai-registry-mech/blob/main/docs/MechMarketplaceDescriptionAndContractsOverviewRepo.pdf).
-
-![image](docs/images/mech_request_response_flow.png)
-
-1. Write request metadata: the application writes the request metadata to the IPFS. The request metadata must contain the attributes `nonce`, `tool`, and `prompt`. Additional attributes can be passed depending on the specific tool:
-
-    ```json
-    {
-      "nonce": 15,
-      "tool": "prediction_request",
-      "prompt": "Will my favourite football team win this week's match?"
-    }
-    ```
-
-2. The application gets the metadata's IPFS hash.
-
-3. The application writes the request's IPFS hash to the Mech contract which includes a small payment (currently $0.01 on the Gnosis chain deployment). Alternatively, the payment could be done separately through a Nevermined subscription.
-
-4. The Mech service is constantly monitoring Mech contract events, and therefore gets the request hash.
-
-5. The Mech reads the request metadata from IPFS using its hash.
-
-6. The Mech selects the appropriate tool to handle the request from the `tool` entry in the metadata, and runs the tool with the given arguments, usually a prompt. In this example, the mech has been requested to interact with OpenAI's API, so it forwards the prompt to it, but the tool can implement any other desired behavior.
-
-7. The Mech gets a response from the tool.
-
-8. The Mech writes the response to the IPFS.
-
-9. The Mech receives the response the IPFS hash.
-
-10. The Mech writes the response hash to the Mech contract.
-
-11. The application monitors for contract Deliver events and reads the response hash from the associated transaction.
-
-12. The application gets the response metadata from the IPFS:
-
-    ```json
-    {
-      "requestId": 68039248068127180134548324138158983719531519331279563637951550269130775,
-      "result": "{\"p_yes\": 0.35, \"p_no\": 0.65, \"confidence\": 0.85, \"info_utility\": 0.75}"
-    }
-    ```
-
-See some examples of requests and responses on the [Mech Hub](https://mech.olas.network/gnosis/mech/0x77af31de935740567cf4ff1986d04b2c964a786a?legacy=true).
-
 ## Requirements
 
 This repository contains a demo AI Mech. You can clone and extend the codebase to create your own AI Mech. You need the following requirements installed in your system:
@@ -103,6 +55,12 @@ This repository contains a demo AI Mech. You can clone and extend the codebase t
 - [Docker Engine](https://docs.docker.com/engine/install/)
 - [Docker Compose](https://docs.docker.com/compose/install/)
 - [Tendermint](https://docs.tendermint.com/v0.34/introduction/install.html) `==0.34.19`
+
+## Developing, running and deploying Mechs and Mech tools
+
+The easiest way to create, run, deploy and test your own Mech and Mech tools is to follow the Mech and Mech tool docs [here](https://open-autonomy.docs.autonolas.tech/mech-tools-dev/). The [Mech tools dev repo](https://github.com/valory-xyz/mech-tools-dev) used in those docs greatly simplifies the development flow and dev experience.
+
+Only continue reading this README if you know what you are doing and you are specifically interested in this repo.
 
 ## Set up your environment
 
@@ -266,7 +224,7 @@ Once your service works locally, you have the option to run it on a hosted servi
 
 ## Included tools
 
-🚧 **Under Construction** 🚧  
+🚧 **Under Construction** 🚧
 We are working on adding a simple tool for the quickstart
 
 ## More on tools
@@ -292,7 +250,7 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 | Ethereum | https://registry.olas.network/ethereum/services/21    | n/a                                              | n/a  | n/a                                            |
 |  Gnosis  | https://registry.olas.network/gnosis/services/3       | `0x327E26bDF1CfEa50BFAe35643B23D5268E41F7F9` - 3 | `0x77af31De935740567Cf4fF1986D04B2c964A786a` - 6 | 3 |
 | Arbitrum | https://registry.olas.network/arbitrum-one/services/1 | `0x0eA6B3137f294657f0E854390bb2F607e315B82c` - 1 | `0x1FDAD3a5af5E96e5a64Fc0662B1814458F114597` - 2 | 1 |
-| Polygon  | https://registry.olas.network/polygon/services/3      | `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188` - 1 | `0xbF92568718982bf65ee4af4F7020205dE2331a8a` - 2 | 3 | 
+| Polygon  | https://registry.olas.network/polygon/services/3      | `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188` - 1 | `0xbF92568718982bf65ee4af4F7020205dE2331a8a` - 2 | 3 |
 |   Base   | https://registry.olas.network/base/services/1         | `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA` - 1 | `0x111D7DB1B752AB4D2cC0286983D9bd73a49bac6c` - 2 | 1 |
 |   Celo   | https://registry.olas.network/celo/services/1         | `0xeC20694b7BD7870d2dc415Af3b349360A6183245` - 1 | `0x230eD015735c0D01EA0AaD2786Ed6Bd3C6e75912` - 2 | 1 |
 | Optimism | https://registry.olas.network/optimism/services/1     | `0xbA4491C86705e8f335Ceaa8aaDb41361b2F82498` - 1 | `0xDd40E7D93c37eFD860Bd53Ab90b2b0a8D05cf71a` - 2 | 1 |
@@ -310,7 +268,7 @@ You can update these information inside the :
 `packages/valory/services/mech/service.yaml`
 
 If we have more than one agent in the service, these agents should not share the same configuration.
-You can use different nodes like so : 
+You can use different nodes like so :
 ```
 -${TM_P2P_ENDPOINT_NODE_1
 -${TM_P2P_ENDPOINT_NODE_2
