@@ -70,7 +70,7 @@ class Params(Model):
         self.req_type: Optional[str] = None
         self.req_to_callback: Dict[str, Callable] = {}
         self.req_to_deadline: Dict[str, float] = {}
-        self.mech_to_max_delivery_rate: Dict[str, float] = {}
+        self.mech_to_max_delivery_rate: Dict[str, int] = {}
         self.api_keys: Dict[str, List[str]] = self._ensure_get(
             "api_keys", kwargs, Dict[str, List[str]]
         )
