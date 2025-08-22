@@ -289,7 +289,11 @@ class ContractHandler(BaseHandler):
             elif req["status"] == TIMED_OUT_STATUS:
                 self.timed_out_tasks.append(req)
             elif req["status"] == WAIT_FOR_TIMEOUT_STATUS:
-                self.wait_for_timeout_tasks.append(req)
+                if (
+                    req["request_delivery_rate"]
+                    >= self.params.mech_to_max_delivery_rate
+                ):
+                    self.wait_for_timeout_tasks.append(req)
 
 
 class LedgerHandler(BaseHandler):
