@@ -46,9 +46,11 @@ PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
+TIMED_OUT_TASKS = "timed_out_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 TIMED_OUT_STATUS = 2
+WAIT_FOR_TIMEOUT_STATUS = 1
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -152,6 +154,7 @@ class ContractHandler(BaseHandler):
         """Setup the contract handler."""
         self.context.shared_state[PENDING_TASKS] = []
         self.context.shared_state[WAIT_FOR_TIMEOUT] = []
+        self.context.shared_state[TIMED_OUT_TASKS] = []
         self.context.shared_state[DONE_TASKS] = []
         self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
         self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO] = {}
@@ -166,6 +169,11 @@ class ContractHandler(BaseHandler):
     def wait_for_timeout_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks from other mechs"""
         return self.context.shared_state[WAIT_FOR_TIMEOUT]
+
+    @property
+    def timed_out_tasks(self) -> List[Dict[str, Any]]:
+        """Get timed_out_tasks for other mechs"""
+        return self.context.shared_state[TIMED_OUT_TASKS]
 
     def handle(self, message: Message) -> None:
         """
@@ -190,6 +198,7 @@ class ContractHandler(BaseHandler):
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""
         reqs = self._validate_and_flatten(body=body)
+        self.wait_for_timeout_tasks.clear()
         if len(reqs) == 0:
             return
 
@@ -203,7 +212,7 @@ class ContractHandler(BaseHandler):
             for req in reqs
             if req["block_number"] % self.params.num_agents == self.params.agent_index
         ]
-        self.context.logger.info(f"Processing only {len(reqs)} of the new requests.")
+        self.context.logger.info(f"Total new requests: {len(reqs)}")
         self.filter_requests(reqs)
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
@@ -213,6 +222,7 @@ class ContractHandler(BaseHandler):
         """Validate and flatten the requests body to single request."""
         items: List[Dict[str, Any]] = []
         requests = body.get("data", [])
+        existing_requests = body.get("wait_for_timeout_tasks", [])
         # check_timeout and drop
         for req in requests:
             req_ids = req.get("requestIds", [])
@@ -268,15 +278,17 @@ class ContractHandler(BaseHandler):
                     }
                 )
                 items.append(item)
-
+        items.extend(existing_requests)
         return items
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
         """Filtering requests based on priority mech and status."""
-        for req in reqs:
-            if req["priorityMech"].lower() == self.mech_address.lower():
+        for req in reqs:  # 50_000
+            if req["priorityMech"].lower() == self.mech_address.lower():  # 10_000
                 self.pending_tasks.append(req)
             elif req["status"] == TIMED_OUT_STATUS:
+                self.timed_out_tasks.append(req)
+            elif req["status"] == WAIT_FOR_TIMEOUT_STATUS:
                 self.wait_for_timeout_tasks.append(req)
 
 

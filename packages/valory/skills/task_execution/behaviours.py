@@ -64,11 +64,12 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 
 PENDING_TASKS = "pending_tasks"
+WAIT_FOR_TIMEOUT = "wait_for_timeout"
+TIMED_OUT_TASKS = "timed_out_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
-WAIT_FOR_TIMEOUT = "wait_for_timeout"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 
@@ -148,6 +149,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def wait_for_timeout_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks from other mechs"""
         return self.context.shared_state[WAIT_FOR_TIMEOUT]
+
+    @property
+    def timed_out_tasks(self) -> List[Dict[str, Any]]:
+        """Get timed_out_tasks for other mechs"""
+        return self.context.shared_state[TIMED_OUT_TASKS]
 
     @property
     def done_tasks(self) -> List[Dict[str, Any]]:
@@ -287,6 +293,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     chain_id=self.params.default_chain_id,
                     max_block_window=self.params.max_block_window,
                     marketplace_address=self.params.mech_marketplace_address,
+                    wait_for_timeout_tasks=self.wait_for_timeout_tasks,
                 )
             ),
             counterparty=LEDGER_API_ADDRESS,
@@ -354,9 +361,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if len(self.pending_tasks) == 0:
-            if len(self.wait_for_timeout_tasks) == 0:
+            if len(self.timed_out_tasks) == 0:
                 return
-            task_data = self.wait_for_timeout_tasks.pop(0)
+            task_data = self.timed_out_tasks.pop(0)
         else:
             task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
