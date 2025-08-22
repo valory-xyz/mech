@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeihwyw2vb2lshn4sb4gmcyn2tnpnh2ua4xjcy2lc6cgz7fvrorb3me
+agent: valory/mech:0.1.0:bafybeigzz43vj37rea53faoutpyz5fb6gghhcx242jki3houo5ajyx3lae
 number_of_agents: 4
 deployment:
   agent:
@@ -200,6 +200,7 @@ type: skill
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
+        mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 1:
   models:
@@ -216,6 +217,7 @@ type: skill
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
+        mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 2:
   models:
@@ -232,6 +234,7 @@ type: skill
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         timeout_limit: ${TIMEOUT_LIMIT:int:3}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
+        mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 3:
   models:
@@ -248,6 +251,7 @@ type: skill
         mech_to_config: ${MECH_TO_CONFIG:dict:{}}
         tools_to_pricing: ${TOOLS_TO_PRICING:dict:{}}
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
+        mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
 ---
 public_id: valory/ledger:0.19.0

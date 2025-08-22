@@ -88,7 +88,7 @@ models:
       mech_to_config: {}
       tools_to_pricing: {}
       polling_interval: 30.0
-      mech_to_max_delivery_rate: ${dict:{}}
+      mech_to_max_delivery_rate: {}
       task_deadline: 240.0
       max_block_window: 500
       use_slashing: false
