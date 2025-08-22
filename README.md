@@ -11,7 +11,7 @@
     </a>
 </h1>
 
-This repository contains an AI Mech for the [Predict Agent Economy](https://olas.network/agent-economies/predict). 
+This repository contains an AI Mech for the [Predict Agent Economy](https://olas.network/agent-economies/predict).
 
 ## Requirements
 
@@ -22,6 +22,13 @@ You need the following requirements installed in your system:
 - [Docker Engine](https://docs.docker.com/engine/install/)
 - [Docker Compose](https://docs.docker.com/compose/install/)
 - [Tendermint](https://docs.tendermint.com/v0.34/introduction/install.html) `==0.34.19`
+
+## Developing, running and deploying Mechs and Mech tools
+
+The easiest way to create, run, deploy and test your own Mech and Mech tools is to follow the Mech and Mech tool docs [here](https://open-autonomy.docs.autonolas.tech/mech-tools-dev/). The [Mech tools dev repo](https://github.com/valory-xyz/mech-tools-dev) used in those docs greatly simplifies the development flow and dev experience.
+
+Only continue reading this README if you know what you are doing and you are specifically interested in this repo.
+
 
 ## Set up your environment
 
@@ -87,7 +94,7 @@ source .1env
 ##### Environment Variables
 
 You may customize the agent's behaviour by setting these environment variables.
- 
+
 | Name                       | Type   | Sample Value                                                                                                                                                                                                                                                        | Description                                                            |
 | -------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
 | `TOOLS_TO_PACKAGE_HASH`    | `dict` | `{"openai-gpt-3.5-turbo-instruct":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-3.5-turbo":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-4":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq"}` | Tracks services for each tool packages.                                |
@@ -97,7 +104,7 @@ You may customize the agent's behaviour by setting these environment variables.
 | `MECH_MARKETPLACE_ADDRESS` | `str`  | `"0x4554fE75c1f5576c1d7F765B2A036c199Adae329"`                                                                                                                                                                                                                      | Marketplace for posting and delivering requests served by agent mechs. |
 | `MECH_TO_SUBSCRIPTION`     | `dict` | `{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000","tokenId":"1"}}`                                                                                                                                        | Tracks mech's subscription details.                                    |
 | `MECH_TO_CONFIG`           | `dict` | `{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}`                                                                                                                                                          | Tracks mech's config.                                                  |
- 
+
 The rest of the common environment variables are present in the [service.yaml](https://github.com/valory-xyz/mech/blob/main/packages/valory/services/mech/service.yaml), which are customizable too.
 
 
@@ -112,7 +119,7 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 1. Ensure you have a file with a private key (`ethereum_private_key.txt`). You can generate a new private key file using the Open Autonomy CLI:
 
    ```bash
-   autonomy generate-key ethereum 
+   autonomy generate-key ethereum
    ```
 
 2. From one terminal, run the agent:
