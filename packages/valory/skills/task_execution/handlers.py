@@ -290,11 +290,20 @@ class ContractHandler(BaseHandler):
         """Filtering requests based on priority mech and status."""
         for req in reqs:
             if req["priorityMech"].lower() == self.mech_address.lower():
+                self.context.logger.info(
+                    "Priority Mech matched, adding request: {req} to pending tasks"
+                )
                 self.pending_tasks.append(req)
             elif req["status"] == TIMED_OUT_STATUS:
+                self.context.logger.info(
+                    "Timed out status matched, adding request: {req} to timeout tasks"
+                )
                 self.timed_out_tasks.append(req)
             elif req["status"] == WAIT_FOR_TIMEOUT_STATUS:
                 if req["request_delivery_rate"] >= self.mech_to_max_delivery_rate:
+                    self.context.logger.info(
+                        "Wait for timeout status matched, adding request: {req} to wait_for_timeout tasks"
+                    )
                     self.wait_for_timeout_tasks.append(req)
 
 
