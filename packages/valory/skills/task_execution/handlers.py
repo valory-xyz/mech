@@ -173,7 +173,11 @@ class ContractHandler(BaseHandler):
     @property
     def mech_to_max_delivery_rate(self) -> int:
         """Get the max delivery rate of the mech"""
-        return self.params.mech_to_max_delivery_rate[self.mech_address]
+        mech_to_max_delivery_rate_dict = {
+            k.lower(): v for k, v in self.params.mech_to_max_delivery_rate.items()
+        }
+        mech_address = self.mech_address.lower()
+        return mech_to_max_delivery_rate_dict[mech_address]
 
     @property
     def timed_out_tasks(self) -> List[Dict[str, Any]]:

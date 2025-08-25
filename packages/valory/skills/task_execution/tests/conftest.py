@@ -97,6 +97,7 @@ def params_stub() -> SimpleNamespace:
         num_agents=1,
         agent_index=0,
         from_block_range=0,
+        mech_to_max_delivery_rate={},
     )
 
     # Provide a logger object sometimes accessed via params.
@@ -397,4 +398,5 @@ def params_kwargs(dialogue_skill_context: SimpleNamespace) -> Dict[str, Any]:
         polling_interval=12.5,
         task_deadline=111.0,
         cleanup_freq=77,
+        mech_to_max_delivery_rate={},
     )
