@@ -1,3 +1,4 @@
+import json
 import os
 
 from dotenv import load_dotenv
@@ -22,11 +23,7 @@ and the `yes` option represented by `Yes` and the `no` option represented by `No
 what are the respective probabilities of `p_yes` and `p_no` occurring?
 """
 
-DUMMY_API_KEYS = {
-    "openai": [os.getenv("OPENAI_API_KEY")] * 3,
-    "google_api_key": [os.getenv("GOOGLE_API_KEY")] * 3,
-    "google_engine_id": [os.getenv("GOOGLE_ENGINE_ID")] * 3,
-}
+API_KEYS = json.loads(os.getenv("API_KEYS", "{}"))
 
 # Mocking a Google API exception
 # from googleapiclient.errors import HttpError
@@ -45,7 +42,7 @@ def main():
         "tool": TOOL,
         "model": MODEL,
         "prompt": PROMPT,
-        "api_keys": KeyChain(DUMMY_API_KEYS),
+        "api_keys": KeyChain(API_KEYS),
     }
 
     result = run(**kwargs)
