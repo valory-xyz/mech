@@ -145,8 +145,8 @@ You may customize the agent's behaviour by setting these environment variables.
 The rest of the common environment variables are present in the [service.yaml](https://github.com/valory-xyz/mech/blob/main/packages/valory/services/mech/service.yaml), which are customizable too.
 
 > **Warning**<br />
-> **The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://mech.olas.network/mechs?legacy=true)). Since you will not have access to its private key, your local instance will not be able to transact.
-> However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://mech.olas.network/mechs). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).**
+> **The demo service is configured to match a specific on-chain agent (ID 3 on [Mech Hub](https://marketplace.olas.network/gnosis/ai-agents/3)). Since you will not have access to its private key, your local instance will not be able to transact.
+> However, it will be able to receive Requests for AI tasks [sent from Mech Hub](https://marketplace.olas.network/gnosis/ai-agents). These Requests will be executed by your local instance, but you will notice that a failure will occur when it tries to submit the transaction on-chain (Deliver type).**
 
 Now, you have two options to run the worker: as a standalone agent or as a service.
 
@@ -247,13 +247,13 @@ Make sure you don't have any extra characters in the file, like newlines or spac
 
 | Network  | Service                                               | Mech Instance (Nevermined Pricing) - Agent Id    | Mech Instance (Fixed Pricing) - Agent Id         |  Service id |
 | :------: | ----------------------------------------------------- | ------------------------------------------------ | ------------------------------------------------ | -------- |
-| Ethereum | https://registry.olas.network/ethereum/services/21    | n/a                                              | n/a  | n/a                                            |
-|  Gnosis  | https://registry.olas.network/gnosis/services/3       | `0x327E26bDF1CfEa50BFAe35643B23D5268E41F7F9` - 3 | `0x77af31De935740567Cf4fF1986D04B2c964A786a` - 6 | 3 |
-| Arbitrum | https://registry.olas.network/arbitrum-one/services/1 | `0x0eA6B3137f294657f0E854390bb2F607e315B82c` - 1 | `0x1FDAD3a5af5E96e5a64Fc0662B1814458F114597` - 2 | 1 |
-| Polygon  | https://registry.olas.network/polygon/services/3      | `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188` - 1 | `0xbF92568718982bf65ee4af4F7020205dE2331a8a` - 2 | 3 |
-|   Base   | https://registry.olas.network/base/services/1         | `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA` - 1 | `0x111D7DB1B752AB4D2cC0286983D9bd73a49bac6c` - 2 | 1 |
-|   Celo   | https://registry.olas.network/celo/services/1         | `0xeC20694b7BD7870d2dc415Af3b349360A6183245` - 1 | `0x230eD015735c0D01EA0AaD2786Ed6Bd3C6e75912` - 2 | 1 |
-| Optimism | https://registry.olas.network/optimism/services/1     | `0xbA4491C86705e8f335Ceaa8aaDb41361b2F82498` - 1 | `0xDd40E7D93c37eFD860Bd53Ab90b2b0a8D05cf71a` - 2 | 1 |
+| Ethereum | https://marketplace.olas.network/ethereum/ai-agents/21    | n/a                                              | n/a  | n/a                                            |
+|  Gnosis  | https://marketplace.olas.network/gnosis/ai-agents/3       | `0x327E26bDF1CfEa50BFAe35643B23D5268E41F7F9` - 3 | `0x77af31De935740567Cf4fF1986D04B2c964A786a` - 6 | 3 |
+| Arbitrum | https://marketplace.olas.network/arbitrum-one/ai-agents/1 | `0x0eA6B3137f294657f0E854390bb2F607e315B82c` - 1 | `0x1FDAD3a5af5E96e5a64Fc0662B1814458F114597` - 2 | 1 |
+| Polygon  | https://marketplace.olas.network/polygon/ai-agents/3      | `0xCF1b5Db1Fa26F71028dA9d0DF01F74D4bbF5c188` - 1 | `0xbF92568718982bf65ee4af4F7020205dE2331a8a` - 2 | 3 |
+|   Base   | https://marketplace.olas.network/base/ai-agents/1         | `0x37C484cc34408d0F827DB4d7B6e54b8837Bf8BDA` - 1 | `0x111D7DB1B752AB4D2cC0286983D9bd73a49bac6c` - 2 | 1 |
+|   Celo   | https://marketplace.olas.network/celo/ai-agents/1         | `0xeC20694b7BD7870d2dc415Af3b349360A6183245` - 1 | `0x230eD015735c0D01EA0AaD2786Ed6Bd3C6e75912` - 2 | 1 |
+| Optimism | https://marketplace.olas.network/optimism/ai-agents/1     | `0xbA4491C86705e8f335Ceaa8aaDb41361b2F82498` - 1 | `0xDd40E7D93c37eFD860Bd53Ab90b2b0a8D05cf71a` - 2 | 1 |
 
 ### Mechs receiving requests via the Mech Marketplace
 
