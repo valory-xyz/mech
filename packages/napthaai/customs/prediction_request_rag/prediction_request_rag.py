@@ -60,6 +60,8 @@ IMAGE_RELATED_PATTERNS = [
 N_MODEL_CALLS = 2
 
 USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+GOOGLE_RATE_LIMIT_EXCEEDED_CODE = 429
+DEFAULT_DELIVERY_RATE = 100
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -102,8 +104,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 return execute()
             except googleapiclient.errors.HttpError as e:
                 # try with a new key again
-                rate_limit_exceeded_code = 429
-                if e.status_code != rate_limit_exceeded_code:
+                if e.status_code != GOOGLE_RATE_LIMIT_EXCEEDED_CODE:
                     raise e
                 service = "google_api_key"
                 if retries_left[service] <= 0:
@@ -573,8 +574,14 @@ def get_urls_from_queries(
                 num=num,
             ):
                 results.append(url)
-        except Exception:
-            pass
+        except googleapiclient.errors.HttpError as e:
+            if e.resp.status == GOOGLE_RATE_LIMIT_EXCEEDED_CODE:
+                print(
+                    f"Rate limit exceeded for query: {query}. Trying to rotate API key."
+                )
+                raise e
+            print(f"HTTP error for query {query}: {e}")
+
     unique_results = list(set(results))
     return unique_results
 
@@ -948,7 +955,7 @@ def run(
     if model is None:
         raise ValueError("Model must be specified in kwargs")
 
-    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    delivery_rate = int(kwargs.get("delivery_rate", DEFAULT_DELIVERY_RATE))
     counter_callback: Optional[Callable[..., Any]] = kwargs.get(
         "counter_callback", None
     )
