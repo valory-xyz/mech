@@ -5,10 +5,10 @@
         "custom/valory/prediction_request/0.1.0": "bafybeib32imz3ehgw5iukjvtn7nanl44kvq46i7fzkyu25tfdhed4w7sau",
         "custom/jhehemann/prediction_sum_url_content/0.1.0": "bafybeidqfhxg2q7wogiacc7rhwaagfzuz74uaxwheurluflfvtu2ir424q",
         "custom/psouranis/optimization_by_prompting/0.1.0": "bafybeictfa5pjn4v7si3ybw5ddolqm3ho3j3655fopidnikngqcbeawbuq",
-        "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeicyc4wrd5v5iql5p7x2lmwkbhszhw7dg54szutxqnsjwx2xenrup4",
-        "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeicjaphnhhsqvbkz57d4lwrwsgfx7rmlaue4eay2ndbgcdlzqy7ggm",
-        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeicm3nrfzdimcfsxulmv5pjbqewvn4aazxzefozghahf6dv3dihd44",
-        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeic463lrhke37mh3jhrik2gza7f2cq6wtxfgifxylzgl5ggg6lrqqm",
+        "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeihrsydiukrzzdfnkkveixjb23saxh536gtu3apq3vc2cfzi6x5tda",
+        "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeiewvkwt5qrvvi4zocai5tq4vxldfq34z3ixupkr3udnefvxm2kkie",
+        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeib2kz2sbgto5uarwyy2imrxqq7suixuz2pejvsfjq76hbbcp5wgcm",
+        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeicwpsljbbfpv7qe3euxy2grkrykjy356wqghnl7m7zfkoynkf2xr4",
         "custom/valory/prepare_tx/0.1.0": "bafybeibjzexmjct6ledxezfa54usa3o4abdafm6e2u2xxjzaji3l6sw6b4",
         "custom/napthaai/prediction_url_cot/0.1.0": "bafybeihqlqtp4cgnxbrw5gazh6f7m6ejsw7zgku7snf3mw4q6y3vxxpoqe",
         "custom/valory/prediction_langchain/0.1.0": "bafybeifdaxabgxvoghpks42a54fsv7appdisf66qpsrryym6l6r44asq6i",
@@ -21,8 +21,8 @@
         "custom/valory/tee_openai_request/0.1.0": "bafybeigtbzt7qnzzcds33r6kz34jn6i57djh2mx7zrzcffq3vdkaik6uka",
         "custom/dvilela/corcel_request/0.1.0": "bafybeidk3lht6yaaasobigkyjzbjvh7mm3lqcbgzwzzngjbxnrvumigdte",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeidxq54wpslnnzymifdho323q7cpvgi7oo2vptzmycuzuhetfu57ri",
-        "agent/valory/mech/0.1.0": "bafybeiaafto374em4rb5rxk5qzjlro7sh3whjmckq3wnspshnsvyzqxkei",
-        "service/valory/mech/0.1.0": "bafybeidfmqgkj4w4fonfmacu7u2hhluaurppxr2gbe5cpsix6dmqzqod7i"
+        "agent/valory/mech/0.1.0": "bafybeigw4wsovx77osxplacx5xrqrkglo36t437onrzdnyko6u2wit5ele",
+        "service/valory/mech/0.1.0": "bafybeicsqttwz42umy3fiybylretwhi7puj6xqcnojkolf33eddcwgqkcm"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
