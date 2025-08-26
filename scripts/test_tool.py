@@ -17,10 +17,12 @@
 #
 # ------------------------------------------------------------------------------
 
+"""This script tests the prediction request tool."""
+
 import json
 import os
 
-from dotenv import load_dotenv
+from dotenv import load_dotenv  # type: ignore
 
 from packages.valory.customs.prediction_request.prediction_request import run
 from packages.valory.skills.task_execution.utils.apis import KeyChain
@@ -44,18 +46,18 @@ what are the respective probabilities of `p_yes` and `p_no` occurring?
 
 API_KEYS = json.loads(os.getenv("API_KEYS", "{}"))
 
-# Mocking a Google API exception
-# from googleapiclient.errors import HttpError
-# from httplib2 import Response
-# import json
-# raise HttpError(
-#     Response({"status": str(429)}),
-#     json.dumps("dummy").encode("utf-8"),
-#     uri="https://fake.googleapis.com/test"
-# )
+# Mocking a Google API exception                # noqa: E800
+# from googleapiclient.errors import HttpError  # noqa: E800
+# from httplib2 import Response                 # noqa: E800
+# import json                                   # noqa: E800
+# raise HttpError(                              # noqa: E800
+#     Response({"status": str(429)}),           # noqa: E800
+#     json.dumps("dummy").encode("utf-8"),      # noqa: E800
+#     uri="https://fake.googleapis.com/test"    # noqa: E800
+# )                                             # noqa: E800
 
 
-def main():
+def main() -> None:
     """Test the prediction request tool."""
     kwargs = {
         "tool": TOOL,

@@ -82,6 +82,7 @@ google-api-core = "^2.20.0"
 openapi-core = "0.15.0"
 httpx = "0.25.2"
 tqdm = "4.67.1"
+dotenv = "^0.9.9"
 
 [tool.poetry.group.dev.dependencies]
 tomte = {version = ">=0.2.15", extras = ["cli", "tests"]}
