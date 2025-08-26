@@ -294,7 +294,7 @@ def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[s
 
 
 def get_urls_from_queries(
-    queries: List[str], api_key: str, engine: str, num: int
+    queries: List[str], api_key: str, engine: str, num: int = 3
 ) -> List[str]:
     """Get URLs from search engine queries"""
     results = []
