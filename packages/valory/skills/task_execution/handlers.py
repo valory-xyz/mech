@@ -186,7 +186,7 @@ class ContractHandler(BaseHandler):
         return self.context.shared_state[TIMED_OUT_TASKS]
 
     @timed_out_tasks.setter
-    def timed_out_tasks(self, value) -> None:
+    def timed_out_tasks(self, value: List[Dict[str, Any]]) -> None:
         """Get timed_out_tasks for other mechs"""
         self.context.shared_state[TIMED_OUT_TASKS] = value
 
