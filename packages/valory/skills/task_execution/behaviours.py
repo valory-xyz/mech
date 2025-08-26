@@ -294,6 +294,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     max_block_window=self.params.max_block_window,
                     marketplace_address=self.params.mech_marketplace_address,
                     wait_for_timeout_tasks=self.wait_for_timeout_tasks,
+                    timeout_tasks=self.timed_out_tasks,
                 )
             ),
             counterparty=LEDGER_API_ADDRESS,

@@ -51,6 +51,7 @@ WAIT_FOR_TIMEOUT = "wait_for_timeout"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 TIMED_OUT_STATUS = 2
 WAIT_FOR_TIMEOUT_STATUS = 1
+DELIVERED_STATUS = 3
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -184,6 +185,11 @@ class ContractHandler(BaseHandler):
         """Get timed_out_tasks for other mechs"""
         return self.context.shared_state[TIMED_OUT_TASKS]
 
+    @timed_out_tasks.setter
+    def timed_out_tasks(self, value: List[Dict[str, Any]]) -> None:
+        """Get timed_out_tasks for other mechs"""
+        self.context.shared_state[TIMED_OUT_TASKS] = value
+
     def handle(self, message: Message) -> None:
         """
         Implement the reaction to a contract message.
@@ -206,8 +212,12 @@ class ContractHandler(BaseHandler):
 
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""
-        reqs = self._validate_and_flatten(body=body)
+
+        # Reset lists.
         self.wait_for_timeout_tasks.clear()
+        self.timed_out_tasks.clear()
+        reqs = self._validate_and_flatten(body=body)
+
         if len(reqs) == 0:
             return
 
@@ -232,6 +242,8 @@ class ContractHandler(BaseHandler):
         items: List[Dict[str, Any]] = []
         requests = body.get("data", [])
         existing_requests = body.get("wait_for_timeout_tasks", [])
+        timed_out_requests = body.get("timed_out_requests", [])
+        self.timed_out_tasks = timed_out_requests
         # check_timeout and drop
         for req in requests:
             req_ids = req.get("requestIds", [])
@@ -293,7 +305,10 @@ class ContractHandler(BaseHandler):
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
         """Filtering requests based on priority mech and status."""
         for req in reqs:
-            if req["priorityMech"].lower() == self.mech_address.lower():
+            if (
+                req["priorityMech"].lower() == self.mech_address.lower()
+                and req["status"] != DELIVERED_STATUS
+            ):
                 self.context.logger.info(
                     f"Priority Mech matched, adding request: {req} to pending tasks"
                 )
