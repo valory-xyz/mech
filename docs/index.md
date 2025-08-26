@@ -13,6 +13,10 @@ For instance, if an agent service needs to perform a task requiring access to an
 
 ## Live use case
 
+!!! tip "See it in action!"
+
+    Watch a Mech service live in action [here](https://marketplace.olas.network/gnosis/ai-agents/3?activity=true)!
+
 Consider the [Trader service](https://github.com/valory-xyz/trader), an autonomous service that trades in prediction markets. It utilizes a specific tool called `prediction_request` provided by the Mech service.
 
 Here is how the agent and the Mech interact:
