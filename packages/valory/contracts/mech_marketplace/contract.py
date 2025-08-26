@@ -250,6 +250,7 @@ class MechMarketplaceContract(Contract):
             ledger_api: LedgerApi,
             contract_address: str,
             wait_for_timeout_tasks: List[Dict[str, Any]],
+            timeout_tasks: List[Dict[str, Any]],
             marketplace_address: str,
             from_block: BlockIdentifier = "earliest",
             to_block: BlockIdentifier = "latest",
@@ -312,7 +313,14 @@ class MechMarketplaceContract(Contract):
                 status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)
                 existing_req["status"] = status["data"]
                 updated_wait.append(existing_req)
-        return {"data": pending_tasks, "wait_for_timeout_tasks": updated_wait}
+        timed_out: List[Dict[str, Any]] = []
+        for timed_req in timeout_tasks:
+            request_id = timed_req["requestId"]
+            if request_id not in existing_ids:
+                status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)
+                timed_req["status"] = status["data"]
+                timed_out.append(timed_req)
+        return {"data": pending_tasks, "wait_for_timeout_tasks": updated_wait, "timed_out_requests": timed_out}
 
     @classmethod
     def get_marketplace_request_events(

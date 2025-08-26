@@ -406,3 +406,132 @@ def test_on_message_handled_triggers_cleanup(
     h.on_message_handled(SimpleNamespace())
 
     assert cleaned["ipfs"] == 1
+
+
+def test_contract_handler_my_mech_delivered_not_enqueued(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A delivered request for my mech (status=3) is ignored (not enqueued)."""
+    params: Any = handler_context.params
+    params.in_flight_req = True
+    params.req_type = "marketplace"
+    params.req_params.from_block["marketplace"] = 0
+
+    my_mech: str = params.agent_mech_contract_addresses[0]
+
+    body: Dict[str, List[Dict[str, Any]]] = {
+        "data": [
+            {
+                "tx_hash": "0xdelivered",
+                "block_number": 50,
+                "priorityMech": my_mech,
+                "requester": "0xReq",
+                "numRequests": 1,
+                "requestIds": [b"\x11" * 32],
+                "requestDatas": [b"\x22" * 32],
+                "status": hmod.DELIVERED_STATUS,  # == 3
+                "request_delivery_rate": 100,
+            }
+        ]
+    }
+
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+
+    msg: SimpleNamespace = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=body),
+    )
+    ch.handle(msg)
+
+    # from_block should advance to 51 (50+1)
+    assert params.req_params.from_block["marketplace"] == 51
+
+    # Nothing should be enqueued anywhere
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+    assert len(ch.timed_out_tasks) == 0
+
+    # in-flight cleared
+    assert params.in_flight_req is False
+
+
+def test_contract_handler_timed_out_then_delivered_updates_list(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A timed-out request later delivered is removed from the timeout list."""
+
+    params: Any = handler_context.params
+    params.in_flight_req = True
+    params.req_type = "marketplace"
+    params.req_params.from_block["marketplace"] = 0
+
+    # Use a non-matching mech (so it won't go to pending), but status=2 should land in timed_out_tasks.
+    other_mech: str = "0xBEEF"
+    my_mech: str = params.agent_mech_contract_addresses[0]
+    assert other_mech.lower() != my_mech.lower()
+
+    rid = b"\x33" * 32
+    data = b"\x44" * 32
+
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+
+    # Round 1: status=2 -> goes to timed_out_tasks
+    body_round1: Dict[str, List[Dict[str, Any]]] = {
+        "data": [
+            {
+                "tx_hash": "0xround1",
+                "block_number": 100,
+                "priorityMech": other_mech,
+                "requester": "0xReq1",
+                "numRequests": 1,
+                "requestIds": [rid],
+                "requestDatas": [data],
+                "status": hmod.TIMED_OUT_STATUS,  # == 2
+                "request_delivery_rate": 10,
+            }
+        ]
+    }
+    msg1: SimpleNamespace = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=body_round1),
+    )
+    ch.handle(msg1)
+
+    assert params.req_params.from_block["marketplace"] == 101
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+    assert len(ch.timed_out_tasks) == 1
+    assert ch.timed_out_tasks[0]["tx_hash"] == "0xround1"
+    assert params.in_flight_req is False
+
+    # Round 2: same request turns into delivered (status=3) -> timed_out_tasks should be cleared
+    params.in_flight_req = True
+    body_round2: Dict[str, List[Dict[str, Any]]] = {
+        "data": [
+            {
+                "tx_hash": "0xround2",
+                "block_number": 105,
+                "priorityMech": other_mech,
+                "requester": "0xReq1",
+                "numRequests": 1,
+                "requestIds": [rid],
+                "requestDatas": [data],
+                "status": hmod.DELIVERED_STATUS,  # == 3
+                "request_delivery_rate": 10,
+            }
+        ]
+    }
+    msg2: SimpleNamespace = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=body_round2),
+    )
+    ch.handle(msg2)
+
+    # from_block advances to 106; timed_out list is cleared (handler resets and doesn't re-add delivered)
+    assert params.req_params.from_block["marketplace"] == 106
+    assert len(ch.timed_out_tasks) == 0
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+    assert params.in_flight_req is False
