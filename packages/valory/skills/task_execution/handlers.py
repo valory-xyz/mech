@@ -189,7 +189,6 @@ class ContractHandler(BaseHandler):
     def timed_out_tasks(self, value) -> None:
         """Get timed_out_tasks for other mechs"""
         self.context.shared_state[TIMED_OUT_TASKS] = value
-        return
 
     def handle(self, message: Message) -> None:
         """
