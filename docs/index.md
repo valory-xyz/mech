@@ -15,7 +15,7 @@ For instance, if an agent service needs to perform a task requiring access to an
 
 !!! tip "See it in action!"
 
-    Watch a Mech service live in action [here](https://aimechs.autonolas.network/mech/0x77af31De935740567Cf4fF1986D04B2c964A786a)!
+    Watch a Mech service live in action [here](https://marketplace.olas.network/gnosis/ai-agents/3?activity=true)!
 
 Consider the [Trader service](https://github.com/valory-xyz/trader), an autonomous service that trades in prediction markets. It utilizes a specific tool called `prediction_request` provided by the Mech service.
 
