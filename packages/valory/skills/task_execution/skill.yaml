@@ -9,13 +9,13 @@ fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
   behaviours.py: bafybeibjyg3q5gwnj5ia3djzfkkltjvavv5stij3ei4hb2eaia3mbqixda
   dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
-  handlers.py: bafybeihnqwwhy7pm4rxcoc4uy2f26ysugx4g5gcfkrx4bwjv2nbjopexwq
+  handlers.py: bafybeigacwxw32b3u3mbttmtppjt3mn7h2s6qwo7xeab3xoatduobce5fm
   models.py: bafybeig7ia5gy2qhe4l5uwzht6vgdmm7mh7ea3mq6hjxkmymmbedynfmf4
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeibkptfnknufzwqqac25norr3z3ypdeq2pv35rwqakyyjv42lktv5a
   tests/test_behaviours.py: bafybeigl2byfpse7szxjmnsyahsgvdl3ulysskyahtrcmlmdsfj7dfwsdm
   tests/test_dialogues.py: bafybeihrghdkt7xjcr3gsj5xb274h2wn42f4sijag3xbopijp4v3yktau4
-  tests/test_handlers.py: bafybeicn77ykknd652axcx2pgk4ducucyb7g6wdj5nlchvyvzlotdzuexu
+  tests/test_handlers.py: bafybeiemiu25kqpruzxf3yvut2nni3faxsuwant3uk276zkgkckghnzrde
   tests/test_models.py: bafybeidfkrmoh5awqvsfgxmjwkf5p6i7te5rm32tlacf7gzv4ohe6jdlce
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
@@ -29,7 +29,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeiamz23olgtow4wqf7zpsfnfzf7pxiognrxl2mhn5kvqutlwhgukxa
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 contracts:
-- valory/mech_marketplace:0.1.0:bafybeie2e6nasffvjtloa4craxd5z2vxtvjjyq2zocn5e4izdtpspbg7uy
+- valory/mech_marketplace:0.1.0:bafybeibnox6adq2owkf7lkk3mwd4cmnxpvy3cruhyurmenmi26p3uflmb4
 protocols:
 - valory/acn_data_share:0.1.0:bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq
 - valory/contract_api:1.0.0:bafybeid247uig2ekykdumh7ewhp2cdq7rchaeqjj6e7urx35zfpdl5zrn4

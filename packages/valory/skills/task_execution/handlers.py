@@ -248,6 +248,7 @@ class ContractHandler(BaseHandler):
         for req in requests:
             req_ids = req.get("requestIds", [])
             req_data = req.get("requestDatas", [])
+            statuses = req.get("statuses", [])
             n_meta = int(req.get("numRequests", 0))
 
             # length checks
@@ -287,14 +288,14 @@ class ContractHandler(BaseHandler):
                 "requester": req.get("requester"),
                 # We need to deliver based on our mech event if we are stepping in.
                 "contract_address": self.mech_address,
-                "status": req.get("status"),
             }
-            for rid, data in zip(req_ids, req_data):
+            for rid, data, status in zip(req_ids, req_data, statuses):
                 item = dict(base)
                 item.update(
                     {
                         "requestId": rid,
                         "data": data,
+                        "status": status,
                         "request_delivery_rate": int(rate),
                     }
                 )
@@ -318,12 +319,14 @@ class ContractHandler(BaseHandler):
                     f"Timed out status matched, adding request: {req} to timeout tasks"
                 )
                 self.timed_out_tasks.append(req)
-            elif req["status"] == WAIT_FOR_TIMEOUT_STATUS:
-                if req["request_delivery_rate"] >= self.mech_to_max_delivery_rate:
-                    self.context.logger.info(
-                        f"Wait for timeout status matched, adding request: {req} to wait_for_timeout tasks"
-                    )
-                    self.wait_for_timeout_tasks.append(req)
+            elif (
+                req["status"] == WAIT_FOR_TIMEOUT_STATUS
+                and req["request_delivery_rate"] >= self.mech_to_max_delivery_rate
+            ):
+                self.context.logger.info(
+                    f"Wait for timeout status matched, adding request: {req} to wait_for_timeout tasks"
+                )
+                self.wait_for_timeout_tasks.append(req)
 
 
 class LedgerHandler(BaseHandler):

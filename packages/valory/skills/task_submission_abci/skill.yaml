@@ -22,8 +22,8 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeifdsphnuz6kjylxvtcay6hifx2rrsjxsurfsnwwex43mqlxtidfxe
-- valory/mech_marketplace:0.1.0:bafybeie2e6nasffvjtloa4craxd5z2vxtvjjyq2zocn5e4izdtpspbg7uy
+- valory/agent_mech:0.1.0:bafybeiaqrnqp4v7welxlgwyyxabygpi23dtb5hge7hsf3vtehpmxxaeg3y
+- valory/mech_marketplace:0.1.0:bafybeibnox6adq2owkf7lkk3mwd4cmnxpvy3cruhyurmenmi26p3uflmb4
 - valory/complementary_service_metadata:0.1.0:bafybeibu65wpdsbrbrt2wnf2lr3psy26jiaomyjkg4twbupve7o3kso2aa
 - valory/gnosis_safe:0.1.0:bafybeibjpgpvyvkqeugr7yv4ijze365legdwc5exvaedak7druv646qowe
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
@@ -38,7 +38,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia7lzwbmcmf3u7mn3673345klkyyp7ln62gqx6hcqlbjracxmrqlm
 - valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
-- valory/task_execution:0.1.0:bafybeifut6pqsm36e67lqorqeo5zx66jbv33zxq3fcwkxdfie6udy2mwxq
+- valory/task_execution:0.1.0:bafybeibdon2n2bopucev37zhh63h4wztqi344ppj4z24ko6fw45bz5moda
 behaviours:
   main:
     args: {}

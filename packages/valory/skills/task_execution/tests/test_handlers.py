@@ -147,7 +147,7 @@ def test_contract_handler_state_enqueues_and_updates_from_block(
             "numRequests": 1,
             "requestIds": [b"\x01" * 32],
             "requestDatas": [b"\x02" * 32],
-            "status": 2,
+            "statuses": [2],
             "request_delivery_rate": 100,
         },
         {
@@ -158,7 +158,7 @@ def test_contract_handler_state_enqueues_and_updates_from_block(
             "numRequests": 1,
             "requestIds": [b"\x03" * 32],
             "requestDatas": [b"\x04" * 32],
-            "status": 2,
+            "statuses": [2],
             "request_delivery_rate": 100,
         },
     ]
@@ -211,7 +211,7 @@ def test_contract_handler_other_mech_goes_to_wait_list(
                 "numRequests": 1,
                 "requestIds": [b"\xaa" * 32],
                 "requestDatas": [b"\xbb" * 32],
-                "status": 2,  # kept in wait_for_timeout_tasks
+                "statuses": [2],  # kept in wait_for_timeout_tasks
                 "request_delivery_rate": 50,
             }
         ]
@@ -429,7 +429,7 @@ def test_contract_handler_my_mech_delivered_not_enqueued(
                 "numRequests": 1,
                 "requestIds": [b"\x11" * 32],
                 "requestDatas": [b"\x22" * 32],
-                "status": hmod.DELIVERED_STATUS,  # == 3
+                "statuses": [hmod.DELIVERED_STATUS],  # == 3
                 "request_delivery_rate": 100,
             }
         ]
@@ -488,7 +488,7 @@ def test_contract_handler_timed_out_then_delivered_updates_list(
                 "numRequests": 1,
                 "requestIds": [rid],
                 "requestDatas": [data],
-                "status": hmod.TIMED_OUT_STATUS,  # == 2
+                "statuses": [hmod.TIMED_OUT_STATUS],  # == 2
                 "request_delivery_rate": 10,
             }
         ]
@@ -518,7 +518,7 @@ def test_contract_handler_timed_out_then_delivered_updates_list(
                 "numRequests": 1,
                 "requestIds": [rid],
                 "requestDatas": [data],
-                "status": hmod.DELIVERED_STATUS,  # == 3
+                "statuses": [hmod.DELIVERED_STATUS],  # == 3
                 "request_delivery_rate": 10,
             }
         ]

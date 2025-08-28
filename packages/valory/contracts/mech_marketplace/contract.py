@@ -292,10 +292,11 @@ class MechMarketplaceContract(Contract):
         existing_ids = {rid for d in delivers for rid in d["requestIds"]}
         pending_tasks: List[Dict[str, Any]] = []
         for request in requests:
+            request["statuses"] = []
             for i, request_id in enumerate(request["requestIds"]):
                 if request_id not in existing_ids:
                     status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)
-                    request["status"] = status["data"]
+                    request["statuses"].append(status["data"])
                     # fetch and store max delivery rate for each request id
                     request_id_info = MechMarketplaceContract.get_request_id_info(
                         ledger_api, marketplace_address, request_id
