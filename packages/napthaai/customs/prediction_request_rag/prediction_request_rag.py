@@ -495,6 +495,8 @@ def multi_queries(
             token_counter=count_tokens,
         )
     queries = parser_query_response(response.content, num_queries=num_queries)
+    if len(queries) > DEFAULT_NUM_QUERIES:
+        queries = queries[:DEFAULT_NUM_QUERIES]
     queries.append(prompt)
 
     return queries, counter_callback

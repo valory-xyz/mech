@@ -7,8 +7,8 @@
         "custom/psouranis/optimization_by_prompting/0.1.0": "bafybeictfa5pjn4v7si3ybw5ddolqm3ho3j3655fopidnikngqcbeawbuq",
         "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeiex6ckgmvps46p4xnjr27vvceiesw5skmz4nbfusqgmmcq7nxxujq",
         "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeiewvkwt5qrvvi4zocai5tq4vxldfq34z3ixupkr3udnefvxm2kkie",
-        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeiegdpd6sekkel24hmzht23ltp4rlhrqut2gmpeh3u7b6tkgcswuye",
-        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeiew2tuqmwdfniyszztyfd77ekk6bhokva3vag2bvixiaqpoatnpke",
+        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeigmeyavi32e7xzhix5nhxos7632dq225eapogezlqmcz2bjbasynu",
+        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeiag6iwzqrfjgy3333naqbb4fo2suv6ej6bagdj4etxw3jnat35nwi",
         "custom/valory/prepare_tx/0.1.0": "bafybeibjzexmjct6ledxezfa54usa3o4abdafm6e2u2xxjzaji3l6sw6b4",
         "custom/napthaai/prediction_url_cot/0.1.0": "bafybeihqlqtp4cgnxbrw5gazh6f7m6ejsw7zgku7snf3mw4q6y3vxxpoqe",
         "custom/valory/prediction_langchain/0.1.0": "bafybeifdaxabgxvoghpks42a54fsv7appdisf66qpsrryym6l6r44asq6i",
@@ -21,8 +21,8 @@
         "custom/valory/tee_openai_request/0.1.0": "bafybeigtbzt7qnzzcds33r6kz34jn6i57djh2mx7zrzcffq3vdkaik6uka",
         "custom/dvilela/corcel_request/0.1.0": "bafybeidk3lht6yaaasobigkyjzbjvh7mm3lqcbgzwzzngjbxnrvumigdte",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeidxq54wpslnnzymifdho323q7cpvgi7oo2vptzmycuzuhetfu57ri",
-        "agent/valory/mech/0.1.0": "bafybeicmzriutdglmvkgisuzgpsa2fnftiedjprocsbtsxq37o5ys7h2iq",
-        "service/valory/mech/0.1.0": "bafybeiggpnahni46ycl2h3462hr3zfkq2vyxt7b6vnghlp2dntcjsgvssq"
+        "agent/valory/mech/0.1.0": "bafybeianfdolnt74js5askiv7jpw3edyu6st6kpysutjrl2iyzmftnqbae",
+        "service/valory/mech/0.1.0": "bafybeidbnruwcoq4blu4wa2or6rsy6d2qimggpwcsblcrdfqm7oic5ggj4"
     },
     "third_party": {
         "protocol/valory/acn_data_share/0.1.0": "bafybeih5ydonnvrwvy2ygfqgfabkr47s4yw3uqxztmwyfprulwfsoe7ipq",
