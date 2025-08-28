@@ -585,6 +585,8 @@ def multi_queries(
             token_counter=count_tokens,
         )
     queries = parser_query_response(response.content, num_queries=num_queries)
+    # remove empty queries, including ""
+    queries = [query for query in queries if query.strip() != ""]
     if len(queries) > DEFAULT_NUM_QUERIES:
         queries = queries[:DEFAULT_NUM_QUERIES]
     queries.append(prompt)
@@ -1049,8 +1051,6 @@ def fetch_additional_information(
 
     # get the top URLs for the queries
     if not source_links:
-        # remove empty queries, including ""
-        queries = [query for query in queries if query.strip() != ""]
         urls = get_urls_from_queries(
             queries=queries,
             api_key=google_api_key,

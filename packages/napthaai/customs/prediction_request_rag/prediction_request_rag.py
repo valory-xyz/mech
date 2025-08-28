@@ -495,6 +495,8 @@ def multi_queries(
             token_counter=count_tokens,
         )
     queries = parser_query_response(response.content, num_queries=num_queries)
+    # remove empty queries, including ""
+    queries = [query for query in queries if query.strip() != ""]
     if len(queries) > DEFAULT_NUM_QUERIES:
         queries = queries[:DEFAULT_NUM_QUERIES]
     queries.append(prompt)
@@ -817,8 +819,6 @@ def fetch_additional_information(
             max_tokens=max_tokens,
         )
         print(f"Queries: {queries}")
-        # remove empty queries, including ""
-        queries = [query for query in queries if query.strip() != ""]
     except Exception as e:
         print(f"Error generating queries: {e}")
         queries = [prompt]

@@ -863,12 +863,13 @@ def fetch_additional_information(
         json_data = {"queries": [user_prompt]}
 
     if not source_links:
-        # limit the number of queries
-        if len(json_data["queries"]) > DEFAULT_NUM_QUERIES:
-            json_data["queries"] = json_data["queries"][:DEFAULT_NUM_QUERIES]
         # remove empty queries, including ""
         queries = json_data["queries"]
         queries = [query for query in queries if query.strip() != ""]
+        # limit the number of queries
+        if len(queries) > DEFAULT_NUM_QUERIES:
+            queries = queries[:DEFAULT_NUM_QUERIES]
+
         urls = get_urls_from_queries(
             queries,
             google_api_key,
