@@ -215,8 +215,11 @@ class ContractHandler(BaseHandler):
 
         # Reset lists.
         self.wait_for_timeout_tasks.clear()
-        self.timed_out_tasks.clear()
-        reqs = self._validate_and_flatten(body=body)
+        self.timed_out_tasks = body.get("timed_out_requests", [])
+
+        # collect items to process: fresh + previously waiting
+        reqs = list(body.get("data", []))
+        reqs.extend(body.get("wait_for_timeout_tasks", []))
 
         if len(reqs) == 0:
             return
@@ -236,72 +239,6 @@ class ContractHandler(BaseHandler):
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
         )
-
-    def _validate_and_flatten(self, body: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Validate and flatten the requests body to single request."""
-        items: List[Dict[str, Any]] = []
-        requests = body.get("data", [])
-        existing_requests = body.get("wait_for_timeout_tasks", [])
-        timed_out_requests = body.get("timed_out_requests", [])
-        self.timed_out_tasks = timed_out_requests
-        # check_timeout and drop
-        for req in requests:
-            req_ids = req.get("requestIds", [])
-            req_data = req.get("requestDatas", [])
-            statuses = req.get("statuses", [])
-            n_meta = int(req.get("numRequests", 0))
-
-            # length checks
-            n_ids = len(req_ids)
-            n_datas = len(req_data)
-
-            if n_ids != n_datas:
-                raise ValueError(
-                    f"Length mismatch: requestIds={n_ids} requestDatas={n_datas}"
-                )
-
-            if n_meta and n_meta != n_ids:
-                self.context.logger.warning(
-                    "numRequests (%d) != actual count (%d)", n_meta, n_ids
-                )
-
-            rate = req.get("request_delivery_rate")
-            if rate is None:
-                self.context.logger.warning(
-                    "Missing request_delivery_rate; defaulting to 0"
-                )
-                rate = 0
-
-            for i, (rid, data) in enumerate(zip(req_ids, req_data)):
-                if not isinstance(rid, (bytes, bytearray)) or not isinstance(
-                    data, (bytes, bytearray)
-                ):
-                    raise TypeError(
-                        f"requestIds/requestDatas must be bytes at index {i}"
-                    )
-
-            # flatten
-            base = {
-                "tx_hash": req.get("tx_hash"),
-                "block_number": req.get("block_number"),
-                "priorityMech": req.get("priorityMech"),
-                "requester": req.get("requester"),
-                # We need to deliver based on our mech event if we are stepping in.
-                "contract_address": self.mech_address,
-            }
-            for rid, data, status in zip(req_ids, req_data, statuses):
-                item = dict(base)
-                item.update(
-                    {
-                        "requestId": rid,
-                        "data": data,
-                        "status": status,
-                        "request_delivery_rate": int(rate),
-                    }
-                )
-                items.append(item)
-        items.extend(existing_requests)
-        return items
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
         """Filtering requests based on priority mech and status."""
