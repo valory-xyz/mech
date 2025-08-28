@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -559,7 +559,7 @@ def get_dates(
 ) -> Tuple[str, Optional[Callable]]:
     """Get the date from the extracted text"""
     adjusted_text = adjust_additional_information(
-        prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-3.5-turbo-0125"
+        prompt=GET_DATE_PROMPT, additional_information=text, model="gpt-4.1-2025-04-14"
     )
     get_date_prompt = GET_DATE_PROMPT.format(extracted_text=adjusted_text)
     messages = [
@@ -567,7 +567,7 @@ def get_dates(
         {"role": "user", "content": get_date_prompt},
     ]
     response = client_.chat.completions.create(
-        model="gpt-3.5-turbo-0125",
+        model="gpt-4.1-2025-04-14",
         messages=messages,
         temperature=0,
         n=1,
@@ -582,7 +582,7 @@ def get_dates(
             counter_callback(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
-                model="gpt-3.5-turbo-0125",
+                model="gpt-4.1-2025-04-14",
                 token_counter=count_tokens,
             )
             return f"{date.year}-{date.month}-{date.day}", counter_callback
@@ -879,8 +879,11 @@ def adjust_additional_information(
     prompt_tokens = len(enc.encode(prompt))
 
     # Calculate available tokens for additional_information
+    max_tokens_model = MAX_TOKENS.get(model)
+    if max_tokens_model is None:
+        raise ValueError(f"Max tokens for model {model} not defined in MAX_TOKENS.")
     MAX_PREDICTION_PROMPT_TOKENS = (
-        MAX_TOKENS[model] - DEFAULT_OPENAI_SETTINGS["max_tokens"]
+        max_tokens_model - DEFAULT_OPENAI_SETTINGS["max_tokens"]
     )
     available_tokens = MAX_PREDICTION_PROMPT_TOKENS - prompt_tokens - BUFFER_TOKENS
 
