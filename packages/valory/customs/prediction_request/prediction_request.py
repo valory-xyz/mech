@@ -82,6 +82,7 @@ N_MODEL_CALLS = 2
 USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
 DEFAULT_DELIVERY_RATE = 100
 GOOGLE_RATE_LIMIT_EXCEEDED_CODE = 429
+DEFAULT_NUM_QUERIES = 2
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -862,6 +863,9 @@ def fetch_additional_information(
         json_data = {"queries": [user_prompt]}
 
     if not source_links:
+        # limit the number of queries
+        if len(json_data["queries"]) > DEFAULT_NUM_QUERIES:
+            json_data["queries"] = json_data["queries"][:DEFAULT_NUM_QUERIES]
         urls = get_urls_from_queries(
             json_data["queries"],
             google_api_key,
