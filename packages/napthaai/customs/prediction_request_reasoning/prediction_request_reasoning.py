@@ -387,7 +387,7 @@ Please read the prompt carefully and identify the key pieces of information that
 
 Brainstorm a list of {NUM_QUERIES} different search queries that cover various aspects of the user prompt. Each query should be focused on a specific sub-topic or question related to the overarching prompt.
 
-Please write each search query inside its own tags, like this: example search query here
+Please write each search query inside its own tags, like this: <query>example search query here</query>
 
 The queries should be concise while still containing enough information to return relevant search results. Focus the queries on gathering factual information to address the prompt rather than opinions.
 
