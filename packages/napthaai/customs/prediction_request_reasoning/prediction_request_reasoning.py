@@ -1047,6 +1047,8 @@ def fetch_additional_information(
 
     # get the top URLs for the queries
     if not source_links:
+        # remove empty queries, including ""
+        queries = [query for query in queries if query.strip() != ""]
         urls = get_urls_from_queries(
             queries=queries,
             api_key=google_api_key,

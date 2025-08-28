@@ -815,6 +815,8 @@ def fetch_additional_information(
             max_tokens=max_tokens,
         )
         print(f"Queries: {queries}")
+        # remove empty queries, including ""
+        queries = [query for query in queries if query.strip() != ""]
     except Exception as e:
         print(f"Error generating queries: {e}")
         queries = [prompt]

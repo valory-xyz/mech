@@ -866,8 +866,11 @@ def fetch_additional_information(
         # limit the number of queries
         if len(json_data["queries"]) > DEFAULT_NUM_QUERIES:
             json_data["queries"] = json_data["queries"][:DEFAULT_NUM_QUERIES]
+        # remove empty queries, including ""
+        queries = json_data["queries"]
+        queries = [query for query in queries if query.strip() != ""]
         urls = get_urls_from_queries(
-            json_data["queries"],
+            queries,
             google_api_key,
             google_engine,
             num_urls,
