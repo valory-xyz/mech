@@ -841,6 +841,9 @@ def fetch_additional_information(
         )
     print(f"Split Docs: {len(split_docs)}")
 
+    if len(split_docs) == 0:
+        raise ValueError("No valid documents found from the provided URLs")
+
     # Remove None values from the list
     split_docs = [doc for doc in split_docs if doc]
 

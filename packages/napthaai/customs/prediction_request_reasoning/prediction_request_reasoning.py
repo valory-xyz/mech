@@ -1097,6 +1097,10 @@ def fetch_additional_information(
     split_docs = [doc for doc in split_docs if doc]
 
     print(f"Split Docs: {len(split_docs)}")
+
+    if len(split_docs) == 0:
+        raise ValueError("No valid documents found from the provided URLs")
+
     if len(split_docs) > MAX_NR_DOCS:
         # truncate the split_docs to the first MAX_NR_DOCS documents
         split_docs = split_docs[:MAX_NR_DOCS]
