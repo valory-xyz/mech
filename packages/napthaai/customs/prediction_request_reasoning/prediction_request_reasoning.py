@@ -127,6 +127,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 api_keys.rotate(service)
                 return execute()
             except Exception as e:
+                print(f"Unexpected error: {e}")
                 return str(e), "", None, None, api_keys
 
         mech_response = execute()
