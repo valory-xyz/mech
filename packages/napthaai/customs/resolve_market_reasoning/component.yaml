@@ -4,10 +4,10 @@ version: 0.1.0
 type: custom
 description: An improved tool for resolving markets after they have been closed.
 license: Apache-2.0
-aea_version: ">=1.0.0, <2.0.0"
+aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeib36ew6vbztldut5xayk5553rylrq7yv4cpqyhwc5ktvd4cx67vwu
-  resolve_market_reasoning.py: bafybeig37qeyjwpzmwyfjyqxsqpk7u3t77l2ftpbg6sdckf5vn3d4b7boi
+  resolve_market_reasoning.py: bafybeie3wotq2ntkpm3gf6bpopgtl7z3qlehlz3i4s7wiilzhqvwfc6kmq
 fingerprint_ignore_patterns: []
 entry_point: resolve_market_reasoning.py
 callable: run
@@ -20,7 +20,7 @@ dependencies:
     version: ==1.2.3
   requests: {}
   pydantic:
-    version: ">=1.9.0,<3"
+    version: '>=1.9.0,<3'
   faiss-cpu:
     version: ==1.7.4
   tiktoken:
@@ -36,6 +36,6 @@ dependencies:
   pypdf2:
     version: ==3.0.1
   numpy:
-    version: ">=1.19.0"
+    version: '>=1.19.0'
   anthropic:
     version: ==0.21.3
