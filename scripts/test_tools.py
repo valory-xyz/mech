@@ -171,12 +171,18 @@ def test_market_resolution_tool(prompt: str, tool: str, model: str) -> dict:
     actual_result = json.loads(result[0])
 
     assert (
-        "has_occurred" in actual_result
-    ), f"Missing 'resolution' key in result: {actual_result.keys()}"
-    assert actual_result["has_occurred"] in {
-        True,
-        False,
-    }, f"Invalid resolution value: {actual_result['resolution']}. Expected 'Yes' or 'No'."
+        "has_occurred" in actual_result or "is_determinable" in actual_result
+    ), f"Missing both 'has_occurred' and 'is_determinable' key in result: {actual_result.keys()}"
+    if "has_occurred" in actual_result:
+        assert actual_result["has_occurred"] in {
+            True,
+            False,
+        }, f"Invalid value for 'has_occurred': {actual_result['has_occurred']}. Expected True or False."
+    if "is_determinable" in actual_result:
+        assert actual_result["is_determinable"] in {
+            True,
+            False,
+        }, f"Invalid value for 'is_determinable': {actual_result['is_determinable']}. Expected True or False."
     return actual_result
 
 
