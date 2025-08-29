@@ -82,6 +82,7 @@ N_MODEL_CALLS = 2
 USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
 DEFAULT_DELIVERY_RATE = 100
 GOOGLE_RATE_LIMIT_EXCEEDED_CODE = 429
+DEFAULT_NUM_QUERIES = 2
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -539,7 +540,7 @@ USER_PROMPT:
 OUTPUT_FORMAT
 * Your output response must be only a single JSON object to be parsed by Python's "json.loads()".
 * The JSON must contain two fields: "queries", and "urls".
-   - "queries": An array of strings of size between 1 and 5. Each string must be a search engine query that can help obtain relevant information to estimate
+   - "queries": An array of strings of size {num_queries}. Each string must be a search engine query that can help obtain relevant information to estimate
      the probability that the event in "USER_PROMPT" occurs. You must provide original information in each query, and they should not overlap
      or lead to obtain the same set of results.
 * Output only the JSON object. Do not include any other contents in your response.
@@ -842,7 +843,9 @@ def fetch_additional_information(
     if not client:
         raise RuntimeError("Client not initialized")
 
-    url_query_prompt = URL_QUERY_PROMPT.format(user_prompt=user_prompt)
+    url_query_prompt = URL_QUERY_PROMPT.format(
+        user_prompt=user_prompt, num_queries=DEFAULT_NUM_QUERIES
+    )
     messages = [
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": url_query_prompt},
@@ -862,8 +865,15 @@ def fetch_additional_information(
         json_data = {"queries": [user_prompt]}
 
     if not source_links:
+        # remove empty queries, including ""
+        queries = json_data["queries"]
+        queries = [query for query in queries if query.strip() != ""]
+        # limit the number of queries
+        if len(queries) > DEFAULT_NUM_QUERIES:
+            queries = queries[:DEFAULT_NUM_QUERIES]
+
         urls = get_urls_from_queries(
-            json_data["queries"],
+            queries,
             google_api_key,
             google_engine,
             num_urls,

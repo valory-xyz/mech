@@ -343,7 +343,7 @@ ALLOWED_TOOLS = [
 ]
 ALLOWED_MODELS = list(LLM_SETTINGS.keys())
 DEFAULT_NUM_URLS = 3
-DEFAULT_NUM_QUERIES = 3
+DEFAULT_NUM_QUERIES = 2
 SPLITTER_CHUNK_SIZE = 300
 SPLITTER_OVERLAP = 50
 EMBEDDING_MODEL = "text-embedding-3-large"
@@ -585,6 +585,10 @@ def multi_queries(
             token_counter=count_tokens,
         )
     queries = parser_query_response(response.content, num_queries=num_queries)
+    # remove empty queries, including ""
+    queries = [query for query in queries if query.strip() != ""]
+    if len(queries) > DEFAULT_NUM_QUERIES:
+        queries = queries[:DEFAULT_NUM_QUERIES]
     queries.append(prompt)
 
     return queries, counter_callback
