@@ -45,6 +45,7 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 N_MODEL_CALLS = 2
 USER_AGENT_HEADER = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+DEFAULT_DELIVERY_RATE = 100
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -342,7 +343,7 @@ Please read the prompt carefully and identify the key pieces of information that
 
 Brainstorm a list of {NUM_QUERIES} different search queries that cover various aspects of the user prompt. Each query should be focused on a specific sub-topic or question related to the overarching prompt.
 
-Please write each search query inside its own tags, like this: example search query here
+Please write each search query inside its own tags, like this: <query>example search query here</query>
 
 The queries should be concise while still containing enough information to return relevant search results. Focus the queries on gathering factual information to address the prompt rather than opinions.
 
@@ -845,7 +846,7 @@ def run(
     """Run the task"""
     tool = kwargs["tool"]
     model = kwargs.get("model")
-    delivery_rate = int(kwargs.get("delivery_rate", 0))
+    delivery_rate = int(kwargs.get("delivery_rate", DEFAULT_DELIVERY_RATE))
     counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
     if delivery_rate == 0:
         if not counter_callback:
