@@ -291,20 +291,28 @@ class MechMarketplaceContract(Contract):
             delivers.extend(delivers_batch)
         existing_ids = {rid for d in delivers for rid in d["requestIds"]}
         pending_tasks: List[Dict[str, Any]] = []
-        for request in requests:
-            for i, request_id in enumerate(request["requestIds"]):
-                if request_id not in existing_ids:
-                    status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)
-                    request["status"] = status["data"]
-                    # fetch and store max delivery rate for each request id
-                    request_id_info = MechMarketplaceContract.get_request_id_info(
-                        ledger_api, marketplace_address, request_id
-                    )
-                    request["request_delivery_rate"] = request_id_info["data"][
-                        DELIVERY_RATE_INDEX
-                    ]
-                    # store each requests in the pending_tasks list, make sure each req is stored once
-                    pending_tasks.append(request)
+
+        for req in requests:
+            ids = req.get("requestIds", [])
+            datas = req.get("requestDatas", [])
+            for i, rid in enumerate(ids):
+                if rid in existing_ids:
+                    continue  # skip delivered
+                st = cls.get_request_id_status(ledger_api, marketplace_address, rid)["data"]
+                info = cls.get_request_id_info(ledger_api, marketplace_address, rid)["data"]
+                pending_tasks.append(
+                    {
+                        "tx_hash": req.get("tx_hash"),
+                        "block_number": req.get("block_number"),
+                        "priorityMech": req.get("priorityMech"),
+                        "requester": req.get("requester"),
+                        "contract_address": contract_address,
+                        "requestId": rid,
+                        "data": datas[i],
+                        "status": int(st),
+                        "request_delivery_rate": int(info[DELIVERY_RATE_INDEX]),
+                    }
+                )
 
         updated_wait: List[Dict[str, Any]] = []
         for existing_req in wait_for_timeout_tasks:
