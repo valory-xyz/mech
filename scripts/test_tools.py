@@ -87,7 +87,6 @@ TOOLS_TO_TEST = [
     "prediction-url-cot-claude",
 ]
 
-# TOOL = "prediction-online"
 MODEL_GPT = "gpt-4.1-2025-04-14"
 MODEL_CLAUDE = "claude-3-5-sonnet-20240620"
 
@@ -99,7 +98,7 @@ MARKETS = [
     """Will Google publicly release, before or on August 31, 2025, an updated environmental impact report for Gemini AI that includes both direct and indirect water usage figures?""",
 ]
 PROMPTS = [
-    f"""With the given question \"{market}\" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"""
+    f"""With the given question {market!r} and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"""
     for market in MARKETS
 ]
 
@@ -113,12 +112,12 @@ JSON_KEYS = {"p_yes", "p_no", "confidence", "info_utility"}
 TEST_RESULTS_DIR = "./tools_test_results"
 
 
-def check_keys(json_obj) -> bool:
+def check_keys(json_obj: dict) -> bool:
     """Check if all json keys are present."""
     return all(key in json_obj for key in JSON_KEYS)
 
 
-def test_prediction_tool(prompt: str, tool: str, model: str) -> None:
+def test_prediction_tool(prompt: str, tool: str, model: str) -> dict:
     """Test a specific tool with a specific model."""
 
     kwargs = {
@@ -154,10 +153,10 @@ def test_prediction_tool(prompt: str, tool: str, model: str) -> None:
         f"p_yes and p_no do not sum to 1: {actual_result['p_yes']} + {actual_result['p_no']} = "
         f"{actual_result['p_yes'] + actual_result['p_no']}"
     )
-    return result
+    return actual_result
 
 
-def test_market_resolution_tool(prompt: str, tool: str, model: str) -> None:
+def test_market_resolution_tool(prompt: str, tool: str, model: str) -> dict:
     """Test a specific tool with a specific model."""
 
     kwargs = {
@@ -178,18 +177,18 @@ def test_market_resolution_tool(prompt: str, tool: str, model: str) -> None:
         True,
         False,
     }, f"Invalid resolution value: {actual_result['resolution']}. Expected 'Yes' or 'No'."
-    return result
+    return actual_result
 
 
 def get_current_agent_hash() -> str:
     """Get the current agent hash from packages.json."""
-    with open("./packages/packages.json", "r") as f:
+    with open("./packages/packages.json", "r", encoding="utf-8") as f:
         packages = json.load(f)
     return packages["dev"]["agent/valory/mech/0.1.0"]
 
 
 def save_result(
-    tool: str, model: str, result: str, time_taken: str, prompt: str
+    tool: str, model: str, result: dict, time_taken: str, prompt: str
 ) -> None:
     """Save the result to a file."""
     if not os.path.exists(TEST_RESULTS_DIR):
@@ -198,7 +197,7 @@ def save_result(
     filename = os.path.join(
         TEST_RESULTS_DIR, f"{CURRENT_TIME_PREFIX}_{current_agent_hash}.jsonl"
     )
-    with open(filename, "a+") as f:
+    with open(filename, "a+", encoding="utf-8") as f:
         f.write(
             json.dumps(
                 {
@@ -232,7 +231,7 @@ def main() -> None:
             print(
                 f"Time taken for tool {tool} with model {model}: {elapsed_time:.2f} seconds"
             )
-            save_result(tool, model, result[0], f"{elapsed_time:.2f} seconds", prompt)
+            save_result(tool, model, result, f"{elapsed_time:.2f} seconds", prompt)
 
 
 if __name__ == "__main__":
