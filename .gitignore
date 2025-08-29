@@ -33,3 +33,5 @@ log
 
 mech/
 mech_service/
+
+tools_test_results/
