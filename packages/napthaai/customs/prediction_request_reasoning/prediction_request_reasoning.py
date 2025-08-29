@@ -127,6 +127,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 api_keys.rotate(service)
                 return execute()
             except Exception as e:
+                print(f"Unexpected error: {e}")
                 return str(e), "", None, None, api_keys
 
         mech_response = execute()
@@ -1097,6 +1098,10 @@ def fetch_additional_information(
     split_docs = [doc for doc in split_docs if doc]
 
     print(f"Split Docs: {len(split_docs)}")
+
+    if len(split_docs) == 0:
+        raise ValueError("No valid documents found from the provided URLs")
+
     if len(split_docs) > MAX_NR_DOCS:
         # truncate the split_docs to the first MAX_NR_DOCS documents
         split_docs = split_docs[:MAX_NR_DOCS]
