@@ -339,12 +339,14 @@ def test_invalid_tool_is_recorded_and_no_execution(
     disable_polling()
 
     req_id: int = 5
+    my_mech = params_stub.agent_mech_contract_addresses[0]
     shared_state[beh_mod.PENDING_TASKS].append(
         {
             "requestId": req_id,
             "request_delivery_rate": 100,
             "data": b"x",
-            "contract_address": "0xmech",
+            "contract_address": my_mech,
+            "priorityMech": my_mech,
         }
     )
     params_stub.request_id_to_num_timeouts[req_id] = 0

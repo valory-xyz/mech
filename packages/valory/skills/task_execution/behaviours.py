@@ -26,7 +26,7 @@ from asyncio import Future
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, cast
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 from aea.helpers.cid import to_v1
 from aea.mail.base import EnvelopeContext
@@ -102,6 +102,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._invalid_request = False
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
+        self._ignored_request_ids: Set[int] = set()
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -523,29 +524,49 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             and "prompt" in task_data
             and "tool" in task_data
         )  # pylint: disable=C0301
-        if is_data_valid and task_data["tool"] in self._tools_to_package_hash:
+
+        if not is_data_valid:
+            self.context.logger.warning("Data for task is not valid.")
+            self._invalid_request = True
+            return
+
+        executing_task = cast(Dict[str, Any], self._executing_task)
+        my_mech = self._get_designated_marketplace_mech_address().lower()
+        exec_prio = str(executing_task.get("priorityMech", "")).lower()
+        stepping_in = exec_prio != my_mech
+        tool_name = task_data["tool"]
+        if stepping_in and tool_name not in self._tools_to_package_hash:
+            rid = int(executing_task["requestId"])
+            self._ignored_request_ids.add(rid)
+            self.context.logger.info(
+                "Ignoring request %s: stepping in but tool %r not installed.",
+                rid,
+                tool_name,
+            )
+            self._executing_task = None
+            self._last_deadline = None
+            self._async_result = None
+            return
+
+        if tool_name in self._tools_to_package_hash:
             if self._tools_to_pricing:
-                executing_task = cast(Dict[str, Any], self._executing_task)
-                tool_pricing = self._tools_to_pricing[task_data["tool"]]
-                request_id_delivery_rate = self.request_id_to_delivery_rate_info[
+                tool_pricing = self._tools_to_pricing[tool_name]
+                req_id_delivery_rate = self.request_id_to_delivery_rate_info[
                     executing_task["requestId"]
                 ]
-                if request_id_delivery_rate < tool_pricing:
+                if req_id_delivery_rate < tool_pricing:
                     self.context.logger.warning(
-                        f"Requested pricing is not valid. Actual {request_id_delivery_rate} Needed {tool_pricing}"
+                        "Requested pricing invalid. Actual %s Needed %s",
+                        req_id_delivery_rate,
+                        tool_pricing,
                     )
                     self._invalid_request = True
                     return
-
             self._prepare_task(task_data)
-        elif is_data_valid:
-            tool = task_data["tool"]
-            executing_task = cast(Dict[str, Any], self._executing_task)
-            executing_task["tool"] = tool
-            self.context.logger.warning(f"Tool {tool} is not valid.")
-            self._invalid_request = True
         else:
-            self.context.logger.warning("Data for task is not valid.")
+            # Unknown tool and we're the priority mech -> store stub (existing behavior)
+            executing_task["tool"] = tool_name
+            self.context.logger.warning("Tool %r is not valid.", tool_name)
             self._invalid_request = True
 
     def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
