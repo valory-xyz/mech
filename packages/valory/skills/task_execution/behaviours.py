@@ -539,9 +539,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             rid = int(executing_task["requestId"])
             self._ignored_request_ids.add(rid)
             self.context.logger.info(
-                "Ignoring request %s: stepping in but tool %r not installed.",
-                rid,
-                tool_name,
+                f"Ignoring request {rid}: stepping in but tool {tool_name} not installed.",
             )
             self._executing_task = None
             self._last_deadline = None
@@ -556,9 +554,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 ]
                 if req_id_delivery_rate < tool_pricing:
                     self.context.logger.warning(
-                        "Requested pricing invalid. Actual %s Needed %s",
-                        req_id_delivery_rate,
-                        tool_pricing,
+                        f"Requested pricing invalid. Actual {req_id_delivery_rate} Needed {tool_pricing}"
                     )
                     self._invalid_request = True
                     return
@@ -566,7 +562,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         else:
             # Unknown tool and we're the priority mech -> store stub (existing behavior)
             executing_task["tool"] = tool_name
-            self.context.logger.warning("Tool %r is not valid.", tool_name)
+            self.context.logger.warning(f"Tool {tool_name} is not valid.")
             self._invalid_request = True
 
     def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
