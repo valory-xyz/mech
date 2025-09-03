@@ -37,6 +37,7 @@ from packages.valory.skills.task_execution.behaviours import (
     IPFS_TASKS,
     PENDING_TASKS,
     REQUEST_ID_TO_DELIVERY_RATE_INFO,
+    TIMED_OUT_TASKS,
     TaskExecutionBehaviour,
     WAIT_FOR_TIMEOUT,
 )
@@ -51,6 +52,7 @@ def shared_state() -> Dict[str, Any]:
     return {
         PENDING_TASKS: [],
         WAIT_FOR_TIMEOUT: [],
+        TIMED_OUT_TASKS: [],
         DONE_TASKS: [],
         IPFS_TASKS: [],
         DONE_TASKS_LOCK: threading.Lock(),
