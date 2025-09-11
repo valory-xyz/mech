@@ -1685,10 +1685,17 @@ class TransactionPreparationBehaviour(
                 marketplace_deliver_by_mech[mech][MarketplaceKeys.DATAS.value].append(
                     bytes.fromhex(data[MarketplaceData.TASK_RESULT.value])
                 )
-                # default is set to 0 as for regular mechs this key is not being used in deliveries
+                # default is set to mech's max delivery rate
+                # as for nvm mechs this allows to deliver invalid responses
+                # where tool is not available and so is tool_to_pricing
                 marketplace_deliver_by_mech[mech][
                     MarketplaceKeys.DELIVERY_RATES.value
-                ].append(data.get(MarketplaceData.DYNAMIC_TOOL_COST.value, 0))
+                ].append(
+                    data.get(
+                        MarketplaceData.DYNAMIC_TOOL_COST.value,
+                        self.params.mech_max_delivery_rate,
+                    )
+                )
 
             for mech, details in marketplace_deliver_by_mech.items():
                 self.context.logger.info(f"Preparing deliver data for mech: {mech}")

@@ -93,6 +93,12 @@ class Params(BaseParams):
         self.minimum_agent_balance = self._ensure("minimum_agent_balance", kwargs, int)
         self.agent_funding_amount = self._ensure("agent_funding_amount", kwargs, int)
         self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
+        self.mech_to_max_delivery_rate: Dict[str, int] = self._ensure_get(
+            "mech_to_max_delivery_rate", kwargs, Dict[str, int]
+        )
+        self.mech_max_delivery_rate: int = int(
+            next(iter(self.mech_to_max_delivery_rate.values()))
+        )
         super().__init__(*args, **kwargs)
 
     @classmethod
