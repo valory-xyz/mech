@@ -155,15 +155,11 @@ def with_key_rotation(func: Callable) -> Callable:
 
 
 def count_tokens_for_openai_api_first_check(text: str) -> int:
-    """
-    Estimate the number of tokens for OpenAI embeddings API's initial check.
-
-    OpenAI's embeddings endpoint uses an approximate calculation of 0.25 tokens per UTF-8 byte
-    (i.e., 1 token per 4 bytes) for the 300k token limit. This is not the same as tiktoken's
-    actual token count, but is used for the API's first validation.
-
-    Reference: https://community.openai.com/t/max-total-embeddings-tokens-per-request/1254699/6
-    """
+    """Estimate the number of tokens for OpenAI embeddings API's initial check."""
+    # OpenAI's embeddings endpoint uses an approximate calculation of 0.25 tokens per UTF-8 byte
+    # (i.e., 1 token per 4 bytes) for the 300k token limit. This is not the same as tiktoken's
+    # actual token count, but is used for the API's first validation.
+    # Reference: https://community.openai.com/t/max-total-embeddings-tokens-per-request/1254699/6
     return len(text.encode("utf-8")) // 4
 
 
