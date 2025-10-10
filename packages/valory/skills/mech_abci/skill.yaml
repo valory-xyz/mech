@@ -17,19 +17,19 @@ fingerprint:
   tests/test_handlers.py: bafybeihkbnvbcdstqoe23yj3ryhudh6h6rifuxqyp3j76e7uxsjvdhrboq
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
+- valory/http_server:0.22.0:bafybeicmy3phyy3ckvlfumioiadwlmlt5dijkp3mhezkxgx7kigigwe3rm
 contracts: []
 protocols:
-- valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
+- valory/http:1.0.0:bafybeibxab2yfpchusrzw4rgrasjomtpphazanpivhhtznmuao5ny2lsmi
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeia7lzwbmcmf3u7mn3673345klkyyp7ln62gqx6hcqlbjracxmrqlm
-- valory/registration_abci:0.1.0:bafybeigoomgcphpjc32wlx5j3fjm27bgiw4o7hqtj62hv54hpwtfbvxkma
-- valory/reset_pause_abci:0.1.0:bafybeigtq7etpplx2yjdobrutv2fwosc7jw5etfb44n44nexciicrs7m4i
-- valory/task_submission_abci:0.1.0:bafybeiccuwr57nct3f3noo7iqxetmyew6fyvq6twl6oskpeecrplgykxpi
-- valory/termination_abci:0.1.0:bafybeiam7v3kicazjq6rr3ijjc5nsqzp4sjrysmsevnxbhiqdv6ltyxope
-- valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
-- valory/delivery_rate_abci:0.1.0:bafybeidwdkwg4pqvtxy2hivyxh7tdrc3wff6hyq4ik72zykbwoujrpm22e
-- valory/task_execution:0.1.0:bafybeid2f67qayxc5enlkcwqv3itpnjfwin7lnpkhrpalujfjl4lxl3qhm
+- valory/abstract_round_abci:0.1.0:bafybeiemzg3e2hc5hjnpqj4kulxq4mjz65ktelqdgb6wvxekiwudjp63uu
+- valory/registration_abci:0.1.0:bafybeig3fa2uj5qymqhka2qyzmqwvk3opiiyfzhu4ybkr2yk33s5q7grka
+- valory/reset_pause_abci:0.1.0:bafybeibec77db27lzx7uzheoajzhc24itvbuaph4rnxtqynebw3ykm7w5u
+- valory/task_submission_abci:0.1.0:bafybeicu62dhtjincv6tm3pnk3e6t5ptzr5axwpjigubyhn7x36oa2lieu
+- valory/termination_abci:0.1.0:bafybeihxrqmaqhpwjl7q7kogpdrclw4o24taba6z4wmbljipsnebptvr7y
+- valory/transaction_settlement_abci:0.1.0:bafybeihuygeicnvdcbhm747bzqbxmw2lbuwhaeqdis3d54vhm4sykjyyly
+- valory/delivery_rate_abci:0.1.0:bafybeicgyv6i3z6p55rgea4wig3jxsuybgqzthnesiyl6gken6ercxy7ra
+- valory/task_execution:0.1.0:bafybeihar33gxylsluovtpgusaehvq2xdau5vpjjbpirytpr7hbqjj4emm
 behaviours:
   main:
     args: {}

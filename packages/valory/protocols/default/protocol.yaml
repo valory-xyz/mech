@@ -5,7 +5,7 @@ protocol_specification_id: valory/default:1.0.0
 type: protocol
 description: A protocol for exchanging any bytes message.
 license: Apache-2.0
-aea_version: '>=2.0.0, <3.0.0'
+aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   README.md: bafybeignmf6cibowaii3h7vhdwctj67upzu3nhlsgc4zvqawf7zqyebt6m
   __init__.py: bafybeieg6vsjgnfshtsn77qe6j5t7q5uofpp4xgtnktp7ktkd5aaet6ybu
