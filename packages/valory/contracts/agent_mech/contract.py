@@ -283,14 +283,14 @@ class AgentMechContract(Contract):
             contract_instance = ledger_api.api.eth.contract(
                 contract_address, abi=deliver_with_nonce
             )
-            data = contract_instance.encodeABI(
-                fn_name="deliver",
+            data = contract_instance.encode_abi(
+                abi_element_identifier="deliver",
                 args=[request_id, request_id_nonce, bytes.fromhex(data)],
             )
         else:
             contract_instance = cls.get_instance(ledger_api, contract_address)
-            data = contract_instance.encodeABI(
-                fn_name="deliver", args=[request_id, bytes.fromhex(data)]
+            data = contract_instance.encode_abi(
+                abi_element_identifier="deliver", args=[request_id, bytes.fromhex(data)]
             )
 
         simulation_ok = cls.simulate_tx(
@@ -454,8 +454,8 @@ class AgentMechContract(Contract):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="exec", args=[to, value, data, operation, tx_gas]
+        data = contract_instance.encode_abi(
+            abi_element_identifier="exec", args=[to, value, data, operation, tx_gas]
         )
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
 
@@ -501,8 +501,8 @@ class AgentMechContract(Contract):
             raise ValueError(f"Only EthereumApi is supported, got {type(ledger_api)}")
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        tx_data = contract_instance.encodeABI(
-            fn_name="deliverToMarketplace",
+        tx_data = contract_instance.encode_abi(
+            abi_element_identifier="deliverToMarketplace",
             args=[
                 request_id,
                 bytes.fromhex(data),
@@ -529,8 +529,8 @@ class AgentMechContract(Contract):
         """Get offchain deliver tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="deliverMarketplaceWithSignatures",
+        data = contract_instance.encode_abi(
+            abi_element_identifier="deliverMarketplaceWithSignatures",
             args=[
                 requester,
                 deliverWithSignatures,
@@ -697,8 +697,8 @@ class AgentMechContract(Contract):
         """Get tx data"""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="deliverToMarketplace",
+        data = contract_instance.encode_abi(
+            abi_element_identifier="deliverToMarketplace",
             args=[
                 requestIds,
                 datas,
@@ -729,8 +729,8 @@ class AgentMechContract(Contract):
     ) -> JSONLike:
         """Get tx data"""
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="changeMaxDeliveryRate",
+        data = contract_instance.encode_abi(
+            abi_element_identifier="changeMaxDeliveryRate",
             args=[new_max_delivery_rate],
         )
         return {"data": bytes.fromhex(data[2:])}  # type: ignore
