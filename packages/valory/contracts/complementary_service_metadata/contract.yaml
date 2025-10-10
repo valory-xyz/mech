@@ -4,7 +4,7 @@ version: 0.1.0
 type: contract
 description: Complementary Service Metadata contract
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeie5gvlvdam464ch7zknawcq6zvhaqwncau4ehhngjmigto537go2q
   build/ComplementaryServiceMetadata.json: bafybeia4jozxbrjpofs72c3dm3k64btsvlzxkqts5wblgo4b2rieeq57ee

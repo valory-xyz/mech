@@ -5,7 +5,7 @@ type: skill
 description: A simple skill to subscribe to events on a particular contract using
   the websocket connection.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihmbiavlq5ekiat57xuekfuxjkoniizurn77hivqwtsaqydv32owu
   behaviours.py: bafybeihhhfpan6i5vzxaoggmnj5jw556wnxz75ufcmiucq3yygrbmlsdpm
@@ -43,5 +43,5 @@ models:
     class_name: Params
 dependencies:
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
 is_abstract: false

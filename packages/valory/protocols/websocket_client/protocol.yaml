@@ -5,7 +5,7 @@ protocol_specification_id: valory/websocket_client:1.0.0
 type: protocol
 description: A protocol for websocket client.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   README.md: bafybeieot47xhqlvc3dwl2hc4yq3f6wcva7xf5dx5wz5n4ir6woknyqrsi
   __init__.py: bafybeifhhqtcfac5lcrjxrcdpsrs3kyyxt7uf2qv2a4ivllyyt3c62q4aq

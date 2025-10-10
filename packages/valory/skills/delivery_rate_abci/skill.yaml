@@ -5,7 +5,7 @@ type: skill
 description: An abci skill that implements logic for updating the delivery rates for
   the mech.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeichkazmroftew6ifqoe4tud2faoo24hza5sgfghapmlp4l2rqjwee
   behaviours.py: bafybeih3fga6ds6gznrtshpfg774dhikcznxchvru37y4wyk66ocx3ir3q
