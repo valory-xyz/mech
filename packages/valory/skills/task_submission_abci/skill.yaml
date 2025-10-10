@@ -5,7 +5,7 @@ type: skill
 description: An abci skill that implements task execution and transaction preparation
   for the mech.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
   behaviours.py: bafybeifas3ijulfun3uj3xu2dhbg5v2jvvhrnvxrfmnloqvzkuq6dk5bwm
