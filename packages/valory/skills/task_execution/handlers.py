@@ -185,15 +185,15 @@ class ContractHandler(BaseHandler):
         """Get timed_out_tasks for other mechs"""
         return self.context.shared_state[TIMED_OUT_TASKS]
 
-    @property
-    def step_in_list_size(self) -> int:
-        """Get step_in_list_size"""
-        return self.params.step_in_list_size
-
     @timed_out_tasks.setter
     def timed_out_tasks(self, value: List[Dict[str, Any]]) -> None:
         """Get timed_out_tasks for other mechs"""
         self.context.shared_state[TIMED_OUT_TASKS] = value
+
+    @property
+    def step_in_list_size(self) -> int:
+        """Get step_in_list_size"""
+        return self.params.step_in_list_size
 
     def handle(self, message: Message) -> None:
         """
