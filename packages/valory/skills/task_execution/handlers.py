@@ -185,6 +185,11 @@ class ContractHandler(BaseHandler):
         """Get timed_out_tasks for other mechs"""
         return self.context.shared_state[TIMED_OUT_TASKS]
 
+    @property
+    def step_in_list_size(self) -> int:
+        """Get step_in_list_size"""
+        return self.params.step_in_list_size
+
     @timed_out_tasks.setter
     def timed_out_tasks(self, value: List[Dict[str, Any]]) -> None:
         """Get timed_out_tasks for other mechs"""
@@ -255,7 +260,13 @@ class ContractHandler(BaseHandler):
                 self.context.logger.info(
                     f"Timed out status matched, adding request: {req} to timeout tasks"
                 )
-                self.timed_out_tasks.append(req)
+                timed_out_tasks_len = len(self.timed_out_tasks)
+                if timed_out_tasks_len >= self.step_in_list_size:
+                    self.context.logger.info(
+                        f"Timed out tasks len {timed_out_tasks_len} exceeds the configured cap of {self.step_in_list_size}. Dropping req: {req}"
+                    )
+                else:
+                    self.timed_out_tasks.append(req)
             elif (
                 req["status"] == WAIT_FOR_TIMEOUT_STATUS
                 and req["request_delivery_rate"] >= self.mech_to_max_delivery_rate
@@ -263,6 +274,8 @@ class ContractHandler(BaseHandler):
                 self.context.logger.info(
                     f"Wait for timeout status matched, adding request: {req} to wait_for_timeout tasks"
                 )
+                # no len check necessary as wait_for_timeout_tasks is
+                # cleared everytime we handle new requests
                 self.wait_for_timeout_tasks.append(req)
 
 

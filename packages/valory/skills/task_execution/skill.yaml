@@ -9,8 +9,8 @@ fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
   behaviours.py: bafybeifawhtvsgcoxxez5unujf7z2uedgtjd6zeirl3e5hcrniyctcnyxi
   dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
-  handlers.py: bafybeidh55oeixdv7muh4leyxviuxohlbofoiisc7vgnovj7rb6qfpuusi
-  models.py: bafybeig7ia5gy2qhe4l5uwzht6vgdmm7mh7ea3mq6hjxkmymmbedynfmf4
+  handlers.py: bafybeibtepl5phumeipf5kch5mx2qvzlibwyarchwle6s65id5q3h2ymli
+  models.py: bafybeigihdpoos3dznn25hluumgmjriqbjq2eonkmf5w6wnhddsary6iei
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeide3sgaltshtbggokkhpqcy4hmmqvlm4jgkieedmbnj4tu4fng4si
   tests/test_behaviours.py: bafybeic6h4ypiw4x27gm5auno3bdwwyznxysp5zqutgal4xhxzbnpq5tiq
@@ -88,6 +88,7 @@ models:
       mech_to_config: {}
       tools_to_pricing: {}
       polling_interval: 30.0
+      step_in_list_size: 20
       mech_to_max_delivery_rate: {}
       task_deadline: 240.0
       max_block_window: 500
