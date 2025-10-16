@@ -81,6 +81,7 @@ class Params(Model):
         )
         self.polling_interval = kwargs.get("polling_interval", 30.0)
         self.task_deadline = kwargs.get("task_deadline", 240.0)
+        self.step_in_list_size = kwargs.get("step_in_list_size", 20)
         self.num_agents = self._ensure_get("num_agents", kwargs, int)
         self.request_count: int = 0
         self.cleanup_freq = kwargs.get("cleanup_freq", 50)

@@ -100,6 +100,7 @@ def params_stub() -> SimpleNamespace:
         agent_index=0,
         from_block_range=0,
         mech_to_max_delivery_rate={},
+        step_in_list_size=20,
     )
 
     # Provide a logger object sometimes accessed via params.
