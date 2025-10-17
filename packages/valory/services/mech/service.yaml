@@ -5,9 +5,9 @@ description: A decentralised task execution engine.
 aea_version: '>=1.0.0, <2.0.0'
 license: Apache-2.0
 fingerprint:
-  README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
+  README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeictta324w2xo6a7y77i6phtqvnc34svwpduadgxm3ez2kjfld2gkm
+agent: valory/mech:0.1.0:bafybeickowzkg6s742a72wo3fa23gslgsfxpjnny7tzp3spbljjkj5l4w4
 number_of_agents: 4
 deployment:
   agent:
