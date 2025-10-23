@@ -211,6 +211,8 @@ class ContractHandler(BaseHandler):
             return
 
         body = contract_api_msg.state.body
+        print(f"{body=}")
+        print(f"{type(body)=}")
         self._handle_get_undelivered_reqs(body)
         self.params.in_flight_req = False
         self.on_message_handled(message)

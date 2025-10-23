@@ -304,6 +304,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.req_type = RequestType.MARKETPLACE.value
         self.context.outbox.put_message(message=contract_api_msg)
 
+    def _check_marketplace_request_status(self, request_id: bytes) -> None:
+        """Check for marketplace mech req status."""
+        if not self.params.use_mech_marketplace:
+            return
+
+        contract_api_msg, _ = self.context.contract_dialogues.create(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.mech_marketplace_address,
+            contract_id=str(MechMarketplaceContract.contract_id),
+            callable="get_request_id_status",
+            kwargs=ContractApiMessage.Kwargs(dict(request_id=request_id)),
+            counterparty=LEDGER_API_ADDRESS,
+            ledger_id=self.context.default_ledger_id,
+        )
+        self.params.req_type = RequestType.MARKETPLACE.value
+        self.context.outbox.put_message(message=contract_api_msg)
+
     def _execute_ipfs_tasks(self) -> None:
         """Execute IPFS tasks."""
 
@@ -366,9 +383,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             if len(self.timed_out_tasks) == 0:
                 return
             task_data = self.timed_out_tasks.pop(0)
+            self.context.logger.info(f"Preparing timed out task with data: {task_data}")
         else:
             task_data = self.pending_tasks.pop(0)
-        self.context.logger.info(f"Preparing task with data: {task_data}")
+            self.context.logger.info(f"Preparing priority task with data: {task_data}")
+
+        # blocking call to fetch the request status of the current task
+        request_id = task_data["requestId"]
+        while True:
+            self.context.logger.info(f"Checking request id status of: {request_id}")
+            status = self.params.request_id_to_status.get(request_id)
+            if status:
+                self.context.logger.info(
+                    f"Found status {status} for request id {request_id}"
+                )
+                break
+            else:
+                self.context.logger.info(
+                    f"Status not found for request id {request_id}. Fetching and Sleeping for 5 secs"
+                )
+                self._check_marketplace_request_status(request_id=request_id)
+                time.sleep(5.0)
+
         # convert request id to int if it's bytes
         if type(task_data.get("requestId")) == bytes:
             request_id = task_data["requestId"]

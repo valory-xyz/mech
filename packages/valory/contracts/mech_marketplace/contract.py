@@ -558,11 +558,17 @@ class MechMarketplaceContract(Contract):
         request_id: bytes,
     ) -> JSONLike:
         """Fetch status for a given request id."""
+        print("Inside get_request_id_status contract call")
+        print(f"{contract_address=}")
+        print(f"{request_id=}")
         ledger_api = cast(EthereumApi, ledger_api)
+        print(f"{ledger_api=}")
         contract_instance = cls.get_instance(ledger_api, contract_address)
+        print(f"{contract_instance=}")
         status = contract_instance.functions.getRequestStatus(
             request_id
         ).call()
+        print(f"{status=}")
         return dict(data=status)
 
 
