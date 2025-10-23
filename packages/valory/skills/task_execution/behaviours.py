@@ -65,6 +65,7 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
+CHECK_FOR_STATUS = "check_for_status"
 TIMED_OUT_TASKS = "timed_out_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
@@ -155,6 +156,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def timed_out_tasks(self) -> List[Dict[str, Any]]:
         """Get timed_out_tasks for other mechs"""
         return self.context.shared_state[TIMED_OUT_TASKS]
+
+    @property
+    def check_for_status(self) -> List[Dict[str, Any]]:
+        """Get check_for_status."""
+        return self.context.shared_state[CHECK_FOR_STATUS]
 
     @property
     def done_tasks(self) -> List[Dict[str, Any]]:
@@ -296,6 +302,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     marketplace_address=self.params.mech_marketplace_address,
                     wait_for_timeout_tasks=self.wait_for_timeout_tasks,
                     timeout_tasks=self.timed_out_tasks,
+                    check_for_status=self.check_for_status,
                 )
             ),
             counterparty=LEDGER_API_ADDRESS,
@@ -366,9 +373,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             if len(self.timed_out_tasks) == 0:
                 return
             task_data = self.timed_out_tasks.pop(0)
+            self.context.logger.info(f"Preparing timed out task with data: {task_data}")
         else:
             task_data = self.pending_tasks.pop(0)
-        self.context.logger.info(f"Preparing task with data: {task_data}")
+            self.context.logger.info(f"Preparing priority task with data: {task_data}")
+
+            request_id = task_data["requestId"]
+            timestamp = task_data["timestamp"]
+            status = task_data["status"]
+            if time.time() - timestamp > 300 and status != 3:
+                self.context.logger.info(
+                    "Priority Task timed out onchain, fetching status"
+                )
+                self.check_for_status.append(task_data)
+                self.params.in_flight_req = False
+                self._executing_task = None
+                self._last_deadline = None
+                self._async_result = None
+                return
+
         # convert request id to int if it's bytes
         if type(task_data.get("requestId")) == bytes:
             request_id = task_data["requestId"]
