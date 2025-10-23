@@ -65,6 +65,7 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
+CHECK_FOR_STATUS = "check_for_status"
 TIMED_OUT_TASKS = "timed_out_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
@@ -155,6 +156,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def timed_out_tasks(self) -> List[Dict[str, Any]]:
         """Get timed_out_tasks for other mechs"""
         return self.context.shared_state[TIMED_OUT_TASKS]
+
+    @property
+    def check_for_status(self) -> List[Dict[str, Any]]:
+        """Get check_for_status."""
+        return self.context.shared_state[CHECK_FOR_STATUS]
 
     @property
     def done_tasks(self) -> List[Dict[str, Any]]:
@@ -296,25 +302,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     marketplace_address=self.params.mech_marketplace_address,
                     wait_for_timeout_tasks=self.wait_for_timeout_tasks,
                     timeout_tasks=self.timed_out_tasks,
+                    check_for_status=self.check_for_status,
                 )
             ),
-            counterparty=LEDGER_API_ADDRESS,
-            ledger_id=self.context.default_ledger_id,
-        )
-        self.params.req_type = RequestType.MARKETPLACE.value
-        self.context.outbox.put_message(message=contract_api_msg)
-
-    def _check_marketplace_request_status(self, request_id: bytes) -> None:
-        """Check for marketplace mech req status."""
-        if not self.params.use_mech_marketplace:
-            return
-
-        contract_api_msg, _ = self.context.contract_dialogues.create(
-            performative=ContractApiMessage.Performative.GET_STATE,
-            contract_address=self.params.mech_marketplace_address,
-            contract_id=str(MechMarketplaceContract.contract_id),
-            callable="get_request_id_status",
-            kwargs=ContractApiMessage.Kwargs(dict(request_id=request_id)),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
@@ -388,22 +378,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             task_data = self.pending_tasks.pop(0)
             self.context.logger.info(f"Preparing priority task with data: {task_data}")
 
-        # blocking call to fetch the request status of the current task
-        request_id = task_data["requestId"]
-        while True:
-            self.context.logger.info(f"Checking request id status of: {request_id}")
-            status = self.params.request_id_to_status.get(request_id)
-            if status:
+            request_id = task_data["requestId"]
+            timestamp = task_data["timestamp"]
+            status = task_data["status"]
+            if time.time() - timestamp > 300 and status != 3:
                 self.context.logger.info(
-                    f"Found status {status} for request id {request_id}"
+                    "Priority Task timed out onchain, fetching status"
                 )
-                break
-            else:
-                self.context.logger.info(
-                    f"Status not found for request id {request_id}. Fetching and Sleeping for 5 secs"
-                )
-                self._check_marketplace_request_status(request_id=request_id)
-                time.sleep(5.0)
+                self.check_for_status.append(task_data)
+                self.params.in_flight_req = False
+                self._executing_task = None
+                self._last_deadline = None
+                self._async_result = None
+                return
 
         # convert request id to int if it's bytes
         if type(task_data.get("requestId")) == bytes:

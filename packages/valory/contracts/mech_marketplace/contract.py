@@ -251,6 +251,7 @@ class MechMarketplaceContract(Contract):
             contract_address: str,
             wait_for_timeout_tasks: List[Dict[str, Any]],
             timeout_tasks: List[Dict[str, Any]],
+            check_for_status: List[Dict[str, Any]],
             marketplace_address: str,
             from_block: BlockIdentifier = "earliest",
             to_block: BlockIdentifier = "latest",
@@ -300,10 +301,13 @@ class MechMarketplaceContract(Contract):
                     continue  # skip delivered
                 st = cls.get_request_id_status(ledger_api, marketplace_address, rid)["data"]
                 info = cls.get_request_id_info(ledger_api, marketplace_address, rid)["data"]
+                block_number = req.get("block_number")
+                block_data = ledger_api.api.eth.get_block(block_number)
+                timestamp = block_data.timestamp
                 pending_tasks.append(
                     {
                         "tx_hash": req.get("tx_hash"),
-                        "block_number": req.get("block_number"),
+                        "block_number": block_number,
                         "priorityMech": req.get("priorityMech"),
                         "requester": req.get("requester"),
                         "contract_address": contract_address,
@@ -311,6 +315,7 @@ class MechMarketplaceContract(Contract):
                         "data": datas[i],
                         "status": int(st),
                         "request_delivery_rate": int(info[DELIVERY_RATE_INDEX]),
+                        "timestamp": timestamp
                     }
                 )
 
@@ -328,7 +333,14 @@ class MechMarketplaceContract(Contract):
                 status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)
                 timed_req["status"] = status["data"]
                 timed_out.append(timed_req)
-        return {"data": pending_tasks, "wait_for_timeout_tasks": updated_wait, "timed_out_requests": timed_out}
+        check_status: List[Dict[str, Any]] = []
+        for check_status_req in check_for_status:
+            request_id = check_status_req["requestId"]
+            status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)
+            if status != 3:
+                check_status_req["status"] = status["data"]
+                check_status.append(check_status_req)
+        return {"data": pending_tasks, "wait_for_timeout_tasks": updated_wait, "timed_out_requests": timed_out, "check_status_requests": check_status}
 
     @classmethod
     def get_marketplace_request_events(

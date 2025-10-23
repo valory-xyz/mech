@@ -48,6 +48,7 @@ IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 TIMED_OUT_TASKS = "timed_out_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
+CHECK_FOR_STATUS = "check_for_status"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 TIMED_OUT_STATUS = 2
 WAIT_FOR_TIMEOUT_STATUS = 1
@@ -156,6 +157,7 @@ class ContractHandler(BaseHandler):
         self.context.shared_state[PENDING_TASKS] = []
         self.context.shared_state[WAIT_FOR_TIMEOUT] = []
         self.context.shared_state[TIMED_OUT_TASKS] = []
+        self.context.shared_state[CHECK_FOR_STATUS] = []
         self.context.shared_state[DONE_TASKS] = []
         self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
         self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO] = {}
@@ -223,6 +225,7 @@ class ContractHandler(BaseHandler):
         # Reset lists.
         self.wait_for_timeout_tasks.clear()
         self.timed_out_tasks = body.get("timed_out_requests", [])
+        self.pending_tasks.extend(body.get("check_status_requests", []))
 
         # collect items to process: fresh + previously waiting
         reqs = list(body.get("data", []))
@@ -243,6 +246,9 @@ class ContractHandler(BaseHandler):
         ]
         self.context.logger.info(f"Total new requests: {len(reqs)}")
         self.filter_requests(reqs)
+        self.context.shared_state[PENDING_TASKS] = sorted(
+            self.pending_tasks, key=lambda d: d["timestamp"]
+        )
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
         )

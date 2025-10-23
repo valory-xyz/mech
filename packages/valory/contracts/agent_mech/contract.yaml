@@ -25,4 +25,4 @@ dependencies:
   hexbytes: {}
   eth_typing: {}
 contracts:
-- valory/mech_marketplace:0.1.0:bafybeig2dfnw46sskdyfjsoeeuyaaahyrxkpzyfzkcwtybsn5zblyq3usa
+- valory/mech_marketplace:0.1.0:bafybeid6sixq2xjgtdjky3elsxdcefh2ar6yi5snzcrv24glcevne7mhhi
