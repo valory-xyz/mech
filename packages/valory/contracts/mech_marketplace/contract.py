@@ -276,7 +276,7 @@ class MechMarketplaceContract(Contract):
                 to_block_batch,
             )[
                 "data"
-            ]
+            ]  # 10_000
             delivers_batch: List[
                 Dict[str, Any]
             ] = cls.get_marketplace_deliver_events(
@@ -286,20 +286,20 @@ class MechMarketplaceContract(Contract):
                 to_block_batch,
             )[
                 "data"
-            ]
-            requests.extend(requests_batch)
-            delivers.extend(delivers_batch)
+            ]  # 8_0000
+            requests.extend(requests_batch) # 20_000
+            delivers.extend(delivers_batch) # 18_000
         existing_ids = {rid for d in delivers for rid in d["requestIds"]}
         pending_tasks: List[Dict[str, Any]] = []
 
-        for req in requests:
+        for req in requests: # 20k loops
             ids = req.get("requestIds", [])
             datas = req.get("requestDatas", [])
-            for i, rid in enumerate(ids):
+            for i, rid in enumerate(ids): # 1 - 5
                 if rid in existing_ids:
                     continue  # skip delivered
-                st = cls.get_request_id_status(ledger_api, marketplace_address, rid)["data"]
-                info = cls.get_request_id_info(ledger_api, marketplace_address, rid)["data"]
+                st = cls.get_request_id_status(ledger_api, marketplace_address, rid)["data"] # RPC call
+                info = cls.get_request_id_info(ledger_api, marketplace_address, rid)["data"] # RPC call
                 pending_tasks.append(
                     {
                         "tx_hash": req.get("tx_hash"),
@@ -315,14 +315,14 @@ class MechMarketplaceContract(Contract):
                 )
 
         updated_wait: List[Dict[str, Any]] = []
-        for existing_req in wait_for_timeout_tasks:
+        for existing_req in wait_for_timeout_tasks: # 20
             request_id = existing_req["requestId"]
             if request_id  not in existing_ids:
                 status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)
                 existing_req["status"] = status["data"]
                 updated_wait.append(existing_req)
         timed_out: List[Dict[str, Any]] = []
-        for timed_req in timeout_tasks:
+        for timed_req in timeout_tasks:   # 20
             request_id = timed_req["requestId"]
             if request_id not in existing_ids:
                 status = cls.get_request_id_status(ledger_api, marketplace_address, request_id)

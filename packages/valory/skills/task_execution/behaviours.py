@@ -537,7 +537,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         tool_name = task_data["tool"]
         if stepping_in and tool_name not in self._tools_to_package_hash:
             rid = int(executing_task["requestId"])
-            self._ignored_request_ids.add(rid)
+            # self._ignored_request_ids.add(rid)
             self.context.logger.info(
                 f"Ignoring request {rid}: stepping in but tool {tool_name} not installed.",
             )
