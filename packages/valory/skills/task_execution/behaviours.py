@@ -470,7 +470,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _restart_executor(self) -> None:
         """Restarts the executor."""
-        self._executor.shutdown(wait=False)
+        self._executor.shutdown(wait=False, cancel_futures=True)
         # create a new executor
         self._executor = ProcessPoolExecutor(max_workers=1)
 

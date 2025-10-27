@@ -21,15 +21,36 @@
 
 from typing import Any
 
+from packages.valory.skills.task_execution.utils.timeout_exec import run_tool_with_timeout
+
 
 class AnyToolAsTask:
-    """AnyToolAsTask"""
+    """AnyToolAsTask with hard timeout using a killable child process."""
 
     def execute(self, *args: Any, **kwargs: Any) -> Any:
-        """Execute the task."""
-        tool_py = kwargs.pop("tool_py")
-        callable_method = kwargs.pop("callable_method")
-        local_namespace: Any = {}
-        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
-        method = local_namespace[callable_method]
-        return method(*args, **kwargs)
+        tool_py: str = kwargs.pop("tool_py")
+        callable_method: str = kwargs.pop("callable_method")
+        timeout: float = float(kwargs.pop("task_deadline", 300.0))
+
+        # For constructing a meaningful fallback tuple on timeout/error:
+        counter_callback = kwargs.get("counter_callback")
+        keychain = kwargs.get("api_keys")
+
+        status, result, err = run_tool_with_timeout(
+            tool_src=tool_py,
+            method_name=callable_method,
+            args=args,
+            kwargs=kwargs,
+            timeout=timeout,
+        )
+
+        if status == "ok":
+            # Expect your tool to return the usual 5-tuple:
+            # (deliver_msg, prompt, transaction, counter_callback, keychain)
+            return result
+
+        if status == "timeout":
+            return (f"Task timed out after {timeout} seconds.", "", None, counter_callback, keychain)
+
+        # status == "error"
+        return (f"Task failed with error:\n{err}", "", None, counter_callback, keychain)
