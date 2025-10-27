@@ -45,12 +45,9 @@ class AnyToolAsTask:
         )
 
         if status == "ok":
-            # Expect your tool to return the usual 5-tuple:
-            # (deliver_msg, prompt, transaction, counter_callback, keychain)
             return result
 
         if status == "timeout":
             return (f"Task timed out after {timeout} seconds.", "", None, counter_callback, keychain)
 
-        # status == "error"
         return (f"Task failed with error:\n{err}", "", None, counter_callback, keychain)
