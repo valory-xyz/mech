@@ -29,11 +29,14 @@ from packages.valory.skills.task_execution.utils.timeout_exec import (
 class AnyToolAsTask:
     """AnyToolAsTask with hard timeout using a killable child process."""
 
+    def __init__(self, timeout: float) -> None:
+        """Initialise AnyToolAsTask with a timeout"""
+        self._timeout: float = timeout
+
     def execute(self, *args: Any, **kwargs: Any) -> Any:
         """Execute the tool function."""
         tool_py: str = kwargs.pop("tool_py")
         callable_method: str = kwargs.pop("callable_method")
-        timeout: float = float(kwargs.pop("task_deadline", 300.0))
 
         # For constructing a meaningful fallback tuple on timeout/error:
         counter_callback = kwargs.get("counter_callback")
@@ -44,7 +47,7 @@ class AnyToolAsTask:
             method_name=callable_method,
             args=args,
             kwargs=kwargs,
-            timeout=timeout,
+            timeout=self._timeout,
         )
 
         if status == "ok":
@@ -52,7 +55,7 @@ class AnyToolAsTask:
 
         if status == "timeout":
             return (
-                f"Task timed out after {timeout} seconds.",
+                f"Task timed out after {self._timeout} seconds.",
                 "",
                 None,
                 counter_callback,

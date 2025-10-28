@@ -579,7 +579,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
         self.context.logger.info(f"Preparing tool task with data: {task_data}")
-        tool_task = AnyToolAsTask()
+        tool_task = AnyToolAsTask(self.params.task_deadline)
         tool_py, callable_method, component_yaml = self._all_tools[task_data["tool"]]
         tool_params = component_yaml.get("params", {})
         task_data["tool_py"] = tool_py
