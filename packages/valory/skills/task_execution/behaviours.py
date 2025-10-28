@@ -72,6 +72,7 @@ DONE_TASKS_LOCK = "lock"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
+STATUS_CHECK_INTERVAL = 60.0  # 10min interval
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -103,6 +104,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
         self._ignored_request_ids: Set[int] = set()
+        # We fetch the requests and their status on the startup so this should be fairly accurate
+        self.last_status_check_time: float = time.time()
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -117,6 +120,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._execute_ipfs_tasks()
         self._execute_task()
         self._check_for_new_marketplace_reqs()
+        self._update_pending_tasks()
 
     @property
     def done_tasks_lock(self) -> threading.Lock:
@@ -165,6 +169,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def ipfs_tasks(self) -> List[Dict[str, Any]]:
         """Get ipfs_tasks."""
         return self.context.shared_state[IPFS_TASKS]
+
+    @property
+    def last_status_check(self) -> float:
+        """Get last status check time."""
+        return self.last_status_check_time
 
     @property
     def request_id_to_delivery_rate_info(self) -> List[Dict[str, int]]:
@@ -387,6 +396,45 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             message,
             self._handle_get_task,
         )
+
+    def _update_pending_tasks(self) -> None:
+        if not self.params.use_mech_marketplace:
+            return
+
+        # there is an in flight request
+        if self.params.in_flight_req:
+            return
+
+        # status check interval not reached
+        if self.last_status_check + STATUS_CHECK_INTERVAL > time.time():
+            return
+
+        _len = len(self.pending_tasks)
+        # no pending tasks to check
+        if _len == 0:
+            return
+
+        self.context.logger.info(f"Checking request_id status of {_len} pending tasks")
+        pending_tasks_request_ids = [t["requestId"] for t in self.pending_tasks]
+
+        contract_api_msg, _ = self.context.contract_dialogues.create(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.mech_marketplace_address,
+            contract_id=str(MechMarketplaceContract.contract_id),
+            callable="fetch_batch_request_id_status",
+            kwargs=ContractApiMessage.Kwargs(
+                dict(
+                    request_ids=pending_tasks_request_ids,
+                    chain_id=self.params.default_chain_id,
+                )
+            ),
+            counterparty=LEDGER_API_ADDRESS,
+            ledger_id=self.context.default_ledger_id,
+        )
+        self.params.req_type = RequestType.MARKETPLACE.value
+        self.context.outbox.put_message(message=contract_api_msg)
+        self.params.in_flight_req = True
+        self.last_status_check_time = time.time()
 
     def send_message(
         self,
