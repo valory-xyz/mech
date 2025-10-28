@@ -22,8 +22,8 @@ fingerprint:
   utils/benchmarks.py: bafybeib42vlnvv2lpfs3icjn2aoxwzw7z7wip5br2yj6p3lcgcz3ymrwcu
   utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
   utils/ipfs.py: bafybeiev3mtt5ubsiykigmsxxyf4abevi7qsektcrxbgrirvidc36zjlve
-  utils/task.py: bafybeibiiy3yf3u2ymfwz55pdaooirgpl3lwslw7squz2hkdfghl3svham
-  utils/timeout_exec.py: bafybeifeesnzytp7nbmgo3vg3d3rajj3n5zwxlcrfamnikxffziqztknei
+  utils/task.py: bafybeibrqsva55w2turv74b3wdoboxtviz4gywz3nsa5sn4vs2umovitdu
+  utils/timeout_exec.py: bafybeie6pgexxn4spobw2day47dbw34cv4zaz7azslqyb47ah73zsrmaqi
 fingerprint_ignore_patterns: []
 connections:
 - valory/ledger:0.19.0:bafybeibdsjmy4w2eyilbqc7yzutopl65qpeyspxwz7mjvirr52twhjlf5y
