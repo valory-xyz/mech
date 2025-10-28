@@ -73,7 +73,7 @@ def run(*args, **kwargs):
 
 
 @pytest.mark.timeout(10)
-def test_run_tool_with_timeout_success():
+def test_run_tool_with_timeout_success() -> None:
     """run_tool_with_timeout returns ('ok', result, None) when the tool finishes."""
     status, result, err = run_tool_with_timeout(
         tool_src=_tool_src_success(),
@@ -91,7 +91,7 @@ def test_run_tool_with_timeout_success():
 
 
 @pytest.mark.timeout(10)
-def test_run_tool_with_timeout_timeout_is_bounded():
+def test_run_tool_with_timeout_timeout_is_bounded() -> None:
     """run_tool_with_timeout returns ('timeout', None, None) and finishes within the bound."""
     deadline = 0.3
     t0 = time.monotonic()
@@ -112,7 +112,7 @@ def test_run_tool_with_timeout_timeout_is_bounded():
 
 
 @pytest.mark.timeout(10)
-def test_run_tool_with_timeout_error_surface():
+def test_run_tool_with_timeout_error_surface() -> None:
     """run_tool_with_timeout returns ('error', None, <traceback>) on exception."""
     status, result, err = run_tool_with_timeout(
         tool_src=_tool_src_error(),
@@ -130,7 +130,7 @@ def test_run_tool_with_timeout_error_surface():
 
 
 @pytest.mark.timeout(10)
-def test_any_tool_as_task_success_path_returns_tool_result():
+def test_any_tool_as_task_success_path_returns_tool_result() -> None:
     """AnyToolAsTask.execute returns whatever the tool returns on success."""
     # Set a generous timeout to ensure success runs
     task = AnyToolAsTask(timeout=2.0)
@@ -147,7 +147,7 @@ def test_any_tool_as_task_success_path_returns_tool_result():
 
 
 @pytest.mark.timeout(10)
-def test_any_tool_as_task_timeout_returns_5tuple_and_message_contains_seconds():
+def test_any_tool_as_task_timeout_returns_5tuple_and_message_contains_seconds() -> None:
     """On timeout, AnyToolAsTask returns a 5-tuple with a helpful message and preserves cb/api_keys in parent tuple."""
     task = AnyToolAsTask(timeout=0.2)
     cb = "CB_PARENT"
@@ -172,7 +172,7 @@ def test_any_tool_as_task_timeout_returns_5tuple_and_message_contains_seconds():
 
 
 @pytest.mark.timeout(10)
-def test_any_tool_as_task_error_returns_5tuple_with_error_text():
+def test_any_tool_as_task_error_returns_5tuple_with_error_text() -> None:
     """On error, AnyToolAsTask returns a 5-tuple with error info."""
     task = AnyToolAsTask(timeout=1.0)
     res = task.execute(
@@ -191,7 +191,7 @@ def test_any_tool_as_task_error_returns_5tuple_with_error_text():
 
 
 @pytest.mark.timeout(10)
-def test_kwargs_are_forwarded_into_child():
+def test_kwargs_are_forwarded_into_child() -> None:
     """Prove that kwargs make it into the child invocation by echoing."""
     task = AnyToolAsTask(timeout=1.0)
     res = task.execute(
