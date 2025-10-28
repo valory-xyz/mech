@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2024 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -21,13 +21,16 @@
 
 from typing import Any
 
-from packages.valory.skills.task_execution.utils.timeout_exec import run_tool_with_timeout
+from packages.valory.skills.task_execution.utils.timeout_exec import (
+    run_tool_with_timeout,
+)
 
 
 class AnyToolAsTask:
     """AnyToolAsTask with hard timeout using a killable child process."""
 
     def execute(self, *args: Any, **kwargs: Any) -> Any:
+        """Execute the tool function."""
         tool_py: str = kwargs.pop("tool_py")
         callable_method: str = kwargs.pop("callable_method")
         timeout: float = float(kwargs.pop("task_deadline", 300.0))
@@ -48,6 +51,12 @@ class AnyToolAsTask:
             return result
 
         if status == "timeout":
-            return (f"Task timed out after {timeout} seconds.", "", None, counter_callback, keychain)
+            return (
+                f"Task timed out after {timeout} seconds.",
+                "",
+                None,
+                counter_callback,
+                keychain,
+            )
 
         return (f"Task failed with error:\n{err}", "", None, counter_callback, keychain)

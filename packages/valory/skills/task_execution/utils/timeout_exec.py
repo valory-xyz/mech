@@ -17,9 +17,12 @@
 #
 # ------------------------------------------------------------------------------
 
+"""Wraps the execute method of ta tool to a killable process."""
+
 import multiprocessing as mp
 import traceback
 from typing import Any, Dict, Optional, Tuple
+
 
 def run_tool_with_timeout(
     tool_src: str,
@@ -29,14 +32,7 @@ def run_tool_with_timeout(
     kwargs: Optional[Dict[str, Any]] = None,
     timeout: float = 300.0,
 ) -> Tuple[str, Optional[Any], Optional[str]]:
-    """
-    Execute `method_name` from `tool_src` in a fresh process with a hard timeout.
-
-    Returns (status, result, error):
-      - status: "ok" | "timeout" | "error"
-      - result: method return value if ok, else None
-      - error: traceback string if error, else None
-    """
+    """Execute `method_name` from `tool_src` in a fresh process with a hard timeout."""
     kwargs = kwargs or {}
     ctx = mp.get_context("spawn")
     q: mp.Queue = ctx.Queue()
@@ -51,7 +47,9 @@ def run_tool_with_timeout(
         except Exception:
             q_.put(("error", None, traceback.format_exc()))
 
-    p = ctx.Process(target=_runner, args=(q, tool_src, method_name, args, kwargs), daemon=True)
+    p = ctx.Process(
+        target=_runner, args=(q, tool_src, method_name, args, kwargs), daemon=True
+    )
     p.start()
     p.join(timeout)
 
