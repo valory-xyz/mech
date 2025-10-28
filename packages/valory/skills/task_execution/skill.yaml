@@ -17,13 +17,14 @@ fingerprint:
   tests/test_dialogues.py: bafybeihrghdkt7xjcr3gsj5xb274h2wn42f4sijag3xbopijp4v3yktau4
   tests/test_handlers.py: bafybeicn77ykknd652axcx2pgk4ducucyb7g6wdj5nlchvyvzlotdzuexu
   tests/test_models.py: bafybeidfkrmoh5awqvsfgxmjwkf5p6i7te5rm32tlacf7gzv4ohe6jdlce
+  tests/utils/test_task.py: bafybeiddphs6pcsbf2emknmaru3xf4x6zcdzfcnv5q3ku3glmjjlm3c4e4
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeib42vlnvv2lpfs3icjn2aoxwzw7z7wip5br2yj6p3lcgcz3ymrwcu
   utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
   utils/ipfs.py: bafybeiev3mtt5ubsiykigmsxxyf4abevi7qsektcrxbgrirvidc36zjlve
   utils/task.py: bafybeiablprd736cc57frqiw3oa3getm2lshc3obuaoejqka3bpcvnpabi
-  utils/timeout_exec.py: bafybeie6pgexxn4spobw2day47dbw34cv4zaz7azslqyb47ah73zsrmaqi
+  utils/timeout_exec.py: bafybeigw5vgx2o5eeo3xrozq7g5xupzb66dzmy4pcqmena4z4imyn7k6p4
 fingerprint_ignore_patterns: []
 connections:
 - valory/ledger:0.19.0:bafybeibdsjmy4w2eyilbqc7yzutopl65qpeyspxwz7mjvirr52twhjlf5y
