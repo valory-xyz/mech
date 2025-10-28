@@ -41,12 +41,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeic6kmfomxsx3x6lpx2viw74yyypcqqqdz3x66ljqboskg7opwd63u
 - valory/abstract_round_abci:0.1.0:bafybeia7lzwbmcmf3u7mn3673345klkyyp7ln62gqx6hcqlbjracxmrqlm
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeiatww27klvp2jz43csjfg3vdo3h4hkly6ukb4prxedfwr7iwx2r2y
+- valory/mech_abci:0.1.0:bafybeigc4omnolicjynpozcaipc7r6vubu4avccln6v44tbpfvjypazn6y
 - valory/registration_abci:0.1.0:bafybeigoomgcphpjc32wlx5j3fjm27bgiw4o7hqtj62hv54hpwtfbvxkma
 - valory/reset_pause_abci:0.1.0:bafybeigtq7etpplx2yjdobrutv2fwosc7jw5etfb44n44nexciicrs7m4i
 - valory/delivery_rate_abci:0.1.0:bafybeigftdqgcykli2lqepnxkfqkgcrlbexnox3ezt5aiox4qmfuly2eri
-- valory/task_execution:0.1.0:bafybeidsyvedajk3qd2awaglnhrvzq2xzc4o6vbameivvm3do4xgjxsboy
-- valory/task_submission_abci:0.1.0:bafybeih52wawlb5lyscssubfhsn62tcnjsltq7v4gvc7q4vw5lyz5azv64
+- valory/task_execution:0.1.0:bafybeiai6wb653nnmyrl2s7ou6qspjmddz2sisnvavkx3yuuditfc7rbsa
+- valory/task_submission_abci:0.1.0:bafybeifuuehm5pt5tl2s2qqu7crj4os76zvrbc6lhlitw5ghn5rjlo2i6e
 - valory/termination_abci:0.1.0:bafybeiam7v3kicazjq6rr3ijjc5nsqzp4sjrysmsevnxbhiqdv6ltyxope
 - valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m

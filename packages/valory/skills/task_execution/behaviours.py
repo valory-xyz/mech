@@ -72,7 +72,7 @@ DONE_TASKS_LOCK = "lock"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
-STATUS_CHECK_INTERVAL = 60.0  # 10min interval
+STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
