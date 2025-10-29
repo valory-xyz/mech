@@ -21,6 +21,7 @@
 
 import json
 import re
+import time
 from datetime import datetime
 from enum import Enum
 from typing import Callable, Dict, List, Optional, Tuple, Union, cast
@@ -67,6 +68,14 @@ ContractApiHandler = BaseContractApiHandler
 TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
 
+FSM_REPR_MAX_DEPTH = 25
+LAST_SUCCESSFUL_READ = "last_successful_read"
+LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
+WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
+LAST_TX = "last_tx"
+PENDING_TASKS = "pending_tasks"
+
+
 
 class HttpCode(Enum):
     """Http codes"""
@@ -106,6 +115,7 @@ class HttpHandler(BaseHttpHandler):
         hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
+        metrics_url_regex = rf"{hostname_regex}\/metrics"
 
         # update the route for mech http handler
         routes_data = self.context.shared_state["routes_info"]
@@ -120,11 +130,38 @@ class HttpHandler(BaseHttpHandler):
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
                 (fetch_offchain_info, funcs[1]),
+                (metrics_url_regex, self._handle_get_metrics)
             ],
             (HttpMethod.POST.value,): [(send_signed_url, funcs[0])],
         }
 
         self.json_content_header = "Content-Type: application/json\n"
+
+    @property
+    def last_successful_read(self) -> Optional[Tuple[int, float]]:
+        """Get the last successful read."""
+        return cast(
+            Optional[Tuple[int, float]],
+            self.context.shared_state.get(LAST_SUCCESSFUL_READ),
+        )
+
+    @property
+    def last_successful_executed_task(self) -> Optional[Tuple[int, float]]:
+        """Get the last successful executed task."""
+        return cast(
+            Optional[Tuple[int, float]],
+            self.context.shared_state.get(LAST_SUCCESSFUL_EXECUTED_TASK),
+        )
+
+    @property
+    def was_last_read_successful(self) -> bool:
+        """Get the last read status."""
+        return self.context.shared_state.get(WAS_LAST_READ_SUCCESSFUL) is not False
+
+    @property
+    def last_tx(self) -> Optional[Tuple[str, float]]:
+        """Get the last transaction."""
+        return cast(Optional[Tuple[str, float]], self.context.shared_state.get(LAST_TX))
 
     @property
     def synchronized_data(self) -> SynchronizedData:
@@ -287,11 +324,12 @@ class HttpHandler(BaseHttpHandler):
         :param http_msg: the http message
         :param http_dialogue: the http dialogue
         """
+
         seconds_since_last_transition = None
         is_tm_unhealthy = None
-        is_transitioning_fast = None
         current_round = None
-        previous_rounds = None
+        rounds = None
+        is_transitioning_fast = None
 
         round_sequence = cast(BaseSharedState, self.context.state).round_sequence
 
@@ -313,9 +351,25 @@ class HttpHandler(BaseHttpHandler):
 
         if round_sequence._abci_app:
             current_round = round_sequence._abci_app.current_round.round_id
-            previous_rounds = [
+            rounds = [
                 r.round_id for r in round_sequence._abci_app._previous_rounds[-10:]
             ]
+
+        grace_period = 30 * 10
+        last_executed_task = (
+            self.last_successful_executed_task[1]
+            if self.last_successful_executed_task
+            else time.time() - grace_period * 2
+        )
+        last_tx_made = self.last_tx[1] if self.last_tx else time.time()
+        we_are_delivering = last_executed_task < last_tx_made + grace_period
+
+        # ensure we can get new reqs
+        last_successful_read = (
+            self.last_successful_read[1] if self.last_successful_read else time.time()
+        )
+        we_can_get_new_reqs = last_successful_read > time.time() - grace_period
+
 
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,
@@ -323,8 +377,20 @@ class HttpHandler(BaseHttpHandler):
             "period": self.synchronized_data.period_count,
             "reset_pause_duration": self.context.params.reset_pause_duration,
             "current_round": current_round,
-            "previous_rounds": previous_rounds,
+            "rounds": rounds,
             "is_transitioning_fast": is_transitioning_fast,
+            "is_healthy": (we_are_delivering and we_can_get_new_reqs),
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
+
+    def _handle_get_metrics(
+            self, http_msg: HttpMessage, http_dialogue:HttpDialogue
+    ) -> None:
+        """
+        Handle a Http request of verb GET.
+
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
+        """
+        self._send_ok_response(http_msg, http_dialogue, {})
