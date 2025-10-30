@@ -154,9 +154,9 @@ def context_stub(
             """No-op cleanup."""
             return None
 
-        def create(self, **kwargs) -> None:
-            """No-op create. Expects 2 values"""
-            return MagicMock(kwargs), MagicMock(kwargs)
+        def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
+            """No-op create. Return mock (msg, dlg)"""
+            return MagicMock(a), MagicMock(k)
 
     class _IpfsDLG(_DLG):
         """IPFS dialogue stub with update/create helpers."""

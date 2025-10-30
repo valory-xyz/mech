@@ -576,23 +576,23 @@ def test_contract_handler_updates_pending_list_based_on_delivered_request_status
             "request_delivery_rate": 100,
         },
     ]
-    body: Dict[str, Any] = {"data": reqs}
+    pending_reqs_body: Dict[str, Any] = {"data": reqs}
 
     ch = ContractHandler(name="contract", skill_context=handler_context)
     ch.setup()
 
     msg = SimpleNamespace(
         performative=ContractApiMessage.Performative.STATE,
-        state=SimpleNamespace(body=body),
+        state=SimpleNamespace(body=pending_reqs_body),
     )
     ch.handle(msg)
 
     assert len(ch.pending_tasks) == 2
 
-    body: Dict[str, Any] = {"request_ids": (b"\x01" * 32,)}
+    status_check_body: Dict[str, Any] = {"request_ids": (b"\x01" * 32,)}
     msg = SimpleNamespace(
         performative=ContractApiMessage.Performative.STATE,
-        state=SimpleNamespace(body=body),
+        state=SimpleNamespace(body=status_check_body),
     )
     ch.handle(msg)
 
@@ -641,23 +641,23 @@ def test_contract_handler_doesnot_updates_pending_list_based_on_undelivered_requ
             "request_delivery_rate": 100,
         },
     ]
-    body: Dict[str, Any] = {"data": reqs}
+    pending_reqs_body: Dict[str, Any] = {"data": reqs}
 
     ch = ContractHandler(name="contract", skill_context=handler_context)
     ch.setup()
 
     msg = SimpleNamespace(
         performative=ContractApiMessage.Performative.STATE,
-        state=SimpleNamespace(body=body),
+        state=SimpleNamespace(body=pending_reqs_body),
     )
     ch.handle(msg)
 
     assert len(ch.pending_tasks) == 2
 
-    body: Dict[str, Any] = {"request_ids": ()}
+    status_check_body: Dict[str, Any] = {"request_ids": ()}
     msg = SimpleNamespace(
         performative=ContractApiMessage.Performative.STATE,
-        state=SimpleNamespace(body=body),
+        state=SimpleNamespace(body=status_check_body),
     )
     ch.handle(msg)
 
