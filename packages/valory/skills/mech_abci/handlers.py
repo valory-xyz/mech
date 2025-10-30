@@ -24,7 +24,7 @@ import re
 import time
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
 from aea.protocols.base import Message
@@ -396,7 +396,7 @@ class HttpHandler(BaseHttpHandler):
         :param http_dialogue: the http dialogue
         """
 
-        data: Dict[str, any] = {
+        data: Dict[str, Any] = {
             PENDING_TASKS: len(self.context.shared_state[PENDING_TASKS]),
             WAIT_FOR_TIMEOUT: len(self.context.shared_state[WAIT_FOR_TIMEOUT]),
             TIMED_OUT_TASKS: len(self.context.shared_state[TIMED_OUT_TASKS]),
