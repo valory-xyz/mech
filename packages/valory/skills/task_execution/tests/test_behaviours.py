@@ -20,9 +20,11 @@
 """This package contains the tests for the behaviours."""
 
 import json
+import time
 from concurrent.futures import Future
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, Tuple
+from unittest.mock import MagicMock
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
 
@@ -445,3 +447,81 @@ def test_ipfs_aux_task_removed_from_queue(
     params_stub.in_flight_req = False
     behaviour.act()
     assert shared_state[beh_mod.IPFS_TASKS] == []
+
+
+def test_behaviour_status_check_and_proper_updates(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    done_future: Callable[[Tuple[Any, ...]], Any],
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    disable_polling: Callable[[], None],
+) -> None:
+    """Execute a valid task and store the result."""
+    patch_ipfs_multihash()
+    disable_polling()
+
+    behaviour._all_tools["sum"] = (
+        "tool_py_src",
+        "run",
+        {"params": {"default_model": "gpt-4o-mini"}},
+    )
+    behaviour._tools_to_package_hash["sum"] = "hashsum"
+    params_stub.tools_to_pricing = {"sum": 0}
+
+    req_id: int = 42
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": req_id,
+            "request_delivery_rate": 100,
+            "data": b"fake-ipfs-pointer",
+            "contract_address": "0xmech",
+        }
+    )
+    params_stub.request_id_to_num_timeouts[req_id] = 0
+    shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][req_id] = 100
+
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    monkeypatch.setattr(
+        behaviour,
+        "_build_ipfs_store_file_req",
+        lambda files, **k: (object(), fake_dialogue),
+    )
+    # patch _execute_task to not work on the pending task
+    # to simulate busy/unresponsive mech
+    monkeypatch.setattr(
+        behaviour,
+        "_execute_task",
+        MagicMock(),
+    )
+    monkeypatch.setattr(time, "time", lambda: 1.0)
+
+    behaviour.act()
+
+    assert behaviour._executing_task is None
+    assert behaviour._async_result is None
+    assert behaviour._last_deadline is None
+
+    # patch variable after patching time
+    behaviour.last_status_check_time = time.time()
+
+    assert len(shared_state[beh_mod.PENDING_TASKS]) == 1
+    assert behaviour.last_status_check_time == 1.0
+
+    # update time to less than status check interval
+    monkeypatch.setattr(time, "time", lambda: beh_mod.STATUS_CHECK_INTERVAL - 1)
+
+    behaviour.act()
+    # should not update the time
+    assert behaviour.last_status_check_time == 1
+
+    # update time to more than status check interval
+    monkeypatch.setattr(time, "time", lambda: beh_mod.STATUS_CHECK_INTERVAL + 1)
+
+    behaviour.act()
+    # should update the time
+    assert behaviour.last_status_check_time == beh_mod.STATUS_CHECK_INTERVAL + 1
