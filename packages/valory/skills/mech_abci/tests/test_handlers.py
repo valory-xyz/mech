@@ -70,6 +70,7 @@ class TestHttpHandler:
         hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
         send_signed_url = rf"{hostname_regex}\/send_signed_requests"
+        metrics_url_regex = rf"{hostname_regex}\/metrics"
         fetch_offchain_info_url = rf"{hostname_regex}\/fetch_offchain_info"
 
         assert self.handler.handler_url_regex == rf"{hostname_regex}\/.*"
@@ -80,6 +81,7 @@ class TestHttpHandler:
                     fetch_offchain_info_url,
                     self.mech_handler._handle_offchain_request_info,
                 ),
+                (metrics_url_regex, self.handler._handle_get_metrics),
             ],
             (HttpMethod.POST.value,): [
                 (send_signed_url, self.mech_handler._handle_signed_requests)
