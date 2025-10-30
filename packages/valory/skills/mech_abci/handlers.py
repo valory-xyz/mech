@@ -69,12 +69,16 @@ TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
 
 FSM_REPR_MAX_DEPTH = 25
+GRACE_PERIOD = 30 * 10
 LAST_SUCCESSFUL_READ = "last_successful_read"
 LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
 LAST_TX = "last_tx"
 PENDING_TASKS = "pending_tasks"
-
+DONE_TASKS = "ready_tasks"
+IPFS_TASKS = "ipfs_tasks"
+TIMED_OUT_TASKS = "timed_out_tasks"
+WAIT_FOR_TIMEOUT = "wait_for_timeout"
 
 
 class HttpCode(Enum):
@@ -130,7 +134,7 @@ class HttpHandler(BaseHttpHandler):
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
                 (fetch_offchain_info, funcs[1]),
-                (metrics_url_regex, self._handle_get_metrics)
+                (metrics_url_regex, self._handle_get_metrics),
             ],
             (HttpMethod.POST.value,): [(send_signed_url, funcs[0])],
         }
@@ -355,21 +359,19 @@ class HttpHandler(BaseHttpHandler):
                 r.round_id for r in round_sequence._abci_app._previous_rounds[-10:]
             ]
 
-        grace_period = 30 * 10
         last_executed_task = (
             self.last_successful_executed_task[1]
             if self.last_successful_executed_task
-            else time.time() - grace_period * 2
+            else time.time() - GRACE_PERIOD * 2
         )
         last_tx_made = self.last_tx[1] if self.last_tx else time.time()
-        we_are_delivering = last_executed_task < last_tx_made + grace_period
+        we_are_delivering = last_executed_task < last_tx_made + GRACE_PERIOD
 
         # ensure we can get new reqs
         last_successful_read = (
             self.last_successful_read[1] if self.last_successful_read else time.time()
         )
-        we_can_get_new_reqs = last_successful_read > time.time() - grace_period
-
+        we_can_get_new_reqs = last_successful_read > time.time() - GRACE_PERIOD
 
         data = {
             "seconds_since_last_transition": seconds_since_last_transition,
@@ -385,7 +387,7 @@ class HttpHandler(BaseHttpHandler):
         self._send_ok_response(http_msg, http_dialogue, data)
 
     def _handle_get_metrics(
-            self, http_msg: HttpMessage, http_dialogue:HttpDialogue
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
         """
         Handle a Http request of verb GET.
@@ -393,4 +395,13 @@ class HttpHandler(BaseHttpHandler):
         :param http_msg: the http message
         :param http_dialogue: the http dialogue
         """
-        self._send_ok_response(http_msg, http_dialogue, {})
+
+        data: Dict[str, any] = {
+            PENDING_TASKS: len(self.context.shared_state[PENDING_TASKS]),
+            WAIT_FOR_TIMEOUT: len(self.context.shared_state[WAIT_FOR_TIMEOUT]),
+            TIMED_OUT_TASKS: len(self.context.shared_state[TIMED_OUT_TASKS]),
+            IPFS_TASKS: len(self.context.shared_state[IPFS_TASKS]),
+            DONE_TASKS: len(self.context.shared_state[DONE_TASKS]),
+        }
+
+        self._send_ok_response(http_msg, http_dialogue, data)
