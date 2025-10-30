@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Wraps the execute method of ta tool to a killable process."""
+"""Wraps the execute method of a tool to a killable process."""
 
 import multiprocessing as mp
 import traceback
