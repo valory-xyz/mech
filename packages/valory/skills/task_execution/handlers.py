@@ -233,15 +233,14 @@ class ContractHandler(BaseHandler):
         # Reset lists.
         self.wait_for_timeout_tasks.clear()
         self.timed_out_tasks = body.get("timed_out_requests", [])
-
+        self.set_last_successful_read(
+            self.params.req_params.from_block[cast(str, self.params.req_type)]
+        )
         # collect items to process: fresh + previously waiting
         reqs = list(body.get("data", []))
         reqs.extend(body.get("wait_for_timeout_tasks", []))
 
         if len(reqs) == 0:
-            self.set_last_successful_read(
-                self.params.req_params.from_block[cast(str, self.params.req_type)]
-            )
             return
 
         self.params.req_params.from_block[cast(str, self.params.req_type)] = (
@@ -258,10 +257,6 @@ class ContractHandler(BaseHandler):
         self.filter_requests(reqs)
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
-        )
-        # for healthcheck metrics
-        self.set_last_successful_read(
-            self.params.req_params.from_block[cast(str, self.params.req_type)]
         )
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
