@@ -382,6 +382,30 @@ class HttpHandler(BaseHttpHandler):
             "rounds": rounds,
             "is_transitioning_fast": is_transitioning_fast,
             "is_healthy": (we_are_delivering and we_can_get_new_reqs),
+            "last_tx": (
+                {
+                    "tx_hash": self.last_tx[0],
+                    "timestamp": self.last_tx[1],
+                }
+                if self.last_tx
+                else None
+            ),
+            "last_successful_read": (
+                {
+                    "block_number": self.last_successful_read[0],
+                    "timestamp": self.last_successful_read[1],
+                }
+                if self.last_successful_read
+                else None
+            ),
+            "last_successful_executed_task": (
+                {
+                    "request_id": self.last_successful_executed_task[0],
+                    "timestamp": self.last_successful_executed_task[1],
+                }
+                if self.last_successful_executed_task
+                else None
+            ),
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
