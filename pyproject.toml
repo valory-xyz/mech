@@ -76,6 +76,7 @@ langchain-community = "==0.2.1"
 prediction-market-agent-tooling = "^0.39.0"
 google-generativeai = "==0.6.0"
 openfactverification-kongzii = "^0.1.0"
+multiaddr = "0.0.9"
 
 lxml = {extras = ["html-clean"], version = "^5.1.0"}
 google-api-core = "^2.20.0"
