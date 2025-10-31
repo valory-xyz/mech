@@ -106,6 +106,7 @@ NONCE = "nonce"
 SENDER = "sender"
 REQUESTER_KEY = "requester"
 MECH_ADDRESS = "mech_address"
+LAST_TX = "last_tx"
 
 
 class OffchainKeys(Enum):
@@ -240,6 +241,12 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             yield from self.wait_until_round_end()
         self.set_done()
 
+    def set_tx(self, last_tx: str) -> None:
+        """Signal that the transaction was prepared."""
+        now = time.time()
+        # store the tx hash and the time it was stored
+        self.context.shared_state[LAST_TX] = (last_tx, now)
+
     def get_payload_content(self) -> Generator[None, None, str]:
         """Get the payload content."""
         done_tasks = yield from self.get_done_tasks(self.params.task_wait_timeout)
@@ -281,6 +288,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         # ref: https://github.com/valory-xyz/open-autonomy/blob/main/packages/valory/skills/transaction_settlement_abci/rounds.py#L432-L434
         try:
             final_tx_hash = self.synchronized_data.final_tx_hash
+            self.set_tx(final_tx_hash)
         except Exception as e:
             self.context.logger.error(e)
             return (False, "")
