@@ -69,6 +69,7 @@ TIMED_OUT_TASKS = "timed_out_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
+LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
@@ -207,6 +208,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if timeout_deadline is None:
             return False
         return timeout_deadline <= time.time()
+
+    def set_last_executed_task(self, request_id: int) -> None:
+        """Set the last executed task."""
+        self.context.shared_state[LAST_SUCCESSFUL_EXECUTED_TASK] = (
+            request_id,
+            time.time(),
+        )
 
     def _get_executing_task_result(self) -> Any:
         """Get the executing task result."""
@@ -713,6 +721,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(
             f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
         )
+        self.set_last_executed_task(req_id)
         done_task = cast(Dict[str, Any], self._done_task)
         if done_task is None or not isinstance(done_task, Dict):
             self.context.logger.error(
