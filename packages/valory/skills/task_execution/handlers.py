@@ -24,7 +24,7 @@ import threading
 import time
 import urllib.parse
 from enum import Enum
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Dict, List, Optional, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -48,7 +48,9 @@ IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 TIMED_OUT_TASKS = "timed_out_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
+LAST_SUCCESSFUL_READ = "last_successful_read"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
+WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
 TIMED_OUT_STATUS = 2
 WAIT_FOR_TIMEOUT_STATUS = 1
 DELIVERED_STATUS = 3
@@ -161,6 +163,14 @@ class ContractHandler(BaseHandler):
         self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO] = {}
         super().setup()
 
+    def set_last_successful_read(self, block_number: Optional[int]) -> None:
+        """Set the last successful read."""
+        self.context.shared_state[LAST_SUCCESSFUL_READ] = (block_number, time.time())
+
+    def set_was_last_read_successful(self, was_successful: bool) -> None:
+        """Set the last successful read."""
+        self.context.shared_state[WAS_LAST_READ_SUCCESSFUL] = was_successful
+
     @property
     def pending_tasks(self) -> List[Dict[str, Any]]:
         """Get pending_tasks."""
@@ -207,12 +217,14 @@ class ContractHandler(BaseHandler):
             self.context.logger.warning(
                 f"Contract API Message performative not recognized: {contract_api_msg.performative}"
             )
+            self.set_was_last_read_successful(False)
             self.params.in_flight_req = False
             return
 
         body = contract_api_msg.state.body
         self._handle_get_undelivered_reqs(body)
         self.params.in_flight_req = False
+        self.set_was_last_read_successful(True)
         self.on_message_handled(message)
 
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
@@ -221,7 +233,9 @@ class ContractHandler(BaseHandler):
         # Reset lists.
         self.wait_for_timeout_tasks.clear()
         self.timed_out_tasks = body.get("timed_out_requests", [])
-
+        self.set_last_successful_read(
+            self.params.req_params.from_block[cast(str, self.params.req_type)]
+        )
         # collect items to process: fresh + previously waiting
         reqs = list(body.get("data", []))
         reqs.extend(body.get("wait_for_timeout_tasks", []))
