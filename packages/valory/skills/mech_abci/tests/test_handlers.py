@@ -100,6 +100,12 @@ class TestHttpHandler:
             ),
             GetHandlerTestCase(
                 name="Happy Path",
+                url="http://localhost:8080/metrics",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_get_metrics",
+            ),
+            GetHandlerTestCase(
+                name="Happy Path",
                 url="http://localhost:8080/send_signed_requests",
                 method=HttpMethod.POST.value,
                 expected_handler="_handle_signed_requests",
