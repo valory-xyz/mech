@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2024 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -21,45 +21,15 @@
 
 from typing import Any
 
-from packages.valory.skills.task_execution.utils.timeout_exec import (
-    run_tool_with_timeout,
-)
-
 
 class AnyToolAsTask:
-    """AnyToolAsTask with hard timeout using a killable child process."""
-
-    def __init__(self, timeout: float) -> None:
-        """Initialise AnyToolAsTask with a timeout"""
-        self._timeout: float = timeout
+    """AnyToolAsTask"""
 
     def execute(self, *args: Any, **kwargs: Any) -> Any:
-        """Execute the tool function."""
-        tool_py: str = kwargs.pop("tool_py")
-        callable_method: str = kwargs.pop("callable_method")
-
-        # For constructing a meaningful fallback tuple on timeout/error:
-        counter_callback = kwargs.get("counter_callback")
-        keychain = kwargs.get("api_keys")
-
-        status, result, err = run_tool_with_timeout(
-            tool_src=tool_py,
-            method_name=callable_method,
-            args=args,
-            kwargs=kwargs,
-            timeout=self._timeout,
-        )
-
-        if status == "ok":
-            return result
-
-        if status == "timeout":
-            return (
-                f"Task timed out after {self._timeout} seconds.",
-                "",
-                None,
-                counter_callback,
-                keychain,
-            )
-
-        return (f"Task failed with error:\n{err}", "", None, counter_callback, keychain)
+        """Execute the task."""
+        tool_py = kwargs.pop("tool_py")
+        callable_method = kwargs.pop("callable_method")
+        local_namespace: Any = {}
+        exec(tool_py, local_namespace)  # pylint: disable=W0122  # nosec
+        method = local_namespace[callable_method]
+        return method(*args, **kwargs)

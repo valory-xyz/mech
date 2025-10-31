@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeigbazvzedrgkforeziga7ku7qk3g3s6kh2mro3xrqzkstpqopyahi
+  behaviours.py: bafybeiedwvq6vvm5fxgd3vup4llkiwqc6e2ubui2vmjb4tt3fzqaawrokq
   dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
   handlers.py: bafybeieyggrpp3h76jiaqb7cv3ob7icq2jnyr3p7c37y26ksk6j46dl7pe
   models.py: bafybeibtnnysthc3imw2zhmhnbqvzqu65bx33jsn44zwt6dfrojrndid7m
@@ -23,7 +23,7 @@ fingerprint:
   utils/benchmarks.py: bafybeib42vlnvv2lpfs3icjn2aoxwzw7z7wip5br2yj6p3lcgcz3ymrwcu
   utils/cost_calculation.py: bafybeighafxied73w3mcmgziwfp3u2x6t4qlztw4kyekyq2ddgyhdge74q
   utils/ipfs.py: bafybeiev3mtt5ubsiykigmsxxyf4abevi7qsektcrxbgrirvidc36zjlve
-  utils/task.py: bafybeiablprd736cc57frqiw3oa3getm2lshc3obuaoejqka3bpcvnpabi
+  utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
   utils/timeout_exec.py: bafybeigw5vgx2o5eeo3xrozq7g5xupzb66dzmy4pcqmena4z4imyn7k6p4
 fingerprint_ignore_patterns: []
 connections:
@@ -112,4 +112,6 @@ dependencies:
     version: ==4.0.0
   PyYAML:
     version: ==6.0.1
+  pebble:
+    version: ==5.1.3
 is_abstract: false
