@@ -23,8 +23,6 @@ import json
 import threading
 import time
 from asyncio import Future
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures.process import BrokenProcessPool
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
@@ -207,21 +205,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id,
             time.time(),
         )
-
-    def _get_executing_task_result(self) -> Any:
-        """Get the executing task result."""
-        if self._executing_task is None:
-            raise ValueError("Executing task is None")
-        if self._invalid_request:
-            return None
-        try:
-            async_result = cast(Future, self._async_result)
-            return async_result.result()
-        except Exception as e:  # pylint: disable=broad-except
-            self.context.logger.error(
-                "Exception raised while executing task: {}".format(str(e))
-            )
-            return None
 
     def _download_tools(self) -> None:
         """Download tools."""
