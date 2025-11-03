@@ -227,13 +227,19 @@ def test_broken_process_pool_restart(
     patch_ipfs_multihash: Callable[[], None],
     disable_polling: Callable[[], None],
 ) -> None:
-    """Restart executor and retry when BrokenProcessPool is raised."""
+    """Restart Pebble pool and retry when schedule() raises once."""
+
+    from types import SimpleNamespace
+    import json
+
     patch_ipfs_multihash()
     disable_polling()
 
+    # Arrange: minimal tool wiring
     behaviour._all_tools["sum"] = ("py", "run", {"params": {}})
     behaviour._tools_to_package_hash["sum"] = "fake-package-hash"
 
+    # Queue a single pending task
     req_id: int = 1
     shared_state[beh_mod.PENDING_TASKS].append(
         {
@@ -246,6 +252,7 @@ def test_broken_process_pool_restart(
     params_stub.request_id_to_num_timeouts[req_id] = 0
     shared_state[beh_mod.REQUEST_ID_TO_DELIVERY_RATE_INFO][req_id] = 100
 
+    # Stub IPFS get/store
     monkeypatch.setattr(
         behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
     )
@@ -257,47 +264,30 @@ def test_broken_process_pool_restart(
 
     calls: Dict[str, int] = {"n": 0}
 
-    class BrokenOnceExec:
-        """Executor stub that fails once and then succeeds."""
+    class BrokenOncePool:
+        """Pebble-like pool stub that raises once, then returns a done future."""
 
-        def submit(self, *a: Any, **k: Any) -> Future:
-            """
-            Raise once then return a done future.
-
-            :param a: Ignored positional arguments.
-            :type a: Any
-            :param k: Ignored keyword arguments.
-            :type k: Any
-            :returns: A completed Future on the second invocation.
-            :rtype: Future
-            """
+        def schedule(self, *a: Any, **k: Any) -> Future:
             calls["n"] += 1
             if calls["n"] == 1:
-                from concurrent.futures.process import BrokenProcessPool
-
-                raise BrokenProcessPool("boom")
+                # Simulate a failure during scheduling (e.g., broken pool)
+                raise RuntimeError("boom")
+            # On second call, return a completed future with the 5-tuple
             return done_future(
                 ("ok", "p", {"tx": 1}, type("CB", (), {"cost_dict": {}})(), object())
             )
 
-    monkeypatch.setattr(behaviour, "_executor", BrokenOnceExec())
+    # Replace the behaviour's executor with our stub
+    monkeypatch.setattr(behaviour, "_executor", BrokenOncePool())
 
+    # Flag that _restart_executor() was called
     restarted: Dict[str, bool] = {"flag": False}
     monkeypatch.setattr(
         behaviour, "_restart_executor", lambda: restarted.__setitem__("flag", True)
     )
 
+    # send_message stub: route to the right handler based on callback identity
     def send_message_stub(msg: Any, dlg: Any, cb: Callable[[Any, Any], None]) -> None:
-        """
-        Stub send_message to dispatch based on callback identity.
-
-        :param msg: Message-like object passed by the behaviour.
-        :type msg: Any
-        :param dlg: Dialogue-like object passed to the callback.
-        :type dlg: Any
-        :param cb: Callback to invoke with a fake IPFS response.
-        :type cb: Callable[[Any, Any], None]
-        """
         func = getattr(cb, "__func__", cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             body: Dict[str, Any] = {"prompt": "p", "tool": "sum"}
@@ -310,15 +300,16 @@ def test_broken_process_pool_restart(
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
+    # Tick the behaviour twice: first time triggers schedule failure + restart,
+    # second time schedules successfully and completes the flow.
     params_stub.in_flight_req = False
     behaviour.act()
 
     params_stub.in_flight_req = False
     behaviour.act()
 
-    assert restarted[
-        "flag"
-    ], "executor should have been restarted after BrokenProcessPool"
+    # Assertions
+    assert restarted["flag"], "executor should have been restarted after schedule() failure"
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
