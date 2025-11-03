@@ -558,7 +558,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.warning(f"Tool {tool_name} is not valid.")
             self._invalid_request = True
 
-    def _submit_task(self, fn: Any, *args: Any, **kwargs: Any):
+    def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
         """Submit a task with a hard per-call timeout via Pebble."""
         try:
             return self._executor.schedule(  # type: ignore[attr-defined]
