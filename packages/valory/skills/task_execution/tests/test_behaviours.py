@@ -229,8 +229,8 @@ def test_broken_process_pool_restart(
 ) -> None:
     """Restart Pebble pool and retry when schedule() raises once."""
 
-    from types import SimpleNamespace
     import json
+    from types import SimpleNamespace
 
     patch_ipfs_multihash()
     disable_polling()
@@ -309,7 +309,9 @@ def test_broken_process_pool_restart(
     behaviour.act()
 
     # Assertions
-    assert restarted["flag"], "executor should have been restarted after schedule() failure"
+    assert restarted[
+        "flag"
+    ], "executor should have been restarted after schedule() failure"
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
