@@ -23,8 +23,6 @@ import json
 import threading
 import time
 from asyncio import Future
-from pebble import ProcessPool
-
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures.process import BrokenProcessPool
 from enum import Enum
@@ -35,6 +33,7 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
+from pebble import ProcessPool
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
@@ -71,6 +70,7 @@ TIMED_OUT_TASKS = "timed_out_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
+LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
@@ -201,20 +201,27 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return False
         return timeout_deadline <= time.time()
 
-    # def _get_executing_task_result(self) -> Any:
-    #     """Get the executing task result."""
-    #     if self._executing_task is None:
-    #         raise ValueError("Executing task is None")
-    #     if self._invalid_request:
-    #         return None
-    #     try:
-    #         async_result = cast(Future, self._async_result)
-    #         return async_result.result()
-    #     except Exception as e:  # pylint: disable=broad-except
-    #         self.context.logger.error(
-    #             "Exception raised while executing task: {}".format(str(e))
-    #         )
-    #         return None
+    def set_last_executed_task(self, request_id: int) -> None:
+        """Set the last executed task."""
+        self.context.shared_state[LAST_SUCCESSFUL_EXECUTED_TASK] = (
+            request_id,
+            time.time(),
+        )
+
+    def _get_executing_task_result(self) -> Any:
+        """Get the executing task result."""
+        if self._executing_task is None:
+            raise ValueError("Executing task is None")
+        if self._invalid_request:
+            return None
+        try:
+            async_result = cast(Future, self._async_result)
+            return async_result.result()
+        except Exception as e:  # pylint: disable=broad-except
+            self.context.logger.error(
+                "Exception raised while executing task: {}".format(str(e))
+            )
+            return None
 
     def _download_tools(self) -> None:
         """Download tools."""
@@ -702,6 +709,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(
             f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
         )
+        self.set_last_executed_task(req_id)
         done_task = cast(Dict[str, Any], self._done_task)
         if done_task is None or not isinstance(done_task, Dict):
             self.context.logger.error(
