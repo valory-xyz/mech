@@ -586,22 +586,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         try:
             fut = cast(Any, self._async_result)
-            return fut.result()  # Pebble already enforced timeout at schedule()
+            return fut.result()
         except TimeoutError as e:
-            # Map to your timeout contract
-            timeout_s = float(self.params.task_deadline)
-            exec_task = cast(Dict[str, Any], self._executing_task)
-            cb = exec_task.get("counter_callback")
-            keys = exec_task.get("api_keys")
             self.context.logger.warning(f"Task expired: {e}")
-            return (f"Task timed out after {timeout_s} seconds.", "", None, cb, keys)
         except Exception as e:
-            # Map to your error contract
-            exec_task = cast(Dict[str, Any], self._executing_task)
-            cb = exec_task.get("counter_callback")
-            keys = exec_task.get("api_keys")
             self.context.logger.error(f"Exception during task: {e}")
-            return (f"Task failed with error: {e}", "", None, cb, keys)
+        self._handle_timeout_task()
+        return None
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
