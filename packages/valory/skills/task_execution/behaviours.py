@@ -591,7 +591,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.warning(f"Task expired: {e}")
         except Exception as e:
             self.context.logger.error(f"Exception during task: {e}")
-        self._handle_timeout_task()
         return None
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
