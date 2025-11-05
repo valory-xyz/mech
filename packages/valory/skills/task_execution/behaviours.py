@@ -33,6 +33,7 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
+from prometheus_client import Counter, Gauge
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
@@ -107,6 +108,36 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._ignored_request_ids: Set[int] = set()
         # We fetch the requests and their status on the startup so this should be fairly accurate
         self.last_status_check_time: float = time.time()
+
+        # Prometheus metrics
+        self.mech_pending_queue_len = Gauge(
+            "mech_pending_queue_len", "Total pending tasks in the mech agent"
+        )
+        self.mech_timed_out_queue_len = Gauge(
+            "mech_timed_out_queue_len", "Total timed out tasks in the mech agent"
+        )
+        self.mech_wait_for_time_out_queue_len = Gauge(
+            "mech_wait_for_time_out_queue_len",
+            "Total wait for time out tasks in the mech agent",
+        )
+        self.mech_tasks_started_total = Counter(
+            "mech_tasks_started_total", "Total tasks worked on by the mech"
+        )
+        self.mech_tasks_completed_total = Counter(
+            "mech_tasks_completed_total",
+            "Total tasks completed by the mech",
+            labelnames=["tool"],
+        )
+        self.mech_tasks_failed_total = Counter(
+            "mech_tasks_failed_total",
+            "Total tasks failed in mech with tool and reason",
+            labelnames=["tool", "reason"],
+        )
+        self.mech_tasks_timed_out_total = Counter(
+            "mech_tasks_timed_out_total",
+            "Total tasks timed out during execution",
+            labelnames=["tool"],
+        )
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -379,6 +410,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._handle_timeout_task()
             return
 
+        self.mech_pending_queue_len.set_to_current_time()
+        self.mech_pending_queue_len.set(len(self.pending_tasks))
+        self.mech_timed_out_queue_len.set_to_current_time()
+        self.mech_timed_out_queue_len.set(len(self.timed_out_tasks))
+        self.mech_wait_for_time_out_queue_len.set_to_current_time()
+        self.mech_wait_for_time_out_queue_len.set(len(self.wait_for_timeout_tasks))
+
         if len(self.pending_tasks) == 0:
             if len(self.timed_out_tasks) == 0:
                 return
@@ -386,6 +424,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         else:
             task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
+        self.mech_tasks_started_total.inc()
         # convert request id to int if it's bytes
         if type(task_data.get("requestId")) == bytes:
             request_id = task_data["requestId"]
@@ -519,6 +558,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._keychain = keychain
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
+        self.mech_tasks_completed_total.labels(tool).inc()
+        reason = response["result"]
+        if reason == "Invalid response":
+            self.mech_tasks_failed_total.labels(tool, reason).inc()
+
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
         )
@@ -534,11 +578,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle timeout tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+        tool = executing_task.get("tool", None)
         self.count_timeout(req_id)
         self.context.logger.info(f"Task timed out for request {req_id}")
         self.context.logger.info(
             f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times"
         )
+        self.mech_tasks_timed_out_total.labels(tool).inc()
         if self._async_result:
             async_result = cast(Future, self._async_result)
             async_result.cancel()
@@ -594,9 +640,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if stepping_in and tool_name not in self._tools_to_package_hash:
             rid = int(executing_task["requestId"])
             self._ignored_request_ids.add(rid)
-            self.context.logger.info(
-                f"Ignoring request {rid}: stepping in but tool {tool_name} not installed.",
-            )
+            reason = f"Ignoring request {rid}: stepping in but tool {tool_name} not installed."
+            self.context.logger.info(reason)
+            self.mech_tasks_failed_total.labels(tool_name, reason).inc()
             self._executing_task = None
             self._last_deadline = None
             self._async_result = None
@@ -609,16 +655,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     executing_task["requestId"]
                 ]
                 if req_id_delivery_rate < tool_pricing:
-                    self.context.logger.warning(
-                        f"Requested pricing invalid. Actual {req_id_delivery_rate} Needed {tool_pricing}"
-                    )
+                    reason = f"Requested pricing invalid. Actual {req_id_delivery_rate} Needed {tool_pricing}"
+                    self.context.logger.warning(reason)
+                    self.mech_tasks_failed_total.labels(tool_name, reason).inc()
                     self._invalid_request = True
                     return
             self._prepare_task(task_data)
         else:
             # Unknown tool and we're the priority mech -> store stub (existing behavior)
             executing_task["tool"] = tool_name
-            self.context.logger.warning(f"Tool {tool_name} is not valid.")
+            reason = f"Tool {tool_name} is not valid."
+            self.context.logger.warning(reason)
+            self.mech_tasks_failed_total.labels(tool_name, reason).inc()
             self._invalid_request = True
 
     def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
