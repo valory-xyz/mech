@@ -31,6 +31,7 @@ from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 from aea.helpers.cid import CID, to_v1
 from multibase import multibase
 from multicodec import multicodec
+from web3.constants import ADDRESS_ZERO
 
 from packages.valory.contracts.agent_mech.contract import (
     AgentMechContract,
@@ -230,7 +231,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         """Do the act, supporting asynchronous execution."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
             # clean up the queue based on the outcome of the previous period
-            self.handle_submitted_tasks()
+            yield from self.handle_submitted_tasks()
 
             # sync new tasks
             payload_content = yield from self.get_payload_content()
@@ -267,7 +268,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         self.context.logger.info("No tasks were ready within the timeout")
         return []
 
-    def handle_submitted_tasks(self) -> None:
+    def handle_submitted_tasks(self) -> Generator[None, None, None]:
         """Handle tasks that have been already submitted before (in a prev. period)."""
         (status, tx_hash) = self.check_last_tx_status()
         self.context.logger.info(f"Last tx status is: {status}")
@@ -279,6 +280,13 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                 f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}. "
                 f"Removing them from the list of tasks to be processed."
             )
+            block_number = yield from self._fetch_tx_block_number(tx_hash)
+            self.context.logger.info(
+                f"Block number for tx hash: {tx_hash} is {block_number}"
+            )
+            if block_number:
+                self.shared_state.mech_delivery_last_block_number.set_to_current_time()
+                self.shared_state.mech_delivery_last_block_number.set(block_number)
             self.remove_tasks(submitted_tasks)
 
     def check_last_tx_status(self) -> Tuple[bool, str]:
@@ -297,6 +305,28 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                 return (True, final_tx_hash)
             else:
                 return (False, "")
+
+    def _fetch_tx_block_number(
+        self, tx_hash: str
+    ) -> Generator[None, None, Optional[int]]:
+        contract_api_msg = yield from self.get_contract_api_response(
+            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
+            contract_address=ADDRESS_ZERO,
+            contract_id=str(MechMarketplaceContract.contract_id),
+            contract_callable="get_block_number",
+            tx_hash=tx_hash,
+            chain_id=self.params.default_chain_id,
+        )
+        if (
+            contract_api_msg.performative != ContractApiMessage.Performative.STATE
+        ):  # pragma: nocover
+            self.context.logger.warning(
+                f"get_block_number unsuccessful!: {contract_api_msg}"
+            )
+            return None
+
+        block_number = cast(int, contract_api_msg.state.body["number"])
+        return block_number
 
 
 class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):

@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Type
 
 from aea.exceptions import enforce
+from prometheus_client import Gauge
 
 from packages.valory.skills.abstract_round_abci.base import AbciApp
 from packages.valory.skills.abstract_round_abci.models import BaseParams
@@ -42,6 +43,10 @@ class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
     abci_app_cls: Type[AbciApp] = TaskSubmissionAbciApp
+    # Prometheus metrics
+    mech_delivery_last_block_number = Gauge(
+        "mech_delivery_last_block_number", "Last observed block for a delivery"
+    )
 
 
 @dataclass
