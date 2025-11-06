@@ -47,6 +47,9 @@ class SharedState(BaseSharedState):
     mech_delivery_last_block_number = Gauge(
         "mech_delivery_last_block_number", "Last observed block for a delivery"
     )
+    mech_agent_balance = Gauge(
+        "mech_agent_balance", "Agent wallet native token balance", labelnames=["chain"]
+    )
 
 
 @dataclass

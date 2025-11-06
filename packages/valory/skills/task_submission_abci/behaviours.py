@@ -1106,6 +1106,12 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         balances = {}
         for agent in self.synchronized_data.all_participants:
             balance = yield from self._get_balance(agent)
+            self.shared_state.mech_agent_balance.labels(
+                self.params.default_chain_id
+            ).set_to_current_time()
+            self.shared_state.mech_agent_balance.labels(
+                self.params.default_chain_id
+            ).set(balance)
             if balance is None:
                 self.context.logger.warning(
                     f"Could not get balance for agent {agent}. Skipping re-funding."
