@@ -134,7 +134,7 @@ class ComplementaryServiceMetadata(Contract):
             ledger_api=ledger_api,
             contract_address=contract_address,
         )
-        data = contract_interface.encodeABI(
-            fn_name="changeHash", args=[service_id, metadata_hash]
+        data = contract_interface.encode_abi(
+            abi_element_identifier="changeHash", args=[service_id, metadata_hash]
         )
         return dict(data=data)
