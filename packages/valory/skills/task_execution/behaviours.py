@@ -138,6 +138,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "Total tasks timed out during execution",
             labelnames=["tool"],
         )
+        self.mech_tasks_inflight = Gauge(
+            "mech_tasks_inflight",
+            "Current task in execution",
+            labelnames=["request_id"],
+        )
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -431,6 +436,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
 
         request_id = task_data["requestId"]
+        self.mech_tasks_inflight.labels(request_id).set_to_current_time()
+        self.mech_tasks_inflight.labels(request_id).set(1)
         delivery_rate = task_data["request_delivery_rate"]
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
@@ -578,6 +585,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle timeout tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+        # Prometheus has no way to remove/clear metrics, so we set to default 0
+        self.mech_tasks_inflight.labels(req_id).set_to_current_time()
+        self.mech_tasks_inflight.labels(req_id).set(0)
         tool = executing_task.get("tool", None)
         self.count_timeout(req_id)
         self.context.logger.info(f"Task timed out for request {req_id}")
@@ -643,6 +653,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             reason = f"Ignoring request {rid}: stepping in but tool {tool_name} not installed."
             self.context.logger.info(reason)
             self.mech_tasks_failed_total.labels(tool_name, reason).inc()
+            # Prometheus has no way to remove/clear metrics, so we set to default 0
+            self.mech_tasks_inflight.labels(rid).set_to_current_time()
+            self.mech_tasks_inflight.labels(rid).set(0)
             self._executing_task = None
             self._last_deadline = None
             self._async_result = None
@@ -775,6 +788,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.error(
                 f"Invalid done task format. Expected Dict. Actual: {done_task}"
             )
+            # Prometheus has no way to remove/clear metrics, so we set to default 0
+            self.mech_tasks_inflight.labels(req_id).set_to_current_time()
+            self.mech_tasks_inflight.labels(req_id).set(0)
             self._executing_task = None
             self._done_task = None
             self._invalid_request = False
@@ -804,6 +820,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
+
+        # Prometheus has no way to remove/clear metrics, so we set to default 0
+        self.mech_tasks_inflight.labels(req_id).set_to_current_time()
+        self.mech_tasks_inflight.labels(req_id).set(0)
         # reset tasks
         self._executing_task = None
         self._done_task = None
