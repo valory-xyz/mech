@@ -195,6 +195,7 @@ models:
       num_agents: ${int:4}
       from_block_range: ${int:50000}
       mech_marketplace_address: ${str:0x0000000000000000000000000000000000000000}
+      step_in_list_size: ${int:20}
       mech_to_config: ${dict:{}}
       tools_to_pricing: ${dict:{}}
       mech_to_max_delivery_rate: ${dict:{}}

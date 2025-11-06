@@ -2166,14 +2166,14 @@ open-aea = ">=2.0.0,<3.0.0"
 
 [[package]]
 name = "open-aea-ledger-cosmos"
-version = "2.0.5"
+version = "2.0.6"
 description = "Python package wrapping the public and private key cryptography and ledger api of Cosmos."
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "open_aea_ledger_cosmos-2.0.5-py3-none-any.whl", hash = "sha256:02b52003165f4b6407cb7eda8683a92c1ac382f5ef76eba7c577216347d92340"},
-    {file = "open_aea_ledger_cosmos-2.0.5.tar.gz", hash = "sha256:7dd06d6e9c8d639ecc867311ac8c8618bfcf7a85b0c9ea95623c389c13dcf188"},
+    {file = "open_aea_ledger_cosmos-2.0.6-py3-none-any.whl", hash = "sha256:a43458086d133f042b5864357b66170dbc531106cb4c50707cdef8aded8c6a2e"},
+    {file = "open_aea_ledger_cosmos-2.0.6.tar.gz", hash = "sha256:9df861b7c67697eec0cf62d56c239cede7b2a588872b7a10a33314d36569b2e7"},
 ]
 
 [package.dependencies]
@@ -2203,32 +2203,32 @@ web3 = ">=7.0.0,<8"
 
 [[package]]
 name = "open-aea-test-autonomy"
-version = "0.21.1"
+version = "0.21.3"
 description = "Plugin containing test tools for open-autonomy packages."
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "open_aea_test_autonomy-0.21.1-py3-none-any.whl", hash = "sha256:2e67c51ffb17d863704f3f6a0130659af8a264cc90bbc9963021a6b901b2dfcc"},
-    {file = "open_aea_test_autonomy-0.21.1.tar.gz", hash = "sha256:64bd837b3daa5edc46fadaaadf57ea8036305bf03c8807d896a2f87cf81df29e"},
+    {file = "open_aea_test_autonomy-0.21.3-py3-none-any.whl", hash = "sha256:c4045e5368fb3a37526c285c6cc67cb3a66bf3297a3c2714a5faeaf58f9e2dba"},
+    {file = "open_aea_test_autonomy-0.21.3.tar.gz", hash = "sha256:0b0322bdcc74b6b7f6dff7292559456c38353f89b56d8db10eefb22d26664a54"},
 ]
 
 [package.dependencies]
 docker = "7.1.0"
-open-aea = {version = ">=2.0.5,<3.0.0", extras = ["all"]}
-open-aea-ledger-ethereum = ">=2.0.5,<3.0.0"
+open-aea = {version = ">=2.0.6,<3.0.0", extras = ["all"]}
+open-aea-ledger-ethereum = ">=2.0.6,<3.0.0"
 pytest = "7.4.4"
 
 [[package]]
 name = "open-autonomy"
-version = "0.21.2"
+version = "0.21.3"
 description = "A framework for the creation of autonomous agent services."
 optional = false
 python-versions = ">=3.10"
 groups = ["main"]
 files = [
-    {file = "open_autonomy-0.21.2-py3-none-any.whl", hash = "sha256:2007027ad646590bfcea018912007a5c3d43bff1ea9eb0cee7285bab07fb7d82"},
-    {file = "open_autonomy-0.21.2.tar.gz", hash = "sha256:88eb5bbc683917feaab4473bc1d54824ec75c5bd7747fa4aec83dc4e7a862ca1"},
+    {file = "open_autonomy-0.21.3-py3-none-any.whl", hash = "sha256:8380dc2c1626e54c42c950369e7aab924bf9442362eee63a934c753857b3a981"},
+    {file = "open_autonomy-0.21.3.tar.gz", hash = "sha256:8eec867f7c7eace051e8d5e25f5d1ddc4768ba63a41c39ed3e10dfbe0d478fc0"},
 ]
 
 [package.dependencies]
@@ -3279,21 +3279,21 @@ files = [
 
 [[package]]
 name = "requests"
-version = "2.28.2"
+version = "2.32.4"
 description = "Python HTTP for Humans."
 optional = false
-python-versions = ">=3.7, <4"
+python-versions = ">=3.8"
 groups = ["main", "dev"]
 files = [
-    {file = "requests-2.28.2-py3-none-any.whl", hash = "sha256:64299f4909223da747622c030b781c0d7811e359c37124b4bd368fb8c6518baa"},
-    {file = "requests-2.28.2.tar.gz", hash = "sha256:98b1b2782e3c6c4904938b84c0eb932721069dfdb9134313beff7c83c2df24bf"},
+    {file = "requests-2.32.4-py3-none-any.whl", hash = "sha256:27babd3cda2a6d50b30443204ee89830707d396671944c998b5975b031ac2b2c"},
+    {file = "requests-2.32.4.tar.gz", hash = "sha256:27d0316682c8a29834d3264820024b62a36942083d52caf2f14c0591336d3422"},
 ]
 
 [package.dependencies]
 certifi = ">=2017.4.17"
-charset-normalizer = ">=2,<4"
+charset_normalizer = ">=2,<4"
 idna = ">=2.5,<4"
-urllib3 = ">=1.21.1,<1.27"
+urllib3 = ">=1.21.1,<3"
 
 [package.extras]
 socks = ["PySocks (>=1.5.6,!=1.5.7)"]
@@ -3473,38 +3473,38 @@ markers = {main = "python_version == \"3.10\"", dev = "python_full_version <= \"
 
 [[package]]
 name = "tomte"
-version = "0.3.0"
+version = "0.4.0"
 description = "A library that wraps many useful tools (linters, analysers, etc) to keep Python code clean, secure, well-documented and optimised."
 optional = false
-python-versions = "<4,>=3.9"
+python-versions = "<4,>=3.10"
 groups = ["dev"]
 files = [
-    {file = "tomte-0.3.0-py3-none-any.whl", hash = "sha256:6fe577dea5fb21b1a2a3fb0c09a1fc417e7e09d317c96e2d9a46b9813608301b"},
-    {file = "tomte-0.3.0.tar.gz", hash = "sha256:fc95252b5bffe88998ae273cc6f36294f9558f4037286a64e699b2263b185f77"},
+    {file = "tomte-0.4.0-py3-none-any.whl", hash = "sha256:09bfed0ebd44d4eb1033668a72748ed79885b6ef7b4ee3f96a49b0f490b8462a"},
+    {file = "tomte-0.4.0.tar.gz", hash = "sha256:4e275e89e4425427212f3c10d02865f9b3ed8049ccf94d1269e0f6d60d4c822c"},
 ]
 
 [package.dependencies]
-click = {version = ">=8.1.0,<9", optional = true, markers = "extra == \"black\" or extra == \"cli\" or extra == \"docs\""}
+click = {version = "8.2.1", optional = true, markers = "extra == \"black\" or extra == \"cli\" or extra == \"docs\""}
 pytest = {version = "7.4.4", optional = true, markers = "extra == \"tests\""}
 pytest-asyncio = {version = "0.21.2", optional = true, markers = "extra == \"tests\""}
 pytest-cov = {version = "6.2.1", optional = true, markers = "extra == \"tests\""}
 pytest-randomly = {version = "3.16.0", optional = true, markers = "extra == \"tests\""}
 pytest-rerunfailures = {version = "15.1", optional = true, markers = "extra == \"tests\""}
-requests = {version = ">=2.28.1,<3", optional = true, markers = "extra == \"cli\""}
+requests = {version = "2.32.4", optional = true, markers = "extra == \"cli\""}
 tox = {version = "3.28.0", optional = true, markers = "extra == \"cli\" or extra == \"tox\""}
 
 [package.extras]
-bandit = ["bandit (==1.8.3)"]
-black = ["black (==25.1.0)", "click (>=8.1.0,<9)"]
-cli = ["click (>=8.1.0,<9)", "requests (>=2.28.1,<3)", "tox (==3.28.0)"]
+bandit = ["bandit (==1.8.6)"]
+black = ["black (==25.1.0)", "click (==8.2.1)"]
+cli = ["click (==8.2.1)", "requests (==2.32.4)", "tox (==3.28.0)"]
 darglint = ["darglint (==1.8.1)"]
-docs = ["Markdown (==3.8)", "Pygments (==2.19.1)", "bs4 (==0.0.2)", "click (>=8.1.0,<9)", "markdown-include (==0.8.1)", "mkdocs (==1.6.1)", "mkdocs-macros-plugin (==1.3.7)", "mkdocs-material (==9.6.14)", "mkdocs-material-extensions (==1.3.1)", "mkdocs-redirects (==1.2.2)", "pydoc-markdown (==4.8.2)", "pydocstyle (==6.3.0)", "pymdown-extensions (==10.15)"]
-flake8 = ["flake8 (==7.2.0)", "flake8-bugbear (==24.12.12)", "flake8-docstrings (==1.7.0)", "flake8-eradicate (==1.5.0)", "flake8-isort (==6.1.2)", "flake8-pytest-style (==2.1.0)", "pydocstyle (==6.3.0)"]
+docs = ["Markdown (==3.8.2)", "Pygments (==2.19.2)", "bs4 (==0.0.2)", "click (==8.2.1)", "markdown-include (==0.8.1)", "mkdocs (==1.6.1)", "mkdocs-macros-plugin (==1.3.7)", "mkdocs-material (==9.6.15)", "mkdocs-material-extensions (==1.3.1)", "mkdocs-redirects (==1.2.2)", "pydoc-markdown (==4.8.2)", "pydocstyle (==6.3.0)", "pymdown-extensions (==10.16)"]
+flake8 = ["flake8 (==7.3.0)", "flake8-bugbear (==24.12.12)", "flake8-docstrings (==1.7.0)", "flake8-eradicate (==1.5.0)", "flake8-isort (==6.1.2)", "flake8-pytest-style (==2.1.0)", "pydocstyle (==6.3.0)"]
 isort = ["isort (==6.0.1)"]
 liccheck = ["liccheck (==0.9.2)"]
 mypy = ["mypy (==1.16.1)"]
 pylint = ["pylint (==3.3.7)"]
-safety = ["safety (==3.5.2)"]
+safety = ["safety (==3.6.0)"]
 tests = ["pytest (==7.4.4)", "pytest-asyncio (==0.21.2)", "pytest-cov (==6.2.1)", "pytest-randomly (==3.16.0)", "pytest-rerunfailures (==15.1)"]
 tox = ["tox (==3.28.0)"]
 vulture = ["vulture (==2.14)"]
@@ -4027,4 +4027,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.12"
-content-hash = "8eb658d1e24b2d3fe8447b959b904697833b3d95c6cac07985c333d1001a6cc1"
+content-hash = "e0d6b82f86829f450e9d547246c3df4435748ef8a2f6fa2e470552c97cff1830"
