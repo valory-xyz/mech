@@ -38,7 +38,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia7lzwbmcmf3u7mn3673345klkyyp7ln62gqx6hcqlbjracxmrqlm
 - valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
-- valory/task_execution:0.1.0:bafybeibw7yyj3qifp5mq6nw5rabyc5wjjgtuhwuxqynpe3jkphshvp7p2i
+- valory/task_execution:0.1.0:bafybeigwcsijd2cr3hrwx3dcn2qgh6fsykj7x2wj6ajhobz2qhhw3pf2m4
 behaviours:
   main:
     args: {}
@@ -175,8 +175,12 @@ models:
     args: {}
     class_name: TendermintDialogues
 dependencies:
+  web3:
+    version: <7,>=6.0.0
   py-multibase:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
+  prometheus_client:
+    version: ==0.23.1
 is_abstract: true

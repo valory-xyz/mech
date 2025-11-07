@@ -110,4 +110,6 @@ dependencies:
     version: ==4.0.0
   PyYAML:
     version: ==6.0.1
+  prometheus_client:
+    version: ==0.23.1
 is_abstract: false
