@@ -26,7 +26,26 @@ from types import SimpleNamespace
 from typing import Any, Callable, Dict, Tuple
 from unittest.mock import MagicMock
 
+import pytest
+from prometheus_client import REGISTRY
+
 import packages.valory.skills.task_execution.behaviours as beh_mod
+
+
+def clear_registry():
+    collectors = list(REGISTRY._names_to_collectors.values())
+    for collector in collectors:
+        try:
+            REGISTRY.unregister(collector)
+        except KeyError:
+            pass
+
+
+@pytest.fixture(autouse=True)
+def cleanup():
+    clear_registry()
+    yield
+    clear_registry()
 
 
 def test_happy_path_executes_and_stores(
