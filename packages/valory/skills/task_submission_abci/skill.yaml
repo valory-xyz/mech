@@ -22,13 +22,13 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeibbr5qo4lgupjknz2vqy6yauszyetxvktosaka2vwk3anuuzem7n4
+- valory/agent_mech:0.1.0:bafybeieaescqw6l344ibm7y4ucg65qe2r4kcefbrhvjgmpn3gtu3dkrale
 - valory/mech_marketplace:0.1.0:bafybeifr4ddua34lr423pz62fe6vpbdmm2fn4rwalna346z54kibmp3bfe
 - valory/complementary_service_metadata:0.1.0:bafybeibjk5gdgc54wx5bz4fl2666urmfj6mx3ocqxyumqpj7wq5fdg4diu
 - valory/gnosis_safe:0.1.0:bafybeia4h7w5xcslzwphyupvqoijhf3wru4cswnztm24zwafyv5eliwm4a
 - valory/multisend:0.1.0:bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4
 - valory/service_registry:0.1.0:bafybeieprxqowacuaqrhhzkv476i2zsnf4hs2ffusdgvlga3ruurrjdaqu
-- valory/hash_checkpoint:0.1.0:bafybeidr2gqayk2ihr56ok6czvsbmoexzkw2ssi6gr7epus5nvqok7nxmu
+- valory/hash_checkpoint:0.1.0:bafybeigoqq4mzzuokvajqhlciestuhnxmlgj7cmn2q3cwzckuwdgfyhv2q
 - valory/balance_tracker:0.1.0:bafybeihe3rgqcqtch365sevgprcgrubnfuedgzid5iluhs5mjqii7os5ny
 - valory/erc20:0.1.0:bafybeideeg2kkwtxt3fo36dtejmuy7fevuouyc6zji2zdpsobzmsnfougy
 protocols:
@@ -38,7 +38,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeib4xpcpuiryyfnkuyhypdvqi5ebbl7ugavv6ig6yp4nzk3fxosntm
 - valory/transaction_settlement_abci:0.1.0:bafybeids5bopaujr5bh2jfhvysl6fzf7zexsbdifaurf4nerp24hv5uqnm
-- valory/task_execution:0.1.0:bafybeigda6b7fcr4kh7z5gmx3iuddq5v4fdsdac7bmxpazmvbc2rxfhcgq
+- valory/task_execution:0.1.0:bafybeie5adfcgubravec7yqm6vypenv7luode6ayassfnhffp4uc66hhtm
 behaviours:
   main:
     args: {}

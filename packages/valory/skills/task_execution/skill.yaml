@@ -15,8 +15,8 @@ fingerprint:
   tests/conftest.py: bafybeiev6qpxz6fvp666hkhsu3vxyttnyz7cp4fvipaurho6jdqcw2ahaa
   tests/test_behaviours.py: bafybeic6h4ypiw4x27gm5auno3bdwwyznxysp5zqutgal4xhxzbnpq5tiq
   tests/test_dialogues.py: bafybeihrghdkt7xjcr3gsj5xb274h2wn42f4sijag3xbopijp4v3yktau4
-  tests/test_handlers.py: bafybeicn77ykknd652axcx2pgk4ducucyb7g6wdj5nlchvyvzlotdzuexu
-  tests/test_models.py: bafybeidfkrmoh5awqvsfgxmjwkf5p6i7te5rm32tlacf7gzv4ohe6jdlce
+  tests/test_handlers.py: bafybeihwzgmdom2v6gcuv5il5qptobriujoov23gxj3bw3f66ul7zkcqxa
+  tests/test_models.py: bafybeife4reoldzyxu3muhkdpl7leos3z4b3vyepomzdr4lj4kgr2zkqkm
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeib42vlnvv2lpfs3icjn2aoxwzw7z7wip5br2yj6p3lcgcz3ymrwcu
