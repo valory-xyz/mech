@@ -108,8 +108,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._ignored_request_ids: Set[int] = set()
         # We fetch the requests and their status on the startup so this should be fairly accurate
         self.last_status_check_time: float = time.time()
-        self.tool_preparation_start_time = None
-        self.tool_execution_start_time = None
+        self.tool_preparation_start_time: float = 0.0
+        self.tool_execution_start_time: float = 0.0
 
         # Prometheus metrics
         self.mech_pending_queue_len = Gauge(
@@ -417,8 +417,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self.params.is_cold_start = False
                 self._last_deadline = None
                 # reset all times
-                self.tool_preparation_start_time = None
-                self.tool_execution_start_time = None
+                self.tool_preparation_start_time = 0.0
+                self.tool_execution_start_time = 0.0
                 self._handle_timeout_task()
             return
 
@@ -428,8 +428,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._handle_done_task(task_result)
             elif self._has_executing_task_timed_out():
                 # reset all times
-                self.tool_preparation_start_time = None
-                self.tool_execution_start_time = None
+                self.tool_preparation_start_time = 0.0
+                self.tool_execution_start_time = 0.0
                 self._handle_timeout_task()
             return
 
@@ -586,14 +586,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
         # fetch the time duration for tool execution to complete
-        # if tool exec start time is None, set to current time
-        # it can be None if _prepare_task was not called due to other checks such as tool not valid
+        # if tool exec start time is 0.0, set to current time
+        # it can be 0.0 if _prepare_task was not called due to other checks such as tool not valid
         # or stepping in but tool not found or tool to pricing not found for dynamic mechs
         tool_exec_time_duration = time.perf_counter() - (
             self.tool_execution_start_time or time.perf_counter()
         )
         # reset the time counter used to measure time taken to execute the task
-        self.tool_execution_start_time = None
+        self.tool_execution_start_time = 0.0
         self.tool_execution_time.labels(tool, req_id).observe(tool_exec_time_duration)
         # Start the time counter to measure time taken to deliver the task
         self.tool_deliver_start_time = time.perf_counter()
@@ -692,7 +692,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._last_deadline = None
             self._async_result = None
             # reset the time counter used to measure time taken to prepare the task
-            self.tool_preparation_start_time = None
+            self.tool_preparation_start_time = 0.0
             return
 
         if tool_name in self._tools_to_package_hash:
@@ -707,7 +707,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     self.mech_tasks_failed_total.labels(tool_name, reason).inc()
                     self._invalid_request = True
                     # reset the time counter used to measure time taken to prepare the task
-                    self.tool_preparation_start_time = None
+                    self.tool_preparation_start_time = 0.0
                     return
 
             # fetch the time duration for tool preparation to complete
@@ -715,7 +715,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 time.perf_counter() - self.tool_preparation_start_time
             )
             # reset the time counter used to measure time taken to prepare the task
-            self.tool_preparation_start_time = None
+            self.tool_preparation_start_time = 0.0
             rid = int(executing_task["requestId"])
             self.tool_preparation_time.labels(tool_name, rid).observe(
                 tool_prep_time_duration
@@ -731,7 +731,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.mech_tasks_failed_total.labels(tool_name, reason).inc()
             self._invalid_request = True
             # reset the time counter used to measure time taken to prepare the task
-            self.tool_preparation_start_time = None
+            self.tool_preparation_start_time = 0.0
 
     def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
         """Submit a task."""
