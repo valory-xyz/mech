@@ -61,9 +61,9 @@ def test_ipfs_handler_calls_callback_and_clears(
     handler.setup()
 
     called = {"ok": False}
-    handler_context.params.req_to_callback["nonce-1"] = (
-        lambda _msg, _dlg: called.__setitem__("ok", True)
-    )
+    handler_context.params.req_to_callback[
+        "nonce-1"
+    ] = lambda _msg, _dlg: called.__setitem__("ok", True)
     handler_context.params.req_to_deadline["nonce-1"] = time.time() + 999.0
     handler_context.params.is_cold_start = True
     handler_context.params.in_flight_req = True

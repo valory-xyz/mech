@@ -383,6 +383,7 @@ class MechHttpHandler(AbstractResponseHandler):
         super().setup()
 
     def start_prometheus_server(self) -> None:
+        """Starts the prometheus server"""
         start_http_server(PROMETHEUS_PORT)
         self.context.logger.info(f"Started Prometheus server on {PROMETHEUS_PORT}")
 
