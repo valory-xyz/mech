@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigpq5lxfj2aza6ok3fjuywtdafelkbvoqwaits7regfbgu4oynmku
   build/HashCheckpoint.json: bafybeicdse6k7xbis3mdurqee7a3ghiba4hzfk4llhc3hk6q4qbfjd5rg4
-  contract.py: bafybeiggklmnb6p7naanj3ywiwiwzcylluqe34lnhkrfxfndtl3rkzmf3e
+  contract.py: bafybeiba722ddtd3gfcyyokwwo6dzrkkwbd3qddnkppf72n5ylypiy3ajm
 fingerprint_ignore_patterns: []
 class_name: HashCheckpointContract
 contract_interface_paths:

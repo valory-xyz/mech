@@ -115,7 +115,7 @@ def test_params_tools_pricing_keys_match_ok(params_kwargs: Dict[str, Any]) -> No
 
 
 def test_params_tools_pricing_keys_mismatch_raises(
-    params_kwargs: Dict[str, Any]
+    params_kwargs: Dict[str, Any],
 ) -> None:
     """
     Mismatched pricing/package keys should raise an enforcement error.
