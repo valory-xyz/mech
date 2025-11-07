@@ -7,7 +7,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint: {}
 fingerprint_ignore_patterns: []
 connections:
-- valory/abci:0.1.0:bafybeig6hnll4fddbqlgt26z74mgo2scaxlhnwhzusxrz7tbd7at6boxdi
+- valory/abci:0.1.0:bafybeihoh3pe47zoouuudqlidspvmqpuc62a7qszhznieqdkdjpzl4vsaq
 - valory/http_client:0.23.0:bafybeib34a2ukancj5524tz64smczju2q2njscgufmtml6dcjb3bjyaocy
 - valory/http_server:0.22.0:bafybeicmy3phyy3ckvlfumioiadwlmlt5dijkp3mhezkxgx7kigigwe3rm
 - valory/ipfs:0.1.0:bafybeif7exoq2viwhfgfcjplxq73hnxvgpsx7pwshhntx6aekza25mdwli
@@ -17,11 +17,11 @@ connections:
 contracts:
 - valory/agent_mech:0.1.0:bafybeibbr5qo4lgupjknz2vqy6yauszyetxvktosaka2vwk3anuuzem7n4
 - valory/complementary_service_metadata:0.1.0:bafybeibjk5gdgc54wx5bz4fl2666urmfj6mx3ocqxyumqpj7wq5fdg4diu
-- valory/gnosis_safe:0.1.0:bafybeidxtpqztd33y2k47tmwy5kfxjp6cfzc3cvkpyxpbqc3s6vp6kmt4q
-- valory/gnosis_safe_proxy_factory:0.1.0:bafybeigr5qbpzpugko6ajmm7jemizddzswnxyslqeajjcc62or75ehnili
+- valory/gnosis_safe:0.1.0:bafybeia4h7w5xcslzwphyupvqoijhf3wru4cswnztm24zwafyv5eliwm4a
+- valory/gnosis_safe_proxy_factory:0.1.0:bafybeifbty6k7cpi3srl56wjrrefwqteuomqarq4fd55vdrmnomk6cwdhu
 - valory/hash_checkpoint:0.1.0:bafybeidr2gqayk2ihr56ok6czvsbmoexzkw2ssi6gr7epus5nvqok7nxmu
 - valory/multisend:0.1.0:bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4
-- valory/service_registry:0.1.0:bafybeigi3efqi5nofhe6d24tnznr5xisacyav24zc37f77xetm4t7azovy
+- valory/service_registry:0.1.0:bafybeieprxqowacuaqrhhzkv476i2zsnf4hs2ffusdgvlga3ruurrjdaqu
 - valory/mech_marketplace:0.1.0:bafybeifr4ddua34lr423pz62fe6vpbdmm2fn4rwalna346z54kibmp3bfe
 - valory/balance_tracker:0.1.0:bafybeihe3rgqcqtch365sevgprcgrubnfuedgzid5iluhs5mjqii7os5ny
 - valory/erc20:0.1.0:bafybeideeg2kkwtxt3fo36dtejmuy7fevuouyc6zji2zdpsobzmsnfougy
@@ -38,17 +38,17 @@ protocols:
 - valory/tendermint:0.1.0:bafybeif5wq5i2ugr66alniej2bk4vws5sikal7otx674y5kz52e3ulo2qm
 - valory/websocket_client:0.1.0:bafybeig6omutaqt5rbvidju4zc7pwwdi6tkagwu3dwiirosadyoo534v3q
 skills:
-- valory/abstract_abci:0.1.0:bafybeidswz43c4c3ivxuqz6iqbo7snxc6snox3ztn6dzh76si3k7uiolou
-- valory/abstract_round_abci:0.1.0:bafybeiemzg3e2hc5hjnpqj4kulxq4mjz65ktelqdgb6wvxekiwudjp63uu
+- valory/abstract_abci:0.1.0:bafybeihbstfafzdk4ecb4nkuo3vz3incrvgibljaqf5khtm3yxqswklj5i
+- valory/abstract_round_abci:0.1.0:bafybeib4xpcpuiryyfnkuyhypdvqi5ebbl7ugavv6ig6yp4nzk3fxosntm
 - valory/contract_subscription:0.1.0:bafybeicrkrifwefmfd3d25cx7fwlq2ttqfhycrkply7dxrplhvoldgtdau
-- valory/mech_abci:0.1.0:bafybeianiq2b4esuqdf2yjspaj4tpfczd5un4ynl56sy4qkswjrsyueb5i
-- valory/registration_abci:0.1.0:bafybeig3fa2uj5qymqhka2qyzmqwvk3opiiyfzhu4ybkr2yk33s5q7grka
-- valory/reset_pause_abci:0.1.0:bafybeibec77db27lzx7uzheoajzhc24itvbuaph4rnxtqynebw3ykm7w5u
-- valory/delivery_rate_abci:0.1.0:bafybeicgyv6i3z6p55rgea4wig3jxsuybgqzthnesiyl6gken6ercxy7ra
-- valory/task_execution:0.1.0:bafybeihar33gxylsluovtpgusaehvq2xdau5vpjjbpirytpr7hbqjj4emm
-- valory/task_submission_abci:0.1.0:bafybeicu62dhtjincv6tm3pnk3e6t5ptzr5axwpjigubyhn7x36oa2lieu
-- valory/termination_abci:0.1.0:bafybeihxrqmaqhpwjl7q7kogpdrclw4o24taba6z4wmbljipsnebptvr7y
-- valory/transaction_settlement_abci:0.1.0:bafybeihuygeicnvdcbhm747bzqbxmw2lbuwhaeqdis3d54vhm4sykjyyly
+- valory/mech_abci:0.1.0:bafybeihhrrqv2sok33ax5khpvkxbsr3a5ztelae6sqhvxkuj756bwf5cdi
+- valory/registration_abci:0.1.0:bafybeibf5nhislatztx2q3u46v7d36vmm7dnxpmuhrbxqxkz4lvdgifwha
+- valory/reset_pause_abci:0.1.0:bafybeihuxdetmcyqoqr7iatqsddufolzoebdxsxb4lxd2uiyvuwhb52ttq
+- valory/delivery_rate_abci:0.1.0:bafybeihjgkrjek6gmseynjpnuadp425eobfessfve6nxnt6pe6wrkwm3zq
+- valory/task_execution:0.1.0:bafybeigda6b7fcr4kh7z5gmx3iuddq5v4fdsdac7bmxpazmvbc2rxfhcgq
+- valory/task_submission_abci:0.1.0:bafybeig4or5hsgnfh44zvdqdlp4tpi3vgnbfh6nfuyd4map4pvfcst7e7y
+- valory/termination_abci:0.1.0:bafybeigysvgr5m6zj5b6ofadeddzpxxlhxzn2hyxfilcybhcpp252vdft4
+- valory/transaction_settlement_abci:0.1.0:bafybeids5bopaujr5bh2jfhvysl6fzf7zexsbdifaurf4nerp24hv5uqnm
 - valory/websocket_client:0.1.0:bafybeidbcdcvyy2svob6p52akdx4ezsqpxdh4kphhqgf6hbageneu7unwi
 default_ledger: ethereum
 required_ledgers:
