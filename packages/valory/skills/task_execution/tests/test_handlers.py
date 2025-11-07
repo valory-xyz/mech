@@ -24,6 +24,7 @@ import time
 import urllib.parse
 from types import SimpleNamespace
 from typing import Any, Dict, List
+from unittest.mock import MagicMock
 
 import packages.valory.skills.task_execution.handlers as hmod
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -60,9 +61,9 @@ def test_ipfs_handler_calls_callback_and_clears(
     handler.setup()
 
     called = {"ok": False}
-    handler_context.params.req_to_callback[
-        "nonce-1"
-    ] = lambda _msg, _dlg: called.__setitem__("ok", True)
+    handler_context.params.req_to_callback["nonce-1"] = (
+        lambda _msg, _dlg: called.__setitem__("ok", True)
+    )
     handler_context.params.req_to_deadline["nonce-1"] = time.time() + 999.0
     handler_context.params.is_cold_start = True
     handler_context.params.in_flight_req = True
@@ -308,9 +309,13 @@ def make_http_msg(body_dict: Dict[str, str], headers: str = "") -> SimpleNamespa
     )
 
 
-def test_signed_requests_success(handler_context: Any, http_dialogue: Any) -> None:
+def test_signed_requests_success(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
     """Enqueue off-chain request & respond 200 on valid signed POST."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    # patch prometheus server to bypass port in use error and not relevant to these tests
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
     ipfs_hash: str = "0x" + "ab" * 64
@@ -338,9 +343,13 @@ def test_signed_requests_success(handler_context: Any, http_dialogue: Any) -> No
     assert data["request_id"] == "req-1"
 
 
-def test_signed_requests_bad_request(handler_context: Any, http_dialogue: Any) -> None:
+def test_signed_requests_bad_request(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
     """Return HTTP 400 when required POST fields are missing."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    # patch prometheus server to bypass port in use error and not relevant to these tests
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
     http_msg: Any = make_http_msg({"only": "one"})
@@ -351,10 +360,12 @@ def test_signed_requests_bad_request(handler_context: Any, http_dialogue: Any) -
 
 
 def test_fetch_offchain_request_info_found(
-    handler_context: Any, http_dialogue: Any
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
     """Return stored result for an off-chain request when present."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    # patch prometheus server to bypass port in use error and not relevant to these tests
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
     handler_context.shared_state["ready_tasks"].append(
@@ -370,10 +381,12 @@ def test_fetch_offchain_request_info_found(
 
 
 def test_fetch_offchain_request_info_not_found(
-    handler_context: Any, http_dialogue: Any
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
     """Return empty JSON when no off-chain result exists for the given request_id."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    # patch prometheus server to bypass port in use error and not relevant to these tests
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
     http_msg: Any = make_http_msg({"request_id": "missing"})

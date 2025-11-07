@@ -379,9 +379,12 @@ class MechHttpHandler(AbstractResponseHandler):
         }
         self.context.shared_state[IPFS_TASKS] = []
         self.json_content_header = "Content-Type: application/json\n"
+        self.start_prometheus_server()
+        super().setup()
+
+    def start_prometheus_server(self) -> None:
         start_http_server(PROMETHEUS_PORT)
         self.context.logger.info(f"Started Prometheus server on {PROMETHEUS_PORT}")
-        super().setup()
 
     def _handle_signed_requests(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
