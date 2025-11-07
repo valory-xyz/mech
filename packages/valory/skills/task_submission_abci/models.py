@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional, Type
 
 from aea.exceptions import enforce
-from prometheus_client import Gauge
+from prometheus_client import Gauge, Histogram
 
 from packages.valory.skills.abstract_round_abci.base import AbciApp
 from packages.valory.skills.abstract_round_abci.models import BaseParams
@@ -49,6 +49,11 @@ class SharedState(BaseSharedState):
     )
     mech_agent_balance = Gauge(
         "mech_agent_balance", "Agent wallet native token balance", labelnames=["chain"]
+    )
+    tool_delivery_time = Histogram(
+        "tool_delivery_time",
+        "Duration taken by tool from completion till delivery",
+        labelnames=["tool", "request_id"],
     )
 
 

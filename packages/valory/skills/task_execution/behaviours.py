@@ -33,7 +33,7 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
-from prometheus_client import Counter, Gauge
+from prometheus_client import Counter, Gauge, Histogram
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
@@ -108,6 +108,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._ignored_request_ids: Set[int] = set()
         # We fetch the requests and their status on the startup so this should be fairly accurate
         self.last_status_check_time: float = time.time()
+        self.tool_preparation_start_time = None
+        self.tool_execution_start_time = None
 
         # Prometheus metrics
         self.mech_pending_queue_len = Gauge(
@@ -142,6 +144,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "mech_tasks_inflight",
             "Current task in execution",
             labelnames=["request_id"],
+        )
+        self.tool_preparation_time = Histogram(
+            "tool_preparation_time",
+            "Duration taken by tool from preparation till execution",
+            labelnames=["tool", "request_id"],
+        )
+        self.tool_execution_time = Histogram(
+            "tool_execution_time",
+            "Duration taken by tool from execution till completion",
+            labelnames=["tool", "request_id"],
         )
 
     def setup(self) -> None:
@@ -404,6 +416,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self.params.in_flight_req = False
                 self.params.is_cold_start = False
                 self._last_deadline = None
+                # reset all times
+                self.tool_preparation_start_time = None
+                self.tool_execution_start_time = None
                 self._handle_timeout_task()
             return
 
@@ -412,6 +427,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 task_result = self._get_executing_task_result()
                 self._handle_done_task(task_result)
             elif self._has_executing_task_timed_out():
+                # reset all times
+                self.tool_preparation_start_time = None
+                self.tool_execution_start_time = None
                 self._handle_timeout_task()
             return
 
@@ -429,6 +447,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         else:
             task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
+        # Start the time counter to measure time taken to prepare the task
+        self.tool_preparation_start_time = time.perf_counter()
         self.mech_tasks_started_total.inc()
         # convert request id to int if it's bytes
         if type(task_data.get("requestId")) == bytes:
@@ -565,6 +585,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._keychain = keychain
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
+        # fetch the time duration for tool execution to complete
+        # if tool exec start time is None, set to current time
+        # it can be None if _prepare_task was not called due to other checks such as tool not valid
+        # or stepping in but tool not found or tool to pricing not found for dynamic mechs
+        tool_exec_time_duration = time.perf_counter() - (
+            self.tool_execution_start_time or time.perf_counter()
+        )
+        # reset the time counter used to measure time taken to execute the task
+        self.tool_execution_start_time = None
+        self.tool_execution_time.labels(tool, req_id).observe(tool_exec_time_duration)
+        # Start the time counter to measure time taken to deliver the task
+        self.tool_deliver_start_time = time.perf_counter()
         self.mech_tasks_completed_total.labels(tool).inc()
         reason = response["result"]
         if reason == "Invalid response":
@@ -659,6 +691,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._executing_task = None
             self._last_deadline = None
             self._async_result = None
+            # reset the time counter used to measure time taken to prepare the task
+            self.tool_preparation_start_time = None
             return
 
         if tool_name in self._tools_to_package_hash:
@@ -672,7 +706,22 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     self.context.logger.warning(reason)
                     self.mech_tasks_failed_total.labels(tool_name, reason).inc()
                     self._invalid_request = True
+                    # reset the time counter used to measure time taken to prepare the task
+                    self.tool_preparation_start_time = None
                     return
+
+            # fetch the time duration for tool preparation to complete
+            tool_prep_time_duration = (
+                time.perf_counter() - self.tool_preparation_start_time
+            )
+            # reset the time counter used to measure time taken to prepare the task
+            self.tool_preparation_start_time = None
+            rid = int(executing_task["requestId"])
+            self.tool_preparation_time.labels(tool_name, rid).observe(
+                tool_prep_time_duration
+            )
+            # Start the time counter to measure time taken to execute the task
+            self.tool_execution_start_time = time.perf_counter()
             self._prepare_task(task_data)
         else:
             # Unknown tool and we're the priority mech -> store stub (existing behavior)
@@ -681,6 +730,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.warning(reason)
             self.mech_tasks_failed_total.labels(tool_name, reason).inc()
             self._invalid_request = True
+            # reset the time counter used to measure time taken to prepare the task
+            self.tool_preparation_start_time = None
 
     def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
         """Submit a task."""
@@ -814,6 +865,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         mech_config = self.params.mech_to_config[mech_address.lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
+        # store the time the task was added to done task list
+        done_task["start_time"] = time.perf_counter()
         # pop the data key value as it's bytes which causes issues
         # with json dumps and not required anywhere
         done_task.pop("data", None)

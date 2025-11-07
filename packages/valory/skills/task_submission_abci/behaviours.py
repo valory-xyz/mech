@@ -276,6 +276,16 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             submitted_tasks = cast(
                 List[Dict[str, Any]], self.synchronized_data.done_tasks
             )
+            if len(submitted_tasks) > 0:
+                for task in submitted_tasks:
+                    req_id = task["request_id"]
+                    tool = task["tool"]
+                    start_time = task["start_time"]
+                    tool_delivery_time_duration = time.perf_counter() - start_time
+                    self.shared_state.tool_delivery_time.labels(tool, req_id).observe(
+                        tool_delivery_time_duration
+                    )
+
             self.context.logger.info(
                 f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}. "
                 f"Removing them from the list of tasks to be processed."
