@@ -27,6 +27,7 @@ from collections import defaultdict
 from copy import deepcopy
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
+from prometheus_client import Gauge, Histogram
 
 from aea.helpers.cid import CID, to_v1
 from multibase import multibase
@@ -220,9 +221,8 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         hex_multihash = multihash_bytes.hex()
         return hex_multihash[6:]
 
-    def set_gauge(self, metrics_name: str, value: int, **labels: Any) -> None:
+    def set_gauge(self, metric: Gauge, value: int, **labels: Any) -> None:
         """Set the Prometheus' guage metric"""
-        metric = getattr(self.shared_state, metrics_name)
         if labels:
             metric.labels(**labels).set_to_current_time()
             metric.labels(**labels).set(value)
@@ -230,9 +230,8 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
             metric.set_to_current_time()
             metric.set(value)
 
-    def observe_histogram(self, metrics_name: str, value: float, **labels: Any) -> None:
+    def observe_histogram(self, metric: Histogram, value: float, **labels: Any) -> None:
         """Observe the Prometheus' histogram metric"""
-        metric = getattr(self.shared_state, metrics_name)
         if labels:
             metric.labels(**labels).observe(value)
         else:
@@ -300,7 +299,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                     start_time = task["start_time"]
                     tool_delivery_time_duration = time.perf_counter() - start_time
                     self.observe_histogram(
-                        "tool_delivery_time",
+                        self.shared_state.tool_delivery_time,
                         tool_delivery_time_duration,
                         tool=tool,
                         request_id=req_id,
@@ -311,7 +310,9 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                     f"Block number for tx hash: {tx_hash} is {block_number}"
                 )
                 if block_number:
-                    self.set_gauge("mech_delivery_last_block_number", block_number)
+                    self.set_gauge(
+                        self.shared_state.mech_delivery_last_block_number, block_number
+                    )
 
             self.context.logger.info(
                 f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}. "
@@ -1135,7 +1136,9 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 )
                 return None
             self.set_gauge(
-                "mech_agent_balance", balance, chain=self.params.default_chain_id
+                self.shared_state.mech_agent_balance,
+                balance,
+                chain=self.params.default_chain_id,
             )
             balances[agent] = balance
 
