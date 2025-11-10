@@ -349,8 +349,9 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             self.context.logger.error("get_transaction_receipt unsuccessfull!!!")
             return None
 
-        block_number = cast(int, response["blockNumber"])
-        return block_number
+        if response.get("blockNumber"):
+            block_number = int(response["blockNumber"])
+            return block_number
 
 
 class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):
