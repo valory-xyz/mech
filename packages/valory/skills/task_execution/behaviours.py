@@ -482,9 +482,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         self.mech_metrics.set_gauge("mech_pending_queue_len", len(self.pending_tasks))
-        self.mech_metrics.set_gauge("mech_timed_out_queue_len", len(self.pending_tasks))
         self.mech_metrics.set_gauge(
-            "mech_wait_for_time_out_queue_len", len(self.pending_tasks)
+            "mech_timed_out_queue_len", len(self.timed_out_tasks)
+        )
+        self.mech_metrics.set_gauge(
+            "mech_wait_for_time_out_queue_len", len(self.wait_for_timeout_tasks)
         )
 
         if len(self.pending_tasks) == 0:
