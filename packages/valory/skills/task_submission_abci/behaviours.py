@@ -31,7 +31,6 @@ from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 from aea.helpers.cid import CID, to_v1
 from multibase import multibase
 from multicodec import multicodec
-from web3.constants import ADDRESS_ZERO
 
 from packages.valory.contracts.agent_mech.contract import (
     AgentMechContract,
@@ -221,7 +220,8 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         hex_multihash = multihash_bytes.hex()
         return hex_multihash[6:]
 
-    def set_gauge(self, metrics_name: str, value: int, **labels: Any):
+    def set_gauge(self, metrics_name: str, value: int, **labels: Any) -> None:
+        """Set the Prometheus' guage metric"""
         metric = getattr(self.shared_state, metrics_name)
         if labels:
             metric.labels(**labels).set_to_current_time()
@@ -230,7 +230,8 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
             metric.set_to_current_time()
             metric.set(value)
 
-    def observe_histogram(self, metrics_name: str, value: float, **labels: Any):
+    def observe_histogram(self, metrics_name: str, value: float, **labels: Any) -> None:
+        """Observe the Prometheus' histogram metric"""
         metric = getattr(self.shared_state, metrics_name)
         print(f"{labels=}")
         if labels:
@@ -344,8 +345,11 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             tx_digest=tx_hash,
             chain_id=self.params.default_chain_id,
         )
+        if not response:
+            self.context.logger.error("get_transaction_receipt unsuccessfull!!!")
+            return None
 
-        block_number = response["blockNumber"]
+        block_number = cast(int, response["blockNumber"])
         return block_number
 
 
@@ -1126,14 +1130,14 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         balances = {}
         for agent in self.synchronized_data.all_participants:
             balance = yield from self._get_balance(agent)
-            self.set_gauge(
-                "mech_agent_balance", balance, chain=self.params.default_chain_id
-            )
             if balance is None:
                 self.context.logger.warning(
                     f"Could not get balance for agent {agent}. Skipping re-funding."
                 )
                 return None
+            self.set_gauge(
+                "mech_agent_balance", balance, chain=self.params.default_chain_id
+            )
             balances[agent] = balance
 
         return balances

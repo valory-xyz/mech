@@ -103,6 +103,7 @@ class MechMetrics:
     tool_execution_time: Histogram = field(init=False)
 
     def __post_init__(self) -> None:
+        """Define Prometheus metrics"""
         self.mech_pending_queue_len = Gauge(
             "mech_pending_queue_len", "Total pending tasks in the mech agent"
         )
@@ -147,7 +148,8 @@ class MechMetrics:
             labelnames=["tool", "request_id"],
         )
 
-    def set_gauge(self, metrics_name: str, value: int, **labels: Any):
+    def set_gauge(self, metrics_name: str, value: int, **labels: Any) -> None:
+        """Set the Prometheus' guage metric"""
         metric = getattr(self, metrics_name)
         if labels:
             metric.labels(**labels).set_to_current_time()
@@ -156,14 +158,16 @@ class MechMetrics:
             metric.set_to_current_time()
             metric.set(value)
 
-    def inc_counter(self, metrics_name: str, value: float = 1, **labels: Any):
+    def inc_counter(self, metrics_name: str, value: float = 1, **labels: Any) -> None:
+        """Increment the Prometheus' counter metric"""
         metric = getattr(self, metrics_name)
         if labels:
             metric.labels(**labels).inc(value)
         else:
             metric.inc(value)
 
-    def observe_histogram(self, metrics_name: str, value: float, **labels: Any):
+    def observe_histogram(self, metrics_name: str, value: float, **labels: Any) -> None:
+        """Observe the Prometheus' histogram metric"""
         metric = getattr(self, metrics_name)
         print(f"{labels=}")
         if labels:
