@@ -87,22 +87,22 @@ class RequestType(Enum):
     MARKETPLACE = "marketplace"
 
 
-@dataclass
+@dataclass(init=False)
 class MechMetrics:
     """Prometheus Metrics for mech"""
 
-    mech_pending_queue_len: Gauge = field(init=False)
-    mech_timed_out_queue_len: Gauge = field(init=False)
-    mech_wait_for_time_out_queue_len: Gauge = field(init=False)
-    mech_tasks_started_total: Counter = field(init=False)
-    mech_tasks_completed_total: Counter = field(init=False)
-    mech_tasks_failed_total: Counter = field(init=False)
-    mech_tasks_timed_out_total: Counter = field(init=False)
-    mech_tasks_inflight: Gauge = field(init=False)
-    tool_preparation_time: Histogram = field(init=False)
-    tool_execution_time: Histogram = field(init=False)
+    mech_pending_queue_len: Gauge
+    mech_timed_out_queue_len: Gauge
+    mech_wait_for_time_out_queue_len: Gauge
+    mech_tasks_started_total: Counter
+    mech_tasks_completed_total: Counter
+    mech_tasks_failed_total: Counter
+    mech_tasks_timed_out_total: Counter
+    mech_tasks_inflight: Gauge
+    tool_preparation_time: Histogram
+    tool_execution_time: Histogram
 
-    def __post_init__(self) -> None:
+    def __init__(self) -> None:
         """Define Prometheus metrics"""
         self.mech_pending_queue_len = Gauge(
             "mech_pending_queue_len", "Total pending tasks in the mech agent"
@@ -169,7 +169,6 @@ class MechMetrics:
     def observe_histogram(self, metrics_name: str, value: float, **labels: Any) -> None:
         """Observe the Prometheus' histogram metric"""
         metric = getattr(self, metrics_name)
-        print(f"{labels=}")
         if labels:
             metric.labels(**labels).observe(value)
         else:
