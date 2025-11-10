@@ -85,6 +85,7 @@ ZERO_IPFS_HASH = (
 )
 FILENAME = "usage"
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+BLOCK_NUMBER_FIELD = "blockNumber"
 
 
 PAYMENT_TYPE_NATIVE = (
@@ -349,14 +350,20 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             self.context.logger.error("get_transaction_receipt unsuccessfull!!!")
             return None
 
-        if not response.get("blockNumber"):
-            self.context.logger.error(
-                f"get blockNumber unsuccessfull!!! from response: {response}"
+        block_number_raw = response.get(BLOCK_NUMBER_FIELD)
+        if block_number_raw is None:
+            self.context.logger.warning(
+                f"Missing {BLOCK_NUMBER_FIELD!r} in {response=}"
             )
             return None
 
-        block_number = int(response["blockNumber"])
-        return block_number
+        try:
+            return int(block_number_raw)
+        except (TypeError, ValueError):
+            self.context.logger.warning(
+                f"Invalid {BLOCK_NUMBER_FIELD!r} value: {block_number_raw}"
+            )
+            return None
 
 
 class DeliverBehaviour(TaskExecutionBaseBehaviour, ABC):
