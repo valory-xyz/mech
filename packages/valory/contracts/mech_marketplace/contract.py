@@ -615,17 +615,3 @@ class MechMarketplaceContract(Contract):
         logs = w3.get_logs(filter_params)
         entries = [get_event_data(w3.codec, event_abi, log) for log in logs]
         return entries
-
-    @classmethod
-    def get_block_number(
-        cls,
-        ledger_api: EthereumApi,
-        contract_address: str,
-        tx_hash: str,
-        **kwargs: Any,
-    ) -> JSONLike:
-        """Get the number of the block in which the tx of the given hash was settled."""
-        contract_address = ledger_api.api.to_checksum_address(contract_address)
-        receipt: TxReceipt = ledger_api.api.eth.get_transaction_receipt(tx_hash)
-        block = ledger_api.api.eth.get_block(receipt["blockNumber"])
-        return dict(number=block["number"])

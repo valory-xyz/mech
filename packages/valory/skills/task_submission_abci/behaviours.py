@@ -319,23 +319,12 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     def _fetch_tx_block_number(
         self, tx_hash: str
     ) -> Generator[None, None, Optional[int]]:
-        contract_api_msg = yield from self.get_contract_api_response(
-            performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
-            contract_address=ADDRESS_ZERO,
-            contract_id=str(MechMarketplaceContract.contract_id),
-            contract_callable="get_block_number",
-            tx_hash=tx_hash,
+        response = yield from self.get_transaction_receipt(
+            tx_digest=tx_hash,
             chain_id=self.params.default_chain_id,
         )
-        if (
-            contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
-            self.context.logger.warning(
-                f"get_block_number unsuccessful!: {contract_api_msg}"
-            )
-            return None
 
-        block_number = cast(int, contract_api_msg.state.body["number"])
+        block_number = response["blockNumber"]
         return block_number
 
 
