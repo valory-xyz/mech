@@ -24,7 +24,7 @@ import re
 import time
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Callable, Dict, List, Optional, Tuple, Union, cast
 from urllib.parse import urlparse
 
 from aea.protocols.base import Message
@@ -119,7 +119,6 @@ class HttpHandler(BaseHttpHandler):
         hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
-        metrics_url_regex = rf"{hostname_regex}\/metrics"
 
         # update the route for mech http handler
         routes_data = self.context.shared_state["routes_info"]
@@ -134,7 +133,6 @@ class HttpHandler(BaseHttpHandler):
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
                 (fetch_offchain_info, funcs[1]),
-                (metrics_url_regex, self._handle_get_metrics),
             ],
             (HttpMethod.POST.value,): [(send_signed_url, funcs[0])],
         }
@@ -406,26 +404,6 @@ class HttpHandler(BaseHttpHandler):
                 if self.last_successful_executed_task
                 else None
             ),
-        }
-
-        self._send_ok_response(http_msg, http_dialogue, data)
-
-    def _handle_get_metrics(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
-    ) -> None:
-        """
-        Handle a Http request of verb GET.
-
-        :param http_msg: the http message
-        :param http_dialogue: the http dialogue
-        """
-
-        data: Dict[str, Any] = {
-            PENDING_TASKS: len(self.context.shared_state[PENDING_TASKS]),
-            WAIT_FOR_TIMEOUT: len(self.context.shared_state[WAIT_FOR_TIMEOUT]),
-            TIMED_OUT_TASKS: len(self.context.shared_state[TIMED_OUT_TASKS]),
-            IPFS_TASKS: len(self.context.shared_state[IPFS_TASKS]),
-            DONE_TASKS: len(self.context.shared_state[DONE_TASKS]),
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)

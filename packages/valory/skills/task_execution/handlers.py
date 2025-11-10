@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
+from prometheus_client import start_http_server
 
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
@@ -54,6 +55,7 @@ WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
 TIMED_OUT_STATUS = 2
 WAIT_FOR_TIMEOUT_STATUS = 1
 DELIVERED_STATUS = 3
+PROMETHEUS_PORT = 9001
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -377,7 +379,13 @@ class MechHttpHandler(AbstractResponseHandler):
         }
         self.context.shared_state[IPFS_TASKS] = []
         self.json_content_header = "Content-Type: application/json\n"
+        self.start_prometheus_server()
         super().setup()
+
+    def start_prometheus_server(self) -> None:
+        """Starts the prometheus server"""
+        start_http_server(PROMETHEUS_PORT)
+        self.context.logger.info(f"Started Prometheus server on {PROMETHEUS_PORT}")
 
     def _handle_signed_requests(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

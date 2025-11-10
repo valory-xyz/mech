@@ -8,11 +8,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeiah6thqq7o6cful44nlditq7pwmurtzl7j2effln4jguuxly7gp2e
+  behaviours.py: bafybeihxmaqbxnn52s43iaa4pb7d4qf4wybwpeyqmthunsgjqrt6zpjebi
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeieheuv55gkg4amr654xlmoz3nmvptyedkbm2aesb65uxevpqkfnpy
+  models.py: bafybeidrmeove6zoaeurjthx4fydax75netij3tx2sgs2xruofdeqbsl4q
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
   rounds.py: bafybeig7rio35qvs25lvnyfeehazcdiosvnsb7mloh2agdwvoqx3ncybau
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
@@ -22,8 +22,8 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeibxtrcvqusp5qkcnqyrzxpb4onpxt25vzcfs5uigkkreaikr7mlmm
-- valory/mech_marketplace:0.1.0:bafybeiarkde66oeccn2smfofo2mqn2fyqrxu3aylm4n26ht2d4dqci3nly
+- valory/agent_mech:0.1.0:bafybeiffr6x5e33twgvvhsrbvf3u6mmey36abrv7bk3nztbtbcx56vgzsu
+- valory/mech_marketplace:0.1.0:bafybeibwrpdf3s4xhnnj4lrd2vta5o2ghrnzlvbpxndg7cadft5bmdgkzu
 - valory/complementary_service_metadata:0.1.0:bafybeibu65wpdsbrbrt2wnf2lr3psy26jiaomyjkg4twbupve7o3kso2aa
 - valory/gnosis_safe:0.1.0:bafybeibjpgpvyvkqeugr7yv4ijze365legdwc5exvaedak7druv646qowe
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
@@ -38,7 +38,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia7lzwbmcmf3u7mn3673345klkyyp7ln62gqx6hcqlbjracxmrqlm
 - valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
-- valory/task_execution:0.1.0:bafybeicq75m6m4tpuxfhw2r4xld6nkhm6tu2bk5uwr4gpbffkcmep62uga
+- valory/task_execution:0.1.0:bafybeiclwfsewoyfw2ub2p3z7vtqjur6h2wagmcb5jitp3kbblkfk2evva
 behaviours:
   main:
     args: {}
@@ -175,8 +175,12 @@ models:
     args: {}
     class_name: TendermintDialogues
 dependencies:
+  web3:
+    version: <7,>=6.0.0
   py-multibase:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
+  prometheus_client:
+    version: ==0.23.1
 is_abstract: true
