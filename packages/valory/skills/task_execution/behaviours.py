@@ -627,9 +627,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _get_executing_task_result(self) -> Any:
         """Get the executing task result (convert Pebble errors to your 5-tuple)."""
-        if self._executing_task is None or self._async_result is None:
-            return None
-        if self._invalid_request:
+        if self._executing_task is None or self._async_result is None or self._invalid_request:
             return None
 
         try:
