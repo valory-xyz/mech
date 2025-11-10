@@ -233,7 +233,6 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     def observe_histogram(self, metrics_name: str, value: float, **labels: Any) -> None:
         """Observe the Prometheus' histogram metric"""
         metric = getattr(self.shared_state, metrics_name)
-        print(f"{labels=}")
         if labels:
             metric.labels(**labels).observe(value)
         else:
