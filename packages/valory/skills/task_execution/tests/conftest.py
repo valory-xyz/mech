@@ -26,6 +26,7 @@ from collections import defaultdict
 from concurrent.futures import Future
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Tuple
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -152,6 +153,10 @@ def context_stub(
         def cleanup(self) -> None:
             """No-op cleanup."""
             return None
+
+        def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
+            """No-op create. Return mock (msg, dlg)"""
+            return MagicMock(a), MagicMock(k)
 
     class _IpfsDLG(_DLG):
         """IPFS dialogue stub with update/create helpers."""

@@ -222,7 +222,13 @@ class ContractHandler(BaseHandler):
             return
 
         body = contract_api_msg.state.body
-        self._handle_get_undelivered_reqs(body)
+        if body.get("data"):
+            # handle the undelivered requests response
+            self._handle_get_undelivered_reqs(body)
+        if body.get("request_ids"):
+            # handle the request id status check response
+            self._update_pending_list(body)
+
         self.params.in_flight_req = False
         self.set_was_last_read_successful(True)
         self.on_message_handled(message)
@@ -257,6 +263,15 @@ class ContractHandler(BaseHandler):
         self.filter_requests(reqs)
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
+        )
+
+    def _update_pending_list(self, body: Dict[str, List]) -> None:
+        self.context.shared_state[PENDING_TASKS] = [
+            req for req in self.pending_tasks if req["requestId"] in body["request_ids"]
+        ]
+        _len = len(self.pending_tasks)
+        self.context.logger.info(
+            f"Updated pending list based on status, Updated pending tasks len: {_len}"
         )
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
