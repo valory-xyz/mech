@@ -45,7 +45,6 @@ def clear_registry() -> None:
 @pytest.fixture(autouse=True)
 def cleanup() -> Generator[None, None, None]:
     """Clears the Prometheus registry after each tests"""
-    clear_registry()
     yield
     clear_registry()
 
