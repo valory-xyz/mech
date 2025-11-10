@@ -27,11 +27,11 @@ from collections import defaultdict
 from copy import deepcopy
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
-from prometheus_client import Gauge, Histogram
 
 from aea.helpers.cid import CID, to_v1
 from multibase import multibase
 from multicodec import multicodec
+from prometheus_client import Gauge, Histogram
 
 from packages.valory.contracts.agent_mech.contract import (
     AgentMechContract,
