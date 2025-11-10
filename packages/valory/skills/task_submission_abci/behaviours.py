@@ -221,6 +221,23 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         hex_multihash = multihash_bytes.hex()
         return hex_multihash[6:]
 
+    def set_gauge(self, metrics_name: str, value: int, **labels: Any):
+        metric = getattr(self.shared_state, metrics_name)
+        if labels:
+            metric.labels(**labels).set_to_current_time()
+            metric.labels(**labels).set(value)
+        else:
+            metric.set_to_current_time()
+            metric.set(value)
+
+    def observe_histogram(self, metrics_name: str, value: float, **labels: Any):
+        metric = getattr(self.shared_state, metrics_name)
+        print(f"{labels=}")
+        if labels:
+            metric.labels(**labels).observe(value)
+        else:
+            metric.observe(value)
+
 
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     """TaskPoolingBehaviour"""
@@ -282,21 +299,25 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                     tool = task["tool"]
                     start_time = task["start_time"]
                     tool_delivery_time_duration = time.perf_counter() - start_time
-                    self.shared_state.tool_delivery_time.labels(tool, req_id).observe(
-                        tool_delivery_time_duration
+                    self.observe_histogram(
+                        "tool_delivery_time",
+                        tool_delivery_time_duration,
+                        tool=tool,
+                        request_id=req_id,
                     )
+
+                block_number = yield from self._fetch_tx_block_number(tx_hash)
+                self.context.logger.info(
+                    f"Block number for tx hash: {tx_hash} is {block_number}"
+                )
+                if block_number:
+                    self.set_gauge("mech_delivery_last_block_number", block_number)
 
             self.context.logger.info(
                 f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}. "
                 f"Removing them from the list of tasks to be processed."
             )
-            block_number = yield from self._fetch_tx_block_number(tx_hash)
-            self.context.logger.info(
-                f"Block number for tx hash: {tx_hash} is {block_number}"
-            )
-            if block_number:
-                self.shared_state.mech_delivery_last_block_number.set_to_current_time()
-                self.shared_state.mech_delivery_last_block_number.set(block_number)
+
             self.remove_tasks(submitted_tasks)
 
     def check_last_tx_status(self) -> Tuple[bool, str]:
@@ -1105,12 +1126,9 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         balances = {}
         for agent in self.synchronized_data.all_participants:
             balance = yield from self._get_balance(agent)
-            self.shared_state.mech_agent_balance.labels(
-                self.params.default_chain_id
-            ).set_to_current_time()
-            self.shared_state.mech_agent_balance.labels(
-                self.params.default_chain_id
-            ).set(balance)
+            self.set_gauge(
+                "mech_agent_balance", balance, chain=self.params.default_chain_id
+            )
             if balance is None:
                 self.context.logger.warning(
                     f"Could not get balance for agent {agent}. Skipping re-funding."
