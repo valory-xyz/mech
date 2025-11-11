@@ -271,9 +271,8 @@ class ContractHandler(BaseHandler):
         self.context.shared_state[PENDING_TASKS] = [
             req for req in self.pending_tasks if req["requestId"] in body["request_ids"]
         ]
-        pending_tasks_len = len(self.pending_tasks)
         self.context.logger.info(
-            f"Updated pending list based on status. There are {pending_tasks_len} pending tasks now."
+            f"Updated pending list based on status. There are {len(self.pending_tasks)} pending tasks now."
         )
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
