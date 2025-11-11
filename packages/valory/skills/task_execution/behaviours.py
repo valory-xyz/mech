@@ -23,8 +23,6 @@ import json
 import threading
 import time
 from asyncio import Future
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures.process import BrokenProcessPool
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
@@ -34,6 +32,7 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
+from pebble import ProcessPool
 from prometheus_client import Counter, Gauge, Histogram
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
@@ -179,7 +178,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Initialise the agent."""
         super().__init__(**kwargs)
         # we only want to execute one task at a time, for the time being
-        self._executor = ProcessPoolExecutor(max_workers=1)
+        self._executor = ProcessPool(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
         self._tools_to_package_hash: Dict[str, str] = {}
         self._tools_to_pricing: Dict[str, int] = {}
@@ -307,21 +306,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id,
             time.time(),
         )
-
-    def _get_executing_task_result(self) -> Any:
-        """Get the executing task result."""
-        if self._executing_task is None:
-            raise ValueError("Executing task is None")
-        if self._invalid_request:
-            return None
-        try:
-            async_result = cast(Future, self._async_result)
-            return async_result.result()
-        except Exception as e:  # pylint: disable=broad-except
-            self.context.logger.error(
-                "Exception raised while executing task: {}".format(str(e))
-            )
-            return None
 
     def _download_tools(self) -> None:
         """Download tools."""
@@ -669,9 +653,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _restart_executor(self) -> None:
         """Restarts the executor."""
-        self._executor.shutdown(wait=False)
+        self._executor.stop()
+        self._executor.join()
         # create a new executor
-        self._executor = ProcessPoolExecutor(max_workers=1)
+        self._executor = ProcessPool(max_workers=1)
 
     def _handle_timeout_task(self) -> None:
         """Handle timeout tasks"""
@@ -812,16 +797,42 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # reset the time counter used to measure time taken to prepare the task
             self.tool_preparation_start_time = 0.0
 
-    def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
-        """Submit a task."""
+    def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        """Submit a task with a hard per-call timeout via Pebble."""
         try:
-            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
-        except BrokenProcessPool:
+            return self._executor.schedule(  # type: ignore[attr-defined]
+                fn,
+                args=args,
+                kwargs=kwargs,
+                timeout=float(self.params.task_deadline),
+            )
+        except Exception:
             self.context.logger.warning("Executor is broken. Restarting...")
-            # restart the executor
             self._restart_executor()
-            # try to run the task again
-            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
+            return self._executor.schedule(  # type: ignore[attr-defined]
+                fn,
+                args=args,
+                kwargs=kwargs,
+                timeout=float(self.params.task_deadline),
+            )
+
+    def _get_executing_task_result(self) -> Any:
+        """Get the executing task result (convert Pebble errors to your 5-tuple)."""
+        if (
+            self._executing_task is None
+            or self._async_result is None
+            or self._invalid_request
+        ):
+            return None
+
+        try:
+            fut = cast(Any, self._async_result)
+            return fut.result()
+        except TimeoutError as e:
+            self.context.logger.warning(f"Task expired: {e}")
+        except Exception as e:
+            self.context.logger.error(f"Exception during task: {e}")
+        return None
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
