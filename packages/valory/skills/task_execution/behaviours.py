@@ -516,12 +516,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if self.last_status_check + STATUS_CHECK_INTERVAL > time.time():
             return
 
-        _len = len(self.pending_tasks)
+        pending_tasks_len = len(self.pending_tasks)
         # no pending tasks to check
-        if _len == 0:
+        if pending_tasks_len == 0:
             return
 
-        self.context.logger.info(f"Checking request_id status of {_len} pending tasks")
+        self.context.logger.info(
+            f"Checking request_id status of {pending_tasks_len} pending tasks"
+        )
         pending_tasks_request_ids = [t["requestId"] for t in self.pending_tasks]
 
         contract_api_msg, _ = self.context.contract_dialogues.create(
