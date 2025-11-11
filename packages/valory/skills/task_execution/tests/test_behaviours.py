@@ -251,9 +251,6 @@ def test_broken_process_pool_restart(
 ) -> None:
     """Restart Pebble pool and retry when schedule() raises once."""
 
-    import json
-    from types import SimpleNamespace
-
     patch_ipfs_multihash()
     disable_polling()
 
