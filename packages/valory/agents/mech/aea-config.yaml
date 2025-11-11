@@ -15,14 +15,14 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeic6ayusdwy4dks75njwk32ac7ur7salgllwf4fdc34ue5z2k5iz4q
 - valory/websocket_client:0.1.0:bafybeic4ag3gqc7kd3k2o3pucddj2odck5yrfbgmwh5veqny7zao5qayli
 contracts:
-- valory/agent_mech:0.1.0:bafybeihes4znnsy7krg7iaf5io5esvt3elicbpdxgn3tmsrcjztzhmibzm
+- valory/agent_mech:0.1.0:bafybeiffr6x5e33twgvvhsrbvf3u6mmey36abrv7bk3nztbtbcx56vgzsu
 - valory/complementary_service_metadata:0.1.0:bafybeibu65wpdsbrbrt2wnf2lr3psy26jiaomyjkg4twbupve7o3kso2aa
 - valory/gnosis_safe:0.1.0:bafybeibjpgpvyvkqeugr7yv4ijze365legdwc5exvaedak7druv646qowe
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeihmjoncn5gkgp64cpkzabwh4pxr4iarddsfdhpxevsdpvcwjtcvsq
 - valory/hash_checkpoint:0.1.0:bafybeiaqnq2wmk4d2skbsh53rek5qncvygclxr3ktenc246qovth5emupe
 - valory/multisend:0.1.0:bafybeig5byt5urg2d2bsecufxe5ql7f4mezg3mekfleeh32nmuusx66p4y
 - valory/service_registry:0.1.0:bafybeiauvchyehaks6pxnk4b6u5sfduwjnbqjm6br4ie5vhna25nzgkcky
-- valory/mech_marketplace:0.1.0:bafybeibkb7tkt5khbwtiedyru2bm3xsd3qrkv3747nhyzls4gveqklvpgm
+- valory/mech_marketplace:0.1.0:bafybeibwrpdf3s4xhnnj4lrd2vta5o2ghrnzlvbpxndg7cadft5bmdgkzu
 - valory/balance_tracker:0.1.0:bafybeign3mbjn5lpvqz6hght3f3slex7tplulyzub5w3zfe7zvpor4lv6q
 - valory/erc20:0.1.0:bafybeiblm2r2opxkqom3hb3qsmm746r55ujx44jh3plrip45p5sekdnnvi
 protocols:
@@ -41,12 +41,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeic6kmfomxsx3x6lpx2viw74yyypcqqqdz3x66ljqboskg7opwd63u
 - valory/abstract_round_abci:0.1.0:bafybeia7lzwbmcmf3u7mn3673345klkyyp7ln62gqx6hcqlbjracxmrqlm
 - valory/contract_subscription:0.1.0:bafybeiefuemlp75obgpxrp6iuleb3hn6vcviwh5oetk5djbuprf4xsmgjy
-- valory/mech_abci:0.1.0:bafybeidcnjojtefosdu3yqzfrvpnw75wr3fekrdjfxx6efcnlwfewp742u
+- valory/mech_abci:0.1.0:bafybeibhjva4jrtnzl4o6iup6ihzcloo3quy6o6g55n47qb6xfuah546iu
 - valory/registration_abci:0.1.0:bafybeigoomgcphpjc32wlx5j3fjm27bgiw4o7hqtj62hv54hpwtfbvxkma
 - valory/reset_pause_abci:0.1.0:bafybeigtq7etpplx2yjdobrutv2fwosc7jw5etfb44n44nexciicrs7m4i
-- valory/delivery_rate_abci:0.1.0:bafybeidwdkwg4pqvtxy2hivyxh7tdrc3wff6hyq4ik72zykbwoujrpm22e
-- valory/task_execution:0.1.0:bafybeihuueb3ehqqkimpplrcbwwmobl4cqid26cksrg4wxj36d57rr72re
-- valory/task_submission_abci:0.1.0:bafybeig5nh5np63i4nx2fmud6gqil4fwrg6klqkldqq6lfyvu6l2jdczti
+- valory/delivery_rate_abci:0.1.0:bafybeibhotak73bsqz4ru6gnymiscalcwulocvtkkwuswr74lnllrox44u
+- valory/task_execution:0.1.0:bafybeigxbdbmrdcex3phttmxid5miqt4dwycc5di3u6t56igak4tceflly
+- valory/task_submission_abci:0.1.0:bafybeihnkuoftnuwmaoac7ihgl6rdzv52akj5mwtkpvii54cuomgz6pipy
 - valory/termination_abci:0.1.0:bafybeiam7v3kicazjq6rr3ijjc5nsqzp4sjrysmsevnxbhiqdv6ltyxope
 - valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
 - valory/websocket_client:0.1.0:bafybeif7rrvsu6z4evqkhblxj3u6wwv2eqou576hgkyoehxuj7cntw7o2m
@@ -88,6 +88,8 @@ dependencies:
     version: ==1.65.0
   typing_extensions:
     version: ==4.12.2
+  pebble:
+    version: ==5.1.3
 customs: []
 default_connection: null
 ---
