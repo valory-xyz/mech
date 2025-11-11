@@ -23,10 +23,30 @@ import json
 import time
 from concurrent.futures import Future
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, Generator, Tuple
 from unittest.mock import MagicMock
 
+import pytest
+from prometheus_client import REGISTRY
+
 import packages.valory.skills.task_execution.behaviours as beh_mod
+
+
+def clear_registry() -> None:
+    """Clears the Prometheus registry"""
+    collectors = list(REGISTRY._names_to_collectors.values())
+    for collector in collectors:
+        try:
+            REGISTRY.unregister(collector)
+        except KeyError:
+            pass
+
+
+@pytest.fixture(autouse=True)
+def cleanup() -> Generator[None, None, None]:
+    """Clears the Prometheus registry after each tests"""
+    yield
+    clear_registry()
 
 
 def test_happy_path_executes_and_stores(
