@@ -139,12 +139,12 @@ class MechMetrics:
         self.tool_preparation_time = Histogram(
             "tool_preparation_time",
             "Duration taken by tool from preparation till execution",
-            labelnames=["tool", "request_id"],
+            labelnames=["tool"],
         )
         self.tool_execution_time = Histogram(
             "tool_execution_time",
             "Duration taken by tool from execution till completion",
-            labelnames=["tool", "request_id"],
+            labelnames=["tool"],
         )
 
     def set_gauge(self, metric: Gauge, value: int, **labels: Any) -> None:
@@ -627,13 +627,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         tool_exec_time_duration = time.perf_counter() - (
             self.tool_execution_start_time or time.perf_counter()
         )
+        self.context.logger.info(
+            f"Request id: {req_id} with tool: {tool} took {tool_exec_time_duration} seconds to complete execution"
+        )
         # reset the time counter used to measure time taken to execute the task
         self.tool_execution_start_time = 0.0
         self.mech_metrics.observe_histogram(
             self.mech_metrics.tool_execution_time,
             tool_exec_time_duration,
             tool=tool,
-            request_id=req_id,
         )
         # Start the time counter to measure time taken to deliver the task
         self.tool_deliver_start_time = time.perf_counter()
@@ -769,18 +771,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     self.tool_preparation_start_time = 0.0
                     return
 
+            rid = int(executing_task["requestId"])
             # fetch the time duration for tool preparation to complete
             tool_prep_time_duration = (
                 time.perf_counter() - self.tool_preparation_start_time
             )
+            self.context.logger.info(
+                f"Request id: {rid} with tool: {tool_name} took {tool_prep_time_duration} seconds to prepare"
+            )
             # reset the time counter used to measure time taken to prepare the task
             self.tool_preparation_start_time = 0.0
-            rid = int(executing_task["requestId"])
             self.mech_metrics.observe_histogram(
                 self.mech_metrics.tool_preparation_time,
                 tool_prep_time_duration,
                 tool=tool_name,
-                request_id=rid,
             )
             # Start the time counter to measure time taken to execute the task
             self.tool_execution_start_time = time.perf_counter()
