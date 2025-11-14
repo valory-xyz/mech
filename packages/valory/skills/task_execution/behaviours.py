@@ -98,8 +98,8 @@ class MechMetrics:
     mech_tasks_failed_total: Counter
     mech_tasks_timed_out_total: Counter
     mech_tasks_inflight: Gauge
-    tool_preparation_time: Histogram
-    tool_execution_time: Histogram
+    mech_tool_preparation_time: Histogram
+    mech_tool_execution_time: Histogram
 
     def __init__(self) -> None:
         """Define Prometheus metrics"""
@@ -134,15 +134,14 @@ class MechMetrics:
         self.mech_tasks_inflight = Gauge(
             "mech_tasks_inflight",
             "Current task in execution",
-            labelnames=["request_id"],
         )
-        self.tool_preparation_time = Histogram(
-            "tool_preparation_time",
+        self.mech_tool_preparation_time = Histogram(
+            "mech_tool_preparation_time",
             "Duration taken by tool from preparation till execution",
             labelnames=["tool"],
         )
-        self.tool_execution_time = Histogram(
-            "tool_execution_time",
+        self.mech_tool_execution_time = Histogram(
+            "mech_tool_execution_time",
             "Duration taken by tool from execution till completion",
             labelnames=["tool"],
         )
@@ -489,7 +488,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         request_id = task_data["requestId"]
         self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_tasks_inflight, 1, request_id=request_id
+            self.mech_metrics.mech_tasks_inflight,
+            request_id,
         )
         delivery_rate = task_data["request_delivery_rate"]
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
@@ -633,7 +633,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # reset the time counter used to measure time taken to execute the task
         self.tool_execution_start_time = 0.0
         self.mech_metrics.observe_histogram(
-            self.mech_metrics.tool_execution_time,
+            self.mech_metrics.mech_tool_execution_time,
             tool_exec_time_duration,
             tool=tool,
         )
@@ -668,7 +668,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         req_id = executing_task.get("requestId", None)
         # Prometheus has no way to remove/clear metrics, so we set to default 0
         self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_tasks_inflight, 0, request_id=req_id
+            self.mech_metrics.mech_tasks_inflight,
+            0,
         )
         tool = executing_task.get("tool", None)
         self.count_timeout(req_id)
@@ -743,7 +744,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             # Prometheus has no way to remove/clear metrics, so we set to default 0
             self.mech_metrics.set_gauge(
-                self.mech_metrics.mech_tasks_inflight, 0, request_id=rid
+                self.mech_metrics.mech_tasks_inflight,
+                0,
             )
             self._executing_task = None
             self._last_deadline = None
@@ -782,7 +784,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # reset the time counter used to measure time taken to prepare the task
             self.tool_preparation_start_time = 0.0
             self.mech_metrics.observe_histogram(
-                self.mech_metrics.tool_preparation_time,
+                self.mech_metrics.mech_tool_preparation_time,
                 tool_prep_time_duration,
                 tool=tool_name,
             )
@@ -937,7 +939,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             # Prometheus has no way to remove/clear metrics, so we set to default 0
             self.mech_metrics.set_gauge(
-                self.mech_metrics.mech_tasks_inflight, 0, request_id=req_id
+                self.mech_metrics.mech_tasks_inflight,
+                0,
             )
             self._executing_task = None
             self._done_task = None
@@ -973,7 +976,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         # Prometheus has no way to remove/clear metrics, so we set to default 0
         self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_tasks_inflight, 0, request_id=req_id
+            self.mech_metrics.mech_tasks_inflight,
+            0,
         )
 
         # reset tasks
