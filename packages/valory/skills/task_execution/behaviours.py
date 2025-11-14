@@ -98,8 +98,8 @@ class MechMetrics:
     mech_tasks_failed_total: Counter
     mech_tasks_timed_out_total: Counter
     mech_tasks_inflight: Gauge
-    tool_preparation_time: Histogram
-    tool_execution_time: Histogram
+    mech_tool_preparation_time: Histogram
+    mech_tool_execution_time: Histogram
 
     def __init__(self) -> None:
         """Define Prometheus metrics"""
@@ -135,13 +135,13 @@ class MechMetrics:
             "mech_tasks_inflight",
             "Current task in execution",
         )
-        self.tool_preparation_time = Histogram(
-            "tool_preparation_time",
+        self.mech_tool_preparation_time = Histogram(
+            "mech_tool_preparation_time",
             "Duration taken by tool from preparation till execution",
             labelnames=["tool"],
         )
-        self.tool_execution_time = Histogram(
-            "tool_execution_time",
+        self.mech_tool_execution_time = Histogram(
+            "mech_tool_execution_time",
             "Duration taken by tool from execution till completion",
             labelnames=["tool"],
         )
@@ -633,7 +633,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # reset the time counter used to measure time taken to execute the task
         self.tool_execution_start_time = 0.0
         self.mech_metrics.observe_histogram(
-            self.mech_metrics.tool_execution_time,
+            self.mech_metrics.mech_tool_execution_time,
             tool_exec_time_duration,
             tool=tool,
         )
@@ -784,7 +784,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # reset the time counter used to measure time taken to prepare the task
             self.tool_preparation_start_time = 0.0
             self.mech_metrics.observe_histogram(
-                self.mech_metrics.tool_preparation_time,
+                self.mech_metrics.mech_tool_preparation_time,
                 tool_prep_time_duration,
                 tool=tool_name,
             )
