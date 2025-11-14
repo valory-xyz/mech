@@ -134,7 +134,6 @@ class MechMetrics:
         self.mech_tasks_inflight = Gauge(
             "mech_tasks_inflight",
             "Current task in execution",
-            labelnames=["request_id"],
         )
         self.tool_preparation_time = Histogram(
             "tool_preparation_time",
@@ -489,7 +488,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         request_id = task_data["requestId"]
         self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_tasks_inflight, 1, request_id=request_id
+            self.mech_metrics.mech_tasks_inflight,
+            request_id,
         )
         delivery_rate = task_data["request_delivery_rate"]
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
@@ -668,7 +668,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         req_id = executing_task.get("requestId", None)
         # Prometheus has no way to remove/clear metrics, so we set to default 0
         self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_tasks_inflight, 0, request_id=req_id
+            self.mech_metrics.mech_tasks_inflight,
+            0,
         )
         tool = executing_task.get("tool", None)
         self.count_timeout(req_id)
@@ -743,7 +744,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             # Prometheus has no way to remove/clear metrics, so we set to default 0
             self.mech_metrics.set_gauge(
-                self.mech_metrics.mech_tasks_inflight, 0, request_id=rid
+                self.mech_metrics.mech_tasks_inflight,
+                0,
             )
             self._executing_task = None
             self._last_deadline = None
@@ -937,7 +939,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             # Prometheus has no way to remove/clear metrics, so we set to default 0
             self.mech_metrics.set_gauge(
-                self.mech_metrics.mech_tasks_inflight, 0, request_id=req_id
+                self.mech_metrics.mech_tasks_inflight,
+                0,
             )
             self._executing_task = None
             self._done_task = None
@@ -973,7 +976,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         # Prometheus has no way to remove/clear metrics, so we set to default 0
         self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_tasks_inflight, 0, request_id=req_id
+            self.mech_metrics.mech_tasks_inflight,
+            0,
         )
 
         # reset tasks
