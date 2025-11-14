@@ -299,11 +299,13 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                     tool = task["tool"]
                     start_time = task["start_time"]
                     tool_delivery_time_duration = time.perf_counter() - start_time
+                    self.context.logger.info(
+                        f"Request id: {req_id} with tool: {tool} took {tool_delivery_time_duration} seconds to complete delivery"
+                    )
                     self.observe_histogram(
                         self.shared_state.tool_delivery_time,
                         tool_delivery_time_duration,
                         tool=tool,
-                        request_id=req_id,
                     )
 
                 block_number = yield from self._fetch_tx_block_number(tx_hash)

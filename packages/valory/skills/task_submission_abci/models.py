@@ -53,7 +53,7 @@ class SharedState(BaseSharedState):
     tool_delivery_time = Histogram(
         "tool_delivery_time",
         "Duration taken by tool from completion till delivery",
-        labelnames=["tool", "request_id"],
+        labelnames=["tool"],
     )
 
 

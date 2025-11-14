@@ -8,11 +8,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeihxmaqbxnn52s43iaa4pb7d4qf4wybwpeyqmthunsgjqrt6zpjebi
+  behaviours.py: bafybeifjuahfqffvysxpceaaub3i6dx26q4xhf5bdj5ddsqbq3tigsuxu4
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
-  models.py: bafybeidrmeove6zoaeurjthx4fydax75netij3tx2sgs2xruofdeqbsl4q
+  models.py: bafybeia6wk67ekero2er2odehoc22uiaxjimfrs56hpl4ic2zqblqlmini
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
   rounds.py: bafybeig7rio35qvs25lvnyfeehazcdiosvnsb7mloh2agdwvoqx3ncybau
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
@@ -38,7 +38,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeia7lzwbmcmf3u7mn3673345klkyyp7ln62gqx6hcqlbjracxmrqlm
 - valory/transaction_settlement_abci:0.1.0:bafybeigjp3sj5aqemttht63vsewozsfxblx66ekez6vm5lnycd4lgwghda
-- valory/task_execution:0.1.0:bafybeieago5bcwszd4doony2i2jgd7aktdr5phv45boilmkj4gvkisghre
+- valory/task_execution:0.1.0:bafybeiaaavhena4vzj6qv45hizbflmtx2r4h2ijox72ufy5fs7r7mqldiy
 behaviours:
   main:
     args: {}
