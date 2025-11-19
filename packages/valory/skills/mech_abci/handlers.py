@@ -362,7 +362,7 @@ class HttpHandler(BaseHttpHandler):
         )
 
         # ---- Backlog awareness (best-effort) -------------------------------------
-        def _len_or_zero(v):
+        def _len_or_zero(v) -> int:
             if v is None:
                 return 0
             if isinstance(v, int):
