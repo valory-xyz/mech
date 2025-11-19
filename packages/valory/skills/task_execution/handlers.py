@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
+from prometheus_client import start_http_server
 
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
@@ -54,6 +55,7 @@ WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
 TIMED_OUT_STATUS = 2
 WAIT_FOR_TIMEOUT_STATUS = 1
 DELIVERED_STATUS = 3
+PROMETHEUS_PORT = 9000
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -222,7 +224,13 @@ class ContractHandler(BaseHandler):
             return
 
         body = contract_api_msg.state.body
-        self._handle_get_undelivered_reqs(body)
+        if body.get("data"):
+            # handle the undelivered requests response
+            self._handle_get_undelivered_reqs(body)
+        if body.get("request_ids"):
+            # handle the request id status check response
+            self._update_pending_list(body)
+
         self.params.in_flight_req = False
         self.set_was_last_read_successful(True)
         self.on_message_handled(message)
@@ -257,6 +265,14 @@ class ContractHandler(BaseHandler):
         self.filter_requests(reqs)
         self.context.logger.info(
             f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
+        )
+
+    def _update_pending_list(self, body: Dict[str, List]) -> None:
+        self.context.shared_state[PENDING_TASKS] = [
+            req for req in self.pending_tasks if req["requestId"] in body["request_ids"]
+        ]
+        self.context.logger.info(
+            f"Updated pending list based on status. There are {len(self.pending_tasks)} pending tasks now."
         )
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
@@ -362,7 +378,13 @@ class MechHttpHandler(AbstractResponseHandler):
         }
         self.context.shared_state[IPFS_TASKS] = []
         self.json_content_header = "Content-Type: application/json\n"
+        self.start_prometheus_server()
         super().setup()
+
+    def start_prometheus_server(self) -> None:
+        """Starts the prometheus server"""
+        start_http_server(PROMETHEUS_PORT)
+        self.context.logger.info(f"Started Prometheus server on {PROMETHEUS_PORT}")
 
     def _handle_signed_requests(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
