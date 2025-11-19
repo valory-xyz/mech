@@ -24,6 +24,7 @@ import time
 import urllib.parse
 from types import SimpleNamespace
 from typing import Any, Dict, List
+from unittest.mock import MagicMock
 
 import packages.valory.skills.task_execution.handlers as hmod
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -308,9 +309,13 @@ def make_http_msg(body_dict: Dict[str, str], headers: str = "") -> SimpleNamespa
     )
 
 
-def test_signed_requests_success(handler_context: Any, http_dialogue: Any) -> None:
+def test_signed_requests_success(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
     """Enqueue off-chain request & respond 200 on valid signed POST."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    # patch prometheus server to bypass port in use error and not relevant to these tests
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
     ipfs_hash: str = "0x" + "ab" * 64
@@ -338,9 +343,13 @@ def test_signed_requests_success(handler_context: Any, http_dialogue: Any) -> No
     assert data["request_id"] == "req-1"
 
 
-def test_signed_requests_bad_request(handler_context: Any, http_dialogue: Any) -> None:
+def test_signed_requests_bad_request(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
     """Return HTTP 400 when required POST fields are missing."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    # patch prometheus server to bypass port in use error and not relevant to these tests
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
     http_msg: Any = make_http_msg({"only": "one"})
@@ -351,10 +360,12 @@ def test_signed_requests_bad_request(handler_context: Any, http_dialogue: Any) -
 
 
 def test_fetch_offchain_request_info_found(
-    handler_context: Any, http_dialogue: Any
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
     """Return stored result for an off-chain request when present."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    # patch prometheus server to bypass port in use error and not relevant to these tests
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
     handler_context.shared_state["ready_tasks"].append(
@@ -370,10 +381,12 @@ def test_fetch_offchain_request_info_found(
 
 
 def test_fetch_offchain_request_info_not_found(
-    handler_context: Any, http_dialogue: Any
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
     """Return empty JSON when no off-chain result exists for the given request_id."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    # patch prometheus server to bypass port in use error and not relevant to these tests
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
     http_msg: Any = make_http_msg({"request_id": "missing"})
@@ -534,4 +547,134 @@ def test_contract_handler_timed_out_then_delivered_updates_list(
     assert len(ch.timed_out_tasks) == 0
     assert len(ch.pending_tasks) == 0
     assert len(ch.wait_for_timeout_tasks) == 0
+    assert params.in_flight_req is False
+
+
+def test_contract_handler_updates_pending_list_based_on_delivered_request_status(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Updates pending list based on request id status based on marketplace contract data"""
+    params: Any = handler_context.params
+    params.in_flight_req = True
+    params.num_agents = 1
+    params.agent_index = 0
+    params.req_type = "marketplace"
+    params.req_params.from_block["marketplace"] = 0
+
+    # Make priorityMech match our mech so it goes to pending_tasks (not wait list)
+    my_mech = params.agent_mech_contract_addresses[0]
+
+    # Build marketplace-shaped body: each item has arrays requestIds/requestDatas
+    reqs: List[Dict[str, Any]] = [
+        {
+            "tx_hash": "0xaaa",
+            "block_number": 10,
+            "priorityMech": my_mech,
+            "requester": "0xR1",
+            "numRequests": 1,
+            "requestId": b"\x01" * 32,
+            "requestData": b"\x02" * 32,
+            "status": 1,
+            "request_delivery_rate": 100,
+        },
+        {
+            "tx_hash": "0xbbb",
+            "block_number": 11,
+            "priorityMech": my_mech,
+            "requester": "0xR2",
+            "numRequests": 1,
+            "requestId": b"\x03" * 32,
+            "requestData": b"\x04" * 32,
+            "status": 1,
+            "request_delivery_rate": 100,
+        },
+    ]
+    pending_reqs_body: Dict[str, Any] = {"data": reqs}
+
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+
+    msg = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=pending_reqs_body),
+    )
+    ch.handle(msg)
+
+    assert len(ch.pending_tasks) == 2
+
+    status_check_body: Dict[str, Any] = {"request_ids": (b"\x01" * 32,)}
+    msg = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=status_check_body),
+    )
+    ch.handle(msg)
+
+    assert len(ch.pending_tasks) == 1
+
+    # in_flight flag must be cleared
+    assert params.in_flight_req is False
+
+
+def test_contract_handler_doesnot_updates_pending_list_based_on_undelivered_request_status(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Does not update pending list based on request id status based on marketplace contract data"""
+    params: Any = handler_context.params
+    params.in_flight_req = True
+    params.num_agents = 1
+    params.agent_index = 0
+    params.req_type = "marketplace"
+    params.req_params.from_block["marketplace"] = 0
+
+    # Make priorityMech match our mech so it goes to pending_tasks (not wait list)
+    my_mech = params.agent_mech_contract_addresses[0]
+
+    # Build marketplace-shaped body: each item has arrays requestIds/requestDatas
+    reqs: List[Dict[str, Any]] = [
+        {
+            "tx_hash": "0xaaa",
+            "block_number": 10,
+            "priorityMech": my_mech,
+            "requester": "0xR1",
+            "numRequests": 1,
+            "requestId": b"\x01" * 32,
+            "requestData": b"\x02" * 32,
+            "status": 1,
+            "request_delivery_rate": 100,
+        },
+        {
+            "tx_hash": "0xbbb",
+            "block_number": 11,
+            "priorityMech": my_mech,
+            "requester": "0xR2",
+            "numRequests": 1,
+            "requestId": b"\x03" * 32,
+            "requestData": b"\x04" * 32,
+            "status": 1,
+            "request_delivery_rate": 100,
+        },
+    ]
+    pending_reqs_body: Dict[str, Any] = {"data": reqs}
+
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+
+    msg = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=pending_reqs_body),
+    )
+    ch.handle(msg)
+
+    assert len(ch.pending_tasks) == 2
+
+    status_check_body: Dict[str, Any] = {"request_ids": ()}
+    msg = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=status_check_body),
+    )
+    ch.handle(msg)
+
+    assert len(ch.pending_tasks) == 2
+
+    # in_flight flag must be cleared
     assert params.in_flight_req is False
