@@ -69,7 +69,6 @@ TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
 
 FSM_REPR_MAX_DEPTH = 25
-GRACE_PERIOD = 30 * 10
 LAST_SUCCESSFUL_READ = "last_successful_read"
 LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
@@ -320,12 +319,7 @@ class HttpHandler(BaseHttpHandler):
     def _handle_get_health(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
-        """
-        Handle a Http request of verb GET.
-
-        :param http_msg: the http message
-        :param http_dialogue: the http dialogue
-        """
+        """Handle GET /healthcheck"""
 
         seconds_since_last_transition = None
         is_tm_unhealthy = None
@@ -357,37 +351,97 @@ class HttpHandler(BaseHttpHandler):
                 r.round_id for r in round_sequence._abci_app._previous_rounds[-10:]
             ]
 
-        last_executed_task = (
+        # ---- Observations ---------------------------------------------------------
+        last_executed_task_ts = (
             self.last_successful_executed_task[1]
             if self.last_successful_executed_task
-            else time.time() - GRACE_PERIOD * 2
+            else None
         )
-        last_tx_made = self.last_tx[1] if self.last_tx else time.time()
-        we_are_delivering = last_executed_task < last_tx_made + GRACE_PERIOD
-
-        # ensure we can get new reqs
-        last_successful_read = (
-            self.last_successful_read[1] if self.last_successful_read else time.time()
+        last_successful_read_ts = (
+            self.last_successful_read[1] if self.last_successful_read else None
         )
-        we_can_get_new_reqs = last_successful_read > time.time() - GRACE_PERIOD
 
+        # ---- Backlog awareness (best-effort) -------------------------------------
+        def _len_or_zero(v):
+            if v is None:
+                return 0
+            if isinstance(v, int):
+                return v
+            try:
+                return len(v)
+            except Exception:
+                return 0
+
+        pending = _len_or_zero(self.context.shared_state.get(PENDING_TASKS))
+        ipfsq = _len_or_zero(self.context.shared_state.get(IPFS_TASKS))
+        waiting = _len_or_zero(self.context.shared_state.get(WAIT_FOR_TIMEOUT))
+        backlog_size = pending + ipfsq + waiting
+        expected_work = backlog_size > 0
+
+        # ---- Thresholds -----------------------------------------------------------
+        reset_pause = float(self.context.params.reset_pause_duration)
+        grace = max(2 * reset_pause, 30.0)  # readiness/progress grace
+        now = time.time()
+
+        # ---- Liveness -------------------------------------------------------------
+        if seconds_since_last_transition is None or is_tm_unhealthy is None:
+            liveness_ok, live_reason = False, "no-fsm-data"
+        else:
+            liveness_ok = (not is_tm_unhealthy) and (
+                seconds_since_last_transition <= 3 * reset_pause
+            )
+            live_reason = (
+                "ok"
+                if liveness_ok
+                else ("tm-unhealthy" if is_tm_unhealthy else "stuck-no-transition")
+            )
+
+        # ---- Readiness (idle is OK) ----------------------------------------------
+        if not expected_work:
+            readiness_ok, ready_reason = True, "idle-ok"
+        elif last_successful_read_ts is None:
+            readiness_ok, ready_reason = False, "no-read-yet"
+        else:
+            readiness_ok = (now - last_successful_read_ts) <= grace
+            ready_reason = "deps-ok" if readiness_ok else "stale-read"
+
+        # ---- Progress (only when backlog exists) ---------------------------------
+        if expected_work:
+            if last_executed_task_ts is None:
+                progress_ok = (
+                    seconds_since_last_transition is not None
+                    and seconds_since_last_transition <= 2 * reset_pause
+                )
+            else:
+                progress_ok = (
+                    seconds_since_last_transition is not None
+                    and seconds_since_last_transition <= 2 * reset_pause
+                ) or ((now - last_executed_task_ts) <= grace)
+            prog_reason = "progress" if progress_ok else "no-progress-with-backlog"
+        else:
+            progress_ok, prog_reason = True, "idle-ok"
+
+        # ---- Canonical health flag for alerts ------------------------------------
+        is_healthy = bool(liveness_ok and readiness_ok and progress_ok)
+
+        # ---- Response payload (lean, no legacy fields) ---------------------------
         data = {
+            "is_healthy": is_healthy,
+            "liveness": {"ok": liveness_ok, "reason": live_reason},
+            "readiness": {"ok": readiness_ok, "reason": ready_reason},
+            "progress": {
+                "ok": progress_ok,
+                "reason": prog_reason,
+                "backlog_size": backlog_size,
+                "expected_work": expected_work,
+            },
             "seconds_since_last_transition": seconds_since_last_transition,
-            "is_tm_healthy": not is_tm_unhealthy,
+            "is_tm_healthy": (None if is_tm_unhealthy is None else not is_tm_unhealthy),
             "period": self.synchronized_data.period_count,
-            "reset_pause_duration": self.context.params.reset_pause_duration,
+            "reset_pause_duration": reset_pause,
             "current_round": current_round,
             "rounds": rounds,
             "is_transitioning_fast": is_transitioning_fast,
-            "is_healthy": (we_are_delivering and we_can_get_new_reqs),
-            "last_tx": (
-                {
-                    "tx_hash": self.last_tx[0],
-                    "timestamp": self.last_tx[1],
-                }
-                if self.last_tx
-                else None
-            ),
             "last_successful_read": (
                 {
                     "block_number": self.last_successful_read[0],
@@ -404,6 +458,12 @@ class HttpHandler(BaseHttpHandler):
                 if self.last_successful_executed_task
                 else None
             ),
+            "last_tx": (
+                {"tx_hash": self.last_tx[0], "timestamp": self.last_tx[1]}
+                if self.last_tx
+                else None
+            ),
+            "health_version": 2,
         }
 
         self._send_ok_response(http_msg, http_dialogue, data)
