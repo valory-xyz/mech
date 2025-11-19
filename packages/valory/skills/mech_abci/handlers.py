@@ -24,7 +24,7 @@ import re
 import time
 from datetime import datetime
 from enum import Enum
-from typing import Callable, Dict, List, Optional, Tuple, Union, cast
+from typing import Callable, Dict, List, Optional, Sized, Tuple, Union, cast
 from urllib.parse import urlparse
 
 from aea.protocols.base import Message
@@ -362,7 +362,7 @@ class HttpHandler(BaseHttpHandler):
         )
 
         # ---- Backlog awareness (best-effort) -------------------------------------
-        def _len_or_zero(v) -> int:
+        def _len_or_zero(v: Optional[Union[int, Sized]]) -> int:
             if v is None:
                 return 0
             if isinstance(v, int):
