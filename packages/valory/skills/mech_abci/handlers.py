@@ -342,6 +342,7 @@ class HttpHandler(BaseHttpHandler):
             is_transitioning_fast = (
                 not is_tm_unhealthy
                 and seconds_since_last_transition
+                # Consider healthy if transitions happen within twice the expected pause duration
                 < 2 * self.context.params.reset_pause_duration
             )
 
@@ -410,11 +411,13 @@ class HttpHandler(BaseHttpHandler):
             if last_executed_task_ts is None:
                 progress_ok = (
                     seconds_since_last_transition is not None
+                    # Consider healthy if transitions happen within twice the expected pause duration
                     and seconds_since_last_transition <= 2 * reset_pause
                 )
             else:
                 progress_ok = (
                     seconds_since_last_transition is not None
+                    # Consider healthy if transitions happen within twice the expected pause duration
                     and seconds_since_last_transition <= 2 * reset_pause
                 ) or ((now - last_executed_task_ts) <= grace)
             prog_reason = "progress" if progress_ok else "no-progress-with-backlog"
