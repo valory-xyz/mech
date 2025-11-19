@@ -23,8 +23,7 @@ import json
 import threading
 import time
 from asyncio import Future
-from concurrent.futures import ProcessPoolExecutor
-from concurrent.futures.process import BrokenProcessPool
+from dataclasses import dataclass
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
@@ -33,6 +32,8 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
+from pebble import ProcessPool
+from prometheus_client import Counter, Gauge, Histogram
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
@@ -73,6 +74,7 @@ LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
+STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -84,6 +86,90 @@ class RequestType(Enum):
     MARKETPLACE = "marketplace"
 
 
+@dataclass(init=False)
+class MechMetrics:
+    """Prometheus Metrics for mech"""
+
+    mech_pending_queue_len: Gauge
+    mech_timed_out_queue_len: Gauge
+    mech_wait_for_time_out_queue_len: Gauge
+    mech_tasks_started_total: Counter
+    mech_tasks_completed_total: Counter
+    mech_tasks_failed_total: Counter
+    mech_tasks_timed_out_total: Counter
+    mech_tasks_inflight: Gauge
+    mech_tool_preparation_time: Histogram
+    mech_tool_execution_time: Histogram
+
+    def __init__(self) -> None:
+        """Define Prometheus metrics"""
+        self.mech_pending_queue_len = Gauge(
+            "mech_pending_queue_len", "Total pending tasks in the mech agent"
+        )
+        self.mech_timed_out_queue_len = Gauge(
+            "mech_timed_out_queue_len", "Total timed out tasks in the mech agent"
+        )
+        self.mech_wait_for_time_out_queue_len = Gauge(
+            "mech_wait_for_time_out_queue_len",
+            "Total wait for time out tasks in the mech agent",
+        )
+        self.mech_tasks_started_total = Counter(
+            "mech_tasks_started_total", "Total tasks worked on by the mech"
+        )
+        self.mech_tasks_completed_total = Counter(
+            "mech_tasks_completed_total",
+            "Total tasks completed by the mech",
+            labelnames=["tool"],
+        )
+        self.mech_tasks_failed_total = Counter(
+            "mech_tasks_failed_total",
+            "Total tasks failed in mech with tool and reason",
+            labelnames=["tool", "reason"],
+        )
+        self.mech_tasks_timed_out_total = Counter(
+            "mech_tasks_timed_out_total",
+            "Total tasks timed out during execution",
+            labelnames=["tool"],
+        )
+        self.mech_tasks_inflight = Gauge(
+            "mech_tasks_inflight",
+            "Current task in execution",
+        )
+        self.mech_tool_preparation_time = Histogram(
+            "mech_tool_preparation_time",
+            "Duration taken by tool from preparation till execution",
+            labelnames=["tool"],
+        )
+        self.mech_tool_execution_time = Histogram(
+            "mech_tool_execution_time",
+            "Duration taken by tool from execution till completion",
+            labelnames=["tool"],
+        )
+
+    def set_gauge(self, metric: Gauge, value: int, **labels: Any) -> None:
+        """Set the Prometheus' guage metric"""
+        if labels:
+            metric.labels(**labels).set_to_current_time()
+            metric.labels(**labels).set(value)
+        else:
+            metric.set_to_current_time()
+            metric.set(value)
+
+    def inc_counter(self, metric: Counter, value: float = 1, **labels: Any) -> None:
+        """Increment the Prometheus' counter metric"""
+        if labels:
+            metric.labels(**labels).inc(value)
+        else:
+            metric.inc(value)
+
+    def observe_histogram(self, metric: Histogram, value: float, **labels: Any) -> None:
+        """Observe the Prometheus' histogram metric"""
+        if labels:
+            metric.labels(**labels).observe(value)
+        else:
+            metric.observe(value)
+
+
 class TaskExecutionBehaviour(SimpleBehaviour):
     """A class to execute tasks."""
 
@@ -91,7 +177,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Initialise the agent."""
         super().__init__(**kwargs)
         # we only want to execute one task at a time, for the time being
-        self._executor = ProcessPoolExecutor(max_workers=1)
+        self._executor = ProcessPool(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
         self._tools_to_package_hash: Dict[str, str] = {}
         self._tools_to_pricing: Dict[str, int] = {}
@@ -104,6 +190,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
         self._ignored_request_ids: Set[int] = set()
+        # We fetch the requests and their status on the startup so this should be fairly accurate
+        self.last_status_check_time: float = time.time()
+        self.tool_preparation_start_time: float = 0.0
+        self.tool_execution_start_time: float = 0.0
+
+        # Prometheus metrics
+        self.mech_metrics = MechMetrics()
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -118,6 +211,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._execute_ipfs_tasks()
         self._execute_task()
         self._check_for_new_marketplace_reqs()
+        self._update_pending_tasks()
 
     @property
     def done_tasks_lock(self) -> threading.Lock:
@@ -168,6 +262,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         return self.context.shared_state[IPFS_TASKS]
 
     @property
+    def last_status_check(self) -> float:
+        """Get last status check time."""
+        return self.last_status_check_time
+
+    @property
     def request_id_to_delivery_rate_info(self) -> List[Dict[str, int]]:
         """Get request_id_to_delivery_rate_info."""
         return self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO]
@@ -206,21 +305,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_id,
             time.time(),
         )
-
-    def _get_executing_task_result(self) -> Any:
-        """Get the executing task result."""
-        if self._executing_task is None:
-            raise ValueError("Executing task is None")
-        if self._invalid_request:
-            return None
-        try:
-            async_result = cast(Future, self._async_result)
-            return async_result.result()
-        except Exception as e:  # pylint: disable=broad-except
-            self.context.logger.error(
-                "Exception raised while executing task: {}".format(str(e))
-            )
-            return None
 
     def _download_tools(self) -> None:
         """Download tools."""
@@ -359,6 +443,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self.params.in_flight_req = False
                 self.params.is_cold_start = False
                 self._last_deadline = None
+                # reset all times
+                self.tool_preparation_start_time = 0.0
+                self.tool_execution_start_time = 0.0
                 self._handle_timeout_task()
             return
 
@@ -367,8 +454,22 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 task_result = self._get_executing_task_result()
                 self._handle_done_task(task_result)
             elif self._has_executing_task_timed_out():
+                # reset all times
+                self.tool_preparation_start_time = 0.0
+                self.tool_execution_start_time = 0.0
                 self._handle_timeout_task()
             return
+
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_pending_queue_len, len(self.pending_tasks)
+        )
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_timed_out_queue_len, len(self.timed_out_tasks)
+        )
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_wait_for_time_out_queue_len,
+            len(self.wait_for_timeout_tasks),
+        )
 
         if len(self.pending_tasks) == 0:
             if len(self.timed_out_tasks) == 0:
@@ -377,12 +478,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         else:
             task_data = self.pending_tasks.pop(0)
         self.context.logger.info(f"Preparing task with data: {task_data}")
+        # Start the time counter to measure time taken to prepare the task
+        self.tool_preparation_start_time = time.perf_counter()
+        self.mech_metrics.inc_counter(self.mech_metrics.mech_tasks_started_total)
         # convert request id to int if it's bytes
         if type(task_data.get("requestId")) == bytes:
             request_id = task_data["requestId"]
             task_data["requestId"] = int.from_bytes(request_id, byteorder="big")
 
         request_id = task_data["requestId"]
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_tasks_inflight,
+            request_id,
+        )
         delivery_rate = task_data["request_delivery_rate"]
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
@@ -395,6 +503,47 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             message,
             self._handle_get_task,
         )
+
+    def _update_pending_tasks(self) -> None:
+        if not self.params.use_mech_marketplace:
+            return
+
+        # there is an in flight request
+        if self.params.in_flight_req:
+            return
+
+        # status check interval not reached
+        if self.last_status_check + STATUS_CHECK_INTERVAL > time.time():
+            return
+
+        pending_tasks_count = len(self.pending_tasks)
+        # no pending tasks to check
+        if pending_tasks_count == 0:
+            return
+
+        self.context.logger.info(
+            f"Checking request_id status of {pending_tasks_count} pending tasks"
+        )
+        pending_tasks_request_ids = [t["requestId"] for t in self.pending_tasks]
+
+        contract_api_msg, _ = self.context.contract_dialogues.create(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.mech_marketplace_address,
+            contract_id=str(MechMarketplaceContract.contract_id),
+            callable="fetch_batch_request_id_status",
+            kwargs=ContractApiMessage.Kwargs(
+                dict(
+                    request_ids=pending_tasks_request_ids,
+                    chain_id=self.params.default_chain_id,
+                )
+            ),
+            counterparty=LEDGER_API_ADDRESS,
+            ledger_id=self.context.default_ledger_id,
+        )
+        self.params.req_type = RequestType.MARKETPLACE.value
+        self.context.outbox.put_message(message=contract_api_msg)
+        self.params.in_flight_req = True
+        self.last_status_check_time = time.time()
 
     def send_message(
         self,
@@ -471,6 +620,36 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._keychain = keychain
 
         self.context.logger.info(f"Task result for request {req_id}: {task_result}")
+        # fetch the time duration for tool execution to complete
+        # if tool exec start time is 0.0, set to current time
+        # it can be 0.0 if _prepare_task was not called due to other checks such as tool not valid
+        # or stepping in but tool not found or tool to pricing not found for dynamic mechs
+        tool_exec_time_duration = time.perf_counter() - (
+            self.tool_execution_start_time or time.perf_counter()
+        )
+        self.context.logger.info(
+            f"Request id: {req_id} with tool: {tool} took {tool_exec_time_duration} seconds to complete execution"
+        )
+        # reset the time counter used to measure time taken to execute the task
+        self.tool_execution_start_time = 0.0
+        self.mech_metrics.observe_histogram(
+            self.mech_metrics.mech_tool_execution_time,
+            tool_exec_time_duration,
+            tool=tool,
+        )
+        # Start the time counter to measure time taken to deliver the task
+        self.tool_deliver_start_time = time.perf_counter()
+        self.mech_metrics.inc_counter(
+            self.mech_metrics.mech_tasks_completed_total, tool=tool
+        )
+        reason = response["result"]
+        if reason == "Invalid response":
+            self.mech_metrics.inc_counter(
+                metric=self.mech_metrics.mech_tasks_failed_total,
+                tool=tool,
+                reason=reason,
+            )
+
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
         )
@@ -478,18 +657,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _restart_executor(self) -> None:
         """Restarts the executor."""
-        self._executor.shutdown(wait=False)
+        self._executor.stop()
+        self._executor.join()
         # create a new executor
-        self._executor = ProcessPoolExecutor(max_workers=1)
+        self._executor = ProcessPool(max_workers=1)
 
     def _handle_timeout_task(self) -> None:
         """Handle timeout tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+        # Prometheus has no way to remove/clear metrics, so we set to default 0
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_tasks_inflight,
+            0,
+        )
+        tool = executing_task.get("tool", None)
         self.count_timeout(req_id)
         self.context.logger.info(f"Task timed out for request {req_id}")
         self.context.logger.info(
             f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times"
+        )
+        self.mech_metrics.inc_counter(
+            metric=self.mech_metrics.mech_tasks_timed_out_total, tool=tool
         )
         if self._async_result:
             async_result = cast(Future, self._async_result)
@@ -546,12 +735,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if stepping_in and tool_name not in self._tools_to_package_hash:
             rid = int(executing_task["requestId"])
             self._ignored_request_ids.add(rid)
-            self.context.logger.info(
-                f"Ignoring request {rid}: stepping in but tool {tool_name} not installed.",
+            reason = f"Ignoring request {rid}: stepping in but tool {tool_name} not installed."
+            self.context.logger.info(reason)
+            self.mech_metrics.inc_counter(
+                metric=self.mech_metrics.mech_tasks_failed_total,
+                tool=tool_name,
+                reason=reason,
+            )
+            # Prometheus has no way to remove/clear metrics, so we set to default 0
+            self.mech_metrics.set_gauge(
+                self.mech_metrics.mech_tasks_inflight,
+                0,
             )
             self._executing_task = None
             self._last_deadline = None
             self._async_result = None
+            # reset the time counter used to measure time taken to prepare the task
+            self.tool_preparation_start_time = 0.0
             return
 
         if tool_name in self._tools_to_package_hash:
@@ -561,28 +761,86 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     executing_task["requestId"]
                 ]
                 if req_id_delivery_rate < tool_pricing:
-                    self.context.logger.warning(
-                        f"Requested pricing invalid. Actual {req_id_delivery_rate} Needed {tool_pricing}"
+                    reason = f"Requested pricing invalid. Actual {req_id_delivery_rate} Needed {tool_pricing}"
+                    self.context.logger.warning(reason)
+                    self.mech_metrics.inc_counter(
+                        metric=self.mech_metrics.mech_tasks_failed_total,
+                        tool=tool_name,
+                        reason=reason,
                     )
                     self._invalid_request = True
+                    # reset the time counter used to measure time taken to prepare the task
+                    self.tool_preparation_start_time = 0.0
                     return
+
+            rid = int(executing_task["requestId"])
+            # fetch the time duration for tool preparation to complete
+            tool_prep_time_duration = (
+                time.perf_counter() - self.tool_preparation_start_time
+            )
+            self.context.logger.info(
+                f"Request id: {rid} with tool: {tool_name} took {tool_prep_time_duration} seconds to prepare"
+            )
+            # reset the time counter used to measure time taken to prepare the task
+            self.tool_preparation_start_time = 0.0
+            self.mech_metrics.observe_histogram(
+                self.mech_metrics.mech_tool_preparation_time,
+                tool_prep_time_duration,
+                tool=tool_name,
+            )
+            # Start the time counter to measure time taken to execute the task
+            self.tool_execution_start_time = time.perf_counter()
             self._prepare_task(task_data)
         else:
             # Unknown tool and we're the priority mech -> store stub (existing behavior)
             executing_task["tool"] = tool_name
-            self.context.logger.warning(f"Tool {tool_name} is not valid.")
+            reason = f"Tool {tool_name} is not valid."
+            self.context.logger.warning(reason)
+            self.mech_metrics.inc_counter(
+                metric=self.mech_metrics.mech_tasks_failed_total,
+                tool=tool_name,
+                reason=reason,
+            )
             self._invalid_request = True
+            # reset the time counter used to measure time taken to prepare the task
+            self.tool_preparation_start_time = 0.0
 
-    def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Future:
-        """Submit a task."""
+    def _submit_task(self, fn: Any, *args: Any, **kwargs: Any) -> Any:
+        """Submit a task with a hard per-call timeout via Pebble."""
         try:
-            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
-        except BrokenProcessPool:
+            return self._executor.schedule(  # type: ignore[attr-defined]
+                fn,
+                args=args,
+                kwargs=kwargs,
+                timeout=float(self.params.task_deadline),
+            )
+        except Exception:
             self.context.logger.warning("Executor is broken. Restarting...")
-            # restart the executor
             self._restart_executor()
-            # try to run the task again
-            return self._executor.submit(fn, *args, **kwargs)  # type: ignore
+            return self._executor.schedule(  # type: ignore[attr-defined]
+                fn,
+                args=args,
+                kwargs=kwargs,
+                timeout=float(self.params.task_deadline),
+            )
+
+    def _get_executing_task_result(self) -> Any:
+        """Get the executing task result (convert Pebble errors to your 5-tuple)."""
+        if (
+            self._executing_task is None
+            or self._async_result is None
+            or self._invalid_request
+        ):
+            return None
+
+        try:
+            fut = cast(Any, self._async_result)
+            return fut.result()
+        except TimeoutError as e:
+            self.context.logger.warning(f"Task expired: {e}")
+        except Exception as e:
+            self.context.logger.error(f"Exception during task: {e}")
+        return None
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
@@ -679,6 +937,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.context.logger.error(
                 f"Invalid done task format. Expected Dict. Actual: {done_task}"
             )
+            # Prometheus has no way to remove/clear metrics, so we set to default 0
+            self.mech_metrics.set_gauge(
+                self.mech_metrics.mech_tasks_inflight,
+                0,
+            )
             self._executing_task = None
             self._done_task = None
             self._invalid_request = False
@@ -702,12 +965,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         mech_config = self.params.mech_to_config[mech_address.lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
         done_task["task_result"] = task_result
+        # store the time the task was added to done task list
+        done_task["start_time"] = time.perf_counter()
         # pop the data key value as it's bytes which causes issues
         # with json dumps and not required anywhere
         done_task.pop("data", None)
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
+
+        # Prometheus has no way to remove/clear metrics, so we set to default 0
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_tasks_inflight,
+            0,
+        )
+
         # reset tasks
         self._executing_task = None
         self._done_task = None
