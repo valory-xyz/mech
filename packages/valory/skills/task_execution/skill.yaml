@@ -8,13 +8,13 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
   behaviours.py: bafybeibhansi3d7krvze5nturphaux6s4qlhj2j5vwgoqkhtsyaekcleji
-  dialogues.py: bafybeib6xkxutxwctbegngexys3smael4rzkrkdlbwi7f5lgcvmag3siqm
+  dialogues.py: bafybeih3sbvogzgjgukf67nwefyd6wwwsxoe7xxzsf4mnexvz4k6aginuy
   handlers.py: bafybeih6ef7vufyjuaoaix3j66mmxcoinns2snjcgkv4l42aa4jwfcvrje
   models.py: bafybeibtnnysthc3imw2zhmhnbqvzqu65bx33jsn44zwt6dfrojrndid7m
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeigndgh2yfqhovgdydafcwxamvxsmngjgzpfkkwo5n3zgk4rlz5jvu
   tests/test_behaviours.py: bafybeih32odtcwa2nzc7oqimnzjxoukjjkti3ysech44vk2vtisn7wq3lu
-  tests/test_dialogues.py: bafybeihrghdkt7xjcr3gsj5xb274h2wn42f4sijag3xbopijp4v3yktau4
+  tests/test_dialogues.py: bafybeifcdbylfpbekj22pqpgk6idb7dtrjrgwm42y4jiesl62nr7ng5moy
   tests/test_handlers.py: bafybeicsgqqi56p4afdb7vuypkc3gk4pxkcg5rcz46ojp7fvspwfhp67pu
   tests/test_models.py: bafybeife4reoldzyxu3muhkdpl7leos3z4b3vyepomzdr4lj4kgr2zkqkm
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
