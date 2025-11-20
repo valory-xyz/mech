@@ -117,8 +117,8 @@ class BalanceTrackerContract(Contract):
         """Get tx data"""
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        tx_data = contract_instance.encodeABI(
-            fn_name="processPaymentByMultisig",
+        tx_data = contract_instance.encode_abi(
+            abi_element_identifier="processPaymentByMultisig",
             args=[mech_address],
         )
         simulation_ok = cls.simulate_tx(
