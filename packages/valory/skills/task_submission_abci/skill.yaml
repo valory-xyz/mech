@@ -176,7 +176,7 @@ models:
     class_name: TendermintDialogues
 dependencies:
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
   py-multibase:
     version: ==1.0.3
   py-multicodec:
