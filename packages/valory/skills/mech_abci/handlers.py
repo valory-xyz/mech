@@ -78,6 +78,12 @@ DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 TIMED_OUT_TASKS = "timed_out_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
+TRANSITION_TOLERANCE_FACTOR = (
+    2.0  # allow up to 2× the expected pause before calling it “slow”
+)
+LIVENESS_STALL_FACTOR = (
+    3.0  # allow up to 3× the expected pause before calling it “stuck”
+)
 
 
 class HttpCode(Enum):
@@ -319,31 +325,50 @@ class HttpHandler(BaseHttpHandler):
     def _handle_get_health(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
-        """Handle GET /healthcheck"""
+        """
+        Handle GET /healthcheck and compute the agent's health metrics.
 
-        seconds_since_last_transition = None
-        is_tm_unhealthy = None
-        current_round = None
-        rounds = None
-        is_transitioning_fast = None
+        The function assesses the health of the agent in three dimensions:
+
+        - **Liveness**: Whether the FSM (Finite State Machine) is actively transitioning and
+          Tendermint is not in a stalled state.
+        - **Readiness**: Whether the agent is capable of accepting new work.
+          When idle (no backlog), readiness is considered true.
+        - **Progress**: Whether the agent is making progress when there is work in its backlog.
+
+        The endpoint returns a composite health object, where `is_healthy` is true only if
+        all three dimensions (liveness, readiness, progress) are satisfied.
+
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
+        """
+
+        # --------- Gather FSM/round info (used by liveness/progress and for observability) ---------
+        seconds_since_last_transition: Optional[float] = None
+        is_tm_unhealthy: Optional[bool] = None
+        current_round: Optional[str] = None
+        rounds: Optional[list[str]] = None
+        is_transitioning_fast: Optional[bool] = None
 
         round_sequence = cast(BaseSharedState, self.context.state).round_sequence
 
         if round_sequence._last_round_transition_timestamp:
+            # Tendermint node stall indicator exposed by the framework
             is_tm_unhealthy = cast(
                 BaseSharedState, self.context.state
             ).round_sequence.block_stall_deadline_expired
 
+            # NOTE: wall time is OK for coarse health, but monotonic() is better for deltas.
             current_time = datetime.now().timestamp()
             seconds_since_last_transition = current_time - datetime.timestamp(
                 round_sequence._last_round_transition_timestamp
             )
 
+            # Informational: “moving faster than ~2× the expected pause”
             is_transitioning_fast = (
-                not is_tm_unhealthy
+                (is_tm_unhealthy is False)
                 and seconds_since_last_transition
-                # Consider healthy if transitions happen within twice the expected pause duration
-                < 2 * self.context.params.reset_pause_duration
+                < TRANSITION_TOLERANCE_FACTOR * self.context.params.reset_pause_duration
             )
 
         if round_sequence._abci_app:
@@ -352,24 +377,26 @@ class HttpHandler(BaseHttpHandler):
                 r.round_id for r in round_sequence._abci_app._previous_rounds[-10:]
             ]
 
-        # ---- Observations ---------------------------------------------------------
-        last_executed_task_ts = (
+        # --------- Observations pulled from shared state (timestamps in epoch seconds) --------------
+        last_executed_task_ts: Optional[float] = (
             self.last_successful_executed_task[1]
             if self.last_successful_executed_task
             else None
         )
-        last_successful_read_ts = (
+        last_successful_read_ts: Optional[float] = (
             self.last_successful_read[1] if self.last_successful_read else None
         )
 
-        # ---- Backlog awareness (best-effort) -------------------------------------
+        # --------- Backlog awareness ---------------------------------------------------------------
+        # Health should not flip “unhealthy” just because we’re idle.
         def _len_or_zero(v: Optional[Union[int, Sized]]) -> int:
+            """Return an integer size for counters/collections; tolerate None/missing."""
             if v is None:
                 return 0
             if isinstance(v, int):
                 return v
             try:
-                return len(v)
+                return len(v)  # type: ignore[arg-type]
             except Exception:
                 return 0
 
@@ -379,17 +406,19 @@ class HttpHandler(BaseHttpHandler):
         backlog_size = pending + ipfsq + waiting
         expected_work = backlog_size > 0
 
-        # ---- Thresholds -----------------------------------------------------------
+        # --------- Thresholds & clocks --------------------------------------------------------------
         reset_pause = float(self.context.params.reset_pause_duration)
-        grace = max(2 * reset_pause, 30.0)  # readiness/progress grace
+        # Readiness/progress grace: allow short dependency blips without flapping.
+        grace = max(2 * reset_pause, 30.0)
         now = time.time()
 
-        # ---- Liveness -------------------------------------------------------------
+        # --------- Liveness: am I alive and not stuck? ----------------------------------------------
+        # Uses FSM movement and Tendermint stall flag. If we lack FSM data, treat as unknown → not live.
         if seconds_since_last_transition is None or is_tm_unhealthy is None:
             liveness_ok, live_reason = False, "no-fsm-data"
         else:
             liveness_ok = (not is_tm_unhealthy) and (
-                seconds_since_last_transition <= 3 * reset_pause
+                seconds_since_last_transition <= LIVENESS_STALL_FACTOR * reset_pause
             )
             live_reason = (
                 "ok"
@@ -397,7 +426,8 @@ class HttpHandler(BaseHttpHandler):
                 else ("tm-unhealthy" if is_tm_unhealthy else "stuck-no-transition")
             )
 
-        # ---- Readiness (idle is OK) ----------------------------------------------
+        # --------- Readiness: can I accept work right now? ------------------------------------------
+        # Idle → ready; if work exists, require a fresh dependency read.
         if not expected_work:
             readiness_ok, ready_reason = True, "idle-ok"
         elif last_successful_read_ts is None:
@@ -406,28 +436,29 @@ class HttpHandler(BaseHttpHandler):
             readiness_ok = (now - last_successful_read_ts) <= grace
             ready_reason = "deps-ok" if readiness_ok else "stale-read"
 
-        # ---- Progress (only when backlog exists) ---------------------------------
+        # --------- Progress: if there’s backlog, are we actually advancing? -------------------------
+        # Accept progress if either the FSM is transitioning at pace, or a task executed recently.
         if expected_work:
             if last_executed_task_ts is None:
                 progress_ok = (
                     seconds_since_last_transition is not None
-                    # Consider healthy if transitions happen within twice the expected pause duration
-                    and seconds_since_last_transition <= 2 * reset_pause
+                    and seconds_since_last_transition
+                    <= TRANSITION_TOLERANCE_FACTOR * reset_pause
                 )
             else:
                 progress_ok = (
                     seconds_since_last_transition is not None
-                    # Consider healthy if transitions happen within twice the expected pause duration
-                    and seconds_since_last_transition <= 2 * reset_pause
+                    and seconds_since_last_transition
+                    <= TRANSITION_TOLERANCE_FACTOR * reset_pause
                 ) or ((now - last_executed_task_ts) <= grace)
             prog_reason = "progress" if progress_ok else "no-progress-with-backlog"
         else:
             progress_ok, prog_reason = True, "idle-ok"
 
-        # ---- Canonical health flag for alerts ------------------------------------
+        # --------- Canonical health flag for alerts -------------------------------------------------
         is_healthy = bool(liveness_ok and readiness_ok and progress_ok)
 
-        # ---- Response payload (lean, no legacy fields) ---------------------------
+        # --------- Response payload -----------------------------------------------------------------
         data = {
             "is_healthy": is_healthy,
             "liveness": {"ok": liveness_ok, "reason": live_reason},
@@ -439,6 +470,7 @@ class HttpHandler(BaseHttpHandler):
                 "expected_work": expected_work,
             },
             "seconds_since_last_transition": seconds_since_last_transition,
+            # Three-state: True (healthy), False (unhealthy), None (unknown/no data yet)
             "is_tm_healthy": (None if is_tm_unhealthy is None else not is_tm_unhealthy),
             "period": self.synchronized_data.period_count,
             "reset_pause_duration": reset_pause,
