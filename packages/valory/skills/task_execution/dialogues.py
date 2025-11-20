@@ -37,12 +37,6 @@ from packages.valory.protocols.contract_api.dialogues import (
 from packages.valory.protocols.contract_api.dialogues import (
     ContractApiDialogues as BaseContractApiDialogues,
 )
-from packages.valory.protocols.default.dialogues import (
-    DefaultDialogue as BaseDefaultDialogue,
-)
-from packages.valory.protocols.default.dialogues import (
-    DefaultDialogues as BaseDefaultDialogues,
-)
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue as BaseIpfsDialogue
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogues as BaseIpfsDialogues
 from packages.valory.protocols.ledger_api.dialogues import (
@@ -60,7 +54,6 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
 
 
 ContractApiDialogue = BaseContractApiDialogue
-DefaultDialogue = BaseDefaultDialogue
 IpfsDialogue = BaseIpfsDialogue
 AcnDataShareDialogue = BaseAcnDataShareDialogue
 LedgerDialogue = BaseLedgerApiDialogue
@@ -146,32 +139,6 @@ class LedgerDialogues(Model, BaseLedgerApiDialogues):
             self_address=str(self.skill_id),
             role_from_first_message=role_from_first_message,
             dialogue_class=LedgerDialogue,
-        )
-
-
-class DefaultDialogues(Model, BaseDefaultDialogues):
-    """The dialogues class keeps track of all dialogues."""
-
-    def __init__(self, **kwargs: Any) -> None:
-        """Initialize dialogues."""
-        Model.__init__(self, **kwargs)
-
-        def role_from_first_message(
-            message: Message, receiver_address: Address
-        ) -> BaseDialogue.Role:
-            """Infer the role of the agent from an incoming/outgoing first message
-
-            :param message: an incoming/outgoing first message
-            :param receiver_address: the address of the receiving agent
-            :return: The role of the agent
-            """
-            self.context.logger.debug(f"{message} {receiver_address}")
-            return DefaultDialogue.Role.AGENT
-
-        BaseDefaultDialogues.__init__(
-            self,
-            self_address=self.context.agent_address,
-            role_from_first_message=role_from_first_message,
         )
 
 
