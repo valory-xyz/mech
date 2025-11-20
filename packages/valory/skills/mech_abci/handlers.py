@@ -69,6 +69,7 @@ TendermintHandler = BaseTendermintHandler
 IpfsHandler = BaseIpfsHandler
 
 FSM_REPR_MAX_DEPTH = 25
+DEFAULT_GRACE = 120.0
 LAST_SUCCESSFUL_READ = "last_successful_read"
 LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
@@ -409,7 +410,7 @@ class HttpHandler(BaseHttpHandler):
         # --------- Thresholds & clocks --------------------------------------------------------------
         reset_pause = float(self.context.params.reset_pause_duration)
         # Readiness/progress grace: allow short dependency blips without flapping.
-        grace = max(2 * reset_pause, 120.0)
+        grace = max(2 * reset_pause, DEFAULT_GRACE)
         now = time.time()
 
         # --------- Liveness: am I alive and not stuck? ----------------------------------------------
