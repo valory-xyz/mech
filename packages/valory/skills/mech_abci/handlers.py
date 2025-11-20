@@ -409,7 +409,7 @@ class HttpHandler(BaseHttpHandler):
         # --------- Thresholds & clocks --------------------------------------------------------------
         reset_pause = float(self.context.params.reset_pause_duration)
         # Readiness/progress grace: allow short dependency blips without flapping.
-        grace = max(2 * reset_pause, 60.0)
+        grace = max(2 * reset_pause, 120.0)
         now = time.time()
 
         # --------- Liveness: am I alive and not stuck? ----------------------------------------------
