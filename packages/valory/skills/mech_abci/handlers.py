@@ -79,6 +79,8 @@ DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 TIMED_OUT_TASKS = "timed_out_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
+LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
+INFLIGHT_READ_TS = "inflight_read_ts"
 TRANSITION_TOLERANCE_FACTOR = (
     2.0  # allow up to 2× the expected pause before calling it “slow”
 )
@@ -152,6 +154,16 @@ class HttpHandler(BaseHttpHandler):
             Optional[Tuple[int, float]],
             self.context.shared_state.get(LAST_SUCCESSFUL_READ),
         )
+
+    @property
+    def last_attempt_ts(self) -> Optional[float]:
+        """Get the last attempted read."""
+        return self.context.shared_state.get(LAST_READ_ATTEMPT_TS)
+
+    @property
+    def inflight_ts(self) -> Optional[float]:
+        """Get the last inflight timestamp read."""
+        return cast(Optional[float], self.context.shared_state.get(INFLIGHT_READ_TS))
 
     @property
     def last_successful_executed_task(self) -> Optional[Tuple[int, float]]:
@@ -413,6 +425,23 @@ class HttpHandler(BaseHttpHandler):
         grace = max(2 * reset_pause, DEFAULT_GRACE)
         now = time.time()
 
+        # ---------- Helper function to get the max ts (Type Safe) -----------------------------------
+        def _max_ts(*vals: Optional[float]) -> Optional[float]:
+            """Return the maximum timestamp from a list, ignoring None."""
+            present = [v for v in vals if v is not None]
+            return max(present) if present else None
+
+        last_dependency_heartbeat_ts = _max_ts(
+            last_successful_read_ts, self.last_attempt_ts
+        )
+        is_dependency_heartbeat_recent = bool(
+            last_dependency_heartbeat_ts
+            and (now - last_dependency_heartbeat_ts) <= grace
+        )
+        inflight_recent = bool(
+            self.inflight_ts and (now - self.inflight_ts) <= min(grace, 2 * reset_pause)
+        )
+
         # --------- Liveness: am I alive and not stuck? ----------------------------------------------
         # Uses FSM movement and Tendermint stall flag. If we lack FSM data, treat as unknown → not live.
         if seconds_since_last_transition is None or is_tm_unhealthy is None:
@@ -429,13 +458,16 @@ class HttpHandler(BaseHttpHandler):
 
         # --------- Readiness: can I accept work right now? ------------------------------------------
         # Idle → ready; if work exists, require a fresh dependency read.
+
         if not expected_work:
             readiness_ok, ready_reason = True, "idle-ok"
-        elif last_successful_read_ts is None:
-            readiness_ok, ready_reason = False, "no-read-yet"
         else:
-            readiness_ok = (now - last_successful_read_ts) <= grace
-            ready_reason = "deps-ok" if readiness_ok else "stale-read"
+            if is_dependency_heartbeat_recent or inflight_recent:
+                readiness_ok, ready_reason = True, (
+                    "deps-ok" if is_dependency_heartbeat_recent else "deps-inflight"
+                )
+            else:
+                readiness_ok, ready_reason = False, "stale-read"
 
         # --------- Progress: if there’s backlog, are we actually advancing? -------------------------
         # Accept progress if either the FSM is transitioning at pace, or a task executed recently.
