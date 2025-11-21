@@ -431,8 +431,13 @@ class HttpHandler(BaseHttpHandler):
             present = [v for v in vals if v is not None]
             return max(present) if present else None
 
-        dep_touch_ts = _max_ts(last_successful_read_ts, self.last_attempt_ts)
-        dep_touch_recent = bool(dep_touch_ts and (now - dep_touch_ts) <= grace)
+        last_dependency_heartbeat_ts = _max_ts(
+            last_successful_read_ts, self.last_attempt_ts
+        )
+        is_dependency_heartbeat_recent = bool(
+            last_dependency_heartbeat_ts
+            and (now - last_dependency_heartbeat_ts) <= grace
+        )
         inflight_recent = bool(
             self.inflight_ts and (now - self.inflight_ts) <= min(grace, 2 * reset_pause)
         )
@@ -457,9 +462,9 @@ class HttpHandler(BaseHttpHandler):
         if not expected_work:
             readiness_ok, ready_reason = True, "idle-ok"
         else:
-            if dep_touch_recent or inflight_recent:
+            if is_dependency_heartbeat_recent or inflight_recent:
                 readiness_ok, ready_reason = True, (
-                    "deps-ok" if dep_touch_recent else "deps-inflight"
+                    "deps-ok" if is_dependency_heartbeat_recent else "deps-inflight"
                 )
             else:
                 readiness_ok, ready_reason = False, "stale-read"
