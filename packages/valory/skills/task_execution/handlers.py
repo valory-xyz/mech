@@ -50,6 +50,8 @@ DONE_TASKS_LOCK = "lock"
 TIMED_OUT_TASKS = "timed_out_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
 LAST_SUCCESSFUL_READ = "last_successful_read"
+LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
+INFLIGHT_READ_TS = "inflight_read_ts"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
 TIMED_OUT_STATUS = 2
@@ -239,6 +241,7 @@ class ContractHandler(BaseHandler):
         """Handle get undelivered reqs."""
 
         # Reset lists.
+        self.context.shared_state[INFLIGHT_READ_TS] = None
         self.wait_for_timeout_tasks.clear()
         self.timed_out_tasks = body.get("timed_out_requests", [])
         self.set_last_successful_read(
