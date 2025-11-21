@@ -4,7 +4,7 @@ version: 0.1.0
 type: skill
 description: A skill used for monitoring and executing tasks.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
   behaviours.py: bafybeiak6eurmxbyeoophlhyymcxugczxtxmdhumefu7ywicm33x3pd2nm
@@ -107,7 +107,7 @@ dependencies:
   py-multicodec:
     version: ==0.2.1
   eth-abi:
-    version: ==4.0.0
+    version: ==5.2.0
   PyYAML:
     version: ==6.0.1
   prometheus_client:

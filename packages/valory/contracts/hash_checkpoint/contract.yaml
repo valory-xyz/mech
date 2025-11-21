@@ -4,7 +4,7 @@ version: 0.1.0
 type: contract
 description: Hash checkpoint contract
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigpq5lxfj2aza6ok3fjuywtdafelkbvoqwaits7regfbgu4oynmku
   build/HashCheckpoint.json: bafybeicdse6k7xbis3mdurqee7a3ghiba4hzfk4llhc3hk6q4qbfjd5rg4
@@ -15,7 +15,7 @@ contract_interface_paths:
   ethereum: build/HashCheckpoint.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.65.0
+    version: ==2.0.6
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
 contracts: []

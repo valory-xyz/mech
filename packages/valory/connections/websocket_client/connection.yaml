@@ -5,7 +5,7 @@ type: connection
 description: Simple Websocket Client to allow the agent to interact with a Websocket
   Server.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeicyrebbic2h3ytyxeg776zelg2bpshcepnkm4qc5oypqqqfq3sqmq
   connection.py: bafybeiakisvetjqs3qqlpdo5asm45gfygx35lw7cciypaneyqieyf6ul34

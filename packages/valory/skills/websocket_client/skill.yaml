@@ -4,7 +4,7 @@ version: 0.1.0
 type: skill
 description: Websocket client.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeibgl4hnpsd3vokfs6cfkg4elgqu7nm4yhs6sh373j6erwvgpjdqeu
   behaviours.py: bafybeiawcxlvtzr7757s6ury6xwvuv4ydz6yzec2vhxft77gqihvmncowy
@@ -37,5 +37,5 @@ models:
     class_name: Params
 dependencies:
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
 is_abstract: true

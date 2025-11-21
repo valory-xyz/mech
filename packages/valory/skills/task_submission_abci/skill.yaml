@@ -5,7 +5,7 @@ type: skill
 description: An abci skill that implements task execution and transaction preparation
   for the mech.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
   behaviours.py: bafybeifjuahfqffvysxpceaaub3i6dx26q4xhf5bdj5ddsqbq3tigsuxu4
@@ -176,7 +176,7 @@ models:
     class_name: TendermintDialogues
 dependencies:
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
   py-multibase:
     version: ==1.0.3
   py-multicodec:
