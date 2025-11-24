@@ -73,29 +73,29 @@ class SharedState(TaskExecSharedState):
         """Set up."""
         super().setup()
 
-        MechAbciApp.event_to_timeout[
-            TaskExecutionEvent.ROUND_TIMEOUT
-        ] = self.context.params.round_timeout_seconds
+        MechAbciApp.event_to_timeout[TaskExecutionEvent.ROUND_TIMEOUT] = (
+            self.context.params.round_timeout_seconds
+        )
 
         MechAbciApp.event_to_timeout[
             TaskExecutionEvent.TASK_EXECUTION_ROUND_TIMEOUT
         ] = self.context.params.round_timeout_seconds
 
-        MechAbciApp.event_to_timeout[
-            ResetPauseEvent.ROUND_TIMEOUT
-        ] = self.context.params.round_timeout_seconds
+        MechAbciApp.event_to_timeout[ResetPauseEvent.ROUND_TIMEOUT] = (
+            self.context.params.round_timeout_seconds
+        )
 
-        MechAbciApp.event_to_timeout[
-            TransactionSettlementEvent.ROUND_TIMEOUT
-        ] = self.context.params.round_timeout_seconds
+        MechAbciApp.event_to_timeout[TransactionSettlementEvent.ROUND_TIMEOUT] = (
+            self.context.params.round_timeout_seconds
+        )
 
-        MechAbciApp.event_to_timeout[
-            TransactionSettlementEvent.VALIDATE_TIMEOUT
-        ] = self.context.params.validate_timeout
+        MechAbciApp.event_to_timeout[TransactionSettlementEvent.VALIDATE_TIMEOUT] = (
+            self.context.params.validate_timeout
+        )
 
-        MechAbciApp.event_to_timeout[
-            TransactionSettlementEvent.FINALIZE_TIMEOUT
-        ] = self.context.params.finalize_timeout
+        MechAbciApp.event_to_timeout[TransactionSettlementEvent.FINALIZE_TIMEOUT] = (
+            self.context.params.finalize_timeout
+        )
 
         MechAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT] = (
             self.context.params.reset_pause_duration + MARGIN
