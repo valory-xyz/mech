@@ -1222,7 +1222,7 @@ class TrackingBehaviour(DeliverBehaviour, ABC):
             return None
         return ipfs_hash
 
-    def get_update_usage_tx(self) -> Generator:
+    def get_update_usage_tx(self) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get a tx to update the usage."""
         updated_usage = yield from self.get_delivery_report()
         if updated_usage is None:
@@ -1268,7 +1268,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         latest_hash = cast(bytes, contract_api_msg.state.body["data"])
         return latest_hash
 
-    def _should_update_hash(self) -> Generator:
+    def _should_update_hash(self) -> Generator[None, None, bool]:
         """Check if the agent should update the hash."""
         if self.params.task_mutable_params.latest_metadata_hash is None:
             latest_hash = yield from self._get_latest_hash()
@@ -1286,7 +1286,9 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         latest_hash = self.params.task_mutable_params.latest_metadata_hash
         return configured_hash != latest_hash
 
-    def get_mech_update_hash_tx(self) -> Generator:
+    def get_mech_update_hash_tx(
+        self,
+    ) -> Generator[None, None, Optional[Dict[str, Any]]]:
         """Get the mech update hash tx."""
         should_update_hash = yield from self._should_update_hash()
         if not should_update_hash:
