@@ -84,7 +84,7 @@ dependencies:
   hypothesis:
     version: ==6.21.6
   open-aea-ledger-ethereum:
-    version: ==2.0.5
+    version: ==2.0.6
   typing_extensions:
     version: ==4.12.2
   pebble:
