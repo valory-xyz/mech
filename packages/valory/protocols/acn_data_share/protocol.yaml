@@ -5,9 +5,9 @@ protocol_specification_id: valory/acn_data_share:0.1.0
 type: protocol
 description: A protocol for sharing raw data using ACN.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  README.md: bafybeiexqywrjzv4ajzesbzaw7bujvmgadsqtxzfnerwqogi7nz6jcvp6u
+  README.md: bafybeic6mapxpqdjuenn4xdmqqsvkv2axup3skrwbuuywakzpb7zvs46fq
   __init__.py: bafybeif7fohg7vfalh35nyuqchdw5lnjblqtodhxmcnnhycderagqs46du
   acn_data_share.proto: bafybeiell3oa6eo2oogbgymu5cupeakbkpkmxkh7gossgy4jdip7lrr7tu
   acn_data_share_pb2.py: bafybeifyna3ykdjrh2t5etusxc22hiplfvekh6vjlrnom2tzgcolmhsslu

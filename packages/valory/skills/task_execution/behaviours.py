@@ -680,6 +680,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """Handle timeout tasks"""
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+        # This should never be the case but added to handle all cases for latest mypy updates
+        if not req_id:
+            self.context.logger.error(
+                "Request id not found inside executing task for handle timedout task"
+            )
+            return None
+
         # Prometheus has no way to remove/clear metrics, so we set to default 0
         self.mech_metrics.set_gauge(
             self.mech_metrics.mech_tasks_inflight,

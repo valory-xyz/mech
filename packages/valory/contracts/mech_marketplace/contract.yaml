@@ -4,25 +4,25 @@ version: 0.1.0
 type: contract
 description: Mech Marketplace contract for the AgentMech project.
 license: Apache-2.0
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   BatchRequestIdStatusData.sol: bafybeiarqhq77lrobd76rbqmlowldrwjzucj4wy63junaowkw7e5477ilm
   __init__.py: bafybeigqedpnruwcvjarngql7yfnpqwozvvgzcei2xcrp7mjf4ccspa62y
   build/MechMarketplace.json: bafybeib3fopqudslnrl2ipmzqlzbbggvc6kb2rcdfasbbtuehcc7iv3gfe
-  contract.py: bafybeifkqcnlmfn26u7rkijlgn63iinc43nee5re65irr4mcxa4qfue644
+  contract.py: bafybeic7ilo55dbs7joebnv2mkcnia5eovlqqymengcngxkkawxohlozpm
 fingerprint_ignore_patterns: []
 class_name: MechMarketplaceContract
 contract_interface_paths:
   ethereum: build/MechMarketplace.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==1.65.0
+    version: ==2.0.6
   web3:
-    version: <7,>=6.0.0
+    version: <8,>=7.0.0
   eth-abi:
-    version: ==4.0.0
+    version: ==5.2.0
   eth-utils:
-    version: ==2.2.0
+    version: ==5.3.0
   hexbytes: {}
   eth_typing: {}
 contracts: []

@@ -166,8 +166,8 @@ class MechMarketplaceContract(Contract):
         """
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        data = contract_instance.encodeABI(
-            fn_name="deliverMarketplace",
+        data = contract_instance.encode_abi(
+            abi_element_identifier="deliverMarketplace",
             args=[
                 request_id,
                 bytes.fromhex(data),

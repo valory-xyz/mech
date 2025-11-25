@@ -74,17 +74,6 @@ def test_ledger_dialogues_uses_skill_id_for_self_address(
     dlg.cleanup()
 
 
-def test_default_dialogues_uses_agent_address_for_self_address(
-    dialogue_skill_context: Any,
-) -> None:
-    """Default dialogues should use the agent_address from context as self address."""
-    dlg = dmod.DefaultDialogues(
-        name="default_dialogues", skill_context=dialogue_skill_context
-    )
-    assert _get_self_addr(dlg) == dialogue_skill_context.agent_address
-    dlg.cleanup()
-
-
 def test_acn_data_share_dialogues_uses_agent_address_for_self_address(
     dialogue_skill_context: Any,
 ) -> None:

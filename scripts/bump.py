@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2025 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -56,6 +56,7 @@ VERISON_RE = re.compile(r"(__version__|version)( )?=( )?\"(?P<version>[0-9a-z\.]
 
 OPEN_AEA_REPO = "valory-xyz/open-aea"
 OPEN_AUTONOMY_REPO = "valory-xyz/open-autonomy"
+TIMEOUT = 30.0
 
 DEPENDENCY_SPECS = {
     "open-aea": {
@@ -119,8 +120,10 @@ def make_git_request(url: str) -> requests.Response:
     """Make git request"""
     auth = os.environ.get("GITHUB_AUTH")
     if auth is None:
-        return requests.get(url=url)
-    return requests.get(url=url, headers={"Authorization": f"Bearer {auth}"})
+        return requests.get(url=url, timeout=TIMEOUT)
+    return requests.get(
+        url=url, headers={"Authorization": f"Bearer {auth}"}, timeout=TIMEOUT
+    )
 
 
 def get_latest_tag(repo: str) -> str:

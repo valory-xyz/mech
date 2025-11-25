@@ -96,5 +96,5 @@ class ERC20TokenContract(Contract):
             ledger_api=ledger_api,
             contract_address=contract_address,
         )
-        data = contract_interface.encodeABI(fn_name="transfer", args=[receiver, amount])
+        data = contract_interface.encode_abi(abi_element_identifier="transfer", args=[receiver, amount])
         return dict(data=data)
