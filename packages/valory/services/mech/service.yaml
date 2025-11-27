@@ -2,7 +2,7 @@ name: mech
 author: valory
 version: 0.1.0
 description: A decentralised task execution engine.
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
