@@ -1044,7 +1044,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
                 google_api_key,
                 google_engine_id,
                 num_urls,
-                num_words,
+                num_words,  # type: ignore
                 counter_callback=counter_callback,
                 source_links=kwargs.get("source_links", None),
             )
