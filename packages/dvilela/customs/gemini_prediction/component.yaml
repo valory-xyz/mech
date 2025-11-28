@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeictllsxej6cl3hhrsfyroyiqcp5ian2wayajwpesbyjwnf5gwinxq
-  gemini_prediction.py: bafybeid355km546xnij32y3i44c2praenwhktbirlhd5wi54ufnogrzkye
+  gemini_prediction.py: bafybeiaejbqx63mw5pokqjqnu6debcu4ymlh7fjew5w24ejqdmbi4cb2n4
 fingerprint_ignore_patterns: []
 entry_point: gemini_prediction.py
 callable: run
