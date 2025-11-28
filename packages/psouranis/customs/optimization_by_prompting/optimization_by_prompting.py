@@ -273,7 +273,7 @@ def evaluate_prompt(prompt: str, df: DataFrame, llm: OpenAILLM) -> List:
             dictionary_match = float(
                 eval(pred_chain)["p_yes"]  # pylint: disable=eval-used
             )
-        except BaseException as e:
+        except BaseException as e:  # noqa: B036
             print(f"Error occurred while running evaluate_prompt: {e}")
             match = re.search(r"\{.*\}", pred_chain)
             if match:

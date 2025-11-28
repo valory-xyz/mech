@@ -233,14 +233,12 @@ class LLMClient:
                     system_prompt = messages_copy[i]["content"]
                     del messages_copy[i]
 
-            response_provider = (
-                self.client.messages.create(  # pylint: disable=no-member
-                    model=model,
-                    messages=messages_copy,
-                    system=system_prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
+            response_provider = self.client.messages.create(  # pylint: disable=no-member
+                model=model,
+                messages=messages_copy,
+                system=system_prompt,  # pylint: disable=possibly-used-before-assignment
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             response = LLMResponse()
             response.content = response_provider.content[0].text
@@ -997,7 +995,7 @@ def do_reasoning_with_retry(
     error_message = (
         f"Failed to generate prediction after retries:\n{chr(10).join(tool_errors)}"
     )
-    raise Exception(error_message)
+    raise Exception(error_message)  # pylint: disable=broad-exception-raised
 
 
 def count_tokens(text: str, model: str) -> int:

@@ -61,7 +61,9 @@ def with_key_rotation(func: Callable) -> Callable:
                 # try with a new key again
                 service = "corcel"
                 if retries_left[service] <= 0:
-                    raise Exception("Error: API retries exhausted") from e
+                    raise Exception(  # pylint: disable=broad-exception-raised
+                        "Error: API retries exhausted"
+                    ) from e
                 retries_left[service] -= 1
                 api_keys.rotate(service)
                 return execute()

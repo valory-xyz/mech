@@ -218,14 +218,12 @@ class LLMClient:
                     system_prompt = messages[i]["content"]
                     del messages[i]
 
-            response_provider = (
-                self.client.messages.create(  # pylint: disable=no-member
-                    model=model,
-                    messages=messages,
-                    system=system_prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
+            response_provider = self.client.messages.create(  # pylint: disable=no-member
+                model=model,
+                messages=messages,
+                system=system_prompt,  # pylint: disable=possibly-used-before-assignment
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             response = LLMResponse()
             response.content = response_provider.content[0].text
