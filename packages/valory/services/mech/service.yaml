@@ -2,12 +2,12 @@ name: mech
 author: valory
 version: 0.1.0
 description: A decentralised task execution engine.
-aea_version: '>=1.0.0, <2.0.0'
+aea_version: '>=2.0.0, <3.0.0'
 license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeiesozgye4qxod3hvfsnpylmlpuyh3z5tjmapikumwfbhfx223qsrm
+agent: valory/mech:0.1.0:bafybeibj7zemu2f5jejxeqtxui4auaxfgsjcaww54bawi7o4nxc4t2cfe4
 number_of_agents: 1
 deployment:
   agent:

@@ -209,14 +209,12 @@ class LLMClient:
                     system_prompt = messages[i]["content"]
                     del messages[i]
 
-            response_provider = (
-                self.client.messages.create(  # pylint: disable=no-member
-                    model=model,
-                    messages=messages,
-                    system=system_prompt,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                )
+            response_provider = self.client.messages.create(  # pylint: disable=no-member
+                model=model,
+                messages=messages,
+                system=system_prompt,  # pylint: disable=possibly-used-before-assignment
+                temperature=temperature,
+                max_tokens=max_tokens,
             )
             response = LLMResponse()
             response.content = response_provider.content[0].text
@@ -619,8 +617,7 @@ def extract_event_date(doc_question: Doc) -> Optional[str]:
             datetime.strptime(event_date_ymd, "%Y-%m-%d")
     except (ValueError, TypeError):
         return None
-    else:
-        return event_date_ymd
+    return event_date_ymd
 
 
 def get_max_tokens_for_additional_information(
@@ -1309,7 +1306,9 @@ def generate_prediction_with_retry(
 ) -> Tuple[Any, Optional[Callable]]:
     """Attempt to generate a prediction with retries on failure."""
     if not client:
-        raise Exception("Client not initialized")
+        raise Exception(  # pylint: disable=broad-exception-raised
+            "Client not initialized"
+        )
 
     attempt = 0
     while attempt < retries:
@@ -1335,12 +1334,17 @@ def generate_prediction_with_retry(
 
                     extracted_block = extract_json_string(response.content)
 
-                return extracted_block, counter_callback
+                return (
+                    extracted_block,  # pylint: disable=possibly-used-before-assignment
+                    counter_callback,
+                )
         except Exception as e:
             print(f"Attempt {attempt + 1} failed with error: {e}")
             time.sleep(delay)
             attempt += 1
-    raise Exception("Failed to generate prediction after retries")
+    raise Exception(  # pylint: disable=broad-exception-raised
+        "Failed to generate prediction after retries"
+    )
 
 
 def fetch_additional_information(
@@ -1405,7 +1409,9 @@ def fetch_additional_information(
 
     # Print queries each on a new line
     print("QUERIES:\n")
-    for query in json_data["queries"]:
+    for query in json_data[  # pylint: disable=possibly-used-before-assignment
+        "queries"
+    ]:
         print(f"query: {query}\n")
 
     # Get URLs from queries

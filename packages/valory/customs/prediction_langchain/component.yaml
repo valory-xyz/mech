@@ -16,12 +16,8 @@ dependencies:
     version: ==0.2.1
   langchain-core:
     version: ==0.2.1
-  langchain-openai:
-    version: ==0.1.7
   langgraph:
     version: ==0.0.55
-  langchain_community:
-    version: ==0.2.1
   openai:
     version: ==1.93.0
   anthropic:

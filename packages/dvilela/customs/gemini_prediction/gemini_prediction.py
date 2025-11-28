@@ -55,7 +55,9 @@ def with_key_rotation(func: Callable) -> Callable:
                 # try with a new key again
                 service = "gemini"
                 if retries_left[service] <= 0:
-                    raise Exception("Error: API retries exhausted") from e
+                    raise Exception(  # pylint: disable=broad-exception-raised
+                        "Error: API retries exhausted"
+                    ) from e
                 retries_left[service] -= 1
                 api_keys.rotate(service)
                 return execute()
@@ -184,4 +186,4 @@ def run(  # pylint: disable=too-many-return-statements
     if tool_name == "gemini-prediction":
         response = response_post_process(response)
 
-    return response, prompt, None, None
+    return response, prompt, None, None  # type: ignore

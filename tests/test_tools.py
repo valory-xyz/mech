@@ -19,13 +19,11 @@
 """This module contains tool tests."""
 from typing import List, Any
 
-from packages.gnosis.customs.omen_tools import omen_buy_sell
 from packages.victorpolisetty.customs.dalle_request import dalle_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
 from packages.jhehemann.customs.prediction_sentence_embeddings import (
     prediction_sentence_embeddings,
 )
-from packages.gnosis.customs.ofv_market_resolver import ofv_market_resolver
 from packages.napthaai.customs.prediction_request_reasoning import (
     prediction_request_reasoning,
 )
@@ -151,26 +149,6 @@ class TestPredictionCOT(BaseToolTest):
     tool_module = prediction_url_cot
 
 
-class TestOmenTransactionBuilder(BaseToolTest):
-    """Test Prediction COT."""
-
-    tools = omen_buy_sell.ALLOWED_TOOLS
-    models = omen_buy_sell.ALLOWED_MODELS
-    market_id = (
-        "0x7323440218011988f0e431e19298d1921e41197f"  # to be resolved in 8 years
-    )
-    prompts = [
-        f"The sender 0x669F3CD2015eB9298b3feA01FCBb034068FE2D3f wants to buy 0 yes Tokens from market {market_id}."
-    ]
-    tool_module = omen_buy_sell
-
-    def _validate_response(self, response: Any) -> None:
-        super()._validate_response(response)
-        if response[2]:
-            expected_num_tx_params = 2
-            assert len(response[2].keys()) == expected_num_tx_params
-
-
 class TestDALLEGeneration(BaseToolTest):
     """Test DALL-E Generation."""
 
@@ -189,14 +167,3 @@ class TestPredictionSentenceEmbeddings(BaseToolTest):
         'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
     tool_module = prediction_sentence_embeddings
-
-
-class TestOfvMarketResolverTool(BaseToolTest):
-    """Test OFV Market Resolver Tool."""
-
-    tools = ofv_market_resolver.ALLOWED_TOOLS
-    models = ofv_market_resolver.ALLOWED_MODELS
-    prompts = [
-        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
-    ]
-    tool_module = ofv_market_resolver
