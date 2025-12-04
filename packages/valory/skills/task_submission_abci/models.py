@@ -54,6 +54,7 @@ class SharedState(BaseSharedState):
         "tool_delivery_time",
         "Duration taken by tool from completion till delivery",
         labelnames=["tool"],
+        buckets=(0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300),
     )
 
 
