@@ -17,19 +17,19 @@ fingerprint:
   tests/test_handlers.py: bafybeihkbnvbcdstqoe23yj3ryhudh6h6rifuxqyp3j76e7uxsjvdhrboq
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeic3jpkum7g6qo6x6vdrmvvhj7vqw7ec2op72uc3yfhmnlp5hn3joy
+- valory/http_server:0.22.0:bafybeicmy3phyy3ckvlfumioiadwlmlt5dijkp3mhezkxgx7kigigwe3rm
 contracts: []
 protocols:
-- valory/http:1.0.0:bafybeih4azmfwtamdbkhztkm4xitep3gx6tfdnoz6tvllmaqnhu3klejfa
+- valory/http:1.0.0:bafybeibxab2yfpchusrzw4rgrasjomtpphazanpivhhtznmuao5ny2lsmi
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeia5rj75bxgpw3kdjgxhbgg7dhs5rzewqczt74rcgzw2hbjwdt3f64
-- valory/registration_abci:0.1.0:bafybeiddlj4x4ge2dykc4kvaso47xidxt42fhmuq2vz7rsddrymyljqi24
-- valory/reset_pause_abci:0.1.0:bafybeicpd7bzkrpaleebnyodr3yzkt3dnywqqh5qax7swrgoujlg3jek2a
-- valory/task_submission_abci:0.1.0:bafybeic36uttugs2j6k4j45cr2mygvxo7ehfclgsad3ipeoytgtwjarx6m
-- valory/termination_abci:0.1.0:bafybeia3iz3pcqk5ta4zvyf645jv2tfvddckjhjzj5fw3euz43af2d3eaa
-- valory/transaction_settlement_abci:0.1.0:bafybeihj3dx3pn7hr3inwavs2tcev33xvbb55gczi6olmm4ey6s3halixi
-- valory/delivery_rate_abci:0.1.0:bafybeiafkzicbaicx2b5nbflp4nmguiykxo2wtw3jejfhwdwpsxpebpzeu
-- valory/task_execution:0.1.0:bafybeih2nd5yxyxbdre4supuovc7gwvggl2bp25z55nvwxh3k5ms5abgaa
+- valory/abstract_round_abci:0.1.0:bafybeib4xpcpuiryyfnkuyhypdvqi5ebbl7ugavv6ig6yp4nzk3fxosntm
+- valory/registration_abci:0.1.0:bafybeibf5nhislatztx2q3u46v7d36vmm7dnxpmuhrbxqxkz4lvdgifwha
+- valory/reset_pause_abci:0.1.0:bafybeihuxdetmcyqoqr7iatqsddufolzoebdxsxb4lxd2uiyvuwhb52ttq
+- valory/task_submission_abci:0.1.0:bafybeiarqavkywx4oioxcdv3w6jsvymfgpigi6d2lllgm7uyduw426pija
+- valory/termination_abci:0.1.0:bafybeigysvgr5m6zj5b6ofadeddzpxxlhxzn2hyxfilcybhcpp252vdft4
+- valory/transaction_settlement_abci:0.1.0:bafybeids5bopaujr5bh2jfhvysl6fzf7zexsbdifaurf4nerp24hv5uqnm
+- valory/delivery_rate_abci:0.1.0:bafybeidfl5ivxdoru5ox3ylcoqfejpuf5phvkrcl5bofjqn4aedhfj3lpm
+- valory/task_execution:0.1.0:bafybeib425n45wjhidbztlkpok2zcaj3zfjmzi4lfy55fpwq3kxyx25hfu
 behaviours:
   main:
     args: {}
