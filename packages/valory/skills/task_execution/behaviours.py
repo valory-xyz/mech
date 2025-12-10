@@ -141,13 +141,13 @@ class MechMetrics:
             "mech_tool_preparation_time",
             "Duration taken by tool from preparation till execution",
             labelnames=["tool"],
-            buckets=(0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300),
+            buckets=(0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600),
         )
         self.mech_tool_execution_time = Histogram(
             "mech_tool_execution_time",
             "Duration taken by tool from execution till completion",
             labelnames=["tool"],
-            buckets=(0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300),
+            buckets=(0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600),
         )
 
     def set_gauge(self, metric: Gauge, value: int, **labels: Any) -> None:
