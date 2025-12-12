@@ -459,7 +459,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             if req_mech not in self.payment_info:
                 # this should not happen
                 self.context.logger.warning(
-                    f"A mech address for which there is no payment type information was found in pending {task=}!"
+                    f"A mech address for which there is no payment type information was found in pending {task=}! Dropping the task."
                 )
                 continue
 
