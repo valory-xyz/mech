@@ -48,12 +48,15 @@ DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
 TIMED_OUT_TASKS = "timed_out_tasks"
+UNPROCESSED_TIMED_OUT_TASKS = "unprocessed_timed_out_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
 LAST_SUCCESSFUL_READ = "last_successful_read"
 LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
+PAYMENT_MODEL = "payment_model"
+PAYMENT_INFO = "payment_info"
 TIMED_OUT_STATUS = 2
 WAIT_FOR_TIMEOUT_STATUS = 1
 DELIVERED_STATUS = 3
@@ -161,6 +164,7 @@ class ContractHandler(BaseHandler):
         """Setup the contract handler."""
         self.context.shared_state[PENDING_TASKS] = []
         self.context.shared_state[WAIT_FOR_TIMEOUT] = []
+        self.context.shared_state[UNPROCESSED_TIMED_OUT_TASKS] = []
         self.context.shared_state[TIMED_OUT_TASKS] = []
         self.context.shared_state[DONE_TASKS] = []
         self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
@@ -195,14 +199,14 @@ class ContractHandler(BaseHandler):
         return mech_to_max_delivery_rate_dict[mech_address]
 
     @property
-    def timed_out_tasks(self) -> List[Dict[str, Any]]:
-        """Get timed_out_tasks for other mechs"""
-        return self.context.shared_state[TIMED_OUT_TASKS]
+    def unprocessed_timed_out_tasks(self) -> List[Dict[str, Any]]:
+        """Get unprocessed timed_out_tasks for other mechs"""
+        return self.context.shared_state[UNPROCESSED_TIMED_OUT_TASKS]
 
-    @timed_out_tasks.setter
-    def timed_out_tasks(self, value: List[Dict[str, Any]]) -> None:
-        """Get timed_out_tasks for other mechs"""
-        self.context.shared_state[TIMED_OUT_TASKS] = value
+    @unprocessed_timed_out_tasks.setter
+    def unprocessed_timed_out_tasks(self, value: List[Dict[str, Any]]) -> None:
+        """Set unprocessed timed_out_tasks for other mechs"""
+        self.context.shared_state[UNPROCESSED_TIMED_OUT_TASKS] = value
 
     @property
     def step_in_list_size(self) -> int:
@@ -232,6 +236,16 @@ class ContractHandler(BaseHandler):
         if body.get("request_ids"):
             # handle the request id status check response
             self._update_pending_list(body)
+        if body.get("mech_type"):
+            # handle the mech type response
+            self.context.shared_state[PAYMENT_MODEL] = body["mech_type"]
+            self.context.logger.info(
+                f"Found payment model {self.context.shared_state[PAYMENT_MODEL]!r}."
+            )
+        if body.get("mech_types"):
+            # handle the mech types response
+            self.context.shared_state[PAYMENT_INFO] = body["mech_types"]
+            self.context.logger.info("The cache was updated with the new mech types.")
 
         self.params.in_flight_req = False
         self.set_was_last_read_successful(True)
@@ -243,7 +257,7 @@ class ContractHandler(BaseHandler):
         # Reset lists.
         self.context.shared_state[INFLIGHT_READ_TS] = None
         self.wait_for_timeout_tasks.clear()
-        self.timed_out_tasks = body.get("timed_out_requests", [])
+        self.unprocessed_timed_out_tasks = body.get("timed_out_requests", [])
         self.set_last_successful_read(
             self.params.req_params.from_block[cast(str, self.params.req_type)]
         )
@@ -293,13 +307,7 @@ class ContractHandler(BaseHandler):
                 self.context.logger.info(
                     f"Timed out status matched, adding request: {req} to timeout tasks"
                 )
-                timed_out_tasks_len = len(self.timed_out_tasks)
-                if timed_out_tasks_len >= self.step_in_list_size:
-                    self.context.logger.info(
-                        f"Timed out tasks len {timed_out_tasks_len} exceeds the configured cap of {self.step_in_list_size}. Dropping req: {req}"
-                    )
-                else:
-                    self.timed_out_tasks.append(req)
+                self.unprocessed_timed_out_tasks.append(req)
             elif (
                 req["status"] == WAIT_FOR_TIMEOUT_STATUS
                 and req["request_delivery_rate"] >= self.mech_to_max_delivery_rate

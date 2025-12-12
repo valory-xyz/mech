@@ -43,6 +43,7 @@ from packages.valory.connections.ledger.connection import (
 from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
+from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
@@ -66,10 +67,13 @@ from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
+UNPROCESSED_TIMED_OUT_TASKS = "unprocessed_timed_out_tasks"
 TIMED_OUT_TASKS = "timed_out_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"
 DONE_TASKS_LOCK = "lock"
+PAYMENT_MODEL = "payment_model"
+PAYMENT_INFO = "payment_info"
 LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
@@ -202,6 +206,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # Prometheus metrics
         self.mech_metrics = MechMetrics()
 
+    def _request_payment_model(self) -> None:
+        """Request the mech's payment model."""
+        contract_api_msg, _ = self.context.contract_dialogues.create(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.agent_mech_contract_address,
+            contract_id=str(AgentMechContract.contract_id),
+            callable="get_mech_type",
+            kwargs=ContractApiMessage.Kwargs({}),
+            counterparty=LEDGER_API_ADDRESS,
+            ledger_id=self.context.default_ledger_id,
+        )
+        self.context.outbox.put_message(message=contract_api_msg)
+        self.params.in_flight_req = True
+
     def setup(self) -> None:
         """Implement the setup."""
         self.context.logger.info("Setting up TaskExecutionBehaviour")
@@ -209,13 +227,41 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_pricing = self.params.tools_to_pricing
         self._keychain = KeyChain(self.params.api_keys)
 
+    def _ensure_payment_model(self) -> bool:
+        """Set the mech's payment model."""
+        if not self.params.use_mech_marketplace:
+            return True
+
+        if self.params.in_flight_req:
+            return False
+
+        if self.payment_model:
+            return True
+
+        self.context.logger.info("Setting the mech's payment model...")
+        self._request_payment_model()
+        return False
+
     def act(self) -> None:
         """Implement the act."""
         self._download_tools()
+        if not self._ensure_payment_model():
+            return
         self._execute_ipfs_tasks()
         self._execute_task()
         self._check_for_new_marketplace_reqs()
+        self._filter_out_incompatible_reqs()
         self._update_pending_tasks()
+
+    @property
+    def payment_model(self) -> Optional[Any]:
+        """Get the mech's payment model."""
+        return self.context.shared_state.get(PAYMENT_MODEL)
+
+    @property
+    def payment_info(self) -> Dict[str, Any]:
+        """Get the cached mechs' payment info."""
+        return self.context.shared_state.get(PAYMENT_INFO, {})
 
     @property
     def done_tasks_lock(self) -> threading.Lock:
@@ -252,8 +298,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     @property
     def timed_out_tasks(self) -> List[Dict[str, Any]]:
-        """Get timed_out_tasks for other mechs"""
+        """Get timed_out_tasks for other mechs."""
         return self.context.shared_state[TIMED_OUT_TASKS]
+
+    @timed_out_tasks.setter
+    def timed_out_tasks(self, tasks: List[Dict[str, Any]]) -> None:
+        """Set timed_out_tasks for other mechs."""
+        self.context.shared_state[TIMED_OUT_TASKS] = tasks
+
+    @property
+    def unprocessed_timed_out_tasks(self) -> List[Dict[str, Any]]:
+        """Get unprocessed timed_out_tasks for other mechs."""
+        return self.context.shared_state[UNPROCESSED_TIMED_OUT_TASKS]
+
+    @unprocessed_timed_out_tasks.setter
+    def unprocessed_timed_out_tasks(self, tasks: List[Dict[str, Any]]) -> None:
+        """Set unprocessed timed_out_tasks for other mechs."""
+        self.context.shared_state[UNPROCESSED_TIMED_OUT_TASKS] = tasks
 
     @property
     def done_tasks(self) -> List[Dict[str, Any]]:
@@ -350,6 +411,70 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self.context.outbox.put_message(message=ledger_api_msg)
         self.params.in_flight_req = True
+
+    def _get_payment_types(self) -> bool:
+        """Get the payment types of the mechs in the timed out tasks, if not available in the cache."""
+        if self.params.in_flight_req:
+            return False
+
+        to_request = {
+            mech_address
+            for task in self.unprocessed_timed_out_tasks
+            if (mech_address := task["contract_address"]) not in self.payment_info
+            and mech_address != self.params.agent_mech_contract_address
+        }
+
+        if not to_request:
+            return True
+
+        self.context.logger.info(
+            f"Getting mech types for addresses {to_request} not found in cache."
+        )
+
+        contract_api_msg, _ = self.context.contract_dialogues.create(
+            performative=ContractApiMessage.Performative.GET_STATE,
+            contract_address=self.params.agent_mech_contract_address,
+            contract_id=str(AgentMechContract.contract_id),
+            callable="get_mech_types",
+            kwargs=ContractApiMessage.Kwargs(dict(mech_addresses=to_request)),
+            counterparty=LEDGER_API_ADDRESS,
+            ledger_id=self.context.default_ledger_id,
+        )
+        self.context.outbox.put_message(message=contract_api_msg)
+        self.params.in_flight_req = True
+        return False
+
+    def _filter_out_incompatible_reqs(self) -> None:
+        """Filter out incompatible requests based on the payment model."""
+        if not self.params.use_mech_marketplace:
+            return
+
+        done = self._get_payment_types()
+        if not done:
+            return
+
+        same_payment_type = []
+        for task in self.unprocessed_timed_out_tasks:
+            req_mech = task["contract_address"]
+            if req_mech not in self.payment_info:
+                # this should not happen
+                self.context.logger.warning(
+                    f"A mech address for which there is no payment type information was found in pending {task=}! Dropping the task."
+                )
+                continue
+
+            req_mech_pm = self.payment_info[req_mech]
+            if req_mech_pm == self.payment_model:
+                # the timed out task can be processed by this mech as they share the same payment type model
+                same_payment_type.append(task)
+                continue
+
+            self.context.logger.info(
+                f"Filtering out incompatible request {task}. "
+                f"Requested mech's payment model: {req_mech_pm} != {self.payment_model}."
+            )
+
+        self.timed_out_tasks = same_payment_type[: self.params.step_in_list_size]
 
     def _check_for_new_marketplace_reqs(self) -> None:
         """Check for new reqs."""

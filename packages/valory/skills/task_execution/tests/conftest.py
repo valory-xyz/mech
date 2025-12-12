@@ -40,6 +40,7 @@ from packages.valory.skills.task_execution.behaviours import (
     REQUEST_ID_TO_DELIVERY_RATE_INFO,
     TIMED_OUT_TASKS,
     TaskExecutionBehaviour,
+    UNPROCESSED_TIMED_OUT_TASKS,
     WAIT_FOR_TIMEOUT,
 )
 
@@ -54,6 +55,7 @@ def shared_state() -> Dict[str, Any]:
         PENDING_TASKS: [],
         WAIT_FOR_TIMEOUT: [],
         TIMED_OUT_TASKS: [],
+        UNPROCESSED_TIMED_OUT_TASKS: [],
         DONE_TASKS: [],
         IPFS_TASKS: [],
         DONE_TASKS_LOCK: threading.Lock(),
@@ -84,6 +86,7 @@ def params_stub() -> SimpleNamespace:
         req_type=None,
         default_chain_id=100,
         agent_mech_contract_addresses=[mech_addr],
+        agent_mech_contract_address=mech_addr,
         mech_to_config={
             mech_addr_lower: SimpleNamespace(
                 is_marketplace_mech=True,

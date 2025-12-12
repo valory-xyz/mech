@@ -91,6 +91,11 @@ class Params(BaseParams):
             for key, value in mech_to_config_dict.items()
         }
         self.agent_mech_contract_addresses = list(self.mech_to_config.keys())
+        try:
+            self.agent_mech_contract_address = self.agent_mech_contract_addresses[0]
+        except IndexError:
+            raise ValueError("No mech contract addresses found!")
+
         self.hash_checkpoint_address = self._ensure(
             "hash_checkpoint_address", kwargs, str
         )

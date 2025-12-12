@@ -7,15 +7,15 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeiflzkgny2ivr2gjiafrk2s6renfbbozrgfno7rjucmcxujza7rymm
+  behaviours.py: bafybeibueozvkhmzb2xcr7om6upucdnjsevdtcy3mncysd2slq3zyzpoji
   dialogues.py: bafybeih3sbvogzgjgukf67nwefyd6wwwsxoe7xxzsf4mnexvz4k6aginuy
-  handlers.py: bafybeiaxso4ce574t7sbsrfwisrrmyzxkrvhm3mzucc227gu7r2sojfh64
-  models.py: bafybeibtnnysthc3imw2zhmhnbqvzqu65bx33jsn44zwt6dfrojrndid7m
+  handlers.py: bafybeif724giq5apjexza6k53iuyxaz4bkiokjjsh66pdfyttlg7iceagm
+  models.py: bafybeiatry4lxawllntogneynhdao5c6xtgcrqbcmponxv6pfebysfyeky
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
-  tests/conftest.py: bafybeigndgh2yfqhovgdydafcwxamvxsmngjgzpfkkwo5n3zgk4rlz5jvu
-  tests/test_behaviours.py: bafybeih32odtcwa2nzc7oqimnzjxoukjjkti3ysech44vk2vtisn7wq3lu
+  tests/conftest.py: bafybeiechvx36cjl2viykpgampy6waaq2jrkbxvgmd4nxua2ult4ugxk6y
+  tests/test_behaviours.py: bafybeibq5rykiid3xam2l23y5empvpkonaxn7zqzichibzreohae7fhslq
   tests/test_dialogues.py: bafybeigtvumwhygqsjtzvicbygjmj3a2dr36j6mjaiez36bqfyh2naux3i
-  tests/test_handlers.py: bafybeicsgqqi56p4afdb7vuypkc3gk4pxkcg5rcz46ojp7fvspwfhp67pu
+  tests/test_handlers.py: bafybeigdbj3p2tvne7dqd7hdj3njeqv5ijgu7eussckahk5i5vhketxsai
   tests/test_models.py: bafybeife4reoldzyxu3muhkdpl7leos3z4b3vyepomzdr4lj4kgr2zkqkm
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
@@ -29,6 +29,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeif7exoq2viwhfgfcjplxq73hnxvgpsx7pwshhntx6aekza25mdwli
 - valory/p2p_libp2p_client:0.1.0:bafybeihezztwiiismlbblbv67i4zibp7w6xzpqadt67mcdjaoauibjqii4
 contracts:
+- valory/agent_mech:0.1.0:bafybeiebzjblkhr25jpvevsglk4uvsbzmysvkfkwauqiyaneknrx4lnglq
 - valory/mech_marketplace:0.1.0:bafybeicnl6sdhhw244hra52h5zxndzhq4ofe3jwgdnp4sw2jrcdcbm3vv4
 protocols:
 - valory/acn_data_share:0.1.0:bafybeic7infync56c4b5qzmgomcfkh3au5bpsd53rlfq4hzyjelb3w2u74

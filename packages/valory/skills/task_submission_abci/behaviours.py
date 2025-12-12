@@ -109,6 +109,7 @@ SENDER = "sender"
 REQUESTER_KEY = "requester"
 MECH_ADDRESS = "mech_address"
 LAST_TX = "last_tx"
+PAYMENT_MODEL = "payment_model"
 
 
 class OffchainKeys(Enum):
@@ -177,6 +178,11 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         """
         done_tasks = deepcopy(self.context.shared_state.get(DONE_TASKS, []))
         return cast(List[Dict[str, Any]], done_tasks)
+
+    @property
+    def payment_model(self) -> None:
+        """Get the mech's payment model."""
+        return self.context.shared_state.get(PAYMENT_MODEL)
 
     def done_tasks_lock(self) -> threading.Lock:
         """Get done_tasks_lock."""
@@ -715,6 +721,9 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
     def _get_mech_payment_type(
         self, address: str
     ) -> Generator[None, None, Optional[bytes]]:
+        if self.payment_model and address == self.params.agent_mech_contract_address:
+            return self.payment_model
+
         self.context.logger.info(f"Fetching mech type for mech {address}")
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
@@ -731,7 +740,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
             )
             return None
 
-        mech_type = cast(bytes, contract_api_msg.state.body["data"])
+        mech_type = cast(bytes, contract_api_msg.state.body["mech_type"])
         self.context.logger.info(
             f"Fetched mech type for mech {address}: {mech_type.hex()}"
         )
