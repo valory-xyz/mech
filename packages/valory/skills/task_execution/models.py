@@ -99,6 +99,11 @@ class Params(Model):
             for key, value in mech_to_config_dict.items()
         }
         self.agent_mech_contract_addresses = list(self.mech_to_config.keys())
+        try:
+            self.agent_mech_contract_address = self.agent_mech_contract_addresses[0]
+        except IndexError:
+            raise ValueError("No mech contract addresses found!")
+
         self.mech_marketplace_address: str = self._ensure_get(
             "mech_marketplace_address", kwargs, str
         )

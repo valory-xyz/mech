@@ -21,7 +21,7 @@
 
 import logging
 from enum import Enum
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, Optional, Set, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
@@ -556,11 +556,22 @@ class AgentMechContract(Contract):
 
     @classmethod
     def get_mech_type(cls, ledger_api: LedgerApi, contract_address: str) -> JSONLike:
-        """Get tx data"""
+        """Get the mech's payment type."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         payment_type_bytes = contract_instance.functions.paymentType().call()
 
-        return {"data": payment_type_bytes}
+        return {"mech_type": payment_type_bytes}
+
+    @classmethod
+    def get_mech_types(
+        cls, ledger_api: LedgerApi, contract_address: str, mech_addresses: Set[str]
+    ) -> Dict[str, Dict[str, Any]]:
+        """Get the given mechs' payment types."""
+        addresses_to_types = {
+            mech_address: cls.get_mech_type(ledger_api, mech_address).get("mech_type")
+            for mech_address in mech_addresses
+        }
+        return {"mech_types": addresses_to_types}
 
     @classmethod
     def get_marketplace_mech_request_events(
