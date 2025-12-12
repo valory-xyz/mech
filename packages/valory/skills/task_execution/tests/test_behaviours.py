@@ -94,6 +94,8 @@ def test_happy_path_executes_and_stores(
         lambda files, **k: (object(), fake_dialogue),
     )
 
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
+
     call_no: Dict[str, int] = {"n": 0}
 
     def send_message_stub(
@@ -184,6 +186,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
         "_build_ipfs_store_file_req",
         lambda files, **k: (object(), fake_dialogue),
     )
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def _fail_submit(*a: Any, **k: Any) -> None:
         """
@@ -280,6 +283,8 @@ def test_broken_process_pool_restart(
         "_build_ipfs_store_file_req",
         lambda files, **k: (object(), fake_dialogue),
     )
+
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     calls: Dict[str, int] = {"n": 0}
 
@@ -378,6 +383,7 @@ def test_invalid_tool_is_recorded_and_no_execution(
         "_submit_task",
         lambda *a, **k: (_ for _ in ()).throw(AssertionError("should not execute")),
     )
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def send_message_stub(msg: Any, dlg: Any, cb: Callable[[Any, Any], None]) -> None:
         """
@@ -438,6 +444,7 @@ def test_ipfs_aux_task_removed_from_queue(
         "_build_ipfs_store_file_req",
         lambda *a, **k: (object(), fake_dialogue),
     )
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     def send_message_stub(msg: Any, dlg: Any, cb: Callable[[Any, Any], None]) -> None:
         """
@@ -509,6 +516,7 @@ def test_behaviour_status_check_and_proper_updates(
         MagicMock(),
     )
     monkeypatch.setattr(time, "time", lambda: 1.0)
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
     behaviour.act()
 

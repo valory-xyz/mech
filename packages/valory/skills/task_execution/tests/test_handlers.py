@@ -230,8 +230,8 @@ def test_contract_handler_other_mech_goes_to_wait_list(
 
     assert params.req_params.from_block["marketplace"] == 22
     assert len(ch.pending_tasks) == 0
-    assert len(ch.timed_out_tasks) == 1
-    assert ch.timed_out_tasks[0]["priorityMech"] == other_mech
+    assert len(ch.unprocessed_timed_out_tasks) == 1
+    assert ch.unprocessed_timed_out_tasks[0]["priorityMech"] == other_mech
     assert params.in_flight_req is False
 
 
@@ -463,7 +463,7 @@ def test_contract_handler_my_mech_delivered_not_enqueued(
     # Nothing should be enqueued anywhere
     assert len(ch.pending_tasks) == 0
     assert len(ch.wait_for_timeout_tasks) == 0
-    assert len(ch.timed_out_tasks) == 0
+    assert len(ch.unprocessed_timed_out_tasks) == 0
 
     # in-flight cleared
     assert params.in_flight_req is False
@@ -479,7 +479,7 @@ def test_contract_handler_timed_out_then_delivered_updates_list(
     params.req_type = "marketplace"
     params.req_params.from_block["marketplace"] = 0
 
-    # Use a non-matching mech (so it won't go to pending), but status=2 should land in timed_out_tasks.
+    # Use a non-matching mech (so it won't go to pending), but status=2 should land in unprocessed_timed_out_tasks.
     other_mech: str = "0xBEEF"
     my_mech: str = params.agent_mech_contract_addresses[0]
     assert other_mech.lower() != my_mech.lower()
@@ -490,7 +490,7 @@ def test_contract_handler_timed_out_then_delivered_updates_list(
     ch = ContractHandler(name="contract", skill_context=handler_context)
     ch.setup()
 
-    # Round 1: status=2 -> goes to timed_out_tasks
+    # Round 1: status=2 -> goes to unprocessed_timed_out_tasks
     body_round1: Dict[str, List[Dict[str, Any]]] = {
         "data": [
             {
@@ -515,11 +515,11 @@ def test_contract_handler_timed_out_then_delivered_updates_list(
     assert params.req_params.from_block["marketplace"] == 101
     assert len(ch.pending_tasks) == 0
     assert len(ch.wait_for_timeout_tasks) == 0
-    assert len(ch.timed_out_tasks) == 1
-    assert ch.timed_out_tasks[0]["tx_hash"] == "0xround1"
+    assert len(ch.unprocessed_timed_out_tasks) == 1
+    assert ch.unprocessed_timed_out_tasks[0]["tx_hash"] == "0xround1"
     assert params.in_flight_req is False
 
-    # Round 2: same request turns into delivered (status=3) -> timed_out_tasks should be cleared
+    # Round 2: same request turns into delivered (status=3) -> unprocessed_timed_out_tasks should be cleared
     params.in_flight_req = True
     body_round2: Dict[str, List[Dict[str, Any]]] = {
         "data": [
@@ -544,7 +544,7 @@ def test_contract_handler_timed_out_then_delivered_updates_list(
 
     # from_block advances to 106; timed_out list is cleared (handler resets and doesn't re-add delivered)
     assert params.req_params.from_block["marketplace"] == 106
-    assert len(ch.timed_out_tasks) == 0
+    assert len(ch.unprocessed_timed_out_tasks) == 0
     assert len(ch.pending_tasks) == 0
     assert len(ch.wait_for_timeout_tasks) == 0
     assert params.in_flight_req is False
