@@ -213,7 +213,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             contract_address=self.params.agent_mech_contract_address,
             contract_id=str(AgentMechContract.contract_id),
             callable="get_mech_type",
-            kwargs=ContractApiMessage.Kwargs({}),
+            kwargs=ContractApiMessage.Kwargs(
+                dict(
+                    chain_id=self.params.default_chain_id,
+                )
+            ),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
@@ -436,7 +440,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             contract_address=self.params.agent_mech_contract_address,
             contract_id=str(AgentMechContract.contract_id),
             callable="get_mech_types",
-            kwargs=ContractApiMessage.Kwargs(dict(mech_addresses=to_request)),
+            kwargs=ContractApiMessage.Kwargs(
+                dict(mech_addresses=to_request, chain_id=self.params.default_chain_id)
+            ),
             counterparty=LEDGER_API_ADDRESS,
             ledger_id=self.context.default_ledger_id,
         )
