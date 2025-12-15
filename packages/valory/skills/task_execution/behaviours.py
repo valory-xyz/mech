@@ -463,10 +463,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         for task in self.unprocessed_timed_out_tasks:
             req_mech = task["priorityMech"]
             if req_mech not in self.payment_info:
-                # this should not happen
-                self.context.logger.warning(
-                    f"A mech address for which there is no payment type information was found in pending {task=}! Dropping the task."
-                )
+                # not stepping in for self
+                if req_mech != self.params.agent_mech_contract_address:
+                    # this should not happen
+                    self.context.logger.warning(
+                        f"A mech address for which there is no payment type information was found in pending {task=}! Dropping the task."
+                    )
                 continue
 
             req_mech_pm = self.payment_info[req_mech]
