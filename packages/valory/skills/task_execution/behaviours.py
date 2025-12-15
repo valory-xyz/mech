@@ -424,7 +424,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         to_request = {
             mech_address
             for task in self.unprocessed_timed_out_tasks
-            if (mech_address := task["contract_address"]) not in self.payment_info
+            if (mech_address := task["priorityMech"]) not in self.payment_info
             and mech_address != self.params.agent_mech_contract_address
         }
 
@@ -461,12 +461,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         same_payment_type = []
         for task in self.unprocessed_timed_out_tasks:
-            req_mech = task["contract_address"]
+            req_mech = task["priorityMech"]
             if req_mech not in self.payment_info:
-                # this should not happen
-                self.context.logger.warning(
-                    f"A mech address for which there is no payment type information was found in pending {task=}! Dropping the task."
-                )
+                # not stepping in for self
+                if req_mech != self.params.agent_mech_contract_address:
+                    # this should not happen
+                    self.context.logger.warning(
+                        f"A mech address for which there is no payment type information was found in pending {task=}! Dropping the task."
+                    )
                 continue
 
             req_mech_pm = self.payment_info[req_mech]
