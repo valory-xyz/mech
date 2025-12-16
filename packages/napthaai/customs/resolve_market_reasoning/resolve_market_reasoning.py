@@ -19,6 +19,8 @@
 """This module implements a Mech tool for binary predictions."""
 
 import functools
+import json
+import random
 import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -28,12 +30,10 @@ from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 import PyPDF2
 import anthropic
 import faiss
-import googleapiclient
 import numpy as np
 import openai
 import requests
 from docstring_parser import parse
-from googleapiclient.discovery import build
 from markdownify import markdownify as md
 from openai import OpenAI
 from pydantic import BaseModel, Field
@@ -46,7 +46,6 @@ DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
 BUFFER = 500  # Buffer for the total tokens in the embeddings batch
 MAX_EMBEDDING_TOKENS = 300000 - BUFFER  # Maximum tokens for the embeddings batch
 N_MODEL_CALLS = 6
-GOOGLE_RATE_LIMIT_EXCEEDED_CODE = 429
 DEFAULT_DELIVERY_RATE = 100
 
 
@@ -133,16 +132,6 @@ def with_key_rotation(func: Callable) -> Callable:
                 retries_left["openrouter"] -= 1
                 api_keys.rotate("openai")
                 api_keys.rotate("openrouter")
-                return execute()
-            except googleapiclient.errors.HttpError as e:
-                # try with a new key again
-                if e.status_code != GOOGLE_RATE_LIMIT_EXCEEDED_CODE:
-                    raise e
-                service = "google_api_key"
-                if retries_left[service] <= 0:
-                    raise e
-                retries_left[service] -= 1
-                api_keys.rotate(service)
                 return execute()
             except Exception as e:
                 print(f"Unexpected error: {e}")
@@ -519,45 +508,29 @@ def multi_queries(
     return queries.queries, counter_callback
 
 
-def search_google(query: str, api_key: str, engine: str, num: int) -> List[str]:
-    """Performs a Google Custom Search and returns a list of result links."""
-    service = build("customsearch", "v1", developerKey=api_key)
-    search = (
-        service.cse()  # pylint: disable=no-member
-        .list(
-            q=query,
-            cx=engine,
-            num=num,
-        )
-        .execute()
-    )
-    return [result["link"] for result in search["items"]]
-
-
 def get_urls_from_queries(
-    queries: List[str], api_key: str, engine: str, num: int
+    queries: List[str], api_key: str, num: int
 ) -> List[str]:
-    """Get URLs from search engine queries"""
-    results = []
+    """Get URLs from search engine queries using Serper."""
+    urls: List[str] = []
     for query in queries:
         try:
-            for url in search_google(
-                query=query,
-                api_key=api_key,
-                engine=engine,
-                num=num,
-            ):
-                results.append(url)
-        except googleapiclient.errors.HttpError as e:
-            if e.resp.status == GOOGLE_RATE_LIMIT_EXCEEDED_CODE:
-                print(
-                    f"Rate limit exceeded for query: {query}. Trying to rotate API key."
-                )
-                raise e
-            print(f"HTTP error for query {query}: {e}")
+            url = "https://google.serper.dev/search"
+            payload = json.dumps({"q": query})
+            headers = {
+                "X-API-KEY": api_key,
+                "Content-Type": "application/json",
+            }
+            response = requests.request("POST", url, headers=headers, data=payload, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+            organic = data.get("organic", [])
+            sampled = random.sample(organic, k=min(num, len(organic)))
+            urls.extend(item["link"] for item in sampled)
+        except Exception as e:
+            print(f"Error fetching URLs for query '{query}': {e}")
 
-    unique_results = list(set(results))
-    return unique_results
+    return list(set(urls))
 
 
 def get_dates(
@@ -797,15 +770,12 @@ def fetch_additional_information(
     client_: OpenAI,
     prompt: str,
     engine: str,
-    google_api_key: Optional[str],
-    google_engine_id: Optional[str],
+    serper_api_key: Optional[str],
     counter_callback: Optional[Callable] = None,
 ) -> Tuple:
     """Fetch additional information from the web."""
-    if not google_api_key:
-        raise RuntimeError("Google API key not found")
-    if not google_engine_id:
-        raise RuntimeError("Google Engine Id not found")
+    if not serper_api_key:
+        raise RuntimeError("Serper API key not found")
 
     # generate multiple queries for fetching information from the web
     queries, counter_callback = multi_queries(
@@ -820,8 +790,7 @@ def fetch_additional_information(
     # get the top URLs for the queries
     urls = get_urls_from_queries(
         queries=queries,
-        api_key=google_api_key,
-        engine=google_engine_id,
+        api_key=serper_api_key,
         num=NUM_URLS_PER_QUERY,
     )
     print(f"URLs: {urls}")
@@ -932,8 +901,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         prompt = kwargs["prompt"]
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
-        google_api_key = api_keys.get("google_api_key", None)
-        google_engine_id = api_keys.get("google_engine_id", None)
+        serper_api_key = api_keys.get("serper_api_key", None)
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
@@ -979,8 +947,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             client_=client,
             prompt=prompt,
             engine=engine,
-            google_api_key=google_api_key,
-            google_engine_id=google_engine_id,
+            serper_api_key=serper_api_key,
             counter_callback=counter_callback,
         )
 
