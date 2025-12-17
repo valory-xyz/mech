@@ -69,6 +69,13 @@ type: skill
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_owner_share: ${SERVICE_SHARE:int:0}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
+    randomness_api: &id002
+      args:
+        method: ${RANDOMNESS_API_METHOD:str:GET}
+        response_key: ${RANDOMNESS_API_RESPONSE_KEY:str:null}
+        response_type: ${RANDOMNESS_API_RESPONSE_TYPE:str:dict}
+        retries: ${RANDOMNESS_API_RETRIES:int:5}
+        url: ${RANDOMNESS_API_URL:str:https://drand.cloudflare.com/public/latest}
 1:
   models:
     params:
@@ -108,6 +115,7 @@ type: skill
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_owner_share: ${SERVICE_SHARE:int:0}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
+    randomness_api: *id002
 2:
   models:
     params:
@@ -147,6 +155,7 @@ type: skill
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_owner_share: ${SERVICE_SHARE:int:0}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
+    randomness_api: *id002
 3:
   models:
     params:
@@ -186,6 +195,7 @@ type: skill
         mech_staking_instance_address: ${MECH_STAKING_INSTANCE_ADDRESS:str:0x0000000000000000000000000000000000000000}
         service_owner_share: ${SERVICE_SHARE:int:0}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
+    randomness_api: *id002
 ---
 public_id: valory/task_execution:0.1.0
 type: skill
