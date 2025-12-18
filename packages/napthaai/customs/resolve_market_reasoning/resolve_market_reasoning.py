@@ -18,7 +18,10 @@
 # ------------------------------------------------------------------------------
 """This module implements a Mech tool for binary predictions."""
 
+# pylint: disable=too-many-arguments,too-many-locals
+
 import functools
+import json
 import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -144,7 +147,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 retries_left[service] -= 1
                 api_keys.rotate(service)
                 return execute()
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 print(f"Unexpected error: {e}")
                 return str(e), "", None, None, api_keys
 
@@ -560,6 +563,32 @@ def get_urls_from_queries(
     return unique_results
 
 
+def get_urls_from_queries_serper(
+    queries: List[str], api_key: str, num: int
+) -> List[str]:
+    """Get URLs from search engine queries using Serper."""
+    urls: List[str] = []
+    for query in queries:
+        try:
+            url = "https://google.serper.dev/search"
+            payload = json.dumps({"q": query})
+            headers = {
+                "X-API-KEY": api_key,
+                "Content-Type": "application/json",
+            }
+            response = requests.request(
+                "POST", url, headers=headers, data=payload, timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+            organic = data.get("organic", [])
+            urls.extend(item["link"] for item in organic[:num])
+        except Exception as e:  # pylint: disable=broad-except
+            print(f"Error fetching URLs for query '{query}': {e}")
+
+    return list(set(urls))
+
+
 def get_dates(
     client_: OpenAI,
     text: str,
@@ -618,7 +647,7 @@ def extract_text_from_pdf(
         doc = Document(text=text[:num_words] if num_words else text, date="", url=url)
 
         return doc
-    except Exception as e:
+    except Exception as e:  # pylint: disable=broad-except
         print(f"An error occurred: {e}")
         return None
 
@@ -677,7 +706,7 @@ def extract_texts(
                 extracted_texts.append(doc)
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
-            except Exception as e:
+            except Exception as e:  # pylint: disable=broad-except
                 print(f"An error occurred: {e}")
     return extracted_texts, counter_callback
 
@@ -799,6 +828,7 @@ def fetch_additional_information(
     engine: str,
     google_api_key: Optional[str],
     google_engine_id: Optional[str],
+    serper_api_key: Optional[str],
     counter_callback: Optional[Callable] = None,
 ) -> Tuple:
     """Fetch additional information from the web."""
@@ -806,6 +836,8 @@ def fetch_additional_information(
         raise RuntimeError("Google API key not found")
     if not google_engine_id:
         raise RuntimeError("Google Engine Id not found")
+    if not serper_api_key:
+        raise RuntimeError("Serper API key not found")
 
     # generate multiple queries for fetching information from the web
     queries, counter_callback = multi_queries(
@@ -818,12 +850,24 @@ def fetch_additional_information(
     print(f"Queries: {queries}")
 
     # get the top URLs for the queries
-    urls = get_urls_from_queries(
-        queries=queries,
-        api_key=google_api_key,
-        engine=google_engine_id,
-        num=NUM_URLS_PER_QUERY,
-    )
+    urls = []
+    try:
+        urls = get_urls_from_queries(
+            queries=queries,
+            api_key=google_api_key,
+            engine=google_engine_id,
+            num=NUM_URLS_PER_QUERY,
+        )
+    except Exception as e:  # pylint: disable=broad-except
+        print(f"Error with Google Search API: {e}.")
+
+    if not urls:
+        print("Falling back to Serper API.")
+        urls = get_urls_from_queries_serper(
+            queries=queries,
+            api_key=serper_api_key,
+            num=NUM_URLS_PER_QUERY,
+        )
     print(f"URLs: {urls}")
 
     # Extract text and dates from the URLs
@@ -934,6 +978,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
+        serper_api_key = api_keys.get("serperapi", None)
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
@@ -981,6 +1026,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             engine=engine,
             google_api_key=google_api_key,
             google_engine_id=google_engine_id,
+            serper_api_key=serper_api_key,
             counter_callback=counter_callback,
         )
 
