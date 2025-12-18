@@ -22,7 +22,6 @@
 
 import functools
 import json
-import random
 import re
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -583,8 +582,7 @@ def get_urls_from_queries_serper(
             response.raise_for_status()
             data = response.json()
             organic = data.get("organic", [])
-            sampled = random.sample(organic, k=min(num, len(organic)))
-            urls.extend(item["link"] for item in sampled)
+            urls.extend(item["link"] for item in organic[:num])
         except Exception as e:  # pylint: disable=broad-except
             print(f"Error fetching URLs for query '{query}': {e}")
 
