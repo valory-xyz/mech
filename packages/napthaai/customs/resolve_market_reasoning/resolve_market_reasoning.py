@@ -980,7 +980,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
-        serper_api_key = api_keys.get("serper_api_key", None)
+        serper_api_key = api_keys.get("serperapi", None)
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
