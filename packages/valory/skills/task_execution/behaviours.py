@@ -460,7 +460,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         same_payment_type = []
-        for task in self.unprocessed_timed_out_tasks:
+        while self.unprocessed_timed_out_tasks:
+            task = self.unprocessed_timed_out_tasks.pop()
             req_mech = task["priorityMech"]
             if req_mech not in self.payment_info:
                 # not stepping in for self
