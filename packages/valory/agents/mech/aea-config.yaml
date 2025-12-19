@@ -40,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihbstfafzdk4ecb4nkuo3vz3incrvgibljaqf5khtm3yxqswklj5i
 - valory/abstract_round_abci:0.1.0:bafybeib4xpcpuiryyfnkuyhypdvqi5ebbl7ugavv6ig6yp4nzk3fxosntm
 - valory/contract_subscription:0.1.0:bafybeicrkrifwefmfd3d25cx7fwlq2ttqfhycrkply7dxrplhvoldgtdau
-- valory/mech_abci:0.1.0:bafybeidkt6vg5bh5rgbitf2ek2lkybkh45vwnti7zp64higii7sv5fdydu
+- valory/mech_abci:0.1.0:bafybeihlttil2d6ra4qtyyxqmyhqgr2wpsftphrwltc2cjzgcmrigy4jk4
 - valory/registration_abci:0.1.0:bafybeibf5nhislatztx2q3u46v7d36vmm7dnxpmuhrbxqxkz4lvdgifwha
 - valory/reset_pause_abci:0.1.0:bafybeihuxdetmcyqoqr7iatqsddufolzoebdxsxb4lxd2uiyvuwhb52ttq
 - valory/delivery_rate_abci:0.1.0:bafybeib3y46tseqlty5ux3bmweoajmcl4eeyiwnofiidushnmqms7fjsl4
-- valory/task_execution:0.1.0:bafybeigseirkbfhpm2eql4grcnu3aevnndp46fvrsfwfsjxvq4grhbnrjy
-- valory/task_submission_abci:0.1.0:bafybeifevg75n4td74aac2zkffdml7fmf3fu2gxtbcce52zbebie5y4e2e
+- valory/task_execution:0.1.0:bafybeiaposc5i5zt5okalgw2rqn6ztwsb7twgktvxff3oh5u4odqeipgzu
+- valory/task_submission_abci:0.1.0:bafybeihrlsjeryxjuubscua4i2j6ehpgxtnk5bpqcz6imciscloltup72y
 - valory/termination_abci:0.1.0:bafybeigysvgr5m6zj5b6ofadeddzpxxlhxzn2hyxfilcybhcpp252vdft4
 - valory/transaction_settlement_abci:0.1.0:bafybeids5bopaujr5bh2jfhvysl6fzf7zexsbdifaurf4nerp24hv5uqnm
 - valory/websocket_client:0.1.0:bafybeidbcdcvyy2svob6p52akdx4ezsqpxdh4kphhqgf6hbageneu7unwi
