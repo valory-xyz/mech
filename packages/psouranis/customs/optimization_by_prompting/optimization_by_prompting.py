@@ -20,7 +20,6 @@
 """A script that implements the optimization by prompting methodology."""
 import functools
 import json
-import os
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import StringIO
@@ -312,6 +311,7 @@ def prompt_engineer(
     model_name: str = "gpt-4o-2024-08-06",
 ) -> Any:
     """Iteratively refines a prompt template using a large language model to maximize performance score."""
+    # pylint: disable=not-callable
     llm = OpenAILLM(model_name=model_name, openai_api_key=openai_api_key)
     score_template = {"template": init_instructions, "score": 0.0}
 
@@ -356,7 +356,9 @@ def prompt_engineer(
 
 def search_google(query: str, api_key: str, engine: str, num: int = 3) -> List[str]:
     """Performs a Google Custom Search and returns a list of result links."""
-    service = build("customsearch", "v1", developerKey=api_key)
+    service = build(
+        "customsearch", "v1", developerKey=api_key
+    )  # pylint: disable=no-member
     search = (
         service.cse()  # pylint: disable=no-member
         .list(
@@ -384,7 +386,9 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
     return unique_results
 
 
-def get_urls_from_queries_serper(queries: List[str], api_key: str, num: int = 3) -> List[str]:
+def get_urls_from_queries_serper(
+    queries: List[str], api_key: str, num: int = 3
+) -> List[str]:
     """Get URLs from search engine queries using Serper API."""
     urls: List[str] = []
     for query in queries:
@@ -505,7 +509,7 @@ def fetch_additional_information(
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
-    
+
     # Determine which search provider to use
     if search_provider == "serper":
         if not serper_api_key:

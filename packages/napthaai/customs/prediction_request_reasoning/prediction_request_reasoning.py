@@ -21,7 +21,6 @@
 import copy
 import functools
 import json
-import os
 import re
 import time
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -1043,7 +1042,7 @@ def count_tokens(text: str, model: str) -> int:
     return len(enc.encode(text))
 
 
-def fetch_additional_information(
+def fetch_additional_information(  # pylint: disable=too-many-statements
     prompt: str,
     model: str,
     google_api_key: Optional[str],

@@ -21,7 +21,6 @@
 
 import functools
 import json
-import os
 import re
 import traceback
 from collections.abc import Iterable
@@ -584,11 +583,11 @@ def get_urls_from_queries_serper(
             urls.extend(item["link"] for item in organic[:num])
         except Exception as e:
             print(f"Error fetching URLs for query '{query}': {e}")
-    
+
     print("get_urls_from_queries_serper result:")
     for url in urls:
         print(url)
-    
+
     return list(set(urls))
 
 
@@ -1131,6 +1130,8 @@ def fetch_additional_information(
     :type google_engine: str
     :param serper_api_key: The API key for the Serper service.
     :type serper_api_key: Optional[str]
+    :param search_provider: The search provider to use ('google' or 'serper').
+    :type search_provider: str
     :param nlp: The nlp object
     :type nlp: Any
     :param engine: The openai engine. Defaults to "gpt-3.5-turbo".
@@ -1212,7 +1213,9 @@ def fetch_additional_information(
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
+def run(  # pylint: disable=too-many-statements
+    **kwargs: Any,
+) -> Union[MaxCostResponse, MechResponse]:
     """
     Run the task with the given arguments.
 

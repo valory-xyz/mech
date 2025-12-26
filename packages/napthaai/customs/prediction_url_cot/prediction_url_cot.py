@@ -20,7 +20,6 @@
 """This module implements a tool prediction url cot."""
 import functools
 import json
-import os
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO

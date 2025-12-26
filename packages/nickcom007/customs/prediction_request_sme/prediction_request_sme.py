@@ -20,7 +20,6 @@
 """This module implements a Mech tool for binary predictions."""
 import functools
 import json
-import os
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
 from itertools import islice

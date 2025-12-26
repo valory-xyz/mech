@@ -21,7 +21,6 @@
 
 import functools
 import json
-import os
 import re
 import time
 from collections.abc import Iterable
@@ -757,11 +756,11 @@ def get_urls_from_queries_serper(
             urls.extend(item["link"] for item in organic[:num])
         except Exception as e:
             print(f"Error fetching URLs for query '{query}': {e}")
-    
+
     print("get_urls_from_queries_serper result:")
     for url in urls:
         print(url)
-    
+
     return list(set(urls))
 
 
@@ -1403,6 +1402,8 @@ def fetch_additional_information(
     :type google_engine: str
     :param serper_api_key: The API key for the Serper service.
     :type serper_api_key: Optional[str]
+    :param search_provider: The search provider to use ('google' or 'serper').
+    :type search_provider: str
     :param temperature: The temperature parameter for the engine.
     :type temperature: float
     :param nlp: The spaCy NLP model.
