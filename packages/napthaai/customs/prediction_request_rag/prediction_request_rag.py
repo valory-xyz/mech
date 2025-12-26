@@ -568,6 +568,31 @@ def get_urls_from_queries(
     return unique_results
 
 
+def get_urls_from_queries_serper(
+    queries: List[str], api_key: str, num: int
+) -> List[str]:
+    """Get URLs from search engine queries using Serper API."""
+    urls: List[str] = []
+    for query in queries:
+        try:
+            url = "https://google.serper.dev/search"
+            payload = json.dumps({"q": query})
+            headers = {
+                "X-API-KEY": api_key,
+                "Content-Type": "application/json",
+            }
+            response = requests.request(
+                "POST", url, headers=headers, data=payload, timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+            organic = data.get("organic", [])
+            urls.extend(item["link"] for item in organic[:num])
+        except Exception as e:
+            print(f"Error fetching URLs for query '{query}': {e}")
+    return list(set(urls))
+
+
 def extract_text(
     html: str, num_words: Optional[int] = None
 ) -> Optional[ExtendedDocument]:
@@ -793,6 +818,8 @@ def fetch_additional_information(
     model: str,
     google_api_key: Optional[str],
     google_engine_id: Optional[str],
+    serper_api_key: Optional[str],
+    search_provider: str,
     counter_callback: Optional[Callable] = None,
     source_links: Optional[Dict] = None,
     num_urls: int = DEFAULT_NUM_URLS,
@@ -801,11 +828,6 @@ def fetch_additional_information(
     max_tokens: int = LLM_SETTINGS["claude-4-sonnet-20250514"]["default_max_tokens"],
 ) -> Tuple[str, Optional[Callable[..., None]]]:
     """Fetch additional information to help answer the user prompt."""
-    if not google_api_key:
-        raise RuntimeError("Google API key not found")
-    if not google_engine_id:
-        raise RuntimeError("Google Engine Id not found")
-
     # generate multiple queries for fetching information from the web
 
     try:
@@ -824,12 +846,26 @@ def fetch_additional_information(
 
     # get the top URLs for the queries
     if not source_links:
-        urls = get_urls_from_queries(
-            queries=queries,
-            api_key=google_api_key,
-            engine=google_engine_id,
-            num=NUM_URLS_PER_QUERY,
-        )
+        # Determine which search provider to use
+        if search_provider == "serper":
+            if not serper_api_key:
+                raise RuntimeError("Serper API key not found")
+            urls = get_urls_from_queries_serper(
+                queries=queries,
+                api_key=serper_api_key,
+                num=NUM_URLS_PER_QUERY,
+            )
+        else:  # default to google
+            if not google_api_key:
+                raise RuntimeError("Google API key not found")
+            if not google_engine_id:
+                raise RuntimeError("Google Engine Id not found")
+            urls = get_urls_from_queries(
+                queries=queries,
+                api_key=google_api_key,
+                engine=google_engine_id,
+                num=NUM_URLS_PER_QUERY,
+            )
         print(f"URLs: {urls}")
 
         urls = list(set(urls))
@@ -969,6 +1005,8 @@ def run(
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
+        serper_api_key = api_keys.get("serperapi", None)
+        search_provider = kwargs.get("search_provider", "google").lower()
         if not client:
             raise RuntimeError("Client not initialized")
 
@@ -985,6 +1023,8 @@ def run(
             model=model,
             google_api_key=google_api_key,
             google_engine_id=google_engine_id,
+            serper_api_key=serper_api_key,
+            search_provider=search_provider,
             counter_callback=counter_callback,
             source_links=kwargs.get("source_links", None),
             num_urls=num_urls,

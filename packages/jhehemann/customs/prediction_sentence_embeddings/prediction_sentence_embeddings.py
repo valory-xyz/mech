@@ -21,6 +21,7 @@
 
 import functools
 import json
+import os
 import re
 import time
 from collections.abc import Iterable
@@ -734,6 +735,36 @@ def get_urls_from_queries(
     return list(results)
 
 
+def get_urls_from_queries_serper(
+    queries: List[str], api_key: str, num: int = 3
+) -> List[str]:
+    """Get URLs from search engine queries using Serper API."""
+    urls: List[str] = []
+    for query in queries:
+        try:
+            url = "https://google.serper.dev/search"
+            payload = json.dumps({"q": query})
+            headers = {
+                "X-API-KEY": api_key,
+                "Content-Type": "application/json",
+            }
+            response = requests.request(
+                "POST", url, headers=headers, data=payload, timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+            organic = data.get("organic", [])
+            urls.extend(item["link"] for item in organic[:num])
+        except Exception as e:
+            print(f"Error fetching URLs for query '{query}': {e}")
+    
+    print("get_urls_from_queries_serper result:")
+    for url in urls:
+        print(url)
+    
+    return list(set(urls))
+
+
 def standardize_date(date_text: str) -> Optional[str]:
     """
     Standardizes a given date string to the format 'YYYY-MM-DD' or 'MM-DD' if possible.
@@ -1352,6 +1383,8 @@ def fetch_additional_information(
     max_add_words: int,
     google_api_key: str,
     google_engine: str,
+    serper_api_key: Optional[str],
+    search_provider: str,
     nlp: Any,
     engine: str = ADDITIONAL_INFO_ENGINE,
     temperature: float = 0.5,
@@ -1368,6 +1401,8 @@ def fetch_additional_information(
     :type google_api_key: str
     :param google_engine: The Google engine to be used.
     :type google_engine: str
+    :param serper_api_key: The API key for the Serper service.
+    :type serper_api_key: Optional[str]
     :param temperature: The temperature parameter for the engine.
     :type temperature: float
     :param nlp: The spaCy NLP model.
@@ -1415,11 +1450,20 @@ def fetch_additional_information(
         print(f"query: {query}\n")
 
     # Get URLs from queries
-    urls = get_urls_from_queries(
-        json_data["queries"],
-        api_key=google_api_key,
-        engine=google_engine,
-    )
+    # Determine which search provider to use
+    if search_provider == "serper":
+        if not serper_api_key:
+            raise RuntimeError("Serper API key not found")
+        urls = get_urls_from_queries_serper(
+            queries=json_data["queries"],
+            api_key=serper_api_key,
+        )
+    else:  # default to google
+        urls = get_urls_from_queries(
+            json_data["queries"],
+            api_key=google_api_key,
+            engine=google_engine,
+        )
 
     # Extract relevant sentences from URLs
     relevant_sentences_sorted = extract_and_sort_sentences(
@@ -1517,6 +1561,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         max_add_words = int(max_add_tokens * 0.75)
 
         # Fetch additional information
+        search_provider = kwargs.get("search_provider", "google").lower()
         additional_information = fetch_additional_information(
             event_question=event_question,
             engine=ADDITIONAL_INFO_ENGINE,
@@ -1526,6 +1571,8 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             max_add_words=max_add_words,
             google_api_key=kwargs["api_keys"]["google_api_key"],
             google_engine=kwargs["api_keys"]["google_engine_id"],
+            serper_api_key=kwargs["api_keys"].get("serperapi", None),
+            search_provider=search_provider,
         )
 
         # Truncate additional information to stay within the chat completion token limit of 4096

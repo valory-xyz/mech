@@ -20,6 +20,7 @@
 """A script that implements the optimization by prompting methodology."""
 import functools
 import json
+import os
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import StringIO
@@ -383,6 +384,29 @@ def get_urls_from_queries(queries: List[str], api_key: str, engine: str) -> List
     return unique_results
 
 
+def get_urls_from_queries_serper(queries: List[str], api_key: str, num: int = 3) -> List[str]:
+    """Get URLs from search engine queries using Serper API."""
+    urls: List[str] = []
+    for query in queries:
+        try:
+            url = "https://google.serper.dev/search"
+            payload = json.dumps({"q": query})
+            headers = {
+                "X-API-KEY": api_key,
+                "Content-Type": "application/json",
+            }
+            response = requests.request(
+                "POST", url, headers=headers, data=payload, timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+            organic = data.get("organic", [])
+            urls.extend(item["link"] for item in organic[:num])
+        except Exception as e:
+            print(f"Error fetching URLs for query '{query}': {e}")
+    return list(set(urls))
+
+
 def extract_text(
     html: str,
     num_words: int = 300,  # TODO: summerise using GPT instead of limit
@@ -455,6 +479,8 @@ def fetch_additional_information(
     max_tokens: int,
     google_api_key: str,
     google_engine: str,
+    serper_api_key: Optional[str],
+    search_provider: str,
 ) -> str:
     """Fetch additional information."""
     if not client:
@@ -479,11 +505,21 @@ def fetch_additional_information(
         stop=None,
     )
     json_data = json.loads(response.choices[0].message.content)
-    urls = get_urls_from_queries(
-        json_data["queries"],
-        api_key=google_api_key,
-        engine=google_engine,
-    )
+    
+    # Determine which search provider to use
+    if search_provider == "serper":
+        if not serper_api_key:
+            raise RuntimeError("Serper API key not found")
+        urls = get_urls_from_queries_serper(
+            queries=json_data["queries"],
+            api_key=serper_api_key,
+        )
+    else:  # default to google
+        urls = get_urls_from_queries(
+            json_data["queries"],
+            api_key=google_api_key,
+            engine=google_engine,
+        )
     texts = extract_texts(urls)
     return "\n".join(["- " + text for text in texts])
 
@@ -521,6 +557,8 @@ def run(
             raise RuntimeError("Client not initialized")
 
         openai_key = kwargs["api_keys"]["openai"]
+        serper_api_key = kwargs["api_keys"].get("serperapi", None)
+        search_provider = kwargs.get("search_provider", "google").lower()
 
         additional_information = fetch_additional_information(
             prompt=prompt,
@@ -529,6 +567,8 @@ def run(
             max_tokens=max_tokens,
             google_api_key=kwargs["api_keys"]["google_api_key"],
             google_engine=kwargs["api_keys"]["google_engine_id"],
+            serper_api_key=serper_api_key,
+            search_provider=search_provider,
         )
 
         instructions = prompt_engineer(
