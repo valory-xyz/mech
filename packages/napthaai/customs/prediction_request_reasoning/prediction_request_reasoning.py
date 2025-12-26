@@ -1230,7 +1230,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
         serper_api_key = api_keys.get("serperapi", None)
-        search_provider = kwargs.get("search_provider", "google").lower()
+        search_provider = api_keys.get("search_provider", "google")
 
         if not client:
             raise RuntimeError("Client not initialized")

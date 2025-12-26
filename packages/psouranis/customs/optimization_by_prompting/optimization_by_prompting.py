@@ -558,7 +558,7 @@ def run(
 
         openai_key = kwargs["api_keys"]["openai"]
         serper_api_key = kwargs["api_keys"].get("serperapi", None)
-        search_provider = kwargs.get("search_provider", "google").lower()
+        search_provider = kwargs["api_keys"].get("search_provider", "google")
 
         additional_information = fetch_additional_information(
             prompt=prompt,

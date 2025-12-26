@@ -1286,7 +1286,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         max_add_words = int(max_add_tokens * 0.75)
 
         # Fetch additional information
-        search_provider = kwargs.get("search_provider", "google").lower()
+        search_provider = kwargs["api_keys"].get("search_provider", "google")
         additional_information = (
             fetch_additional_information(
                 event_question=event_question,
