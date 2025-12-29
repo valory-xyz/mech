@@ -594,6 +594,31 @@ def get_urls_from_queries(
     return unique_results
 
 
+def get_urls_from_queries_serper(
+    queries: List[str], api_key: str, num: int
+) -> List[str]:
+    """Get URLs from search engine queries using Serper API."""
+    urls: List[str] = []
+    for query in queries:
+        try:
+            url = "https://google.serper.dev/search"
+            payload = json.dumps({"q": query})
+            headers = {
+                "X-API-KEY": api_key,
+                "Content-Type": "application/json",
+            }
+            response = requests.request(
+                "POST", url, headers=headers, data=payload, timeout=30
+            )
+            response.raise_for_status()
+            data = response.json()
+            organic = data.get("organic", [])
+            urls.extend(item["link"] for item in organic[:num])
+        except Exception as e:
+            print(f"Error fetching URLs for query '{query}': {e}")
+    return list(set(urls))
+
+
 def extract_text(
     html: str, num_words: Optional[int] = None
 ) -> Optional[ExtendedDocument]:
@@ -831,16 +856,14 @@ def fetch_additional_information(
     max_tokens: int,
     google_api_key: Optional[str],
     google_engine: Optional[str],
+    serper_api_key: Optional[str],
+    search_provider: str,
     num_urls: int,
     num_words: int,
     counter_callback: Optional[Callable] = None,
     source_links: Optional[Dict] = None,
 ) -> Tuple[str, Any]:
     """Fetch additional information."""
-    if not google_api_key:
-        raise RuntimeError("Google API key not found")
-    if not google_engine:
-        raise RuntimeError("Google Engine Id not found")
     if not client:
         raise RuntimeError("Client not initialized")
 
@@ -873,12 +896,26 @@ def fetch_additional_information(
         if len(queries) > DEFAULT_NUM_QUERIES:
             queries = queries[:DEFAULT_NUM_QUERIES]
 
-        urls = get_urls_from_queries(
-            queries,
-            google_api_key,
-            google_engine,
-            num_urls,
-        )
+        # Determine which search provider to use
+        if search_provider == "serper":
+            if not serper_api_key:
+                raise RuntimeError("Serper API key not found")
+            urls = get_urls_from_queries_serper(
+                queries=queries,
+                api_key=serper_api_key,
+                num=num_urls,
+            )
+        else:  # default to google
+            if not google_api_key:
+                raise RuntimeError("Google API key not found")
+            if not google_engine:
+                raise RuntimeError("Google Engine Id not found")
+            urls = get_urls_from_queries(
+                queries=queries,
+                api_key=google_api_key,
+                engine=google_engine,
+                num=num_urls,
+            )
         docs = extract_texts(urls, num_words)
     else:
         docs = []
@@ -1029,6 +1066,8 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
         google_engine_id = api_keys.get("google_engine_id", None)
+        serper_api_key = api_keys.get("serperapi", None)
+        search_provider = api_keys.get("search_provider", "google")
 
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
@@ -1043,6 +1082,8 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
                 max_tokens,
                 google_api_key,
                 google_engine_id,
+                serper_api_key,
+                search_provider,
                 num_urls,
                 num_words,  # type: ignore
                 counter_callback=counter_callback,
