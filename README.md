@@ -38,7 +38,7 @@ The project consists of three components:
 
 - Off-chain AI workers, each of which controls a Mech contract. Each AI worker is implemented as an autonomous AI agent on the Autonolas stack.
 - An on-chain protocol, which is used to generate a registry of AI Mechs, represented as NFTs on-chain.
-- An on-chain [MarketPlace](https://github.com/valory-xyz/ai-registry-mech/) which enable AI Mechs to easily deploy Mech contracts, relays AI agent requests and deliveries to such Mech contracts, and guarantees service deliveries by implementing a reputation score and a take-over mechanism.
+- An on-chain [MarketPlace](https://github.com/valory-xyz/autonolas-marketplace/) which enable AI Mechs to easily deploy Mech contracts, relays AI agent requests and deliveries to such Mech contracts, and guarantees service deliveries by implementing a reputation score and a take-over mechanism.
 - [Mech Hub](https://mech.olas.network/mechs), a frontend which allows to interact with the protocol:
   - Gives an overview of the AI workers in the registry.
   - Allows Mech owners to create new workers.
