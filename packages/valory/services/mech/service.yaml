@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeicfqd6xfc36rmskh6edl445lyxucwrhpt5fnk5digtypcjxkyjl34
+agent: valory/mech:0.1.0:bafybeibiff6wniya3ee46cbtib2qjg2rv55pa3o6z36syotggqzxnzmxaa
 number_of_agents: 4
 deployment:
   agent:
@@ -281,6 +281,11 @@ type: connection
         chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
         poa_chain: ${GNOSIS_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
+      polygon:
+        address: ${POLYGON_LEDGER_RPC_0:str:http://host.docker.internal:8545}
+        chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:100}
+        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
 1:
   config:
     ledger_apis:
@@ -294,6 +299,11 @@ type: connection
         chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
         poa_chain: ${GNOSIS_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
+      polygon:
+        address: ${POLYGON_LEDGER_RPC_1:str:http://host.docker.internal:8545}
+        chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:100}
+        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
 2:
   config:
     ledger_apis:
@@ -307,6 +317,11 @@ type: connection
         chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
         poa_chain: ${GNOSIS_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
+      polygon:
+        address: ${POLYGON_LEDGER_RPC_2:str:http://host.docker.internal:8545}
+        chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:100}
+        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
 3:
   config:
     ledger_apis:
@@ -320,6 +335,11 @@ type: connection
         chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
         poa_chain: ${GNOSIS_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
+      polygon:
+        address: ${POLYGON_LEDGER_RPC_3:str:http://host.docker.internal:8545}
+        chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:100}
+        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection
