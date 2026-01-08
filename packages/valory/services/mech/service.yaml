@@ -284,7 +284,7 @@ type: connection
       polygon:
         address: ${POLYGON_LEDGER_RPC_0:str:http://host.docker.internal:8545}
         chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:100}
-        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:false}
+        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:true}
         default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
 1:
   config:
@@ -302,7 +302,7 @@ type: connection
       polygon:
         address: ${POLYGON_LEDGER_RPC_1:str:http://host.docker.internal:8545}
         chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:100}
-        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:false}
+        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:true}
         default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
 2:
   config:
@@ -320,7 +320,7 @@ type: connection
       polygon:
         address: ${POLYGON_LEDGER_RPC_2:str:http://host.docker.internal:8545}
         chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:100}
-        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:false}
+        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:true}
         default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
 3:
   config:
@@ -338,7 +338,7 @@ type: connection
       polygon:
         address: ${POLYGON_LEDGER_RPC_3:str:http://host.docker.internal:8545}
         chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:100}
-        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:false}
+        poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:true}
         default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
