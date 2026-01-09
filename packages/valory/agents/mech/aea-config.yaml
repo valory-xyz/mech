@@ -15,7 +15,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeihezztwiiismlbblbv67i4zibp7w6xzpqadt67mcdjaoauibjqii4
 - valory/websocket_client:0.1.0:bafybeicdavar2qg2s2h7qp2ugzab6zf2jzehvu4zgxjjrfucjqeac575iu
 contracts:
-- valory/agent_mech:0.1.0:bafybeicwukklw7cy6kset2qvqzst2trjej4molnnpksstmu27zakozy5di
+- valory/agent_mech:0.1.0:bafybeiebzjblkhr25jpvevsglk4uvsbzmysvkfkwauqiyaneknrx4lnglq
 - valory/complementary_service_metadata:0.1.0:bafybeibjk5gdgc54wx5bz4fl2666urmfj6mx3ocqxyumqpj7wq5fdg4diu
 - valory/gnosis_safe:0.1.0:bafybeia4h7w5xcslzwphyupvqoijhf3wru4cswnztm24zwafyv5eliwm4a
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeifbty6k7cpi3srl56wjrrefwqteuomqarq4fd55vdrmnomk6cwdhu
@@ -40,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeihbstfafzdk4ecb4nkuo3vz3incrvgibljaqf5khtm3yxqswklj5i
 - valory/abstract_round_abci:0.1.0:bafybeib4xpcpuiryyfnkuyhypdvqi5ebbl7ugavv6ig6yp4nzk3fxosntm
 - valory/contract_subscription:0.1.0:bafybeicrkrifwefmfd3d25cx7fwlq2ttqfhycrkply7dxrplhvoldgtdau
-- valory/mech_abci:0.1.0:bafybeibsf5zcvabk3oo27hs6rhisi23lr5nxhwngwskwnsb6fdjbb7bt3u
+- valory/mech_abci:0.1.0:bafybeievicmvzj2wr5hcvzjgnz5mt64vvx256vmk2lvipyyat6cyj2uexq
 - valory/registration_abci:0.1.0:bafybeibf5nhislatztx2q3u46v7d36vmm7dnxpmuhrbxqxkz4lvdgifwha
 - valory/reset_pause_abci:0.1.0:bafybeihuxdetmcyqoqr7iatqsddufolzoebdxsxb4lxd2uiyvuwhb52ttq
-- valory/delivery_rate_abci:0.1.0:bafybeidfl5ivxdoru5ox3ylcoqfejpuf5phvkrcl5bofjqn4aedhfj3lpm
-- valory/task_execution:0.1.0:bafybeiepxkqtuo7eyqrj4oqvnki6o6z2yzymwrg5ydtugwu5hyknbytyv4
-- valory/task_submission_abci:0.1.0:bafybeibyrpazxcltqlybnpljodykfpji34hf2sg5igzmpp7p6kmu4b7joy
+- valory/delivery_rate_abci:0.1.0:bafybeib3y46tseqlty5ux3bmweoajmcl4eeyiwnofiidushnmqms7fjsl4
+- valory/task_execution:0.1.0:bafybeif4x5z6hqzfrhz7tuuyyoegv32irj4ykuaugqljfrmn6iathfhfju
+- valory/task_submission_abci:0.1.0:bafybeidr52qknbeasnepm6zcgj66rwbkb4dr6saw2wutetrjthyhqypjgm
 - valory/termination_abci:0.1.0:bafybeigysvgr5m6zj5b6ofadeddzpxxlhxzn2hyxfilcybhcpp252vdft4
 - valory/transaction_settlement_abci:0.1.0:bafybeids5bopaujr5bh2jfhvysl6fzf7zexsbdifaurf4nerp24hv5uqnm
 - valory/websocket_client:0.1.0:bafybeidbcdcvyy2svob6p52akdx4ezsqpxdh4kphhqgf6hbageneu7unwi
@@ -290,6 +290,21 @@ config:
       chain_id: ${int:100}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
+    polygon:
+      address: ${str:https://1rpc.io/matic}
+      chain_id: ${int:137}
+      poa_chain: ${bool:true}
+      default_gas_price_strategy: ${str:eip1559}
+      gas_price_strategies:
+        eip1559:
+          max_gas_fast: 100
+          fee_history_blocks: 10
+          fee_history_percentile: 5
+          default_priority_fee: ${int:300000000000}
+          fallback_estimate:
+            maxFeePerGas: ${int:1000000000000}
+            maxPriorityFeePerGas: ${int:300000000000}
+          priority_fee_increase_boundary: ${int:20000}
 ---
 public_id: valory/http_server:0.22.0:bafybeicblltx7ha3ulthg7bzfccuqqyjmihhrvfeztlgrlcoxhr7kf6nbq
 type: connection

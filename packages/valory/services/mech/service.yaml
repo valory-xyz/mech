@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeigpu55t3frz4m4t5fb6dvk6jpzdsw3xgegtswghatmvqivkpdq45q
+agent: valory/mech:0.1.0:bafybeif23zsejqle6f4aob3xlzgprhaxldqlmcdxfluw6fxwq4zj764c5q
 number_of_agents: 1
 deployment:
   agent:
@@ -281,6 +281,25 @@ type: connection
         chain_id: ${GNOSIS_LEDGER_CHAIN_ID:int:100}
         poa_chain: ${GNOSIS_LEDGER_IS_POA_CHAIN:bool:false}
         default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
+      polygon:
+        address: ${str:https://1rpc.io/matic}
+        chain_id: ${int:137}
+        poa_chain: ${bool:true}
+        default_gas_price_strategy: ${str:eip1559}
+        gas_price_strategies:
+          gas_station:
+            gas_price_api_key: null
+            gas_price_strategy: fast
+          eip1559:
+            max_gas_fast: 3000
+            fee_history_blocks: 10
+            fee_history_percentile: 5
+            default_priority_fee: ${int:30000000000}
+            fallback_estimate:
+              maxFeePerGas: ${int:3000000000000}
+              maxPriorityFeePerGas: ${int:30000000000}
+              baseFee: null
+            priority_fee_increase_boundary: ${int:200}
 1:
   config:
     ledger_apis:
