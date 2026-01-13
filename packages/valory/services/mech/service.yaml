@@ -293,22 +293,22 @@ type: connection
         default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
       polygon:
         address: ${POLYGON_LEDGER_RPC_0:str:https://1rpc.io/matic}
-        chain_id: ${int:137}
-        poa_chain: ${bool:true}
-        default_gas_price_strategy: ${str:eip1559}
+        chain_id: ${BASE_LEDGER_CHAIN_ID:int:137}
+        poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:true}
+        default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
         gas_price_strategies:
           gas_station:
-            gas_price_api_key: null
-            gas_price_strategy: fast
+            gas_price_api_key: ${BASE_GAS_PRICE_API_KEY:str:null}
+            gas_price_strategy: ${BASE_GAS_PRICE_STRATEGY:str:fast}
           eip1559:
-            max_gas_fast: ${int:100}
-            fee_history_blocks: ${int:10}
-            fee_history_percentile: ${int:5}
-            default_priority_fee: ${int:30000000000}
+            max_gas_fast: ${BASE_MAX_GAS_FAST:int:100}
+            fee_history_blocks: ${BASE_FEE_HISTORY_BLOCKS:int:10}
+            fee_history_percentile: ${BASE_FEE_HISTORY_PERCENTILE:int:5}
+            default_priority_fee: ${BASE_DEFAULT_PRIORITY_FEE:int:30000000000}
             fallback_estimate:
-              maxFeePerGas: ${int:3000000000000}
-              maxPriorityFeePerGas: ${int:30000000000}
-            priority_fee_increase_boundary: ${int:200}
+              maxFeePerGas: ${BASE_MAX_FEE_PER_GAS:int:3000000000000}
+              maxPriorityFeePerGas: ${BASE_MAX_PRIORITY_FEE_PER_GAS:int:30000000000}
+            priority_fee_increase_boundary: ${BASE_PRIORITY_FEE_INCREASE_BOUNDARY:int:200}
 1:
   config:
     ledger_apis:
@@ -324,22 +324,22 @@ type: connection
         default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
       polygon:
         address: ${POLYGON_LEDGER_RPC_1:str:https://1rpc.io/matic}
-        chain_id: ${int:137}
-        poa_chain: ${bool:true}
-        default_gas_price_strategy: ${str:eip1559}
+        chain_id: ${BASE_LEDGER_CHAIN_ID:int:137}
+        poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:true}
+        default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
         gas_price_strategies:
           gas_station:
-            gas_price_api_key: null
-            gas_price_strategy: fast
+            gas_price_api_key: ${BASE_GAS_PRICE_API_KEY:str:null}
+            gas_price_strategy: ${BASE_GAS_PRICE_STRATEGY:str:fast}
           eip1559:
-            max_gas_fast: ${int:100}
-            fee_history_blocks: ${int:10}
-            fee_history_percentile: ${int:5}
-            default_priority_fee: ${int:30000000000}
+            max_gas_fast: ${BASE_MAX_GAS_FAST:int:100}
+            fee_history_blocks: ${BASE_FEE_HISTORY_BLOCKS:int:10}
+            fee_history_percentile: ${BASE_FEE_HISTORY_PERCENTILE:int:5}
+            default_priority_fee: ${BASE_DEFAULT_PRIORITY_FEE:int:30000000000}
             fallback_estimate:
-              maxFeePerGas: ${int:3000000000000}
-              maxPriorityFeePerGas: ${int:30000000000}
-            priority_fee_increase_boundary: ${int:200}
+              maxFeePerGas: ${BASE_MAX_FEE_PER_GAS:int:3000000000000}
+              maxPriorityFeePerGas: ${BASE_MAX_PRIORITY_FEE_PER_GAS:int:30000000000}
+            priority_fee_increase_boundary: ${BASE_PRIORITY_FEE_INCREASE_BOUNDARY:int:200}
 2:
   config:
     ledger_apis:
@@ -355,22 +355,22 @@ type: connection
         default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
       polygon:
         address: ${POLYGON_LEDGER_RPC_2:str:https://1rpc.io/matic}
-        chain_id: ${int:137}
-        poa_chain: ${bool:true}
-        default_gas_price_strategy: ${str:eip1559}
+        chain_id: ${BASE_LEDGER_CHAIN_ID:int:137}
+        poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:true}
+        default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
         gas_price_strategies:
           gas_station:
-            gas_price_api_key: null
-            gas_price_strategy: fast
+            gas_price_api_key: ${BASE_GAS_PRICE_API_KEY:str:null}
+            gas_price_strategy: ${BASE_GAS_PRICE_STRATEGY:str:fast}
           eip1559:
-            max_gas_fast: ${int:100}
-            fee_history_blocks: ${int:10}
-            fee_history_percentile: ${int:5}
-            default_priority_fee: ${int:30000000000}
+            max_gas_fast: ${BASE_MAX_GAS_FAST:int:100}
+            fee_history_blocks: ${BASE_FEE_HISTORY_BLOCKS:int:10}
+            fee_history_percentile: ${BASE_FEE_HISTORY_PERCENTILE:int:5}
+            default_priority_fee: ${BASE_DEFAULT_PRIORITY_FEE:int:30000000000}
             fallback_estimate:
-              maxFeePerGas: ${int:3000000000000}
-              maxPriorityFeePerGas: ${int:30000000000}
-            priority_fee_increase_boundary: ${int:200}
+              maxFeePerGas: ${BASE_MAX_FEE_PER_GAS:int:3000000000000}
+              maxPriorityFeePerGas: ${BASE_MAX_PRIORITY_FEE_PER_GAS:int:30000000000}
+            priority_fee_increase_boundary: ${BASE_PRIORITY_FEE_INCREASE_BOUNDARY:int:200}
 3:
   config:
     ledger_apis:
@@ -386,22 +386,22 @@ type: connection
         default_gas_price_strategy: ${GNOSIS_LEDGER_PRICING:str:eip1559}
       polygon:
         address: ${POLYGON_LEDGER_RPC_3:str:https://1rpc.io/matic}
-        chain_id: ${int:137}
-        poa_chain: ${bool:true}
-        default_gas_price_strategy: ${str:eip1559}
+        chain_id: ${BASE_LEDGER_CHAIN_ID:int:137}
+        poa_chain: ${BASE_LEDGER_IS_POA_CHAIN:bool:true}
+        default_gas_price_strategy: ${BASE_LEDGER_PRICING:str:eip1559}
         gas_price_strategies:
           gas_station:
-            gas_price_api_key: null
-            gas_price_strategy: fast
+            gas_price_api_key: ${BASE_GAS_PRICE_API_KEY:str:null}
+            gas_price_strategy: ${BASE_GAS_PRICE_STRATEGY:str:fast}
           eip1559:
-            max_gas_fast: ${int:100}
-            fee_history_blocks: ${int:10}
-            fee_history_percentile: ${int:5}
-            default_priority_fee: ${int:30000000000}
+            max_gas_fast: ${BASE_MAX_GAS_FAST:int:100}
+            fee_history_blocks: ${BASE_FEE_HISTORY_BLOCKS:int:10}
+            fee_history_percentile: ${BASE_FEE_HISTORY_PERCENTILE:int:5}
+            default_priority_fee: ${BASE_DEFAULT_PRIORITY_FEE:int:30000000000}
             fallback_estimate:
-              maxFeePerGas: ${int:3000000000000}
-              maxPriorityFeePerGas: ${int:30000000000}
-            priority_fee_increase_boundary: ${int:200}
+              maxFeePerGas: ${BASE_MAX_FEE_PER_GAS:int:3000000000000}
+              maxPriorityFeePerGas: ${BASE_MAX_PRIORITY_FEE_PER_GAS:int:30000000000}
+            priority_fee_increase_boundary: ${BASE_PRIORITY_FEE_INCREASE_BOUNDARY:int:200}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection
