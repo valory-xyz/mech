@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeif7ia4jdlazy6745ke2k2x5yoqlwsgwr6sbztbgqtwvs3ndm2p7ba
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeiecxl4gfjldjd4cv4nxlqdftk54md5xff6qz3m6vzkmmzbya476wi
+agent: valory/mech:0.1.0:bafybeihxxmcnvxwum4sgcup3x2dbi4qwb6uz2mt3ribqwpvv3ittflq66q
 number_of_agents: 1
 deployment:
   agent:
@@ -301,13 +301,12 @@ type: connection
             gas_price_api_key: ${POLYGON_GAS_PRICE_API_KEY:str:null}
             gas_price_strategy: ${POLYGON_GAS_PRICE_STRATEGY:str:fast}
           eip1559:
-            max_gas_fast: ${POLYGON_MAX_GAS_FAST:int:100}
+            max_gas_fast: ${POLYGON_MAX_GAS_FAST:int:1500}
             fee_history_blocks: ${POLYGON_FEE_HISTORY_BLOCKS:int:10}
             fee_history_percentile: ${POLYGON_FEE_HISTORY_PERCENTILE:int:5}
-            default_priority_fee: ${POLYGON_DEFAULT_PRIORITY_FEE:int:30000000000}
             fallback_estimate:
-              maxFeePerGas: ${POLYGON_MAX_FEE_PER_GAS:int:3000000000000}
-              maxPriorityFeePerGas: ${POLYGON_MAX_PRIORITY_FEE_PER_GAS:int:30000000000}
+              maxFeePerGas: ${POLYGON_MAX_FEE_PER_GAS:int:20000000000}
+              maxPriorityFeePerGas: ${POLYGON_MAX_PRIORITY_FEE_PER_GAS:int:3000000000}
             priority_fee_increase_boundary: ${POLYGON_PRIORITY_FEE_INCREASE_BOUNDARY:int:200}
 1:
   config:
@@ -332,13 +331,12 @@ type: connection
             gas_price_api_key: ${POLYGON_GAS_PRICE_API_KEY:str:null}
             gas_price_strategy: ${POLYGON_GAS_PRICE_STRATEGY:str:fast}
           eip1559:
-            max_gas_fast: ${POLYGON_MAX_GAS_FAST:int:100}
+            max_gas_fast: ${POLYGON_MAX_GAS_FAST:int:1500}
             fee_history_blocks: ${POLYGON_FEE_HISTORY_BLOCKS:int:10}
             fee_history_percentile: ${POLYGON_FEE_HISTORY_PERCENTILE:int:5}
-            default_priority_fee: ${POLYGON_DEFAULT_PRIORITY_FEE:int:30000000000}
             fallback_estimate:
-              maxFeePerGas: ${POLYGON_MAX_FEE_PER_GAS:int:3000000000000}
-              maxPriorityFeePerGas: ${POLYGON_MAX_PRIORITY_FEE_PER_GAS:int:30000000000}
+              maxFeePerGas: ${POLYGON_MAX_FEE_PER_GAS:int:20000000000}
+              maxPriorityFeePerGas: ${POLYGON_MAX_PRIORITY_FEE_PER_GAS:int:3000000000}
             priority_fee_increase_boundary: ${POLYGON_PRIORITY_FEE_INCREASE_BOUNDARY:int:200}
 2:
   config:
@@ -363,13 +361,12 @@ type: connection
             gas_price_api_key: ${POLYGON_GAS_PRICE_API_KEY:str:null}
             gas_price_strategy: ${POLYGON_GAS_PRICE_STRATEGY:str:fast}
           eip1559:
-            max_gas_fast: ${POLYGON_MAX_GAS_FAST:int:100}
+            max_gas_fast: ${POLYGON_MAX_GAS_FAST:int:1500}
             fee_history_blocks: ${POLYGON_FEE_HISTORY_BLOCKS:int:10}
             fee_history_percentile: ${POLYGON_FEE_HISTORY_PERCENTILE:int:5}
-            default_priority_fee: ${POLYGON_DEFAULT_PRIORITY_FEE:int:30000000000}
             fallback_estimate:
-              maxFeePerGas: ${POLYGON_MAX_FEE_PER_GAS:int:3000000000000}
-              maxPriorityFeePerGas: ${POLYGON_MAX_PRIORITY_FEE_PER_GAS:int:30000000000}
+              maxFeePerGas: ${POLYGON_MAX_FEE_PER_GAS:int:20000000000}
+              maxPriorityFeePerGas: ${POLYGON_MAX_PRIORITY_FEE_PER_GAS:int:3000000000}
             priority_fee_increase_boundary: ${POLYGON_PRIORITY_FEE_INCREASE_BOUNDARY:int:200}
 3:
   config:
@@ -394,13 +391,12 @@ type: connection
             gas_price_api_key: ${POLYGON_GAS_PRICE_API_KEY:str:null}
             gas_price_strategy: ${POLYGON_GAS_PRICE_STRATEGY:str:fast}
           eip1559:
-            max_gas_fast: ${POLYGON_MAX_GAS_FAST:int:100}
+            max_gas_fast: ${POLYGON_MAX_GAS_FAST:int:1500}
             fee_history_blocks: ${POLYGON_FEE_HISTORY_BLOCKS:int:10}
             fee_history_percentile: ${POLYGON_FEE_HISTORY_PERCENTILE:int:5}
-            default_priority_fee: ${POLYGON_DEFAULT_PRIORITY_FEE:int:30000000000}
             fallback_estimate:
-              maxFeePerGas: ${POLYGON_MAX_FEE_PER_GAS:int:3000000000000}
-              maxPriorityFeePerGas: ${POLYGON_MAX_PRIORITY_FEE_PER_GAS:int:30000000000}
+              maxFeePerGas: ${POLYGON_MAX_FEE_PER_GAS:int:20000000000}
+              maxPriorityFeePerGas: ${POLYGON_MAX_PRIORITY_FEE_PER_GAS:int:3000000000}
             priority_fee_increase_boundary: ${POLYGON_PRIORITY_FEE_INCREASE_BOUNDARY:int:200}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
