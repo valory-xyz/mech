@@ -19,6 +19,7 @@
 """Contains the job definitions"""
 import functools
 import json
+import re
 import time
 from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -343,6 +344,17 @@ def format_sources_data(organic_data: Any, misc_data: Any) -> str:
     return sources
 
 
+def extract_question(prompt: str) -> str:
+    """Uses regexp to extract question from the prompt"""
+    pattern = r"\"(.*?)\""
+    try:
+        question = re.findall(pattern, prompt)[0]
+    except Exception as e:
+        print(f"Error extracting question: {e}")
+        question = prompt
+    return question
+
+
 @with_key_rotation
 def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
@@ -378,8 +390,10 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         today = date.today()
         d = today.strftime("%d/%m/%Y")
 
+        question = extract_question(prompt)
+
         print("Fetching additional sources...")
-        serper_response = fetch_additional_sources(prompt, serper_api_key)
+        serper_response = fetch_additional_sources(question, serper_api_key)
         sources_data = serper_response.json()
         # choose top 5 results
         organic_data = sources_data.get("organic", [])[:5]
@@ -389,7 +403,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         print("Updating prompt...")
         prediction_prompt = PREDICTION_PROMPT.format(
-            question=prompt, today=d, sources=sources
+            question=question, today=d, sources=sources
         )
 
         messages = [
