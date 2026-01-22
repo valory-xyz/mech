@@ -35,6 +35,9 @@ MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, 
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 MaxCostResponse = float
 
+N_MODEL_CALLS = 1
+DEFAULT_DELIVERY_RATE = 100
+
 
 def with_key_rotation(func: Callable) -> Callable:
     """
@@ -362,12 +365,14 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
 
-    engine = kwargs.get("model")
-    if engine is None:
+    model = kwargs.get("model")
+    if model is None:
         raise ValueError("Model not supplied.")
 
-    delivery_rate = int(kwargs.get("delivery_rate", 0))
-    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    delivery_rate = int(kwargs.get("delivery_rate", DEFAULT_DELIVERY_RATE))
+    counter_callback: Optional[Callable[..., Any]] = kwargs.get(
+        "counter_callback", None
+    )
     if delivery_rate == 0:
         if not counter_callback:
             raise ValueError(
@@ -376,7 +381,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         max_cost = counter_callback(
             max_cost=True,
-            models_calls=(engine,),
+            models_calls=(model,) * N_MODEL_CALLS,
         )
         return max_cost
 
@@ -412,7 +417,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         ]
         print("Getting prompt response...")
         extracted_block, counter_callback = generate_prediction_with_retry(
-            model=engine,
+            model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
