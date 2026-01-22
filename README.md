@@ -40,13 +40,13 @@ Follow these instructions to have your local environment prepared to run the dem
     poetry install && poetry shell
     ```
 
-2. Fetch the software packages using the [Open Autonomy](https://docs.autonolas.network/open-autonomy/) CLI:
+2. Fetch the software packages using the [Open Autonomy](https://stack.olas.network/open-autonomy/) CLI:
 
     ```bash
     autonomy packages sync --update-packages
     ```
 
-    This will populate the Open Autonomy [local registry](https://docs.autonolas.network/open-autonomy/guides/set_up/#the-registries-and-runtime-folders) (folder `./packages`) with the required components to run the worker services.
+    This will populate the Open Autonomy [local registry](https://stack.olas.network/open-autonomy/guides/set_up/#the-registries-and-runtime-folders) (folder `./packages`) with the required components to run the worker services.
 
 ## Run the Mech Predict
 

@@ -44,7 +44,7 @@ The clever part? All the intricacies of dealing with APIs and data scraping are 
 
 In order to run a local demo service based on the MechKit:
 
-1. [Set up your system](https://docs.autonolas.network/open-autonomy/guides/set_up/) to work with the Open Autonomy framework and prepare the repository:
+1. [Set up your system](https://stack.olas.network/open-autonomy/guides/set_up/) to work with the Open Autonomy framework and prepare the repository:
 
     ```bash
     git clone https://github.com/valory-xyz/mech && cd mech
