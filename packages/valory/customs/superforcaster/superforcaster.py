@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@
 """Contains the job definitions"""
 import functools
 import json
+import re
 import time
 from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -33,6 +34,9 @@ client: Optional[OpenAI] = None
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 MaxCostResponse = float
+
+N_MODEL_CALLS = 1
+DEFAULT_DELIVERY_RATE = 100
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -343,6 +347,17 @@ def format_sources_data(organic_data: Any, misc_data: Any) -> str:
     return sources
 
 
+def extract_question(prompt: str) -> str:
+    """Uses regexp to extract question from the prompt"""
+    pattern = r"\"(.*?)\""
+    try:
+        question = re.findall(pattern, prompt)[0]
+    except Exception as e:
+        print(f"Error extracting question: {e}")
+        question = prompt
+    return question
+
+
 @with_key_rotation
 def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
@@ -350,12 +365,14 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     if tool not in ALLOWED_TOOLS:
         raise ValueError(f"Tool {tool} is not supported.")
 
-    engine = kwargs.get("model")
-    if engine is None:
+    model = kwargs.get("model")
+    if model is None:
         raise ValueError("Model not supplied.")
 
-    delivery_rate = int(kwargs.get("delivery_rate", 0))
-    counter_callback: Optional[Callable] = kwargs.get("counter_callback", None)
+    delivery_rate = int(kwargs.get("delivery_rate", DEFAULT_DELIVERY_RATE))
+    counter_callback: Optional[Callable[..., Any]] = kwargs.get(
+        "counter_callback", None
+    )
     if delivery_rate == 0:
         if not counter_callback:
             raise ValueError(
@@ -364,7 +381,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         max_cost = counter_callback(
             max_cost=True,
-            models_calls=(engine,),
+            models_calls=(model,) * N_MODEL_CALLS,
         )
         return max_cost
 
@@ -378,8 +395,10 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         today = date.today()
         d = today.strftime("%d/%m/%Y")
 
+        question = extract_question(prompt)
+
         print("Fetching additional sources...")
-        serper_response = fetch_additional_sources(prompt, serper_api_key)
+        serper_response = fetch_additional_sources(question, serper_api_key)
         sources_data = serper_response.json()
         # choose top 5 results
         organic_data = sources_data.get("organic", [])[:5]
@@ -389,7 +408,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         print("Updating prompt...")
         prediction_prompt = PREDICTION_PROMPT.format(
-            question=prompt, today=d, sources=sources
+            question=question, today=d, sources=sources
         )
 
         messages = [
@@ -398,7 +417,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         ]
         print("Getting prompt response...")
         extracted_block, counter_callback = generate_prediction_with_retry(
-            model=engine,
+            model=model,
             messages=messages,
             temperature=temperature,
             max_tokens=max_tokens,
