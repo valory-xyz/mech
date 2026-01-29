@@ -326,9 +326,9 @@ def format_sources_data(organic_data: Any, misc_data: Any) -> str:
         """
 
         for item in organic_data:
-            sources += f"""{item['position']}. **Title:** {item["title"]}
-            - **Link:** [{item["link"]}]({item["link"]})
-            - **Snippet:** {item["snippet"]}
+            sources += f"""{item.get('position', 'N/A')}. **Title:** {item.get("title", 'N/A')}
+            - **Link:** [{item.get("link", '#')}]({item.get("link", '#')})
+            - **Snippet:** {item.get("snippet", 'N/A')}
             """
 
     if len(misc_data) > 0:
@@ -338,9 +338,9 @@ def format_sources_data(organic_data: Any, misc_data: Any) -> str:
 
         counter = 1
         for item in misc_data:
-            sources += f"""{counter}. **Question:** {item["question"]}
-            - **Link:** [{item["link"]}]({item["link"]})
-            - **Snippet:** {item["snippet"]}
+            sources += f"""{counter}. **Question:** {item.get("question", 'N/A')}
+            - **Link:** [{item.get("link", '#')}]({item.get("link", '#')})
+            - **Snippet:** {item.get("snippet", 'N/A')}
             """
             counter += 1
 
@@ -400,6 +400,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         print("Fetching additional sources...")
         serper_response = fetch_additional_sources(question, serper_api_key)
         sources_data = serper_response.json()
+        print(f"Additional sources fetched: {sources_data}")
         # choose top 5 results
         organic_data = sources_data.get("organic", [])[:5]
         misc_data = sources_data.get("peopleAlsoAsk", [])
