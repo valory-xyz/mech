@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeifvbuxt54l5jsxextf6ru5yvimkfdg4gfkcsnmyvsyqcsgclg7vey
-  superforcaster.py: bafybeighxwfgyzr4cqqh3j47knkhyigqlz6hfqpkyfy2esfdbu5eiwf4rm
+  superforcaster.py: bafybeiaqazsf2p7ohfw422dk5fcubkkia7cnpoydj5cd3smfaze3bknub4
 fingerprint_ignore_patterns: []
 entry_point: superforcaster.py
 callable: run
