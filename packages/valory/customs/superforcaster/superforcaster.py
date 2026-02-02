@@ -412,9 +412,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         prediction_prompt = PREDICTION_PROMPT.format(
             question=question, today=d, sources=sources
         )
-        print()
-        print(prediction_prompt)
-        print()
+        print(f"\n{prediction_prompt=}\n")
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
