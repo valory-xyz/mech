@@ -349,9 +349,10 @@ def format_sources_data(organic_data: Any, misc_data: Any) -> str:
 
 def extract_question(prompt: str) -> str:
     """Uses regexp to extract question from the prompt"""
-    pattern = r"\"(.*?)\""
+    # Match from 'question "' to '" and the `yes`' to handle nested quotes
+    pattern = r'question\s+"(.+?)"\s+and\s+the\s+`yes`'
     try:
-        question = re.findall(pattern, prompt)[0]
+        question = re.findall(pattern, prompt, re.DOTALL)[0]
     except Exception as e:
         print(f"Error extracting question: {e}")
         question = prompt
@@ -411,7 +412,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         prediction_prompt = PREDICTION_PROMPT.format(
             question=question, today=d, sources=sources
         )
-
+        print(f"\n{prediction_prompt=}\n")
         messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": prediction_prompt},
