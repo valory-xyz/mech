@@ -362,7 +362,7 @@ class LoggingMetricsHandler(MetricsHandler):
 
     logger = None
 
-    def log_message(self, format, *args):
+    def log_message(self, format, *args) -> None:
         """Log message"""
         if self.logger:
             self.logger.info(
