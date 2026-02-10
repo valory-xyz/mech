@@ -24,11 +24,12 @@ import threading
 import time
 import urllib.parse
 from enum import Enum
+from http.server import HTTPServer
 from typing import Any, Dict, List, Optional, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
-from prometheus_client import start_http_server
+from prometheus_client.exposition import MetricsHandler
 
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
@@ -356,6 +357,19 @@ class HttpCode(Enum):
     BAD_REQUEST_CODE = 400
 
 
+class LoggingMetricsHandler(MetricsHandler):
+    """Metrics handler that logs each scrape request and response."""
+
+    logger = None
+
+    def log_message(self, format, *args):
+        """Log message"""
+        if self.logger:
+            self.logger.info(
+                f"Prometheus /metrics scraped by {self.client_address[0]}: {format % args}"
+            )
+
+
 class MechHttpHandler(AbstractResponseHandler):
     """Mech HTTP message handler."""
 
@@ -393,9 +407,15 @@ class MechHttpHandler(AbstractResponseHandler):
         super().setup()
 
     def start_prometheus_server(self) -> None:
-        """Starts the prometheus server"""
-        start_http_server(PROMETHEUS_PORT)
-        self.context.logger.info(f"Started Prometheus server on {PROMETHEUS_PORT}")
+        """Starts the prometheus server with scrape logging."""
+        try:
+            LoggingMetricsHandler.logger = self.context.logger
+            server = HTTPServer(("0.0.0.0", PROMETHEUS_PORT), LoggingMetricsHandler)
+            thread = threading.Thread(target=server.serve_forever, daemon=True)
+            thread.start()
+            self.context.logger.info(f"Started Prometheus server on {PROMETHEUS_PORT}")
+        except Exception as e:
+            self.context.logger.error(f"Failed to start Prometheus server: {e}")
 
     def _handle_signed_requests(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
