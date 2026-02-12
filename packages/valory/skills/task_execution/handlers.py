@@ -167,8 +167,6 @@ class IpfsHandler(BaseHandler):
             self.context.logger.info(
                 f"Ipfs task deadline reached for task with nonce {nonce}."
             )
-            self.params.in_flight_req = False
-            self.params.is_cold_start = False
             return
 
         self.context.logger.info(f"Invoking IPFS callback. {nonce=}")
