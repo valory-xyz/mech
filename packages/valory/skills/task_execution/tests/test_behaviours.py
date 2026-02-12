@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -146,7 +146,7 @@ def test_happy_path_executes_and_stores(
 
     assert behaviour._executing_task is None
     assert behaviour._async_result is None
-    assert behaviour._last_deadline is None
+    assert behaviour._request_handling_deadline is None
 
 
 def test_pricing_too_low_marks_invalid_and_stores_stub(
@@ -522,7 +522,7 @@ def test_behaviour_status_check_and_proper_updates(
 
     assert behaviour._executing_task is None
     assert behaviour._async_result is None
-    assert behaviour._last_deadline is None
+    assert behaviour._request_handling_deadline is None
 
     # patch variable after patching time
     behaviour.last_status_check_time = time.time()

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -74,6 +74,7 @@ class BaseHandler(Handler):
 
     def cleanup_dialogues(self) -> None:
         """Clean up all dialogues."""
+        self.context.logger.info("Cleaning up dialogues.")
         for handler_name in self.context.handlers.__dict__.keys():
             dialogues_name = handler_name.replace("_handler", "_dialogues")
             dialogues = getattr(self.context, dialogues_name)
@@ -89,6 +90,20 @@ class BaseHandler(Handler):
         """Return the mech address from the list of contract addresses."""
         return self.params.agent_mech_contract_addresses[0]
 
+    @property
+    def from_block(self) -> Optional[int]:
+        """Get the block from which we should search for new requests."""
+        return self.params.req_params.from_block.get(
+            cast(str, self.params.req_type), None
+        )
+
+    @from_block.setter
+    def from_block(self, block_number: int) -> None:
+        """Set the block from which we should search for new requests."""
+        self.params.req_params.from_block[cast(str, self.params.req_type)] = (
+            block_number
+        )
+
     def teardown(self) -> None:
         """Teardown the handler."""
         self.context.logger.info(f"{self.__class__.__name__}: teardown called.")
@@ -96,6 +111,10 @@ class BaseHandler(Handler):
     def on_message_handled(self, _message: Message) -> None:
         """Callback after a message has been handled."""
         self.params.request_count += 1
+        self.context.logger.info(
+            f"Message handled. {self.params.request_count=} {self.params.cleanup_freq=}"
+        )
+
         if self.params.request_count % self.params.cleanup_freq == 0:
             self.context.logger.info(
                 f"{self.params.request_count} requests processed. Cleaning up dialogues."
@@ -111,7 +130,7 @@ class AcnHandler(BaseHandler):
     def handle(self, message: Message) -> None:
         """Handle the message."""
         # we don't respond to ACN messages at this point
-        self.context.logger.info(f"Received message: {message}")
+        self.context.logger.info(f"Received ACN message: {message}")
         self.on_message_handled(message)
 
 
@@ -126,7 +145,7 @@ class IpfsHandler(BaseHandler):
 
         :param message: the message
         """
-        self.context.logger.info(f"Received message: {message}")
+        self.context.logger.info(f"Received IPFS message: {message}")
         ipfs_msg = cast(IpfsMessage, message)
         if ipfs_msg.performative == IpfsMessage.Performative.ERROR:
             self.context.logger.warning(
@@ -140,7 +159,10 @@ class IpfsHandler(BaseHandler):
         callback = self.params.req_to_callback.pop(nonce)
         deadline = self.params.req_to_deadline.pop(nonce)
 
-        if deadline and time.time() > deadline:
+        now = time.time()
+        self.context.logger.info(f"IPFS response mapped. {nonce=} {deadline=} {now=}")
+
+        if deadline and now > deadline:
             # Deadline reached
             self.context.logger.info(
                 f"Ipfs task deadline reached for task with nonce {nonce}."
@@ -149,6 +171,7 @@ class IpfsHandler(BaseHandler):
             self.params.is_cold_start = False
             return
 
+        self.context.logger.info(f"Invoking IPFS callback. {nonce=}")
         callback(ipfs_msg, dialogue)
         self.params.in_flight_req = False
         self.params.is_cold_start = False
@@ -174,10 +197,14 @@ class ContractHandler(BaseHandler):
     def set_last_successful_read(self, block_number: Optional[int]) -> None:
         """Set the last successful read."""
         self.context.shared_state[LAST_SUCCESSFUL_READ] = (block_number, time.time())
+        self.context.logger.info(
+            f"Last successful read set to {self.context.shared_state[LAST_SUCCESSFUL_READ]}."
+        )
 
     def set_was_last_read_successful(self, was_successful: bool) -> None:
         """Set the last successful read."""
         self.context.shared_state[WAS_LAST_READ_SUCCESSFUL] = was_successful
+        self.context.logger.info(f"Last read success flag set to {was_successful}.")
 
     @property
     def pending_tasks(self) -> List[Dict[str, Any]]:
@@ -219,7 +246,7 @@ class ContractHandler(BaseHandler):
 
         :param message: the message
         """
-        self.context.logger.info(f"Received message: {message}")
+        self.context.logger.info(f"Received ContractApi message: {message}")
         contract_api_msg = cast(ContractApiMessage, message)
         if contract_api_msg.performative != ContractApiMessage.Performative.STATE:
             self.context.logger.warning(
@@ -230,6 +257,8 @@ class ContractHandler(BaseHandler):
             return
 
         body = contract_api_msg.state.body
+        self.context.logger.info(f"Contract state body keys={list(body.keys())}.")
+
         if body.get("data"):
             # handle the undelivered requests response
             self._handle_get_undelivered_reqs(body)
@@ -239,13 +268,13 @@ class ContractHandler(BaseHandler):
         if body.get("mech_type"):
             # handle the mech type response
             self.context.shared_state[PAYMENT_MODEL] = body["mech_type"]
-            self.context.logger.info(
-                f"Found payment model {self.context.shared_state[PAYMENT_MODEL]!r}."
-            )
+            self.context.logger.info(f"Found payment model {body['mech_type']!r}.")
         if body.get("mech_types"):
             # handle the mech types response
             self.context.shared_state[PAYMENT_INFO] = body["mech_types"]
-            self.context.logger.info("The cache was updated with the new mech types.")
+            self.context.logger.info(
+                f"The cache was updated with the new mech types: {body['mech_types']}."
+            )
 
         self.params.in_flight_req = False
         self.set_was_last_read_successful(True)
@@ -253,71 +282,101 @@ class ContractHandler(BaseHandler):
 
     def _handle_get_undelivered_reqs(self, body: Dict[str, Any]) -> None:
         """Handle get undelivered reqs."""
+        self.context.logger.info("Handling undelivered requests.")
+        self.context.logger.info(
+            f"State: "
+            f"pending={len(self.pending_tasks)} "
+            f"wait_for_timeout={len(self.wait_for_timeout_tasks)} "
+            f"unprocessed_timed_out={len(self.unprocessed_timed_out_tasks)}",
+        )
 
         # Reset lists.
         self.context.shared_state[INFLIGHT_READ_TS] = None
         self.wait_for_timeout_tasks.clear()
         self.unprocessed_timed_out_tasks = body.get("timed_out_requests", [])
-        self.set_last_successful_read(
-            self.params.req_params.from_block[cast(str, self.params.req_type)]
+        self.set_last_successful_read(self.from_block)
+
+        self.context.logger.info(
+            f"Loaded {len(self.unprocessed_timed_out_tasks)} timed out requests from contract.",
         )
         # collect items to process: fresh + previously waiting
         reqs = list(body.get("data", []))
         reqs.extend(body.get("wait_for_timeout_tasks", []))
 
-        if len(reqs) == 0:
+        reqs_count = len(reqs)
+        if reqs_count == 0:
+            self.context.logger.info("No new requests returned from contract.")
             return
 
-        self.params.req_params.from_block[cast(str, self.params.req_type)] = (
-            max([req["block_number"] for req in reqs]) + 1
+        old_block = self.from_block
+        self.from_block = max(req["block_number"] for req in reqs) + 1
+        self.context.logger.info(
+            f"Received {reqs_count} requests. Advanced from_block {old_block} -> {self.from_block}."
         )
-        self.context.logger.info(f"Received {len(reqs)} new requests.")
 
-        reqs = [
+        filtered = [
             req
             for req in reqs
             if req["block_number"] % self.params.num_agents == self.params.agent_index
         ]
-        self.context.logger.info(f"Total new requests: {len(reqs)}")
-        self.filter_requests(reqs)
         self.context.logger.info(
-            f"Monitoring new reqs from block {self.params.req_params.from_block[cast(str, self.params.req_type)]}"
+            f"After agent sharding: {len(filtered)}/{reqs_count} requests selected."
+        )
+        self.filter_requests(filtered)
+
+        self.context.logger.info(
+            f"Post-filtering state: "
+            f"pending={len(self.pending_tasks)} "
+            f"wait_for_timeout={len(self.wait_for_timeout_tasks)} "
+            f"unprocessed_timed_out={len(self.unprocessed_timed_out_tasks)}",
         )
 
     def _update_pending_list(self, body: Dict[str, List]) -> None:
+        before = len(self.pending_tasks)
         self.context.shared_state[PENDING_TASKS] = [
             req for req in self.pending_tasks if req["requestId"] in body["request_ids"]
         ]
+        after = len(self.pending_tasks)
         self.context.logger.info(
-            f"Updated pending list based on status. There are {len(self.pending_tasks)} pending tasks now."
+            f"Pending list updated via status check. {before} -> {after}"
         )
 
     def filter_requests(self, reqs: List[Dict[str, Any]]) -> None:
         """Filtering requests based on priority mech and status."""
         for req in reqs:
+            rid = req.get("requestId")
+            status = req.get("status")
+
+            self.context.logger.info(f"Evaluating request {req}.")
+
             if (
                 req["priorityMech"].lower() == self.mech_address.lower()
-                and req["status"] != DELIVERED_STATUS
+                and status != DELIVERED_STATUS
             ):
                 self.context.logger.info(
-                    f"Priority Mech matched, adding request: {req} to pending tasks"
+                    f"Adding request with id {rid} to pending_tasks."
                 )
                 self.pending_tasks.append(req)
-            elif req["status"] == TIMED_OUT_STATUS:
+
+            elif status == TIMED_OUT_STATUS:
                 self.context.logger.info(
-                    f"Timed out status matched, adding request: {req} to timeout tasks"
+                    f"Adding request with id {rid} to unprocessed_timed_out_tasks."
                 )
                 self.unprocessed_timed_out_tasks.append(req)
+
             elif (
-                req["status"] == WAIT_FOR_TIMEOUT_STATUS
+                status == WAIT_FOR_TIMEOUT_STATUS
                 and req["request_delivery_rate"] >= self.mech_to_max_delivery_rate
             ):
                 self.context.logger.info(
-                    f"Wait for timeout status matched, adding request: {req} to wait_for_timeout tasks"
+                    f"Adding request with id {rid} to wait_for_timeout_tasks."
                 )
                 # no len check necessary as wait_for_timeout_tasks is
                 # cleared everytime we handle new requests
                 self.wait_for_timeout_tasks.append(req)
+
+            else:
+                self.context.logger.info(f"Request with id {rid} skipped.")
 
 
 class LedgerHandler(BaseHandler):
@@ -331,7 +390,7 @@ class LedgerHandler(BaseHandler):
 
         :param message: the message
         """
-        self.context.logger.info(f"Received message: {message}")
+        self.context.logger.info(f"Received LedgerApi message: {message}")
         ledger_api_msg = cast(LedgerApiMessage, message)
         if ledger_api_msg.performative != LedgerApiMessage.Performative.STATE:
             self.context.logger.warning(
@@ -341,9 +400,12 @@ class LedgerHandler(BaseHandler):
             return
 
         block_number = ledger_api_msg.state.body["number"]
-        self.params.req_params.from_block[cast(str, self.params.req_type)] = (
-            block_number - self.params.from_block_range
+        old_from_block = self.from_block
+        self.from_block = block_number - self.params.from_block_range
+        self.context.logger.info(
+            f"Block with number {block_number} received. Updated from_block: {old_from_block} -> {self.from_block}"
         )
+
         self.params.in_flight_req = False
         self.on_message_handled(message)
 
@@ -395,7 +457,9 @@ class MechHttpHandler(AbstractResponseHandler):
     def start_prometheus_server(self) -> None:
         """Starts the prometheus server"""
         start_http_server(PROMETHEUS_PORT)
-        self.context.logger.info(f"Started Prometheus server on {PROMETHEUS_PORT}")
+        self.context.logger.info(
+            f"Prometheus server started on port {PROMETHEUS_PORT}."
+        )
 
     def _handle_signed_requests(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -412,11 +476,14 @@ class MechHttpHandler(AbstractResponseHandler):
             request_data = http_msg.body.decode("utf-8")
             parsed_data = urllib.parse.parse_qs(request_data)
             data = {key: value[0] for key, value in parsed_data.items()}
-
-            ipfs_hash = data["ipfs_hash"]
             request_id = data["request_id"]
-            ipfs_data = data["ipfs_data"]
+            ipfs_hash = data["ipfs_hash"]
             request_delivery_rate = data["delivery_rate"]
+
+            self.context.logger.info(
+                f"Received signed offchain request with {request_id=} and {request_delivery_rate=}."
+            )
+
             req = {
                 "requestId": request_id,
                 "data": bytes.fromhex(ipfs_hash[2:]),
@@ -425,17 +492,24 @@ class MechHttpHandler(AbstractResponseHandler):
                 **data,
             }
             self.pending_tasks.append(req)
-            self.ipfs_tasks.append({"request_id": request_id, "ipfs_data": ipfs_data})
-            self.context.logger.info(f"Offchain Task added with data: {req}")
+            self.ipfs_tasks.append(
+                {"request_id": request_id, "ipfs_data": data["ipfs_data"]}
+            )
+            self.context.logger.info(
+                f"Offchain task added with data: {req}. "
+                f"pending_tasks={len(self.pending_tasks)} ipfs_tasks={len(self.ipfs_tasks)}."
+            )
 
             self._send_ok_response(
                 http_msg,
                 http_dialogue,
-                data={"request_id": req["requestId"]},
+                data={"request_id": request_id},
             )
 
-        except (json.JSONDecodeError, ValueError, Exception) as e:
-            self.context.logger.error(f"Error processing signed request data: {str(e)}")
+        except Exception as e:
+            self.context.logger.error(
+                f"Error processing signed request. body={http_msg.body!r} error={str(e)}."
+            )
             self._handle_bad_request(http_msg, http_dialogue)
 
     def _handle_offchain_request_info(
@@ -455,6 +529,7 @@ class MechHttpHandler(AbstractResponseHandler):
             data = {key: value[0] for key, value in parsed_data.items()}
 
             request_id = data["request_id"]
+            self.context.logger.info(f"Fetching offchain info for {request_id=}.")
 
             done_tasks_list = self.done_tasks
 
@@ -462,15 +537,13 @@ class MechHttpHandler(AbstractResponseHandler):
                 data for data in done_tasks_list if data.get("request_id") == request_id
             ]
 
-            if len(requested_done_tasks_list) > 0:
-                print(f"Data for request_id {request_id} found")
-                requested_data = requested_done_tasks_list[0]
-                self._send_ok_response(http_msg, http_dialogue, data=requested_data)
+            self._send_ok_response(
+                http_msg,
+                http_dialogue,
+                data=requested_done_tasks_list[0] if requested_done_tasks_list else {},
+            )
 
-            else:
-                self._send_ok_response(http_msg, http_dialogue, data={})
-
-        except (json.JSONDecodeError, ValueError) as e:
+        except Exception as e:
             self.context.logger.error(f"Error getting offchain request info: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -193,7 +193,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._inflight_tool_req: Optional[str] = None
         self._inflight_ipfs_req: Optional[str] = None
         self._done_task: Optional[Dict[str, Any]] = None
-        self._last_deadline: Optional[float] = None
+        self._request_handling_deadline: Optional[float] = None
         self._invalid_request = False
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
@@ -336,7 +336,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         return self.last_status_check_time
 
     @property
-    def request_id_to_delivery_rate_info(self) -> List[Dict[str, int]]:
+    def request_id_to_delivery_rate_info(self) -> Dict[str, int]:
         """Get request_id_to_delivery_rate_info."""
         return self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO]
 
@@ -503,6 +503,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         from_block = self.params.req_params.from_block.get(
             RequestType.MARKETPLACE.value, None
         )
+        self.context.logger.info(
+            f"Checking for new marketplace requests from block {from_block}..."
+        )
         if from_block is None:
             # set the initial from block
             self._populate_from_block()
@@ -556,23 +559,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         ):
             return
 
-        if len(self.ipfs_tasks) == 0:
-            # not ipfs tasks
+        if self.ipfs_tasks is None or len(self.ipfs_tasks) == 0:
+            self.context.logger.info("No IPFS tasks to execute.")
             return
 
-        if self.ipfs_tasks is not None:
-            self.context.logger.info(f"Found {len(self.ipfs_tasks)} IPFS Tasks")
-            ipfs_task = self.ipfs_tasks.pop(0)
-            request_id = ipfs_task["request_id"]
-            ipfs_data = ipfs_task["ipfs_data"]
+        self.context.logger.info(f"Found {len(self.ipfs_tasks)} IPFS tasks.")
+        ipfs_task = self.ipfs_tasks.pop(0)
+        request_id = ipfs_task["request_id"]
+        ipfs_data = ipfs_task["ipfs_data"]
+        self.context.logger.info(
+            f"Preparing ipfs task for request id {request_id} with data: {ipfs_data}"
+        )
+        self._inflight_ipfs_req = request_id
+        msg, dialogue = self._build_ipfs_store_file_req({"metadata.json": ipfs_data})
+        self.send_message(msg, dialogue, self._handle_ipfs_tasks_response)
+
+    def _ensure_deadline(self) -> None:
+        """Set a deadline if not set already, otherwise continue."""
+        if self._request_handling_deadline is None:
+            self._request_handling_deadline = self._fetch_deadline()
             self.context.logger.info(
-                f"Preparing ipfs task for request id {request_id} with data: {ipfs_data}"
+                f"Deadline set to {self._request_handling_deadline} for task {self._executing_task}."
             )
-            self._inflight_ipfs_req = request_id
-            msg, dialogue = self._build_ipfs_store_file_req(
-                {"metadata.json": ipfs_data}
-            )
-            self.send_message(msg, dialogue, self._handle_ipfs_tasks_response)
 
     def _execute_task(self) -> None:
         """Execute tasks."""
@@ -580,22 +588,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if self.params.in_flight_req:
             # there is an in flight request
 
-            # if no deadline is set it, otherwise continue
-            if self._last_deadline is None:
-                self._last_deadline = self._fetch_deadline()
+            self._ensure_deadline()
 
             # check if the executing task is within deadline or not
-            if self._executing_task and time.time() > self._last_deadline:
+            if self._executing_task and time.time() > cast(
+                float, self._request_handling_deadline
+            ):
                 # Deadline reached, restart the task execution
                 self.context.logger.info(
-                    f"Deadline reached for task {self._executing_task}. Restarting task execution..."
+                    f"Request handling deadline reached for task {self._executing_task}. Restarting task execution..."
                 )
-                self.params.in_flight_req = False
-                self.params.is_cold_start = False
-                self._last_deadline = None
-                # reset all times
-                self.tool_preparation_start_time = 0.0
-                self.tool_execution_start_time = 0.0
                 self._handle_timeout_task()
             return
 
@@ -604,10 +606,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 task_result = self._get_executing_task_result()
                 self._handle_done_task(task_result)
             elif self._has_executing_task_timed_out():
-                # reset all times
-                self.tool_preparation_start_time = 0.0
-                self.tool_execution_start_time = 0.0
                 self._handle_timeout_task()
+            self.context.logger.info("No executing task found.")
             return
 
         self.mech_metrics.set_gauge(
@@ -623,6 +623,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         if len(self.pending_tasks) == 0:
             if len(self.timed_out_tasks) == 0:
+                self.context.logger.info("No pending or timed out tasks found.")
                 return
             task_data = self.timed_out_tasks.pop(0)
         else:
@@ -644,8 +645,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         delivery_rate = task_data["request_delivery_rate"]
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
-        task_data_ = task_data["data"]
-        ipfs_hash = get_ipfs_file_hash(task_data_)
+        ipfs_hash = get_ipfs_file_hash(task_data["data"])
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
         self.send_message(
@@ -669,10 +669,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         pending_tasks_count = len(self.pending_tasks)
         # no pending tasks to check
         if pending_tasks_count == 0:
+            self.context.logger.info("No pending tasks found locally.")
             return
 
         self.context.logger.info(
-            f"Checking request_id status of {pending_tasks_count} pending tasks"
+            f"Checking status change for {pending_tasks_count} pending tasks..."
         )
         pending_tasks_request_ids = [t["requestId"] for t in self.pending_tasks]
 
@@ -705,9 +706,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
-        if self._last_deadline is None:
-            self._last_deadline = self._fetch_deadline()
-        self.params.req_to_deadline[nonce] = self._last_deadline
+        self._ensure_deadline()
+        self.params.req_to_deadline[nonce] = cast(
+            float, self._request_handling_deadline
+        )
         self.params.in_flight_req = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
@@ -720,9 +722,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_done_task(self, task_result: Any) -> None:
         """Handle done tasks"""
-        self.context.logger.info(f"Inside handle done task {self._executing_task=}")
-        self.context.logger.info(f"Inside handle done task {task_result=}")
         executing_task = cast(Dict[str, Any], self._executing_task)
+        self.context.logger.info(f"Handling done task {executing_task}.")
         req_id = executing_task.get("requestId", None)
         request_id_nonce = executing_task.get("requestIdWithNonce", None)
         mech_address = (
@@ -769,7 +770,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # we want to use the most up-to-date key priority
             self._keychain = keychain
 
-        self.context.logger.info(f"Task result for request {req_id}: {task_result}")
         # fetch the time duration for tool execution to complete
         # if tool exec start time is 0.0, set to current time
         # it can be 0.0 if _prepare_task was not called due to other checks such as tool not valid
@@ -778,7 +778,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.tool_execution_start_time or time.perf_counter()
         )
         self.context.logger.info(
-            f"Request id: {req_id} with tool: {tool} took {tool_exec_time_duration} seconds to complete execution"
+            f"Request id {req_id!r} with {tool=}, took {tool_exec_time_duration} seconds to complete execution. "
+            f"Request's result:\n{task_result}"
         )
         # reset the time counter used to measure time taken to execute the task
         self.tool_execution_start_time = 0.0
@@ -814,13 +815,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_timeout_task(self) -> None:
         """Handle timeout tasks"""
+        self.params.in_flight_req = False
+        self.params.is_cold_start = False
+        self._request_handling_deadline = None
+        # reset all times
+        self.tool_preparation_start_time = 0.0
+        self.tool_execution_start_time = 0.0
+
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
+
         # This should never be the case but added to handle all cases for latest mypy updates
         if not req_id:
             self.context.logger.error(
-                "Request id not found inside executing task for handle timedout task"
+                "Request id not found inside executing task for handle timedout task."
             )
+            self._executing_task = None
+            self._async_result = None
             return None
 
         # Prometheus has no way to remove/clear metrics, so we set to default 0
@@ -832,7 +843,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.count_timeout(req_id)
         self.context.logger.info(f"Task timed out for request {req_id}")
         self.context.logger.info(
-            f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times"
+            f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times."
         )
         self.mech_metrics.inc_counter(
             metric=self.mech_metrics.mech_tasks_timed_out_total, tool=tool
@@ -845,6 +856,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # we do this because its possible the .cancel() call above is not respected
         # by the executor. Since we only have 1 process running at a time, this would
         # mean that the task being executed next would be queued. We want to avoid this.
+        self.context.logger.info("Restarting executor.")
         self._restart_executor()
 
         # check if we can add the task to the end of the queue
@@ -862,10 +874,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             return self._handle_done_task(task_result)
 
-        self.context.logger.info(f"Adding task {req_id} to the end of the queue")
+        self.context.logger.info(f"Adding task {req_id} to the end of the queue.")
         self.pending_tasks.append(executing_task)
         self._executing_task = None
-        self._last_deadline = None
         self._async_result = None
         return None
 
@@ -879,12 +890,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             and "tool" in task_data
         )  # pylint: disable=C0301
 
+        executing_task = cast(Dict[str, Any], self._executing_task)
         if not is_data_valid:
-            self.context.logger.warning("Data for task is not valid.")
+            self.context.logger.warning(f"Invalid {task_data=} for {executing_task=}.")
             self._invalid_request = True
             return
 
-        executing_task = cast(Dict[str, Any], self._executing_task)
         my_mech = self._get_designated_marketplace_mech_address().lower()
         exec_prio = str(executing_task.get("priorityMech", "")).lower()
         stepping_in = exec_prio != my_mech
@@ -892,7 +903,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if stepping_in and tool_name not in self._tools_to_package_hash:
             rid = int(executing_task["requestId"])
             self._ignored_request_ids.add(rid)
-            reason = f"Ignoring request {rid}: stepping in but tool {tool_name} not installed."
+            reason = f"Cannot step in. Tool {tool_name} is not installed. Ignoring request {rid}."
             self.context.logger.info(reason)
             self.mech_metrics.inc_counter(
                 metric=self.mech_metrics.mech_tasks_failed_total,
@@ -905,7 +916,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 0,
             )
             self._executing_task = None
-            self._last_deadline = None
+            self._request_handling_deadline = None
             self._async_result = None
             # reset the time counter used to measure time taken to prepare the task
             self.tool_preparation_start_time = 0.0
@@ -918,7 +929,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     executing_task["requestId"]
                 ]
                 if req_id_delivery_rate < tool_pricing:
-                    reason = f"Requested pricing invalid. Actual {req_id_delivery_rate} Needed {tool_pricing}"
+                    reason = f"Requested pricing invalid. Actual {req_id_delivery_rate}, needed {tool_pricing}."
                     self.context.logger.warning(reason)
                     self.mech_metrics.inc_counter(
                         metric=self.mech_metrics.mech_tasks_failed_total,
@@ -936,7 +947,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 time.perf_counter() - self.tool_preparation_start_time
             )
             self.context.logger.info(
-                f"Request id: {rid} with tool: {tool_name} took {tool_prep_time_duration} seconds to prepare"
+                f"Request id {rid} with {tool_name=} took {tool_prep_time_duration} seconds to prepare."
             )
             # reset the time counter used to measure time taken to prepare the task
             self.tool_preparation_start_time = 0.0
@@ -983,25 +994,35 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _get_executing_task_result(self) -> Any:
         """Get the executing task result (convert Pebble errors to your 5-tuple)."""
-        if (
-            self._executing_task is None
-            or self._async_result is None
-            or self._invalid_request
-        ):
+        if self._executing_task is None:
+            self.context.logger.warning("No executing task found to get a result from.")
+            return None
+
+        if self._invalid_request:
+            self.context.logger.warning(
+                "Cannot get executing task result for invalid request."
+            )
+            return None
+
+        if self._async_result is None:
+            self.context.logger.warning(
+                f"No result found for the executing task: {self._executing_task}."
+            )
             return None
 
         try:
-            fut = cast(Any, self._async_result)
-            return fut.result()
+            return self._async_result.result()
         except TimeoutError as e:
             self.context.logger.warning(f"Task expired: {e}")
         except Exception as e:
             self.context.logger.error(f"Exception during task: {e}")
-        return None
 
     def _prepare_task(self, task_data: Dict[str, Any]) -> None:
         """Prepare the task."""
-        self.context.logger.info(f"Preparing tool task with data: {task_data}")
+        executing_task = cast(Dict[str, Any], self._executing_task)
+        self.context.logger.info(
+            f"Preparing tool task: {executing_task} with data: {task_data}"
+        )
         tool_task = AnyToolAsTask()
         tool_py, callable_method, component_yaml = self._all_tools[task_data["tool"]]
         tool_params = component_yaml.get("params", {})
@@ -1013,7 +1034,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "model", tool_params.get("default_model", None)
         )
         future = self._submit_task(tool_task.execute, **task_data)
-        executing_task = cast(Dict[str, Any], self._executing_task)
         executing_task["timeout_deadline"] = time.time() + self.params.task_deadline
         executing_task["tool"] = task_data["tool"]
         executing_task["model"] = task_data.get(
@@ -1075,15 +1095,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _handle_store_response(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a store response request."""
         if not self._executing_task:
-            self.context.logger.error("No executing task found")
+            self.context.logger.error(
+                "No executing task found while trying to handle a store response from IPFS."
+            )
             return
 
         executing_task = self._executing_task
         # if sender is not present, use mech address
-        req_id, _ = (
-            executing_task["requestId"],
-            executing_task.get("sender", executing_task.get("mech")),
-        )
+        req_id = executing_task["requestId"]
         ipfs_hash = to_v1(message.ipfs_hash)
         self.context.logger.info(
             f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
@@ -1102,22 +1121,22 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._executing_task = None
             self._done_task = None
             self._invalid_request = False
-            self._last_deadline = None
+            self._request_handling_deadline = None
             self._async_result = None
-            return None
+            return
 
         task_result = to_multihash(ipfs_hash)
         tool = str(done_task.get("tool"))
         dynamic_tool_cost = self._tools_to_pricing.get(tool)
         if dynamic_tool_cost is not None:
             self.context.logger.info(
-                f"Tools to pricing found for tool {tool}. Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}"
+                f"Tools to pricing found for tool {tool}. "
+                f"Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}."
             )
             done_task["dynamic_tool_cost"] = dynamic_tool_cost
         else:
-            dynamic_tool_cost = 0
             cost = get_cost_for_done_task(done_task)
-            self.context.logger.info(f"Cost for task {req_id}: {cost}")
+            self.context.logger.info(f"Cost for task {req_id}: {cost}.")
         mech_address = self._get_designated_marketplace_mech_address()
         mech_config = self.params.mech_to_config[mech_address.lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
@@ -1130,6 +1149,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
+        self.context.logger.info(f"Done task added to done tasks list: {done_task}.")
 
         # Prometheus has no way to remove/clear metrics, so we set to default 0
         self.mech_metrics.set_gauge(
@@ -1141,7 +1161,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executing_task = None
         self._done_task = None
         self._invalid_request = False
-        self._last_deadline = None
+        self._request_handling_deadline = None
         self._async_result = None
 
     def _handle_ipfs_tasks_response(
@@ -1153,9 +1173,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(
             f"Response for request {request_id} stored on IPFS with hash {ipfs_hash}."
         )
-        # remove the uploaded request from the pending list
+        # remove the uploaded request from the IPFS tasks
         self.context.shared_state[IPFS_TASKS] = [
-            t for t in self.ipfs_tasks if t != {"request_id": request_id}
+            t for t in self.ipfs_tasks if t.get("request_id") != request_id
         ]
         self._inflight_ipfs_req = None
 
