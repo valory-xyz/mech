@@ -163,9 +163,8 @@ class IpfsHandler(BaseHandler):
         self.context.logger.info(f"IPFS response mapped. {nonce=} {deadline=} {now=}")
 
         if deadline and now > deadline:
-            # Deadline reached
             self.context.logger.info(
-                f"Ipfs task deadline reached for task with nonce {nonce}."
+                f"Deadline reached for task with nonce {nonce} while handling IPFS message."
             )
             return
 
