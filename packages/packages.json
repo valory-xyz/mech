@@ -19,8 +19,8 @@
         "custom/valory/tee_openai_request/0.1.0": "bafybeigtbzt7qnzzcds33r6kz34jn6i57djh2mx7zrzcffq3vdkaik6uka",
         "custom/dvilela/corcel_request/0.1.0": "bafybeihy3635ggtioakl66mc3vqfqwr3jvxdvkden2tnktf6zfc3ipif6i",
         "custom/dvilela/gemini_prediction/0.1.0": "bafybeiakbuhuxa5zin3jb75domyltqc33gtzrcl5ucjgiuz5y5wbfigevy",
-        "agent/valory/mech/0.1.0": "bafybeiekehsssy4aro4cywmit4ea5sqnubfunpyesijhji67y67mpwrnti",
-        "service/valory/mech/0.1.0": "bafybeibslkq6bwp3y5diyrn6wgsk4f5yhjynfugs6wleclqhwzjgej5ds4"
+        "agent/valory/mech/0.1.0": "bafybeia7rfsa3t4khguv7w23j2nzicdqclopw2z43c67ccc7fvnj2aziny",
+        "service/valory/mech/0.1.0": "bafybeifmvpuj7bx2lydxhwql2webta5qjsxvecuncg3mc47mdrz2krd4ba"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeib7p5as3obcdzseiwg5umj2piiqaodkxkto7qh7b552l5emwsmdzm",
