@@ -203,7 +203,7 @@ class MechMarketplaceContract(Contract):
 
         request_events = list(
             {
-                "tx_hash": entry.transactionHash.hex(),
+                "tx_hash": entry.transactionHash.to_0x_hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
                 "sender": entry["args"]["requester"],
@@ -234,7 +234,7 @@ class MechMarketplaceContract(Contract):
 
         request_events = list(
             {
-                "tx_hash": entry.transactionHash.hex(),
+                "tx_hash": entry.transactionHash.to_0x_hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
                 "contract_address": contract_address,
@@ -351,7 +351,7 @@ class MechMarketplaceContract(Contract):
 
         request_events = list(
             {
-                "tx_hash": entry.transactionHash.hex(),
+                "tx_hash": entry.transactionHash.to_0x_hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
                 "contract_address": contract_address,
@@ -382,7 +382,7 @@ class MechMarketplaceContract(Contract):
 
         deliver_events = list(
             {
-                "tx_hash": entry.transactionHash.hex(),
+                "tx_hash": entry.transactionHash.to_0x_hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
                 "contract_address": contract_address,
