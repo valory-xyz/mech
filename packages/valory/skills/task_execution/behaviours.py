@@ -607,7 +607,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._handle_done_task(task_result)
             elif self._has_executing_task_timed_out():
                 self._handle_timeout_task()
-            self.context.logger.info("No executing task found.")
+            self.context.logger.info(
+                f"Executing task is not ready: {self._executing_task}"
+            )
             return
 
         self.mech_metrics.set_gauge(

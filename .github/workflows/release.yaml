@@ -17,7 +17,7 @@ jobs:
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-versions }}
-      - uses: addnab/docker-run-action@v3
+      - uses: maus007/docker-run-action-fork@v1
         with:
             image: valory/open-autonomy-user:0.21.11
             options: -v ${{ github.workspace }}:/work
@@ -42,30 +42,26 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set up tag and vars
-        uses: addnab/docker-run-action@v3
+        uses: maus007/docker-run-action-fork@v1
         with:
-            image: valory/open-autonomy-user:0.21.11
-            options: -v ${{ github.workspace }}:/work
-            run: |
-              echo "Setting Tag Images"
-              cd /work
-              apt-get update && apt-get install git -y || exit 1
-              git config --global --add safe.directory /work
-              export TAG=$(git describe --exact-match --tags $(git rev-parse HEAD)) || exit 1
-              if [ $? -eq 0 ]; then
-                  export TAG=`echo $TAG | sed 's/^v//'`
-              else
-                  echo "You are not on a tagged branch"
-                  exit 1
-              fi
-              echo VERSION=$TAG> env.sh
-              echo AUTHOR=$(grep 'service/' packages/packages.json | awk -F/ '{print $2}' | head -1) >> env.sh
-              echo SERVICE=$(grep 'service/' packages/packages.json | awk -F/ '{print $3}' | head -1) >> env.sh
-              echo AGENT=$(grep 'agent/' packages/packages.json | awk -F/ '{print $3}' | head -1) >> env.sh
-              echo DEFAULT_IMAGE_TAG=$(cat packages/packages.json | grep agent/ | awk -F: '{print $2}' | tr -d '", ' | head -n 1) >> env.sh
-              cat env.sh
+          image: valory/open-autonomy-user:0.21.11
+          options: -v ${{ github.workspace }}:/work
+          run: |
+            echo "Setting Tag Images"
+            cd /work
+            apt-get update && apt-get install git -y || exit 1
+            git config --global --add safe.directory /work
+            head=$(git rev-parse HEAD)
+            TAG=$(git describe --exact-match --tags "$head")
+            export TAG=$(echo "$TAG" | sed 's/^v//')
+            echo VERSION=$TAG > env.sh
+            echo AUTHOR=$(grep 'service/' packages/packages.json | awk -F/ '{print $2}' | head -1) >> env.sh
+            echo SERVICE=$(grep 'service/' packages/packages.json | awk -F/ '{print $3}' | head -1) >> env.sh
+            echo AGENT=$(grep 'agent/' packages/packages.json | awk -F/ '{print $3}' | head -1) >> env.sh
+            echo DEFAULT_IMAGE_TAG=$(cat packages/packages.json | grep agent/ | awk -F: '{print $2}' | tr -d '", ' | head -n 1) >> env.sh
+            cat env.sh
 
-      - uses: addnab/docker-run-action@v3
+      - uses: maus007/docker-run-action-fork@v1
         name: Build Images
         with:
             image: valory/open-autonomy-user:0.21.11
@@ -125,7 +121,7 @@ jobs:
           # for staging
           export IP_ADDR=$(dig +short balancer.tcp.propel.staging.autonolas.tech)
           echo -e "\n$IP_ADDR\tapp.propel.staging.valory.xyz\n"  | sudo tee -a /etc/hosts
-          
+
           # for prod
           export IP_ADDR=$(dig +short balancer.tcp.propel.autonolas.tech)
           echo -e "\n$IP_ADDR\tapp.propel.valory.xyz\n"  | sudo tee -a /etc/hosts
@@ -182,7 +178,7 @@ jobs:
           # for staging
           export IP_ADDR=$(dig +short balancer.tcp.propel.staging.autonolas.tech)
           echo -e "\n$IP_ADDR\tapp.propel.staging.valory.xyz\n"  | sudo tee -a /etc/hosts
-          
+
           # for prod
           export IP_ADDR=$(dig +short balancer.tcp.propel.autonolas.tech)
           echo -e "\n$IP_ADDR\tapp.propel.valory.xyz\n"  | sudo tee -a /etc/hosts
@@ -239,7 +235,7 @@ jobs:
           # for staging
           export IP_ADDR=$(dig +short balancer.tcp.propel.staging.autonolas.tech)
           echo -e "\n$IP_ADDR\tapp.propel.staging.valory.xyz\n"  | sudo tee -a /etc/hosts
-          
+
           # for prod
           export IP_ADDR=$(dig +short balancer.tcp.propel.autonolas.tech)
           echo -e "\n$IP_ADDR\tapp.propel.valory.xyz\n"  | sudo tee -a /etc/hosts
@@ -264,4 +260,3 @@ jobs:
           echo '${{ toJSON(vars) }}' | jq -r 'to_entries|map("export \(.key)=\(.value|tojson)")|.[]' >> github.vars
           source github.vars
           $CMD service deploy --name  '${{ vars.SERVICE_NAME }}'  --service-dir $SERVICE_PATH --service-ipfs-hash $IPFS_HASH  --ingress-enabled true --keys '${{ vars.SERVICE_KEYS }}' --timeout 320
-
