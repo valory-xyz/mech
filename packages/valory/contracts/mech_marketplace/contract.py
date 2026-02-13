@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -203,7 +203,7 @@ class MechMarketplaceContract(Contract):
 
         request_events = list(
             {
-                "tx_hash": entry.transactionHash.hex(),
+                "tx_hash": entry.transactionHash.to_0x_hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
                 "sender": entry["args"]["requester"],
@@ -234,7 +234,7 @@ class MechMarketplaceContract(Contract):
 
         request_events = list(
             {
-                "tx_hash": entry.transactionHash.hex(),
+                "tx_hash": entry.transactionHash.to_0x_hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
                 "contract_address": contract_address,
@@ -351,7 +351,7 @@ class MechMarketplaceContract(Contract):
 
         request_events = list(
             {
-                "tx_hash": entry.transactionHash.hex(),
+                "tx_hash": entry.transactionHash.to_0x_hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
                 "contract_address": contract_address,
@@ -382,7 +382,7 @@ class MechMarketplaceContract(Contract):
 
         deliver_events = list(
             {
-                "tx_hash": entry.transactionHash.hex(),
+                "tx_hash": entry.transactionHash.to_0x_hex(),
                 "block_number": entry.blockNumber,
                 **entry["args"],
                 "contract_address": contract_address,

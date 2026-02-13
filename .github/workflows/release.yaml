@@ -19,7 +19,7 @@ jobs:
           python-version: ${{ matrix.python-versions }}
       - uses: maus007/docker-run-action-fork@v1
         with:
-            image: valory/open-autonomy-user:0.21.4
+            image: valory/open-autonomy-user:0.21.11
             options: -v ${{ github.workspace }}:/work
             run: |
               echo "Pushing Packages"
@@ -44,7 +44,7 @@ jobs:
       - name: Set up tag and vars
         uses: maus007/docker-run-action-fork@v1
         with:
-          image: valory/open-autonomy-user:0.21.4
+          image: valory/open-autonomy-user:0.21.11
           options: -v ${{ github.workspace }}:/work
           run: |
             echo "Setting Tag Images"
@@ -64,7 +64,7 @@ jobs:
       - uses: maus007/docker-run-action-fork@v1
         name: Build Images
         with:
-            image: valory/open-autonomy-user:0.21.4
+            image: valory/open-autonomy-user:0.21.11
             options: -v ${{ github.workspace }}:/work
             shell: bash
             run: |
