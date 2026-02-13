@@ -163,12 +163,9 @@ class IpfsHandler(BaseHandler):
         self.context.logger.info(f"IPFS response mapped. {nonce=} {deadline=} {now=}")
 
         if deadline and now > deadline:
-            # Deadline reached
             self.context.logger.info(
-                f"Ipfs task deadline reached for task with nonce {nonce}."
+                f"Deadline reached for task with nonce {nonce} while handling IPFS message."
             )
-            self.params.in_flight_req = False
-            self.params.is_cold_start = False
             return
 
         self.context.logger.info(f"Invoking IPFS callback. {nonce=}")
