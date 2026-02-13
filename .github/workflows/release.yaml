@@ -51,13 +51,14 @@ jobs:
               cd /work
               apt-get update && apt-get install git -y || exit 1
               git config --global --add safe.directory /work
-              export TAG=$(git describe --exact-match --tags $(git rev-parse HEAD)) || exit 1
-              if [ $? -eq 0 ]; then
-                  export TAG=`echo $TAG | sed 's/^v//'`
-              else
-                  echo "You are not on a tagged branch"
-                  exit 1
-              fi
+
+              TAG=$(git describe --exact-match --tags "$(git rev-parse HEAD)") || {
+                echo "You are not on a tagged commit"
+                exit 1
+              }
+              TAG=$(echo "$TAG" | sed 's/^v//')
+              export TAG
+
               echo VERSION=$TAG> env.sh
               echo AUTHOR=$(grep 'service/' packages/packages.json | awk -F/ '{print $2}' | head -1) >> env.sh
               echo SERVICE=$(grep 'service/' packages/packages.json | awk -F/ '{print $3}' | head -1) >> env.sh
