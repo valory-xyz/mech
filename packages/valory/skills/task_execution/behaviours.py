@@ -556,11 +556,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._inflight_ipfs_req
             or self._inflight_tool_req
             or self.params.in_flight_req
+            or self.ipfs_tasks is None
+            or len(self.ipfs_tasks) == 0
         ):
-            return
-
-        if self.ipfs_tasks is None or len(self.ipfs_tasks) == 0:
-            self.context.logger.info("No IPFS tasks to execute.")
             return
 
         self.context.logger.info(f"Found {len(self.ipfs_tasks)} IPFS tasks.")
@@ -588,7 +586,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if self.params.in_flight_req:
             # there is an in flight request
 
-            self._ensure_deadline()
+            if self._executing_task:
+                self._ensure_deadline()
 
             # check if the executing task is within deadline or not
             if self._executing_task and time.time() > cast(
@@ -625,7 +624,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         if len(self.pending_tasks) == 0:
             if len(self.timed_out_tasks) == 0:
-                self.context.logger.info("No pending or timed out tasks found.")
                 return
             task_data = self.timed_out_tasks.pop(0)
         else:
@@ -671,7 +669,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         pending_tasks_count = len(self.pending_tasks)
         # no pending tasks to check
         if pending_tasks_count == 0:
-            self.context.logger.info("No pending tasks found locally.")
             return
 
         self.context.logger.info(
