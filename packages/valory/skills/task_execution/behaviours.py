@@ -187,6 +187,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # we only want to execute one task at a time, for the time being
         self._executor = ProcessPool(max_workers=1)
         self._executing_task: Optional[Dict[str, Any]] = None
+        self._current_request_id: Optional[int] = None
         self._tools_to_package_hash: Dict[str, str] = {}
         self._tools_to_pricing: Dict[str, int] = {}
         self._all_tools: Dict[str, Tuple[str, str, Dict[str, Any]]] = {}
@@ -601,14 +602,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         if self._executing_task is not None:
+            req_id = self._executing_task.get("requestId", None)
+            if self._current_request_id != req_id:
+                self._current_request_id = req_id
+                self.context.logger.info(f"Waiting for task: {self._executing_task}")
+
             if self._is_executing_task_ready() or self._invalid_request:
                 task_result = self._get_executing_task_result()
                 self._handle_done_task(task_result)
             elif self._has_executing_task_timed_out():
                 self._handle_timeout_task()
-            self.context.logger.info(
-                f"Executing task is not ready: {self._executing_task}"
-            )
             return
 
         self.mech_metrics.set_gauge(
