@@ -678,3 +678,114 @@ def test_contract_handler_doesnot_updates_pending_list_based_on_undelivered_requ
 
     # in_flight flag must be cleared
     assert params.in_flight_req is False
+
+
+def test_contract_handler_handles_wait_for_timeout_tasks_properly_from_contract(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Test handler to work fine with data and wait_for_timeout_tasks."""
+    params: Any = handler_context.params
+    params.in_flight_req = True
+    params.num_agents = 1
+    params.agent_index = 0
+    params.req_type = "marketplace"
+    params.req_params.from_block["marketplace"] = 0
+
+    # Make priorityMech match our mech so it goes to pending_tasks (not wait list)
+    my_mech = params.agent_mech_contract_addresses[0]
+
+    # Build marketplace-shaped body: each item has arrays requestIds/requestDatas
+    reqs: List[Dict[str, Any]] = [
+        {
+            "tx_hash": "0xaaa",
+            "block_number": 10,
+            "priorityMech": my_mech,
+            "requester": "0xR1",
+            "numRequests": 1,
+            "requestId": b"\x01" * 32,
+            "requestData": b"\x02" * 32,
+            "status": 1,
+            "request_delivery_rate": 100,
+        },
+        {
+            "tx_hash": "0xbbb",
+            "block_number": 11,
+            "priorityMech": my_mech,
+            "requester": "0xR2",
+            "numRequests": 1,
+            "requestId": b"\x03" * 32,
+            "requestData": b"\x04" * 32,
+            "status": 1,
+            "request_delivery_rate": 100,
+        },
+    ]
+
+    wait_for_timeout_tasks = [
+        {
+            "tx_hash": "0xaaac",
+            "block_number": 10,
+            "priorityMech": my_mech,
+            "requester": "0xR12",
+            "numRequests": 1,
+            "requestId": b"\x01" * 32,
+            "requestData": b"\x02" * 32,
+            "status": 1,
+            "request_delivery_rate": 100,
+        },
+        {
+            "tx_hash": "0xbbbc2",
+            "block_number": 11,
+            "priorityMech": my_mech,
+            "requester": "0xR2",
+            "numRequests": 1,
+            "requestId": b"\x03" * 32,
+            "requestData": b"\x04" * 32,
+            "status": 1,
+            "request_delivery_rate": 100,
+        },
+        {
+            "tx_hash": "0xbbbc5",
+            "block_number": 11,
+            "priorityMech": my_mech,
+            "requester": "0xR2",
+            "numRequests": 1,
+            "requestId": b"\x03" * 32,
+            "requestData": b"\x04" * 32,
+            "status": 1,
+            "request_delivery_rate": 100,
+        },
+    ]
+
+    # check data is empty and wait_for_timeout_tasks has to be processed well
+    pending_reqs_body: Dict[str, Any] = {
+        "data": [],
+        "wait_for_timeout_tasks": wait_for_timeout_tasks,
+    }
+
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+
+    msg = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=pending_reqs_body),
+    )
+    ch.handle(msg)
+
+    assert len(ch.pending_tasks) == 3
+
+    # check data and wait_for_timeout_tasks
+    pending_reqs_body2: Dict[str, Any] = {
+        "data": reqs,
+        "wait_for_timeout_tasks": wait_for_timeout_tasks,
+    }
+
+    ch2 = ContractHandler(name="contract", skill_context=handler_context)
+    ch2.setup()
+
+    msg2 = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=pending_reqs_body2),
+    )
+    ch2.handle(msg2)
+
+    assert len(ch2.pending_tasks) == 5
