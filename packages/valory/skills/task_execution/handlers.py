@@ -256,8 +256,8 @@ class ContractHandler(BaseHandler):
         body = contract_api_msg.state.body
         self.context.logger.info(f"Contract state body keys={list(body.keys())}.")
 
-        if body.get("data"):
-            # handle the undelivered requests response
+        if body.get("data") or body.get("wait_for_timeout_tasks"):
+            # handle the undelivered requests response from data and wait_for_timeout_tasks
             self._handle_get_undelivered_reqs(body)
         if body.get("request_ids"):
             # handle the request id status check response
