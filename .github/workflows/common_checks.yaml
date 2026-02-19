@@ -140,30 +140,56 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
-        python-version: [ "3.10" ]
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        python-version: [ "3.10", "3.11" ]
 
     timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
-          fetch-depth: 0
-      - uses: actions/setup-python@v3
+          submodules: recursive
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+      - if: matrix.os == 'ubuntu-latest'
+        name: Install dependencies (ubuntu-latest)
         run: |
           sudo apt-get update --fix-missing
           sudo apt-get autoremove
           sudo apt-get autoclean
-          pip install tomte[tox,cli]==0.4.0
+          pip install tomte[tox]==0.2.14
           pip install --user --upgrade setuptools
 
-      - name: Packages unit tests ${{ matrix.os }}
+      - if: matrix.os == 'ubuntu-latest'
+        name: Packages unit tests ubuntu-latest
         run: |
           tox -e py${{ matrix.python-version }}-linux
 
-      - name: Upload coverage to Codecov
+      - if: matrix.os == 'macos-latest'
+        name: Install dependencies (macos-latest)
+        run: |
+          pip install tomte[tox]==0.2.14
+          pip install --user --upgrade setuptools
+
+      - if: matrix.os == 'macos-latest'
+        name: Packages unit tests macos-latest
+        run: |
+          tox -e py${{ matrix.python-version }}-darwin
+
+      - if: matrix.os == 'windows-latest'
+        name: Install dependencies (windows-latest)
+        run: |
+          python -m pip install -U pip
+          pip install tomte[tox]==0.2.14
+          pip install --upgrade setuptools
+
+      - if: matrix.os == 'windows-latest'
+        name: Packages unit tests windows-latest
+        run: |
+          tox -e py${{ matrix.python-version }}-win
+
+      - if: matrix.os == 'ubuntu-latest'
+        name: Upload coverage to Codecov
         uses: codecov/codecov-action@v1
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
