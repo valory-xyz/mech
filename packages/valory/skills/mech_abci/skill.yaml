@@ -25,11 +25,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeico2i67lk5wkgyvmu5ska7phbugxbfh4ofnm57vwpypis5zmpjnim
 - valory/registration_abci:0.1.0:bafybeiaur5o7xjf5jod2gzbhxa2m2l2m7z76rfs7gf2sfuf3ffjlqodaxy
 - valory/reset_pause_abci:0.1.0:bafybeibgbbt4yzd6amf2wuldrdvhyfqibjqx2uxhybqhrkumlp4jcfndia
-- valory/task_submission_abci:0.1.0:bafybeiglxzjsgefgldsgx7ojpb5bwzqcbe5hmjxrjtnn2vt2op7qk3u3we
+- valory/task_submission_abci:0.1.0:bafybeieq4housqxrn4wetp7y7hmz3ukua3qujmo4hw7osl36vtf2dfksku
 - valory/termination_abci:0.1.0:bafybeifjwbctocnxrtgyzn7z2ml2q6bxdxrd4sa7m5u43p7ts6hk6ujvce
 - valory/transaction_settlement_abci:0.1.0:bafybeidmg3beiqyubkze6wdiwhz4oqwvidhsjexjgcvso5bkrryqkbsgzu
-- valory/delivery_rate_abci:0.1.0:bafybeiaxihrr2nli4mk6yl6lo4agy3gly3jtd3xmbeyu64kf75v2harfky
-- valory/task_execution:0.1.0:bafybeihg6dppmu756tcgawabxflbzug2vmm4mn4tcmquwuqyni74zu2ltm
+- valory/delivery_rate_abci:0.1.0:bafybeifjwvcdom6c6y5uxam2ja44ola535kphs7v6qfwdw7bqk3a7sxxlq
+- valory/task_execution:0.1.0:bafybeibrnln3wenuewv5nipwehtqbbr4jztf3pb6lrb7emsa7uffclnpaa
 behaviours:
   main:
     args: {}
