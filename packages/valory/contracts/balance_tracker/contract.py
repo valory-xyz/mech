@@ -51,6 +51,17 @@ class BalanceTrackerContract(Contract):
         return {"mech_balance": mech_balance}
 
     @classmethod
+    def get_requester_balance(
+        cls, ledger_api: LedgerApi, contract_address: str, requester: str
+    ) -> JSONLike:
+        """Get requester balance."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        requester_balance = contract_instance.functions.mapRequesterBalances(
+            requester
+        ).call()
+        return {"requester_balance": requester_balance}
+
+    @classmethod
     def get_max_fee_factor(
         cls,
         ledger_api: LedgerApi,
