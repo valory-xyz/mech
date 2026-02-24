@@ -29,7 +29,7 @@ contracts:
 - valory/multisend:0.1.0:bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4
 - valory/service_registry:0.1.0:bafybeidheiinltcynckpgs35vknbs7s6zal3d544nfjcdjrbvely32j5le
 - valory/hash_checkpoint:0.1.0:bafybeic7x3cqr46yw7wzbvfc7mc6l3vsilx7g7tltqsb3whzfyolukoev4
-- valory/balance_tracker:0.1.0:bafybeif3ziyaqnx5lj4mambwf3nw7jjp2xng2ib2c3qewj3r653duxg7em
+- valory/balance_tracker:0.1.0:bafybeifpbhcztv5m7ic7hebujn324oou24cc2orfaracuazgih2p5ydvje
 - valory/erc20:0.1.0:bafybeieuh56e2ikru4g7jl6owsndxjebydplg7fb5rbrtqie6wronitdze
 protocols:
 - valory/acn_data_share:0.1.0:bafybeiebct3enol4nkiy3uxm2xnn2hniwnorjfwtcjbsywea5ql36pqk3y
@@ -38,7 +38,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeico2i67lk5wkgyvmu5ska7phbugxbfh4ofnm57vwpypis5zmpjnim
 - valory/transaction_settlement_abci:0.1.0:bafybeidmg3beiqyubkze6wdiwhz4oqwvidhsjexjgcvso5bkrryqkbsgzu
-- valory/task_execution:0.1.0:bafybeibrnln3wenuewv5nipwehtqbbr4jztf3pb6lrb7emsa7uffclnpaa
+- valory/task_execution:0.1.0:bafybeie7tbxqk477j24dv4n4xxc4jihnj4dbmtaclbqslj7cq5mxbrgbye
 behaviours:
   main:
     args: {}

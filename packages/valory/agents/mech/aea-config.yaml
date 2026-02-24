@@ -23,7 +23,7 @@ contracts:
 - valory/multisend:0.1.0:bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4
 - valory/service_registry:0.1.0:bafybeidheiinltcynckpgs35vknbs7s6zal3d544nfjcdjrbvely32j5le
 - valory/mech_marketplace:0.1.0:bafybeicnxlb62tmpure2fppbsnhbmek4zur2cfaiyg4nujek4h35ijh72a
-- valory/balance_tracker:0.1.0:bafybeif3ziyaqnx5lj4mambwf3nw7jjp2xng2ib2c3qewj3r653duxg7em
+- valory/balance_tracker:0.1.0:bafybeifpbhcztv5m7ic7hebujn324oou24cc2orfaracuazgih2p5ydvje
 - valory/erc20:0.1.0:bafybeieuh56e2ikru4g7jl6owsndxjebydplg7fb5rbrtqie6wronitdze
 protocols:
 - open_aea/signing:1.0.0:bafybeiei6h5suazzfta7n3uyq7bsz26zkmdiiylptu5i44p7s2wiygxt24
@@ -40,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieoc35cjm3dlt2ayj6iidjfdgry6fmhnzniml5dqalmwu4so6vmme
 - valory/abstract_round_abci:0.1.0:bafybeico2i67lk5wkgyvmu5ska7phbugxbfh4ofnm57vwpypis5zmpjnim
 - valory/contract_subscription:0.1.0:bafybeicrkrifwefmfd3d25cx7fwlq2ttqfhycrkply7dxrplhvoldgtdau
-- valory/mech_abci:0.1.0:bafybeiezu5hipxa2ge7ue4yo3otcxzfklv3qlluju2yoglyb7tluff5yt4
+- valory/mech_abci:0.1.0:bafybeiaevnkmxyfjejjnbloew5kljxaiowspo3xm2pmse7kvchrcrlxany
 - valory/registration_abci:0.1.0:bafybeiaur5o7xjf5jod2gzbhxa2m2l2m7z76rfs7gf2sfuf3ffjlqodaxy
 - valory/reset_pause_abci:0.1.0:bafybeibgbbt4yzd6amf2wuldrdvhyfqibjqx2uxhybqhrkumlp4jcfndia
 - valory/delivery_rate_abci:0.1.0:bafybeifjwvcdom6c6y5uxam2ja44ola535kphs7v6qfwdw7bqk3a7sxxlq
-- valory/task_execution:0.1.0:bafybeibrnln3wenuewv5nipwehtqbbr4jztf3pb6lrb7emsa7uffclnpaa
-- valory/task_submission_abci:0.1.0:bafybeieq4housqxrn4wetp7y7hmz3ukua3qujmo4hw7osl36vtf2dfksku
+- valory/task_execution:0.1.0:bafybeie7tbxqk477j24dv4n4xxc4jihnj4dbmtaclbqslj7cq5mxbrgbye
+- valory/task_submission_abci:0.1.0:bafybeidjzk5enhvzvs7gruudahtozenbyddunvbzsn2xrvc7c543v6h7ye
 - valory/termination_abci:0.1.0:bafybeifjwbctocnxrtgyzn7z2ml2q6bxdxrd4sa7m5u43p7ts6hk6ujvce
 - valory/transaction_settlement_abci:0.1.0:bafybeidmg3beiqyubkze6wdiwhz4oqwvidhsjexjgcvso5bkrryqkbsgzu
 - valory/websocket_client:0.1.0:bafybeidbcdcvyy2svob6p52akdx4ezsqpxdh4kphhqgf6hbageneu7unwi
