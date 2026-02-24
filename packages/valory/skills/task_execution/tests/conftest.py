@@ -84,7 +84,10 @@ def params_stub() -> SimpleNamespace:
         request_count=0,
         cleanup_freq=1000,
         req_type=None,
-        default_chain_id=100,
+        default_chain_id="gnosis",
+        gnosis_ledger_rpc="http://localhost:8545",
+        polygon_ledger_rpc="http://localhost:8545",
+        base_ledger_rpc="http://localhost:8545",
         agent_mech_contract_addresses=[mech_addr],
         agent_mech_contract_address=mech_addr,
         mech_to_config={
