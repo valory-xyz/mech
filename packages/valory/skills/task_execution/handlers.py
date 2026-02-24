@@ -864,16 +864,16 @@ class MechHttpHandler(AbstractResponseHandler):
 
     def _get_mech_payment_type(
         self, ledger_api: EthereumApi, mech_address: str
-    ) -> Optional[bytes]:
+    ) -> Optional[str]:
         """Get the mech payment type from the mech contract."""
         payment_type_res = AgentMechContract.get_mech_type(ledger_api, mech_address)
-        return cast(Optional[bytes], payment_type_res.get(BodyKey.MECH_TYPE.value))
+        return cast(Optional[str], payment_type_res.get(BodyKey.MECH_TYPE.value))
 
     def _get_balance_tracker_address_for_payment_type(
         self,
         ledger_api: EthereumApi,
         marketplace_address: str,
-        payment_type: bytes,
+        payment_type: str,
     ) -> str:
         """Get the balance tracker address for the provided payment type."""
         balance_tracker_res = MechMarketplaceContract.get_balance_tracker_for_mech_type(

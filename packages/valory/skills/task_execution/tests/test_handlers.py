@@ -615,7 +615,7 @@ def test_get_ledger_settings_unsupported_chain(
     settings = mh._get_ledger_settings()
 
     assert settings["status"] == "unavailable"
-    assert "Unsupported chain" in settings["reason"]
+    assert "Unsupported chain" in str(settings["reason"])
 
 
 def test_on_message_handled_triggers_cleanup(
