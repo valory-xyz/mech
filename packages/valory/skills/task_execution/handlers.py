@@ -327,21 +327,25 @@ class ContractHandler(BaseHandler):
         body = contract_api_msg.state.body
         self.context.logger.info(f"Contract state body keys={list(body.keys())}.")
 
-        if body.get("data") or body.get("wait_for_timeout_tasks"):
+        if body.get(BodyKey.DATA.value) or body.get(
+            BodyKey.WAIT_FOR_TIMEOUT_TASKS.value
+        ):
             # handle the undelivered requests response from data and wait_for_timeout_tasks
             self._handle_get_undelivered_reqs(body)
-        if body.get("request_ids"):
+        if body.get(BodyKey.REQUEST_IDS.value):
             # handle the request id status check response
             self._update_pending_list(body)
-        if body.get("mech_type"):
+        if body.get(BodyKey.MECH_TYPE.value):
             # handle the mech type response
-            self.context.shared_state[PAYMENT_MODEL] = body["mech_type"]
-            self.context.logger.info(f"Found payment model {body['mech_type']!r}.")
-        if body.get("mech_types"):
-            # handle the mech types response
-            self.context.shared_state[PAYMENT_INFO] = body["mech_types"]
+            self.context.shared_state[PAYMENT_MODEL] = body[BodyKey.MECH_TYPE.value]
             self.context.logger.info(
-                f"The cache was updated with the new mech types: {body['mech_types']}."
+                f"Found payment model {body[BodyKey.MECH_TYPE.value]!r}."
+            )
+        if body.get(BodyKey.MECH_TYPES.value):
+            # handle the mech types response
+            self.context.shared_state[PAYMENT_INFO] = body[BodyKey.MECH_TYPES.value]
+            self.context.logger.info(
+                f"The cache was updated with the new mech types: {body[BodyKey.MECH_TYPES.value]}."
             )
 
         self.params.in_flight_req = False
@@ -361,15 +365,17 @@ class ContractHandler(BaseHandler):
         # Reset lists.
         self.context.shared_state[INFLIGHT_READ_TS] = None
         self.wait_for_timeout_tasks.clear()
-        self.unprocessed_timed_out_tasks = body.get("timed_out_requests", [])
+        self.unprocessed_timed_out_tasks = body.get(
+            BodyKey.TIMED_OUT_REQUESTS.value, []
+        )
         self.set_last_successful_read(self.from_block)
 
         self.context.logger.info(
             f"Loaded {len(self.unprocessed_timed_out_tasks)} timed out requests from contract.",
         )
         # collect items to process: fresh + previously waiting
-        reqs = list(body.get("data", []))
-        reqs.extend(body.get("wait_for_timeout_tasks", []))
+        reqs = list(body.get(BodyKey.DATA.value, []))
+        reqs.extend(body.get(BodyKey.WAIT_FOR_TIMEOUT_TASKS.value, []))
 
         reqs_count = len(reqs)
         if reqs_count == 0:
@@ -402,7 +408,9 @@ class ContractHandler(BaseHandler):
     def _update_pending_list(self, body: Dict[str, List]) -> None:
         before = len(self.pending_tasks)
         self.context.shared_state[PENDING_TASKS] = [
-            req for req in self.pending_tasks if req["requestId"] in body["request_ids"]
+            req
+            for req in self.pending_tasks
+            if req[RequestKey.REQUEST_ID_CAMEL.value] in body[BodyKey.REQUEST_IDS.value]
         ]
         after = len(self.pending_tasks)
         self.context.logger.info(
@@ -521,12 +529,13 @@ class MechHttpHandler(AbstractResponseHandler):
 
     def setup(self) -> None:
         """Setup the mech http handler."""
-        self.context.shared_state["routes_info"] = {
-            "send_signed_requests": self._handle_signed_requests,
-            "fetch_offchain_info": self._handle_offchain_request_info,
+        self.context.shared_state[ROUTES_INFO] = {
+            Route.SEND_SIGNED_REQUESTS.value: self._handle_signed_requests,
+            Route.FETCH_OFFCHAIN_INFO.value: self._handle_offchain_request_info,
         }
         self.context.shared_state[IPFS_TASKS] = []
-        self.json_content_header = "Content-Type: application/json\n"
+        self.context.shared_state[OFFCHAIN_REQUEST_RESPONSES] = {}
+        self.json_content_header = JSON_CONTENT_HEADER
         self.start_prometheus_server()
         super().setup()
 
@@ -558,26 +567,70 @@ class MechHttpHandler(AbstractResponseHandler):
                 f"Received signed offchain request with {request_id=} and {request_delivery_rate=}."
             )
 
-            req = {
-                "requestId": request_id,
-                "data": bytes.fromhex(ipfs_hash[2:]),
-                "is_offchain": True,
-                "request_delivery_rate": request_delivery_rate,
-                **data,
-            }
-            self.pending_tasks.append(req)
-            self.ipfs_tasks.append(
-                {"request_id": request_id, "ipfs_data": data["ipfs_data"]}
+            balance_check = self._check_offchain_requester_balance(
+                sender=sender,
+                delivery_rate=request_delivery_rate,
             )
+            if balance_check[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+                response_payload = {
+                    RequestKey.REQUEST_ID.value: request_id,
+                    ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
+                    ResponseKey.REASON.value: "balance check unavailable",
+                }
+                self.offchain_request_responses[request_id] = response_payload
+                http_response = http_dialogue.reply(
+                    performative=HttpMessage.Performative.RESPONSE,
+                    target_message=http_msg,
+                    version=http_msg.version,
+                    status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
+                    status_text="Service unavailable",
+                    headers=f"{self.json_content_header}{http_msg.headers}",
+                    body=json.dumps(response_payload).encode(ENCODING_UTF8),
+                )
+                self.context.logger.info("Responding with: {}".format(http_response))
+                self.context.outbox.put_message(message=http_response)
+                return
+
+            available_amount = cast(
+                int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value]
+            )
+            if available_amount < request_delivery_rate:
+                response_payload = {
+                    RequestKey.REQUEST_ID.value: request_id,
+                    ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
+                    ResponseKey.REASON.value: "insufficient balance",
+                }
+                self.offchain_request_responses[request_id] = response_payload
+                http_response = http_dialogue.reply(
+                    performative=HttpMessage.Performative.RESPONSE,
+                    target_message=http_msg,
+                    version=http_msg.version,
+                    status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
+                    status_text="Payment required",
+                    headers=f"{self.json_content_header}{http_msg.headers}",
+                    body=json.dumps(response_payload).encode(ENCODING_UTF8),
+                )
+                self.context.logger.info("Responding with: {}".format(http_response))
+                self.context.outbox.put_message(message=http_response)
+                return
+
+            req = self._enqueue_offchain_request(
+                request_id=request_id,
+                ipfs_hash=ipfs_hash,
+                request_delivery_rate=request_delivery_rate,
+                data=data,
+            )
+
             self.context.logger.info(
                 f"Offchain task added with data: {req}. "
                 f"pending_tasks={len(self.pending_tasks)} ipfs_tasks={len(self.ipfs_tasks)}."
             )
 
+            self.offchain_request_responses.pop(request_id, None)
             self._send_ok_response(
-                http_msg,
-                http_dialogue,
-                data={"request_id": request_id},
+                http_msg=http_msg,
+                http_dialogue=http_dialogue,
+                data={RequestKey.REQUEST_ID.value: request_id},
             )
 
         except Exception as e:
@@ -597,18 +650,25 @@ class MechHttpHandler(AbstractResponseHandler):
         """
 
         try:
-            # Parse incoming data
-            request_data = http_msg.body.decode("utf-8")
-            parsed_data = urllib.parse.parse_qs(request_data)
-            data = {key: value[0] for key, value in parsed_data.items()}
-
-            request_id = data["request_id"]
+            data = self._parse_http_body(http_msg)
+            request_id = data[RequestKey.REQUEST_ID.value]
             self.context.logger.info(f"Fetching offchain info for {request_id=}.")
+
+            stored_response = self.offchain_request_responses.get(request_id)
+            if stored_response is not None:
+                self._send_ok_response(
+                    http_msg,
+                    http_dialogue,
+                    data=stored_response,
+                )
+                return
 
             done_tasks_list = self.done_tasks
 
             requested_done_tasks_list = [
-                data for data in done_tasks_list if data.get("request_id") == request_id
+                item
+                for item in done_tasks_list
+                if item.get(RequestKey.REQUEST_ID.value) == request_id
             ]
 
             self._send_ok_response(
@@ -658,7 +718,7 @@ class MechHttpHandler(AbstractResponseHandler):
             status_code=HttpCode.OK_CODE.value,
             status_text="Success",
             headers=f"{self.json_content_header}{http_msg.headers}",
-            body=json.dumps(data).encode("utf-8"),
+            body=json.dumps(data).encode(ENCODING_UTF8),
         )
 
         # Send response
