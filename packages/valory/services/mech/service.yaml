@@ -208,6 +208,9 @@ type: skill
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
+        gnosis_ledger_rpc: ${GNOSIS_LEDGER_RPC:str:http://host.docker.internal:8545}
+        polygon_ledger_rpc: ${POLYGON_LEDGER_RPC:str:http://host.docker.internal:8545}
+        base_ledger_rpc: ${BASE_LEDGER_RPC:str:http://host.docker.internal:8545}
 1:
   models:
     params:
@@ -227,6 +230,9 @@ type: skill
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
+        gnosis_ledger_rpc: ${GNOSIS_LEDGER_RPC:str:http://host.docker.internal:8545}
+        polygon_ledger_rpc: ${POLYGON_LEDGER_RPC:str:http://host.docker.internal:8545}
+        base_ledger_rpc: ${BASE_LEDGER_RPC:str:http://host.docker.internal:8545}
 2:
   models:
     params:
@@ -246,6 +252,9 @@ type: skill
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
+        gnosis_ledger_rpc: ${GNOSIS_LEDGER_RPC:str:http://host.docker.internal:8545}
+        polygon_ledger_rpc: ${POLYGON_LEDGER_RPC:str:http://host.docker.internal:8545}
+        base_ledger_rpc: ${BASE_LEDGER_RPC:str:http://host.docker.internal:8545}
 3:
   models:
     params:
@@ -265,6 +274,9 @@ type: skill
         max_block_window: ${MAX_BLOCK_WINDOW:int:500}
         mech_to_max_delivery_rate: ${MECH_TO_MAX_DELIVERY_RATE:dict:{}}
         default_chain_id: ${DEFAULT_CHAIN_ID:str:gnosis}
+        gnosis_ledger_rpc: ${GNOSIS_LEDGER_RPC_0:str:http://host.docker.internal:8545}
+        polygon_ledger_rpc: ${POLYGON_LEDGER_RPC_0:str:http://host.docker.internal:8545}
+        base_ledger_rpc: ${BASE_LEDGER_RPC_0:str:http://host.docker.internal:8545}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

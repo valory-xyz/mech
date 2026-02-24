@@ -97,6 +97,9 @@ models:
       serious_slash_unit_amount: 8000000000000000
       mech_marketplace_address: '0x0000000000000000000000000000000000000000'
       default_chain_id: gnosis
+      gnosis_ledger_rpc: http://localhost:8545
+      polygon_ledger_rpc: http://localhost:8545
+      base_ledger_rpc: http://localhost:8545
     class_name: Params
 dependencies:
   py-multibase:
