@@ -311,21 +311,53 @@ def make_http_msg(body_dict: Dict[str, str], headers: str = "") -> SimpleNamespa
     )
 
 
-def test_signed_requests_success(
-    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+@pytest.mark.parametrize(
+    "balance_status,available_offset,request_id,expected_http_code,enqueued,"
+    "expected_resp_status,expected_resp_reason",
+    [
+        pytest.param(
+            "ok", 1, "req-1",
+            HttpCode.OK_CODE.value, True,
+            None, None,
+            id="success",
+        ),
+        pytest.param(
+            "ok", -1, "req-insufficient",
+            HttpCode.PAYMENT_REQUIRED_CODE.value, False,
+            "rejected", "insufficient balance",
+            id="insufficient_balance",
+        ),
+        pytest.param(
+            "unavailable", -123, "req-unavailable",
+            HttpCode.SERVICE_UNAVAILABLE_CODE.value, False,
+            "rejected", "balance check unavailable",
+            id="balance_check_unavailable",
+        ),
+    ],
+)
+def test_signed_requests_balance_scenarios(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    balance_status: str,
+    available_offset: int,
+    request_id: str,
+    expected_http_code: int,
+    enqueued: bool,
+    expected_resp_status: Any,
+    expected_resp_reason: Any,
 ) -> None:
-    """Enqueue off-chain request & respond 202 on valid signed POST."""
+    """Test balance-check outcomes: success, insufficient balance, and unavailable."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
-    # patch prometheus server to bypass port in use error and not relevant to these tests
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     monkeypatch.setattr(
         mh,
         "_check_offchain_requester_balance",
         lambda sender, delivery_rate: {
-            "status": "ok",
+            "status": balance_status,
             "required_amount": int(delivery_rate),
-            "available_amount": int(delivery_rate) + 1,
-            "reason": "balance check completed",
+            "available_amount": int(delivery_rate) + available_offset,
+            "reason": "balance check completed" if balance_status == "ok" else "rpc unavailable",
         },
     )
     mh.setup()
@@ -333,27 +365,32 @@ def test_signed_requests_success(
     ipfs_hash: str = "0x" + "ab" * 64
     body: Dict[str, str] = {
         "ipfs_hash": ipfs_hash,
-        "request_id": "req-1",
+        "request_id": request_id,
         "ipfs_data": '{"foo":"bar"}',
         "delivery_rate": "123",
         "sender": "0x0000000000000000000000000000000000000001",
     }
     http_msg: Any = make_http_msg(body)
-
     mh._handle_signed_requests(http_msg, http_dialogue)
 
     pend = handler_context.shared_state["pending_tasks"]
     ipfsq = handler_context.shared_state["ipfs_tasks"]
-    assert len(pend) == 1 and len(ipfsq) == 1
-    assert pend[0]["is_offchain"] is True
-    assert pend[0]["requestId"] == "req-1"
-    assert ipfsq[0]["request_id"] == "req-1"
+    if enqueued:
+        assert len(pend) == 1 and len(ipfsq) == 1
+        assert pend[0]["is_offchain"] is True
+        assert pend[0]["requestId"] == request_id
+        assert ipfsq[0]["request_id"] == request_id
+    else:
+        assert pend == [] and ipfsq == []
 
     assert handler_context.outbox.sent, "no HTTP response sent"
     resp: SimpleNamespace = handler_context.outbox.sent[-1]
-    assert resp.status_code == HttpCode.OK_CODE.value
-    data = json.loads(resp.body.decode("utf-8"))
-    assert data["request_id"] == "req-1"
+    assert resp.status_code == expected_http_code
+
+    if expected_resp_status is not None:
+        payload = json.loads(resp.body.decode("utf-8"))
+        assert payload["status"] == expected_resp_status
+        assert payload["reason"] == expected_resp_reason
 
 
 def test_signed_requests_bad_request(
@@ -361,7 +398,6 @@ def test_signed_requests_bad_request(
 ) -> None:
     """Return HTTP 400 when required POST fields are missing."""
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
-    # patch prometheus server to bypass port in use error and not relevant to these tests
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
@@ -370,45 +406,6 @@ def test_signed_requests_bad_request(
 
     resp: SimpleNamespace = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
-
-
-def test_signed_requests_insufficient_balance(
-    handler_context: Any, http_dialogue: Any, monkeypatch: Any
-) -> None:
-    """Reject off-chain request with 402 when requester balance is insufficient."""
-    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
-    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
-    monkeypatch.setattr(
-        mh,
-        "_check_offchain_requester_balance",
-        lambda sender, delivery_rate: {
-            "status": "ok",
-            "required_amount": int(delivery_rate),
-            "available_amount": int(delivery_rate) - 1,
-            "reason": "balance check completed",
-        },
-    )
-    mh.setup()
-
-    ipfs_hash: str = "0x" + "ab" * 64
-    body: Dict[str, str] = {
-        "ipfs_hash": ipfs_hash,
-        "request_id": "req-insufficient",
-        "ipfs_data": '{"foo":"bar"}',
-        "delivery_rate": "123",
-        "sender": "0x0000000000000000000000000000000000000001",
-    }
-    http_msg: Any = make_http_msg(body)
-    mh._handle_signed_requests(http_msg, http_dialogue)
-
-    assert handler_context.shared_state["pending_tasks"] == []
-    assert handler_context.shared_state["ipfs_tasks"] == []
-
-    resp: SimpleNamespace = handler_context.outbox.sent[-1]
-    assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
-    payload = json.loads(resp.body.decode("utf-8"))
-    assert payload["status"] == "rejected"
-    assert payload["reason"] == "insufficient balance"
 
 
 def test_fetch_offchain_request_info_returns_insufficient_balance_response(
@@ -450,45 +447,6 @@ def test_fetch_offchain_request_info_returns_insufficient_balance_response(
     assert payload["status"] == "rejected"
     assert payload["reason"] == "insufficient balance"
     assert payload["request_id"] == request_id
-
-
-def test_signed_requests_balance_check_unavailable(
-    handler_context: Any, http_dialogue: Any, monkeypatch: Any
-) -> None:
-    """Reject off-chain request with 503 when balance check backend is unavailable."""
-    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
-    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
-    monkeypatch.setattr(
-        mh,
-        "_check_offchain_requester_balance",
-        lambda sender, delivery_rate: {
-            "status": "unavailable",
-            "required_amount": int(delivery_rate),
-            "available_amount": 0,
-            "reason": "rpc unavailable",
-        },
-    )
-    mh.setup()
-
-    ipfs_hash: str = "0x" + "ab" * 64
-    body: Dict[str, str] = {
-        "ipfs_hash": ipfs_hash,
-        "request_id": "req-unavailable",
-        "ipfs_data": '{"foo":"bar"}',
-        "delivery_rate": "123",
-        "sender": "0x0000000000000000000000000000000000000001",
-    }
-    http_msg: Any = make_http_msg(body)
-    mh._handle_signed_requests(http_msg, http_dialogue)
-
-    assert handler_context.shared_state["pending_tasks"] == []
-    assert handler_context.shared_state["ipfs_tasks"] == []
-
-    resp: SimpleNamespace = handler_context.outbox.sent[-1]
-    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
-    payload = json.loads(resp.body.decode("utf-8"))
-    assert payload["status"] == "rejected"
-    assert payload["reason"] == "balance check unavailable"
 
 
 def test_signed_requests_rollback_partial_enqueue(
