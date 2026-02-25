@@ -316,21 +316,33 @@ def make_http_msg(body_dict: Dict[str, str], headers: str = "") -> SimpleNamespa
     "expected_resp_status,expected_resp_reason",
     [
         pytest.param(
-            "ok", 1, "req-1",
-            HttpCode.OK_CODE.value, True,
-            None, None,
+            "ok",
+            1,
+            "req-1",
+            HttpCode.OK_CODE.value,
+            True,
+            None,
+            None,
             id="success",
         ),
         pytest.param(
-            "ok", -1, "req-insufficient",
-            HttpCode.PAYMENT_REQUIRED_CODE.value, False,
-            "rejected", "insufficient balance",
+            "ok",
+            -1,
+            "req-insufficient",
+            HttpCode.PAYMENT_REQUIRED_CODE.value,
+            False,
+            "rejected",
+            "insufficient balance",
             id="insufficient_balance",
         ),
         pytest.param(
-            "unavailable", -123, "req-unavailable",
-            HttpCode.SERVICE_UNAVAILABLE_CODE.value, False,
-            "rejected", "balance check unavailable",
+            "unavailable",
+            -123,
+            "req-unavailable",
+            HttpCode.SERVICE_UNAVAILABLE_CODE.value,
+            False,
+            "rejected",
+            "balance check unavailable",
             id="balance_check_unavailable",
         ),
     ],
@@ -357,7 +369,11 @@ def test_signed_requests_balance_scenarios(
             "status": balance_status,
             "required_amount": int(delivery_rate),
             "available_amount": int(delivery_rate) + available_offset,
-            "reason": "balance check completed" if balance_status == "ok" else "rpc unavailable",
+            "reason": (
+                "balance check completed"
+                if balance_status == "ok"
+                else "rpc unavailable"
+            ),
         },
     )
     mh.setup()

@@ -573,7 +573,9 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             if balance_check[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
                 self._send_rejection_response(
-                    http_msg, http_dialogue, request_id,
+                    http_msg,
+                    http_dialogue,
+                    request_id,
                     reason="balance check unavailable",
                     status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
                     status_text="Service unavailable",
@@ -585,7 +587,9 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             if available_amount < request_delivery_rate:
                 self._send_rejection_response(
-                    http_msg, http_dialogue, request_id,
+                    http_msg,
+                    http_dialogue,
+                    request_id,
                     reason="insufficient balance",
                     status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
                     status_text="Payment required",
