@@ -572,46 +572,24 @@ class MechHttpHandler(AbstractResponseHandler):
                 delivery_rate=request_delivery_rate,
             )
             if balance_check[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
-                response_payload = {
-                    RequestKey.REQUEST_ID.value: request_id,
-                    ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
-                    ResponseKey.REASON.value: "balance check unavailable",
-                }
-                self.offchain_request_responses[request_id] = response_payload
-                http_response = http_dialogue.reply(
-                    performative=HttpMessage.Performative.RESPONSE,
-                    target_message=http_msg,
-                    version=http_msg.version,
+                self._send_rejection_response(
+                    http_msg, http_dialogue, request_id,
+                    reason="balance check unavailable",
                     status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
                     status_text="Service unavailable",
-                    headers=f"{self.json_content_header}{http_msg.headers}",
-                    body=json.dumps(response_payload).encode(ENCODING_UTF8),
                 )
-                self.context.logger.info("Responding with: {}".format(http_response))
-                self.context.outbox.put_message(message=http_response)
                 return
 
             available_amount = cast(
                 int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value]
             )
             if available_amount < request_delivery_rate:
-                response_payload = {
-                    RequestKey.REQUEST_ID.value: request_id,
-                    ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
-                    ResponseKey.REASON.value: "insufficient balance",
-                }
-                self.offchain_request_responses[request_id] = response_payload
-                http_response = http_dialogue.reply(
-                    performative=HttpMessage.Performative.RESPONSE,
-                    target_message=http_msg,
-                    version=http_msg.version,
+                self._send_rejection_response(
+                    http_msg, http_dialogue, request_id,
+                    reason="insufficient balance",
                     status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
                     status_text="Payment required",
-                    headers=f"{self.json_content_header}{http_msg.headers}",
-                    body=json.dumps(response_payload).encode(ENCODING_UTF8),
                 )
-                self.context.logger.info("Responding with: {}".format(http_response))
-                self.context.outbox.put_message(message=http_response)
                 return
 
             req = self._enqueue_offchain_request(
@@ -725,6 +703,34 @@ class MechHttpHandler(AbstractResponseHandler):
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
 
+    def _send_rejection_response(
+        self,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+    ) -> None:
+        """Build a rejection payload, store it, and send the HTTP error response."""
+        response_payload = {
+            RequestKey.REQUEST_ID.value: request_id,
+            ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
+            ResponseKey.REASON.value: reason,
+        }
+        self.offchain_request_responses[request_id] = response_payload
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=status_code,
+            status_text=status_text,
+            headers=f"{self.json_content_header}{http_msg.headers}",
+            body=json.dumps(response_payload).encode(ENCODING_UTF8),
+        )
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)
+
     def _rollback_offchain_enqueue(self, request_id: str) -> None:
         """Rollback a partial off-chain enqueue in case of unexpected failure."""
         self.context.shared_state[PENDING_TASKS] = [
@@ -776,6 +782,19 @@ class MechHttpHandler(AbstractResponseHandler):
             raise
         return req
 
+    @staticmethod
+    def _make_unavailable_balance_response(
+        required_amount: int,
+        reason: str,
+    ) -> Dict[str, Union[str, int]]:
+        """Build a standardised 'unavailable' balance-check response."""
+        return {
+            ResponseKey.STATUS.value: ResponseStatus.UNAVAILABLE.value,
+            ResponseKey.REQUIRED_AMOUNT.value: required_amount,
+            ResponseKey.AVAILABLE_AMOUNT.value: 0,
+            ResponseKey.REASON.value: reason,
+        }
+
     def _check_offchain_requester_balance(
         self,
         sender: str,
@@ -785,14 +804,10 @@ class MechHttpHandler(AbstractResponseHandler):
         required_amount = int(delivery_rate)
         ledger_settings = self._get_ledger_settings()
         if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
-            return {
-                ResponseKey.STATUS.value: ResponseStatus.UNAVAILABLE.value,
-                ResponseKey.REQUIRED_AMOUNT.value: required_amount,
-                ResponseKey.AVAILABLE_AMOUNT.value: 0,
-                ResponseKey.REASON.value: cast(
-                    str, ledger_settings[ResponseKey.REASON.value]
-                ),
-            }
+            return self._make_unavailable_balance_response(
+                required_amount,
+                cast(str, ledger_settings[ResponseKey.REASON.value]),
+            )
 
         try:
             rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
@@ -809,12 +824,9 @@ class MechHttpHandler(AbstractResponseHandler):
 
             payment_type = self._get_mech_payment_type(ledger_api, mech_address)
             if payment_type is None:
-                return {
-                    ResponseKey.STATUS.value: ResponseStatus.UNAVAILABLE.value,
-                    ResponseKey.REQUIRED_AMOUNT.value: required_amount,
-                    ResponseKey.AVAILABLE_AMOUNT.value: 0,
-                    ResponseKey.REASON.value: "Unable to fetch mech payment type.",
-                }
+                return self._make_unavailable_balance_response(
+                    required_amount, "Unable to fetch mech payment type."
+                )
 
             balance_tracker_address = (
                 self._get_balance_tracker_address_for_payment_type(
@@ -824,12 +836,10 @@ class MechHttpHandler(AbstractResponseHandler):
                 )
             )
             if not balance_tracker_address or int(balance_tracker_address, 16) == 0:
-                return {
-                    ResponseKey.STATUS.value: ResponseStatus.UNAVAILABLE.value,
-                    ResponseKey.REQUIRED_AMOUNT.value: required_amount,
-                    ResponseKey.AVAILABLE_AMOUNT.value: 0,
-                    ResponseKey.REASON.value: "No balance tracker configured for mech payment type.",
-                }
+                return self._make_unavailable_balance_response(
+                    required_amount,
+                    "No balance tracker configured for mech payment type.",
+                )
 
             balance_tracker_address = ledger_api.api.to_checksum_address(
                 balance_tracker_address
@@ -855,12 +865,9 @@ class MechHttpHandler(AbstractResponseHandler):
                 ResponseKey.REASON.value: "balance check completed",
             }
         except Exception as e:  # pragma: nocover
-            return {
-                ResponseKey.STATUS.value: ResponseStatus.UNAVAILABLE.value,
-                ResponseKey.REQUIRED_AMOUNT.value: required_amount,
-                ResponseKey.AVAILABLE_AMOUNT.value: 0,
-                ResponseKey.REASON.value: f"Balance check failed: {str(e)}",
-            }
+            return self._make_unavailable_balance_response(
+                required_amount, f"Balance check failed: {str(e)}"
+            )
 
     def _get_mech_payment_type(
         self, ledger_api: EthereumApi, mech_address: str
