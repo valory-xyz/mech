@@ -147,17 +147,26 @@ class IpfsHandler(BaseHandler):
         """
         self.context.logger.info(f"Received IPFS message: {message}")
         ipfs_msg = cast(IpfsMessage, message)
-        if ipfs_msg.performative == IpfsMessage.Performative.ERROR:
-            self.context.logger.warning(
-                f"IPFS Message performative not recognized: {ipfs_msg.performative}"
-            )
-            self.params.in_flight_req = False
-            return
 
+        # Update dialogue and pop bookkeeping for ALL performatives (including ERROR).
+        # ERROR is a valid TERMINAL_PERFORMATIVE in the IPFS dialogue protocol,
+        # so ipfs_dialogues.update() will succeed for error replies.
         dialogue = self.context.ipfs_dialogues.update(ipfs_msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         callback = self.params.req_to_callback.pop(nonce)
+        error_callback = self.params.req_to_error_callback.pop(nonce, None)
         deadline = self.params.req_to_deadline.pop(nonce)
+
+        if ipfs_msg.performative == IpfsMessage.Performative.ERROR:
+            reason = ipfs_msg.reason
+            self.context.logger.warning(
+                f"IPFS request failed for nonce {nonce}: {reason}"
+            )
+            if error_callback is not None:
+                error_callback(reason)
+            self.params.in_flight_req = False
+            self.on_message_handled(message)
+            return
 
         now = time.time()
         self.context.logger.info(f"IPFS response mapped. {nonce=} {deadline=} {now=}")
