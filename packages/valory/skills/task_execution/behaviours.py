@@ -751,7 +751,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         model = executing_task.get("model", None)
         tool_params = executing_task.get("params", None)
         is_offchain = executing_task.get("is_offchain", False)
-        response = {"requestId": req_id, "result": "Invalid response", "tool": tool}
+        result_msg = self._ipfs_error_reason or "Invalid response"
+        response = {"requestId": req_id, "result": result_msg, "tool": tool}
         task_executor = self.context.agent_address
         self._done_task = {
             "request_id": req_id,
@@ -810,12 +811,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.mech_metrics.inc_counter(
             self.mech_metrics.mech_tasks_completed_total, tool=tool
         )
-        reason = response["result"]
-        if reason == "Invalid response":
+        if self._invalid_request:
             self.mech_metrics.inc_counter(
                 metric=self.mech_metrics.mech_tasks_failed_total,
                 tool=tool,
-                reason=reason,
+                reason=response["result"],
             )
 
         msg, dialogue = self._build_ipfs_store_file_req(
@@ -835,6 +835,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.in_flight_req = False
         self.params.is_cold_start = False
         self._request_handling_deadline = None
+        self._ipfs_error_reason = None
         # reset all times
         self.tool_preparation_start_time = 0.0
         self.tool_execution_start_time = 0.0
@@ -1138,6 +1139,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._executing_task = None
             self._done_task = None
             self._invalid_request = False
+            self._ipfs_error_reason = None
             self._request_handling_deadline = None
             self._async_result = None
             return
@@ -1178,6 +1180,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executing_task = None
         self._done_task = None
         self._invalid_request = False
+        self._ipfs_error_reason = None
         self._request_handling_deadline = None
         self._async_result = None
 
