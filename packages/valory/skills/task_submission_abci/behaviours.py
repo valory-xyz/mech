@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -33,10 +33,6 @@ from multibase import multibase
 from multicodec import multicodec
 from prometheus_client import Gauge, Histogram
 
-from packages.valory.contracts.olas_mech.contract import (
-    OlasMechContract,
-    MechOperation,
-)
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
 from packages.valory.contracts.complementary_service_metadata.contract import (
     ComplementaryServiceMetadata,
@@ -52,6 +48,7 @@ from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
 )
+from packages.valory.contracts.olas_mech.contract import MechOperation, OlasMechContract
 from packages.valory.contracts.service_registry.contract import ServiceRegistryContract
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
