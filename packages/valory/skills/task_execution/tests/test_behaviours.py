@@ -113,6 +113,8 @@ def test_happy_path_executes_and_stores(
         :type dlg: Any
         :param callback: Callback to invoke with a fake IPFS response.
         :type callback: Callable[[Any, Any], None]
+        :param error_callback: Optional error callback for IPFS failures.
+        :type error_callback: Any
         """
         call_no["n"] += 1
         if call_no["n"] == 1:
@@ -222,6 +224,8 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
         :type dlg: Any
         :param callback: Callback to invoke with a fake IPFS response.
         :type callback: Callable[[Any, Any], None]
+        :param error_callback: Optional error callback for IPFS failures.
+        :type error_callback: Any
         """
         calls["n"] += 1
         if calls["n"] == 1:
@@ -405,6 +409,8 @@ def test_invalid_tool_is_recorded_and_no_execution(
         :type dlg: Any
         :param cb: Callback to invoke with a fake IPFS response.
         :type cb: Callable[[Any, Any], None]
+        :param error_cb: Optional error callback for IPFS failures.
+        :type error_cb: Any
         """
         func = getattr(cb, "__func__", cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
@@ -468,6 +474,8 @@ def test_ipfs_aux_task_removed_from_queue(
         :type dlg: Any
         :param cb: Callback to invoke with a fake STORE_FILES response.
         :type cb: Callable[[Any, Any], None]
+        :param error_cb: Optional error callback for IPFS failures.
+        :type error_cb: Any
         """
         cb(SimpleNamespace(ipfs_hash="bafyaux"), dlg)
         params_stub.in_flight_req = True

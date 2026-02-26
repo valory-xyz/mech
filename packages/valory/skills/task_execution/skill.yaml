@@ -10,13 +10,13 @@ fingerprint:
   behaviours.py: bafybeicxqbolggig5v3reepmgnv53w7bps3zryzrsybmfc7etnrdc7pr5u
   dialogues.py: bafybeih3sbvogzgjgukf67nwefyd6wwwsxoe7xxzsf4mnexvz4k6aginuy
   handlers.py: bafybeienspfzazvi35c2afahf3yth2ulbliwmocr4tty4hfdlgs3uaamrm
-  models.py: bafybeicipguy7qk2zg3aovz6gfurulj2np4ymvqgr4nlm7p6utue4qfzuy
+  models.py: bafybeieprf5w545bnbc5hcd664trevlx7q4bmqaqbahzl4r5lr32qgpbx4
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
-  tests/conftest.py: bafybeiaji2yijqrvkxc4aiuv77hxfuerdaulunw5c4qgeo3dqm5yc7fvnm
-  tests/test_behaviours.py: bafybeibp2g6jeagzrjyip6mjeeq3i2lfomudevj3iftido763o26ykosu4
+  tests/conftest.py: bafybeidgmgfwgxnq2ogkt72yf3pncbffidurhsmoydnmprvbgmvglykyga
+  tests/test_behaviours.py: bafybeiapepzkqv3rraasjpunquu45krcnvwp5zdbgerw6rk3iwc3w7svlu
   tests/test_dialogues.py: bafybeigtvumwhygqsjtzvicbygjmj3a2dr36j6mjaiez36bqfyh2naux3i
   tests/test_handlers.py: bafybeif7256c56uc3zw3hygxudna454gdsc5yrhzfjuena6gzaw7fg3nq4
-  tests/test_models.py: bafybeibmsyk2gwyqorlimj22jzz2lwunvahw3cwcwck6isqf2kd25diiaq
+  tests/test_models.py: bafybeiblrii2f4he2gzim65ndtchk6crdxot7upsa2fidydrr7vakzu4wa
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeib42vlnvv2lpfs3icjn2aoxwzw7z7wip5br2yj6p3lcgcz3ymrwcu
