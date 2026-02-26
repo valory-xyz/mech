@@ -61,6 +61,7 @@ def test_params_init_derivations(
     # default counters/maps
     assert p.request_id_to_num_timeouts[123] == 0  # defaultdict
     assert p.req_to_callback == {}
+    assert p.req_to_error_callback == {}
     assert p.req_to_deadline == {}
 
     # request params structure
