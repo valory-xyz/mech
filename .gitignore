@@ -14,7 +14,7 @@ packages/valory/contracts/multisend/
 packages/valory/contracts/service_registry/
 packages/valory/contracts/gnosis_safe/
 packages/valory/contracts/erc20/
-
+packages/valory/contracts/mech_marketplace/
 packages/valory/protocols/abci
 packages/valory/protocols/acn
 packages/valory/protocols/contract_api
