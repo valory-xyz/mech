@@ -196,6 +196,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._done_task: Optional[Dict[str, Any]] = None
         self._request_handling_deadline: Optional[float] = None
         self._invalid_request = False
+        self._ipfs_error_reason: Optional[str] = None
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
         self._ignored_request_ids: Set[int] = set()
@@ -655,6 +656,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             ipfs_msg,
             message,
             self._handle_get_task,
+            self._handle_ipfs_error,
         )
 
     def _update_pending_tasks(self) -> None:
@@ -703,16 +705,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         msg: Message,
         dialogue: Dialogue,
         callback: Callable,
+        error_callback: Optional[Callable] = None,
     ) -> None:
         """Send message."""
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
+        if error_callback is not None:
+            self.params.req_to_error_callback[nonce] = error_callback
         self._ensure_deadline()
         self.params.req_to_deadline[nonce] = cast(
             float, self._request_handling_deadline
         )
         self.params.in_flight_req = True
+
+    def _handle_ipfs_error(self, reason: str) -> None:
+        """Handle an IPFS error reported by the handler.
+
+        :param reason: the error reason from the IPFS connection.
+        """
+        self._ipfs_error_reason = (
+            f"Request data could not be retrieved from IPFS (detail: {reason})"
+        )
+        self._invalid_request = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
         """Get the designated mech address."""
