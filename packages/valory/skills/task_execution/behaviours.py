@@ -43,7 +43,7 @@ from packages.valory.connections.ledger.connection import (
 from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
-from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.olas_mech.contract import OlasMechContract
 from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
@@ -212,7 +212,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.agent_mech_contract_address,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             callable="get_mech_type",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
@@ -439,7 +439,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.agent_mech_contract_address,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             callable="get_mech_types",
             kwargs=ContractApiMessage.Kwargs(
                 dict(mech_addresses=to_request, chain_id=self.params.default_chain_id)

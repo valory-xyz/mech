@@ -21,8 +21,8 @@
 from abc import ABC
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
-from packages.valory.contracts.agent_mech.contract import (
-    AgentMechContract,
+from packages.valory.contracts.olas_mech.contract import (
+    OlasMechContract,
 )
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
@@ -94,7 +94,7 @@ class UpdateDeliveryRateBehaviour(BaseDeliveryRateBehaviour):
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=mech_address,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             contract_callable="get_delivery_rate",
             chain_id=self.params.default_chain_id,
         )
@@ -126,7 +126,7 @@ class UpdateDeliveryRateBehaviour(BaseDeliveryRateBehaviour):
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=mech_address,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             contract_callable="get_set_delivery_rate_tx_data",
             new_max_delivery_rate=delivery_rate,
             chain_id=self.params.default_chain_id,

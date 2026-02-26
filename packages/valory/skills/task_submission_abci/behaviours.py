@@ -33,8 +33,8 @@ from multibase import multibase
 from multicodec import multicodec
 from prometheus_client import Gauge, Histogram
 
-from packages.valory.contracts.agent_mech.contract import (
-    AgentMechContract,
+from packages.valory.contracts.olas_mech.contract import (
+    OlasMechContract,
     MechOperation,
 )
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
@@ -728,7 +728,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=address,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             contract_callable="get_mech_type",
             chain_id=self.params.default_chain_id,
         )
@@ -941,7 +941,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=mech_address,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             contract_callable="get_exec_tx_data",
             to=receiver_address,
             value=amount,
@@ -1029,7 +1029,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=mech_address,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             contract_callable="get_exec_tx_data",
             to=token_address,
             value=ZERO_ETHER_VALUE,
@@ -1521,7 +1521,7 @@ class TransactionPreparationBehaviour(
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=task_data["mech_address"],
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             contract_callable="get_deliver_data",
             sender_address=self.synchronized_data.safe_contract_address,
             request_id=task_data["request_id"],
@@ -1554,7 +1554,7 @@ class TransactionPreparationBehaviour(
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=task_data["mech_address"],
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             contract_callable="get_deliver_to_market_tx",
             request_id=task_data["request_id"],
             sender_address=self.synchronized_data.safe_contract_address,
@@ -1668,7 +1668,7 @@ class TransactionPreparationBehaviour(
                 contract_api_msg = yield from self.get_contract_api_response(
                     performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
                     contract_address=mech_address,
-                    contract_id=str(AgentMechContract.contract_id),
+                    contract_id=str(OlasMechContract.contract_id),
                     contract_callable="get_offchain_deliver_data",
                     **contract_data,
                     chain_id=self.params.default_chain_id,
@@ -1704,7 +1704,7 @@ class TransactionPreparationBehaviour(
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
             contract_address=mech,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             contract_callable="get_is_nvm_mech",
             chain_id=self.params.default_chain_id,
         )
@@ -1827,7 +1827,7 @@ class TransactionPreparationBehaviour(
                 contract_api_msg = yield from self.get_contract_api_response(
                     performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
                     contract_address=mech,
-                    contract_id=str(AgentMechContract.contract_id),
+                    contract_id=str(OlasMechContract.contract_id),
                     contract_callable="get_marketplace_deliver_data",
                     **contract_data,
                     chain_id=self.params.default_chain_id,

@@ -15,7 +15,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeigg3kzkywemiswrgjhb7hei5qsysxcsx36c6weyewtirctbmleowm
 - valory/websocket_client:0.1.0:bafybeicdavar2qg2s2h7qp2ugzab6zf2jzehvu4zgxjjrfucjqeac575iu
 contracts:
-- valory/agent_mech:0.1.0:bafybeiaytfc6v6hjv6i6ixndca63jlreslgcye5vmouvhq4ylezoldo7ky
+- valory/olas_mech:0.1.0:bafybeihahvyyeen6qoq36qvxuqzl2jztqixpxauc2za6opxbosacq2br3i
 - valory/complementary_service_metadata:0.1.0:bafybeibjk5gdgc54wx5bz4fl2666urmfj6mx3ocqxyumqpj7wq5fdg4diu
 - valory/gnosis_safe:0.1.0:bafybeig666ryzt3bzavejkmk4jtspihzziq72qpxy4g2ta3d5j5sdwzv5i
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeihnuhz6n7quvmfi36owk3k2qse7unjeykrlmjecet5o6kcrrhtpsa
@@ -39,13 +39,13 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeieoc35cjm3dlt2ayj6iidjfdgry6fmhnzniml5dqalmwu4so6vmme
 - valory/abstract_round_abci:0.1.0:bafybeico2i67lk5wkgyvmu5ska7phbugxbfh4ofnm57vwpypis5zmpjnim
-- valory/contract_subscription:0.1.0:bafybeicrkrifwefmfd3d25cx7fwlq2ttqfhycrkply7dxrplhvoldgtdau
-- valory/mech_abci:0.1.0:bafybeigzimnrhogyzlcnsawgelhzju6msauvx5kkxq623f5xifpukadc4m
+- valory/contract_subscription:0.1.0:bafybeic3ngmx5uw3b6wp5oe4efa22slgjrllf4irhwsulwefbbgwsiidxq
+- valory/mech_abci:0.1.0:bafybeibidv336lqoarhj3qur7zhhqvuah7bznq5bn4qf7imrceshxvyzjm
 - valory/registration_abci:0.1.0:bafybeiaur5o7xjf5jod2gzbhxa2m2l2m7z76rfs7gf2sfuf3ffjlqodaxy
 - valory/reset_pause_abci:0.1.0:bafybeibgbbt4yzd6amf2wuldrdvhyfqibjqx2uxhybqhrkumlp4jcfndia
-- valory/delivery_rate_abci:0.1.0:bafybeifjwvcdom6c6y5uxam2ja44ola535kphs7v6qfwdw7bqk3a7sxxlq
-- valory/task_execution:0.1.0:bafybeibrnln3wenuewv5nipwehtqbbr4jztf3pb6lrb7emsa7uffclnpaa
-- valory/task_submission_abci:0.1.0:bafybeicclfypyjykro5752qruviqgnwnqfbotqnzvgqs43cvcdizthuuxi
+- valory/delivery_rate_abci:0.1.0:bafybeic257hnu57eqdo4wg67ocma3ziypzdbotmhu5xrttncrixqgzy67e
+- valory/task_execution:0.1.0:bafybeigqa2cpbpsbhmttbdivarrubkkwvrlk5wb6fdmxlzejse4dp5a2xu
+- valory/task_submission_abci:0.1.0:bafybeiebhww77tx3ngnpbooxcxuz7wl4lt2fuu3244xc4yshxdd2wl4b3y
 - valory/termination_abci:0.1.0:bafybeifjwbctocnxrtgyzn7z2ml2q6bxdxrd4sa7m5u43p7ts6hk6ujvce
 - valory/transaction_settlement_abci:0.1.0:bafybeidmg3beiqyubkze6wdiwhz4oqwvidhsjexjgcvso5bkrryqkbsgzu
 - valory/websocket_client:0.1.0:bafybeidbcdcvyy2svob6p52akdx4ezsqpxdh4kphhqgf6hbageneu7unwi

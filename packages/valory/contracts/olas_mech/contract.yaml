@@ -1,16 +1,16 @@
-name: agent_mech
+name: olas_mech
 author: valory
 version: 0.1.0
 type: contract
-description: agent mech contract
+description: olas mech contract
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigpq5lxfj2aza6ok3fjuywtdafelkbvoqwaits7regfbgu4oynmku
   build/AgentMech.json: bafybeigtikt7m5nyhlsxscgfciejkfvot56a7gbwe2og6dziwzvgkvo7hq
-  contract.py: bafybeigqgvpeoqy7tlyec6y7r6gap6ra3qfgfluirglks4cyqi6x4rcs4e
+  contract.py: bafybeiaouq6wrqbiejtlstrfbfbcqez25qo5s6cv6yn74hkixddnyh2dyi
 fingerprint_ignore_patterns: []
-class_name: AgentMechContract
+class_name: OlasMechContract
 contract_interface_paths:
   ethereum: build/AgentMech.json
 dependencies:
