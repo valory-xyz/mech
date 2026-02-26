@@ -37,12 +37,11 @@ from web3.types import BlockIdentifier, FilterParams, TxReceipt
 from web3._utils.events import get_event_data
 
 
-PUBLIC_ID = PublicId.from_str("valory/agent_mech:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/mech_marketplace:0.1.0")
 
 _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
 )
-
 
 BATCH_REQUESTID_STATUS_DATA = {
     "abi": [
