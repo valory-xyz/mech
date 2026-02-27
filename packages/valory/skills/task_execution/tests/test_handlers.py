@@ -26,6 +26,8 @@ from types import SimpleNamespace
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
+import pytest
+
 import packages.valory.skills.task_execution.handlers as hmod
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
@@ -40,16 +42,26 @@ from packages.valory.skills.task_execution.handlers import (
 )
 
 
-def test_ipfs_handler_error_codec_mismatch(handler_context: Any) -> None:
-    """IPFS ERROR with protobuf codec mismatch triggers error callback with reason."""
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "protobuf: (PBNode) invalid wireType, expected 2, got 3",
+        "Failed to download: bafybeiabc123",
+        "custom IPFS node error: connection refused to /ip4/127.0.0.1",
+    ],
+)
+def test_ipfs_handler_error_triggers_error_callback(
+    handler_context: Any, reason: str
+) -> None:
+    """IPFS ERROR triggers error callback with the reason preserved verbatim."""
     handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
     handler.setup()
 
     captured: Dict[str, Any] = {"called": False, "reason": None}
 
-    def error_cb(reason: str) -> None:
+    def error_cb(r: str) -> None:
         captured["called"] = True
-        captured["reason"] = reason
+        captured["reason"] = r
 
     handler_context.params.in_flight_req = True
     handler_context.params.req_to_callback["nonce-1"] = lambda *_: None
@@ -58,40 +70,7 @@ def test_ipfs_handler_error_codec_mismatch(handler_context: Any) -> None:
 
     msg: SimpleNamespace = SimpleNamespace(
         performative=IpfsMessage.Performative.ERROR,
-        reason="protobuf: (PBNode) invalid wireType, expected 2, got 3",
-    )
-
-    handler.handle(msg)
-
-    assert handler_context.params.in_flight_req is False
-    # Callback and deadline maps cleaned up (no leak)
-    assert "nonce-1" not in handler_context.params.req_to_callback
-    assert "nonce-1" not in handler_context.params.req_to_error_callback
-    assert "nonce-1" not in handler_context.params.req_to_deadline
-    # Error callback was invoked with the raw reason
-    assert captured["called"] is True
-    assert "protobuf" in captured["reason"]
-
-
-def test_ipfs_handler_error_network_failure(handler_context: Any) -> None:
-    """IPFS ERROR with network/download error triggers error callback."""
-    handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
-    handler.setup()
-
-    captured: Dict[str, Any] = {"called": False, "reason": None}
-
-    def error_cb(reason: str) -> None:
-        captured["called"] = True
-        captured["reason"] = reason
-
-    handler_context.params.in_flight_req = True
-    handler_context.params.req_to_callback["nonce-1"] = lambda *_: None
-    handler_context.params.req_to_error_callback["nonce-1"] = error_cb
-    handler_context.params.req_to_deadline["nonce-1"] = 999.0
-
-    msg: SimpleNamespace = SimpleNamespace(
-        performative=IpfsMessage.Performative.ERROR,
-        reason="Failed to download: bafybeiabc123",
+        reason=reason,
     )
 
     handler.handle(msg)
@@ -101,34 +80,7 @@ def test_ipfs_handler_error_network_failure(handler_context: Any) -> None:
     assert "nonce-1" not in handler_context.params.req_to_error_callback
     assert "nonce-1" not in handler_context.params.req_to_deadline
     assert captured["called"] is True
-    assert "Failed to download" in captured["reason"]
-
-
-def test_ipfs_handler_error_preserves_reason_verbatim(handler_context: Any) -> None:
-    """IPFS error reason from connection is preserved verbatim in error callback."""
-    handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
-    handler.setup()
-
-    captured: Dict[str, Any] = {"reason": None}
-
-    handler_context.params.in_flight_req = True
-    handler_context.params.req_to_callback["nonce-1"] = lambda *_: None
-    handler_context.params.req_to_error_callback["nonce-1"] = (
-        lambda r: captured.__setitem__("reason", r)
-    )
-    handler_context.params.req_to_deadline["nonce-1"] = 999.0
-
-    original_reason: str = (
-        "custom IPFS node error: connection refused to /ip4/127.0.0.1"
-    )
-    msg: SimpleNamespace = SimpleNamespace(
-        performative=IpfsMessage.Performative.ERROR,
-        reason=original_reason,
-    )
-
-    handler.handle(msg)
-
-    assert captured["reason"] == original_reason
+    assert captured["reason"] == reason
 
 
 def test_ipfs_handler_calls_callback_and_clears(
