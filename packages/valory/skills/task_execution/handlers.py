@@ -562,64 +562,69 @@ class MechHttpHandler(AbstractResponseHandler):
             ipfs_hash = data[RequestKey.IPFS_HASH.value]
             sender = data[RequestKey.SENDER.value]
             request_delivery_rate = int(data[RequestKey.DELIVERY_RATE.value])
-
-            self.context.logger.info(
-                f"Received signed offchain request with {request_id=} and {request_delivery_rate=}."
+        except Exception as e:
+            self.context.logger.error(
+                f"Error processing signed request. body={http_msg.body!r} error={str(e)}."
             )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
 
-            balance_check = self._check_offchain_requester_balance(
-                sender=sender,
-                delivery_rate=request_delivery_rate,
+        self.context.logger.info(
+            f"Received signed offchain request with {request_id=} and {request_delivery_rate=}."
+        )
+
+        balance_check = self._check_offchain_requester_balance(
+            sender=sender,
+            delivery_rate=request_delivery_rate,
+        )
+        if balance_check[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason="balance check unavailable",
+                status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
+                status_text="Service unavailable",
             )
-            if balance_check[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
-                self._send_rejection_response(
-                    http_msg,
-                    http_dialogue,
-                    request_id,
-                    reason="balance check unavailable",
-                    status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
-                    status_text="Service unavailable",
-                )
-                return
+            return
 
-            available_amount = cast(
-                int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value]
+        available_amount = cast(int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value])
+        if available_amount < request_delivery_rate:
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason="insufficient balance",
+                status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
+                status_text="Payment required",
             )
-            if available_amount < request_delivery_rate:
-                self._send_rejection_response(
-                    http_msg,
-                    http_dialogue,
-                    request_id,
-                    reason="insufficient balance",
-                    status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
-                    status_text="Payment required",
-                )
-                return
+            return
 
+        try:
             req = self._enqueue_offchain_request(
                 request_id=request_id,
                 ipfs_hash=ipfs_hash,
                 request_delivery_rate=request_delivery_rate,
                 data=data,
             )
-
-            self.context.logger.info(
-                f"Offchain task added with data: {req}. "
-                f"pending_tasks={len(self.pending_tasks)} ipfs_tasks={len(self.ipfs_tasks)}."
-            )
-
-            self.offchain_request_responses.pop(request_id, None)
-            self._send_ok_response(
-                http_msg=http_msg,
-                http_dialogue=http_dialogue,
-                data={RequestKey.REQUEST_ID.value: request_id},
-            )
-
         except Exception as e:
             self.context.logger.error(
-                f"Error processing signed request. body={http_msg.body!r} error={str(e)}."
+                f"Error enqueuing offchain request {request_id}: {str(e)}."
             )
             self._handle_bad_request(http_msg, http_dialogue)
+            return
+
+        self.context.logger.info(
+            f"Offchain task added with data: {req}. "
+            f"pending_tasks={len(self.pending_tasks)} ipfs_tasks={len(self.ipfs_tasks)}."
+        )
+
+        self.offchain_request_responses.pop(request_id, None)
+        self._send_ok_response(
+            http_msg=http_msg,
+            http_dialogue=http_dialogue,
+            data={RequestKey.REQUEST_ID.value: request_id},
+        )
 
     def _handle_offchain_request_info(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -634,34 +639,35 @@ class MechHttpHandler(AbstractResponseHandler):
         try:
             data = self._parse_http_body(http_msg)
             request_id = data[RequestKey.REQUEST_ID.value]
-            self.context.logger.info(f"Fetching offchain info for {request_id=}.")
-
-            stored_response = self.offchain_request_responses.get(request_id)
-            if stored_response is not None:
-                self._send_ok_response(
-                    http_msg,
-                    http_dialogue,
-                    data=stored_response,
-                )
-                return
-
-            done_tasks_list = self.done_tasks
-
-            requested_done_tasks_list = [
-                item
-                for item in done_tasks_list
-                if item.get(RequestKey.REQUEST_ID.value) == request_id
-            ]
-
-            self._send_ok_response(
-                http_msg,
-                http_dialogue,
-                data=requested_done_tasks_list[0] if requested_done_tasks_list else {},
-            )
-
         except Exception as e:
             self.context.logger.error(f"Error getting offchain request info: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
+            return
+
+        self.context.logger.info(f"Fetching offchain info for {request_id=}.")
+
+        stored_response = self.offchain_request_responses.get(request_id)
+        if stored_response is not None:
+            self._send_ok_response(
+                http_msg,
+                http_dialogue,
+                data=stored_response,
+            )
+            return
+
+        done_tasks_list = self.done_tasks
+
+        requested_done_tasks_list = [
+            item
+            for item in done_tasks_list
+            if item.get(RequestKey.REQUEST_ID.value) == request_id
+        ]
+
+        self._send_ok_response(
+            http_msg,
+            http_dialogue,
+            data=requested_done_tasks_list[0] if requested_done_tasks_list else {},
+        )
 
     def _handle_bad_request(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
