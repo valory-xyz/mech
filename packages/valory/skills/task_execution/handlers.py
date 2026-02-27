@@ -34,9 +34,9 @@ from prometheus_client import start_http_server
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
 )
-from packages.valory.contracts.olas_mech.contract import OlasMechContract
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
 from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
+from packages.valory.contracts.olas_mech.contract import OlasMechContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
