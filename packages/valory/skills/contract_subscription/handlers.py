@@ -64,7 +64,7 @@ class WebSocketHandler(BaseWebSocketHandler):
 
         # loads the contracts from the config file
         with open(
-            "vendor/valory/contracts/agent_mech/build/AgentMech.json",
+            "vendor/valory/contracts/olas_mech/build/AgentMech.json",
             "r",
             encoding="utf-8",
         ) as file:
