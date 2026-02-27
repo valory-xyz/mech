@@ -34,7 +34,7 @@ from prometheus_client import start_http_server
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
 )
-from packages.valory.contracts.agent_mech.contract import AgentMechContract
+from packages.valory.contracts.olas_mech.contract import OlasMechContract
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
 from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
@@ -892,7 +892,7 @@ class MechHttpHandler(AbstractResponseHandler):
         self, ledger_api: EthereumApi, mech_address: str
     ) -> Optional[str]:
         """Get the mech payment type from the mech contract."""
-        payment_type_res = AgentMechContract.get_mech_type(ledger_api, mech_address)
+        payment_type_res = OlasMechContract.get_mech_type(ledger_api, mech_address)
         return cast(Optional[str], payment_type_res.get(BodyKey.MECH_TYPE.value))
 
     def _get_balance_tracker_address_for_payment_type(
