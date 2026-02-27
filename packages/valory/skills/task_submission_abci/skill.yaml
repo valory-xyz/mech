@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiholqak7ltw6bbmn2c5tn3j7xgzkdlfzp3kcskiqsvmxoih6m4muq
-  behaviours.py: bafybeieg24h5vqbzohvo2ss3zrvp6tc5za4c7v6r3zeiovlpcrn7cawvji
+  behaviours.py: bafybeidyriavq4mo4unhy226462hdrofgvhm7bq2vs6yh2ozv7jwfw2tzu
   dialogues.py: bafybeibmac3m5u5h6ucoyjr4dazay72dyga656wvjl6z6saapluvjo54ne
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeibe5n7my2vd2wlwo73sbma65epjqc7kxgtittewlylcmvnmoxtxzq
@@ -22,15 +22,15 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/agent_mech:0.1.0:bafybeiaytfc6v6hjv6i6ixndca63jlreslgcye5vmouvhq4ylezoldo7ky
-- valory/mech_marketplace:0.1.0:bafybeicnxlb62tmpure2fppbsnhbmek4zur2cfaiyg4nujek4h35ijh72a
+- valory/olas_mech:0.1.0:bafybeigo6cldicov4ce2yxjztk4spemxf3sreztmkucmywvty6c5luwbw4
+- valory/mech_marketplace:0.1.0:bafybeifnabe3hqdizvdtc2q33sr6q7glmojid332irkhbmczev3wzvq5lq
 - valory/complementary_service_metadata:0.1.0:bafybeibjk5gdgc54wx5bz4fl2666urmfj6mx3ocqxyumqpj7wq5fdg4diu
 - valory/gnosis_safe:0.1.0:bafybeig666ryzt3bzavejkmk4jtspihzziq72qpxy4g2ta3d5j5sdwzv5i
 - valory/multisend:0.1.0:bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4
 - valory/service_registry:0.1.0:bafybeidheiinltcynckpgs35vknbs7s6zal3d544nfjcdjrbvely32j5le
 - valory/hash_checkpoint:0.1.0:bafybeic7x3cqr46yw7wzbvfc7mc6l3vsilx7g7tltqsb3whzfyolukoev4
 - valory/balance_tracker:0.1.0:bafybeif27pp2772gkhnrdyxlswkr4whf2ka6bwf5wtdym6mzdgddyq3v3a
-- valory/erc20:0.1.0:bafybeieuh56e2ikru4g7jl6owsndxjebydplg7fb5rbrtqie6wronitdze
+- valory/erc20:0.1.0:bafybeig3avtl5ffku556ipvuviiat5p2psfw46fa2ieofcc4eculxe3vde
 protocols:
 - valory/acn_data_share:0.1.0:bafybeiebct3enol4nkiy3uxm2xnn2hniwnorjfwtcjbsywea5ql36pqk3y
 - valory/contract_api:1.0.0:bafybeigl7mxuyxngk4gztgygeccbgdfrllx73kwbvvkjvtkfw6ionyd56q
@@ -38,7 +38,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeico2i67lk5wkgyvmu5ska7phbugxbfh4ofnm57vwpypis5zmpjnim
 - valory/transaction_settlement_abci:0.1.0:bafybeidmg3beiqyubkze6wdiwhz4oqwvidhsjexjgcvso5bkrryqkbsgzu
-- valory/task_execution:0.1.0:bafybeihiaj5x3dx62pvko5h2ivwkaei2rwcbphmg5ptka7zak7on5ld5nm
+- valory/task_execution:0.1.0:bafybeidewmyszxfvvq32fncvsr6lwhqbrtvmfzjqkhlmk4gdsb6kqowqou
 behaviours:
   main:
     args: {}

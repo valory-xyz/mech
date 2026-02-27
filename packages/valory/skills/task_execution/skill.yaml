@@ -7,16 +7,16 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
-  behaviours.py: bafybeic337hnoyqxwzzsbn7pwi62zvq2qr77gohijeh2mbv47kut7ggtwy
+  behaviours.py: bafybeigj7h5nkyl7kvvkkbjqnvaeeayammbllubozr2nmlo6d7jayatuai
   dialogues.py: bafybeih3sbvogzgjgukf67nwefyd6wwwsxoe7xxzsf4mnexvz4k6aginuy
-  handlers.py: bafybeie57n4xehoqrlzhm7il5tdas5sdmhlgyjknvf3zdfsf532ycp4ixa
-  models.py: bafybeifzlotbhbx4z6fyojmxgf3fi7wr3dn7ysrfjoxsewfcqhay3sna24
+  handlers.py: bafybeicq3kxfm7ja7zzht3dstq7qriusszqybza25izvuodadtwabnvdri
+  models.py: bafybeiaamovdzx55etedtllppyf5agqnbyeywlib2ebqaazzwrzlvq5beq
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
-  tests/conftest.py: bafybeigefgl7pbgcwoffzc73ca567ow34dqrixy65spz4bkxo4etmzl5ja
-  tests/test_behaviours.py: bafybeieg4atysdjfryg5xrbhb2fjf6pwsnvrbthnfgok4h6vi3x2amy6lu
+  tests/conftest.py: bafybeigyamw5xxzxljaeplhawvwlagfcnz2to4sb553sznmhmmqkifk4w4
+  tests/test_behaviours.py: bafybeiapepzkqv3rraasjpunquu45krcnvwp5zdbgerw6rk3iwc3w7svlu
   tests/test_dialogues.py: bafybeigtvumwhygqsjtzvicbygjmj3a2dr36j6mjaiez36bqfyh2naux3i
-  tests/test_handlers.py: bafybeidosmgxyj65lwjcuawtach3kqblqf624s32vnkchwvpvw5taewyim
-  tests/test_models.py: bafybeife4reoldzyxu3muhkdpl7leos3z4b3vyepomzdr4lj4kgr2zkqkm
+  tests/test_handlers.py: bafybeidk6jzdtrrhc3chqwebagkjrpj2ijsh3y4qz5iykphwdislb6eofu
+  tests/test_models.py: bafybeiblrii2f4he2gzim65ndtchk6crdxot7upsa2fidydrr7vakzu4wa
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
   utils/benchmarks.py: bafybeib42vlnvv2lpfs3icjn2aoxwzw7z7wip5br2yj6p3lcgcz3ymrwcu
@@ -29,9 +29,8 @@ connections:
 - valory/ipfs:0.1.0:bafybeif2252xypx25p42fva4y3wi4loinxi6pfwf4wkwgcbdbfiu3gmjqu
 - valory/p2p_libp2p_client:0.1.0:bafybeigg3kzkywemiswrgjhb7hei5qsysxcsx36c6weyewtirctbmleowm
 contracts:
-- valory/agent_mech:0.1.0:bafybeiaytfc6v6hjv6i6ixndca63jlreslgcye5vmouvhq4ylezoldo7ky
-- valory/mech_marketplace:0.1.0:bafybeicnxlb62tmpure2fppbsnhbmek4zur2cfaiyg4nujek4h35ijh72a
-- valory/balance_tracker:0.1.0:bafybeif27pp2772gkhnrdyxlswkr4whf2ka6bwf5wtdym6mzdgddyq3v3a
+- valory/olas_mech:0.1.0:bafybeigo6cldicov4ce2yxjztk4spemxf3sreztmkucmywvty6c5luwbw4
+- valory/mech_marketplace:0.1.0:bafybeifnabe3hqdizvdtc2q33sr6q7glmojid332irkhbmczev3wzvq5lq
 protocols:
 - valory/acn_data_share:0.1.0:bafybeiebct3enol4nkiy3uxm2xnn2hniwnorjfwtcjbsywea5ql36pqk3y
 - valory/contract_api:1.0.0:bafybeigl7mxuyxngk4gztgygeccbgdfrllx73kwbvvkjvtkfw6ionyd56q

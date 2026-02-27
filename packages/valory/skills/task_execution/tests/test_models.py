@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -61,6 +61,7 @@ def test_params_init_derivations(
     # default counters/maps
     assert p.request_id_to_num_timeouts[123] == 0  # defaultdict
     assert p.req_to_callback == {}
+    assert p.req_to_error_callback == {}
     assert p.req_to_deadline == {}
 
     # request params structure

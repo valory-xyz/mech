@@ -80,6 +80,7 @@ def params_stub() -> SimpleNamespace:
         polling_interval=10.0,
         in_flight_req=False,
         req_to_callback={},
+        req_to_error_callback={},
         req_to_deadline={},
         request_count=0,
         cleanup_freq=1000,

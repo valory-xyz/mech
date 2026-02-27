@@ -41,7 +41,7 @@ from packages.valory.contracts.mech_marketplace.contract import (
 )
 
 
-PUBLIC_ID = PublicId.from_str("valory/agent_mech:0.1.0")
+PUBLIC_ID = PublicId.from_str("valory/olas_mech:0.1.0")
 
 _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
@@ -180,10 +180,10 @@ def pad_address_for_topic(address: str) -> HexBytes:
     return HexBytes(Ox + address[Ox_CHARS:].zfill(TOPIC_CHARS))
 
 
-class AgentMechContract(Contract):
+class OlasMechContract(Contract):
     """The scaffold contract class for a smart contract."""
 
-    contract_id = PublicId.from_str("valory/agent_mech:0.1.0")
+    contract_id = PublicId.from_str("valory/olas_mech:0.1.0")
 
     @classmethod
     def get_raw_transaction(

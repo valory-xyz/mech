@@ -2658,6 +2658,24 @@ docs = ["sphinx (>=6.0.0)", "sphinx-autobuild (>=2021.3.14)", "sphinx_rtd_theme 
 test = ["pytest (>=7.0.0)", "pytest-xdist (>=2.4.0)"]
 
 [[package]]
+name = "py-eth-sig-utils"
+version = "0.4.0"
+description = "Python Ethereum Signing Utils"
+optional = false
+python-versions = "*"
+groups = ["main"]
+files = [
+    {file = "py_eth_sig_utils-0.4.0-py3-none-any.whl", hash = "sha256:8f2fe9b8d3c475bfca3b3bb901f6ef79e42b7b4abcd00ad5de5d483fff8359e9"},
+    {file = "py_eth_sig_utils-0.4.0.tar.gz", hash = "sha256:bdf76b06677a43eba42e29ddebe6832bfbdda4c09a6b171d0de318e5a06992ad"},
+]
+
+[package.dependencies]
+eth-abi = ">=1.1.1"
+py-ecc = ">=1.7.1"
+pycryptodome = ">=3.4.7"
+rlp = ">=1.1.0"
+
+[[package]]
 name = "py-multibase"
 version = "1.0.3"
 description = "Multibase implementation for Python"
@@ -4030,4 +4048,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.12"
-content-hash = "d8073eaa8f7e67cbaecfec50e2a3286263fa4ea4dd875ee412cba1677d13a7c1"
+content-hash = "410618612e80a85bcf6ccce582a36d2ad145230e26a1a482f8cfd69e9bb19f56"

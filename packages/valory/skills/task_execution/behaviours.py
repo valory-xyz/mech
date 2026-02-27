@@ -43,8 +43,8 @@ from packages.valory.connections.ledger.connection import (
 from packages.valory.connections.p2p_libp2p_client.connection import (
     PUBLIC_ID as P2P_CLIENT_PUBLIC_ID,
 )
-from packages.valory.contracts.agent_mech.contract import AgentMechContract
 from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
+from packages.valory.contracts.olas_mech.contract import OlasMechContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialogues
 from packages.valory.protocols.contract_api import ContractApiMessage
@@ -196,6 +196,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._done_task: Optional[Dict[str, Any]] = None
         self._request_handling_deadline: Optional[float] = None
         self._invalid_request = False
+        self._ipfs_error_reason: Optional[str] = None
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
         self._ignored_request_ids: Set[int] = set()
@@ -212,7 +213,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.agent_mech_contract_address,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             callable="get_mech_type",
             kwargs=ContractApiMessage.Kwargs(
                 dict(
@@ -439,7 +440,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.agent_mech_contract_address,
-            contract_id=str(AgentMechContract.contract_id),
+            contract_id=str(OlasMechContract.contract_id),
             callable="get_mech_types",
             kwargs=ContractApiMessage.Kwargs(
                 dict(mech_addresses=to_request, chain_id=self.params.default_chain_id)
@@ -655,6 +656,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             ipfs_msg,
             message,
             self._handle_get_task,
+            self._handle_ipfs_error,
         )
 
     def _update_pending_tasks(self) -> None:
@@ -703,16 +705,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         msg: Message,
         dialogue: Dialogue,
         callback: Callable,
+        error_callback: Optional[Callable] = None,
     ) -> None:
         """Send message."""
         self.context.outbox.put_message(message=msg)
         nonce = dialogue.dialogue_label.dialogue_reference[0]
         self.params.req_to_callback[nonce] = callback
+        if error_callback is not None:
+            self.params.req_to_error_callback[nonce] = error_callback
         self._ensure_deadline()
         self.params.req_to_deadline[nonce] = cast(
             float, self._request_handling_deadline
         )
         self.params.in_flight_req = True
+
+    def _handle_ipfs_error(self, reason: str) -> None:
+        """Handle an IPFS error reported by the handler.
+
+        :param reason: the error reason from the IPFS connection.
+        """
+        self._ipfs_error_reason = (
+            f"Request data could not be retrieved from IPFS (detail: {reason})"
+        )
+        self._invalid_request = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
         """Get the designated mech address."""
@@ -736,7 +751,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         model = executing_task.get("model", None)
         tool_params = executing_task.get("params", None)
         is_offchain = executing_task.get("is_offchain", False)
-        response = {"requestId": req_id, "result": "Invalid response", "tool": tool}
+        result_msg = self._ipfs_error_reason or "Invalid response"
+        response = {"requestId": req_id, "result": result_msg, "tool": tool}
         task_executor = self.context.agent_address
         self._done_task = {
             "request_id": req_id,
@@ -795,12 +811,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.mech_metrics.inc_counter(
             self.mech_metrics.mech_tasks_completed_total, tool=tool
         )
-        reason = response["result"]
-        if reason == "Invalid response":
+        if self._invalid_request:
             self.mech_metrics.inc_counter(
                 metric=self.mech_metrics.mech_tasks_failed_total,
                 tool=tool,
-                reason=reason,
+                reason=response["result"],
             )
 
         msg, dialogue = self._build_ipfs_store_file_req(
@@ -820,6 +835,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.params.in_flight_req = False
         self.params.is_cold_start = False
         self._request_handling_deadline = None
+        self._ipfs_error_reason = None
         # reset all times
         self.tool_preparation_start_time = 0.0
         self.tool_execution_start_time = 0.0
@@ -1123,6 +1139,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._executing_task = None
             self._done_task = None
             self._invalid_request = False
+            self._ipfs_error_reason = None
             self._request_handling_deadline = None
             self._async_result = None
             return
@@ -1163,6 +1180,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._executing_task = None
         self._done_task = None
         self._invalid_request = False
+        self._ipfs_error_reason = None
         self._request_handling_deadline = None
         self._async_result = None
 
