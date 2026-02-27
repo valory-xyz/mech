@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -69,6 +69,7 @@ class Params(Model):
         self.req_params: RequestParams = RequestParams()
         self.req_type: Optional[str] = None
         self.req_to_callback: Dict[str, Callable] = {}
+        self.req_to_error_callback: Dict[str, Callable] = {}
         self.req_to_deadline: Dict[str, float] = {}
         self.mech_to_max_delivery_rate: Dict[str, int] = self._ensure_get(
             "mech_to_max_delivery_rate", kwargs, Dict[str, int]

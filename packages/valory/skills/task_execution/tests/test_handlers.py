@@ -26,6 +26,8 @@ from types import SimpleNamespace
 from typing import Any, Dict, List
 from unittest.mock import MagicMock
 
+import pytest
+
 import packages.valory.skills.task_execution.handlers as hmod
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
@@ -40,17 +42,45 @@ from packages.valory.skills.task_execution.handlers import (
 )
 
 
-def test_ipfs_handler_error_sets_flags(handler_context: Any) -> None:
-    """Clear `in_flight_req` when the IPFS handler receives an ERROR."""
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "protobuf: (PBNode) invalid wireType, expected 2, got 3",
+        "Failed to download: bafybeiabc123",
+        "custom IPFS node error: connection refused to /ip4/127.0.0.1",
+    ],
+)
+def test_ipfs_handler_error_triggers_error_callback(
+    handler_context: Any, reason: str
+) -> None:
+    """IPFS ERROR triggers error callback with the reason preserved verbatim."""
     handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
     handler.setup()
 
+    captured: Dict[str, Any] = {"called": False, "reason": None}
+
+    def error_cb(r: str) -> None:
+        captured["called"] = True
+        captured["reason"] = r
+
     handler_context.params.in_flight_req = True
-    msg: SimpleNamespace = SimpleNamespace(performative=IpfsMessage.Performative.ERROR)
+    handler_context.params.req_to_callback["nonce-1"] = lambda *_: None
+    handler_context.params.req_to_error_callback["nonce-1"] = error_cb
+    handler_context.params.req_to_deadline["nonce-1"] = 999.0
+
+    msg: SimpleNamespace = SimpleNamespace(
+        performative=IpfsMessage.Performative.ERROR,
+        reason=reason,
+    )
 
     handler.handle(msg)
 
     assert handler_context.params.in_flight_req is False
+    assert "nonce-1" not in handler_context.params.req_to_callback
+    assert "nonce-1" not in handler_context.params.req_to_error_callback
+    assert "nonce-1" not in handler_context.params.req_to_deadline
+    assert captured["called"] is True
+    assert captured["reason"] == reason
 
 
 def test_ipfs_handler_calls_callback_and_clears(
@@ -64,6 +94,7 @@ def test_ipfs_handler_calls_callback_and_clears(
     handler_context.params.req_to_callback["nonce-1"] = (
         lambda _msg, _dlg: called.__setitem__("ok", True)
     )
+    handler_context.params.req_to_error_callback["nonce-1"] = lambda *_: None
     handler_context.params.req_to_deadline["nonce-1"] = time.time() + 999.0
     handler_context.params.is_cold_start = True
     handler_context.params.in_flight_req = True
@@ -78,6 +109,7 @@ def test_ipfs_handler_calls_callback_and_clears(
     assert handler_context.params.in_flight_req is False
     assert handler_context.params.is_cold_start is False
     assert "nonce-1" not in handler_context.params.req_to_callback
+    assert "nonce-1" not in handler_context.params.req_to_error_callback
     assert "nonce-1" not in handler_context.params.req_to_deadline
 
 
@@ -90,6 +122,7 @@ def test_ipfs_handler_deadline_expired_skips_callback(handler_context: Any) -> N
     handler_context.params.req_to_callback["nonce-1"] = lambda *_: called.__setitem__(
         "ok", True
     )
+    handler_context.params.req_to_error_callback["nonce-1"] = lambda *_: None
     handler_context.params.req_to_deadline["nonce-1"] = time.time() - 1.0
     handler_context.params.in_flight_req = True
     handler_context.params.is_cold_start = True
@@ -103,6 +136,7 @@ def test_ipfs_handler_deadline_expired_skips_callback(handler_context: Any) -> N
     assert handler_context.params.in_flight_req
     assert handler_context.params.is_cold_start
     assert "nonce-1" not in handler_context.params.req_to_callback
+    assert "nonce-1" not in handler_context.params.req_to_error_callback
     assert "nonce-1" not in handler_context.params.req_to_deadline
 
 
