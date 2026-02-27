@@ -4,16 +4,16 @@
         "contract/valory/olas_mech/0.1.0": "bafybeigo6cldicov4ce2yxjztk4spemxf3sreztmkucmywvty6c5luwbw4",
         "contract/valory/complementary_service_metadata/0.1.0": "bafybeibjk5gdgc54wx5bz4fl2666urmfj6mx3ocqxyumqpj7wq5fdg4diu",
         "contract/valory/hash_checkpoint/0.1.0": "bafybeic7x3cqr46yw7wzbvfc7mc6l3vsilx7g7tltqsb3whzfyolukoev4",
-        "contract/valory/balance_tracker/0.1.0": "bafybeif3ziyaqnx5lj4mambwf3nw7jjp2xng2ib2c3qewj3r653duxg7em",
+        "contract/valory/balance_tracker/0.1.0": "bafybeif27pp2772gkhnrdyxlswkr4whf2ka6bwf5wtdym6mzdgddyq3v3a",
         "connection/valory/websocket_client/0.1.0": "bafybeicdavar2qg2s2h7qp2ugzab6zf2jzehvu4zgxjjrfucjqeac575iu",
         "skill/valory/contract_subscription/0.1.0": "bafybeic3ngmx5uw3b6wp5oe4efa22slgjrllf4irhwsulwefbbgwsiidxq",
-        "skill/valory/mech_abci/0.1.0": "bafybeiebvjvilbyga5jlrtxfzjw4mcr7nvtsbgjr6vxq4njb6lemnz47na",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeifqewhyglr6znfj32slh3a4gpz7xy7i3ar4qncafxzbgivggtiwea",
-        "skill/valory/task_execution/0.1.0": "bafybeicc6h4jx23g6jem57yagie26k642ce6jnlyisxhwebl2v2h3j7544",
+        "skill/valory/mech_abci/0.1.0": "bafybeicace7xfnqfrvrlijeximx66osejmv4fs6yt52zty3bcwnmgvkwge",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeihleykoygbyf2ezzkvy4begcf5uisqpievoq672rpaak37xrumvpy",
+        "skill/valory/task_execution/0.1.0": "bafybeibkzt2tq4mpjf6jtq63tdfih2s4smbuvosbnnlttrlf632tuyr5jy",
         "skill/valory/websocket_client/0.1.0": "bafybeidbcdcvyy2svob6p52akdx4ezsqpxdh4kphhqgf6hbageneu7unwi",
         "skill/valory/delivery_rate_abci/0.1.0": "bafybeifzw4okhzax55zuuusggfcyz2z2ulrto4fww2l36julte5ks7e7kq",
-        "agent/valory/mech/0.1.0": "bafybeibl2shvqqeueu2mbcsvslhxyc6kgqhhlerbfz376ycspilcgkkq3a",
-        "service/valory/mech/0.1.0": "bafybeieldpqie4drckyy5daug7e2coodirfoueznzhniqwhhpmopykvszu"
+        "agent/valory/mech/0.1.0": "bafybeifknsbplv2f5uyoh7r3g7sclhejsdxiuikepmglsaqnjqoqvu74ae",
+        "service/valory/mech/0.1.0": "bafybeiaku727bbwmetq5ltlwcoaz73ug5ftkxpnoecj3dnbm2pzpelnr6a"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeiei6h5suazzfta7n3uyq7bsz26zkmdiiylptu5i44p7s2wiygxt24",

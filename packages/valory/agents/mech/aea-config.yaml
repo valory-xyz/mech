@@ -23,7 +23,7 @@ contracts:
 - valory/multisend:0.1.0:bafybeidjdgi2kyexajirj3cnpzgse4y5u664b2blztt4flv6i7knlecyr4
 - valory/service_registry:0.1.0:bafybeidheiinltcynckpgs35vknbs7s6zal3d544nfjcdjrbvely32j5le
 - valory/mech_marketplace:0.1.0:bafybeifnabe3hqdizvdtc2q33sr6q7glmojid332irkhbmczev3wzvq5lq
-- valory/balance_tracker:0.1.0:bafybeif3ziyaqnx5lj4mambwf3nw7jjp2xng2ib2c3qewj3r653duxg7em
+- valory/balance_tracker:0.1.0:bafybeif27pp2772gkhnrdyxlswkr4whf2ka6bwf5wtdym6mzdgddyq3v3a
 - valory/erc20:0.1.0:bafybeig3avtl5ffku556ipvuviiat5p2psfw46fa2ieofcc4eculxe3vde
 protocols:
 - open_aea/signing:1.0.0:bafybeiei6h5suazzfta7n3uyq7bsz26zkmdiiylptu5i44p7s2wiygxt24
@@ -40,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeieoc35cjm3dlt2ayj6iidjfdgry6fmhnzniml5dqalmwu4so6vmme
 - valory/abstract_round_abci:0.1.0:bafybeico2i67lk5wkgyvmu5ska7phbugxbfh4ofnm57vwpypis5zmpjnim
 - valory/contract_subscription:0.1.0:bafybeic3ngmx5uw3b6wp5oe4efa22slgjrllf4irhwsulwefbbgwsiidxq
-- valory/mech_abci:0.1.0:bafybeiebvjvilbyga5jlrtxfzjw4mcr7nvtsbgjr6vxq4njb6lemnz47na
+- valory/mech_abci:0.1.0:bafybeicace7xfnqfrvrlijeximx66osejmv4fs6yt52zty3bcwnmgvkwge
 - valory/registration_abci:0.1.0:bafybeiaur5o7xjf5jod2gzbhxa2m2l2m7z76rfs7gf2sfuf3ffjlqodaxy
 - valory/reset_pause_abci:0.1.0:bafybeibgbbt4yzd6amf2wuldrdvhyfqibjqx2uxhybqhrkumlp4jcfndia
 - valory/delivery_rate_abci:0.1.0:bafybeifzw4okhzax55zuuusggfcyz2z2ulrto4fww2l36julte5ks7e7kq
-- valory/task_execution:0.1.0:bafybeicc6h4jx23g6jem57yagie26k642ce6jnlyisxhwebl2v2h3j7544
-- valory/task_submission_abci:0.1.0:bafybeifqewhyglr6znfj32slh3a4gpz7xy7i3ar4qncafxzbgivggtiwea
+- valory/task_execution:0.1.0:bafybeibkzt2tq4mpjf6jtq63tdfih2s4smbuvosbnnlttrlf632tuyr5jy
+- valory/task_submission_abci:0.1.0:bafybeihleykoygbyf2ezzkvy4begcf5uisqpievoq672rpaak37xrumvpy
 - valory/termination_abci:0.1.0:bafybeifjwbctocnxrtgyzn7z2ml2q6bxdxrd4sa7m5u43p7ts6hk6ujvce
 - valory/transaction_settlement_abci:0.1.0:bafybeidmg3beiqyubkze6wdiwhz4oqwvidhsjexjgcvso5bkrryqkbsgzu
 - valory/websocket_client:0.1.0:bafybeidbcdcvyy2svob6p52akdx4ezsqpxdh4kphhqgf6hbageneu7unwi
@@ -203,6 +203,9 @@ models:
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
       default_chain_id: ${str:gnosis}
+      gnosis_ledger_rpc: ${str:http://localhost:8545}
+      polygon_ledger_rpc: ${str:http://localhost:8545}
+      base_ledger_rpc: ${str:http://localhost:8545}
 ---
 public_id: valory/ledger:0.19.0
 type: connection

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2025 Valory AG
+#   Copyright 2025-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -49,6 +49,17 @@ class BalanceTrackerContract(Contract):
         contract_instance = cls.get_instance(ledger_api, contract_address)
         mech_balance = contract_instance.functions.mapMechBalances(mech_address).call()
         return {"mech_balance": mech_balance}
+
+    @classmethod
+    def get_requester_balance(
+        cls, ledger_api: LedgerApi, contract_address: str, requester: str
+    ) -> JSONLike:
+        """Get requester balance."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        requester_balance = contract_instance.functions.mapRequesterBalances(
+            requester
+        ).call()
+        return {"requester_balance": requester_balance}
 
     @classmethod
     def get_max_fee_factor(

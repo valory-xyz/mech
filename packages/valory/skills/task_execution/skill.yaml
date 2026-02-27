@@ -9,13 +9,13 @@ fingerprint:
   __init__.py: bafybeidqhvvlnthkbnmrdkdeyjyx2f2ab6z4xdgmagh7welqnh2v6wczx4
   behaviours.py: bafybeigj7h5nkyl7kvvkkbjqnvaeeayammbllubozr2nmlo6d7jayatuai
   dialogues.py: bafybeih3sbvogzgjgukf67nwefyd6wwwsxoe7xxzsf4mnexvz4k6aginuy
-  handlers.py: bafybeienspfzazvi35c2afahf3yth2ulbliwmocr4tty4hfdlgs3uaamrm
-  models.py: bafybeieprf5w545bnbc5hcd664trevlx7q4bmqaqbahzl4r5lr32qgpbx4
+  handlers.py: bafybeifv2ndn7jo44e3lbpmupdapnniwsjpmeje4cp3jfmifeycyo5qyyi
+  models.py: bafybeiaamovdzx55etedtllppyf5agqnbyeywlib2ebqaazzwrzlvq5beq
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
-  tests/conftest.py: bafybeidgmgfwgxnq2ogkt72yf3pncbffidurhsmoydnmprvbgmvglykyga
+  tests/conftest.py: bafybeigyamw5xxzxljaeplhawvwlagfcnz2to4sb553sznmhmmqkifk4w4
   tests/test_behaviours.py: bafybeiapepzkqv3rraasjpunquu45krcnvwp5zdbgerw6rk3iwc3w7svlu
   tests/test_dialogues.py: bafybeigtvumwhygqsjtzvicbygjmj3a2dr36j6mjaiez36bqfyh2naux3i
-  tests/test_handlers.py: bafybeifbptjyvhmwgnczqqa3h5xc4k7lwcchirivocscig7ayuzk2a3mmi
+  tests/test_handlers.py: bafybeidk6jzdtrrhc3chqwebagkjrpj2ijsh3y4qz5iykphwdislb6eofu
   tests/test_models.py: bafybeiblrii2f4he2gzim65ndtchk6crdxot7upsa2fidydrr7vakzu4wa
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeigu73lfz3g3mc6iupisrvlsp3fyl4du3oqlyajgdpfvtqypddh3w4
@@ -31,6 +31,7 @@ connections:
 contracts:
 - valory/olas_mech:0.1.0:bafybeigo6cldicov4ce2yxjztk4spemxf3sreztmkucmywvty6c5luwbw4
 - valory/mech_marketplace:0.1.0:bafybeifnabe3hqdizvdtc2q33sr6q7glmojid332irkhbmczev3wzvq5lq
+- valory/balance_tracker:0.1.0:bafybeif27pp2772gkhnrdyxlswkr4whf2ka6bwf5wtdym6mzdgddyq3v3a
 protocols:
 - valory/acn_data_share:0.1.0:bafybeiebct3enol4nkiy3uxm2xnn2hniwnorjfwtcjbsywea5ql36pqk3y
 - valory/contract_api:1.0.0:bafybeigl7mxuyxngk4gztgygeccbgdfrllx73kwbvvkjvtkfw6ionyd56q
@@ -97,8 +98,13 @@ models:
       serious_slash_unit_amount: 8000000000000000
       mech_marketplace_address: '0x0000000000000000000000000000000000000000'
       default_chain_id: gnosis
+      gnosis_ledger_rpc: http://localhost:8545
+      polygon_ledger_rpc: http://localhost:8545
+      base_ledger_rpc: http://localhost:8545
     class_name: Params
 dependencies:
+  open-aea-ledger-ethereum:
+    version: ==2.0.8
   py-multibase:
     version: ==1.0.3
   py-multicodec:

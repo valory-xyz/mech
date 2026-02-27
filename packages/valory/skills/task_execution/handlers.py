@@ -28,11 +28,15 @@ from typing import Any, Dict, List, Optional, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
+from aea_ledger_ethereum import EthereumApi
 from prometheus_client import start_http_server
 
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
 )
+from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
+from packages.valory.contracts.mech_marketplace.contract import MechMarketplaceContract
+from packages.valory.contracts.olas_mech.contract import OlasMechContract
 from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
@@ -57,12 +61,79 @@ REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
 PAYMENT_MODEL = "payment_model"
 PAYMENT_INFO = "payment_info"
+ROUTES_INFO = "routes_info"
+OFFCHAIN_REQUEST_RESPONSES = "offchain_request_responses"
+JSON_CONTENT_HEADER = "Content-Type: application/json\n"
+ENCODING_UTF8 = "utf-8"
+
+BALANCE_LOG_DECISION_ACCEPTED = "accepted"
+BALANCE_LOG_DECISION_REJECTED = "rejected"
 TIMED_OUT_STATUS = 2
 WAIT_FOR_TIMEOUT_STATUS = 1
 DELIVERED_STATUS = 3
 PROMETHEUS_PORT = 9000
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
+
+
+class Route(str, Enum):
+    """Supported HTTP route names."""
+
+    SEND_SIGNED_REQUESTS = "send_signed_requests"
+    FETCH_OFFCHAIN_INFO = "fetch_offchain_info"
+
+
+class ResponseStatus(str, Enum):
+    """Internal/API response status."""
+
+    REJECTED = "rejected"
+    OK = "ok"
+    UNAVAILABLE = "unavailable"
+
+
+class ChainId(int, Enum):
+    """Supported chain ids."""
+
+    GNOSIS = 100
+    POLYGON = 137
+    BASE = 8453
+
+
+class BodyKey(str, Enum):
+    """Contract/body keys."""
+
+    DATA = "data"
+    WAIT_FOR_TIMEOUT_TASKS = "wait_for_timeout_tasks"
+    REQUEST_IDS = "request_ids"
+    MECH_TYPE = "mech_type"
+    MECH_TYPES = "mech_types"
+    TIMED_OUT_REQUESTS = "timed_out_requests"
+    REQUESTER_BALANCE = "requester_balance"
+
+
+class RequestKey(str, Enum):
+    """Offchain request keys."""
+
+    REQUEST_ID = "request_id"
+    REQUEST_ID_CAMEL = "requestId"
+    IPFS_HASH = "ipfs_hash"
+    IPFS_DATA = "ipfs_data"
+    SENDER = "sender"
+    DELIVERY_RATE = "delivery_rate"
+    REQUEST_DELIVERY_RATE = "request_delivery_rate"
+    IS_OFFCHAIN = "is_offchain"
+
+
+class ResponseKey(str, Enum):
+    """Offchain response keys."""
+
+    STATUS = "status"
+    REASON = "reason"
+    ERROR_CODE = "error_code"
+    REQUIRED_AMOUNT = "required_amount"
+    AVAILABLE_AMOUNT = "available_amount"
+    RPC_ADDRESS = "rpc_address"
+    CHAIN_ID = "chain_id"
 
 
 class BaseHandler(Handler):
@@ -265,21 +336,25 @@ class ContractHandler(BaseHandler):
         body = contract_api_msg.state.body
         self.context.logger.info(f"Contract state body keys={list(body.keys())}.")
 
-        if body.get("data") or body.get("wait_for_timeout_tasks"):
+        if body.get(BodyKey.DATA.value) or body.get(
+            BodyKey.WAIT_FOR_TIMEOUT_TASKS.value
+        ):
             # handle the undelivered requests response from data and wait_for_timeout_tasks
             self._handle_get_undelivered_reqs(body)
-        if body.get("request_ids"):
+        if body.get(BodyKey.REQUEST_IDS.value):
             # handle the request id status check response
             self._update_pending_list(body)
-        if body.get("mech_type"):
+        if body.get(BodyKey.MECH_TYPE.value):
             # handle the mech type response
-            self.context.shared_state[PAYMENT_MODEL] = body["mech_type"]
-            self.context.logger.info(f"Found payment model {body['mech_type']!r}.")
-        if body.get("mech_types"):
-            # handle the mech types response
-            self.context.shared_state[PAYMENT_INFO] = body["mech_types"]
+            self.context.shared_state[PAYMENT_MODEL] = body[BodyKey.MECH_TYPE.value]
             self.context.logger.info(
-                f"The cache was updated with the new mech types: {body['mech_types']}."
+                f"Found payment model {body[BodyKey.MECH_TYPE.value]!r}."
+            )
+        if body.get(BodyKey.MECH_TYPES.value):
+            # handle the mech types response
+            self.context.shared_state[PAYMENT_INFO] = body[BodyKey.MECH_TYPES.value]
+            self.context.logger.info(
+                f"The cache was updated with the new mech types: {body[BodyKey.MECH_TYPES.value]}."
             )
 
         self.params.in_flight_req = False
@@ -299,15 +374,17 @@ class ContractHandler(BaseHandler):
         # Reset lists.
         self.context.shared_state[INFLIGHT_READ_TS] = None
         self.wait_for_timeout_tasks.clear()
-        self.unprocessed_timed_out_tasks = body.get("timed_out_requests", [])
+        self.unprocessed_timed_out_tasks = body.get(
+            BodyKey.TIMED_OUT_REQUESTS.value, []
+        )
         self.set_last_successful_read(self.from_block)
 
         self.context.logger.info(
             f"Loaded {len(self.unprocessed_timed_out_tasks)} timed out requests from contract.",
         )
         # collect items to process: fresh + previously waiting
-        reqs = list(body.get("data", []))
-        reqs.extend(body.get("wait_for_timeout_tasks", []))
+        reqs = list(body.get(BodyKey.DATA.value, []))
+        reqs.extend(body.get(BodyKey.WAIT_FOR_TIMEOUT_TASKS.value, []))
 
         reqs_count = len(reqs)
         if reqs_count == 0:
@@ -340,7 +417,9 @@ class ContractHandler(BaseHandler):
     def _update_pending_list(self, body: Dict[str, List]) -> None:
         before = len(self.pending_tasks)
         self.context.shared_state[PENDING_TASKS] = [
-            req for req in self.pending_tasks if req["requestId"] in body["request_ids"]
+            req
+            for req in self.pending_tasks
+            if req[RequestKey.REQUEST_ID_CAMEL.value] in body[BodyKey.REQUEST_IDS.value]
         ]
         after = len(self.pending_tasks)
         self.context.logger.info(
@@ -422,6 +501,9 @@ class HttpCode(Enum):
     OK_CODE = 200
     NOT_FOUND_CODE = 404
     BAD_REQUEST_CODE = 400
+    PAYMENT_REQUIRED_CODE = 402
+    SERVICE_UNAVAILABLE_CODE = 503
+    INTERNAL_SERVER_ERROR_CODE = 500
 
 
 class MechHttpHandler(AbstractResponseHandler):
@@ -445,18 +527,24 @@ class MechHttpHandler(AbstractResponseHandler):
         return self.context.shared_state[IPFS_TASKS]
 
     @property
+    def offchain_request_responses(self) -> Dict[str, Dict[str, Any]]:
+        """Get stored off-chain request responses by request id."""
+        return self.context.shared_state[OFFCHAIN_REQUEST_RESPONSES]
+
+    @property
     def params(self) -> Params:
         """Get the parameters."""
         return cast(Params, self.context.params)
 
     def setup(self) -> None:
         """Setup the mech http handler."""
-        self.context.shared_state["routes_info"] = {
-            "send_signed_requests": self._handle_signed_requests,
-            "fetch_offchain_info": self._handle_offchain_request_info,
+        self.context.shared_state[ROUTES_INFO] = {
+            Route.SEND_SIGNED_REQUESTS.value: self._handle_signed_requests,
+            Route.FETCH_OFFCHAIN_INFO.value: self._handle_offchain_request_info,
         }
         self.context.shared_state[IPFS_TASKS] = []
-        self.json_content_header = "Content-Type: application/json\n"
+        self.context.shared_state[OFFCHAIN_REQUEST_RESPONSES] = {}
+        self.json_content_header = JSON_CONTENT_HEADER
         self.start_prometheus_server()
         super().setup()
 
@@ -478,45 +566,74 @@ class MechHttpHandler(AbstractResponseHandler):
         """
 
         try:
-            # Parse incoming data
-            request_data = http_msg.body.decode("utf-8")
-            parsed_data = urllib.parse.parse_qs(request_data)
-            data = {key: value[0] for key, value in parsed_data.items()}
-            request_id = data["request_id"]
-            ipfs_hash = data["ipfs_hash"]
-            request_delivery_rate = data["delivery_rate"]
-
-            self.context.logger.info(
-                f"Received signed offchain request with {request_id=} and {request_delivery_rate=}."
-            )
-
-            req = {
-                "requestId": request_id,
-                "data": bytes.fromhex(ipfs_hash[2:]),
-                "is_offchain": True,
-                "request_delivery_rate": request_delivery_rate,
-                **data,
-            }
-            self.pending_tasks.append(req)
-            self.ipfs_tasks.append(
-                {"request_id": request_id, "ipfs_data": data["ipfs_data"]}
-            )
-            self.context.logger.info(
-                f"Offchain task added with data: {req}. "
-                f"pending_tasks={len(self.pending_tasks)} ipfs_tasks={len(self.ipfs_tasks)}."
-            )
-
-            self._send_ok_response(
-                http_msg,
-                http_dialogue,
-                data={"request_id": request_id},
-            )
-
+            data = self._parse_http_body(http_msg)
+            request_id = data[RequestKey.REQUEST_ID.value]
+            ipfs_hash = data[RequestKey.IPFS_HASH.value]
+            sender = data[RequestKey.SENDER.value]
+            request_delivery_rate = int(data[RequestKey.DELIVERY_RATE.value])
         except Exception as e:
             self.context.logger.error(
                 f"Error processing signed request. body={http_msg.body!r} error={str(e)}."
             )
             self._handle_bad_request(http_msg, http_dialogue)
+            return
+
+        self.context.logger.info(
+            f"Received signed offchain request with {request_id=} and {request_delivery_rate=}."
+        )
+
+        balance_check = self._check_offchain_requester_balance(
+            sender=sender,
+            delivery_rate=request_delivery_rate,
+        )
+        if balance_check[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason="balance check unavailable",
+                status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
+                status_text="Service unavailable",
+            )
+            return
+
+        available_amount = cast(int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value])
+        if available_amount < request_delivery_rate:
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason="insufficient balance",
+                status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
+                status_text="Payment required",
+            )
+            return
+
+        try:
+            req = self._enqueue_offchain_request(
+                request_id=request_id,
+                ipfs_hash=ipfs_hash,
+                request_delivery_rate=request_delivery_rate,
+                data=data,
+            )
+        except Exception as e:
+            self.context.logger.error(
+                f"Error enqueuing offchain request {request_id}: {str(e)}."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+
+        self.context.logger.info(
+            f"Offchain task added with data: {req}. "
+            f"pending_tasks={len(self.pending_tasks)} ipfs_tasks={len(self.ipfs_tasks)}."
+        )
+
+        self.offchain_request_responses.pop(request_id, None)
+        self._send_ok_response(
+            http_msg=http_msg,
+            http_dialogue=http_dialogue,
+            data={RequestKey.REQUEST_ID.value: request_id},
+        )
 
     def _handle_offchain_request_info(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -529,29 +646,37 @@ class MechHttpHandler(AbstractResponseHandler):
         """
 
         try:
-            # Parse incoming data
-            request_data = http_msg.body.decode("utf-8")
-            parsed_data = urllib.parse.parse_qs(request_data)
-            data = {key: value[0] for key, value in parsed_data.items()}
-
-            request_id = data["request_id"]
-            self.context.logger.info(f"Fetching offchain info for {request_id=}.")
-
-            done_tasks_list = self.done_tasks
-
-            requested_done_tasks_list = [
-                data for data in done_tasks_list if data.get("request_id") == request_id
-            ]
-
-            self._send_ok_response(
-                http_msg,
-                http_dialogue,
-                data=requested_done_tasks_list[0] if requested_done_tasks_list else {},
-            )
-
+            data = self._parse_http_body(http_msg)
+            request_id = data[RequestKey.REQUEST_ID.value]
         except Exception as e:
             self.context.logger.error(f"Error getting offchain request info: {str(e)}")
             self._handle_bad_request(http_msg, http_dialogue)
+            return
+
+        self.context.logger.info(f"Fetching offchain info for {request_id=}.")
+
+        stored_response = self.offchain_request_responses.get(request_id)
+        if stored_response is not None:
+            self._send_ok_response(
+                http_msg,
+                http_dialogue,
+                data=stored_response,
+            )
+            return
+
+        done_tasks_list = self.done_tasks
+
+        requested_done_tasks_list = [
+            item
+            for item in done_tasks_list
+            if item.get(RequestKey.REQUEST_ID.value) == request_id
+        ]
+
+        self._send_ok_response(
+            http_msg,
+            http_dialogue,
+            data=requested_done_tasks_list[0] if requested_done_tasks_list else {},
+        )
 
     def _handle_bad_request(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -590,9 +715,233 @@ class MechHttpHandler(AbstractResponseHandler):
             status_code=HttpCode.OK_CODE.value,
             status_text="Success",
             headers=f"{self.json_content_header}{http_msg.headers}",
-            body=json.dumps(data).encode("utf-8"),
+            body=json.dumps(data).encode(ENCODING_UTF8),
         )
 
         # Send response
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
+
+    def _send_rejection_response(
+        self,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+    ) -> None:
+        """Build a rejection payload, store it, and send the HTTP error response."""
+        response_payload = {
+            RequestKey.REQUEST_ID.value: request_id,
+            ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
+            ResponseKey.REASON.value: reason,
+        }
+        self.offchain_request_responses[request_id] = response_payload
+        http_response = http_dialogue.reply(
+            performative=HttpMessage.Performative.RESPONSE,
+            target_message=http_msg,
+            version=http_msg.version,
+            status_code=status_code,
+            status_text=status_text,
+            headers=f"{self.json_content_header}{http_msg.headers}",
+            body=json.dumps(response_payload).encode(ENCODING_UTF8),
+        )
+        self.context.logger.info("Responding with: {}".format(http_response))
+        self.context.outbox.put_message(message=http_response)
+
+    def _rollback_offchain_enqueue(self, request_id: str) -> None:
+        """Rollback a partial off-chain enqueue in case of unexpected failure."""
+        self.context.shared_state[PENDING_TASKS] = [
+            req
+            for req in self.pending_tasks
+            if req.get(RequestKey.REQUEST_ID_CAMEL.value) != request_id
+        ]
+        self.context.shared_state[IPFS_TASKS] = [
+            req
+            for req in self.ipfs_tasks
+            if req.get(RequestKey.REQUEST_ID.value) != request_id
+        ]
+        self.context.logger.error(
+            f"Queue rollback applied for {request_id=}. "
+            f"pending_tasks={len(self.pending_tasks)} ipfs_tasks={len(self.ipfs_tasks)}"
+        )
+
+    def _parse_http_body(self, http_msg: HttpMessage) -> Dict[str, str]:
+        """Parse form-urlencoded HTTP body into a flat key-value dictionary."""
+        request_data = http_msg.body.decode(ENCODING_UTF8)
+        parsed_data = urllib.parse.parse_qs(request_data)
+        return {key: value[0] for key, value in parsed_data.items()}
+
+    def _enqueue_offchain_request(
+        self,
+        request_id: str,
+        ipfs_hash: str,
+        request_delivery_rate: int,
+        data: Dict[str, str],
+    ) -> Dict[str, Any]:
+        """Enqueue the off-chain task and its IPFS upload payload."""
+        req = {
+            RequestKey.REQUEST_ID_CAMEL.value: request_id,
+            BodyKey.DATA.value: bytes.fromhex(ipfs_hash[2:]),
+            RequestKey.IS_OFFCHAIN.value: True,
+            RequestKey.REQUEST_DELIVERY_RATE.value: request_delivery_rate,
+            **data,
+        }
+        try:
+            self.pending_tasks.append(req)
+            self.ipfs_tasks.append(
+                {
+                    RequestKey.REQUEST_ID.value: request_id,
+                    RequestKey.IPFS_DATA.value: data[RequestKey.IPFS_DATA.value],
+                }
+            )
+        except Exception:
+            self._rollback_offchain_enqueue(request_id)
+            raise
+        return req
+
+    @staticmethod
+    def _make_unavailable_balance_response(
+        required_amount: int,
+        reason: str,
+    ) -> Dict[str, Union[str, int]]:
+        """Build a standardised 'unavailable' balance-check response."""
+        return {
+            ResponseKey.STATUS.value: ResponseStatus.UNAVAILABLE.value,
+            ResponseKey.REQUIRED_AMOUNT.value: required_amount,
+            ResponseKey.AVAILABLE_AMOUNT.value: 0,
+            ResponseKey.REASON.value: reason,
+        }
+
+    def _check_offchain_requester_balance(
+        self,
+        sender: str,
+        delivery_rate: int,
+    ) -> Dict[str, Union[str, int]]:
+        """Check requester balance in balance tracker against requested delivery rate."""
+        required_amount = int(delivery_rate)
+        ledger_settings = self._get_ledger_settings()
+        if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+            return self._make_unavailable_balance_response(
+                required_amount,
+                cast(str, ledger_settings[ResponseKey.REASON.value]),
+            )
+
+        try:
+            rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
+            chain_id = cast(int, ledger_settings[ResponseKey.CHAIN_ID.value])
+            ledger_api = EthereumApi(address=rpc_address, chain_id=chain_id)
+
+            requester = ledger_api.api.to_checksum_address(sender)
+            mech_address = ledger_api.api.to_checksum_address(
+                self.params.agent_mech_contract_addresses[0]
+            )
+            marketplace_address = ledger_api.api.to_checksum_address(
+                self.params.mech_marketplace_address
+            )
+
+            payment_type = self._get_mech_payment_type(ledger_api, mech_address)
+            if payment_type is None:
+                return self._make_unavailable_balance_response(
+                    required_amount, "Unable to fetch mech payment type."
+                )
+
+            balance_tracker_address = (
+                self._get_balance_tracker_address_for_payment_type(
+                    ledger_api=ledger_api,
+                    marketplace_address=marketplace_address,
+                    payment_type=payment_type,
+                )
+            )
+            if not balance_tracker_address or int(balance_tracker_address, 16) == 0:
+                return self._make_unavailable_balance_response(
+                    required_amount,
+                    "No balance tracker configured for mech payment type.",
+                )
+
+            balance_tracker_address = ledger_api.api.to_checksum_address(
+                balance_tracker_address
+            )
+            available_amount = self._get_requester_balance(
+                ledger_api=ledger_api,
+                balance_tracker_address=balance_tracker_address,
+                requester=requester,
+            )
+            decision = (
+                BALANCE_LOG_DECISION_ACCEPTED
+                if available_amount >= required_amount
+                else BALANCE_LOG_DECISION_REJECTED
+            )
+            self.context.logger.info(
+                f"offchain_balance_check sender={sender} required={required_amount} "
+                f"available={available_amount} decision={decision}"
+            )
+            return {
+                ResponseKey.STATUS.value: ResponseStatus.OK.value,
+                ResponseKey.REQUIRED_AMOUNT.value: required_amount,
+                ResponseKey.AVAILABLE_AMOUNT.value: int(available_amount),
+                ResponseKey.REASON.value: "balance check completed",
+            }
+        except Exception as e:  # pragma: nocover
+            return self._make_unavailable_balance_response(
+                required_amount, f"Balance check failed: {str(e)}"
+            )
+
+    def _get_mech_payment_type(
+        self, ledger_api: EthereumApi, mech_address: str
+    ) -> Optional[str]:
+        """Get the mech payment type from the mech contract."""
+        payment_type_res = OlasMechContract.get_mech_type(ledger_api, mech_address)
+        return cast(Optional[str], payment_type_res.get(BodyKey.MECH_TYPE.value))
+
+    def _get_balance_tracker_address_for_payment_type(
+        self,
+        ledger_api: EthereumApi,
+        marketplace_address: str,
+        payment_type: str,
+    ) -> str:
+        """Get the balance tracker address for the provided payment type."""
+        balance_tracker_res = MechMarketplaceContract.get_balance_tracker_for_mech_type(
+            ledger_api=ledger_api,
+            contract_address=marketplace_address,
+            mech_type=payment_type,
+        )
+        return cast(str, balance_tracker_res.get(BodyKey.DATA.value))
+
+    def _get_requester_balance(
+        self, ledger_api: EthereumApi, balance_tracker_address: str, requester: str
+    ) -> int:
+        """Get requester balance from the balance tracker."""
+        requester_balance_res = BalanceTrackerContract.get_requester_balance(
+            ledger_api=ledger_api,
+            contract_address=balance_tracker_address,
+            requester=requester,
+        )
+        return cast(int, requester_balance_res.get(BodyKey.REQUESTER_BALANCE.value, 0))
+
+    def _get_ledger_settings(self) -> Dict[str, Union[str, int]]:
+        """Read ledger RPC settings from skill params using default_chain_id."""
+        chain = str(self.params.default_chain_id).lower()
+        rpc_address = cast(
+            Optional[str], getattr(self.context.params, f"{chain}_ledger_rpc", None)
+        )
+        if not rpc_address:
+            return {
+                ResponseKey.STATUS.value: ResponseStatus.UNAVAILABLE.value,
+                ResponseKey.REASON.value: f"Missing RPC config for chain: {chain}.",
+            }
+
+        try:
+            chain_id = ChainId[chain.upper()].value
+        except KeyError:
+            return {
+                ResponseKey.STATUS.value: ResponseStatus.UNAVAILABLE.value,
+                ResponseKey.REASON.value: f"Unsupported chain: {chain}.",
+            }
+
+        return {
+            ResponseKey.STATUS.value: ResponseStatus.OK.value,
+            ResponseKey.RPC_ADDRESS.value: rpc_address,
+            ResponseKey.CHAIN_ID.value: chain_id,
+        }
