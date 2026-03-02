@@ -130,7 +130,9 @@ def test_happy_path_executes_and_stores(
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
-    token_cb: Any = type("CB", (), {"cost_dict": {"input": 10, "output": 5}, "actual_model": None})()
+    token_cb: Any = type(
+        "CB", (), {"cost_dict": {"input": 10, "output": 5}, "actual_model": None}
+    )()
     keychain: object = object()
     result_tuple = ("4", "add 2+2", {"tx": "0xabc"}, token_cb, keychain)
     monkeypatch.setattr(
@@ -308,7 +310,13 @@ def test_broken_process_pool_restart(
                 raise RuntimeError("boom")
             # On second call, return a completed future with the 5-tuple
             return done_future(
-                ("ok", "p", {"tx": 1}, type("CB", (), {"cost_dict": {}, "actual_model": None})(), object())
+                (
+                    "ok",
+                    "p",
+                    {"tx": 1},
+                    type("CB", (), {"cost_dict": {}, "actual_model": None})(),
+                    object(),
+                )
             )
 
     # Replace the behaviour's executor with our stub

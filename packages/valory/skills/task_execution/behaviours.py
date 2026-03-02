@@ -770,9 +770,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             actual_model = None
             if counter_callback is not None:
                 cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
-                actual_model = cast(
-                    TokenCounterCallback, counter_callback
-                ).actual_model
+                actual_model = cast(TokenCounterCallback, counter_callback).actual_model
             metadata = {
                 "model": actual_model or model,
                 "tool": tool,
