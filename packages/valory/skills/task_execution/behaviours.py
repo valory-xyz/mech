@@ -575,12 +575,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.send_message(msg, dialogue, self._handle_ipfs_tasks_response)
 
     def _ensure_deadline(self) -> None:
-        """Set a deadline if not set already, otherwise continue."""
-        if self._request_handling_deadline is None:
-            self._request_handling_deadline = self._fetch_deadline()
-            self.context.logger.info(
-                f"Deadline set to {self._request_handling_deadline} for task {self._executing_task}."
-            )
+        """Set a fresh deadline for the current request."""
+        self._request_handling_deadline = self._fetch_deadline()
+        self.context.logger.info(
+            f"Deadline set to {self._request_handling_deadline} for task {self._executing_task}."
+        )
 
     def _execute_task(self) -> None:
         """Execute tasks."""
