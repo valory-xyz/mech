@@ -130,7 +130,9 @@ def test_happy_path_executes_and_stores(
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
-    token_cb: Any = type("CB", (), {"cost_dict": {"input": 10, "output": 5}})()
+    token_cb: Any = type(
+        "CB", (), {"cost_dict": {"input": 10, "output": 5}, "actual_model": None}
+    )()
     keychain: object = object()
     result_tuple = ("4", "add 2+2", {"tx": "0xabc"}, token_cb, keychain)
     monkeypatch.setattr(
@@ -308,7 +310,13 @@ def test_broken_process_pool_restart(
                 raise RuntimeError("boom")
             # On second call, return a completed future with the 5-tuple
             return done_future(
-                ("ok", "p", {"tx": 1}, type("CB", (), {"cost_dict": {}})(), object())
+                (
+                    "ok",
+                    "p",
+                    {"tx": 1},
+                    type("CB", (), {"cost_dict": {}, "actual_model": None})(),
+                    object(),
+                )
             )
 
     # Replace the behaviour's executor with our stub
@@ -868,7 +876,7 @@ def test_ipfs_success_valid_task_delivers_result(
     monkeypatch.setattr(behaviour, "_build_ipfs_store_file_req", capture_store)
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
-    token_cb: Any = type("CB", (), {"cost_dict": {"input": 10}})()
+    token_cb: Any = type("CB", (), {"cost_dict": {"input": 10}, "actual_model": None})()
     result_tuple = ("42", "add 2+2", {"tx": "0xabc"}, token_cb, object())
     monkeypatch.setattr(
         behaviour, "_submit_task", lambda *a, **k: done_future(result_tuple)
@@ -943,7 +951,7 @@ def test_ipfs_error_does_not_cascade_to_next_task(
     )
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
-    token_cb: Any = type("CB", (), {"cost_dict": {}})()
+    token_cb: Any = type("CB", (), {"cost_dict": {}, "actual_model": None})()
     result_tuple = ("ok", "prompt", {"tx": "0x1"}, token_cb, object())
     monkeypatch.setattr(
         behaviour, "_submit_task", lambda *a, **k: done_future(result_tuple)

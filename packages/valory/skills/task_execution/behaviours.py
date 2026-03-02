@@ -767,10 +767,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # task succeeded
             deliver_msg, prompt, transaction, counter_callback, keychain = task_result
             cost_dict = {}
+            actual_model = None
             if counter_callback is not None:
                 cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
+                actual_model = cast(TokenCounterCallback, counter_callback).actual_model
             metadata = {
-                "model": model,
+                "model": actual_model or model,
                 "tool": tool,
                 "params": tool_params,
             }
