@@ -19,7 +19,7 @@
 """Benchmarking for tools."""
 
 import logging
-from typing import Any, Callable, Dict, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 
 PRICE_NUM_TOKENS = 1000
@@ -53,6 +53,7 @@ class TokenCounterCallback:
 
     def __init__(self) -> None:
         """Initialize the callback."""
+        self.actual_model: Optional[str] = None
         self.cost_dict: Dict[str, Union[int, float]] = {
             "input_tokens": 0,
             "output_tokens": 0,
@@ -90,6 +91,7 @@ class TokenCounterCallback:
 
     def __call__(self, model: str, token_counter: Callable, **kwargs: Any) -> None:
         """Callback to count the number of tokens used in a generation."""
+        self.actual_model = model
         if model not in list(TokenCounterCallback.TOKEN_PRICES.keys()):
             raise ValueError(f"Model {model} not supported.")
         try:
