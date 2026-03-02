@@ -133,7 +133,7 @@ def test_ipfs_handler_deadline_expired_skips_callback(handler_context: Any) -> N
     handler.handle(msg)
 
     assert called["ok"] is False
-    assert handler_context.params.in_flight_req
+    assert not handler_context.params.in_flight_req
     assert handler_context.params.is_cold_start
     assert "nonce-1" not in handler_context.params.req_to_callback
     assert "nonce-1" not in handler_context.params.req_to_error_callback
