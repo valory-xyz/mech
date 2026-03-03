@@ -246,7 +246,6 @@ class IpfsHandler(BaseHandler):
             self.context.logger.info(
                 f"Deadline reached for task with nonce {nonce} while handling IPFS message."
             )
-            self.params.in_flight_req = False
             self.on_message_handled(message)
             return
 
