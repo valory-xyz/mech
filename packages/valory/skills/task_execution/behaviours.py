@@ -587,9 +587,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if self.params.in_flight_req:
             # there is an in flight request
 
-            if self._executing_task:
-                self._ensure_deadline()
-
             # check if the executing task is within deadline or not
             if self._executing_task and time.time() > cast(
                 float, self._request_handling_deadline
