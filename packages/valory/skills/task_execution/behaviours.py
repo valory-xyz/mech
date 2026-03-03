@@ -649,6 +649,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         delivery_rate = task_data["request_delivery_rate"]
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
+        self._request_handling_deadline = None
         ipfs_hash = get_ipfs_file_hash(task_data["data"])
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
