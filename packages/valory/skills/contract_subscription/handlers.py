@@ -36,7 +36,6 @@ from packages.valory.skills.websocket_client.handlers import (
     WebSocketHandler as BaseWebSocketHandler,
 )
 
-
 JOB_QUEUE = "pending_tasks"
 DISCONNECTION_POINT = "disconnection_point"
 

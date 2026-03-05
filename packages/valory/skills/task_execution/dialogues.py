@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -51,7 +51,6 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
 from packages.valory.skills.abstract_round_abci.dialogues import (
     HttpDialogues as BaseHttpDialogues,
 )
-
 
 ContractApiDialogue = BaseContractApiDialogue
 IpfsDialogue = BaseIpfsDialogue

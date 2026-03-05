@@ -34,7 +34,6 @@ from packages.valory.skills.websocket_client.handlers import (
     WEBSOCKET_SUBSCRIPTION_STATUS,
 )
 
-
 DEFAULT_ENCODING = "utf-8"
 WEBSOCKET_CLIENT_CONNECTION_NAME = "websocket_client"
 

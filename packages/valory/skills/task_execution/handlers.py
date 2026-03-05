@@ -46,7 +46,6 @@ from packages.valory.skills.abstract_round_abci.handlers import AbstractResponse
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import Params
 
-
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
 IPFS_TASKS = "ipfs_tasks"

@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of Mech."""
+
 import dataclasses
 from collections import defaultdict
 from typing import Any, Callable, Dict, List, Optional
@@ -26,7 +27,6 @@ from aea.exceptions import enforce
 from aea.skills.base import Model
 
 from packages.valory.skills.abstract_round_abci.utils import check_type
-
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
