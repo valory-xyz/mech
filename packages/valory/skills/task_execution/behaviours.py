@@ -64,7 +64,6 @@ from packages.valory.skills.task_execution.utils.ipfs import (
 )
 from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
-
 PENDING_TASKS = "pending_tasks"
 WAIT_FOR_TIMEOUT = "wait_for_timeout"
 UNPROCESSED_TIMED_OUT_TASKS = "unprocessed_timed_out_tasks"

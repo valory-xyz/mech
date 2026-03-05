@@ -32,12 +32,13 @@ from aea.mail.base import Envelope
 from aea.protocols.base import Address, Message
 from aea.protocols.dialogue.base import Dialogue
 
-from packages.valory.protocols.websocket_client.dialogues import WebsocketClientDialogue
+from packages.valory.protocols.websocket_client.dialogues import (
+    WebsocketClientDialogue,
+)
 from packages.valory.protocols.websocket_client.dialogues import (
     WebsocketClientDialogues as BaseWebsocketClientDialogues,
 )
 from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
-
 
 PUBLIC_ID = PublicId.from_str("valory/websocket_client:0.1.0")
 

@@ -35,7 +35,6 @@ from packages.valory.protocols.websocket_client.dialogues import (
     WebsocketClientDialogues as BaseWebsocketClientDialogues,
 )
 
-
 WebsocketClientDialogue = BaseWebsocketClientDialogue
 
 

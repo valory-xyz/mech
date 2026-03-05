@@ -40,7 +40,6 @@ from packages.valory.contracts.mech_marketplace.contract import (
     MechMarketplaceContract,
 )
 
-
 PUBLIC_ID = PublicId.from_str("valory/olas_mech:0.1.0")
 
 _logger = logging.getLogger(

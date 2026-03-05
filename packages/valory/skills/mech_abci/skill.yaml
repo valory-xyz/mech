@@ -6,30 +6,30 @@ description: The chained abci skill for the mech.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeihscyr3poal6eyk6jeywtbdq552piwpbh2uo5h7bepjqdeivgiyem
+  __init__.py: bafybeigawvaywwgbr4fhxir2fpwze3wp7pctvwtp5gpkjritknqoecxfz4
   behaviours.py: bafybeibnqxq3le55hn3s3wdlf7wwyzn5y3df4ta5d3ikdb53ypfbl5myjq
-  composition.py: bafybeihilg7anxqzpfyc6qnbnu6kzyuhrlkj6cu7wkvwezlq4fjj7mhjt4
-  dialogues.py: bafybeifhydd6xmstbh2jx5igj33upip5a3hhlcaxttfsc77heszqmru7ri
+  composition.py: bafybeiaogjfqujiqn225ury7j4oas4zhnch7gfrlt7gezx4a2xzg2pq3mm
+  dialogues.py: bafybeigph4dbt75rpfjoxp5zzplb4m5izwblbpt6qssnrvvl2joj6o5cke
   fsm_specification.yaml: bafybeibac4bsjjhmxljzptuus3xlkufsiaofgg77g7nq7qgeju7fa6lh3u
-  handlers.py: bafybeif7ovjznqyy5xo5rbttfwy6lqkowqwkbqiv7dnjclgzu7bd6t57ai
-  models.py: bafybeihw4bc7vx5ok2szkq5bekmxwxrrkukzqal672abvhlown6fbvapsq
+  handlers.py: bafybeihnzh6rkrsn6xvmio4c3borzothkj5u62qcbjnzr5gt6hcy6iudsu
+  models.py: bafybeid2dmqyfe4pinh6glewhas24zvjntc4z3rtrkp3ji7z2bkq5sudhu
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
-  tests/test_handlers.py: bafybeihkbnvbcdstqoe23yj3ryhudh6h6rifuxqyp3j76e7uxsjvdhrboq
+  tests/test_handlers.py: bafybeibly5hzonydal5c6t223ltot2ekpha4lmjqapklplaafg5es2pz6q
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeigyjwg6nfwmdkwzt7i56n4zv3oj6hii2mkkgstuaztyunscjifdee
+- valory/http_server:0.22.0:bafybeid4oqsfkqo36lryoecymjnq4whme3tgupqfq6m4l7lbr5r4yxtswu
 contracts: []
 protocols:
-- valory/http:1.0.0:bafybeia4tq7ycivm3dnekelrnlzdwb4qnrjdykk6gf5tizq6djr66adotm
+- valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeico2i67lk5wkgyvmu5ska7phbugxbfh4ofnm57vwpypis5zmpjnim
-- valory/registration_abci:0.1.0:bafybeiaur5o7xjf5jod2gzbhxa2m2l2m7z76rfs7gf2sfuf3ffjlqodaxy
-- valory/reset_pause_abci:0.1.0:bafybeibgbbt4yzd6amf2wuldrdvhyfqibjqx2uxhybqhrkumlp4jcfndia
-- valory/task_submission_abci:0.1.0:bafybeidzioyv3pwkz2fnvwqv7zrxshsmqv47ics62cud7rlzj7wucemzy4
-- valory/termination_abci:0.1.0:bafybeifjwbctocnxrtgyzn7z2ml2q6bxdxrd4sa7m5u43p7ts6hk6ujvce
-- valory/transaction_settlement_abci:0.1.0:bafybeidmg3beiqyubkze6wdiwhz4oqwvidhsjexjgcvso5bkrryqkbsgzu
-- valory/delivery_rate_abci:0.1.0:bafybeifzw4okhzax55zuuusggfcyz2z2ulrto4fww2l36julte5ks7e7kq
-- valory/task_execution:0.1.0:bafybeigvry3sqijrybqzq5ywn6yjgisoueysuvj42y5mtiejsx45xrjw4e
+- valory/abstract_round_abci:0.1.0:bafybeicehi2yqab3lldm7qzoqev3tmqrdk275sbtcabneyorhmzft76z7m
+- valory/registration_abci:0.1.0:bafybeihjgfzqvuymqgku6mwqih7hlvqwr2tmdjrip3m6unt5l4e55bshkm
+- valory/reset_pause_abci:0.1.0:bafybeih6bjalcohxytg6hj3doy5dhkxonrxpqgcnclyf6tnmuyfbom2usy
+- valory/task_submission_abci:0.1.0:bafybeic246jx7ih67zy3uzr2y6kjv6c77ejmo4qizam5k7yv5cwg4gnu4q
+- valory/termination_abci:0.1.0:bafybeiarjw4hhu2vf56yxqb4jh3kmk4hfxvqahygn6scc3rfnlogjkwwpe
+- valory/transaction_settlement_abci:0.1.0:bafybeigivknq755rbnelrdemaz3vm4x7jkofvaskm34uh36pbbg6uiquo4
+- valory/delivery_rate_abci:0.1.0:bafybeihapprjbkenbuqeyvqp55hgxt6s7ejqtno45a75rbt2asmk4gc2gy
+- valory/task_execution:0.1.0:bafybeibdjmdnmmtbzudux4li4xejurvytxtwantxncwdzwrkkr4gdwv4ba
 behaviours:
   main:
     args: {}
@@ -192,5 +192,5 @@ models:
     class_name: TendermintDialogues
 dependencies:
   open-aea-cli-ipfs:
-    version: ==2.0.8
+    version: ==2.1.0rc6
 is_abstract: false

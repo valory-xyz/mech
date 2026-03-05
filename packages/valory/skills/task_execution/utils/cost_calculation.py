@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,12 +17,12 @@
 #
 # ------------------------------------------------------------------------------
 """Calculate the cost for tools."""
+
 import logging
 import math
 from typing import Any, Dict, cast
 
 from packages.valory.skills.task_execution import PUBLIC_ID
-
 
 _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.utils.cost_calculation"

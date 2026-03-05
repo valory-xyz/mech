@@ -71,7 +71,6 @@ from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
 )
 
-
 ZERO_ETHER_VALUE = 0
 AUTO_GAS = SAFE_GAS = 0
 DONE_TASKS = "ready_tasks"
@@ -290,7 +289,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
 
     def handle_submitted_tasks(self) -> Generator[None, None, None]:
         """Handle tasks that have been already submitted before (in a prev. period)."""
-        (status, tx_hash) = self.check_last_tx_status()
+        status, tx_hash = self.check_last_tx_status()
         self.context.logger.info(f"Last tx status is: {status}")
         if status:
             submitted_tasks = cast(

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2025 Valory AG
+#   Copyright 2025-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -19,7 +19,6 @@
 
 """Test the handlers.py module of the mech_abci skill."""
 
-
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
@@ -29,7 +28,6 @@ import pytest
 
 from packages.valory.skills.mech_abci.handlers import HttpHandler, HttpMethod
 from packages.valory.skills.task_execution.handlers import MechHttpHandler
-
 
 PACKAGE_DIR = Path(__file__).parents[1]
 

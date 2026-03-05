@@ -44,7 +44,6 @@ from packages.valory.skills.task_execution.behaviours import (
     WAIT_FOR_TIMEOUT,
 )
 
-
 # ----------------------------- Shared state ----------------------------------
 
 

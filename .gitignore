@@ -3,6 +3,7 @@
 packages/fetchai/
 packages/open_aea/
 packages/valory/connections/abci/
+packages/valory/connections/http_client
 packages/valory/connections/http_server
 packages/valory/connections/ipfs/
 packages/valory/connections/ledger/

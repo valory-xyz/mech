@@ -21,7 +21,6 @@
 import logging
 from typing import Any, Callable, Dict, Optional, Union
 
-
 PRICE_NUM_TOKENS = 1000
 
 
