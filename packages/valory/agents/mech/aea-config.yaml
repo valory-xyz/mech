@@ -81,14 +81,78 @@ logging_config:
 dependencies:
   aiohttp:
     version: <4.0.0,>=3.8.5
+  asn1crypto:
+    version: <1.5.0,>=1.4.0
+  attrs:
+    version: ==25.4.0
+  certifi:
+    version: ==2026.2.25
+  ecdsa:
+    version: '>=0.15'
+  eth-abi:
+    version: ==5.2.0
+  eth-utils:
+    version: ==5.3.0
+  eth_typing:
+    version: ==5.2.1
+  grpcio:
+    version: ==1.78.0
+  hexbytes:
+    version: ==1.3.1
   hypothesis:
     version: ==6.151.9
+  ipfshttpclient:
+    version: ==0.8.0a2
+  multidict:
+    version: ==6.7.1
+  open-aea-cli-ipfs:
+    version: ==2.1.0rc6
+  open-aea-ledger-cosmos:
+    version: ==2.1.0rc6
   open-aea-ledger-ethereum:
     version: ==2.1.0rc6
-  typing_extensions:
-    version: <=4.15.0,>=3.10.0.2
+  open-aea-test-autonomy:
+    version: ==0.21.12rc4
+  openapi-core:
+    version: ==0.22.0
+  openapi-spec-validator:
+    version: <0.8.0,>=0.7.0
+  packaging:
+    version: ==26
   pebble:
     version: ==5.1.3
+  protobuf:
+    version: <6,>=5
+  py-ecc:
+    version: ==8.0.0
+  py-eth-sig-utils:
+    version: ==0.4.0
+  py-multibase:
+    version: ==1.0.3
+  py-multicodec:
+    version: ==0.2.1
+  pycryptodome:
+    version: ==3.20.0
+  pytest:
+    version: <10,>=8.2
+  pytest-asyncio:
+    version: ==1.3.0
+  pytz:
+    version: ==2022.2.1
+  PyYAML:
+    version: ==6.0.1
+  requests:
+    version: ==2.32.5
+  typing_extensions:
+    version: <=4.15.0,>=3.10.0.2
+  web3:
+    version: <8,>=7.0.0
+  websocket_client:
+    version: <1,>=0.32.0
+  werkzeug:
+    version: ==3.1.6
+  prometheus_client:
+    version: ==0.23.1
 customs: []
 default_connection: null
 ---
