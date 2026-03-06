@@ -131,7 +131,7 @@ dependencies:
   moviepy:
     version: ==1.0.3
   open-aea-ledger-ethereum:
-    version: ==2.0.8
+    version: ==2.1.0rc6
   pandas:
     version: ==2.2.2
   pypdf2:
