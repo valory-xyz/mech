@@ -109,7 +109,7 @@ dependencies:
   docstring-parser:
     version: ==0.15
   faiss-cpu:
-    version: ==1.7.4
+    version: ==1.13.2
   fastapi:
     version: ==0.110.3
   google-api-python-client:
@@ -117,15 +117,17 @@ dependencies:
   googlesearch-python:
     version: ==1.2.3
   hypothesis:
-    version: ==6.21.6
+    version: ==6.151.9
   langchain:
-    version: ==0.2.1
+    version: ==1.2.10
   langchain-core:
-    version: ==0.2.1
+    version: ==1.2.17
+  langchain-tavily:
+    version: ==0.2.17
   langgraph:
-    version: ==0.0.55
+    version: ==1.0.10
   lxml:
-    version: ==5.1.0
+    version: ==6.0.2
   markdownify:
     version: ==0.11.6
   moviepy:
@@ -133,7 +135,7 @@ dependencies:
   open-aea-ledger-ethereum:
     version: ==2.1.0rc6
   pandas:
-    version: ==2.2.2
+    version: ==2.3.3
   pypdf2:
     version: ==3.0.1
   python-dateutil:
@@ -142,18 +144,16 @@ dependencies:
     version: ==0.8.1
   replicate:
     version: ==0.15.7
-  scikit-learn:
-    version: ==1.3.1
   spacy:
-    version: ==3.7.2
+    version: ==3.8.11
   tavily-python:
     version: ==0.3.3
   tiktoken:
-    version: ==0.9.0
+    version: ==0.12.0
   typer:
     version: ==0.9.4
   google-generativeai:
-    version: ==0.6.0
+    version: ==0.8.6
   openfactverification-kongzii:
     version: ==0.1.0
   httpx:

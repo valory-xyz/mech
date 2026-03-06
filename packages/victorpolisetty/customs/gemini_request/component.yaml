@@ -13,5 +13,5 @@ entry_point: gemini_request.py
 callable: run
 dependencies:
   google-generativeai:
-    version: ==0.5.3
+    version: ==0.8.6
   requests: {}
