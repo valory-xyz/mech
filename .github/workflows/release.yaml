@@ -104,7 +104,7 @@ jobs:
     env:
       CMD: "propel -U ${{ vars.PROPEL_BASE_URL }}"
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-versions }}
@@ -161,7 +161,7 @@ jobs:
     env:
       CMD: "propel -U ${{ vars.PROPEL_BASE_URL }}"
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-versions }}
@@ -218,7 +218,7 @@ jobs:
     env:
       CMD: "propel -U ${{ vars.PROPEL_BASE_URL }}"
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
         with:
           python-version: ${{ matrix.python-versions }}
