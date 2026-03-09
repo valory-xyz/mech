@@ -164,7 +164,6 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 | packages/nickcom007/customs/prediction_request_sme |
 | packages/nickcom007/customs/sme_generation_request |
 | packages/polywrap/customs/prediction_with_research_report |
-| packages/psouranis/customs/optimization_by_prompting |
 | packages/valory/customs/native_transfer_request |
 | packages/valory/customs/openai_request |
 | packages/valory/customs/prediction_request |
