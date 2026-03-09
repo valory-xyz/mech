@@ -252,7 +252,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         TaskPoolingRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
-        FinishedTaskPoolingRound: {"most_voted_tx_hash", "final_tx_hash"},
+        FinishedTaskPoolingRound: {"most_voted_tx_hash"},
         FinishedTaskExecutionWithErrorRound: set(),
         FinishedWithoutTasksRound: set(),
     }
