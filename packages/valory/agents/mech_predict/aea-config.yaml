@@ -67,6 +67,7 @@ customs:
 - valory/tee_openai_request:0.1.0:bafybeiao3m6mngg6637jl52ibjqvpuno7li7ragaeddccly5lkfsbsyqfu
 - dvilela/corcel_request:0.1.0:bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy
 - dvilela/gemini_prediction:0.1.0:bafybeifd5rfdp73qwibjcmgf732yryefa7aukse3ql3iunty3ho5ojuhnu
+- nickcom007/prediction_request_sme:0.1.0:bafybeihvntrd2hgni2kgo36qst3mmqtozkc2kbtkzdzbjqg42s66cnbwve
 default_ledger: ethereum
 required_ledgers:
 - ethereum
