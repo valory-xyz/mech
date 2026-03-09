@@ -31,7 +31,7 @@ DEFAULT_GEMINI_SETTINGS = {
 }
 PREFIX = "gemini-"
 ENGINES = {
-    "chat": ["pro", "1.0-pro-001", "1.0-pro-latest", "1.5-pro-latest"],
+    "chat": ["2.0-flash", "2.0-flash-lite"],
 }
 
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["chat"]]
