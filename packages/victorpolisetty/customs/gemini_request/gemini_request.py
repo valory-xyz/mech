@@ -37,11 +37,6 @@ ENGINES = {
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["chat"]]
 
 
-def count_tokens(text: str) -> int:
-    """Count the number of tokens in a text using the Gemini model's tokenizer."""
-    return genai.count_message_tokens(prompt=text)
-
-
 def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
     """Run the task"""
 
