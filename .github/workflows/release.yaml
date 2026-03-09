@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
         with:
-          python-version: ${{ matrix.python-versions }}
+          python-version: ${{ matrix.python-version }}
       - uses: maus007/docker-run-action-fork@v1
         with:
             image: valory/open-autonomy-user:0.21.4
@@ -107,7 +107,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
         with:
-          python-version: ${{ matrix.python-versions }}
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           sudo apt-get update --fix-missing
@@ -159,7 +159,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
         with:
-          python-version: ${{ matrix.python-versions }}
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           sudo apt-get update --fix-missing
