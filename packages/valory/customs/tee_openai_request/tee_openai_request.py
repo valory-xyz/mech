@@ -140,7 +140,7 @@ def run(
     params = {"openaiApiKey": api_key, "chatQuery": prompt, "openAiModel": engine}
 
     # Request to agent contract in TEE
-    response = requests.get(AGENT_URL, params=params)
+    response = requests.get(AGENT_URL, params=params, timeout=60)
 
     if response.status_code == 200:
         json_response = response.json()

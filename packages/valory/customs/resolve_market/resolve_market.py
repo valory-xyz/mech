@@ -251,9 +251,9 @@ class CloseMarketBehaviourMock:
     ) -> requests.Response:
         """Make an HTTP request and yield the response."""
         if method == "GET":
-            response = requests.get(url, headers=headers, params=parameters)
+            response = requests.get(url, headers=headers, params=parameters, timeout=60)
         elif method == "POST":
-            response = requests.post(url, headers=headers, json=parameters)
+            response = requests.post(url, headers=headers, json=parameters, timeout=60)
         else:
             raise ValueError(f"Unsupported HTTP method: {method}")
 

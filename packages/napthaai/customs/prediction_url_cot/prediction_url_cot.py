@@ -504,8 +504,8 @@ def get_urls_from_queries(
                 num=num,
             ):
                 results.append(url)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error searching for query {query!r}: {e}")
     unique_results = list(set(results))
     return unique_results
 
