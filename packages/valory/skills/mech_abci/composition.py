@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of MechAbciApp."""
+"""This package contains the FSM composition for MechAbciApp."""
 
 import packages.valory.skills.delivery_rate_abci.rounds as DeliveryRateUpdateAbciApp
 import packages.valory.skills.registration_abci.rounds as RegistrationAbci
