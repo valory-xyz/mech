@@ -20,6 +20,7 @@
 """A mech tool that integrates langchain and langgraph."""
 
 import functools
+import json
 import operator
 import os
 from typing import (
@@ -27,6 +28,7 @@ from typing import (
     Any,
     Callable,
     Dict,
+    List,
     Literal,
     Optional,
     Sequence,
@@ -37,12 +39,15 @@ from typing import (
 import anthropic
 import openai
 from googleapiclient.errors import HttpError as GoogleAPIHttpError
-from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_core.callbacks import CallbackManagerForLLMRun
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, ToolMessage
+from langchain_core.outputs import ChatGeneration, ChatResult
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_openai import ChatOpenAI
-from langgraph.graph import END, StateGraph
+from langchain_tavily import TavilySearch
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
+from openai import OpenAI
 from typing_extensions import TypedDict
 
 
@@ -51,6 +56,100 @@ MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
 
 MODEL = "gpt-4-1106-preview"
+
+
+class OpenAIChatModel(BaseChatModel):
+    """Minimal OpenAI chat model wrapper compatible with langchain's Runnable interface."""
+
+    model_name: str = MODEL
+    temperature: float = 0.1
+
+    @property
+    def _llm_type(self) -> str:
+        return "openai-compat"
+
+    def _generate(
+        self,
+        messages: List[BaseMessage],
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[CallbackManagerForLLMRun] = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        oai_client = OpenAI()
+
+        oai_messages: List[Dict[str, Any]] = []
+        for m in messages:
+            if isinstance(m, ToolMessage):
+                oai_messages.append(
+                    {
+                        "role": "tool",
+                        "content": m.content
+                        if isinstance(m.content, str)
+                        else str(m.content),
+                        "tool_call_id": m.tool_call_id,
+                    }
+                )
+                continue
+
+            if isinstance(m, AIMessage):
+                role = "assistant"
+            elif isinstance(m, HumanMessage):
+                role = "user"
+            else:
+                role = "system"
+
+            content = m.content
+            if isinstance(content, list):
+                content = " ".join(
+                    block.get("text", "") if isinstance(block, dict) else str(block)
+                    for block in content
+                )
+
+            msg_dict: Dict[str, Any] = {"role": role, "content": content}
+            if isinstance(m, AIMessage) and m.tool_calls:
+                msg_dict["tool_calls"] = [
+                    {
+                        "id": tc["id"],
+                        "type": "function",
+                        "function": {
+                            "name": tc["name"],
+                            "arguments": json.dumps(tc["args"]),
+                        },
+                    }
+                    for tc in m.tool_calls
+                ]
+            oai_messages.append(msg_dict)
+
+        oai_kwargs: Dict[str, Any] = {
+            "model": self.model_name,
+            "messages": oai_messages,
+            "temperature": self.temperature,
+        }
+        if stop:
+            oai_kwargs["stop"] = stop
+        if "tools" in kwargs:
+            oai_kwargs["tools"] = kwargs["tools"]
+
+        response = oai_client.chat.completions.create(**oai_kwargs)
+        choice = response.choices[0].message
+
+        tool_calls = []
+        if choice.tool_calls:
+            for tc in choice.tool_calls:
+                tool_calls.append(
+                    {
+                        "name": tc.function.name,
+                        "args": json.loads(tc.function.arguments),
+                        "id": tc.id,
+                    }
+                )
+
+        ai_msg = AIMessage(
+            content=choice.content or "",
+            tool_calls=tool_calls,
+        )
+
+        return ChatResult(generations=[ChatGeneration(message=ai_msg)])
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -154,7 +253,7 @@ def create_agent(tools: Any, system_message: str) -> Any:
     )
     prompt = prompt.partial(system_message=system_message)
     prompt = prompt.partial(tool_names=", ".join([tool.name for tool in tools]))
-    llm = ChatOpenAI(model=MODEL, temperature=0.1)
+    llm = OpenAIChatModel(model_name=MODEL, temperature=0.1)
     return prompt | llm.bind_tools(tools)
 
 
@@ -175,7 +274,7 @@ def agent_node(state: Any, agent: Any, name: Any) -> Any:
     if isinstance(result, ToolMessage):
         pass
     else:
-        result = AIMessage(**result.dict(exclude={"type", "name"}), name=name)
+        result = AIMessage(**result.model_dump(exclude={"type", "name"}), name=name)
     return {
         "messages": [result],
         # Since we have a strict workflow, we can
@@ -192,7 +291,13 @@ def router(state: Any) -> Literal["call_tool", "__end__", "continue"]:
     if last_message.tool_calls:
         # The previous agent is invoking a tool
         return "call_tool"
-    if "FINAL ANSWER" in last_message.content:
+    content = last_message.content
+    if isinstance(content, list):
+        content = " ".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        )
+    if "FINAL ANSWER" in content:
         # Any agent decided the work is done
         return "__end__"
     return "continue"
@@ -201,7 +306,7 @@ def router(state: Any) -> Literal["call_tool", "__end__", "continue"]:
 def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
     """Run langgraph"""
 
-    tavily_tool = TavilySearchResults(max_results=5)
+    tavily_tool = TavilySearch(max_results=5)
 
     # Create research agent and node
     research_agent = create_agent(
@@ -223,7 +328,7 @@ def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
 
     # Tools
     tools = [tavily_tool]
-    tool_node = ToolNode(tools)
+    tool_node = ToolNode(tools, handle_tool_errors=True)
 
     # Either agent can decide to end
     workflow = StateGraph(AgentState)
@@ -255,7 +360,7 @@ def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
             "data_analyzer": "data_analyzer",
         },
     )
-    workflow.set_entry_point("researcher")
+    workflow.add_edge(START, "researcher")
     graph = workflow.compile()
 
     prompt = (
@@ -279,8 +384,14 @@ def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
     last_event = event_list[-1]
     last_sender = list(last_event.keys())[0]
     last_message = last_event[last_sender]["messages"][-1]
+    content = last_message.content
+    if isinstance(content, list):
+        content = " ".join(
+            block.get("text", "") if isinstance(block, dict) else str(block)
+            for block in content
+        )
     response = (
-        last_message.content.replace("FINAL ANSWER:", "")
+        content.replace("FINAL ANSWER:", "")
         .replace("FINAL ANSWER", "")
         .strip()
     )
