@@ -828,7 +828,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _restart_executor(self) -> None:
         """Restarts the executor."""
         self._executor.stop()
-        self._executor.join()
+        self._executor.join(timeout=10.0)
         # create a new executor
         self._executor = ProcessPool(max_workers=1)
 

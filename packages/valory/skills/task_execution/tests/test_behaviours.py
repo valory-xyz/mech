@@ -1119,3 +1119,20 @@ def test_non_ipfs_failure_uses_generic_invalid_response(
     # Without _ipfs_error_reason set, falls back to "Invalid response"
     assert payload["result"] == "Invalid response"
     _assert_clean_state(behaviour)
+
+
+def test_restart_executor_calls_join_with_timeout(
+    behaviour: Any,
+    monkeypatch: Any,
+) -> None:
+    """Verify _restart_executor passes timeout=10.0 to join() (H-2 fix)."""
+    mock_pool = MagicMock()
+    monkeypatch.setattr(behaviour, "_executor", mock_pool)
+
+    # Patch ProcessPool so the new executor creation succeeds
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+
+    behaviour._restart_executor()
+
+    mock_pool.stop.assert_called_once()
+    mock_pool.join.assert_called_once_with(timeout=10.0)
