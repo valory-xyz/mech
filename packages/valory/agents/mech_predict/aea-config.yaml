@@ -59,7 +59,7 @@ customs:
 - napthaai/prediction_request_reasoning:0.1.0:bafybeia25at4jgny4r6z474d6ybpcghms2prn3qh2gvtgrom2szsdsodva
 - valory/prepare_tx:0.1.0:bafybeihnm3n7r6ywzlmxa6j5s67gtayu5qynparmsivq5aifftxduicf24
 - napthaai/prediction_url_cot:0.1.0:bafybeibxu24huuomban3kkvupvj6zrblpea3mjdnlp3vsxig4kc7xirlk4
-- valory/prediction_langchain:0.1.0:bafybeigvmefq6ctbmgxhtdmwbosuwvlqhd4gdzjkbs6bjqe2v334qspciy
+- valory/prediction_langchain:0.1.0:bafybeibs2i4ypvllzjrpghzaghvqjc4fvixv2lrsl6eoas3a2twqc6meqa
 - victorpolisetty/gemini_request:0.1.0:bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy
 - victorpolisetty/dalle_request:0.1.0:bafybeignggkudqjzae6nbxvx6o5m6ekqrbkkdkj6dnlax6d2z5xrgobgyy
 - jhehemann/prediction_sentence_embeddings:0.1.0:bafybeihy3xyrfxcucwkcuoo3b6gdtpi7rnvax2yj2qhyhyuygtq4lsdscy
