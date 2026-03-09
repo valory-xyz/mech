@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeicgnyqp374atbkpfjxcv6ydw2wnrn7bnwi7sxyczjqgmpb27xabvm
-  gemini_request.py: bafybeif3eemu26edbdcsq5nhjijpybz7m7dh2jvkabyujbc55pn4d2xt2m
+  gemini_request.py: bafybeiam26iddoj2j5yqd7eaazub5mzbp6zpmm4mv66lp3qkijcwyjhgke
 fingerprint_ignore_patterns: []
 entry_point: gemini_request.py
 callable: run

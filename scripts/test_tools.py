@@ -52,7 +52,6 @@ from packages.valory.customs.superforcaster.superforcaster import (
 )
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 
-
 load_dotenv(override=True)
 
 TOOLS_TO_RUN_FUNCTION = {

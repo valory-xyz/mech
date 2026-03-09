@@ -27,7 +27,6 @@ from dotenv import load_dotenv  # type: ignore
 from packages.valory.customs.prediction_request.prediction_request import run
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 
-
 load_dotenv(override=True)
 
 

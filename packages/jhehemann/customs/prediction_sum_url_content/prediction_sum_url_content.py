@@ -47,7 +47,6 @@ from spacy.tokens import Doc
 from tiktoken import encoding_for_model
 from tqdm import tqdm
 
-
 client: Optional[OpenAI] = None
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]

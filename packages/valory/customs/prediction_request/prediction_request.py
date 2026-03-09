@@ -47,7 +47,6 @@ from spacy.lang.en import STOP_WORDS
 from spacy.tokens import Doc, Span
 from tiktoken import encoding_for_model, get_encoding
 
-
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 MaxCostResponse = float

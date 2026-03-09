@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024-2025 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@
 This module tries to mimic the current logic on the market-creator service
 (https://github.com/valory-xyz/market-creator) for resolving closed markets.
 """
+
 import functools
 import json
 import logging
@@ -34,7 +35,6 @@ import googleapiclient
 import openai
 import requests
 from openai import OpenAI
-
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]

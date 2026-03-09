@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024-2025 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -50,7 +50,6 @@ from langgraph.prebuilt import ToolNode
 from openai import OpenAI
 from typing_extensions import TypedDict
 
-
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
@@ -83,9 +82,9 @@ class OpenAIChatModel(BaseChatModel):
                 oai_messages.append(
                     {
                         "role": "tool",
-                        "content": m.content
-                        if isinstance(m.content, str)
-                        else str(m.content),
+                        "content": (
+                            m.content if isinstance(m.content, str) else str(m.content)
+                        ),
                         "tool_call_id": m.tool_call_id,
                     }
                 )
@@ -390,11 +389,7 @@ def run_langgraph(topic: str, timeframe: str, question: str) -> Tuple[str, str]:
             block.get("text", "") if isinstance(block, dict) else str(block)
             for block in content
         )
-    response = (
-        content.replace("FINAL ANSWER:", "")
-        .replace("FINAL ANSWER", "")
-        .strip()
-    )
+    response = content.replace("FINAL ANSWER:", "").replace("FINAL ANSWER", "").strip()
 
     return response, prompt
 

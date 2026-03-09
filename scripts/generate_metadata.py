@@ -17,6 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 """The script allows the user to generate the metadata of the tools"""
+
 import importlib.util
 import json
 import sys
@@ -25,7 +26,6 @@ from types import ModuleType
 from typing import Any, Dict, List
 
 import yaml
-
 
 ROOT_DIR = "./packages"
 CUSTOMS = "customs"

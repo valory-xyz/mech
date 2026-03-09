@@ -25,7 +25,6 @@ from typing import Any, Callable, Dict, Optional, Tuple, Union
 import google.generativeai as genai
 from google.api_core.exceptions import GoogleAPIError
 
-
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
