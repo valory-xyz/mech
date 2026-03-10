@@ -1,4 +1,28 @@
-[coverage:run]
+[run]
 omit =
     */tests/*
-    */test_*.py
+    */test_*
+    */__pycache__/*
+    */.*/*
+    */venv/*
+    */.tox/*
+    */build/*
+    */dist/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    pragma: nocover
+    def __repr__
+    if self.debug:
+    if settings.DEBUG
+    raise AssertionError
+    raise NotImplementedError
+    if 0:
+    if __name__ == .__main__.:
+    class .*\bProtocol\):
+    @(abc\.)?abstractmethod
+    def __hash__
+
+[html]
+directory = coverage_html
