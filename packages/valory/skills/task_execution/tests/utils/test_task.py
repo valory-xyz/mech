@@ -22,7 +22,6 @@ import pytest
 
 from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
-
 SIMPLE_TOOL = """\
 def run(*args, **kwargs):
     return list(args), kwargs
@@ -47,7 +46,7 @@ SYNTAX_ERROR_TOOL = "def bad(: pass"
 class TestAnyToolAsTask:
     """Tests for AnyToolAsTask.execute."""
 
-    def test_execute_simple_function_with_args_and_kwargs(self):
+    def test_execute_simple_function_with_args_and_kwargs(self) -> None:
         """Positional args and kwargs are forwarded to the callable."""
         task = AnyToolAsTask()
         args_out, kwargs_out = task.execute(
@@ -56,43 +55,45 @@ class TestAnyToolAsTask:
         assert args_out == [1, 2]
         assert kwargs_out == {"extra": "val"}
 
-    def test_execute_returns_method_result(self):
+    def test_execute_returns_method_result(self) -> None:
         """Return value from the executed method is returned correctly."""
         task = AnyToolAsTask()
-        result = task.execute(tool_py=RETURN_VALUE_TOOL, callable_method="compute", x=3, y=4)
+        result = task.execute(
+            tool_py=RETURN_VALUE_TOOL, callable_method="compute", x=3, y=4
+        )
         assert result == 7
 
-    def test_execute_class_based_callable(self):
+    def test_execute_class_based_callable(self) -> None:
         """Callable defined via a class instance in the tool code."""
         task = AnyToolAsTask()
         result = task.execute(tool_py=CLASS_BASED_TOOL, callable_method="run")
         assert result == "class-result"
 
-    def test_missing_tool_py_raises_key_error(self):
-        """KeyError when tool_py kwarg is absent."""
+    def test_missing_tool_py_raises_key_error(self) -> None:
+        """Raise KeyError when tool_py kwarg is absent."""
         task = AnyToolAsTask()
         with pytest.raises(KeyError):
             task.execute(callable_method="run")
 
-    def test_missing_callable_method_raises_key_error(self):
-        """KeyError when callable_method kwarg is absent."""
+    def test_missing_callable_method_raises_key_error(self) -> None:
+        """Raise KeyError when callable_method kwarg is absent."""
         task = AnyToolAsTask()
         with pytest.raises(KeyError):
             task.execute(tool_py=SIMPLE_TOOL)
 
-    def test_undefined_method_in_code_raises_key_error(self):
-        """KeyError when the named method is not defined by the tool code."""
+    def test_undefined_method_in_code_raises_key_error(self) -> None:
+        """Raise KeyError when the named method is not defined by the tool code."""
         task = AnyToolAsTask()
         with pytest.raises(KeyError):
             task.execute(tool_py=SIMPLE_TOOL, callable_method="nonexistent")
 
-    def test_syntax_error_in_tool_code_propagates(self):
-        """SyntaxError in tool_py propagates out of execute."""
+    def test_syntax_error_in_tool_code_propagates(self) -> None:
+        """Raise SyntaxError in tool_py propagates out of execute."""
         task = AnyToolAsTask()
         with pytest.raises(SyntaxError):
             task.execute(tool_py=SYNTAX_ERROR_TOOL, callable_method="bad")
 
-    def test_tool_py_and_callable_method_are_popped(self):
+    def test_tool_py_and_callable_method_are_popped(self) -> None:
         """tool_py and callable_method are not forwarded as kwargs to the method."""
         tool_py = """\
 def spy(**kwargs):

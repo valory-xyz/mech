@@ -22,24 +22,27 @@
 from typing import Any
 from unittest.mock import MagicMock, patch
 
+import packages.valory.skills.task_execution.dialogues as dmod
 from packages.valory.protocols.acn_data_share.dialogues import (
     AcnDataShareDialogue as BaseAcnDataShareDialogue,
+)
+from packages.valory.protocols.acn_data_share.dialogues import (
     AcnDataShareDialogues as BaseAcnDataShareDialogues,
 )
 from packages.valory.protocols.contract_api.dialogues import (
     ContractApiDialogue as BaseContractApiDialogue,
+)
+from packages.valory.protocols.contract_api.dialogues import (
     ContractApiDialogues as BaseContractApiDialogues,
 )
-from packages.valory.protocols.ipfs.dialogues import (
-    IpfsDialogue as BaseIpfsDialogue,
-    IpfsDialogues as BaseIpfsDialogues,
-)
+from packages.valory.protocols.ipfs.dialogues import IpfsDialogue as BaseIpfsDialogue
+from packages.valory.protocols.ipfs.dialogues import IpfsDialogues as BaseIpfsDialogues
 from packages.valory.protocols.ledger_api.dialogues import (
     LedgerApiDialogue as BaseLedgerApiDialogue,
+)
+from packages.valory.protocols.ledger_api.dialogues import (
     LedgerApiDialogues as BaseLedgerApiDialogues,
 )
-
-import packages.valory.skills.task_execution.dialogues as dmod
 
 
 def _get_self_addr(dialogues_obj: Any) -> str:
@@ -108,15 +111,23 @@ def test_acn_data_share_dialogues_uses_agent_address_for_self_address(
 # ---------------------------------------------------------------------------
 
 
-def _capture_role_fn(cls, base_cls, ctx):
+def _capture_role_fn(cls: Any, base_cls: Any, ctx: Any) -> Any:
     """Create instance, capturing the role_from_first_message closure via patched base init."""
-    captured = {}
+    captured: dict = {}
 
-    def capture_base_init(self_, self_address=None, role_from_first_message=None, **kw):
+    def capture_base_init(
+        self_: Any,
+        self_address: Any = None,
+        role_from_first_message: Any = None,
+        **kw: Any
+    ) -> None:
         captured["fn"] = role_from_first_message
 
     with (
-        patch("packages.valory.skills.task_execution.dialogues.Model.__init__", return_value=None),
+        patch(
+            "packages.valory.skills.task_execution.dialogues.Model.__init__",
+            return_value=None,
+        ),
         patch.object(base_cls, "__init__", side_effect=capture_base_init),
     ):
         obj = cls.__new__(cls)
@@ -139,7 +150,9 @@ def test_contract_dialogues_role_from_first_message_returns_agent(
     dialogue_skill_context: Any,
 ) -> None:
     """The ContractDialogues closure should return ContractApiDialogue.Role.AGENT."""
-    fn = _capture_role_fn(dmod.ContractDialogues, BaseContractApiDialogues, dialogue_skill_context)
+    fn = _capture_role_fn(
+        dmod.ContractDialogues, BaseContractApiDialogues, dialogue_skill_context
+    )
     role = fn(MagicMock(), "some-address")
     assert role == BaseContractApiDialogue.Role.AGENT
 
@@ -148,7 +161,9 @@ def test_ledger_dialogues_role_from_first_message_returns_agent(
     dialogue_skill_context: Any,
 ) -> None:
     """The LedgerDialogues closure should return LedgerDialogue.Role.AGENT."""
-    fn = _capture_role_fn(dmod.LedgerDialogues, BaseLedgerApiDialogues, dialogue_skill_context)
+    fn = _capture_role_fn(
+        dmod.LedgerDialogues, BaseLedgerApiDialogues, dialogue_skill_context
+    )
     role = fn(MagicMock(), "some-address")
     assert role == BaseLedgerApiDialogue.Role.AGENT
 
@@ -157,6 +172,8 @@ def test_acn_data_share_dialogues_role_from_first_message_returns_agent(
     dialogue_skill_context: Any,
 ) -> None:
     """The AcnDataShareDialogues closure should return AcnDataShareDialogue.Role.AGENT."""
-    fn = _capture_role_fn(dmod.AcnDataShareDialogues, BaseAcnDataShareDialogues, dialogue_skill_context)
+    fn = _capture_role_fn(
+        dmod.AcnDataShareDialogues, BaseAcnDataShareDialogues, dialogue_skill_context
+    )
     role = fn(MagicMock(), "some-address")
     assert role == BaseAcnDataShareDialogue.Role.AGENT

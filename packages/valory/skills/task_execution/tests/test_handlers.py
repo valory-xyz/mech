@@ -1024,7 +1024,7 @@ def test_contract_handler_handles_wait_for_timeout_tasks_properly_from_contract(
 
 
 def test_base_handler_teardown(handler_context: Any) -> None:
-    """teardown logs without error."""
+    """Teardown logs without error."""
     h: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
     h.setup()
     h.teardown()  # line 179
@@ -1041,7 +1041,9 @@ def test_acn_handler_handle(handler_context: Any) -> None:
 
 def test_contract_handler_step_in_list_size(handler_context: Any) -> None:
     """step_in_list_size property returns params.step_in_list_size."""
-    ch: ContractHandler = ContractHandler(name="contract", skill_context=handler_context)
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
     ch.setup()
     assert ch.step_in_list_size == handler_context.params.step_in_list_size  # line 317
 
@@ -1060,7 +1062,9 @@ def test_contract_handler_mech_type_and_mech_types_body_keys(
         "mech_type": "token",
         "mech_types": {"token": "0xBT"},
     }
-    ch: ContractHandler = ContractHandler(name="contract", skill_context=handler_context)
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
     ch.setup()
 
     msg: SimpleNamespace = SimpleNamespace(
@@ -1070,7 +1074,9 @@ def test_contract_handler_mech_type_and_mech_types_body_keys(
     ch.handle(msg)
 
     assert handler_context.shared_state[hmod.PAYMENT_MODEL] == "token"  # lines 348-349
-    assert handler_context.shared_state[hmod.PAYMENT_INFO] == {"token": "0xBT"}  # lines 354-355
+    assert handler_context.shared_state[hmod.PAYMENT_INFO] == {
+        "token": "0xBT"
+    }  # lines 354-355
 
 
 def test_contract_handler_handle_get_undelivered_reqs_empty(
@@ -1080,10 +1086,14 @@ def test_contract_handler_handle_get_undelivered_reqs_empty(
     params: Any = handler_context.params
     params.req_type = "legacy"
 
-    ch: ContractHandler = ContractHandler(name="contract", skill_context=handler_context)
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
     ch.setup()
     # Call directly to bypass the outer `if body.get("data") or ...` guard
-    ch._handle_get_undelivered_reqs({"data": [], "wait_for_timeout_tasks": []})  # lines 390-391
+    ch._handle_get_undelivered_reqs(
+        {"data": [], "wait_for_timeout_tasks": []}
+    )  # lines 390-391
 
     assert len(ch.pending_tasks) == 0
 
@@ -1100,7 +1110,9 @@ def test_contract_handler_wait_for_timeout_status(
     my_mech: str = params.agent_mech_contract_addresses[0]
     params.mech_to_max_delivery_rate = {my_mech.lower(): 5}
 
-    ch: ContractHandler = ContractHandler(name="contract", skill_context=handler_context)
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
     ch.setup()
 
     body: Dict[str, Any] = {
@@ -1124,7 +1136,9 @@ def test_contract_handler_wait_for_timeout_status(
     )
     ch.handle(msg)
 
-    assert len(ch.wait_for_timeout_tasks) == 1  # lines 298-302 (property) + 455-460 (branch)
+    assert (
+        len(ch.wait_for_timeout_tasks) == 1
+    )  # lines 298-302 (property) + 455-460 (branch)
 
 
 def test_start_prometheus_server_calls_start_http_server(
@@ -1134,7 +1148,9 @@ def test_start_prometheus_server_calls_start_http_server(
     import packages.valory.skills.task_execution.handlers as hmod
 
     called: Dict[str, Any] = {}
-    monkeypatch.setattr(hmod, "start_http_server", lambda port: called.__setitem__("port", port))
+    monkeypatch.setattr(
+        hmod, "start_http_server", lambda port: called.__setitem__("port", port)
+    )
 
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     mh.start_prometheus_server()  # lines 552-553
@@ -1165,7 +1181,9 @@ def test_make_unavailable_balance_response_static(
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
-    result: Dict[str, Any] = mh._make_unavailable_balance_response(500, "test reason")  # line 809
+    result: Dict[str, Any] = mh._make_unavailable_balance_response(
+        500, "test reason"
+    )  # line 809
 
     assert result["status"] == "unavailable"
     assert result["required_amount"] == 500
@@ -1199,7 +1217,9 @@ def test_get_mech_payment_type(handler_context: Any, monkeypatch: Any) -> None:
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
 
-    with patch.object(hmod.OlasMechContract, "get_mech_type", return_value={"mech_type": "token"}):
+    with patch.object(
+        hmod.OlasMechContract, "get_mech_type", return_value={"mech_type": "token"}
+    ):
         result = mh._get_mech_payment_type(MagicMock(), "0xMECH")  # lines 894-895
 
     assert result == "token"
@@ -1263,10 +1283,14 @@ def test_check_offchain_requester_balance_non_ok_ledger(
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
     monkeypatch.setattr(
-        mh, "_get_ledger_settings", lambda: {"status": "unavailable", "reason": "no rpc"}
+        mh,
+        "_get_ledger_settings",
+        lambda: {"status": "unavailable", "reason": "no rpc"},
     )
 
-    result: Dict[str, Any] = mh._check_offchain_requester_balance("0xSENDER", 100)  # lines 822-827
+    result: Dict[str, Any] = mh._check_offchain_requester_balance(
+        "0xSENDER", 100
+    )  # lines 822-827
 
     assert result["status"] == "unavailable"
     assert result["required_amount"] == 100
@@ -1295,7 +1319,9 @@ def test_check_offchain_requester_balance_payment_type_none(
     fake_api.api.to_checksum_address = lambda x: x
 
     with patch.object(hmod, "EthereumApi", return_value=fake_api):
-        result: Dict[str, Any] = mh._check_offchain_requester_balance("0xSENDER", 100)  # lines 844-847
+        result: Dict[str, Any] = mh._check_offchain_requester_balance(
+            "0xSENDER", 100
+        )  # lines 844-847
 
     assert result["status"] == "unavailable"
     assert "payment type" in result["reason"]
@@ -1328,7 +1354,9 @@ def test_check_offchain_requester_balance_no_balance_tracker(
     fake_api.api.to_checksum_address = lambda x: x
 
     with patch.object(hmod, "EthereumApi", return_value=fake_api):
-        result: Dict[str, Any] = mh._check_offchain_requester_balance("0xSENDER", 100)  # lines 856-860
+        result: Dict[str, Any] = mh._check_offchain_requester_balance(
+            "0xSENDER", 100
+        )  # lines 856-860
 
     assert result["status"] == "unavailable"
     assert "balance tracker" in result["reason"]
@@ -1362,7 +1390,9 @@ def test_check_offchain_requester_balance_success(
     fake_api.api.to_checksum_address = lambda x: x
 
     with patch.object(hmod, "EthereumApi", return_value=fake_api):
-        result: Dict[str, Any] = mh._check_offchain_requester_balance("0xSENDER", 100)  # lines 830-879
+        result: Dict[str, Any] = mh._check_offchain_requester_balance(
+            "0xSENDER", 100
+        )  # lines 830-879
 
     assert result["status"] == "ok"
     assert result["available_amount"] == 500

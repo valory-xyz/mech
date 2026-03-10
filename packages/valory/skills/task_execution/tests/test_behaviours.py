@@ -1170,9 +1170,7 @@ def test_mech_metrics_observe_histogram_without_labels(behaviour: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_payment_model_property(
-    behaviour: Any, shared_state: Dict[str, Any]
-) -> None:
+def test_payment_model_property(behaviour: Any, shared_state: Dict[str, Any]) -> None:
     """payment_model returns the value stored in shared_state."""
     shared_state[beh_mod.PAYMENT_MODEL] = "fixed"
     assert behaviour.payment_model == "fixed"
@@ -1191,9 +1189,7 @@ def test_payment_info_property_default(behaviour: Any) -> None:
     assert behaviour.payment_info == {}
 
 
-def test_request_id_to_num_timeouts_property(
-    behaviour: Any, params_stub: Any
-) -> None:
+def test_request_id_to_num_timeouts_property(behaviour: Any, params_stub: Any) -> None:
     """request_id_to_num_timeouts returns params.request_id_to_num_timeouts."""
     params_stub.request_id_to_num_timeouts[99] = 3
     assert behaviour.request_id_to_num_timeouts[99] == 3
@@ -1233,9 +1229,7 @@ def test_unprocessed_timed_out_tasks_setter(
 # ---------------------------------------------------------------------------
 
 
-def test_ensure_payment_model_non_marketplace(
-    behaviour: Any, params_stub: Any
-) -> None:
+def test_ensure_payment_model_non_marketplace(behaviour: Any, params_stub: Any) -> None:
     """_ensure_payment_model returns True immediately when not a marketplace."""
     params_stub.use_mech_marketplace = False
     assert behaviour._ensure_payment_model() is True
@@ -1294,9 +1288,7 @@ def test_should_poll_no_previous_poll(behaviour: Any, params_stub: Any) -> None:
     assert behaviour._should_poll("legacy") is True
 
 
-def test_should_poll_stale(
-    behaviour: Any, params_stub: Any, monkeypatch: Any
-) -> None:
+def test_should_poll_stale(behaviour: Any, params_stub: Any, monkeypatch: Any) -> None:
     """_should_poll returns True when polling interval has elapsed."""
     params_stub.req_params.last_polling = {"legacy": 1000.0}
     params_stub.polling_interval = 30.0
@@ -1304,9 +1296,7 @@ def test_should_poll_stale(
     assert behaviour._should_poll("legacy") is True
 
 
-def test_should_poll_fresh(
-    behaviour: Any, params_stub: Any, monkeypatch: Any
-) -> None:
+def test_should_poll_fresh(behaviour: Any, params_stub: Any, monkeypatch: Any) -> None:
     """_should_poll returns False when polling interval has not elapsed."""
     params_stub.req_params.last_polling = {"legacy": 1000.0}
     params_stub.polling_interval = 30.0
@@ -1542,9 +1532,7 @@ def test_execute_task_bytes_request_id_converted(
 # ---------------------------------------------------------------------------
 
 
-def test_update_pending_tasks_non_marketplace(
-    behaviour: Any, params_stub: Any
-) -> None:
+def test_update_pending_tasks_non_marketplace(behaviour: Any, params_stub: Any) -> None:
     """_update_pending_tasks returns early when not marketplace."""
     params_stub.use_mech_marketplace = False
     behaviour._update_pending_tasks()  # should not raise
@@ -1578,8 +1566,13 @@ def test_send_message_registers_callback_and_deadline(
     params_stub.is_cold_start = True
     monkeypatch.setattr(time, "time", lambda: 1000.0)
     mock_msg = MagicMock()
-    cb = lambda msg, dlg: None
-    err_cb = lambda reason: None
+
+    def cb(msg: object, dlg: object) -> None:
+        """No-op callback."""
+
+    def err_cb(reason: object) -> None:
+        """No-op error callback."""
+
     behaviour.send_message(mock_msg, fake_dialogue, cb, err_cb)
     nonce = "nonce-1"
     assert params_stub.req_to_callback[nonce] is cb
@@ -1729,7 +1722,11 @@ def test_handle_store_response_dynamic_pricing_recorded(
     params_stub.mech_to_config = {
         my_mech: NS(is_marketplace_mech=True, use_dynamic_pricing=False)
     }
-    behaviour._executing_task = {"requestId": 1, "tool": "mytool", "contract_address": "0xmech"}
+    behaviour._executing_task = {
+        "requestId": 1,
+        "tool": "mytool",
+        "contract_address": "0xmech",
+    }
     behaviour._done_task = {"request_id": 1, "tool": "mytool", "mech_address": "0xmech"}
     behaviour._tools_to_pricing = {"mytool": 100}
     monkeypatch.setattr(beh_mod, "to_v1", lambda x: x)
@@ -1776,9 +1773,7 @@ def test_build_ipfs_get_file_req_returns_pair(behaviour: Any) -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_request_payment_model_sets_inflight(
-    behaviour: Any, params_stub: Any
-) -> None:
+def test_request_payment_model_sets_inflight(behaviour: Any, params_stub: Any) -> None:
     """_request_payment_model puts a message and sets in_flight_req."""
     params_stub.in_flight_req = False
     behaviour._request_payment_model()
@@ -1970,9 +1965,7 @@ def test_download_tools_skips_already_loaded_tool(
     assert len(sent) == 1
 
 
-def test_handle_get_tool_loads_and_stores(
-    behaviour: Any, monkeypatch: Any
-) -> None:
+def test_handle_get_tool_loads_and_stores(behaviour: Any, monkeypatch: Any) -> None:
     """_handle_get_tool calls ComponentPackageLoader.load and stores result."""
     behaviour._inflight_tool_req = "mytool"
     fake_yaml = {"params": {"default_model": "gpt-4o"}}
@@ -1990,9 +1983,7 @@ def test_handle_get_tool_loads_and_stores(
     assert behaviour._inflight_tool_req is None
 
 
-def test_populate_from_block_sets_inflight(
-    behaviour: Any, params_stub: Any
-) -> None:
+def test_populate_from_block_sets_inflight(behaviour: Any, params_stub: Any) -> None:
     """_populate_from_block sends a ledger request and sets in_flight_req."""
     params_stub.in_flight_req = False
     behaviour._populate_from_block()
@@ -2103,7 +2094,9 @@ def test_filter_out_incompatible_reqs_different_payment_type_drops_task(
     params_stub.agent_mech_contract_address = "0xother"
     params_stub.step_in_list_size = 20
     shared_state[beh_mod.PAYMENT_MODEL] = "fixed"
-    shared_state[beh_mod.PAYMENT_INFO] = {"0xmech1": "dynamic"}  # different from "fixed"
+    shared_state[beh_mod.PAYMENT_INFO] = {
+        "0xmech1": "dynamic"
+    }  # different from "fixed"
     shared_state[beh_mod.UNPROCESSED_TIMED_OUT_TASKS] = [
         {"priorityMech": "0xmech1", "requestId": 4}
     ]
