@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This package contains round behaviours of TaskExecutionAbciApp."""
+"""This package contains round behaviours of TaskSubmissionAbciApp."""
 
 import json
 import threading
@@ -1594,7 +1594,7 @@ class TransactionPreparationBehaviour(
     def _get_offchain_tasks_deliver_data(
         self,
     ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
-        done_tasks_list = self.done_tasks
+        done_tasks_list = self.synchronized_data.done_tasks
         offchain_done_tasks_list = [
             done_task
             for done_task in done_tasks_list

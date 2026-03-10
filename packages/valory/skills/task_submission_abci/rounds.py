@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -252,7 +252,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         TaskPoolingRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
-        FinishedTaskPoolingRound: {"most_voted_tx_hash", "final_tx_hash"},
+        FinishedTaskPoolingRound: {"most_voted_tx_hash"},
         FinishedTaskExecutionWithErrorRound: set(),
         FinishedWithoutTasksRound: set(),
     }
