@@ -27,14 +27,15 @@ from packages.valory.skills.task_submission_abci.tasks import AnyToolAsTask
 class TestAnyToolAsTask:
     """Tests for AnyToolAsTask."""
 
-    def test_inherits_from_aea_task(self):
+    def test_inherits_from_aea_task(self) -> None:
+        """Test AnyToolAsTask inherits from Task."""
         assert issubclass(AnyToolAsTask, Task)
 
-    def test_execute_calls_method_with_args(self):
-        """method kwarg is called with remaining args and kwargs."""
+    def test_execute_calls_method_with_args(self) -> None:
+        """Method kwarg is called with remaining args and kwargs."""
         results = []
 
-        def my_method(*args, **kwargs):
+        def my_method(*args: object, **kwargs: object) -> str:
             results.append((args, kwargs))
             return "done"
 
@@ -43,10 +44,10 @@ class TestAnyToolAsTask:
         assert result == "done"
         assert results == [((1, 2), {"extra": "val"})]
 
-    def test_execute_method_kwarg_is_popped(self):
-        """method should NOT be forwarded as a kwarg to the called method."""
+    def test_execute_method_kwarg_is_popped(self) -> None:
+        """Method should NOT be forwarded as a kwarg to the called method."""
 
-        def spy(**kwargs):
+        def spy(**kwargs: object) -> object:
             return kwargs
 
         task = AnyToolAsTask()
@@ -54,12 +55,14 @@ class TestAnyToolAsTask:
         assert "method" not in result
         assert result == {"my_arg": "hello"}
 
-    def test_execute_missing_method_raises_key_error(self):
+    def test_execute_missing_method_raises_key_error(self) -> None:
+        """Test execute raises KeyError when method kwarg is missing."""
         task = AnyToolAsTask()
         with pytest.raises(KeyError):
             task.execute()
 
-    def test_execute_returns_method_return_value(self):
+    def test_execute_returns_method_return_value(self) -> None:
+        """Test execute returns the return value of the called method."""
         task = AnyToolAsTask()
         result = task.execute(method=lambda: 42)
         assert result == 42

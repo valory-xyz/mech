@@ -18,11 +18,11 @@
 # ------------------------------------------------------------------------------
 """Tests for task_submission_abci.models."""
 
-from types import SimpleNamespace
-from typing import Dict
+from typing import Any, Dict
 from unittest.mock import MagicMock, patch
 
 import pytest
+from aea.exceptions import AEAEnforceError
 
 from packages.valory.skills.abstract_round_abci.models import BaseParams
 from packages.valory.skills.task_submission_abci.models import (
@@ -32,17 +32,20 @@ from packages.valory.skills.task_submission_abci.models import (
 )
 from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
 
-
 # ---------------------------------------------------------------------------
 # SharedState
 # ---------------------------------------------------------------------------
 
 
 class TestSharedState:
-    def test_abci_app_cls_is_task_submission(self):
+    """Tests for SharedState."""
+
+    def test_abci_app_cls_is_task_submission(self) -> None:
+        """Test SharedState.abci_app_cls is TaskSubmissionAbciApp."""
         assert SharedState.abci_app_cls is TaskSubmissionAbciApp
 
-    def test_prometheus_metrics_defined(self):
+    def test_prometheus_metrics_defined(self) -> None:
+        """Test Prometheus metrics are defined on SharedState."""
         # These are class-level Prometheus metrics
         assert hasattr(SharedState, "mech_delivery_last_block_number")
         assert hasattr(SharedState, "mech_agent_balance")
@@ -55,16 +58,21 @@ class TestSharedState:
 
 
 class TestMutableParams:
-    def test_latest_metadata_hash_defaults_to_none(self):
+    """Tests for MutableParams."""
+
+    def test_latest_metadata_hash_defaults_to_none(self) -> None:
+        """Test latest_metadata_hash defaults to None."""
         p = MutableParams()
         assert p.latest_metadata_hash is None
 
-    def test_latest_metadata_hash_can_be_mutated(self):
+    def test_latest_metadata_hash_can_be_mutated(self) -> None:
+        """Test latest_metadata_hash can be mutated."""
         p = MutableParams()
         p.latest_metadata_hash = b"some-hash"
         assert p.latest_metadata_hash == b"some-hash"
 
-    def test_can_be_reset_to_none(self):
+    def test_can_be_reset_to_none(self) -> None:
+        """Test latest_metadata_hash can be reset to None."""
         p = MutableParams()
         p.latest_metadata_hash = b"hash"
         p.latest_metadata_hash = None
@@ -99,7 +107,7 @@ _VALID_KWARGS = {
 }
 
 
-def _make_skill_ctx():
+def _make_skill_ctx() -> MagicMock:
     ctx = MagicMock()
     ctx.skill_id = "mock/skill:0.1.0"
     return ctx
@@ -108,24 +116,27 @@ def _make_skill_ctx():
 class TestParamsEnsureGet:
     """Unit tests for the Params._ensure_get classmethod."""
 
-    def test_ensure_get_returns_value_when_present(self):
+    def test_ensure_get_returns_value_when_present(self) -> None:
+        """Test _ensure_get returns value when key is present."""
         kwargs = {"skill_context": _make_skill_ctx(), "my_key": "my_value"}
         result = Params._ensure_get("my_key", kwargs, str)
         assert result == "my_value"
         # Key should NOT be popped
         assert "my_key" in kwargs
 
-    def test_ensure_get_raises_when_key_missing(self):
+    def test_ensure_get_raises_when_key_missing(self) -> None:
+        """Test _ensure_get raises when key is missing."""
         kwargs = {"skill_context": _make_skill_ctx()}
-        with pytest.raises(Exception):  # enforce raises AEA exception
+        with pytest.raises(AEAEnforceError):
             Params._ensure_get("missing_key", kwargs, str)
 
-    def test_ensure_get_raises_without_skill_context(self):
+    def test_ensure_get_raises_without_skill_context(self) -> None:
+        """Test _ensure_get raises without skill_context."""
         kwargs = {"my_key": "val"}
-        with pytest.raises(Exception):
+        with pytest.raises(AEAEnforceError):
             Params._ensure_get("my_key", kwargs, str)
 
-    def test_ensure_get_does_not_pop_key(self):
+    def test_ensure_get_does_not_pop_key(self) -> None:
         """_ensure_get should NOT pop the key from kwargs (unlike _ensure)."""
         kwargs = {"skill_context": _make_skill_ctx(), "my_key": "my_value"}
         Params._ensure_get("my_key", kwargs, str)
@@ -135,13 +146,13 @@ class TestParamsEnsureGet:
 class TestParamsInit:
     """Tests for Params.__init__ — validation and attribute assignment."""
 
-    def _make_kwargs(self, **overrides):
+    def _make_kwargs(self, **overrides: Any) -> Dict[str, Any]:
         kwargs = dict(_VALID_KWARGS)
         kwargs["skill_context"] = _make_skill_ctx()
         kwargs.update(overrides)
         return kwargs
 
-    def test_agent_mech_contract_address_is_first_in_list(self):
+    def test_agent_mech_contract_address_is_first_in_list(self) -> None:
         """agent_mech_contract_address should be the first key in mech_to_config."""
         kwargs = self._make_kwargs()
         with patch.object(BaseParams, "__init__", return_value=None):
@@ -150,7 +161,7 @@ class TestParamsInit:
         assert p.agent_mech_contract_address == MECH_ADDR
         assert p.agent_mech_contract_addresses == [MECH_ADDR]
 
-    def test_empty_mech_to_config_raises_value_error(self):
+    def test_empty_mech_to_config_raises_value_error(self) -> None:
         """No addresses in mech_to_config → should raise ValueError."""
         kwargs = self._make_kwargs(mech_to_config={})
         with patch.object(BaseParams, "__init__", return_value=None):
@@ -158,21 +169,24 @@ class TestParamsInit:
             with pytest.raises(ValueError, match="No mech contract addresses"):
                 Params.__init__(p, **kwargs)
 
-    def test_task_wait_timeout_stored(self):
+    def test_task_wait_timeout_stored(self) -> None:
+        """Test task_wait_timeout is stored on Params."""
         kwargs = self._make_kwargs(task_wait_timeout=99.0)
         with patch.object(BaseParams, "__init__", return_value=None):
             p = Params.__new__(Params)
             Params.__init__(p, **kwargs)
         assert p.task_wait_timeout == 99.0
 
-    def test_service_owner_share_stored(self):
+    def test_service_owner_share_stored(self) -> None:
+        """Test service_owner_share is stored on Params."""
         kwargs = self._make_kwargs(service_owner_share=500)
         with patch.object(BaseParams, "__init__", return_value=None):
             p = Params.__new__(Params)
             Params.__init__(p, **kwargs)
         assert p.service_owner_share == 500
 
-    def test_mech_max_delivery_rate_from_first_value(self):
+    def test_mech_max_delivery_rate_from_first_value(self) -> None:
+        """Test mech_max_delivery_rate is set from first value in mech_to_max_delivery_rate."""
         rates = {MECH_ADDR: 42}
         kwargs = self._make_kwargs(mech_to_max_delivery_rate=rates)
         with patch.object(BaseParams, "__init__", return_value=None):
@@ -180,7 +194,8 @@ class TestParamsInit:
             Params.__init__(p, **kwargs)
         assert p.mech_max_delivery_rate == 42
 
-    def test_task_mutable_params_initialized(self):
+    def test_task_mutable_params_initialized(self) -> None:
+        """Test task_mutable_params is initialized as MutableParams."""
         kwargs = self._make_kwargs()
         with patch.object(BaseParams, "__init__", return_value=None):
             p = Params.__new__(Params)
@@ -188,7 +203,8 @@ class TestParamsInit:
         assert isinstance(p.task_mutable_params, MutableParams)
         assert p.task_mutable_params.latest_metadata_hash is None
 
-    def test_calls_super_init(self):
+    def test_calls_super_init(self) -> None:
+        """Test Params.__init__ calls super().__init__."""
         kwargs = self._make_kwargs()
         with patch.object(BaseParams, "__init__") as mock_super:
             mock_super.return_value = None
