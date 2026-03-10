@@ -142,8 +142,6 @@ dependencies:
     version: ==0.8.1
   replicate:
     version: ==0.15.7
-  spacy:
-    version: ==3.8.11
   tavily-python:
     version: ==0.3.3
   tiktoken:
