@@ -13,7 +13,7 @@ fingerprint:
   models.py: bafybeicuei7xoozvgr6kyp6cp7b6gqonlkmlgkvhhff37iecnjqzhkvbgi
 fingerprint_ignore_patterns: []
 connections:
-- valory/websocket_client:0.1.0:bafybeifgdfiimsnu6ls37bkkctogn45zfxwberhtjae5lgvdpnrv6bdsrq
+- valory/websocket_client:0.1.0:bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea
 contracts: []
 protocols:
 - valory/websocket_client:0.1.0:bafybeig6omutaqt5rbvidju4zc7pwwdi6tkagwu3dwiirosadyoo534v3q

@@ -18,13 +18,13 @@ fingerprint:
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeidvzhcjifcyl4wf5cqaxvn3pkaqw62spcqkormpwqrqa6b2sg6rje
-  tests/test_behaviours.py: bafybeic2gybgikz7w2l5osezgt6yiyn6rgdwevipr7wktmrss37feqn7oa
-  tests/test_dialogues.py: bafybeifdvwho3paoskwizi36f2t3t6zr2lpagjq3cv5uiwu3kyryvwojte
-  tests/test_handlers.py: bafybeifscss5uqch7rvmn2ap6aoueewzzr42luoqpmclkiu6kcgo5oyk5q
-  tests/test_models.py: bafybeig4eyy3su6bwqxowbvzcoydnattbhvrg34ag7ifmlxzu2rnnzl4pq
-  tests/test_payloads.py: bafybeihfkjwpgl55so7nzoy7gtfuxnnquqbiuonlgsbabsbf5zj5fui3vu
-  tests/test_rounds.py: bafybeicubtk3geneisiumytep3g4x6ohaqn27cek4ex3jk2mgus6kxqrje
-  tests/test_tasks.py: bafybeibbzrxlqc2nw2hsxwqsw3tpr6l2opyzjczzrvof75a3m7nje6g2lq
+  tests/test_behaviours.py: bafybeifipfswz6h7f4zt7quantefjkjb3xy2vmitop43rg37delhlwyat4
+  tests/test_dialogues.py: bafybeidhzixfpfotowumvc22x364rolzmfqyl4ewwxsfz3jlr4jzm5psy4
+  tests/test_handlers.py: bafybeihkqyvcwkl24mpb2m3sefwlfrgvdbawdi3l23do5ockx2kp3mlvfy
+  tests/test_models.py: bafybeifhgd3zzvwtxhv6p57f4zy3ims6oqrkpbqetafjvjedm43exf62bu
+  tests/test_payloads.py: bafybeiesgrfu7q555ziz55y72yyfembazxvfeiqwyjdm66fjwf6qwoklpm
+  tests/test_rounds.py: bafybeicg3dxxd3ccr2jrwrwqe2hy6p4qtrbycgrezufncalxluzrk3udfy
+  tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -44,7 +44,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicehi2yqab3lldm7qzoqev3tmqrdk275sbtcabneyorhmzft76z7m
 - valory/transaction_settlement_abci:0.1.0:bafybeigivknq755rbnelrdemaz3vm4x7jkofvaskm34uh36pbbg6uiquo4
-- valory/task_execution:0.1.0:bafybeictmlh3v2adf3prugvkw4zitzo7hwedllisauefzn7bb3rawvpe6i
+- valory/task_execution:0.1.0:bafybeidnzltml5y4yg4fioevtbrmnpahy4jg663kqn4ql4dqdf5fm2ron4
 behaviours:
   main:
     args: {}
