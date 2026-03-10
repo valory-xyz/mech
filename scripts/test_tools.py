@@ -26,9 +26,6 @@ from timeit import default_timer as timer
 
 from dotenv import load_dotenv  # type: ignore
 
-from packages.jhehemann.customs.prediction_sum_url_content.prediction_sum_url_content import (
-    run as prediction_sum_url_content_run,
-)
 from packages.napthaai.customs.prediction_request_rag.prediction_request_rag import (
     run as prediction_request_rag_run,
 )
@@ -61,7 +58,6 @@ TOOLS_TO_RUN_FUNCTION = {
     "claude-prediction-offline": prediction_request_run,
     "prediction-online-sme": prediction_request_sme_run,
     "prediction-offline-sme": prediction_request_sme_run,
-    "prediction-online-sum-url-content": prediction_sum_url_content_run,
     "prediction-request-rag": prediction_request_rag_run,
     "prediction-request-rag-claude": prediction_request_rag_run,
     "prediction-request-reasoning": prediction_request_reasoning_run,

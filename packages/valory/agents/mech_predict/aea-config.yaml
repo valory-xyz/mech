@@ -53,7 +53,6 @@ customs:
 - valory/openai_request:0.1.0:bafybeielkqwc3ij4rervznogbvytmldb4uz4g7gszwb4d2c2rltbh6s54q
 - valory/resolve_market:0.1.0:bafybeiagbltrenwtp2ko2ebephanjvykvljftgs65wo2wfefiib7joxece
 - valory/prediction_request:0.1.0:bafybeie6l74ilvbcuyxnydq6jgglijdbtfj36xdq43zxkl2qsslkbmhaj4
-- jhehemann/prediction_sum_url_content:0.1.0:bafybeiccpamcpeeycnyw6atp34vf3zuzv5gd76naoc4vmoybiznpe2gxke
 - napthaai/resolve_market_reasoning:0.1.0:bafybeihe2qq7s64nm5pidctsafn35lh6x627tb425v5a4zycw3ngu2oa6u
 - napthaai/prediction_request_rag:0.1.0:bafybeiebotu6islwypjkbldafv45klsvalbbuixfzrostcksulzgjvdkre
 - napthaai/prediction_request_reasoning:0.1.0:bafybeia25at4jgny4r6z474d6ybpcghms2prn3qh2gvtgrom2szsdsodva
@@ -62,7 +61,6 @@ customs:
 - valory/prediction_langchain:0.1.0:bafybeibs2i4ypvllzjrpghzaghvqjc4fvixv2lrsl6eoas3a2twqc6meqa
 - victorpolisetty/gemini_request:0.1.0:bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy
 - victorpolisetty/dalle_request:0.1.0:bafybeignggkudqjzae6nbxvx6o5m6ekqrbkkdkj6dnlax6d2z5xrgobgyy
-- jhehemann/prediction_sentence_embeddings:0.1.0:bafybeihy3xyrfxcucwkcuoo3b6gdtpi7rnvax2yj2qhyhyuygtq4lsdscy
 - valory/superforcaster:0.1.0:bafybeiapmn2m6hazjam53zxnrx7e3twnddcs64i63kryld7l67botfvuci
 - valory/tee_openai_request:0.1.0:bafybeiao3m6mngg6637jl52ibjqvpuno7li7ragaeddccly5lkfsbsyqfu
 - dvilela/corcel_request:0.1.0:bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy
@@ -144,8 +142,6 @@ dependencies:
     version: ==0.8.1
   replicate:
     version: ==0.15.7
-  spacy:
-    version: ==3.8.11
   tavily-python:
     version: ==0.3.3
   tiktoken:

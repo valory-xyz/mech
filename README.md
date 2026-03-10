@@ -158,7 +158,6 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 | Tools |
 |---|
-| packages/jhehemann/customs/prediction_sum_url_content |
 | packages/napthaai/customs/prediction_request_rag |
 | packages/napthaai/customs/resolve_market_reasoning |
 | packages/nickcom007/customs/prediction_request_sme |
