@@ -52,7 +52,7 @@ skills:
 customs:
 - valory/openai_request:0.1.0:bafybeielkqwc3ij4rervznogbvytmldb4uz4g7gszwb4d2c2rltbh6s54q
 - valory/resolve_market:0.1.0:bafybeiagbltrenwtp2ko2ebephanjvykvljftgs65wo2wfefiib7joxece
-- valory/prediction_request:0.1.0:bafybeie6l74ilvbcuyxnydq6jgglijdbtfj36xdq43zxkl2qsslkbmhaj4
+- valory/prediction_request:0.1.0:bafybeigcglxciuawbyvfgahcockjkcx2w22wi33ogpaz7b4ibcgxumfcpm
 - napthaai/resolve_market_reasoning:0.1.0:bafybeihe2qq7s64nm5pidctsafn35lh6x627tb425v5a4zycw3ngu2oa6u
 - napthaai/prediction_request_rag:0.1.0:bafybeiebotu6islwypjkbldafv45klsvalbbuixfzrostcksulzgjvdkre
 - napthaai/prediction_request_reasoning:0.1.0:bafybeia25at4jgny4r6z474d6ybpcghms2prn3qh2gvtgrom2szsdsodva
@@ -142,8 +142,6 @@ dependencies:
     version: ==0.8.1
   replicate:
     version: ==0.15.7
-  spacy:
-    version: ==3.8.11
   tavily-python:
     version: ==0.3.3
   tiktoken:

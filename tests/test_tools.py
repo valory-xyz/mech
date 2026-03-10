@@ -21,14 +21,13 @@
 
 from typing import List, Any
 
-import pytest
-
 from packages.victorpolisetty.customs.dalle_request import dalle_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
 from packages.napthaai.customs.prediction_request_reasoning import (
     prediction_request_reasoning,
 )
 from packages.napthaai.customs.prediction_url_cot import prediction_url_cot
+from packages.valory.customs.prediction_request import prediction_request
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from tests.constants import (
@@ -44,11 +43,6 @@ from tests.constants import (
     GEMINI_API_KEY,
     SERPER_API_KEY,
 )
-
-try:
-    from packages.valory.customs.prediction_request import prediction_request
-except Exception:
-    prediction_request = None
 
 
 class BaseToolTest:
@@ -110,14 +104,11 @@ class BaseToolTest:
                     self._validate_response(response)
 
 
-@pytest.mark.skipif(
-    prediction_request is None, reason="Tool not supported in Python 3.14+"
-)
 class TestPredictionOnline(BaseToolTest):
     """Test Prediction Online."""
 
-    tools = prediction_request.ALLOWED_TOOLS if prediction_request else None
-    models = prediction_request.ALLOWED_MODELS if prediction_request else None
+    tools = prediction_request.ALLOWED_TOOLS
+    models = prediction_request.ALLOWED_MODELS
     prompts = [
         'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
     ]
