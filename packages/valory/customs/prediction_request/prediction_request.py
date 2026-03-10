@@ -42,7 +42,6 @@ from pydantic import BaseModel, PositiveInt
 from readability import Document
 from tiktoken import encoding_for_model, get_encoding
 
-
 # `STOP_WORDS` retrieved from https://github.com/explosion/spaCy/blob/v3.7.5/spacy/lang/en/stop_words.py
 STOP_WORDS = set("""
 a about above across after afterwards again against all almost alone along
