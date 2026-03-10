@@ -8,13 +8,15 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeichkazmroftew6ifqoe4tud2faoo24hza5sgfghapmlp4l2rqjwee
-  behaviours.py: bafybeidlwdvt56wzev77dncykhnrtzwsmt24q3ygosq34yzmqshrqxez5u
+  behaviours.py: bafybeibj2xcgfyrvw3dqrizejv6c3id3a3d2z3vbd7te7htp5d4cez4yna
   dialogues.py: bafybeicpmnp6nf4rautp2246dk3rj54k6kcjbbkekc7hvanh2um3y3ckdm
   fsm_specification.yaml: bafybeifurkk2plflg3p5rgh7bn3nf2z3tf6pamnha76lvz7vfmu36gpony
   handlers.py: bafybeibl2xi6ikicoamazml6uh2tiqhni7tgekmtwt672c43utdlbbyi34
   models.py: bafybeibgzaawtuk45ivbjccnwnt3hoit52m324icfhrclke62xqw7wsegm
   payloads.py: bafybeifpjamx7ii5vh25vbqpiw4xdx7rnphh5xbbsrs6dxpovhjkhgfuq4
   rounds.py: bafybeihwqthwavbxookhkq53fy2oj5zui526fpnvcdteiv6k4wjcyey27q
+  tests/__init__.py: bafybeih37qbhmo2pojtefignkuuhnbrkho5tdy3zchprgiynzpijqqbhui
+  tests/test_behaviours.py: bafybeib75tjemgnu3s66v2sug5pk4266yxqlll6il6dvwgztlb46hvohcy
 fingerprint_ignore_patterns: []
 connections: []
 contracts:

@@ -324,6 +324,7 @@ class WebSocketClient(Connection):  # pylint: disable=Too many instance attribut
 
         await self._manager.remove_all_subscriptions()
         self._outbox.empty()
+        self._executor.shutdown(wait=True)
         self.state = ConnectionStates.disconnected
 
     async def send(self, envelope: Envelope) -> None:

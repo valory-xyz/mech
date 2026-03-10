@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains the shared state for the abci skill of TaskExecutionAbciApp."""
+"""This module contains the shared state for the abci skill of TaskSubmissionAbciApp."""
 
 from dataclasses import dataclass
 from typing import Any, Dict, Optional, Type

@@ -21,9 +21,6 @@
 from abc import ABC
 from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
 
-from packages.valory.contracts.olas_mech.contract import (
-    OlasMechContract,
-)
 from packages.valory.contracts.gnosis_safe.contract import (
     GnosisSafeContract,
     SafeOperation,
@@ -31,6 +28,9 @@ from packages.valory.contracts.gnosis_safe.contract import (
 from packages.valory.contracts.multisend.contract import (
     MultiSendContract,
     MultiSendOperation,
+)
+from packages.valory.contracts.olas_mech.contract import (
+    OlasMechContract,
 )
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
@@ -43,8 +43,8 @@ from packages.valory.skills.delivery_rate_abci.payloads import (
     UpdateDeliveryRatePayload,
 )
 from packages.valory.skills.delivery_rate_abci.rounds import (
-    SynchronizedData,
     DeliveryRateUpdateAbciApp,
+    SynchronizedData,
     UpdateDeliveryRateRound,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
@@ -179,6 +179,7 @@ class UpdateDeliveryRateBehaviour(BaseDeliveryRateBehaviour):
                 self.context.logger.warning(
                     f"Could not get delivery_rate update tx for {mech_address}."
                 )
+                continue
 
             txs.append(tx)
 
