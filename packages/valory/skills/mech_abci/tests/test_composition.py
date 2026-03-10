@@ -28,37 +28,47 @@ from packages.valory.skills.mech_abci.composition import (
     abci_app_transition_mapping,
     termination_config,
 )
-from packages.valory.skills.termination_abci.rounds import BackgroundRound, TerminationAbciApp
+from packages.valory.skills.termination_abci.rounds import (
+    BackgroundRound,
+    TerminationAbciApp,
+)
 
 
 class TestAbciAppTransitionMapping:
     """Tests for the abci_app_transition_mapping dict."""
 
-    def test_registration_finished_transitions_to_delivery_rate(self):
+    def test_registration_finished_transitions_to_delivery_rate(self) -> None:
+        """Test registration finished round transitions to delivery rate update."""
         assert (
             abci_app_transition_mapping[RegistrationAbci.FinishedRegistrationRound]
             is DeliveryRateUpdateAbciApp.UpdateDeliveryRateRound
         )
 
-    def test_delivery_rate_no_tx_transitions_to_task_pooling(self):
+    def test_delivery_rate_no_tx_transitions_to_task_pooling(self) -> None:
+        """Test delivery rate no-tx round transitions to task pooling."""
         assert (
-            abci_app_transition_mapping[DeliveryRateUpdateAbciApp.FinishedWithoutTxRound]
+            abci_app_transition_mapping[
+                DeliveryRateUpdateAbciApp.FinishedWithoutTxRound
+            ]
             is TaskSubmissionAbciApp.TaskPoolingRound
         )
 
-    def test_delivery_rate_with_tx_transitions_to_randomness(self):
+    def test_delivery_rate_with_tx_transitions_to_randomness(self) -> None:
+        """Test delivery rate with-tx round transitions to randomness."""
         assert (
             abci_app_transition_mapping[DeliveryRateUpdateAbciApp.FinishedWithTxRound]
             is TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound
         )
 
-    def test_task_pooling_finished_transitions_to_randomness(self):
+    def test_task_pooling_finished_transitions_to_randomness(self) -> None:
+        """Test task pooling finished round transitions to randomness."""
         assert (
             abci_app_transition_mapping[TaskSubmissionAbciApp.FinishedTaskPoolingRound]
             is TransactionSubmissionAbciApp.RandomnessTransactionSubmissionRound
         )
 
-    def test_task_execution_error_transitions_to_reset(self):
+    def test_task_execution_error_transitions_to_reset(self) -> None:
+        """Test task execution error round transitions to reset."""
         assert (
             abci_app_transition_mapping[
                 TaskSubmissionAbciApp.FinishedTaskExecutionWithErrorRound
@@ -66,13 +76,15 @@ class TestAbciAppTransitionMapping:
             is ResetAndPauseAbci.ResetAndPauseRound
         )
 
-    def test_finished_without_tasks_transitions_to_reset(self):
+    def test_finished_without_tasks_transitions_to_reset(self) -> None:
+        """Test finished without tasks round transitions to reset."""
         assert (
             abci_app_transition_mapping[TaskSubmissionAbciApp.FinishedWithoutTasksRound]
             is ResetAndPauseAbci.ResetAndPauseRound
         )
 
-    def test_transaction_submission_finished_transitions_to_reset(self):
+    def test_transaction_submission_finished_transitions_to_reset(self) -> None:
+        """Test transaction submission finished round transitions to reset."""
         assert (
             abci_app_transition_mapping[
                 TransactionSubmissionAbciApp.FinishedTransactionSubmissionRound
@@ -80,47 +92,58 @@ class TestAbciAppTransitionMapping:
             is ResetAndPauseAbci.ResetAndPauseRound
         )
 
-    def test_transaction_submission_failed_transitions_to_reset(self):
+    def test_transaction_submission_failed_transitions_to_reset(self) -> None:
+        """Test transaction submission failed round transitions to reset."""
         assert (
             abci_app_transition_mapping[TransactionSubmissionAbciApp.FailedRound]
             is ResetAndPauseAbci.ResetAndPauseRound
         )
 
-    def test_reset_finished_transitions_to_task_pooling(self):
+    def test_reset_finished_transitions_to_task_pooling(self) -> None:
+        """Test reset finished round transitions to task pooling."""
         assert (
             abci_app_transition_mapping[ResetAndPauseAbci.FinishedResetAndPauseRound]
             is TaskSubmissionAbciApp.TaskPoolingRound
         )
 
-    def test_reset_error_transitions_to_registration(self):
+    def test_reset_error_transitions_to_registration(self) -> None:
+        """Test reset error round transitions to registration."""
         assert (
-            abci_app_transition_mapping[ResetAndPauseAbci.FinishedResetAndPauseErrorRound]
+            abci_app_transition_mapping[
+                ResetAndPauseAbci.FinishedResetAndPauseErrorRound
+            ]
             is RegistrationAbci.RegistrationRound
         )
 
-    def test_all_transitions_have_non_none_destinations(self):
+    def test_all_transitions_have_non_none_destinations(self) -> None:
+        """Test all transitions have non-None destinations."""
         for src, dst in abci_app_transition_mapping.items():
             assert dst is not None, f"Transition from {src} has no destination"
 
-    def test_transition_mapping_has_ten_entries(self):
+    def test_transition_mapping_has_ten_entries(self) -> None:
+        """Test transition mapping has exactly 10 entries."""
         assert len(abci_app_transition_mapping) == 10
 
 
 class TestTerminationConfig:
     """Tests for the termination_config BackgroundAppConfig."""
 
-    def test_round_cls_is_background_round(self):
+    def test_round_cls_is_background_round(self) -> None:
+        """Test termination_config.round_cls is BackgroundRound."""
         assert termination_config.round_cls is BackgroundRound
 
-    def test_abci_app_is_termination_abci_app(self):
+    def test_abci_app_is_termination_abci_app(self) -> None:
+        """Test termination_config.abci_app is TerminationAbciApp."""
         assert termination_config.abci_app is TerminationAbciApp
 
 
 class TestMechAbciApp:
     """Tests for the assembled MechAbciApp."""
 
-    def test_mech_abci_app_is_not_none(self):
+    def test_mech_abci_app_is_not_none(self) -> None:
+        """Test MechAbciApp is not None."""
         assert MechAbciApp is not None
 
-    def test_event_to_timeout_is_dict(self):
+    def test_event_to_timeout_is_dict(self) -> None:
+        """Test MechAbciApp.event_to_timeout is a dict."""
         assert isinstance(MechAbciApp.event_to_timeout, dict)

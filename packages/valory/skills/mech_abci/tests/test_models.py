@@ -22,22 +22,33 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from packages.valory.skills.abstract_round_abci.models import ApiSpecs
-from packages.valory.skills.delivery_rate_abci.models import Params as SubscriptionParams
+from packages.valory.skills.delivery_rate_abci.models import (
+    Params as SubscriptionParams,
+)
 from packages.valory.skills.mech_abci.composition import MechAbciApp
-from packages.valory.skills.mech_abci.models import MARGIN, Params, RandomnessApi, SharedState
+from packages.valory.skills.mech_abci.models import (
+    MARGIN,
+    Params,
+    RandomnessApi,
+    SharedState,
+)
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
+from packages.valory.skills.task_submission_abci.models import (
+    Params as TaskExecutionParams,
+)
 from packages.valory.skills.task_submission_abci.models import (
     SharedState as TaskExecSharedState,
 )
-from packages.valory.skills.task_submission_abci.models import Params as TaskExecutionParams
-from packages.valory.skills.task_submission_abci.rounds import Event as TaskExecutionEvent
+from packages.valory.skills.task_submission_abci.rounds import (
+    Event as TaskExecutionEvent,
+)
 from packages.valory.skills.termination_abci.models import TerminationParams
 from packages.valory.skills.transaction_settlement_abci.rounds import (
     Event as TransactionSettlementEvent,
 )
 
 
-def _make_context(round_timeout=10.0, validate=20.0, finalize=30.0, reset_pause=60.0):
+def _make_context(round_timeout=10.0, validate=20.0, finalize=30.0, reset_pause=60.0):  # type: ignore
     return SimpleNamespace(
         params=SimpleNamespace(
             round_timeout_seconds=round_timeout,
@@ -48,7 +59,7 @@ def _make_context(round_timeout=10.0, validate=20.0, finalize=30.0, reset_pause=
     )
 
 
-def _make_shared_state(ctx=None) -> SharedState:
+def _make_shared_state(ctx=None) -> SharedState:  # type: ignore
     """Create a SharedState instance bypassing the AEA framework init."""
     with patch.object(TaskExecSharedState, "__init__", return_value=None):
         state = SharedState.__new__(SharedState)
@@ -61,53 +72,69 @@ def _make_shared_state(ctx=None) -> SharedState:
 class TestSharedStateInit:
     """Tests for SharedState.__init__."""
 
-    def test_last_processed_block_starts_at_zero(self):
+    def test_last_processed_block_starts_at_zero(self) -> None:
+        """Test last_processed_request_block_number starts at zero."""
         state = _make_shared_state()
         assert state.last_processed_request_block_number == 0
 
-    def test_abci_app_cls_is_mech_abci_app(self):
+    def test_abci_app_cls_is_mech_abci_app(self) -> None:
+        """Test SharedState.abci_app_cls is MechAbciApp."""
         assert SharedState.abci_app_cls is MechAbciApp
 
 
 class TestSharedStateSetup:
     """Tests for SharedState.setup."""
 
-    def test_setup_configures_round_timeout(self):
+    def test_setup_configures_round_timeout(self) -> None:
+        """Test setup configures round timeout on MechAbciApp."""
         state = _make_shared_state(_make_context(round_timeout=10.0))
         original = dict(MechAbciApp.event_to_timeout)
         try:
             with patch.object(TaskExecSharedState, "setup", return_value=None):
                 state.setup()
-            assert MechAbciApp.event_to_timeout[TaskExecutionEvent.ROUND_TIMEOUT] == 10.0
             assert (
-                MechAbciApp.event_to_timeout[TaskExecutionEvent.TASK_EXECUTION_ROUND_TIMEOUT]
+                MechAbciApp.event_to_timeout[TaskExecutionEvent.ROUND_TIMEOUT] == 10.0
+            )
+            assert (
+                MechAbciApp.event_to_timeout[
+                    TaskExecutionEvent.TASK_EXECUTION_ROUND_TIMEOUT
+                ]
                 == 10.0
             )
             assert MechAbciApp.event_to_timeout[ResetPauseEvent.ROUND_TIMEOUT] == 10.0
             assert (
-                MechAbciApp.event_to_timeout[TransactionSettlementEvent.ROUND_TIMEOUT] == 10.0
+                MechAbciApp.event_to_timeout[TransactionSettlementEvent.ROUND_TIMEOUT]
+                == 10.0
             )
         finally:
             MechAbciApp.event_to_timeout.clear()
             MechAbciApp.event_to_timeout.update(original)
 
-    def test_setup_configures_validate_and_finalize_timeout(self):
+    def test_setup_configures_validate_and_finalize_timeout(self) -> None:
+        """Test setup configures validate and finalize timeouts."""
         state = _make_shared_state(_make_context(validate=20.0, finalize=30.0))
         original = dict(MechAbciApp.event_to_timeout)
         try:
             with patch.object(TaskExecSharedState, "setup", return_value=None):
                 state.setup()
             assert (
-                MechAbciApp.event_to_timeout[TransactionSettlementEvent.VALIDATE_TIMEOUT] == 20.0
+                MechAbciApp.event_to_timeout[
+                    TransactionSettlementEvent.VALIDATE_TIMEOUT
+                ]
+                == 20.0
             )
             assert (
-                MechAbciApp.event_to_timeout[TransactionSettlementEvent.FINALIZE_TIMEOUT] == 30.0
+                MechAbciApp.event_to_timeout[
+                    TransactionSettlementEvent.FINALIZE_TIMEOUT
+                ]
+                == 30.0
             )
         finally:
             MechAbciApp.event_to_timeout.clear()
             MechAbciApp.event_to_timeout.update(original)
 
-    def test_reset_pause_timeout_adds_margin(self):
+    def test_reset_pause_timeout_adds_margin(self) -> None:
+        """Test setup adds MARGIN to reset_pause_duration for timeout."""
         reset_pause = 60.0
         state = _make_shared_state(_make_context(reset_pause=reset_pause))
         original = dict(MechAbciApp.event_to_timeout)
@@ -122,7 +149,8 @@ class TestSharedStateSetup:
             MechAbciApp.event_to_timeout.clear()
             MechAbciApp.event_to_timeout.update(original)
 
-    def test_setup_calls_super_setup(self):
+    def test_setup_calls_super_setup(self) -> None:
+        """Test setup calls super().setup()."""
         state = _make_shared_state()
         original = dict(MechAbciApp.event_to_timeout)
         try:
@@ -135,17 +163,26 @@ class TestSharedStateSetup:
 
 
 class TestMarginConstant:
-    def test_margin_value(self):
+    """Tests for the MARGIN constant."""
+
+    def test_margin_value(self) -> None:
+        """Test MARGIN is 5."""
         assert MARGIN == 5
 
 
 class TestRandomnessApi:
-    def test_is_subclass_of_api_specs(self):
+    """Tests for RandomnessApi."""
+
+    def test_is_subclass_of_api_specs(self) -> None:
+        """Test RandomnessApi is a subclass of ApiSpecs."""
         assert issubclass(RandomnessApi, ApiSpecs)
 
 
 class TestParams:
-    def test_inherits_from_all_three(self):
+    """Tests for Params."""
+
+    def test_inherits_from_all_three(self) -> None:
+        """Test Params inherits from all three base classes."""
         assert issubclass(Params, TaskExecutionParams)
         assert issubclass(Params, SubscriptionParams)
         assert issubclass(Params, TerminationParams)

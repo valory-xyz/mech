@@ -226,17 +226,20 @@ class TestHttpHandlerProperties:
     """Tests for the shared_state-backed properties of HttpHandler."""
 
     def test_last_successful_read_none(self) -> None:
+        """Test last successful read none."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         assert h.last_successful_read is None  # line 152
 
     def test_last_successful_read_set(self) -> None:
+        """Test last successful read set."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         ctx.shared_state[hmod.LAST_SUCCESSFUL_READ] = (100, 1.0)
         assert h.last_successful_read == (100, 1.0)
 
     def test_last_attempt_ts(self) -> None:
+        """Test last attempt ts."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         assert h.last_attempt_ts is None  # line 160
@@ -244,6 +247,7 @@ class TestHttpHandlerProperties:
         assert h.last_attempt_ts == 9.5
 
     def test_inflight_ts(self) -> None:
+        """Test inflight ts."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         assert h.inflight_ts is None  # line 165
@@ -251,6 +255,7 @@ class TestHttpHandlerProperties:
         assert h.inflight_ts == 7.7
 
     def test_last_successful_executed_task(self) -> None:
+        """Test last successful executed task."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         assert h.last_successful_executed_task is None  # line 170
@@ -258,17 +263,22 @@ class TestHttpHandlerProperties:
         assert h.last_successful_executed_task == ("req-1", 2.0)
 
     def test_was_last_read_successful_defaults_true(self) -> None:
+        """Test was last read successful defaults true."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
-        assert h.was_last_read_successful is True  # line 178 — absent → not False → True
+        assert (
+            h.was_last_read_successful is True
+        )  # line 178 — absent → not False → True
 
     def test_was_last_read_successful_false(self) -> None:
+        """Test was last read successful false."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         ctx.shared_state[hmod.WAS_LAST_READ_SUCCESSFUL] = False
         assert h.was_last_read_successful is False
 
     def test_last_tx(self) -> None:
+        """Test last tx."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         assert h.last_tx is None  # line 183
@@ -276,12 +286,15 @@ class TestHttpHandlerProperties:
         assert h.last_tx == ("0xabc", 3.0)
 
     def test_synchronized_data(self) -> None:
+        """Test synchronized data."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         # SynchronizedData wraps the db from context.state; just verify no AttributeError
-        with patch("packages.valory.skills.mech_abci.handlers.SynchronizedData") as MockSD:
+        with patch(
+            "packages.valory.skills.mech_abci.handlers.SynchronizedData"
+        ) as MockSD:
             MockSD.return_value = MagicMock(period_count=5)
-            sd = h.synchronized_data  # line 188
+            h.synchronized_data  # line 188
         assert MockSD.called
 
 
@@ -294,6 +307,7 @@ class TestHttpHandlerHandle:
     """Tests for HttpHandler.handle() dispatch."""
 
     def test_handle_non_request_performative_calls_super(self) -> None:
+        """Test handle non request performative calls super."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         msg = _make_http_msg(performative=HttpMessage.Performative.RESPONSE)
@@ -303,6 +317,7 @@ class TestHttpHandlerHandle:
             mock_super.assert_called_once_with(msg)
 
     def test_handle_wrong_sender_calls_super(self) -> None:
+        """Test handle wrong sender calls super."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         msg = _make_http_msg(sender="some_other_skill")
@@ -312,6 +327,7 @@ class TestHttpHandlerHandle:
             mock_super.assert_called_once_with(msg)
 
     def test_handle_no_matching_route_calls_super(self) -> None:
+        """Test handle no matching route calls super."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         msg = _make_http_msg(url="http://notmyhost.com/healthcheck")
@@ -321,6 +337,7 @@ class TestHttpHandlerHandle:
             mock_super.assert_called_once_with(msg)
 
     def test_handle_none_dialogue_returns_early(self) -> None:
+        """Test handle none dialogue returns early."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         msg = _make_http_msg()
@@ -331,6 +348,7 @@ class TestHttpHandlerHandle:
         ctx.outbox.put_message.assert_not_called()
 
     def test_handle_valid_request_calls_handler(self) -> None:
+        """Test handle valid request calls handler."""
         ctx = _make_ctx()
         h = _make_handler(ctx)
         msg = _make_http_msg(url="http://localhost:8080/healthcheck")
@@ -351,24 +369,30 @@ class TestHttpHandlerResponseHelpers:
     """Tests for _handle_bad_request, _send_ok_response, _send_not_found_response."""
 
     def setup_method(self) -> None:
+        """Test setup method."""
         self.ctx = _make_ctx()
         self.h = _make_handler(self.ctx)
         self.http_msg = _make_http_msg()
         self.dlg = _make_dialogue()
 
     def test_handle_bad_request_sends_400(self) -> None:
+        """Test handle bad request sends 400."""
         self.h._handle_bad_request(self.http_msg, self.dlg)  # lines 285-297
         self.ctx.outbox.put_message.assert_called_once()
         resp = self.dlg.reply.call_args
         assert resp.kwargs["status_code"] == 400
 
     def test_send_ok_response_sends_200(self) -> None:
-        self.h._send_ok_response(self.http_msg, self.dlg, {"key": "val"})  # lines 306-318
+        """Test send ok response sends 200."""
+        self.h._send_ok_response(
+            self.http_msg, self.dlg, {"key": "val"}
+        )  # lines 306-318
         self.ctx.outbox.put_message.assert_called_once()
         resp = self.dlg.reply.call_args
         assert resp.kwargs["status_code"] == 200
 
     def test_send_not_found_response_sends_404(self) -> None:
+        """Test send not found response sends 404."""
         self.h._send_not_found_response(self.http_msg, self.dlg)  # lines 324-335
         self.ctx.outbox.put_message.assert_called_once()
         resp = self.dlg.reply.call_args
@@ -420,7 +444,9 @@ class TestHandleGetHealth:
 
         with (
             patch.object(h, "_send_ok_response", side_effect=capture_ok),
-            patch("packages.valory.skills.mech_abci.handlers.SynchronizedData") as MockSD,
+            patch(
+                "packages.valory.skills.mech_abci.handlers.SynchronizedData"
+            ) as MockSD,
         ):
             MockSD.return_value = MagicMock(period_count=1)
             h._handle_get_health(MagicMock(), _make_dialogue())
@@ -459,9 +485,7 @@ class TestHandleGetHealth:
 
     def test_with_backlog_fresh_deps_and_executed_task(self) -> None:
         """Backlog exists, heartbeat recent, task executed recently → all healthy."""
-        rs = _make_round_sequence(
-            last_transition=datetime.now(), stall_expired=False
-        )
+        rs = _make_round_sequence(last_transition=datetime.now(), stall_expired=False)
         now = time.time()
         ss = {
             hmod.PENDING_TASKS: ["task1"],
@@ -488,18 +512,14 @@ class TestHandleGetHealth:
 
     def test_tm_unhealthy_liveness_false(self) -> None:
         """Tendermint stall detected → liveness not ok."""
-        rs = _make_round_sequence(
-            last_transition=datetime.now(), stall_expired=True
-        )
+        rs = _make_round_sequence(last_transition=datetime.now(), stall_expired=True)
         data = self._run(round_sequence=rs)
         assert data["liveness"]["ok"] is False
         assert data["liveness"]["reason"] == "tm-unhealthy"
 
     def test_inflight_recent_covers_readiness(self) -> None:
         """inflight_ts recent enough → readiness deps-inflight even without heartbeat."""
-        rs = _make_round_sequence(
-            last_transition=datetime.now(), stall_expired=False
-        )
+        rs = _make_round_sequence(last_transition=datetime.now(), stall_expired=False)
         now = time.time()
         ss = {
             hmod.PENDING_TASKS: ["task1"],
@@ -513,7 +533,7 @@ class TestHandleGetHealth:
         """_len_or_zero: int value hits line 409; object() with no __len__ hits 412-413."""
         rs = _make_round_sequence(last_transition=None)
         ss = {
-            hmod.PENDING_TASKS: 5,    # int → line 409
+            hmod.PENDING_TASKS: 5,  # int → line 409
             hmod.IPFS_TASKS: object(),  # len() raises TypeError → lines 412-413
         }
         data = self._run(round_sequence=rs, shared_state=ss)
