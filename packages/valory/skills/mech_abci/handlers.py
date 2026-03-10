@@ -409,7 +409,7 @@ class HttpHandler(BaseHttpHandler):
                 return v
             try:
                 return len(v)  # type: ignore[arg-type]
-            except Exception:
+            except Exception:  # pragma: nocover
                 return 0
 
         pending = _len_or_zero(self.context.shared_state.get(PENDING_TASKS))
