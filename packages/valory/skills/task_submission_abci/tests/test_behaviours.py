@@ -18,10 +18,11 @@
 # ------------------------------------------------------------------------------
 """Tests for task_submission_abci.behaviours — non-generator and key-branch coverage."""
 
+import json
 import threading
 import time
 from types import SimpleNamespace
-from typing import Any, Generator, List, Optional, Type
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Type
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -2213,3 +2214,395 @@ class TestMarketplaceNvmMechPath:
         ):
             result = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
         assert len(result) == 1
+
+
+# ---------------------------------------------------------------------------
+# FundsSplittingBehaviour — _should_split_profits / _split_funds
+# (previously in test_funds_split.py; conftest fixtures are inlined here)
+# ---------------------------------------------------------------------------
+
+
+def _make_fs_ctx() -> SimpleNamespace:
+    """Minimal context for FundsSplittingBehaviour tests."""
+    return SimpleNamespace(
+        logger=SimpleNamespace(
+            info=lambda *a, **k: None,
+            warning=lambda *a, **k: None,
+            error=lambda *a, **k: None,
+        ),
+        params=SimpleNamespace(
+            profit_split_balance=10,
+            on_chain_service_id=100,
+            agent_mech_contract_addresses=["0xA"],
+        ),
+    )
+
+
+class TestFundsSplittingBehaviourSplit:
+    """Tests for FundsSplittingBehaviour._should_split_profits and _split_funds."""
+
+    @pytest.fixture
+    def fs_ctx(self) -> SimpleNamespace:
+        return _make_fs_ctx()
+
+    @pytest.fixture
+    def fs_behaviour(self, fs_ctx: SimpleNamespace) -> _DummyFunds:
+        return _DummyFunds(name="fs", skill_context=fs_ctx)
+
+    @pytest.fixture
+    def patch_mech_info(
+        self, monkeypatch: pytest.MonkeyPatch, fs_behaviour: _DummyFunds
+    ) -> Callable[[Dict[str, int]], None]:
+        def _apply(balances_by_addr: Dict[str, int]) -> None:
+            def _fake(
+                self: _DummyFunds, mech_address: str
+            ) -> Generator[None, None, Optional[Tuple[bytes, str, int]]]:
+                if False:
+                    yield
+                bal = balances_by_addr.get(mech_address)
+                if bal is None:
+                    return None
+                return b"\x00", "0xBalanceTracker", bal
+
+            monkeypatch.setattr(_DummyFunds, "_get_mech_info", _fake)
+
+        return _apply
+
+    @pytest.fixture(autouse=True)
+    def _no_agent_deficits(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Default: no agent needs funding; individual tests override via monkeypatch."""
+
+        def _stub(self: _DummyFunds) -> Generator[None, None, Optional[Dict[str, int]]]:
+            if False:
+                yield
+            return {}
+
+        monkeypatch.setattr(_DummyFunds, "_get_agent_funding_amounts", _stub)
+
+    def test_split_true_at_exact_threshold(
+        self, fs_behaviour: _DummyFunds, fs_ctx: SimpleNamespace, patch_mech_info: Any
+    ) -> None:
+        """Return True when the mech balance equals the threshold."""
+        fs_ctx.params.profit_split_balance = 10
+        fs_ctx.params.agent_mech_contract_addresses = ["0xA"]
+        patch_mech_info({"0xA": 10})
+        assert _run_gen(fs_behaviour._should_split_profits()) is True
+
+    def test_split_false_below_threshold(
+        self, fs_behaviour: _DummyFunds, fs_ctx: SimpleNamespace, patch_mech_info: Any
+    ) -> None:
+        """Return False when the mech balance is below the threshold."""
+        fs_ctx.params.profit_split_balance = 10
+        fs_ctx.params.agent_mech_contract_addresses = ["0xA"]
+        patch_mech_info({"0xA": 9})
+        assert _run_gen(fs_behaviour._should_split_profits()) is False
+
+    def test_balance_logic_avoids_old_modulo_flakiness(
+        self, fs_behaviour: _DummyFunds, fs_ctx: SimpleNamespace, patch_mech_info: Any
+    ) -> None:
+        """Threshold logic triggers once balance surpasses target (avoids 9→11 miss)."""
+        fs_ctx.params.profit_split_balance = 10
+        fs_ctx.params.agent_mech_contract_addresses = ["0xA"]
+        patch_mech_info({"0xA": 11})
+        assert _run_gen(fs_behaviour._should_split_profits()) is True
+
+    def test_error_on_missing_mech_info_returns_false(
+        self, fs_behaviour: _DummyFunds, fs_ctx: SimpleNamespace, patch_mech_info: Any
+    ) -> None:
+        """If a mech returns None from _get_mech_info, method returns False."""
+        fs_ctx.params.profit_split_balance = 10
+        fs_ctx.params.agent_mech_contract_addresses = ["0xMissing"]
+        patch_mech_info({})
+        assert _run_gen(fs_behaviour._should_split_profits()) is False
+
+    def test_agent_dips_below_minimum_triggers_split_via_deficit(
+        self,
+        fs_behaviour: _DummyFunds,
+        fs_ctx: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """When an agent needs funding, _should_split_profits() returns True immediately."""
+        ONE_XDAI = 10**18
+        fs_ctx.params.minimum_agent_balance = 10**17
+        fs_ctx.params.agent_funding_amount = 2 * 10**17
+        fs_ctx.params.profit_split_balance = ONE_XDAI
+        fs_ctx.params.agent_mech_contract_addresses = ["0xMECH"]
+
+        calls: Dict[str, int] = {"funds": 0, "mech": 0}
+
+        def _get_agent_funding_amounts_deficit(
+            self: Any,
+        ) -> Generator[None, None, Optional[Dict[str, int]]]:
+            calls["funds"] += 1
+            if False:
+                yield
+            return {"0xAGENT": fs_ctx.params.agent_funding_amount}
+
+        def _get_mech_info_low_balance(
+            self: Any, mech: str
+        ) -> Generator[None, None, Optional[Tuple[bytes, str, int]]]:
+            calls["mech"] += 1
+            if False:
+                yield
+            return b"\x00", "0xTRACKER", 5 * 10**17
+
+        monkeypatch.setattr(
+            type(fs_behaviour), "_get_agent_funding_amounts", _get_agent_funding_amounts_deficit
+        )
+        monkeypatch.setattr(
+            type(fs_behaviour), "_get_mech_info", _get_mech_info_low_balance
+        )
+
+        assert _run_gen(fs_behaviour._should_split_profits()) is True
+        assert calls["funds"] == 1
+
+    def test_owner_share_rounding_wei_error(
+        self,
+        fs_behaviour: _DummyFunds,
+        fs_ctx: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """int(0.1 * profits) != profits // 10 for large integers — code uses //."""
+        profits: int = 1_000_000_000_000_003_139
+        fs_ctx.params.service_owner_share = 1000
+        fs_ctx.params.on_chain_service_id = 1
+
+        def _no_deficits(self: Any) -> Generator[None, None, Optional[Dict[str, int]]]:
+            if False:
+                yield
+            return {}
+
+        def _owner(self: Any, _sid: int) -> Generator[None, None, Optional[str]]:
+            if False:
+                yield
+            return "0xOWNER"
+
+        def _ops(self: Any, operator_share: int) -> Generator[None, None, Optional[Dict[str, int]]]:
+            if False:
+                yield
+            return {"0xOP": operator_share}
+
+        monkeypatch.setattr(type(fs_behaviour), "_get_agent_funding_amounts", _no_deficits)
+        monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _owner)
+        monkeypatch.setattr(type(fs_behaviour), "_get_funds_by_operator", _ops)
+
+        split = _run_gen(fs_behaviour._split_funds(profits))
+        assert split is not None
+        assert split["0xOWNER"] == profits // 10
+
+    def test_split_exact_allocation_no_deficits_bps(
+        self,
+        fs_behaviour: _DummyFunds,
+        fs_ctx: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """No agent deficits: owner gets bps share, operator gets remainder. Sum == profits."""
+        profits: int = 1_000_000_000_000_003_139
+        fs_ctx.params.service_owner_share = 1_000
+        fs_ctx.params.on_chain_service_id = 1
+
+        def _no_deficits(self: Any) -> Generator[None, None, Optional[Dict[str, int]]]:
+            if False:
+                yield
+            return {}
+
+        def _owner(self: Any, _sid: int) -> Generator[None, None, Optional[str]]:
+            if False:
+                yield
+            return "0xOWNER"
+
+        def _ops(self: Any, operator_share: int) -> Generator[None, None, Optional[Dict[str, int]]]:
+            if False:
+                yield
+            return {"0xOP": operator_share}
+
+        monkeypatch.setattr(type(fs_behaviour), "_get_agent_funding_amounts", _no_deficits)
+        monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _owner)
+        monkeypatch.setattr(type(fs_behaviour), "_get_funds_by_operator", _ops)
+
+        split = _run_gen(fs_behaviour._split_funds(profits))
+        assert split is not None
+        owner_expected = profits * fs_ctx.params.service_owner_share // 10_000
+        operator_expected = profits - owner_expected
+        assert split == {"0xOWNER": owner_expected, "0xOP": operator_expected}
+        assert sum(split.values()) == profits
+
+    def test_split_with_agent_deficits_exact_totals_bps(
+        self,
+        fs_behaviour: _DummyFunds,
+        fs_ctx: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """With agent deficits, agents funded first; remainder split owner/operator."""
+        profits: int = 2_000_000_000_000_000_000
+        fs_ctx.params.service_owner_share = 1_000
+        fs_ctx.params.on_chain_service_id = 1
+
+        agent_funding_amount = 200_000_000_000_000_000
+        deficits_map: Dict[str, int] = {"0xA1": agent_funding_amount, "0xA2": agent_funding_amount}
+        total_deficits = sum(deficits_map.values())
+
+        def _deficits(self: Any) -> Generator[None, None, Optional[Dict[str, int]]]:
+            if False:
+                yield
+            return dict(deficits_map)
+
+        def _owner(self: Any, _sid: int) -> Generator[None, None, Optional[str]]:
+            if False:
+                yield
+            return "0xOWNER"
+
+        def _ops(self: Any, operator_share: int) -> Generator[None, None, Optional[Dict[str, int]]]:
+            if False:
+                yield
+            return {"0xOP": operator_share}
+
+        monkeypatch.setattr(type(fs_behaviour), "_get_agent_funding_amounts", _deficits)
+        monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _owner)
+        monkeypatch.setattr(type(fs_behaviour), "_get_funds_by_operator", _ops)
+
+        split = _run_gen(fs_behaviour._split_funds(profits))
+        assert split is not None
+        remainder = profits - total_deficits
+        owner_expected = remainder * fs_ctx.params.service_owner_share // 10_000
+        operator_expected = remainder - owner_expected
+        expected = dict(deficits_map)
+        expected["0xOWNER"] = owner_expected
+        expected["0xOP"] = operator_expected
+        assert split == expected
+        assert sum(split.values()) == profits
+
+    def test_split_when_deficits_exceed_profits_proportional_only_to_agents(
+        self,
+        fs_behaviour: _DummyFunds,
+        fs_ctx: SimpleNamespace,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        """If total agent deficits > profits, split proportionally among agents only."""
+        profits: int = 900
+        deficits_map: Dict[str, int] = {"0xA": 600, "0xB": 600}
+
+        def _deficits(self: Any) -> Generator[None, None, Optional[Dict[str, int]]]:
+            if False:
+                yield
+            return dict(deficits_map)
+
+        def _owner(self: Any, _sid: int) -> Generator[None, None, Optional[str]]:
+            if False:
+                yield
+            return "0xOWNER"
+
+        def _ops(self: Any, operator_share: int) -> Generator[None, None, Optional[Dict[str, int]]]:
+            if False:
+                yield
+            return {}
+
+        monkeypatch.setattr(type(fs_behaviour), "_get_agent_funding_amounts", _deficits)
+        monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _owner)
+        monkeypatch.setattr(type(fs_behaviour), "_get_funds_by_operator", _ops)
+
+        split = _run_gen(fs_behaviour._split_funds(profits))
+        assert split is not None
+        total_need = sum(deficits_map.values())
+        expected_a = (deficits_map["0xA"] * profits) // total_need
+        expected_b = (deficits_map["0xB"] * profits) // total_need
+        assert "0xOWNER" not in split
+        assert "0xOP" not in split
+        assert split == {"0xA": expected_a, "0xB": expected_b}
+        assert sum(split.values()) <= profits
+
+
+# ---------------------------------------------------------------------------
+# async_act entry points — TaskPoolingBehaviour and TransactionPreparationBehaviour
+# (previously in test_async_act.py)
+# ---------------------------------------------------------------------------
+
+
+def _make_benchmark_ctx() -> SimpleNamespace:
+    """Minimal context with benchmark_tool for async_act tests."""
+    return SimpleNamespace(
+        logger=SimpleNamespace(
+            info=lambda *a, **k: None,
+            warning=lambda *a, **k: None,
+            error=lambda *a, **k: None,
+            debug=lambda *a, **k: None,
+        ),
+        params=SimpleNamespace(
+            task_wait_timeout=0.01,
+            agent_mech_contract_addresses=["0xMECH"],
+        ),
+        shared_state={
+            DONE_TASKS_LOCK: threading.Lock(),
+            DONE_TASKS: [],
+        },
+        # MagicMock supports the context-manager protocol automatically, so
+        # benchmark_tool.measure(id).local() and .consensus() work as with-targets.
+        benchmark_tool=MagicMock(),
+        agent_address="test_agent_address",
+    )
+
+
+def _exhaust(gen: Generator) -> None:
+    """Drive a generator to completion."""
+    try:
+        while True:
+            next(gen)
+    except StopIteration:
+        pass
+
+
+def _noop_gen() -> Generator:
+    """Generator that returns immediately with None."""
+    return  # noqa: PLE0307
+    yield  # pragma: no cover
+
+
+def _noop_gen_with_args(*_args: object, **_kwargs: object) -> Generator:
+    """Generator that accepts any arguments and returns immediately."""
+    return  # noqa: PLE0307
+    yield  # pragma: no cover
+
+
+class TestTaskPoolingBehaviourAsyncAct:
+    """Drive TaskPoolingBehaviour.async_act through the real generator body."""
+
+    def test_async_act_runs_to_done(self) -> None:
+        """async_act builds a payload and marks itself done."""
+        ctx = _make_benchmark_ctx()
+        b = TaskPoolingBehaviour(name="b", skill_context=ctx)
+
+        def _payload_content() -> Generator:
+            return json.dumps([])
+            yield  # pragma: no cover
+
+        with (
+            patch.object(b, "handle_submitted_tasks", side_effect=_noop_gen),
+            patch.object(b, "get_payload_content", side_effect=_payload_content),
+            patch.object(b, "send_a2a_transaction", side_effect=_noop_gen_with_args),
+            patch.object(b, "wait_until_round_end", side_effect=_noop_gen),
+        ):
+            _exhaust(b.async_act())
+
+        assert b.is_done()
+
+
+class TestTransactionPreparationBehaviourAsyncAct:
+    """Drive TransactionPreparationBehaviour.async_act through the real generator body."""
+
+    def test_async_act_runs_to_done(self) -> None:
+        """async_act builds a transaction payload and marks itself done."""
+        ctx = _make_benchmark_ctx()
+        b = TransactionPreparationBehaviour(name="b", skill_context=ctx)
+
+        def _tx_hash() -> Generator:
+            return "some_tx_hash"
+            yield  # pragma: no cover
+
+        with (
+            patch.object(b, "get_payload_content", side_effect=_tx_hash),
+            patch.object(b, "send_a2a_transaction", side_effect=_noop_gen_with_args),
+            patch.object(b, "wait_until_round_end", side_effect=_noop_gen),
+        ):
+            _exhaust(b.async_act())
+
+        assert b.is_done()
