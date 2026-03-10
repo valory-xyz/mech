@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -26,7 +26,6 @@ from dotenv import load_dotenv  # type: ignore
 
 from packages.valory.customs.prediction_request.prediction_request import run
 from packages.valory.skills.task_execution.utils.apis import KeyChain
-
 
 load_dotenv(override=True)
 

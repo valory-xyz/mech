@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module implements a Mech tool for binary predictions."""
+
 import copy
 import functools
 import json
@@ -41,7 +42,6 @@ from pydantic import BaseModel, PositiveInt
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import Encoding, encoding_for_model, get_encoding
-
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]

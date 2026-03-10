@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2025 Valory AG
+#   Copyright 2025-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 """The script allows the user to publish the metadata of the tools on ipfs"""
+
 import argparse
 import sys
 
@@ -26,7 +27,6 @@ from multibase import multibase
 from multicodec import multicodec
 
 from scripts.generate_metadata import METADATA_FILE_PATH
-
 
 PREFIX = "f01701220"
 IPFS_PREFIX_LENGTH = 6

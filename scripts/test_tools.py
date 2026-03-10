@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2025 Valory AG
+#   Copyright 2025-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -26,9 +26,6 @@ from timeit import default_timer as timer
 
 from dotenv import load_dotenv  # type: ignore
 
-from packages.jhehemann.customs.prediction_sum_url_content.prediction_sum_url_content import (
-    run as prediction_sum_url_content_run,
-)
 from packages.napthaai.customs.prediction_request_rag.prediction_request_rag import (
     run as prediction_request_rag_run,
 )
@@ -52,7 +49,6 @@ from packages.valory.customs.superforcaster.superforcaster import (
 )
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 
-
 load_dotenv(override=True)
 
 TOOLS_TO_RUN_FUNCTION = {
@@ -62,7 +58,6 @@ TOOLS_TO_RUN_FUNCTION = {
     "claude-prediction-offline": prediction_request_run,
     "prediction-online-sme": prediction_request_sme_run,
     "prediction-offline-sme": prediction_request_sme_run,
-    "prediction-online-sum-url-content": prediction_sum_url_content_run,
     "prediction-request-rag": prediction_request_rag_run,
     "prediction-request-rag-claude": prediction_request_rag_run,
     "prediction-request-reasoning": prediction_request_reasoning_run,

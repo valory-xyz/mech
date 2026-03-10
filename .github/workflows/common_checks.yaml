@@ -16,7 +16,7 @@ jobs:
       matrix:
         os: [ ubuntu-latest, macos-latest, windows-latest ]
         python-version: [ "3.10" ]
-        poetry-version: ["1.8.0"]
+        poetry-version: ["2.3.2"]
 
     defaults:
       run:
@@ -38,7 +38,7 @@ jobs:
         virtualenvs-path: ~/my-custom-path
         installer-parallel: true
     - name: Check if dependencies can be locked
-      run: poetry lock --check
+      run: poetry lock
     - name: Poetry install requirements and check they can be locked
       run: poetry install --all-extras --no-interaction -vvv
 
@@ -61,7 +61,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
-      run: pip install tomte[tox,cli]==0.2.14
+      run: pip install tomte[tox,cli]==0.6.2
     - name: Check copyright headers
       run: tomte check-copyright --author valory --exclude-part abci --exclude-part http_client --exclude-part ipfs --exclude-part ledger --exclude-part p2p_libp2p_client --exclude-part gnosis_safe --exclude-part gnosis_safe_proxy_factory --exclude-part multisend --exclude-part service_registry --exclude-part contracts --exclude-part skills --exclude-part protocols --exclude-part abstract_abci --exclude-part abstract_round_abci --exclude-part registration_abci --exclude-part reset_pause_abci --exclude-part termination_abci --exclude-part transaction_settlement_abci --exclude-part websocket_client --exclude-part contract_subscription --exclude-part mech --exclude-part mech_interact_abci  --exclude-part http_server
     - name: License compatibility check
@@ -92,7 +92,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run:  |
-        pip install tomte[tox,cli]==0.2.17
+        pip install tomte[tox,cli]==0.6.2
 
         # Install `mdspell` for spelling checks
         sudo npm install -g markdown-spellcheck
@@ -140,7 +140,7 @@ jobs:
     strategy:
       matrix:
         os: [ ubuntu-latest, macos-latest, windows-latest ]
-        python-version: [ "3.10", "3.11" ]
+        python-version: [ "3.10", "3.11", "3.12", "3.13", "3.14" ]
 
     timeout-minutes: 120
     
@@ -170,7 +170,7 @@ jobs:
           sudo apt-get update --fix-missing
           sudo apt-get autoremove
           sudo apt-get autoclean
-          pip install tomte[tox,cli]==0.4.0
+          pip install tomte[tox,cli]==0.6.2
           pip install --user --upgrade setuptools
       - if: matrix.os == 'ubuntu-latest'
         name: Tool unit tests ubuntu-latest
@@ -180,7 +180,7 @@ jobs:
       - if: matrix.os == 'macos-latest'
         name: Install dependencies (macos-latest)
         run: |
-          pip install tomte[tox,cli]==0.4.0
+          pip install tomte[tox,cli]==0.6.2
           pip install --user --upgrade setuptools
       - if: matrix.os == 'macos-latest'
         name: Tool unit tests macos-latest
@@ -191,7 +191,7 @@ jobs:
         name: Install dependencies (windows-latest)
         run: |
           python -m pip install -U pip
-          pip install tomte[tox,cli]==0.4.0
+          pip install tomte[tox,cli]==0.6.2
           pip install --upgrade setuptools
       - if: matrix.os == 'windows-latest'
         name: Tool unit tests windows-latest

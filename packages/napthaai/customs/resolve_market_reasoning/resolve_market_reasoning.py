@@ -43,7 +43,6 @@ from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
 from tiktoken import Encoding, encoding_for_model, get_encoding
 
-
 TOKENS_DISTANCE_TO_LIMIT = 200
 DOC_TOKEN_LIMIT = 7000  # Maximum tokens per document for embeddings
 BUFFER = 500  # Buffer for the total tokens in the embeddings batch

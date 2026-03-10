@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module implements a Mech tool for binary predictions."""
+
 import functools
 import json
 from collections import defaultdict
@@ -35,7 +36,6 @@ from markdownify import markdownify as md
 from openai import OpenAI
 from readability import Document
 from tiktoken import encoding_for_model
-
 
 client: Optional[OpenAI] = None
 

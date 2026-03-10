@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
         with:
-          python-version: ${{ matrix.python-versions }}
+          python-version: ${{ matrix.python-version }}
       - uses: maus007/docker-run-action-fork@v1
         with:
             image: valory/open-autonomy-user:0.21.4
@@ -71,7 +71,7 @@ jobs:
               echo "Building Docker Images"
               cd /work
               source env.sh || exit 1
-              pip install requests==2.28.1
+              pip install requests==2.32.5
               echo "Building images for $AUTHOR for service $SERVICE"
               autonomy init --reset --author $AUTHOR --ipfs --remote
               autonomy fetch $AUTHOR/$SERVICE --service --local || exit 1
@@ -104,10 +104,10 @@ jobs:
     env:
       CMD: "propel -U ${{ vars.PROPEL_BASE_URL }}"
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
         with:
-          python-version: ${{ matrix.python-versions }}
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           sudo apt-get update --fix-missing
@@ -156,10 +156,10 @@ jobs:
     env:
       CMD: "propel -U ${{ vars.PROPEL_BASE_URL }}"
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v3
       - uses: actions/setup-python@v3
         with:
-          python-version: ${{ matrix.python-versions }}
+          python-version: ${{ matrix.python-version }}
       - name: Install dependencies
         run: |
           sudo apt-get update --fix-missing
