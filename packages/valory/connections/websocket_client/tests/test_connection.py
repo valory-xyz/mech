@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Tests for websocket_client connection — H-1 fix verification."""
+"""Tests for the WebSocketClient connection."""
 
 # pylint: skip-file
 
@@ -41,13 +41,13 @@ def connection() -> WebSocketClient:
 
 
 class TestDisconnectShutdownExecutor:
-    """Tests for H-1: executor shutdown on disconnect."""
+    """Tests that disconnect() properly releases the ThreadPoolExecutor."""
 
     @pytest.mark.asyncio
     async def test_disconnect_shuts_down_executor(
         self, connection: WebSocketClient
     ) -> None:
-        """After disconnect(), executor.shutdown(wait=True) must be called."""
+        """disconnect() calls executor.shutdown(wait=True) to release thread resources."""
         await connection.disconnect()
 
         connection._executor.shutdown.assert_called_once_with(wait=True)
@@ -56,7 +56,7 @@ class TestDisconnectShutdownExecutor:
     async def test_disconnect_order_of_operations(
         self, connection: WebSocketClient
     ) -> None:
-        """Subscriptions removed and outbox emptied before executor shutdown."""
+        """disconnect() removes subscriptions and empties outbox before shutting down the executor."""
         call_order = []
 
         async def track_remove() -> None:

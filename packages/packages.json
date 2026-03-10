@@ -5,15 +5,15 @@
         "contract/valory/complementary_service_metadata/0.1.0": "bafybeibjk5gdgc54wx5bz4fl2666urmfj6mx3ocqxyumqpj7wq5fdg4diu",
         "contract/valory/hash_checkpoint/0.1.0": "bafybeihidmyihq36u77psqksococh2tynwjnvkblfzikt6ud62eihdxiyi",
         "contract/valory/balance_tracker/0.1.0": "bafybeiao53oacmcgykb3swd2dtjie7laro4yfhisqh5he25pc23txximkq",
-        "connection/valory/websocket_client/0.1.0": "bafybeifgdfiimsnu6ls37bkkctogn45zfxwberhtjae5lgvdpnrv6bdsrq",
-        "skill/valory/contract_subscription/0.1.0": "bafybeiea24wtxgsvji4beygqsqu4ppd7uwou26cr7ahxcl5uvevgc22msq",
-        "skill/valory/mech_abci/0.1.0": "bafybeigcesydxepnt2sedg4izpkquq5stpgsupap5p4kfjpdykcwzp3awa",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeiafalxj2depsfv4qjkocdjgmxj6kfyrb6qx32o3nl2aoueafth6si",
-        "skill/valory/task_execution/0.1.0": "bafybeihxsuebduuthk2vpqjhbgjwlud7ang54afqgrwjq4ty4j6qnvelee",
-        "skill/valory/websocket_client/0.1.0": "bafybeifgbucu4wrlg2mqqbxtn5xjb5ubpk3udmpynar22yltzv2gyb4lua",
+        "connection/valory/websocket_client/0.1.0": "bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea",
+        "skill/valory/contract_subscription/0.1.0": "bafybeibtcbtgm5ptzn6srfts3lxts5722sygmkypcknv5ocmydqwcvgeem",
+        "skill/valory/mech_abci/0.1.0": "bafybeicihkdursp4njmwa5lhfrti4pzas27wn5tnecdaxdu6ty4ha3olwm",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeicnrtxrue75odzydbzcsw75b4v42ypwrpvrm3cgkdsxn2vlmus4ca",
+        "skill/valory/task_execution/0.1.0": "bafybeieenzur2yrskrlxwdsmxjiatlj3imjdyimhmkppdfo4zetryg3kom",
+        "skill/valory/websocket_client/0.1.0": "bafybeie63j65ffblz6g6oiaynjpz4ae5mgyjz2w6o5ovqitzdbnvqzlhzu",
         "skill/valory/delivery_rate_abci/0.1.0": "bafybeifstz7s3bwkpgnvvqyhro6f6rvgfjbgyepywcqrtvpnnrhjynfkym",
-        "agent/valory/mech/0.1.0": "bafybeifgzpwo72elakq3y526fn3kee6cqsl37e26347ccxxaezdp2rr7ym",
-        "service/valory/mech/0.1.0": "bafybeievcakfonprkjqpusk272quqy3rwbyziuxjqqvvfxvqed3oa33ebm"
+        "agent/valory/mech/0.1.0": "bafybeieady4dbtvliapmzjyve3aw4ewogplbeozmezgwc4dotrxwx7bqfu",
+        "service/valory/mech/0.1.0": "bafybeigcuc4v5t7ocvulrwrc5eiuvf5kgg5kjerd2wiblbwnoba4yamiya"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",
