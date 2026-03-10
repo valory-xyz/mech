@@ -59,9 +59,7 @@ class _DummyBase(TaskExecutionBaseBehaviour):
     matching_round: Type[AbstractRound] = _CAST_ROUND  # type: ignore
 
     def async_act(self) -> Generator[None, None, None]:
-        if False:  # pragma: no cover
-            yield
-        return None
+        yield from ()
 
 
 class _DummyPooling(TaskPoolingBehaviour):
@@ -70,9 +68,7 @@ class _DummyPooling(TaskPoolingBehaviour):
     matching_round: Type[AbstractRound] = _CAST_ROUND  # type: ignore
 
     def async_act(self) -> Generator[None, None, None]:
-        if False:  # pragma: no cover
-            yield
-        return None
+        yield from ()
 
 
 class _DummyDeliver(DeliverBehaviour):
@@ -81,9 +77,7 @@ class _DummyDeliver(DeliverBehaviour):
     matching_round: Type[AbstractRound] = _CAST_ROUND  # type: ignore
 
     def async_act(self) -> Generator[None, None, None]:
-        if False:  # pragma: no cover
-            yield
-        return None
+        yield from ()
 
 
 class _DummyFunds(FundsSplittingBehaviour):
@@ -92,9 +86,7 @@ class _DummyFunds(FundsSplittingBehaviour):
     matching_round: Type[AbstractRound] = _CAST_ROUND  # type: ignore
 
     def async_act(self) -> Generator[None, None, None]:
-        if False:  # pragma: no cover
-            yield
-        return None
+        yield from ()
 
 
 def _make_lock() -> threading.Lock:
@@ -293,15 +285,6 @@ class TestSetTx:
 
 
 class TestCheckLastTxStatus:
-    def _make_sync_data_mock(self, final_tx_hash_value=None, raise_=False):
-        """Create a mock synchronized_data."""
-        sd = MagicMock()
-        if raise_:
-            type(sd).final_tx_hash = property(lambda self: (_ for _ in ()).throw(ValueError("not set")))
-        else:
-            type(sd).final_tx_hash = property(lambda self: final_tx_hash_value)
-        return sd
-
     def test_returns_true_with_hash_when_final_tx_hash_exists(self):
         ctx = _make_ctx()
         b = _DummyPooling(name="b", skill_context=ctx)
@@ -1484,9 +1467,7 @@ class _DummyTransPrep(TransactionPreparationBehaviour):
     """Minimal concrete subclass for testing TransactionPreparationBehaviour."""
 
     def async_act(self) -> Generator[None, None, None]:
-        if False:  # pragma: no cover
-            yield
-        return None
+        yield from ()
 
 
 class TestGetDeliverTx:
@@ -1733,13 +1714,6 @@ class TestGetMarketplaceTasksDeliverData:
         ctx = _make_full_ctx()
         b = _DummyTransPrep(name="b", skill_context=ctx)
         return b
-
-    def _patch_sd(self, b, done_tasks):
-        mock_sd = MagicMock()
-        mock_sd.done_tasks = done_tasks
-        mock_sd.safe_contract_address = "0xSAFE"
-        object.__setattr__(b, "_synchronized_data", mock_sd)
-        return patch.object(type(b), "synchronized_data", new_callable=lambda: property(lambda self: b._synchronized_data))
 
     def test_returns_empty_list_for_no_marketplace_tasks(self):
         b = self._make_b()
@@ -2328,7 +2302,7 @@ class TestFundsSplittingBehaviourSplit:
         fs_ctx.params.profit_split_balance = ONE_XDAI
         fs_ctx.params.agent_mech_contract_addresses = ["0xMECH"]
 
-        calls: Dict[str, int] = {"funds": 0, "mech": 0}
+        calls: Dict[str, int] = {"funds": 0}
 
         def _get_agent_funding_amounts_deficit(
             self: Any,
@@ -2338,19 +2312,8 @@ class TestFundsSplittingBehaviourSplit:
                 yield
             return {"0xAGENT": fs_ctx.params.agent_funding_amount}
 
-        def _get_mech_info_low_balance(
-            self: Any, mech: str
-        ) -> Generator[None, None, Optional[Tuple[bytes, str, int]]]:
-            calls["mech"] += 1
-            if False:
-                yield
-            return b"\x00", "0xTRACKER", 5 * 10**17
-
         monkeypatch.setattr(
             type(fs_behaviour), "_get_agent_funding_amounts", _get_agent_funding_amounts_deficit
-        )
-        monkeypatch.setattr(
-            type(fs_behaviour), "_get_mech_info", _get_mech_info_low_balance
         )
 
         assert _run_gen(fs_behaviour._should_split_profits()) is True
@@ -2492,14 +2455,8 @@ class TestFundsSplittingBehaviourSplit:
                 yield
             return "0xOWNER"
 
-        def _ops(self: Any, operator_share: int) -> Generator[None, None, Optional[Dict[str, int]]]:
-            if False:
-                yield
-            return {}
-
         monkeypatch.setattr(type(fs_behaviour), "_get_agent_funding_amounts", _deficits)
         monkeypatch.setattr(type(fs_behaviour), "_get_service_owner", _owner)
-        monkeypatch.setattr(type(fs_behaviour), "_get_funds_by_operator", _ops)
 
         split = _run_gen(fs_behaviour._split_funds(profits))
         assert split is not None
@@ -2553,14 +2510,12 @@ def _exhaust(gen: Generator) -> None:
 
 def _noop_gen() -> Generator:
     """Generator that returns immediately with None."""
-    return  # noqa: PLE0307
-    yield  # pragma: no cover
+    yield from ()
 
 
 def _noop_gen_with_args(*_args: object, **_kwargs: object) -> Generator:
     """Generator that accepts any arguments and returns immediately."""
-    return  # noqa: PLE0307
-    yield  # pragma: no cover
+    yield from ()
 
 
 class TestTaskPoolingBehaviourAsyncAct:
@@ -2572,8 +2527,8 @@ class TestTaskPoolingBehaviourAsyncAct:
         b = TaskPoolingBehaviour(name="b", skill_context=ctx)
 
         def _payload_content() -> Generator:
+            yield from ()
             return json.dumps([])
-            yield  # pragma: no cover
 
         with (
             patch.object(b, "handle_submitted_tasks", side_effect=_noop_gen),
@@ -2595,8 +2550,8 @@ class TestTransactionPreparationBehaviourAsyncAct:
         b = TransactionPreparationBehaviour(name="b", skill_context=ctx)
 
         def _tx_hash() -> Generator:
+            yield from ()
             return "some_tx_hash"
-            yield  # pragma: no cover
 
         with (
             patch.object(b, "get_payload_content", side_effect=_tx_hash),
