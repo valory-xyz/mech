@@ -36,16 +36,89 @@ import anthropic
 import googleapiclient
 import openai
 import requests
-import spacy
 from googleapiclient.discovery import build
 from markdownify import markdownify as md
 from pydantic import BaseModel, PositiveInt
 from readability import Document
-from spacy import Language
-from spacy.cli import download
-from spacy.lang.en import STOP_WORDS
-from spacy.tokens import Doc, Span
 from tiktoken import encoding_for_model, get_encoding
+
+
+# `STOP_WORDS` retrieved from https://github.com/explosion/spaCy/blob/v3.7.5/spacy/lang/en/stop_words.py
+STOP_WORDS = set("""
+a about above across after afterwards again against all almost alone along
+already also although always am among amongst amount an and another any anyhow
+anyone anything anyway anywhere are around as at
+
+back be became because become becomes becoming been before beforehand behind
+being below beside besides between beyond both bottom but by
+
+call can cannot ca could
+
+did do does doing done down due during
+
+each eight either eleven else elsewhere empty enough even ever every
+everyone everything everywhere except
+
+few fifteen fifty first five for former formerly forty four from front full
+further
+
+get give go
+
+had has have he hence her here hereafter hereby herein hereupon hers herself
+him himself his how however hundred
+
+i if in indeed into is it its itself
+
+keep
+
+last latter latterly least less
+
+just
+
+made make many may me meanwhile might mine more moreover most mostly move much
+must my myself
+
+name namely neither never nevertheless next nine no nobody none noone nor not
+nothing now nowhere
+
+of off often on once one only onto or other others otherwise our ours ourselves
+out over own
+
+part per perhaps please put
+
+quite
+
+rather re really regarding
+
+same say see seem seemed seeming seems serious several she should show side
+since six sixty so some somehow someone something sometime sometimes somewhere
+still such
+
+take ten than that the their them themselves then thence there thereafter
+thereby therefore therein thereupon these they third this those though three
+through throughout thru thus to together too top toward towards twelve twenty
+two
+
+under until up unless upon us used using
+
+various very very via was we well were what whatever when whence whenever where
+whereafter whereas whereby wherein whereupon wherever whether which while
+whither who whoever whole whom whose why will with within without would
+
+yet you your yours yourself yourselves
+""".split())
+
+contractions = ["n't", "'d", "'ll", "'m", "'re", "'s", "'ve"]
+STOP_WORDS.update(contractions)
+
+for apostrophe in ["‘", "’"]:
+    for stopword in contractions:
+        STOP_WORDS.add(stopword.replace("'", apostrophe))
+
+STOP_WORDS = STOP_WORDS.union(punctuation)
+
+SENTENCE_BOUNDARY_RE = re.compile(r"(?<=[.!?])\s+")
+WORD_RE = re.compile(r"\w+")
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
@@ -352,7 +425,7 @@ def count_tokens(text: str, model: str) -> int:
 
 
 FrequenciesType = Dict[str, float]
-ScoresType = Dict[Span, float]
+ScoresType = Dict[str, float]
 
 
 LLM_SETTINGS = {
@@ -430,7 +503,6 @@ DEFAULT_NUM_WORDS["prediction-online-summarized-info"] = None
 # how much of the initial content will be kept during summarization
 DEFAULT_COMPRESSION_FACTOR = 0.05
 # the vocabulary to use for the summarization
-DEFAULT_VOCAB = "en_core_web_sm"
 # number of retries and delay for completion
 COMPLETION_RETRIES = 3
 COMPLETION_DELAY = 2
@@ -937,21 +1009,20 @@ def fetch_additional_information(
     return additional_information, counter_callback
 
 
-def load_model(vocab: str) -> Language:
-    """Utilize spaCy to load the model and download it if it is not already available."""
-    try:
-        return spacy.load(vocab)
-    except OSError:
-        print("Downloading language model...")
-        download(vocab)
-        return spacy.load(vocab)
+def _tokenize_words(text: str) -> List[str]:
+    """Tokenize text into lowercase words."""
+    return WORD_RE.findall(text)
 
 
-def calc_word_frequencies(doc: Doc) -> FrequenciesType:
+def _split_sentences(text: str) -> List[str]:
+    """Split text into sentences."""
+    return [s.strip() for s in SENTENCE_BOUNDARY_RE.split(text) if s.strip()]
+
+
+def calc_word_frequencies(words: List[str]) -> FrequenciesType:
     """Get the frequency of each word in the given text, excluding stop words and punctuations."""
-    word_frequencies: Dict = defaultdict(lambda: 0)
-    for token in doc:
-        word = token.text
+    word_frequencies: Dict[str, int] = defaultdict(lambda: 0)
+    for word in words:
         lower = word.lower()
         if lower not in STOP_WORDS.union(punctuation):
             word_frequencies[lower] += 1
@@ -968,31 +1039,29 @@ def calc_word_frequencies(doc: Doc) -> FrequenciesType:
 
 
 def calc_sentence_scores(
-    sentence_tokens: List[Span], word_frequencies: FrequenciesType
+    sentences: List[str], word_frequencies: FrequenciesType
 ) -> ScoresType:
     """Calculate the sentence scores."""
-    sentence_scores: Dict = defaultdict(lambda: 0)
-    for sentence in sentence_tokens:
-        for token in sentence:
-            sentence_scores[sentence] += word_frequencies[token.text.lower()]
+    sentence_scores: ScoresType = defaultdict(lambda: 0)
+    for sentence in sentences:
+        for word in _tokenize_words(sentence):
+            sentence_scores[sentence] += word_frequencies[word.lower()]
 
     return sentence_scores
 
 
-def summarize(text: str, compression_factor: float, vocab: str) -> str:
+def summarize(text: str, compression_factor: float) -> str:
     """Summarize the given text, retaining the given compression factor."""
     if not text:
         raise ValueError("Cannot summarize empty text!")
 
-    nlp = load_model(vocab)
-    doc = nlp(text)
-    word_frequencies = calc_word_frequencies(doc)
-    sentence_tokens = list(doc.sents)
-    sentence_scores = calc_sentence_scores(sentence_tokens, word_frequencies)
-    n = int(len(sentence_tokens) * compression_factor)
+    words = _tokenize_words(text)
+    word_frequencies = calc_word_frequencies(words)
+    sentences = _split_sentences(text)
+    sentence_scores = calc_sentence_scores(sentences, word_frequencies)
+    n = max(1, int(len(sentences) * compression_factor))
     summary = nlargest(n, sentence_scores, key=lambda k: sentence_scores[k])
-    summary_words = [word.text for word in summary]
-    summary_text = "".join(summary_words)
+    summary_text = " ".join(summary)
     return summary_text
 
 
@@ -1060,7 +1129,6 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         compression_factor = kwargs.get(
             "compression_factor", DEFAULT_COMPRESSION_FACTOR
         )
-        vocab = kwargs.get("vocab", DEFAULT_VOCAB)
         counter_callback = kwargs.get("counter_callback", None)
         api_keys = kwargs.get("api_keys", {})
         google_api_key = api_keys.get("google_api_key", None)
@@ -1094,7 +1162,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         if additional_information and tool == "prediction-online-summarized-info":
             additional_information = summarize(
-                additional_information, compression_factor, vocab
+                additional_information, compression_factor
             )
         if additional_information:
             # check the limit of tokens
