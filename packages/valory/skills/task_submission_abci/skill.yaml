@@ -17,8 +17,14 @@ fingerprint:
   rounds.py: bafybeiesmhu2uttp2zv7rgpz5j5ibb3erm4zp65rtzu7olm7bdwfeozdue
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
-  tests/conftest.py: bafybeihmmkkrov5wediwbc62euqvovmixlpwemc5cq3olqfx652kbs7nie
-  tests/test_funds_split.py: bafybeihpn2gtcgqmmuwzjadujkuwf6u7n67idt3xtalqwdwkyy43gjtdne
+  tests/conftest.py: bafybeidvzhcjifcyl4wf5cqaxvn3pkaqw62spcqkormpwqrqa6b2sg6rje
+  tests/test_behaviours.py: bafybeic2gybgikz7w2l5osezgt6yiyn6rgdwevipr7wktmrss37feqn7oa
+  tests/test_dialogues.py: bafybeifdvwho3paoskwizi36f2t3t6zr2lpagjq3cv5uiwu3kyryvwojte
+  tests/test_handlers.py: bafybeifscss5uqch7rvmn2ap6aoueewzzr42luoqpmclkiu6kcgo5oyk5q
+  tests/test_models.py: bafybeig4eyy3su6bwqxowbvzcoydnattbhvrg34ag7ifmlxzu2rnnzl4pq
+  tests/test_payloads.py: bafybeihfkjwpgl55so7nzoy7gtfuxnnquqbiuonlgsbabsbf5zj5fui3vu
+  tests/test_rounds.py: bafybeicubtk3geneisiumytep3g4x6ohaqn27cek4ex3jk2mgus6kxqrje
+  tests/test_tasks.py: bafybeibbzrxlqc2nw2hsxwqsw3tpr6l2opyzjczzrvof75a3m7nje6g2lq
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -38,7 +44,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicehi2yqab3lldm7qzoqev3tmqrdk275sbtcabneyorhmzft76z7m
 - valory/transaction_settlement_abci:0.1.0:bafybeigivknq755rbnelrdemaz3vm4x7jkofvaskm34uh36pbbg6uiquo4
-- valory/task_execution:0.1.0:bafybeihxsuebduuthk2vpqjhbgjwlud7ang54afqgrwjq4ty4j6qnvelee
+- valory/task_execution:0.1.0:bafybeictmlh3v2adf3prugvkw4zitzo7hwedllisauefzn7bb3rawvpe6i
 behaviours:
   main:
     args: {}

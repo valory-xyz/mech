@@ -11,10 +11,14 @@ fingerprint:
   composition.py: bafybeiflvcnopyly2h2vx4p25jicylwzxvyxbqbqc62ssqdnbh2hrusk4m
   dialogues.py: bafybeigph4dbt75rpfjoxp5zzplb4m5izwblbpt6qssnrvvl2joj6o5cke
   fsm_specification.yaml: bafybeibac4bsjjhmxljzptuus3xlkufsiaofgg77g7nq7qgeju7fa6lh3u
-  handlers.py: bafybeihnzh6rkrsn6xvmio4c3borzothkj5u62qcbjnzr5gt6hcy6iudsu
+  handlers.py: bafybeihst6hrmipodszjjqbnwkvtswefas7ihcyqrxpwgnwipea3xxjsim
   models.py: bafybeid2dmqyfe4pinh6glewhas24zvjntc4z3rtrkp3ji7z2bkq5sudhu
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
-  tests/test_handlers.py: bafybeibly5hzonydal5c6t223ltot2ekpha4lmjqapklplaafg5es2pz6q
+  tests/test_behaviours.py: bafybeib5aojkn27lmudmoo2y77mpar7kf2c35mcepqdsksdezietxmptg4
+  tests/test_composition.py: bafybeidrbkx5xmzngll2o7kxi437zl64uerucpdv5rwvjt2kmhgw4yzata
+  tests/test_dialogues.py: bafybeieqns2slytox4mt7a7wimhfjaz4istqrkfcfcceckkqmbzahvio4y
+  tests/test_handlers.py: bafybeic6kqvgk7thdvu6wacpmme4uciptymq46wb6bjcukvpivn3tzd5a4
+  tests/test_models.py: bafybeiczyqmvuvqm3g5brx72un6fgw34byvihfn2d526i5ek4kax7mn2va
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeid4oqsfkqo36lryoecymjnq4whme3tgupqfq6m4l7lbr5r4yxtswu
@@ -25,11 +29,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeicehi2yqab3lldm7qzoqev3tmqrdk275sbtcabneyorhmzft76z7m
 - valory/registration_abci:0.1.0:bafybeihjgfzqvuymqgku6mwqih7hlvqwr2tmdjrip3m6unt5l4e55bshkm
 - valory/reset_pause_abci:0.1.0:bafybeih6bjalcohxytg6hj3doy5dhkxonrxpqgcnclyf6tnmuyfbom2usy
-- valory/task_submission_abci:0.1.0:bafybeiafalxj2depsfv4qjkocdjgmxj6kfyrb6qx32o3nl2aoueafth6si
+- valory/task_submission_abci:0.1.0:bafybeigsvapp33asmab2w4f3piihzp7da76qngmzlep5snoum3rsiel5ge
 - valory/termination_abci:0.1.0:bafybeiarjw4hhu2vf56yxqb4jh3kmk4hfxvqahygn6scc3rfnlogjkwwpe
 - valory/transaction_settlement_abci:0.1.0:bafybeigivknq755rbnelrdemaz3vm4x7jkofvaskm34uh36pbbg6uiquo4
 - valory/delivery_rate_abci:0.1.0:bafybeifstz7s3bwkpgnvvqyhro6f6rvgfjbgyepywcqrtvpnnrhjynfkym
-- valory/task_execution:0.1.0:bafybeihxsuebduuthk2vpqjhbgjwlud7ang54afqgrwjq4ty4j6qnvelee
+- valory/task_execution:0.1.0:bafybeictmlh3v2adf3prugvkw4zitzo7hwedllisauefzn7bb3rawvpe6i
 behaviours:
   main:
     args: {}

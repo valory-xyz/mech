@@ -13,10 +13,16 @@ fingerprint:
   models.py: bafybeigeczmmo5m4a5hwkubh2ulq2i2lod7jvbmmsaua7atskeq2hyy4bm
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeic5hjd7sem6emu2pjf3fc32cgytr2bhvuitl7thkz2xwk2rnmrnwq
-  tests/test_behaviours.py: bafybeihm535e6ciikpt3izyz6c5ok2o4p2gax4uijyibho7wqvetz2nls4
-  tests/test_dialogues.py: bafybeigtvumwhygqsjtzvicbygjmj3a2dr36j6mjaiez36bqfyh2naux3i
-  tests/test_handlers.py: bafybeidk6jzdtrrhc3chqwebagkjrpj2ijsh3y4qz5iykphwdislb6eofu
-  tests/test_models.py: bafybeiblrii2f4he2gzim65ndtchk6crdxot7upsa2fidydrr7vakzu4wa
+  tests/test_behaviours.py: bafybeiai42c3f6l3j37jeoihsa4ynqzxxn667m6du4akkkvee6pqleagki
+  tests/test_dialogues.py: bafybeif5v53ct62ebzwfuju5fixmvykdez44cswpcxx2k5uxmnqdzkjidq
+  tests/test_handlers.py: bafybeib24byyafaswse3ya2licu2nigcr7rc6zhmzadtqx7433awrjq3ze
+  tests/test_models.py: bafybeidyzmub74c3m6zopwgxy43o2mx5tvig4wmahgyhoiur4qz55jgwaq
+  tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
+  tests/utils/test_apis.py: bafybeiexfyjcwdsjbt4fhzdq6kzt7dlhz4vc2iifjqdqrbtvryc6jwxury
+  tests/utils/test_benchmarks.py: bafybeiakohehi33h4ntj2k4z4nvrzapacqv3kmybe4yszvbvoipksherwe
+  tests/utils/test_cost_calculation.py: bafybeig6zhfjzcsxa6eklj722blnxskxp4s4zklgbgtrtfx2cezat5dcey
+  tests/utils/test_ipfs.py: bafybeieeagz5odu7txybd7cwqxhnbxwodcyixb7yzv2diu6wjuluslrf2i
+  tests/utils/test_task.py: bafybeifzwnzi4e57elzuaj6chqzixqylce4ijfsdi5doanadm2revxppua
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeih75sdickbk25zvduf2jolikmsfmh6c2rmju5lrdkhyhipmg23u2y
   utils/benchmarks.py: bafybeibc7tus7mxwjmrlcvujjr7qfxdtg6dwdi4ytjbi57igqbbi4nfknm
