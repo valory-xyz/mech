@@ -1023,7 +1023,7 @@ def calc_word_frequencies(words: List[str]) -> FrequenciesType:
     word_frequencies: Dict[str, int] = defaultdict(lambda: 0)
     for word in words:
         lower = word.lower()
-        if lower not in STOP_WORDS.union(punctuation):
+        if lower not in STOP_WORDS:
             word_frequencies[lower] += 1
 
     max_frequency = max(word_frequencies.values())
