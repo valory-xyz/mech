@@ -72,16 +72,6 @@ class TestSharedStateInit:
 class TestSharedStateSetup:
     """Tests for SharedState.setup."""
 
-    def _run_setup(self, state):
-        original = dict(MechAbciApp.event_to_timeout)
-        try:
-            with patch.object(TaskExecSharedState, "setup", return_value=None) as mock_super:
-                state.setup()
-            return mock_super
-        finally:
-            MechAbciApp.event_to_timeout.clear()
-            MechAbciApp.event_to_timeout.update(original)
-
     def test_setup_configures_round_timeout(self):
         state = _make_shared_state(_make_context(round_timeout=10.0))
         original = dict(MechAbciApp.event_to_timeout)
