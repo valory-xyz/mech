@@ -18,7 +18,6 @@
 # ------------------------------------------------------------------------------
 """Tests for mech_abci.models."""
 
-from types import SimpleNamespace
 from unittest.mock import patch
 
 from packages.valory.skills.abstract_round_abci.models import ApiSpecs
@@ -31,6 +30,10 @@ from packages.valory.skills.mech_abci.models import (
     Params,
     RandomnessApi,
     SharedState,
+)
+from packages.valory.skills.mech_abci.tests.conftest import (
+    _make_context,
+    _make_shared_state,
 )
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
 from packages.valory.skills.task_submission_abci.models import (
@@ -46,27 +49,6 @@ from packages.valory.skills.termination_abci.models import TerminationParams
 from packages.valory.skills.transaction_settlement_abci.rounds import (
     Event as TransactionSettlementEvent,
 )
-
-
-def _make_context(round_timeout=10.0, validate=20.0, finalize=30.0, reset_pause=60.0):  # type: ignore
-    return SimpleNamespace(
-        params=SimpleNamespace(
-            round_timeout_seconds=round_timeout,
-            validate_timeout=validate,
-            finalize_timeout=finalize,
-            reset_pause_duration=reset_pause,
-        )
-    )
-
-
-def _make_shared_state(ctx=None) -> SharedState:  # type: ignore
-    """Create a SharedState instance bypassing the AEA framework init."""
-    with patch.object(TaskExecSharedState, "__init__", return_value=None):
-        state = SharedState.__new__(SharedState)
-        SharedState.__init__(state)
-    # context is a read-only property backed by _context
-    object.__setattr__(state, "_context", ctx or _make_context())
-    return state
 
 
 class TestSharedStateInit:

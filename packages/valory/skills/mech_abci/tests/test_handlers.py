@@ -23,18 +23,21 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, Dict, Optional, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 import packages.valory.skills.mech_abci.handlers as hmod
-from packages.valory.connections.http_server.connection import (
-    PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
-)
 from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.skills.mech_abci.handlers import HttpHandler, HttpMethod
+from packages.valory.skills.mech_abci.tests.conftest import (
+    _make_ctx,
+    _make_dialogue,
+    _make_handler,
+    _make_http_msg,
+    _make_round_sequence,
+)
 from packages.valory.skills.task_execution.handlers import MechHttpHandler
 
 PACKAGE_DIR = Path(__file__).parents[1]
@@ -158,63 +161,6 @@ class TestHttpHandler:
 
         assert handler == expected_handler
         assert captures == expected_captures
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_ctx() -> MagicMock:
-    ctx = MagicMock()
-    ctx.logger = MagicMock()
-    ctx.params.service_endpoint_base = "http://localhost:8080/"
-    ctx.params.reset_pause_duration = 30.0
-    ctx.shared_state = {}
-    ctx.outbox = MagicMock()
-    return ctx
-
-
-def _make_handler(ctx: Optional[MagicMock] = None) -> HttpHandler:
-    if ctx is None:
-        ctx = _make_ctx()
-    # MechHttpHandler.setup() populates shared_state["routes_info"] which HttpHandler.setup() needs
-    mech_h = MechHttpHandler(name="mech_http", skill_context=ctx)
-    with patch.object(mech_h, "start_prometheus_server"):
-        mech_h.setup()
-    h = HttpHandler(name="http", skill_context=ctx)
-    h.setup()
-    return h
-
-
-def _make_http_msg(
-    performative: Any = None,
-    url: str = "http://localhost:8080/healthcheck",
-    method: str = "get",
-    body: bytes = b"",
-    sender: Optional[str] = None,
-) -> MagicMock:
-    if performative is None:
-        performative = HttpMessage.Performative.REQUEST
-    if sender is None:
-        sender = str(HTTP_SERVER_PUBLIC_ID.without_hash())
-    msg = MagicMock()
-    msg.performative = performative
-    msg.url = url
-    msg.method = method
-    msg.body = body
-    msg.sender = sender
-    msg.version = "1.1"
-    msg.headers = ""
-    return msg
-
-
-def _make_dialogue() -> MagicMock:
-    dlg = MagicMock()
-    dlg.reply.return_value = SimpleNamespace(
-        status_code=200, body=b"ok", version="1.1", headers=""
-    )
-    return dlg
 
 
 # ---------------------------------------------------------------------------
@@ -402,22 +348,6 @@ class TestHttpHandlerResponseHelpers:
 # ---------------------------------------------------------------------------
 # _handle_get_health branches
 # ---------------------------------------------------------------------------
-
-
-def _make_round_sequence(
-    last_transition: Optional[datetime] = None,
-    stall_expired: bool = False,
-    has_abci_app: bool = False,
-) -> MagicMock:
-    rs = MagicMock()
-    rs._last_round_transition_timestamp = last_transition
-    rs.block_stall_deadline_expired = stall_expired
-    if has_abci_app:
-        rs._abci_app.current_round.round_id = "some_round"
-        rs._abci_app._previous_rounds = []
-    else:
-        rs._abci_app = None
-    return rs
 
 
 class TestHandleGetHealth:
