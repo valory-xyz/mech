@@ -22,7 +22,7 @@
 import threading
 from types import SimpleNamespace
 from typing import Any, Callable, Generator
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -271,3 +271,12 @@ def make_benchmark_ctx() -> Callable[[], SimpleNamespace]:
 def run_gen() -> Callable[[Generator[Any, Any, Any]], Any]:
     """Fixture for running a generator to completion."""
     return _run_gen
+
+
+@pytest.fixture
+def mock_to_multihash() -> Generator[MagicMock, None, None]:
+    """Patch to_multihash in behaviours and yield the mock."""
+    with patch(
+        "packages.valory.skills.task_submission_abci.behaviours.to_multihash"
+    ) as m:
+        yield m

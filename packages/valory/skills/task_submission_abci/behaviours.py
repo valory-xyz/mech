@@ -29,8 +29,6 @@ from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 
 from aea.helpers.cid import CID, to_v1
-from multibase import multibase
-from multicodec import multicodec
 from prometheus_client import Gauge, Histogram
 
 from packages.valory.contracts.balance_tracker.contract import BalanceTrackerContract
@@ -58,6 +56,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
+from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import TransactionPayload
 from packages.valory.skills.task_submission_abci.rounds import (
@@ -210,19 +209,6 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
     def mech_addresses(self) -> List[str]:
         """Get the addresses of the MECHs."""
         return self.params.agent_mech_contract_addresses
-
-    @staticmethod
-    def to_multihash(hash_string: str) -> str:
-        """To multihash string."""
-        # Decode the Base32 CID to bytes
-        cid_bytes = multibase.decode(hash_string)
-        if not cid_bytes:
-            return ""
-        # Remove the multicodec prefix (0x01) from the bytes
-        multihash_bytes = multicodec.remove_prefix(cid_bytes)
-        # Convert the multihash bytes to a hexadecimal string
-        hex_multihash = multihash_bytes.hex()
-        return hex_multihash[6:]
 
     def set_gauge(self, metric: Gauge, value: int, **labels: Any) -> None:
         """Set the Prometheus' guage metric"""
@@ -1242,7 +1228,7 @@ class TrackingBehaviour(DeliverBehaviour, ABC):
             return None
 
         self.context.logger.info(f"Saved updated usage to IPFS: {ipfs_hash}")
-        ipfs_hash = self.to_multihash(to_v1(ipfs_hash))
+        ipfs_hash = to_multihash(to_v1(ipfs_hash))
         tx = yield from self._get_checkpoint_tx(
             self.params.hash_checkpoint_address, ipfs_hash
         )
@@ -1284,7 +1270,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
                 return False
             self.params.task_mutable_params.latest_metadata_hash = latest_hash
 
-        configured_hash = self.to_multihash(self.params.metadata_hash)
+        configured_hash = to_multihash(self.params.metadata_hash)
         if configured_hash == "":
             self.context.logger.warning("Could not calculate configured hash")
             return False
@@ -1303,7 +1289,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         # reset the latest hash, this will be updated after the tx is sent
         self.params.task_mutable_params.latest_metadata_hash = None
 
-        metadata_str = self.to_multihash(self.params.metadata_hash)
+        metadata_str = to_multihash(self.params.metadata_hash)
         metadata = bytes.fromhex(metadata_str)
         contract_api_msg = yield from self.get_contract_api_response(
             performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore

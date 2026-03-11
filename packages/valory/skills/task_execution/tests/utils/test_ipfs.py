@@ -124,6 +124,14 @@ class TestToMultihash:
             to_multihash("some-cid")
         mock_mb.decode.assert_called_once_with("some-cid")
 
+    def test_empty_decode_returns_empty_string(self) -> None:
+        """Return empty string when multibase.decode yields empty bytes."""
+        with patch(
+            "packages.valory.skills.task_execution.utils.ipfs.multibase"
+        ) as mock_mb:
+            mock_mb.decode.return_value = b""
+            assert to_multihash("empty-cid") == ""
+
 
 # ---------------------------------------------------------------------------
 # ComponentPackageLoader

@@ -195,35 +195,6 @@ class TestRemoveTasks:
         assert ctx.shared_state[DONE_TASKS] == []
 
 
-class TestToMultihash:
-    """Test To Multihash."""
-
-    def test_empty_bytes_returns_empty_string(self) -> None:
-        """Test empty bytes returns empty string."""
-        with patch(
-            "packages.valory.skills.task_submission_abci.behaviours.multibase"
-        ) as mock_mb:
-            mock_mb.decode.return_value = b""
-            result = TaskExecutionBaseBehaviour.to_multihash("empty-cid")
-        assert result == ""
-
-    def test_valid_bytes_strips_six_hex_chars(self) -> None:
-        """Test valid bytes strips six hex chars."""
-        multihash_bytes = bytes.fromhex("1220" + "ab" * 32)
-        with (
-            patch(
-                "packages.valory.skills.task_submission_abci.behaviours.multibase"
-            ) as mock_mb,
-            patch(
-                "packages.valory.skills.task_submission_abci.behaviours.multicodec"
-            ) as mock_mc,
-        ):
-            mock_mb.decode.return_value = b"\x01\x70" + multihash_bytes
-            mock_mc.remove_prefix.return_value = multihash_bytes
-            result = TaskExecutionBaseBehaviour.to_multihash("bafytest")
-        assert result == multihash_bytes.hex()[6:]
-
-
 class TestSetGauge:
     """Test Set Gauge."""
 
@@ -1626,8 +1597,9 @@ class TestGetUpdateUsageTx:
             result = _run_gen(b.get_update_usage_tx())
         assert result is None
 
-    def test_returns_tx_on_success(self) -> None:
+    def test_returns_tx_on_success(self, mock_to_multihash: MagicMock) -> None:
         """Test returns tx on success."""
+        mock_to_multihash.return_value = "ab" * 16
         b = self._make_b()
         tx = {"to": "0xHASH", "value": 0, "data": b"\x00"}
         with (
@@ -1641,9 +1613,6 @@ class TestGetUpdateUsageTx:
                 b, "_save_usage_to_ipfs", side_effect=_gen_returning("bafyhash")
             ),
             patch.object(b, "_get_checkpoint_tx", side_effect=_gen_returning(tx)),
-            patch.object(
-                TaskExecutionBaseBehaviour, "to_multihash", return_value="ab" * 16
-            ),
         ):
             with patch(
                 "packages.valory.skills.task_submission_abci.behaviours.to_v1",
@@ -1685,34 +1654,38 @@ class TestHashUpdateBehaviour:
             result = _run_gen(b._should_update_hash())
         assert result is False
 
-    def test_should_update_hash_returns_false_when_configured_hash_empty(self) -> None:
+    def test_should_update_hash_returns_false_when_configured_hash_empty(
+        self, mock_to_multihash: MagicMock
+    ) -> None:
         """Test should update hash returns false when configured hash empty."""
+        mock_to_multihash.return_value = ""
         b = self._make_b()
         b.context.params.task_mutable_params.latest_metadata_hash = None
-        with (
-            patch.object(
-                b, "_get_latest_hash", side_effect=_gen_returning(b"\x00" * 32)
-            ),
-            patch.object(type(b), "to_multihash", return_value=""),
+        with patch.object(
+            b, "_get_latest_hash", side_effect=_gen_returning(b"\x00" * 32)
         ):
             result = _run_gen(b._should_update_hash())
         assert result is False
 
-    def test_should_update_hash_returns_false_when_hashes_same(self) -> None:
+    def test_should_update_hash_returns_false_when_hashes_same(
+        self, mock_to_multihash: MagicMock
+    ) -> None:
         """Test should update hash returns false when hashes same."""
+        mock_to_multihash.return_value = "same_hash"
         b = self._make_b()
         # latest_metadata_hash and configured_hash must both be strings for equality
         b.context.params.task_mutable_params.latest_metadata_hash = "same_hash"
-        with patch.object(type(b), "to_multihash", return_value="same_hash"):
-            result = _run_gen(b._should_update_hash())
+        result = _run_gen(b._should_update_hash())
         assert result is False
 
-    def test_should_update_hash_returns_true_when_hashes_differ(self) -> None:
+    def test_should_update_hash_returns_true_when_hashes_differ(
+        self, mock_to_multihash: MagicMock
+    ) -> None:
         """Test should update hash returns true when hashes differ."""
+        mock_to_multihash.return_value = "new_hash"
         b = self._make_b()
         b.context.params.task_mutable_params.latest_metadata_hash = b"old_hash"
-        with patch.object(type(b), "to_multihash", return_value="new_hash"):
-            result = _run_gen(b._should_update_hash())
+        result = _run_gen(b._should_update_hash())
         assert result is True
 
     def test_get_mech_update_hash_tx_returns_none_when_no_update_needed(self) -> None:
@@ -1722,15 +1695,17 @@ class TestHashUpdateBehaviour:
             result = _run_gen(b.get_mech_update_hash_tx())
         assert result is None
 
-    def test_get_mech_update_hash_tx_returns_tx_on_success(self) -> None:
+    def test_get_mech_update_hash_tx_returns_tx_on_success(
+        self, mock_to_multihash: MagicMock
+    ) -> None:
         """Test get mech update hash tx returns tx on success."""
+        mock_to_multihash.return_value = "ab" * 16
         b = self._make_b()
         b.context.params.task_mutable_params.latest_metadata_hash = b"old"
         tx_data = b"\xde\xca"
         msg = _state_contract_msg({"data": tx_data})
         with (
             patch.object(b, "_should_update_hash", side_effect=_gen_returning(True)),
-            patch.object(type(b), "to_multihash", return_value="ab" * 16),
             patch.object(
                 b, "get_contract_api_response", side_effect=_gen_returning(msg)
             ),
