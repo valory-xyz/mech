@@ -14,11 +14,12 @@ fingerprint:
   handlers.py: bafybeihst6hrmipodszjjqbnwkvtswefas7ihcyqrxpwgnwipea3xxjsim
   models.py: bafybeid2dmqyfe4pinh6glewhas24zvjntc4z3rtrkp3ji7z2bkq5sudhu
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
+  tests/conftest.py: bafybeifyemptw4npqhqmdixhlbvwy6blknwsrwdkpwk6fytljhvo2tteg4
   tests/test_behaviours.py: bafybeiall74mu4rqpbqsp4top26z5watte7ngq7mzpmsk56ez2bxopeqte
   tests/test_composition.py: bafybeids4xve23iyrut4g55truflyqr2bal3l3yf2hbuz5vsfe4h45neae
   tests/test_dialogues.py: bafybeiepzr3e3olrq2agzui3eposoaxpn4ovnztjaea57utemldzuujd2e
-  tests/test_handlers.py: bafybeiaylcv7gcchv2ajlopoyajefylrt6cg5b4krimihunmv6du6n6imu
-  tests/test_models.py: bafybeifqk5oey34xesahm6ymruc57yzdgi5sh53lvtunslhw3uab26uglm
+  tests/test_handlers.py: bafybeigz45asuc66fsfidiw3kjzmncmovs4mnpfv6gjxwerp53jlushvfm
+  tests/test_models.py: bafybeieqc2vqn6nwhbowid25keundabjnygu6wmn6jhby2iyidgugq5t24
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeid4oqsfkqo36lryoecymjnq4whme3tgupqfq6m4l7lbr5r4yxtswu
@@ -29,11 +30,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeicehi2yqab3lldm7qzoqev3tmqrdk275sbtcabneyorhmzft76z7m
 - valory/registration_abci:0.1.0:bafybeihjgfzqvuymqgku6mwqih7hlvqwr2tmdjrip3m6unt5l4e55bshkm
 - valory/reset_pause_abci:0.1.0:bafybeih6bjalcohxytg6hj3doy5dhkxonrxpqgcnclyf6tnmuyfbom2usy
-- valory/task_submission_abci:0.1.0:bafybeic6g2dr4kgcl3meoetywzulrirfbcugmflvqdh5x53lamyaayeufq
+- valory/task_submission_abci:0.1.0:bafybeiffrg5qfolaibdozzqucjy55kufwqeisk5mwwvelz6ensy2mrl72i
 - valory/termination_abci:0.1.0:bafybeiarjw4hhu2vf56yxqb4jh3kmk4hfxvqahygn6scc3rfnlogjkwwpe
 - valory/transaction_settlement_abci:0.1.0:bafybeigivknq755rbnelrdemaz3vm4x7jkofvaskm34uh36pbbg6uiquo4
 - valory/delivery_rate_abci:0.1.0:bafybeifstz7s3bwkpgnvvqyhro6f6rvgfjbgyepywcqrtvpnnrhjynfkym
-- valory/task_execution:0.1.0:bafybeidnzltml5y4yg4fioevtbrmnpahy4jg663kqn4ql4dqdf5fm2ron4
+- valory/task_execution:0.1.0:bafybeihcqcenkze6wzd5bsgioo7puqtwrrac5q6j5ayljejtaryqjabhsq
 behaviours:
   main:
     args: {}

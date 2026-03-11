@@ -15,19 +15,19 @@ fingerprint:
   tests/conftest.py: bafybeic5hjd7sem6emu2pjf3fc32cgytr2bhvuitl7thkz2xwk2rnmrnwq
   tests/test_behaviours.py: bafybeibef6d4yunnzgtc3wl2eizprtb7ygnvgubzkpw6ye6jxve6wujcaa
   tests/test_dialogues.py: bafybeicirkhymhby4lzmlnya3kndurl7k5key76d2k2qokhwqixmmrhwsa
-  tests/test_handlers.py: bafybeicbgnyktrsek4rt7jcukwhogchg3lrab75tfisvpupgocv6vlcdhy
+  tests/test_handlers.py: bafybeifjaactg7wre7lnb7ac7lwmozk35cvzbiwr6msmq7l6i32uwtm4tu
   tests/test_models.py: bafybeidyzmub74c3m6zopwgxy43o2mx5tvig4wmahgyhoiur4qz55jgwaq
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
-  tests/utils/test_benchmarks.py: bafybeigckz6dhanwg2mr5nrthlbqg63e72cnpxt27t7lhpb3o2weyzjooa
-  tests/utils/test_cost_calculation.py: bafybeie5a6w34vzcvxfl7eaiglugqzurpsj6fj7gamsmdgt65xycc6skuu
-  tests/utils/test_ipfs.py: bafybeihbmmkcv7yefhrx7zrhffn55cdsmqsfsooiv2kfo6w2dakxdiibwy
+  tests/utils/test_benchmarks.py: bafybeifhadhmpwhulgvxm3wgodwstnw3v2lq6uetntww3ia5r7trirfecm
+  tests/utils/test_cost_calculation.py: bafybeiglkqnmurf6ner2wy2k6vy4zmfehfgzh2ctzn4ae2t3qhoaqs7he4
+  tests/utils/test_ipfs.py: bafybeie36a2x3n5cdbjptynjehvba4pjbjyco2ihs22wfariftykalqtz4
   tests/utils/test_task.py: bafybeigdfi37m5taw6jecd7t2bg54ctcv4u3js5u3xd2lyckoazy4efpv4
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeih75sdickbk25zvduf2jolikmsfmh6c2rmju5lrdkhyhipmg23u2y
-  utils/benchmarks.py: bafybeibc7tus7mxwjmrlcvujjr7qfxdtg6dwdi4ytjbi57igqbbi4nfknm
+  utils/benchmarks.py: bafybeieryzn2jmjn2q7u6peokoopuhnhi2mjj6kex4kmunixvf2dea3sge
   utils/cost_calculation.py: bafybeic7siuvsglg7txjpzidskelw32r7lfphupzzrlnir6dbw3wng5v6u
-  utils/ipfs.py: bafybeigllu5hatbf6k25vtv3vim7p4dw7xulwuhtxcv2qkv6m2foxx4acy
+  utils/ipfs.py: bafybeidnea53cncr62gvv5bnhadorlgja7ujmobxcd66c3ueg4ozwfo344
   utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
 fingerprint_ignore_patterns: []
 connections:
