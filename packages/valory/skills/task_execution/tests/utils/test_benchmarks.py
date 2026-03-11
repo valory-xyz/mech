@@ -82,20 +82,17 @@ class TestCalculateCost:
         cb.calculate_cost("input", MODEL, _dummy_counter, input_prompt=prompt)
         assert cb.cost_dict["input_tokens"] == 3
 
-    def test_missing_both_keys_logs_warning(self, caplog) -> None:  # type: ignore
-        """Test calculate_cost logs warning when both token keys are missing."""
+    def test_missing_both_keys_logs_warning_and_returns_early(self, caplog) -> None:  # type: ignore
+        """Test calculate_cost logs warning and returns early when both keys missing."""
         import logging
 
         cb = TokenCounterCallback()
         with caplog.at_level(logging.WARNING):
-            # No input_tokens or input_prompt → logs warning, but tokens is unbound
-            # The function will raise NameError on `token_to_cost(tokens, ...)`.
-            # That error propagates; we just check the log
-            try:
-                cb.calculate_cost("input", MODEL, _dummy_counter)
-            except Exception:
-                pass
+            cb.calculate_cost("input", MODEL, _dummy_counter)
         assert "input" in caplog.text
+        # cost_dict should remain unchanged — no tokens counted
+        assert cb.cost_dict["input_tokens"] == 0
+        assert cb.cost_dict["input_cost"] == 0
 
 
 class TestTokenCounterCallbackCall:
