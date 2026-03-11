@@ -1174,8 +1174,9 @@ class TestSplitFunds:
         ):
             result = _run_gen(b._split_funds(100))
         assert result is not None
-        assert "a0" in result and "a1" in result
-        # Total should not exceed profits
+        # a0 share = (80 * 100) // 140 = 57, a1 share = (60 * 100) // 140 = 42
+        assert result["a0"] == 57
+        assert result["a1"] == 42
         assert result["a0"] + result["a1"] <= 100
 
     def test_full_success_split(self) -> None:
