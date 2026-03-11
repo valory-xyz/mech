@@ -32,6 +32,11 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     DeliverBehaviour,
     FundsSplittingBehaviour,
     LAST_TX,
+    MarketplaceData,
+    MarketplaceKeys,
+    OffchainDataKey,
+    OffchainDataValue,
+    OffchainKeys,
     PAYMENT_MODEL,
     TaskExecutionBaseBehaviour,
     TaskPoolingBehaviour,
@@ -454,50 +459,24 @@ class TestGetDeliveryReport:
 class TestEnumConstants:
     """Verify the module-level Enum classes are accessible."""
 
-    from packages.valory.skills.task_submission_abci.behaviours import (
-        MarketplaceData,
-        MarketplaceKeys,
-        OffchainDataKey,
-        OffchainDataValue,
-        OffchainKeys,
-    )
-
     def test_offchain_keys_values(self) -> None:
         """Test offchain keys values."""
-        from packages.valory.skills.task_submission_abci.behaviours import OffchainKeys
-
         assert OffchainKeys.DELIVER_WITH_SIGNATURES.value == "deliverWithSignatures"
 
     def test_offchain_data_key_values(self) -> None:
         """Test offchain data key values."""
-        from packages.valory.skills.task_submission_abci.behaviours import (
-            OffchainDataKey,
-        )
-
         assert OffchainDataKey.REQUEST_DATA_KEY.value == "requestData"
 
     def test_offchain_data_value_values(self) -> None:
         """Test offchain data value values."""
-        from packages.valory.skills.task_submission_abci.behaviours import (
-            OffchainDataValue,
-        )
-
         assert OffchainDataValue.IPFS_HASH.value == "ipfs_hash"
 
     def test_marketplace_keys_values(self) -> None:
         """Test marketplace keys values."""
-        from packages.valory.skills.task_submission_abci.behaviours import (
-            MarketplaceKeys,
-        )
-
         assert MarketplaceKeys.REQUEST_IDS.value == "requestIds"
 
     def test_marketplace_data_values(self) -> None:
         """Test marketplace data values."""
-        from packages.valory.skills.task_submission_abci.behaviours import (
-            MarketplaceData,
-        )
-
         assert MarketplaceData.REQUEST_ID.value == "requestId"
 
 
