@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 """Tests for task_execution.utils.cost_calculation."""
 
+import logging
 import math
 from typing import Any
 
@@ -71,8 +72,6 @@ class TestGetCostForDoneTask:
 
     def test_empty_cost_dict_logs_warning(self, caplog: Any) -> None:
         """Empty cost_dict logs a warning containing the request_id."""
-        import logging
-
         task = _task(request_id="rid-42", cost_dict={})
         with caplog.at_level(logging.WARNING):
             get_cost_for_done_task(task)
@@ -90,8 +89,6 @@ class TestGetCostForDoneTask:
 
     def test_total_cost_none_logs_warning(self, caplog: Any) -> None:
         """total_cost=None logs a warning containing the request_id."""
-        import logging
-
         task = _task(request_id="rid-99", cost_dict={"total_cost": None})
         with caplog.at_level(logging.WARNING):
             get_cost_for_done_task(task)

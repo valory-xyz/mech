@@ -24,7 +24,7 @@ import time
 import urllib.parse
 from types import SimpleNamespace
 from typing import Any, Dict, List
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -1032,7 +1032,6 @@ def test_base_handler_teardown(handler_context: Any) -> None:
 
 def test_acn_handler_handle(handler_context: Any) -> None:
     """AcnHandler.handle logs and calls on_message_handled."""
-    import packages.valory.skills.task_execution.handlers as hmod
 
     h = hmod.AcnHandler(name="acn", skill_context=handler_context)
     h.setup()
@@ -1052,7 +1051,6 @@ def test_contract_handler_mech_type_and_mech_types_body_keys(
     handler_context: SimpleNamespace,
 ) -> None:
     """MECH_TYPE and MECH_TYPES body keys update shared_state."""
-    import packages.valory.skills.task_execution.handlers as hmod
 
     params: Any = handler_context.params
     params.in_flight_req = True
@@ -1102,7 +1100,6 @@ def test_contract_handler_wait_for_timeout_status(
     handler_context: SimpleNamespace,
 ) -> None:
     """WAIT_FOR_TIMEOUT_STATUS with high delivery_rate puts request in wait_for_timeout_tasks."""
-    import packages.valory.skills.task_execution.handlers as hmod
 
     params: Any = handler_context.params
     params.req_type = "marketplace"
@@ -1145,7 +1142,6 @@ def test_start_prometheus_server_calls_start_http_server(
     handler_context: Any, monkeypatch: Any
 ) -> None:
     """start_prometheus_server invokes prometheus_client.start_http_server."""
-    import packages.valory.skills.task_execution.handlers as hmod
 
     called: Dict[str, Any] = {}
     monkeypatch.setattr(
@@ -1209,10 +1205,6 @@ def test_get_ledger_settings_missing_rpc(
 
 def test_get_mech_payment_type(handler_context: Any, monkeypatch: Any) -> None:
     """_get_mech_payment_type returns the mech_type from contract response."""
-    from unittest.mock import patch
-
-    import packages.valory.skills.task_execution.handlers as hmod
-
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
@@ -1229,10 +1221,6 @@ def test_get_balance_tracker_address_for_payment_type(
     handler_context: Any, monkeypatch: Any
 ) -> None:
     """_get_balance_tracker_address_for_payment_type returns address from contract response."""
-    from unittest.mock import patch
-
-    import packages.valory.skills.task_execution.handlers as hmod
-
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
@@ -1253,10 +1241,6 @@ def test_get_balance_tracker_address_for_payment_type(
 
 def test_get_requester_balance(handler_context: Any, monkeypatch: Any) -> None:
     """_get_requester_balance returns balance from contract response."""
-    from unittest.mock import patch
-
-    import packages.valory.skills.task_execution.handlers as hmod
-
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
@@ -1301,10 +1285,6 @@ def test_check_offchain_requester_balance_payment_type_none(
     handler_context: Any, monkeypatch: Any
 ) -> None:
     """_check_offchain_requester_balance returns unavailable when payment type is None."""
-    from unittest.mock import patch
-
-    import packages.valory.skills.task_execution.handlers as hmod
-
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
@@ -1331,10 +1311,6 @@ def test_check_offchain_requester_balance_no_balance_tracker(
     handler_context: Any, monkeypatch: Any
 ) -> None:
     """_check_offchain_requester_balance returns unavailable when balance tracker is zero."""
-    from unittest.mock import patch
-
-    import packages.valory.skills.task_execution.handlers as hmod
-
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
@@ -1366,10 +1342,6 @@ def test_check_offchain_requester_balance_success(
     handler_context: Any, monkeypatch: Any
 ) -> None:
     """_check_offchain_requester_balance returns OK with balance on full success path."""
-    from unittest.mock import patch
-
-    import packages.valory.skills.task_execution.handlers as hmod
-
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()

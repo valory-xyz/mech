@@ -18,6 +18,8 @@
 # ------------------------------------------------------------------------------
 """Tests for task_execution.utils.benchmarks."""
 
+import logging
+
 import pytest
 
 from packages.valory.skills.task_execution.utils.benchmarks import (
@@ -84,8 +86,6 @@ class TestCalculateCost:
 
     def test_missing_both_keys_logs_warning_and_returns_early(self, caplog) -> None:  # type: ignore
         """Test calculate_cost logs warning and returns early when both keys missing."""
-        import logging
-
         cb = TokenCounterCallback()
         with caplog.at_level(logging.WARNING):
             cb.calculate_cost("input", MODEL, _dummy_counter)
@@ -122,8 +122,6 @@ class TestTokenCounterCallbackCall:
 
     def test_exception_in_calculate_cost_is_caught(self, caplog) -> None:  # type: ignore
         """If calculate_cost raises internally, the error is logged, not re-raised."""
-        import logging
-
         cb = TokenCounterCallback()
 
         # Force an error by providing a token_counter that raises
