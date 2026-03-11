@@ -67,81 +67,61 @@ class TestSharedStateInit:
 class TestSharedStateSetup:
     """Tests for SharedState.setup."""
 
-    def test_setup_configures_round_timeout(self) -> None:
+    def test_setup_configures_round_timeout(
+        self, preserve_event_to_timeout: None
+    ) -> None:
         """Test setup configures round timeout on MechAbciApp."""
         state = _make_shared_state(_make_context(round_timeout=10.0))
-        original = dict(MechAbciApp.event_to_timeout)
-        try:
-            with patch.object(TaskExecSharedState, "setup", return_value=None):
-                state.setup()
-            assert (
-                MechAbciApp.event_to_timeout[TaskExecutionEvent.ROUND_TIMEOUT] == 10.0
-            )
-            assert (
-                MechAbciApp.event_to_timeout[
-                    TaskExecutionEvent.TASK_EXECUTION_ROUND_TIMEOUT
-                ]
-                == 10.0
-            )
-            assert MechAbciApp.event_to_timeout[ResetPauseEvent.ROUND_TIMEOUT] == 10.0
-            assert (
-                MechAbciApp.event_to_timeout[TransactionSettlementEvent.ROUND_TIMEOUT]
-                == 10.0
-            )
-        finally:
-            MechAbciApp.event_to_timeout.clear()
-            MechAbciApp.event_to_timeout.update(original)
+        with patch.object(TaskExecSharedState, "setup", return_value=None):
+            state.setup()
+        assert MechAbciApp.event_to_timeout[TaskExecutionEvent.ROUND_TIMEOUT] == 10.0
+        assert (
+            MechAbciApp.event_to_timeout[
+                TaskExecutionEvent.TASK_EXECUTION_ROUND_TIMEOUT
+            ]
+            == 10.0
+        )
+        assert MechAbciApp.event_to_timeout[ResetPauseEvent.ROUND_TIMEOUT] == 10.0
+        assert (
+            MechAbciApp.event_to_timeout[TransactionSettlementEvent.ROUND_TIMEOUT]
+            == 10.0
+        )
 
-    def test_setup_configures_validate_and_finalize_timeout(self) -> None:
+    def test_setup_configures_validate_and_finalize_timeout(
+        self, preserve_event_to_timeout: None
+    ) -> None:
         """Test setup configures validate and finalize timeouts."""
         state = _make_shared_state(_make_context(validate=20.0, finalize=30.0))
-        original = dict(MechAbciApp.event_to_timeout)
-        try:
-            with patch.object(TaskExecSharedState, "setup", return_value=None):
-                state.setup()
-            assert (
-                MechAbciApp.event_to_timeout[
-                    TransactionSettlementEvent.VALIDATE_TIMEOUT
-                ]
-                == 20.0
-            )
-            assert (
-                MechAbciApp.event_to_timeout[
-                    TransactionSettlementEvent.FINALIZE_TIMEOUT
-                ]
-                == 30.0
-            )
-        finally:
-            MechAbciApp.event_to_timeout.clear()
-            MechAbciApp.event_to_timeout.update(original)
+        with patch.object(TaskExecSharedState, "setup", return_value=None):
+            state.setup()
+        assert (
+            MechAbciApp.event_to_timeout[TransactionSettlementEvent.VALIDATE_TIMEOUT]
+            == 20.0
+        )
+        assert (
+            MechAbciApp.event_to_timeout[TransactionSettlementEvent.FINALIZE_TIMEOUT]
+            == 30.0
+        )
 
-    def test_reset_pause_timeout_adds_margin(self) -> None:
+    def test_reset_pause_timeout_adds_margin(
+        self, preserve_event_to_timeout: None
+    ) -> None:
         """Test setup adds MARGIN to reset_pause_duration for timeout."""
         reset_pause = 60.0
         state = _make_shared_state(_make_context(reset_pause=reset_pause))
-        original = dict(MechAbciApp.event_to_timeout)
-        try:
-            with patch.object(TaskExecSharedState, "setup", return_value=None):
-                state.setup()
-            assert (
-                MechAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT]
-                == reset_pause + MARGIN
-            )
-        finally:
-            MechAbciApp.event_to_timeout.clear()
-            MechAbciApp.event_to_timeout.update(original)
+        with patch.object(TaskExecSharedState, "setup", return_value=None):
+            state.setup()
+        assert (
+            MechAbciApp.event_to_timeout[ResetPauseEvent.RESET_AND_PAUSE_TIMEOUT]
+            == reset_pause + MARGIN
+        )
 
-    def test_setup_calls_super_setup(self) -> None:
+    def test_setup_calls_super_setup(self, preserve_event_to_timeout: None) -> None:
         """Test setup calls super().setup()."""
         state = _make_shared_state()
-        original = dict(MechAbciApp.event_to_timeout)
-        try:
-            with patch.object(TaskExecSharedState, "setup") as mock_super_setup:
-                state.setup()
-            mock_super_setup.assert_called_once()
-        finally:
-            MechAbciApp.event_to_timeout.clear()
-            MechAbciApp.event_to_timeout.update(original)
+        with patch.object(TaskExecSharedState, "setup") as mock_super_setup:
+            state.setup()
+        mock_super_setup.assert_called_once()
 
 
 class TestMarginConstant:

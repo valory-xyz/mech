@@ -21,7 +21,7 @@
 
 from datetime import datetime
 from types import SimpleNamespace
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Generator, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -30,6 +30,7 @@ from packages.valory.connections.http_server.connection import (
     PUBLIC_ID as HTTP_SERVER_PUBLIC_ID,
 )
 from packages.valory.protocols.http.message import HttpMessage
+from packages.valory.skills.mech_abci.composition import MechAbciApp
 from packages.valory.skills.mech_abci.handlers import HttpHandler
 from packages.valory.skills.mech_abci.models import SharedState
 from packages.valory.skills.task_execution.handlers import MechHttpHandler
@@ -181,3 +182,12 @@ def make_context() -> Callable[..., SimpleNamespace]:
 def make_shared_state() -> Callable[..., SharedState]:
     """Factory fixture returning the _make_shared_state helper."""
     return _make_shared_state
+
+
+@pytest.fixture
+def preserve_event_to_timeout() -> Generator[None, None, None]:
+    """Save and restore MechAbciApp.event_to_timeout around a test."""
+    original = dict(MechAbciApp.event_to_timeout)
+    yield
+    MechAbciApp.event_to_timeout.clear()
+    MechAbciApp.event_to_timeout.update(original)
