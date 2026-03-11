@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 """Tests for task_submission_abci.behaviours — non-generator and key-branch coverage."""
 
+import contextlib
 import json
 import time
 from types import SimpleNamespace
@@ -69,7 +70,18 @@ from packages.valory.skills.task_submission_abci.tests.conftest import (
 _CAST_ROUND = type("DummyRound", (), {})
 
 
-class _DummyBase(TaskExecutionBaseBehaviour):
+class _SyncedDataMixin:
+    """Mixin that overrides synchronized_data to read from _synchronized_data."""
+
+    _synchronized_data: Any = None
+
+    @property
+    def synchronized_data(self) -> Any:  # type: ignore
+        """Return the test-provided synchronized data."""
+        return self._synchronized_data
+
+
+class _DummyBase(_SyncedDataMixin, TaskExecutionBaseBehaviour):
     """Minimal concrete subclass for testing TaskExecutionBaseBehaviour."""
 
     matching_round: Type[AbstractRound] = _CAST_ROUND  # type: ignore
@@ -78,7 +90,7 @@ class _DummyBase(TaskExecutionBaseBehaviour):
         yield from ()
 
 
-class _DummyPooling(TaskPoolingBehaviour):
+class _DummyPooling(_SyncedDataMixin, TaskPoolingBehaviour):
     """Minimal concrete subclass for testing TaskPoolingBehaviour."""
 
     matching_round: Type[AbstractRound] = _CAST_ROUND  # type: ignore
@@ -87,7 +99,7 @@ class _DummyPooling(TaskPoolingBehaviour):
         yield from ()
 
 
-class _DummyDeliver(DeliverBehaviour):
+class _DummyDeliver(_SyncedDataMixin, DeliverBehaviour):
     """Minimal concrete subclass for testing DeliverBehaviour."""
 
     matching_round: Type[AbstractRound] = _CAST_ROUND  # type: ignore
@@ -96,7 +108,7 @@ class _DummyDeliver(DeliverBehaviour):
         yield from ()
 
 
-class _DummyFunds(FundsSplittingBehaviour):
+class _DummyFunds(_SyncedDataMixin, FundsSplittingBehaviour):
     """Minimal concrete subclass for testing FundsSplittingBehaviour."""
 
     matching_round: Type[AbstractRound] = _CAST_ROUND  # type: ignore
@@ -274,12 +286,8 @@ class TestCheckLastTxStatus:
         # Patch synchronized_data on the behaviour
         mock_sd = MagicMock()
         mock_sd.final_tx_hash = "0xfinal"
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: mock_sd),
-        ):
-            result = b.check_last_tx_status()
+        b._synchronized_data = mock_sd
+        result = b.check_last_tx_status()
         assert result == (True, "0xfinal")
         # Also verify set_tx was called
         assert ctx.shared_state[LAST_TX][0] == "0xfinal"
@@ -292,12 +300,8 @@ class TestCheckLastTxStatus:
         type(mock_sd).final_tx_hash = property(
             lambda self: (_ for _ in ()).throw(ValueError("not set"))
         )
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: mock_sd),
-        ):
-            result = b.check_last_tx_status()
+        b._synchronized_data = mock_sd
+        result = b.check_last_tx_status()
         assert result == (False, "")
 
     def test_returns_false_when_final_tx_hash_is_none(self) -> None:
@@ -306,12 +310,8 @@ class TestCheckLastTxStatus:
         b = _DummyPooling(name="b", skill_context=ctx)
         mock_sd = MagicMock()
         mock_sd.final_tx_hash = None
-        with patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: mock_sd),
-        ):
-            result = b.check_last_tx_status()
+        b._synchronized_data = mock_sd
+        result = b.check_last_tx_status()
         assert result == (False, "")
 
 
@@ -412,21 +412,14 @@ class TestGetDeliveryReport:
         b = _DummyDeliver(name="b", skill_context=ctx)
         mock_sd = MagicMock()
         mock_sd.done_tasks = done_tasks or []
-        object.__setattr__(b, "_synchronized_data", mock_sd)
+        b._synchronized_data = mock_sd
         return b
 
     def test_returns_none_when_current_report_is_none(self) -> None:
         """Test returns none when current report is none."""
         b = self._make_b()
-        with (
-            patch.object(
-                type(b),
-                "synchronized_data",
-                new_callable=lambda: property(lambda self: b._synchronized_data),
-            ),
-            patch.object(
-                b, "_get_current_delivery_report", side_effect=_gen_returning(None)
-            ),
+        with patch.object(
+            b, "_get_current_delivery_report", side_effect=_gen_returning(None)
         ):
             result = _run_gen(b.get_delivery_report())
         assert result is None
@@ -437,15 +430,9 @@ class TestGetDeliveryReport:
         b = self._make_b(done_tasks=[task])
         mock_sd = MagicMock()
         mock_sd.done_tasks = [task]
-        with (
-            patch.object(
-                type(b),
-                "synchronized_data",
-                new_callable=lambda: property(lambda self: mock_sd),
-            ),
-            patch.object(
-                b, "_get_current_delivery_report", side_effect=_gen_returning({})
-            ),
+        b._synchronized_data = mock_sd
+        with patch.object(
+            b, "_get_current_delivery_report", side_effect=_gen_returning({})
         ):
             result = _run_gen(b.get_delivery_report())
         assert result == {"agent-0": {"tool-x": 1}}
@@ -651,11 +638,8 @@ class TestHandleSubmittedTasks:
     def _patch_sd(self, b: Any, done_tasks: Any) -> Any:
         mock_sd = MagicMock()
         mock_sd.done_tasks = done_tasks
-        return patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: mock_sd),
-        )
+        b._synchronized_data = mock_sd
+        return contextlib.nullcontext()
 
     def test_status_false_removes_nothing(self) -> None:
         """Test status false removes nothing."""
@@ -717,15 +701,11 @@ class TestGetCurrentDeliveryReport:
         b = _DummyDeliver(name="b", skill_context=ctx)
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
-        object.__setattr__(b, "_synchronized_data", mock_sd)
+        b._synchronized_data = mock_sd
         return b
 
     def _patch_sd(self, b: Any) -> Any:
-        return patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: b._synchronized_data),
-        )
+        return contextlib.nullcontext()
 
     def test_returns_none_on_contract_error(self) -> None:
         """Test returns none on contract error."""
@@ -964,17 +944,11 @@ class TestGetProcessPaymentTx:
         b = _DummyFunds(name="b", skill_context=ctx)
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
+        b._synchronized_data = mock_sd
         tx_data = b"\xde\xad"
         msg = _state_contract_msg({"data": tx_data, "simulation_ok": True})
-        with (
-            patch.object(
-                type(b),
-                "synchronized_data",
-                new_callable=lambda: property(lambda self: mock_sd),
-            ),
-            patch.object(
-                b, "get_contract_api_response", side_effect=_gen_returning(msg)
-            ),
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(msg)
         ):
             result = _run_gen(b._get_process_payment_tx("0xMECH", "0xTRACK"))
         assert result["simulation_ok"] is True
@@ -1408,15 +1382,11 @@ class TestGetAgentBalances:
         mock_sd = MagicMock()
         mock_sd.all_participants = participants or ["a0", "a1"]
         mock_sd.mech_agent_balance = MagicMock()
-        object.__setattr__(b, "_synchronized_data", mock_sd)
+        b._synchronized_data = mock_sd
         return b
 
     def _patch_sd(self, b: Any) -> Any:
-        return patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: b._synchronized_data),
-        )
+        return contextlib.nullcontext()
 
     def test_returns_none_when_any_balance_is_none(self) -> None:
         """Test returns none when any balance is none."""
@@ -1541,15 +1511,11 @@ class TestGetUpdateUsageTx:
         b = _DummyTransPrep(name="b", skill_context=ctx)
         mock_sd = MagicMock()
         mock_sd.done_tasks = []
-        object.__setattr__(b, "_synchronized_data", mock_sd)
+        b._synchronized_data = mock_sd
         return b
 
     def _patch_sd(self, b: Any) -> Any:
-        return patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: b._synchronized_data),
-        )
+        return contextlib.nullcontext()
 
     def test_returns_none_when_delivery_report_none(self) -> None:
         """Test returns none when delivery report none."""
@@ -1699,7 +1665,7 @@ class TestHashUpdateBehaviour:
 # ---------------------------------------------------------------------------
 
 
-class _DummyTransPrep(TransactionPreparationBehaviour):
+class _DummyTransPrep(_SyncedDataMixin, TransactionPreparationBehaviour):
     """Minimal concrete subclass for testing TransactionPreparationBehaviour."""
 
     def async_act(self) -> Generator[None, None, None]:
@@ -1754,15 +1720,11 @@ class TestDeliverTxMethods:
         b = _DummyTransPrep(name="b", skill_context=ctx)
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
-        object.__setattr__(b, "_synchronized_data", mock_sd)
+        b._synchronized_data = mock_sd
         return b
 
     def _patch_sd(self, b: Any) -> Any:
-        return patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: b._synchronized_data),
-        )
+        return contextlib.nullcontext()
 
     def test_agent_mech_deliver_tx_success(self) -> None:
         """Test agent mech deliver tx success."""
@@ -1817,15 +1779,11 @@ class TestSafeTxHashAndMultisend:
         b = _DummyTransPrep(name="b", skill_context=ctx)
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
-        object.__setattr__(b, "_synchronized_data", mock_sd)
+        b._synchronized_data = mock_sd
         return b
 
     def _patch_sd(self, b: Any) -> Any:
-        return patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: b._synchronized_data),
-        )
+        return contextlib.nullcontext()
 
     def test_get_safe_tx_hash_returns_none_on_error(self) -> None:
         """Test get safe tx hash returns none on error."""
@@ -1904,12 +1862,8 @@ class TestGetOffchainTasksDeliverData:
         mock_sd = MagicMock()
         mock_sd.done_tasks = done_tasks
         mock_sd.safe_contract_address = "0xSAFE"
-        object.__setattr__(b, "_synchronized_data", mock_sd)
-        return patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: b._synchronized_data),
-        )
+        b._synchronized_data = mock_sd
+        return contextlib.nullcontext()
 
     def test_returns_empty_list_when_no_offchain_tasks(self) -> None:
         """Test returns empty list when no offchain tasks."""
@@ -2043,13 +1997,9 @@ class TestGetMarketplaceTasksDeliverData:
         }
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
+        b._synchronized_data = mock_sd
         msg_deliver = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
         with (
-            patch.object(
-                type(b),
-                "synchronized_data",
-                new_callable=lambda: property(lambda self: mock_sd),
-            ),
             patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
             patch.object(
                 b, "get_contract_api_response", side_effect=_gen_returning(msg_deliver)
@@ -2068,13 +2018,9 @@ class TestGetMarketplaceTasksDeliverData:
         }
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
+        b._synchronized_data = mock_sd
         msg_deliver = _state_contract_msg({"data": b"\xdd", "simulation_ok": False})
         with (
-            patch.object(
-                type(b),
-                "synchronized_data",
-                new_callable=lambda: property(lambda self: mock_sd),
-            ),
             patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
             patch.object(
                 b, "get_contract_api_response", side_effect=_gen_returning(msg_deliver)
@@ -2377,15 +2323,11 @@ class TestToMultisendSuccess:
         b = _DummyTransPrep(name="b", skill_context=ctx)
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
-        object.__setattr__(b, "_synchronized_data", mock_sd)
+        b._synchronized_data = mock_sd
         return b
 
     def _patch_sd(self, b: Any) -> Any:
-        return patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: b._synchronized_data),
-        )
+        return contextlib.nullcontext()
 
     def test_to_multisend_full_success(self) -> None:
         """Test to multisend full success."""
@@ -2423,15 +2365,11 @@ class TestTransactionPreparationGetPayloadContent:
         mock_sd = MagicMock()
         mock_sd.done_tasks = []
         mock_sd.safe_contract_address = "0xSAFE"
-        object.__setattr__(b, "_synchronized_data", mock_sd)
+        b._synchronized_data = mock_sd
         return b
 
     def _patch_sd(self, b: Any) -> Any:
-        return patch.object(
-            type(b),
-            "synchronized_data",
-            new_callable=lambda: property(lambda self: b._synchronized_data),
-        )
+        return contextlib.nullcontext()
 
     def test_returns_error_payload_when_update_usage_tx_none(self) -> None:
         """Test returns error payload when update usage tx none."""
@@ -2624,13 +2562,22 @@ class TestTransactionPreparationGetPayloadContent:
 # ---------------------------------------------------------------------------
 
 
+class _DummyBaseNoMixin(TaskExecutionBaseBehaviour):
+    """Dummy without mixin — for testing the real synchronized_data property."""
+
+    matching_round: Type[AbstractRound] = _CAST_ROUND  # type: ignore
+
+    def async_act(self) -> Generator[None, None, None]:
+        yield from ()
+
+
 class TestSynchronizedDataProperty:
     """Cover line 159: TaskExecutionBaseBehaviour.synchronized_data property."""
 
     def test_returns_synchronized_data_from_shared_state(self) -> None:
         """Test returns synchronized data from shared state."""
         ctx = _make_full_ctx()
-        b = _DummyBase(name="b", skill_context=ctx)
+        b = _DummyBaseNoMixin(name="b", skill_context=ctx)
         # ctx.state.synchronized_data is set in _make_full_ctx
         result = b.synchronized_data
         assert result is ctx.state.synchronized_data
@@ -2741,15 +2688,11 @@ class TestMarketplaceNvmMechPath:
         }
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
+        b._synchronized_data = mock_sd
         encoded_ids = [b"\x00" * 32]
         encoded_datas = [b"\xab" * 16]
         msg_deliver = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
         with (
-            patch.object(
-                type(b),
-                "synchronized_data",
-                new_callable=lambda: property(lambda self: mock_sd),
-            ),
             patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(True)),
             patch.object(
                 b,
