@@ -19,7 +19,6 @@
 
 """Conftest for the task_submission_abci tests."""
 
-import contextlib
 import threading
 from types import SimpleNamespace
 from typing import Any, Callable, Generator
@@ -185,21 +184,6 @@ def _noop_gen() -> Generator:
 def _noop_gen_with_args(*_args: object, **_kwargs: object) -> Generator:
     """Generator that accepts any arguments and returns immediately."""
     yield from ()
-
-
-def _patch_synced_data(
-    behaviour: Any, data: Any = None
-) -> contextlib.AbstractContextManager:
-    """Patch synchronized_data on a behaviour with the given data.
-
-    If *data* is ``None``, ``behaviour._synchronized_data`` is used instead.
-    """
-    sd = data if data is not None else behaviour._synchronized_data
-    return patch.object(
-        type(behaviour),
-        "synchronized_data",
-        new_callable=lambda: property(lambda self: sd),
-    )
 
 
 # ---------------------------------------------------------------------------
