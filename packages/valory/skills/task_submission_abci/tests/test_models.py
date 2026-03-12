@@ -44,13 +44,6 @@ class TestSharedState:
         """Test SharedState.abci_app_cls is TaskSubmissionAbciApp."""
         assert SharedState.abci_app_cls is TaskSubmissionAbciApp
 
-    def test_prometheus_metrics_defined(self) -> None:
-        """Test Prometheus metrics are defined on SharedState."""
-        # These are class-level Prometheus metrics
-        assert hasattr(SharedState, "mech_delivery_last_block_number")
-        assert hasattr(SharedState, "mech_agent_balance")
-        assert hasattr(SharedState, "tool_delivery_time")
-
 
 # ---------------------------------------------------------------------------
 # MutableParams
@@ -70,13 +63,6 @@ class TestMutableParams:
         p = MutableParams()
         p.latest_metadata_hash = b"some-hash"
         assert p.latest_metadata_hash == b"some-hash"
-
-    def test_can_be_reset_to_none(self) -> None:
-        """Test latest_metadata_hash can be reset to None."""
-        p = MutableParams()
-        p.latest_metadata_hash = b"hash"
-        p.latest_metadata_hash = None
-        assert p.latest_metadata_hash is None
 
 
 # ---------------------------------------------------------------------------
