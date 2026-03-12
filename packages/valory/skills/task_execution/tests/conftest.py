@@ -44,6 +44,51 @@ from packages.valory.skills.task_execution.behaviours import (
     WAIT_FOR_TIMEOUT,
 )
 
+
+# ----------------------------- Shared stubs -----------------------------------
+
+
+def _make_logger(include_debug: bool = False) -> SimpleNamespace:
+    """Create a no-op logger stub. Single source of truth for all test contexts."""
+    ns = SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+    if include_debug:
+        ns.debug = lambda *a, **k: None  # type: ignore[attr-defined]
+    return ns
+
+
+class _DLG:
+    """Generic dialogue stub with no-op cleanup/create."""
+
+    def cleanup(self) -> None:
+        """No-op cleanup."""
+        return None
+
+    def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
+        """No-op create. Return mock (msg, dlg)."""
+        return MagicMock(a), MagicMock(k)
+
+
+class _IpfsDLG(_DLG):
+    """IPFS dialogue stub with update/create helpers using stable nonce."""
+
+    def update(self, _msg: Any) -> Any:
+        """Return an object with a stable dialogue reference."""
+        return SimpleNamespace(
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+        )
+
+    def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
+        """Return a (message, dialogue) pair with a stable reference."""
+        msg = SimpleNamespace()
+        dlg = SimpleNamespace(
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+        )
+        return msg, dlg
+
 # ----------------------------- Shared state ----------------------------------
 
 
@@ -110,12 +155,7 @@ def params_stub() -> SimpleNamespace:
         step_in_list_size=20,
     )
 
-    # Provide a logger object sometimes accessed via params.
-    ns.logger = SimpleNamespace(
-        info=lambda *a, **k: None,
-        warning=lambda *a, **k: None,
-        error=lambda *a, **k: None,
-    )
+    ns.logger = _make_logger()
     return ns
 
 
@@ -147,42 +187,8 @@ def context_stub(
     shared_state: Dict[str, Any], params_stub: SimpleNamespace
 ) -> SimpleNamespace:
     """Return a minimal AEA-like context with logger/outbox/dialogue stubs."""
-    logger = SimpleNamespace(
-        info=lambda *a, **k: None,
-        warning=lambda *a, **k: None,
-        error=lambda *a, **k: None,
-    )
-
-    class _DLG:
-        """Generic dialogue stub."""
-
-        def cleanup(self) -> None:
-            """No-op cleanup."""
-            return None
-
-        def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
-            """No-op create. Return mock (msg, dlg)"""
-            return MagicMock(a), MagicMock(k)
-
-    class _IpfsDLG(_DLG):
-        """IPFS dialogue stub with update/create helpers."""
-
-        def update(self, _msg: Any) -> Any:
-            """Return an object with a stable dialogue reference."""
-            return SimpleNamespace(
-                dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
-            )
-
-        def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
-            """Return a (message, dialogue) pair with a stable reference."""
-            msg = SimpleNamespace()
-            dlg = SimpleNamespace(
-                dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
-            )
-            return msg, dlg
-
     ctx = SimpleNamespace(
-        logger=logger,
+        logger=_make_logger(),
         shared_state=shared_state,
         params=params_stub,
         agent_address="0xagent",
@@ -194,15 +200,10 @@ def context_stub(
         acn_data_share_dialogues=_DLG(),
     )
 
-    class _HandlersBag:
-        """Container listing handler attributes (for dialogue cleanup)."""
-
-        ipfs_handler: object = object()
-        contract_handler: object = object()
-        ledger_handler: object = object()
-
-    ctx.handlers = _HandlersBag()
-    ctx.params.logger = ctx.logger  # optional: some code uses params.logger
+    ctx.handlers = SimpleNamespace(
+        ipfs_handler=object(), contract_handler=object(), ledger_handler=object()
+    )
+    ctx.params.logger = ctx.logger
     return ctx
 
 
@@ -288,39 +289,17 @@ def handler_context(
 ) -> SimpleNamespace:
     """Return a context variant that records sent messages (for handler tests)."""
     ctx = SimpleNamespace(
-        logger=SimpleNamespace(
-            info=lambda *a, **k: None,
-            warning=lambda *a, **k: None,
-            error=lambda *a, **k: None,
-        ),
+        logger=_make_logger(),
         shared_state=shared_state,
         params=params_stub,
         default_ledger_id="ethereum",
         outbox=_SentOutbox(),
     )
 
-    class _DLG:
-        """Dialogue stub with cleanup."""
-
-        def cleanup(self) -> None:
-            """No-op cleanup."""
-            return None
-
     ctx.handlers = SimpleNamespace(
         ipfs_handler=object(), contract_handler=object(), ledger_handler=object()
     )
-    ctx.ipfs_dialogues = SimpleNamespace(
-        update=lambda _msg: SimpleNamespace(
-            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
-        ),
-        cleanup=lambda: None,
-        create=lambda *a, **k: (
-            SimpleNamespace(),  # msg
-            SimpleNamespace(
-                dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
-            ),
-        ),
-    )
+    ctx.ipfs_dialogues = _IpfsDLG()
     ctx.contract_dialogues = _DLG()
     ctx.ledger_dialogues = _DLG()
     ctx.params.logger = ctx.logger
@@ -372,16 +351,10 @@ def http_dialogue() -> Any:
 @pytest.fixture
 def dialogue_skill_context(shared_state: Dict[str, Any]) -> SimpleNamespace:
     """Return a minimal skill_context used by dialogue classes in tests."""
-    logger = SimpleNamespace(
-        debug=lambda *a, **k: None,
-        info=lambda *a, **k: None,
-        warning=lambda *a, **k: None,
-        error=lambda *a, **k: None,
-    )
     return SimpleNamespace(
         skill_id="valory/task_execution:0.1.0",
         agent_address="0xagent",
-        logger=logger,
+        logger=_make_logger(include_debug=True),
         shared_state=shared_state,
     )
 

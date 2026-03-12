@@ -96,7 +96,10 @@ def test_happy_path_executes_and_stores(
 
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
-    call_no: Dict[str, int] = {"n": 0}
+    task_body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
+    get_response = SimpleNamespace(files={"task.json": json.dumps(task_body)})
+    store_response = SimpleNamespace(ipfs_hash=valid_cid)
+    responses = iter([get_response, store_response])
 
     def send_message_stub(
         msg: Any,
@@ -104,35 +107,13 @@ def test_happy_path_executes_and_stores(
         callback: Callable[[Any, Any], None],
         error_callback: Any = None,
     ) -> None:
-        """
-        Stub send_message to deliver GET/STORE callbacks.
-
-        :param msg: Message-like object passed by the behaviour.
-        :type msg: Any
-        :param dlg: Dialogue-like object passed to the callback.
-        :type dlg: Any
-        :param callback: Callback to invoke with a fake IPFS response.
-        :type callback: Callable[[Any, Any], None]
-        :param error_callback: Optional error callback for IPFS failures.
-        :type error_callback: Any
-        """
-        call_no["n"] += 1
-        if call_no["n"] == 1:
-            task_body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
-            fake_get_response: Any = type(
-                "Msg", (), {"files": {"task.json": json.dumps(task_body)}}
-            )()
-            callback(fake_get_response, dlg)
-        else:
-            fake_store_response: Any = type("Msg", (), {"ipfs_hash": valid_cid})()
-            callback(fake_store_response, dlg)
+        """Stub send_message with sequential GET then STORE responses."""
+        callback(next(responses), dlg)
         params_stub.in_flight_req = True
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
-    token_cb: Any = type(
-        "CB", (), {"cost_dict": {"input": 10, "output": 5}, "actual_model": None}
-    )()
+    token_cb = SimpleNamespace(cost_dict={"input": 10, "output": 5}, actual_model=None)
     keychain: object = object()
     result_tuple = ("4", "add 2+2", {"tx": "0xabc"}, token_cb, keychain)
     monkeypatch.setattr(
@@ -194,22 +175,20 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
         lambda files, **k: (object(), fake_dialogue),
     )
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
-
-    def _fail_submit(*a: Any, **k: Any) -> None:
-        """
-        Ensure execution is not attempted for invalid pricing.
-
-        :param a: Ignored positional arguments.
-        :type a: Any
-        :param k: Ignored keyword arguments.
-        :type k: Any
-        """
-        raise AssertionError("_submit_task must not be called for invalid pricing")
-
-    monkeypatch.setattr(behaviour, "_submit_task", _fail_submit)
+    monkeypatch.setattr(
+        behaviour,
+        "_submit_task",
+        lambda *a, **k: (_ for _ in ()).throw(
+            AssertionError("_submit_task must not be called for invalid pricing")
+        ),
+    )
 
     valid_cid: str = "bafybeigdyrzt5u36sq3x7xvaf2h2k6g2r5fpmy7bcxfbcdx7djzn2k2f3u"
-    calls: Dict[str, int] = {"n": 0}
+    task_body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
+    get_response = SimpleNamespace(files={"task.json": json.dumps(task_body)})
+    store_response = SimpleNamespace(ipfs_hash=valid_cid)
+    send_calls: list = []
+    responses = iter([get_response, store_response])
 
     def send_message_stub(
         msg: Any,
@@ -217,24 +196,9 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
         callback: Callable[[Any, Any], None],
         error_callback: Any = None,
     ) -> None:
-        """
-        Stub send_message to deliver GET/STORE callbacks for invalid pricing.
-
-        :param msg: Message-like object passed by the behaviour.
-        :type msg: Any
-        :param dlg: Dialogue-like object passed to the callback.
-        :type dlg: Any
-        :param callback: Callback to invoke with a fake IPFS response.
-        :type callback: Callable[[Any, Any], None]
-        :param error_callback: Optional error callback for IPFS failures.
-        :type error_callback: Any
-        """
-        calls["n"] += 1
-        if calls["n"] == 1:
-            body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
-            callback(type("Msg", (), {"files": {"task.json": json.dumps(body)}})(), dlg)
-        else:
-            callback(type("Msg", (), {"ipfs_hash": valid_cid})(), dlg)
+        """Stub send_message with sequential GET then STORE responses."""
+        send_calls.append(1)
+        callback(next(responses), dlg)
         params_stub.in_flight_req = True
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
@@ -244,7 +208,7 @@ def test_pricing_too_low_marks_invalid_and_stores_stub(
     params_stub.in_flight_req = False
     behaviour.act()
 
-    assert calls["n"] == 2
+    assert len(send_calls) == 2
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
@@ -298,34 +262,28 @@ def test_broken_process_pool_restart(
 
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
-    calls: Dict[str, int] = {"n": 0}
+    schedule_results = iter([
+        RuntimeError("boom"),  # first call raises
+        done_future((
+            "ok", "p", {"tx": 1},
+            SimpleNamespace(cost_dict={}, actual_model=None), object(),
+        )),  # second call succeeds
+    ])
 
     class BrokenOncePool:
         """Pebble-like pool stub that raises once, then returns a done future."""
 
         def schedule(self, *a: Any, **k: Any) -> Future:
-            calls["n"] += 1
-            if calls["n"] == 1:
-                # Simulate a failure during scheduling (e.g., broken pool)
-                raise RuntimeError("boom")
-            # On second call, return a completed future with the 5-tuple
-            return done_future(
-                (
-                    "ok",
-                    "p",
-                    {"tx": 1},
-                    type("CB", (), {"cost_dict": {}, "actual_model": None})(),
-                    object(),
-                )
-            )
+            result = next(schedule_results)
+            if isinstance(result, Exception):
+                raise result
+            return result
 
-    # Replace the behaviour's executor with our stub
     monkeypatch.setattr(behaviour, "_executor", BrokenOncePool())
 
-    # Flag that _restart_executor() was called
-    restarted: Dict[str, bool] = {"flag": False}
+    restarted: list = []
     monkeypatch.setattr(
-        behaviour, "_restart_executor", lambda: restarted.__setitem__("flag", True)
+        behaviour, "_restart_executor", lambda: restarted.append(True)
     )
 
     # send_message stub: route to the right handler based on callback identity
@@ -353,9 +311,7 @@ def test_broken_process_pool_restart(
     behaviour.act()
 
     # Assertions
-    assert restarted[
-        "flag"
-    ], "executor should have been restarted after schedule() failure"
+    assert restarted, "executor should have been restarted after schedule() failure"
     assert len(shared_state[beh_mod.DONE_TASKS]) == 1
     done: Dict[str, Any] = shared_state[beh_mod.DONE_TASKS][0]
     assert done["request_id"] == req_id
@@ -620,17 +576,17 @@ def _make_send_stub(
     :param store_cid: CID returned by the STORE callback.
     :returns: The stub function.
     """
-    calls: Dict[str, int] = {"n": 0}
+    store_response = SimpleNamespace(ipfs_hash=store_cid)
+    is_first_call = iter([True, False])
 
     def stub(
         msg: Any, dlg: Any, callback: Callable[[Any, Any], None], error_cb: Any = None
     ) -> None:
         """Route GET vs STORE calls."""
-        calls["n"] += 1
-        if calls["n"] == 1:
+        if next(is_first_call):
             get_action(msg, dlg, callback)
         else:
-            callback(type("Msg", (), {"ipfs_hash": store_cid})(), dlg)
+            callback(store_response, dlg)
         params_stub.in_flight_req = True
 
     return stub
@@ -876,7 +832,7 @@ def test_ipfs_success_valid_task_delivers_result(
     monkeypatch.setattr(behaviour, "_build_ipfs_store_file_req", capture_store)
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
-    token_cb: Any = type("CB", (), {"cost_dict": {"input": 10}, "actual_model": None})()
+    token_cb: Any = SimpleNamespace(cost_dict={"input": 10}, actual_model=None)
     result_tuple = ("42", "add 2+2", {"tx": "0xabc"}, token_cb, object())
     monkeypatch.setattr(
         behaviour, "_submit_task", lambda *a, **k: done_future(result_tuple)
@@ -889,7 +845,7 @@ def test_ipfs_success_valid_task_delivers_result(
     ) -> None:
         """Deliver valid task data via IPFS callback."""
         body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
-        callback(type("Msg", (), {"files": {"task.json": json.dumps(body)}})(), dlg)
+        callback(SimpleNamespace(files={"task.json": json.dumps(body)}), dlg)
 
     monkeypatch.setattr(
         behaviour,
@@ -951,7 +907,7 @@ def test_ipfs_error_does_not_cascade_to_next_task(
     )
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
-    token_cb: Any = type("CB", (), {"cost_dict": {}, "actual_model": None})()
+    token_cb: Any = SimpleNamespace(cost_dict={}, actual_model=None)
     result_tuple = ("ok", "prompt", {"tx": "0x1"}, token_cb, object())
     monkeypatch.setattr(
         behaviour, "_submit_task", lambda *a, **k: done_future(result_tuple)
@@ -980,10 +936,10 @@ def test_ipfs_error_does_not_cascade_to_next_task(
                 # Task 101: IPFS download succeeds
                 body: Dict[str, Any] = {"prompt": "prompt", "tool": "sum"}
                 callback(
-                    type("Msg", (), {"files": {"t.json": json.dumps(body)}})(), dlg
+                    SimpleNamespace(files={"t.json": json.dumps(body)}), dlg
                 )
         elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
-            callback(type("Msg", (), {"ipfs_hash": "bafyok"})(), dlg)
+            callback(SimpleNamespace(ipfs_hash="bafyok"), dlg)
         params_stub.in_flight_req = True
 
     monkeypatch.setattr(behaviour, "send_message", send_message_stub)
@@ -1047,7 +1003,7 @@ def test_ipfs_success_empty_task_data_delivers_invalid_response(
         msg: Any, dlg: Any, callback: Callable[[Any, Any], None]
     ) -> None:
         """Deliver empty task data."""
-        callback(type("Msg", (), {"files": {"task.json": json.dumps({})}})(), dlg)
+        callback(SimpleNamespace(files={"task.json": json.dumps({})}), dlg)
 
     monkeypatch.setattr(
         behaviour,
@@ -1104,7 +1060,7 @@ def test_non_ipfs_failure_uses_generic_invalid_response(
     ) -> None:
         """Deliver valid task data — pricing rejection happens in callback."""
         body: Dict[str, Any] = {"prompt": "add 2+2", "tool": "sum"}
-        callback(type("Msg", (), {"files": {"t.json": json.dumps(body)}})(), dlg)
+        callback(SimpleNamespace(files={"t.json": json.dumps(body)}), dlg)
 
     monkeypatch.setattr(
         behaviour,
