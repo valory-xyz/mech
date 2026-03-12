@@ -661,7 +661,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_mech_balance unsuccessful!: {contract_api_msg}"
             )
@@ -686,7 +686,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_token_credit_ratio unsuccessful!: {contract_api_msg}"
             )
@@ -716,7 +716,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_mech_type unsuccessful!: {contract_api_msg}"
             )
@@ -744,7 +744,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_balance_tracker_for_mech_type unsuccessful!: {contract_api_msg}"
             )
@@ -771,7 +771,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_process_payment_tx unsuccessful!: {contract_api_msg}"
             )
@@ -825,7 +825,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_mech_balance unsuccessful!: {contract_api_msg}"
             )
@@ -847,7 +847,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_mech_balance unsuccessful!: {contract_api_msg}"
             )
@@ -934,7 +934,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_exec_tx_data unsuccessful!: {contract_api_msg}"
             )
@@ -961,7 +961,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_token_address unsuccessful!: {contract_api_msg}"
             )
@@ -985,7 +985,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_transfer_tx_data unsuccessful!: {contract_api_msg}"
             )
@@ -1022,7 +1022,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_exec_tx_data unsuccessful!: {contract_api_msg}"
             )
@@ -1114,7 +1114,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_operators_mapping unsuccessful!: {contract_api_msg}"
             )
@@ -1188,7 +1188,7 @@ class TrackingBehaviour(DeliverBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_checkpoint_data unsuccessful!: {contract_api_msg}"
             )
@@ -1250,7 +1250,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_token_hash unsuccessful!: {contract_api_msg}"
             )
@@ -1302,7 +1302,7 @@ class HashUpdateBehaviour(TaskExecutionBaseBehaviour, ABC):
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_mech_update_hash unsuccessful!: {contract_api_msg}"
             )
@@ -1513,7 +1513,7 @@ class TransactionPreparationBehaviour(
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_deliver_data unsuccessful!: {contract_api_msg}"
             )
@@ -1547,7 +1547,7 @@ class TransactionPreparationBehaviour(
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_deliver_data unsuccessful!: {contract_api_msg}"
             )
@@ -1658,7 +1658,7 @@ class TransactionPreparationBehaviour(
                 if (
                     contract_api_msg.performative
                     != ContractApiMessage.Performative.STATE
-                ):  # pragma: nocover
+                ):
                     self.context.logger.warning(
                         f"get_offchain_deliver_data unsuccessful!: {contract_api_msg}"
                     )
@@ -1692,7 +1692,7 @@ class TransactionPreparationBehaviour(
         )
         if (
             contract_api_msg.performative != ContractApiMessage.Performative.STATE
-        ):  # pragma: nocover
+        ):
             self.context.logger.warning(
                 f"get_is_nvm_mech unsuccessful!: {contract_api_msg}"
             )
@@ -1719,7 +1719,7 @@ class TransactionPreparationBehaviour(
             )
             if (
                 contract_api_msg.performative != ContractApiMessage.Performative.STATE
-            ):  # pragma: nocover
+            ):
                 self.context.logger.warning(
                     f"get_encoded_data_for_request unsuccessful!: {contract_api_msg}"
                 )
@@ -1817,7 +1817,7 @@ class TransactionPreparationBehaviour(
                 if (
                     contract_api_msg.performative
                     != ContractApiMessage.Performative.STATE
-                ):  # pragma: nocover
+                ):
                     self.context.logger.warning(
                         f"get_marketplace_deliver_data unsuccessful!: {contract_api_msg}"
                     )

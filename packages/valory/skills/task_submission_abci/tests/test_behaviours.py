@@ -30,6 +30,10 @@ import pytest
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.task_submission_abci.behaviours import (
     DONE_TASKS,
+    IS_MARKETPLACE_MECH_KEY,
+    IS_OFFCHAIN,
+    MECH_ADDRESS,
+    NONCE,
     DeliverBehaviour,
     FundsSplittingBehaviour,
     LAST_TX,
@@ -39,6 +43,7 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     OffchainDataValue,
     OffchainKeys,
     PAYMENT_MODEL,
+    SENDER,
     TaskExecutionBaseBehaviour,
     TaskPoolingBehaviour,
     TaskSubmissionRoundBehaviour,
@@ -55,6 +60,7 @@ from packages.valory.skills.task_submission_abci.tests.conftest import (
     _make_fs_ctx,
     _make_full_ctx,
     _make_lock,
+    _mock_to_multihash,
     _noop_gen,
     _noop_gen_with_args,
     _raw_tx_contract_msg,
@@ -117,6 +123,13 @@ class _DummyFunds(_SyncedDataMixin, FundsSplittingBehaviour):
         yield from ()
 
 
+class _DummyTransPrep(_SyncedDataMixin, TransactionPreparationBehaviour):
+    """Minimal concrete subclass for testing TransactionPreparationBehaviour."""
+
+    def async_act(self) -> Generator[None, None, None]:
+        yield from ()
+
+
 # ---------------------------------------------------------------------------
 # TaskExecutionBaseBehaviour — properties & non-generator methods
 # ---------------------------------------------------------------------------
@@ -124,12 +137,6 @@ class _DummyFunds(_SyncedDataMixin, FundsSplittingBehaviour):
 
 class TestDoneTasksProperty:
     """Tests for TestDoneTasksProperty."""
-
-    def test_returns_empty_list_by_default(self) -> None:
-        """Test returns empty list by default."""
-        ctx = _make_ctx(done_tasks=[])
-        b = _DummyBase(name="b", skill_context=ctx)
-        assert b.done_tasks == []
 
     def test_returns_copy_of_tasks(self) -> None:
         """Test returns copy of tasks."""
@@ -146,17 +153,12 @@ class TestDoneTasksProperty:
 class TestPaymentModelProperty:
     """Tests for TestPaymentModelProperty."""
 
-    def test_returns_none_when_not_set(self) -> None:
-        """Test returns none when not set."""
+    def test_returns_none_by_default_and_value_when_set(self) -> None:
+        """Test returns None when not set, and the value when set."""
         ctx = _make_ctx()
         b = _DummyBase(name="b", skill_context=ctx)
         assert b.payment_model is None
-
-    def test_returns_model_when_set(self) -> None:
-        """Test returns model when set."""
-        ctx = _make_ctx()
         ctx.shared_state[PAYMENT_MODEL] = "native"
-        b = _DummyBase(name="b", skill_context=ctx)
         assert b.payment_model == "native"
 
 
@@ -446,24 +448,12 @@ class TestGetDeliveryReport:
 class TestEnumConstants:
     """Verify the module-level Enum classes are accessible."""
 
-    def test_offchain_keys_values(self) -> None:
-        """Test offchain keys values."""
+    def test_enum_values(self) -> None:
+        """All contract enum constants have expected values."""
         assert OffchainKeys.DELIVER_WITH_SIGNATURES.value == "deliverWithSignatures"
-
-    def test_offchain_data_key_values(self) -> None:
-        """Test offchain data key values."""
         assert OffchainDataKey.REQUEST_DATA_KEY.value == "requestData"
-
-    def test_offchain_data_value_values(self) -> None:
-        """Test offchain data value values."""
         assert OffchainDataValue.IPFS_HASH.value == "ipfs_hash"
-
-    def test_marketplace_keys_values(self) -> None:
-        """Test marketplace keys values."""
         assert MarketplaceKeys.REQUEST_IDS.value == "requestIds"
-
-    def test_marketplace_data_values(self) -> None:
-        """Test marketplace data values."""
         assert MarketplaceData.REQUEST_ID.value == "requestId"
 
 
@@ -1101,7 +1091,6 @@ class TestSplitFunds:
         # a0 share = (80 * 100) // 140 = 57, a1 share = (60 * 100) // 140 = 42
         assert result["a0"] == 57
         assert result["a1"] == 42
-        assert result["a0"] + result["a1"] <= 100
 
     def test_full_success_split(self) -> None:
         """Test full success split."""
@@ -1542,12 +1531,12 @@ class TestGetUpdateUsageTx:
             result = _run_gen(b.get_update_usage_tx())
         assert result is None
 
-    def test_returns_tx_on_success(self, mock_to_multihash: MagicMock) -> None:
+    def test_returns_tx_on_success(self) -> None:
         """Test returns tx on success."""
-        mock_to_multihash.return_value = "ab" * 16
         b = self._make_b()
         tx = {"to": "0xHASH", "value": 0, "data": b"\x00"}
         with (
+            _mock_to_multihash() as mtm,
             self._patch_sd(b),
             patch.object(
                 b,
@@ -1558,12 +1547,13 @@ class TestGetUpdateUsageTx:
                 b, "_save_usage_to_ipfs", side_effect=_gen_returning("bafyhash")
             ),
             patch.object(b, "_get_checkpoint_tx", side_effect=_gen_returning(tx)),
-        ):
-            with patch(
+            patch(
                 "packages.valory.skills.task_submission_abci.behaviours.to_v1",
                 return_value="bafyhashv1",
-            ):
-                result = _run_gen(b.get_update_usage_tx())
+            ),
+        ):
+            mtm.return_value = "ab" * 16
+            result = _run_gen(b.get_update_usage_tx())
         assert result == tx
 
 
@@ -1599,38 +1589,35 @@ class TestHashUpdateBehaviour:
             result = _run_gen(b._should_update_hash())
         assert result is False
 
-    def test_should_update_hash_returns_false_when_configured_hash_empty(
-        self, mock_to_multihash: MagicMock
-    ) -> None:
+    def test_should_update_hash_returns_false_when_configured_hash_empty(self) -> None:
         """Test should update hash returns false when configured hash empty."""
-        mock_to_multihash.return_value = ""
         b = self._make_b()
         b.context.params.task_mutable_params.latest_metadata_hash = None
-        with patch.object(
-            b, "_get_latest_hash", side_effect=_gen_returning(b"\x00" * 32)
+        with (
+            _mock_to_multihash() as mtm,
+            patch.object(b, "_get_latest_hash", side_effect=_gen_returning(b"\x00" * 32)),
         ):
+            mtm.return_value = ""
             result = _run_gen(b._should_update_hash())
         assert result is False
 
-    def test_should_update_hash_returns_false_when_hashes_same(
-        self, mock_to_multihash: MagicMock
-    ) -> None:
+    def test_should_update_hash_returns_false_when_hashes_same(self) -> None:
         """Test should update hash returns false when hashes same."""
-        mock_to_multihash.return_value = "same_hash"
         b = self._make_b()
         # latest_metadata_hash and configured_hash must both be strings for equality
         b.context.params.task_mutable_params.latest_metadata_hash = "same_hash"
-        result = _run_gen(b._should_update_hash())
+        with _mock_to_multihash() as mtm:
+            mtm.return_value = "same_hash"
+            result = _run_gen(b._should_update_hash())
         assert result is False
 
-    def test_should_update_hash_returns_true_when_hashes_differ(
-        self, mock_to_multihash: MagicMock
-    ) -> None:
+    def test_should_update_hash_returns_true_when_hashes_differ(self) -> None:
         """Test should update hash returns true when hashes differ."""
-        mock_to_multihash.return_value = "new_hash"
         b = self._make_b()
         b.context.params.task_mutable_params.latest_metadata_hash = b"old_hash"
-        result = _run_gen(b._should_update_hash())
+        with _mock_to_multihash() as mtm:
+            mtm.return_value = "new_hash"
+            result = _run_gen(b._should_update_hash())
         assert result is True
 
     def test_get_mech_update_hash_tx_returns_none_when_no_update_needed(self) -> None:
@@ -1640,21 +1627,20 @@ class TestHashUpdateBehaviour:
             result = _run_gen(b.get_mech_update_hash_tx())
         assert result is None
 
-    def test_get_mech_update_hash_tx_returns_tx_on_success(
-        self, mock_to_multihash: MagicMock
-    ) -> None:
+    def test_get_mech_update_hash_tx_returns_tx_on_success(self) -> None:
         """Test get mech update hash tx returns tx on success."""
-        mock_to_multihash.return_value = "ab" * 16
         b = self._make_b()
         b.context.params.task_mutable_params.latest_metadata_hash = b"old"
         tx_data = b"\xde\xca"
         msg = _state_contract_msg({"data": tx_data})
         with (
+            _mock_to_multihash() as mtm,
             patch.object(b, "_should_update_hash", side_effect=_gen_returning(True)),
             patch.object(
                 b, "get_contract_api_response", side_effect=_gen_returning(msg)
             ),
         ):
+            mtm.return_value = "ab" * 16
             result = _run_gen(b.get_mech_update_hash_tx())
         assert result["to"] == "0xMETA"
         assert result["data"] == tx_data
@@ -1663,13 +1649,6 @@ class TestHashUpdateBehaviour:
 # ---------------------------------------------------------------------------
 # TransactionPreparationBehaviour._get_deliver_tx
 # ---------------------------------------------------------------------------
-
-
-class _DummyTransPrep(_SyncedDataMixin, TransactionPreparationBehaviour):
-    """Minimal concrete subclass for testing TransactionPreparationBehaviour."""
-
-    def async_act(self) -> Generator[None, None, None]:
-        yield from ()
 
 
 class TestGetDeliverTx:
@@ -2038,30 +2017,19 @@ class TestGetMarketplaceTasksDeliverData:
 class TestTaskSubmissionRoundBehaviour:
     """Test Task Submission Round Behaviour."""
 
-    def test_initial_behaviour_is_task_pooling(self) -> None:
-        """Test initial behaviour is task pooling."""
+    def test_round_behaviour_composition(self) -> None:
+        """Initial behaviour, app class, and behaviour set are wired correctly."""
         from packages.valory.skills.task_submission_abci.behaviours import (
-            TaskPoolingBehaviour,
+            TransactionPreparationBehaviour,
+        )
+        from packages.valory.skills.task_submission_abci.rounds import (
+            TaskSubmissionAbciApp,
         )
 
         assert (
             TaskSubmissionRoundBehaviour.initial_behaviour_cls is TaskPoolingBehaviour
         )
-
-    def test_abci_app_cls_is_task_submission_app(self) -> None:
-        """Test abci app cls is task submission app."""
-        from packages.valory.skills.task_submission_abci.rounds import (
-            TaskSubmissionAbciApp,
-        )
-
         assert TaskSubmissionRoundBehaviour.abci_app_cls is TaskSubmissionAbciApp
-
-    def test_behaviours_set_contains_expected_classes(self) -> None:
-        """Test behaviours set contains expected classes."""
-        from packages.valory.skills.task_submission_abci.behaviours import (
-            TransactionPreparationBehaviour,
-        )
-
         assert (
             TransactionPreparationBehaviour in TaskSubmissionRoundBehaviour.behaviours
         )
@@ -3037,3 +3005,282 @@ class TestTransactionPreparationBehaviourAsyncAct:
             _run_gen(b.async_act())
 
         assert b.is_done()
+
+
+# ---------------------------------------------------------------------------
+# Contract API error-path tests
+# ---------------------------------------------------------------------------
+
+
+class TestFundsSplittingContractErrors:
+    """Test contract API error branches in FundsSplittingBehaviour methods."""
+
+    def _make_b(self) -> "_DummyFunds":
+        ctx = _make_full_ctx()
+        b = _DummyFunds(name="b", skill_context=ctx)
+        b._synchronized_data = SimpleNamespace(
+            safe_contract_address="0xSAFE",
+            all_participants=frozenset(["0xA"]),
+            done_tasks=[],
+        )
+        return b
+
+    def test_get_mech_payment_type_contract_error(self) -> None:
+        """Error from get_mech_type returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_mech_payment_type("0xOTHER"))
+        assert result is None
+
+    def test_get_balance_tracker_address_contract_error(self) -> None:
+        """Error from get_balance_tracker_for_mech_type returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_balance_tracker_address(b"\x00" * 32))
+        assert result is None
+
+    def test_get_mech_info_contract_error_on_balance(self) -> None:
+        """Error from get_mech_balance (3rd call in _get_mech_info) returns None."""
+        b = self._make_b()
+        with (
+            patch.object(b, "_get_mech_payment_type", side_effect=_gen_returning(b"\x00" * 32)),
+            patch.object(b, "_get_balance_tracker_address", side_effect=_gen_returning("0xTRACK")),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            ),
+        ):
+            result = _run_gen(b._get_mech_info("0xMECH"))
+        assert result is None
+
+    def test_adjust_mech_balance_contract_error(self) -> None:
+        """Error from get_token_credit_ratio returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._adjust_mech_balance("0xTRACKER", 100))
+        assert result is None
+
+    def test_get_process_payment_tx_contract_error(self) -> None:
+        """Error from get_process_payment_tx returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_process_payment_tx("0xMECH", "0xTRACK"))
+        assert result is None
+
+    def test_get_fee_contract_error(self) -> None:
+        """Error from get_fee returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_fee())
+        assert result is None
+
+    def test_get_max_fee_factor_contract_error(self) -> None:
+        """Error from get_max_fee_factor returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_max_fee_factor("0xTRACK"))
+        assert result is None
+
+    def test_get_transfer_tx_contract_error(self) -> None:
+        """Error from get_exec_tx_data returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_transfer_tx("0xMECH", "0xRECEIVER", 100))
+        assert result is None
+
+    def test_get_token_address_contract_error(self) -> None:
+        """Error from get_token_address returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_token_address("0xTRACK"))
+        assert result is None
+
+    def test_get_token_transfer_tx_data_contract_error(self) -> None:
+        """Error from get_transfer_tx_data returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_token_transfer_tx_data("0xTOKEN", "0xRECEIVER", 100))
+        assert result is None
+
+    def test_get_token_transfer_tx_contract_error_on_exec(self) -> None:
+        """Error from get_exec_tx_data (2nd call in _get_token_transfer_tx) returns None."""
+        b = self._make_b()
+        with (
+            patch.object(b, "_get_token_transfer_tx_data", side_effect=_gen_returning(b"\xaa")),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            ),
+        ):
+            result = _run_gen(b._get_token_transfer_tx("0xMECH", "0xTOKEN", "0xRECEIVER", 100))
+        assert result is None
+
+    def test_accumulate_reqs_by_operator_contract_error(self) -> None:
+        """Error from get_operators_mapping returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._accumulate_reqs_by_operator({"0xA": 5}))
+        assert result is None
+
+
+class TestTransPrepContractErrors:
+    """Test contract API error branches in TransactionPreparationBehaviour methods."""
+
+    def _make_b(self) -> "_DummyTransPrep":
+        ctx = _make_full_ctx()
+        b = _DummyTransPrep(name="b", skill_context=ctx)
+        b._synchronized_data = SimpleNamespace(
+            safe_contract_address="0xSAFE",
+            all_participants=frozenset(["0xA"]),
+            done_tasks=[],
+        )
+        return b
+
+    def test_get_checkpoint_tx_contract_error(self) -> None:
+        """Error from get_checkpoint_data returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_checkpoint_tx("0xHASH", "ab" * 16))
+        assert result is None
+
+    def test_get_latest_hash_contract_error(self) -> None:
+        """Error from get_token_hash returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_latest_hash())
+        assert result is None
+
+    def test_get_mech_update_hash_tx_contract_error(self) -> None:
+        """Error from get_update_hash_tx_data returns None."""
+        b = self._make_b()
+        # _should_update_hash needs to return True, so make latest_metadata_hash differ
+        b.context.params.task_mutable_params.latest_metadata_hash = b"\x00" * 32
+        with (
+            _mock_to_multihash() as mtm,
+            patch.object(
+                b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            ),
+        ):
+            mtm.return_value = "ab" * 16
+            result = _run_gen(b.get_mech_update_hash_tx())
+        assert result is None
+
+    def test_get_agent_mech_deliver_tx_contract_error(self) -> None:
+        """Error from get_deliver_data returns None."""
+        b = self._make_b()
+        task_data = {
+            "mech_address": "0xMECH",
+            "request_id": "r1",
+            "task_result": "deadbeef",
+            "request_id_nonce": 0,
+        }
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_agent_mech_deliver_tx(task_data))
+        assert result is None
+
+    def test_get_deliver_marketplace_tx_contract_error(self) -> None:
+        """Error from get_deliver_to_market_tx returns None."""
+        b = self._make_b()
+        task_data = {
+            "mech_address": "0xMECH",
+            "request_id": "r1",
+            "task_result": "deadbeef",
+        }
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_deliver_marketplace_tx(task_data))
+        assert result is None
+
+    def test_get_offchain_tasks_deliver_data_contract_error(self) -> None:
+        """Error from get_offchain_deliver_data returns None."""
+        b = self._make_b()
+        offchain_task = {
+            IS_OFFCHAIN: True,
+            NONCE: 1,
+            SENDER: "0xSENDER",
+            OffchainDataValue.IPFS_HASH.value: "0x" + "aa" * 32,
+            OffchainDataValue.SIGNATURE.value: "0x" + "bb" * 65,
+            OffchainDataValue.TASK_RESULT.value: "cc" * 16,
+            OffchainDataValue.DELIVERY_RATE.value: "10",
+        }
+        b._synchronized_data = SimpleNamespace(
+            safe_contract_address="0xSAFE",
+            done_tasks=[offchain_task],
+        )
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_offchain_tasks_deliver_data())
+        assert result is None
+
+    def test_get_is_nvm_mech_contract_error(self) -> None:
+        """Error from get_is_nvm_mech returns None."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(b._get_is_nvm_mech("0xMECH"))
+        assert result is None
+
+    def test_get_encoded_deliver_data_contract_error(self) -> None:
+        """Error from get_encoded_data_for_request returns (None, None)."""
+        b = self._make_b()
+        with patch.object(
+            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+        ):
+            result = _run_gen(
+                b._get_encoded_deliver_data([b"\x01"], [b"\x02"], [10])
+            )
+        assert result == (None, None)
+
+    def test_get_marketplace_tasks_deliver_data_contract_error(self) -> None:
+        """Error from get_marketplace_deliver_data returns None."""
+        b = self._make_b()
+        marketplace_tasks = [
+            {
+                MECH_ADDRESS: "0xMECH",
+                MarketplaceData.REQUEST_ID.value: 1,
+                MarketplaceData.TASK_RESULT.value: "aa" * 16,
+            }
+        ]
+        # _get_is_nvm_mech must succeed (returning False so we skip encoding)
+        # then get_contract_api_response for get_marketplace_deliver_data must fail
+        call_count = 0
+
+        def _side_effect(*args: Any, **kwargs: Any) -> Any:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                # First call: _get_is_nvm_mech → STATE with is_nvm=False
+                return _gen_returning(_state_contract_msg({"data": False}))(*args, **kwargs)
+            # Second call: get_marketplace_deliver_data → ERROR
+            return _gen_returning(_error_contract_msg())(*args, **kwargs)
+
+        with patch.object(b, "get_contract_api_response", side_effect=_side_effect):
+            result = _run_gen(b._get_marketplace_tasks_deliver_data(marketplace_tasks))
+        assert result is None
