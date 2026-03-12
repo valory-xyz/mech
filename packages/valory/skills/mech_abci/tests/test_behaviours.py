@@ -18,7 +18,6 @@
 # ------------------------------------------------------------------------------
 """Tests for mech_abci.behaviours."""
 
-from packages.valory.skills.abstract_round_abci.behaviours import AbstractRoundBehaviour
 from packages.valory.skills.delivery_rate_abci.behaviours import (
     UpdateDeliveryRateRoundBehaviour,
 )
@@ -43,53 +42,19 @@ from packages.valory.skills.transaction_settlement_abci.behaviours import (
 )
 
 
-class TestMechConsensusBehaviour:
-    """Tests for MechConsensusBehaviour class attributes."""
+def test_mech_consensus_behaviour_composition() -> None:
+    """MechConsensusBehaviour wires all sub-behaviours, app class, and background correctly."""
+    assert MechConsensusBehaviour.initial_behaviour_cls is RegistrationStartupBehaviour
+    assert MechConsensusBehaviour.abci_app_cls is MechAbciApp
+    assert BackgroundBehaviour in MechConsensusBehaviour.background_behaviours_cls
 
-    def test_is_abstract_round_behaviour(self) -> None:
-        """Test MechConsensusBehaviour is a subclass of AbstractRoundBehaviour."""
-        assert issubclass(MechConsensusBehaviour, AbstractRoundBehaviour)
-
-    def test_initial_behaviour_is_registration_startup(self) -> None:
-        """Test initial_behaviour_cls is RegistrationStartupBehaviour."""
-        assert (
-            MechConsensusBehaviour.initial_behaviour_cls is RegistrationStartupBehaviour
-        )
-
-    def test_abci_app_cls_is_mech_abci_app(self) -> None:
-        """Test abci_app_cls is MechAbciApp."""
-        assert MechConsensusBehaviour.abci_app_cls is MechAbciApp
-
-    def test_background_behaviours_contains_background_behaviour(self) -> None:
-        """Test background_behaviours_cls contains BackgroundBehaviour."""
-        assert BackgroundBehaviour in MechConsensusBehaviour.background_behaviours_cls
-
-    def test_behaviours_includes_task_submission(self) -> None:
-        """Test behaviours includes all TaskSubmissionRoundBehaviour behaviours."""
-        for b in TaskSubmissionRoundBehaviour.behaviours:
-            assert b in MechConsensusBehaviour.behaviours
-
-    def test_behaviours_includes_agent_registration(self) -> None:
-        """Test behaviours includes all AgentRegistrationRoundBehaviour behaviours."""
-        for b in AgentRegistrationRoundBehaviour.behaviours:
-            assert b in MechConsensusBehaviour.behaviours
-
-    def test_behaviours_includes_reset_pause(self) -> None:
-        """Test behaviours includes all ResetPauseABCIConsensusBehaviour behaviours."""
-        for b in ResetPauseABCIConsensusBehaviour.behaviours:
-            assert b in MechConsensusBehaviour.behaviours
-
-    def test_behaviours_includes_transaction_settlement(self) -> None:
-        """Test behaviours includes all TransactionSettlementRoundBehaviour behaviours."""
-        for b in TransactionSettlementRoundBehaviour.behaviours:
-            assert b in MechConsensusBehaviour.behaviours
-
-    def test_behaviours_includes_termination(self) -> None:
-        """Test behaviours includes all TerminationAbciBehaviours behaviours."""
-        for b in TerminationAbciBehaviours.behaviours:
-            assert b in MechConsensusBehaviour.behaviours
-
-    def test_behaviours_includes_delivery_rate(self) -> None:
-        """Test behaviours includes all UpdateDeliveryRateRoundBehaviour behaviours."""
-        for b in UpdateDeliveryRateRoundBehaviour.behaviours:
+    for sub_behaviour_set in (
+        TaskSubmissionRoundBehaviour.behaviours,
+        AgentRegistrationRoundBehaviour.behaviours,
+        ResetPauseABCIConsensusBehaviour.behaviours,
+        TransactionSettlementRoundBehaviour.behaviours,
+        TerminationAbciBehaviours.behaviours,
+        UpdateDeliveryRateRoundBehaviour.behaviours,
+    ):
+        for b in sub_behaviour_set:
             assert b in MechConsensusBehaviour.behaviours

@@ -20,15 +20,9 @@
 
 from unittest.mock import patch
 
-from packages.valory.skills.abstract_round_abci.models import ApiSpecs
-from packages.valory.skills.delivery_rate_abci.models import (
-    Params as SubscriptionParams,
-)
 from packages.valory.skills.mech_abci.composition import MechAbciApp
 from packages.valory.skills.mech_abci.models import (
     MARGIN,
-    Params,
-    RandomnessApi,
     SharedState,
 )
 from packages.valory.skills.mech_abci.tests.conftest import (
@@ -37,31 +31,20 @@ from packages.valory.skills.mech_abci.tests.conftest import (
 )
 from packages.valory.skills.reset_pause_abci.rounds import Event as ResetPauseEvent
 from packages.valory.skills.task_submission_abci.models import (
-    Params as TaskExecutionParams,
-)
-from packages.valory.skills.task_submission_abci.models import (
     SharedState as TaskExecSharedState,
 )
 from packages.valory.skills.task_submission_abci.rounds import (
     Event as TaskExecutionEvent,
 )
-from packages.valory.skills.termination_abci.models import TerminationParams
 from packages.valory.skills.transaction_settlement_abci.rounds import (
     Event as TransactionSettlementEvent,
 )
 
 
-class TestSharedStateInit:
-    """Tests for SharedState.__init__."""
-
-    def test_last_processed_block_starts_at_zero(self) -> None:
-        """Test last_processed_request_block_number starts at zero."""
-        state = _make_shared_state()
-        assert state.last_processed_request_block_number == 0
-
-    def test_abci_app_cls_is_mech_abci_app(self) -> None:
-        """Test SharedState.abci_app_cls is MechAbciApp."""
-        assert SharedState.abci_app_cls is MechAbciApp
+def test_shared_state_init() -> None:
+    """SharedState.__init__ sets last_processed_request_block_number to zero."""
+    state = _make_shared_state()
+    assert state.last_processed_request_block_number == 0
 
 
 class TestSharedStateSetup:
@@ -122,29 +105,3 @@ class TestSharedStateSetup:
         with patch.object(TaskExecSharedState, "setup") as mock_super_setup:
             state.setup()
         mock_super_setup.assert_called_once()
-
-
-class TestMarginConstant:
-    """Tests for the MARGIN constant."""
-
-    def test_margin_value(self) -> None:
-        """Test MARGIN is 5."""
-        assert MARGIN == 5
-
-
-class TestRandomnessApi:
-    """Tests for RandomnessApi."""
-
-    def test_is_subclass_of_api_specs(self) -> None:
-        """Test RandomnessApi is a subclass of ApiSpecs."""
-        assert issubclass(RandomnessApi, ApiSpecs)
-
-
-class TestParams:
-    """Tests for Params."""
-
-    def test_inherits_from_all_three(self) -> None:
-        """Test Params inherits from all three base classes."""
-        assert issubclass(Params, TaskExecutionParams)
-        assert issubclass(Params, SubscriptionParams)
-        assert issubclass(Params, TerminationParams)

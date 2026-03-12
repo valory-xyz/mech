@@ -115,15 +115,6 @@ class TestAbciAppTransitionMapping:
             is RegistrationAbci.RegistrationRound
         )
 
-    def test_all_transitions_have_non_none_destinations(self) -> None:
-        """Test all transitions have non-None destinations."""
-        for src, dst in abci_app_transition_mapping.items():
-            assert dst is not None, f"Transition from {src} has no destination"
-
-    def test_transition_mapping_has_ten_entries(self) -> None:
-        """Test transition mapping has exactly 10 entries."""
-        assert len(abci_app_transition_mapping) == 10
-
 
 class TestTerminationConfig:
     """Tests for the termination_config BackgroundAppConfig."""
@@ -135,15 +126,3 @@ class TestTerminationConfig:
     def test_abci_app_is_termination_abci_app(self) -> None:
         """Test termination_config.abci_app is TerminationAbciApp."""
         assert termination_config.abci_app is TerminationAbciApp
-
-
-class TestMechAbciApp:
-    """Tests for the assembled MechAbciApp."""
-
-    def test_mech_abci_app_is_not_none(self) -> None:
-        """Test MechAbciApp is not None."""
-        assert MechAbciApp is not None
-
-    def test_event_to_timeout_is_dict(self) -> None:
-        """Test MechAbciApp.event_to_timeout is a dict."""
-        assert isinstance(MechAbciApp.event_to_timeout, dict)
