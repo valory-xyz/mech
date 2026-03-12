@@ -618,7 +618,7 @@ class TestGetPayloadContent:
 class TestHandleSubmittedTasks:
     """Test Handle Submitted Tasks."""
 
-    def _make_b(self) -> "_DummyDeliver":
+    def _make_b(self) -> "_DummyPooling":
         ctx = _make_full_ctx()
         ctx.shared_state["mech_delivery_last_block_number"] = MagicMock()
         b = _DummyPooling(name="b", skill_context=ctx)

@@ -280,11 +280,11 @@ def test_broken_process_pool_restart(
     class BrokenOncePool:
         """Pebble-like pool stub that raises once, then returns a done future."""
 
-        def schedule(self, *a: Any, **k: Any) -> Future:
+        def schedule(self, *a: Any, **k: Any) -> Future:  # type: ignore[return-value]
             result = next(schedule_results)
             if isinstance(result, Exception):
                 raise result
-            return result
+            return result  # type: ignore[return-value]
 
     monkeypatch.setattr(behaviour, "_executor", BrokenOncePool())
 
