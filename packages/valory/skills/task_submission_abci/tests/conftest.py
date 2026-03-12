@@ -45,6 +45,7 @@ def _make_logger(include_debug: bool = False) -> SimpleNamespace:
         ns.debug = lambda *a, **k: None  # type: ignore[attr-defined]
     return ns
 
+
 # ---------------------------------------------------------------------------
 # Context builders
 # ---------------------------------------------------------------------------
@@ -241,6 +242,4 @@ def _error_ledger_msg() -> MagicMock:
 
 def _mock_to_multihash() -> contextlib.AbstractContextManager:
     """Patch to_multihash in behaviours; use as a context manager."""
-    return patch(
-        "packages.valory.skills.task_submission_abci.behaviours.to_multihash"
-    )
+    return patch("packages.valory.skills.task_submission_abci.behaviours.to_multihash")

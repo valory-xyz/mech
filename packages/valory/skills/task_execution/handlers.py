@@ -451,7 +451,8 @@ class ContractHandler(BaseHandler):
 
             elif (
                 status == WAIT_FOR_TIMEOUT_STATUS
-                and req.get("request_delivery_rate", 0) >= self.mech_to_max_delivery_rate
+                and req.get("request_delivery_rate", 0)
+                >= self.mech_to_max_delivery_rate
             ):
                 self.context.logger.info(
                     f"Adding request with id {rid} to wait_for_timeout_tasks."

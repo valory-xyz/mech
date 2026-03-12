@@ -30,15 +30,14 @@ import pytest
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.task_submission_abci.behaviours import (
     DONE_TASKS,
-    IS_MARKETPLACE_MECH_KEY,
-    IS_OFFCHAIN,
-    MECH_ADDRESS,
-    NONCE,
     DeliverBehaviour,
     FundsSplittingBehaviour,
+    IS_OFFCHAIN,
     LAST_TX,
+    MECH_ADDRESS,
     MarketplaceData,
     MarketplaceKeys,
+    NONCE,
     OffchainDataKey,
     OffchainDataValue,
     OffchainKeys,
@@ -1595,7 +1594,9 @@ class TestHashUpdateBehaviour:
         b.context.params.task_mutable_params.latest_metadata_hash = None
         with (
             _mock_to_multihash() as mtm,
-            patch.object(b, "_get_latest_hash", side_effect=_gen_returning(b"\x00" * 32)),
+            patch.object(
+                b, "_get_latest_hash", side_effect=_gen_returning(b"\x00" * 32)
+            ),
         ):
             mtm.return_value = ""
             result = _run_gen(b._should_update_hash())
@@ -3029,7 +3030,9 @@ class TestFundsSplittingContractErrors:
         """Error from get_mech_type returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_mech_payment_type("0xOTHER"))
         assert result is None
@@ -3038,7 +3041,9 @@ class TestFundsSplittingContractErrors:
         """Error from get_balance_tracker_for_mech_type returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_balance_tracker_address(b"\x00" * 32))
         assert result is None
@@ -3047,10 +3052,16 @@ class TestFundsSplittingContractErrors:
         """Error from get_mech_balance (3rd call in _get_mech_info) returns None."""
         b = self._make_b()
         with (
-            patch.object(b, "_get_mech_payment_type", side_effect=_gen_returning(b"\x00" * 32)),
-            patch.object(b, "_get_balance_tracker_address", side_effect=_gen_returning("0xTRACK")),
             patch.object(
-                b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+                b, "_get_mech_payment_type", side_effect=_gen_returning(b"\x00" * 32)
+            ),
+            patch.object(
+                b, "_get_balance_tracker_address", side_effect=_gen_returning("0xTRACK")
+            ),
+            patch.object(
+                b,
+                "get_contract_api_response",
+                side_effect=_gen_returning(_error_contract_msg()),
             ),
         ):
             result = _run_gen(b._get_mech_info("0xMECH"))
@@ -3060,7 +3071,9 @@ class TestFundsSplittingContractErrors:
         """Error from get_token_credit_ratio returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._adjust_mech_balance("0xTRACKER", 100))
         assert result is None
@@ -3069,7 +3082,9 @@ class TestFundsSplittingContractErrors:
         """Error from get_process_payment_tx returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_process_payment_tx("0xMECH", "0xTRACK"))
         assert result is None
@@ -3078,7 +3093,9 @@ class TestFundsSplittingContractErrors:
         """Error from get_fee returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_fee())
         assert result is None
@@ -3087,7 +3104,9 @@ class TestFundsSplittingContractErrors:
         """Error from get_max_fee_factor returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_max_fee_factor("0xTRACK"))
         assert result is None
@@ -3096,7 +3115,9 @@ class TestFundsSplittingContractErrors:
         """Error from get_exec_tx_data returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_transfer_tx("0xMECH", "0xRECEIVER", 100))
         assert result is None
@@ -3105,7 +3126,9 @@ class TestFundsSplittingContractErrors:
         """Error from get_token_address returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_token_address("0xTRACK"))
         assert result is None
@@ -3114,28 +3137,40 @@ class TestFundsSplittingContractErrors:
         """Error from get_transfer_tx_data returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
-            result = _run_gen(b._get_token_transfer_tx_data("0xTOKEN", "0xRECEIVER", 100))
+            result = _run_gen(
+                b._get_token_transfer_tx_data("0xTOKEN", "0xRECEIVER", 100)
+            )
         assert result is None
 
     def test_get_token_transfer_tx_contract_error_on_exec(self) -> None:
         """Error from get_exec_tx_data (2nd call in _get_token_transfer_tx) returns None."""
         b = self._make_b()
         with (
-            patch.object(b, "_get_token_transfer_tx_data", side_effect=_gen_returning(b"\xaa")),
             patch.object(
-                b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+                b, "_get_token_transfer_tx_data", side_effect=_gen_returning(b"\xaa")
+            ),
+            patch.object(
+                b,
+                "get_contract_api_response",
+                side_effect=_gen_returning(_error_contract_msg()),
             ),
         ):
-            result = _run_gen(b._get_token_transfer_tx("0xMECH", "0xTOKEN", "0xRECEIVER", 100))
+            result = _run_gen(
+                b._get_token_transfer_tx("0xMECH", "0xTOKEN", "0xRECEIVER", 100)
+            )
         assert result is None
 
     def test_accumulate_reqs_by_operator_contract_error(self) -> None:
         """Error from get_operators_mapping returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._accumulate_reqs_by_operator({"0xA": 5}))
         assert result is None
@@ -3158,7 +3193,9 @@ class TestTransPrepContractErrors:
         """Error from get_checkpoint_data returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_checkpoint_tx("0xHASH", "ab" * 16))
         assert result is None
@@ -3167,7 +3204,9 @@ class TestTransPrepContractErrors:
         """Error from get_token_hash returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_latest_hash())
         assert result is None
@@ -3180,7 +3219,9 @@ class TestTransPrepContractErrors:
         with (
             _mock_to_multihash() as mtm,
             patch.object(
-                b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+                b,
+                "get_contract_api_response",
+                side_effect=_gen_returning(_error_contract_msg()),
             ),
         ):
             mtm.return_value = "ab" * 16
@@ -3197,7 +3238,9 @@ class TestTransPrepContractErrors:
             "request_id_nonce": 0,
         }
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_agent_mech_deliver_tx(task_data))
         assert result is None
@@ -3211,7 +3254,9 @@ class TestTransPrepContractErrors:
             "task_result": "deadbeef",
         }
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_deliver_marketplace_tx(task_data))
         assert result is None
@@ -3233,7 +3278,9 @@ class TestTransPrepContractErrors:
             done_tasks=[offchain_task],
         )
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_offchain_tasks_deliver_data())
         assert result is None
@@ -3242,7 +3289,9 @@ class TestTransPrepContractErrors:
         """Error from get_is_nvm_mech returns None."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
             result = _run_gen(b._get_is_nvm_mech("0xMECH"))
         assert result is None
@@ -3251,11 +3300,11 @@ class TestTransPrepContractErrors:
         """Error from get_encoded_data_for_request returns (None, None)."""
         b = self._make_b()
         with patch.object(
-            b, "get_contract_api_response", side_effect=_gen_returning(_error_contract_msg())
+            b,
+            "get_contract_api_response",
+            side_effect=_gen_returning(_error_contract_msg()),
         ):
-            result = _run_gen(
-                b._get_encoded_deliver_data([b"\x01"], [b"\x02"], [10])
-            )
+            result = _run_gen(b._get_encoded_deliver_data([b"\x01"], [b"\x02"], [10]))
         assert result == (None, None)
 
     def test_get_marketplace_tasks_deliver_data_contract_error(self) -> None:
@@ -3277,7 +3326,9 @@ class TestTransPrepContractErrors:
             call_count += 1
             if call_count == 1:
                 # First call: _get_is_nvm_mech → STATE with is_nvm=False
-                return _gen_returning(_state_contract_msg({"data": False}))(*args, **kwargs)
+                return _gen_returning(_state_contract_msg({"data": False}))(
+                    *args, **kwargs
+                )
             # Second call: get_marketplace_deliver_data → ERROR
             return _gen_returning(_error_contract_msg())(*args, **kwargs)
 

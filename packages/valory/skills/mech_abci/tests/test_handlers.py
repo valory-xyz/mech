@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, ClassVar, Dict, Optional, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -57,7 +57,10 @@ class GetHandlerTestCase:
 class TestHttpHandler:
     """Test HttpHandler of mech_abci."""
 
-    path_to_skill = PACKAGE_DIR
+    path_to_skill: ClassVar[Path] = PACKAGE_DIR
+    context: ClassVar[MagicMock]
+    handler: ClassVar[HttpHandler]
+    mech_handler: ClassVar[MechHttpHandler]
 
     @classmethod
     def setup_class(cls) -> None:
@@ -453,7 +456,9 @@ class TestHandleGetHealth:
         """FSM data present, TM healthy, but transition too old → stuck-no-transition."""
         from datetime import timedelta
 
-        old = datetime.now() - timedelta(seconds=300)  # 300s ago, factor=3 * pause=30 = 90
+        old = datetime.now() - timedelta(
+            seconds=300
+        )  # 300s ago, factor=3 * pause=30 = 90
         rs = _make_round_sequence(last_transition=old, stall_expired=False)
         data = self._run(round_sequence=rs, reset_pause=30.0)
         assert data["liveness"]["ok"] is False
@@ -489,9 +494,7 @@ class TestHandleGetHealth:
 
     def test_backlog_no_executed_task_but_fast_transition_progress_ok(self) -> None:
         """Backlog + no executed task but fast FSM transition → progress ok."""
-        rs = _make_round_sequence(
-            last_transition=datetime.now(), stall_expired=False
-        )
+        rs = _make_round_sequence(last_transition=datetime.now(), stall_expired=False)
         now = time.time()
         ss = {
             hmod.PENDING_TASKS: ["task1"],

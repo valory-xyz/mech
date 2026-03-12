@@ -44,7 +44,6 @@ from packages.valory.skills.task_execution.behaviours import (
     WAIT_FOR_TIMEOUT,
 )
 
-
 # ----------------------------- Shared stubs -----------------------------------
 
 
@@ -88,6 +87,7 @@ class _IpfsDLG(_DLG):
             dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
         )
         return msg, dlg
+
 
 # ----------------------------- Shared state ----------------------------------
 

@@ -43,7 +43,7 @@ from packages.valory.skills.transaction_settlement_abci.behaviours import (
 
 
 def test_mech_consensus_behaviour_composition() -> None:
-    """MechConsensusBehaviour wires all sub-behaviours, app class, and background correctly."""
+    """Verify MechConsensusBehaviour wires all sub-behaviours, app class, and background."""
     assert MechConsensusBehaviour.initial_behaviour_cls is RegistrationStartupBehaviour
     assert MechConsensusBehaviour.abci_app_cls is MechAbciApp
     assert BackgroundBehaviour in MechConsensusBehaviour.background_behaviours_cls

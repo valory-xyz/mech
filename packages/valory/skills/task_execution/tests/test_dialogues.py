@@ -110,9 +110,17 @@ def _capture_role_fn(cls: Any, base_cls: Any, ctx: Any) -> Any:
     "cls_name,base_cls,expected_role",
     [
         ("IpfsDialogues", BaseIpfsDialogues, BaseIpfsDialogue.Role.SKILL),
-        ("ContractDialogues", BaseContractApiDialogues, BaseContractApiDialogue.Role.AGENT),
+        (
+            "ContractDialogues",
+            BaseContractApiDialogues,
+            BaseContractApiDialogue.Role.AGENT,
+        ),
         ("LedgerDialogues", BaseLedgerApiDialogues, BaseLedgerApiDialogue.Role.AGENT),
-        ("AcnDataShareDialogues", BaseAcnDataShareDialogues, BaseAcnDataShareDialogue.Role.AGENT),
+        (
+            "AcnDataShareDialogues",
+            BaseAcnDataShareDialogues,
+            BaseAcnDataShareDialogue.Role.AGENT,
+        ),
     ],
 )
 def test_role_from_first_message(

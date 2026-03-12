@@ -262,13 +262,20 @@ def test_broken_process_pool_restart(
 
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
-    schedule_results = iter([
-        RuntimeError("boom"),  # first call raises
-        done_future((
-            "ok", "p", {"tx": 1},
-            SimpleNamespace(cost_dict={}, actual_model=None), object(),
-        )),  # second call succeeds
-    ])
+    schedule_results = iter(
+        [
+            RuntimeError("boom"),  # first call raises
+            done_future(
+                (
+                    "ok",
+                    "p",
+                    {"tx": 1},
+                    SimpleNamespace(cost_dict={}, actual_model=None),
+                    object(),
+                )
+            ),  # second call succeeds
+        ]
+    )
 
     class BrokenOncePool:
         """Pebble-like pool stub that raises once, then returns a done future."""
@@ -282,9 +289,7 @@ def test_broken_process_pool_restart(
     monkeypatch.setattr(behaviour, "_executor", BrokenOncePool())
 
     restarted: list = []
-    monkeypatch.setattr(
-        behaviour, "_restart_executor", lambda: restarted.append(True)
-    )
+    monkeypatch.setattr(behaviour, "_restart_executor", lambda: restarted.append(True))
 
     # send_message stub: route to the right handler based on callback identity
     def send_message_stub(
@@ -935,9 +940,7 @@ def test_ipfs_error_does_not_cascade_to_next_task(
             else:
                 # Task 101: IPFS download succeeds
                 body: Dict[str, Any] = {"prompt": "prompt", "tool": "sum"}
-                callback(
-                    SimpleNamespace(files={"t.json": json.dumps(body)}), dlg
-                )
+                callback(SimpleNamespace(files={"t.json": json.dumps(body)}), dlg)
         elif func is beh_mod.TaskExecutionBehaviour._handle_store_response:
             callback(SimpleNamespace(ipfs_hash="bafyok"), dlg)
         params_stub.in_flight_req = True

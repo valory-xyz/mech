@@ -25,14 +25,14 @@ from packages.valory.skills.task_submission_abci.payloads import (
 
 
 def test_task_pooling_payload() -> None:
-    """TaskPoolingPayload stores sender and content."""
+    """Verify TaskPoolingPayload stores sender and content."""
     p = TaskPoolingPayload(sender="agent-0", content='[{"request_id": "1"}]')
     assert p.content == '[{"request_id": "1"}]'
     assert p.sender == "agent-0"
 
 
 def test_transaction_payload() -> None:
-    """TransactionPayload stores sender and content."""
+    """Verify TransactionPayload stores sender and content."""
     p = TransactionPayload(sender="agent-0", content="0xabc123")
     assert p.content == "0xabc123"
     assert p.sender == "agent-0"

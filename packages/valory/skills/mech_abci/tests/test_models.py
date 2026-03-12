@@ -21,10 +21,7 @@
 from unittest.mock import patch
 
 from packages.valory.skills.mech_abci.composition import MechAbciApp
-from packages.valory.skills.mech_abci.models import (
-    MARGIN,
-    SharedState,
-)
+from packages.valory.skills.mech_abci.models import MARGIN
 from packages.valory.skills.mech_abci.tests.conftest import (
     _make_context,
     _make_shared_state,

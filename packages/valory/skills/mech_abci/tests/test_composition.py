@@ -24,7 +24,6 @@ import packages.valory.skills.reset_pause_abci.rounds as ResetAndPauseAbci
 import packages.valory.skills.task_submission_abci.rounds as TaskSubmissionAbciApp
 import packages.valory.skills.transaction_settlement_abci.rounds as TransactionSubmissionAbciApp
 from packages.valory.skills.mech_abci.composition import (
-    MechAbciApp,
     abci_app_transition_mapping,
     termination_config,
 )
