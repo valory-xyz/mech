@@ -8,17 +8,23 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeie23awnxhvymuswmwifeqnexeusschndllpnouvg5jzpgpxf3w2fa
+  behaviours.py: bafybeicf2ehj2astdgi5ngasqyjcdn4fajwvmw6xqha4bzwsa7bzn3guii
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
   models.py: bafybeiedzzetxjjhbvn4bx3lpr3rrsuop3at6h2zv2sm5s74swfvj3viga
   payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
-  rounds.py: bafybeiesmhu2uttp2zv7rgpz5j5ibb3erm4zp65rtzu7olm7bdwfeozdue
+  rounds.py: bafybeidwubiy6t47yhik7cbbac7otnc44puvlgcfeuo7cnozuli7mwd2ry
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
-  tests/conftest.py: bafybeihmmkkrov5wediwbc62euqvovmixlpwemc5cq3olqfx652kbs7nie
-  tests/test_funds_split.py: bafybeihpn2gtcgqmmuwzjadujkuwf6u7n67idt3xtalqwdwkyy43gjtdne
+  tests/conftest.py: bafybeigss5pdbp64hoflvgk5dmjzmj7kdumjdwaop3kw6s6r7guleen3qe
+  tests/test_behaviours.py: bafybeibsw6ekv5k5gz2a37icrt24uzwvk3hvtr6myboixxqq623whbdjye
+  tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
+  tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
+  tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry
+  tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
+  tests/test_rounds.py: bafybeigw6yechjt4y6ey25hcrofoiq62p2s6rrmx37q3tbopd4owktt5gq
+  tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -38,7 +44,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiaalla55aprhvoumv4u7qt4v6l53fjmgln6wgyjr5e5tw7u4kscja
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
-- valory/task_execution:0.1.0:bafybeidgm6yw4jpvpgdgaag2y66neyx4k4vv373svgqhitrd36ualjml7y
+- valory/task_execution:0.1.0:bafybeihty4ge54l3p2ez7liq3zn57vxn2t3ofzwrwp76cfdos5c5tggj7a
 behaviours:
   main:
     args: {}

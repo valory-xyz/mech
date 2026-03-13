@@ -24,7 +24,7 @@ import time
 import urllib.parse
 from types import SimpleNamespace
 from typing import Any, Dict, List
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -1016,3 +1016,549 @@ def test_contract_handler_handles_wait_for_timeout_tasks_properly_from_contract(
     ch2.handle(msg2)
 
     assert len(ch2.pending_tasks) == 5
+
+
+# ---------------------------------------------------------------------------
+# Additional coverage tests
+# ---------------------------------------------------------------------------
+
+
+def test_base_handler_teardown(handler_context: Any) -> None:
+    """Teardown logs without error."""
+    h: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
+    h.setup()
+    h.teardown()  # line 179
+
+
+def test_acn_handler_handle(handler_context: Any) -> None:
+    """AcnHandler.handle logs and calls on_message_handled."""
+
+    h = hmod.AcnHandler(name="acn", skill_context=handler_context)
+    h.setup()
+    h.handle(SimpleNamespace())  # lines 203-204
+
+
+def test_contract_handler_step_in_list_size(handler_context: Any) -> None:
+    """step_in_list_size property returns params.step_in_list_size."""
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
+    ch.setup()
+    assert ch.step_in_list_size == handler_context.params.step_in_list_size  # line 317
+
+
+def test_contract_handler_mech_type_and_mech_types_body_keys(
+    handler_context: SimpleNamespace,
+) -> None:
+    """MECH_TYPE and MECH_TYPES body keys update shared_state."""
+
+    params: Any = handler_context.params
+    params.in_flight_req = True
+    params.req_type = "legacy"
+
+    body: Dict[str, Any] = {
+        "mech_type": "token",
+        "mech_types": {"token": "0xBT"},
+    }
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
+    ch.setup()
+
+    msg: SimpleNamespace = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=body),
+    )
+    ch.handle(msg)
+
+    assert handler_context.shared_state[hmod.PAYMENT_MODEL] == "token"  # lines 348-349
+    assert handler_context.shared_state[hmod.PAYMENT_INFO] == {
+        "token": "0xBT"
+    }  # lines 354-355
+
+
+def test_contract_handler_handle_get_undelivered_reqs_empty(
+    handler_context: SimpleNamespace,
+) -> None:
+    """_handle_get_undelivered_reqs with empty data returns early (reqs_count==0)."""
+    params: Any = handler_context.params
+    params.req_type = "legacy"
+
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
+    ch.setup()
+    # Call directly to bypass the outer `if body.get("data") or ...` guard
+    ch._handle_get_undelivered_reqs(
+        {"data": [], "wait_for_timeout_tasks": []}
+    )  # lines 390-391
+
+    assert len(ch.pending_tasks) == 0
+
+
+def test_contract_handler_wait_for_timeout_status(
+    handler_context: SimpleNamespace,
+) -> None:
+    """WAIT_FOR_TIMEOUT_STATUS with high delivery_rate puts request in wait_for_timeout_tasks."""
+
+    params: Any = handler_context.params
+    params.req_type = "marketplace"
+    params.req_params.from_block["marketplace"] = 0
+    my_mech: str = params.agent_mech_contract_addresses[0]
+    params.mech_to_max_delivery_rate = {my_mech.lower(): 5}
+
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
+    ch.setup()
+
+    body: Dict[str, Any] = {
+        "data": [
+            {
+                "tx_hash": "0xwait",
+                "block_number": 30,
+                "priorityMech": "0xOtherMech",  # not my mech
+                "requester": "0xR",
+                "numRequests": 1,
+                "requestIds": [b"\x55" * 32],
+                "requestDatas": [b"\x66" * 32],
+                "status": hmod.WAIT_FOR_TIMEOUT_STATUS,  # 1
+                "request_delivery_rate": 10,  # >= 5
+            }
+        ]
+    }
+    msg: SimpleNamespace = SimpleNamespace(
+        performative=ContractApiMessage.Performative.STATE,
+        state=SimpleNamespace(body=body),
+    )
+    ch.handle(msg)
+
+    assert (
+        len(ch.wait_for_timeout_tasks) == 1
+    )  # lines 298-302 (property) + 455-460 (branch)
+
+
+def test_start_prometheus_server_calls_start_http_server(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """start_prometheus_server invokes prometheus_client.start_http_server."""
+
+    called: Dict[str, Any] = {}
+    monkeypatch.setattr(
+        hmod, "start_http_server", lambda port: called.__setitem__("port", port)
+    )
+
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    mh.start_prometheus_server()  # lines 552-553
+
+    assert "port" in called
+
+
+def test_fetch_offchain_request_info_bad_request_missing_key(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """_handle_offchain_request_info returns 400 when request_id is absent from body."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    http_msg: Any = make_http_msg({})  # no request_id → KeyError → bad request
+    mh._handle_offchain_request_info(http_msg, http_dialogue)  # lines 650-653
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+
+
+def test_make_unavailable_balance_response_static(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """_make_unavailable_balance_response returns well-formed unavailable dict."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    result: Dict[str, Any] = mh._make_unavailable_balance_response(
+        500, "test reason"
+    )  # line 809
+
+    assert result["status"] == "unavailable"
+    assert result["required_amount"] == 500
+    assert result["available_amount"] == 0
+    assert result["reason"] == "test reason"
+
+
+def test_get_ledger_settings_missing_rpc(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """_get_ledger_settings returns unavailable when RPC address is empty."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    handler_context.params.default_chain_id = "gnosis"
+    handler_context.params.gnosis_ledger_rpc = ""  # falsy → line 929
+
+    settings: Dict[str, Any] = mh._get_ledger_settings()
+    assert settings["status"] == "unavailable"
+    assert "Missing RPC config" in settings["reason"]
+
+
+def test_get_mech_payment_type(handler_context: Any, monkeypatch: Any) -> None:
+    """_get_mech_payment_type returns the mech_type from contract response."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    with patch.object(
+        hmod.OlasMechContract, "get_mech_type", return_value={"mech_type": "token"}
+    ):
+        result = mh._get_mech_payment_type(MagicMock(), "0xMECH")  # lines 894-895
+
+    assert result == "token"
+
+
+def test_get_balance_tracker_address_for_payment_type(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """_get_balance_tracker_address_for_payment_type returns address from contract response."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    with patch.object(
+        hmod.MechMarketplaceContract,
+        "get_balance_tracker_for_mech_type",
+        return_value={"data": "0xBT"},
+    ):
+        result = mh._get_balance_tracker_address_for_payment_type(  # lines 904-909
+            ledger_api=MagicMock(),
+            marketplace_address="0xMARKET",
+            payment_type="token",
+        )
+
+    assert result == "0xBT"
+
+
+def test_get_requester_balance(handler_context: Any, monkeypatch: Any) -> None:
+    """_get_requester_balance returns balance from contract response."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    with patch.object(
+        hmod.BalanceTrackerContract,
+        "get_requester_balance",
+        return_value={"requester_balance": 42},
+    ):
+        result = mh._get_requester_balance(  # lines 915-920
+            ledger_api=MagicMock(),
+            balance_tracker_address="0xBT",
+            requester="0xSENDER",
+        )
+
+    assert result == 42
+
+
+def test_check_offchain_requester_balance_non_ok_ledger(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """_check_offchain_requester_balance returns unavailable when ledger settings not OK."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    monkeypatch.setattr(
+        mh,
+        "_get_ledger_settings",
+        lambda: {"status": "unavailable", "reason": "no rpc"},
+    )
+
+    result: Dict[str, Any] = mh._check_offchain_requester_balance(
+        "0xSENDER", 100
+    )  # lines 822-827
+
+    assert result["status"] == "unavailable"
+    assert result["required_amount"] == 100
+    assert result["available_amount"] == 0
+
+
+def test_check_offchain_requester_balance_payment_type_none(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """_check_offchain_requester_balance returns unavailable when payment type is None."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    monkeypatch.setattr(
+        mh,
+        "_get_ledger_settings",
+        lambda: {"status": "ok", "rpc_address": "http://rpc", "chain_id": 100},
+    )
+    monkeypatch.setattr(mh, "_get_mech_payment_type", lambda api, addr: None)
+
+    fake_api = MagicMock()
+    fake_api.api.to_checksum_address = lambda x: x
+
+    with patch.object(hmod, "EthereumApi", return_value=fake_api):
+        result: Dict[str, Any] = mh._check_offchain_requester_balance(
+            "0xSENDER", 100
+        )  # lines 844-847
+
+    assert result["status"] == "unavailable"
+    assert "payment type" in result["reason"]
+
+
+def test_check_offchain_requester_balance_no_balance_tracker(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """_check_offchain_requester_balance returns unavailable when balance tracker is zero."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    monkeypatch.setattr(
+        mh,
+        "_get_ledger_settings",
+        lambda: {"status": "ok", "rpc_address": "http://rpc", "chain_id": 100},
+    )
+    monkeypatch.setattr(mh, "_get_mech_payment_type", lambda api, addr: "token")
+    monkeypatch.setattr(
+        mh,
+        "_get_balance_tracker_address_for_payment_type",
+        lambda **kw: "0x" + "0" * 40,  # int == 0
+    )
+
+    fake_api = MagicMock()
+    fake_api.api.to_checksum_address = lambda x: x
+
+    with patch.object(hmod, "EthereumApi", return_value=fake_api):
+        result: Dict[str, Any] = mh._check_offchain_requester_balance(
+            "0xSENDER", 100
+        )  # lines 856-860
+
+    assert result["status"] == "unavailable"
+    assert "balance tracker" in result["reason"]
+
+
+def test_check_offchain_requester_balance_success(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """_check_offchain_requester_balance returns OK with balance on full success path."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    monkeypatch.setattr(
+        mh,
+        "_get_ledger_settings",
+        lambda: {"status": "ok", "rpc_address": "http://rpc", "chain_id": 100},
+    )
+    monkeypatch.setattr(mh, "_get_mech_payment_type", lambda api, addr: "token")
+    monkeypatch.setattr(
+        mh,
+        "_get_balance_tracker_address_for_payment_type",
+        lambda **kw: "0x" + "1" * 40,  # non-zero
+    )
+    monkeypatch.setattr(mh, "_get_requester_balance", lambda **kw: 500)
+
+    fake_api = MagicMock()
+    fake_api.api.to_checksum_address = lambda x: x
+
+    with patch.object(hmod, "EthereumApi", return_value=fake_api):
+        result: Dict[str, Any] = mh._check_offchain_requester_balance(
+            "0xSENDER", 100
+        )  # lines 830-879
+
+    assert result["status"] == "ok"
+    assert result["available_amount"] == 500
+    assert result["required_amount"] == 100
+
+
+def test_check_offchain_requester_balance_exception(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """_check_offchain_requester_balance returns unavailable when an exception is raised."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    monkeypatch.setattr(
+        mh,
+        "_get_ledger_settings",
+        lambda: {"status": "ok", "rpc_address": "http://rpc", "chain_id": 100},
+    )
+
+    with patch.object(hmod, "EthereumApi", side_effect=RuntimeError("rpc down")):
+        result: Dict[str, Any] = mh._check_offchain_requester_balance(
+            "0xSENDER", 100
+        )  # lines 886-889
+
+    assert result["status"] == "unavailable"
+    assert result["required_amount"] == 100
+    assert "rpc down" in result["reason"]
+
+
+# ---------------------------------------------------------------------------
+# filter_requests edge cases
+# ---------------------------------------------------------------------------
+
+
+def _make_contract_handler(handler_context: SimpleNamespace) -> ContractHandler:
+    """Create a fresh ContractHandler with the given context."""
+    # Ensure mech_to_max_delivery_rate has our mech so the property doesn't KeyError
+    my_mech = handler_context.params.agent_mech_contract_addresses[0].lower()
+    handler_context.params.mech_to_max_delivery_rate.setdefault(my_mech, 0)
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+    return ch
+
+
+def _base_req(**overrides: Any) -> Dict[str, Any]:
+    """Return a minimal marketplace request dict, merging overrides."""
+    d: Dict[str, Any] = {
+        "tx_hash": "0xbase",
+        "block_number": 1,
+        "priorityMech": "0xMechAddr",
+        "requester": "0xReq",
+        "numRequests": 1,
+        "requestIds": [b"\x01" * 32],
+        "requestDatas": [b"\x02" * 32],
+        "requestId": "rid-1",
+        "status": 1,
+        "request_delivery_rate": 100,
+    }
+    d.update(overrides)
+    return d
+
+
+def test_filter_requests_missing_priority_mech_skips(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Request without 'priorityMech' key should be skipped (not crash)."""
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(status=hmod.DELIVERED_STATUS)
+    del req["priorityMech"]
+
+    ch.filter_requests([req])
+
+    # delivered + no matching mech → falls through to else (skipped)
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.unprocessed_timed_out_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_missing_delivery_rate_skips(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Request missing 'request_delivery_rate' with WAIT status should be skipped."""
+    my_mech: str = handler_context.params.agent_mech_contract_addresses[0].lower()
+    handler_context.params.mech_to_max_delivery_rate = {my_mech: 50}
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(
+        priorityMech="0xOther",
+        status=hmod.WAIT_FOR_TIMEOUT_STATUS,
+    )
+    del req["request_delivery_rate"]
+
+    ch.filter_requests([req])
+
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_none_status_goes_to_else(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Request with missing 'status' key should be skipped (falls to else)."""
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(priorityMech="0xOther")
+    del req["status"]
+
+    ch.filter_requests([req])
+
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.unprocessed_timed_out_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_delivered_for_my_mech_skipped(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Delivered request (status=3) for my mech goes to else branch."""
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(status=hmod.DELIVERED_STATUS)
+
+    ch.filter_requests([req])
+
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.unprocessed_timed_out_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_wait_below_max_rate_skipped(
+    handler_context: SimpleNamespace,
+) -> None:
+    """WAIT_FOR_TIMEOUT with delivery rate below max is skipped."""
+    my_mech: str = handler_context.params.agent_mech_contract_addresses[0].lower()
+    handler_context.params.mech_to_max_delivery_rate = {my_mech: 200}
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(
+        priorityMech="0xOther",
+        status=hmod.WAIT_FOR_TIMEOUT_STATUS,
+        request_delivery_rate=100,
+    )
+
+    ch.filter_requests([req])
+
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_wait_at_max_rate_enqueued(
+    handler_context: SimpleNamespace,
+) -> None:
+    """WAIT_FOR_TIMEOUT with delivery rate >= max goes to wait_for_timeout_tasks."""
+    my_mech_lower: str = handler_context.params.agent_mech_contract_addresses[0].lower()
+    handler_context.params.mech_to_max_delivery_rate = {my_mech_lower: 100}
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(
+        priorityMech="0xOther",
+        status=hmod.WAIT_FOR_TIMEOUT_STATUS,
+        request_delivery_rate=100,
+    )
+
+    ch.filter_requests([req])
+
+    assert len(ch.wait_for_timeout_tasks) == 1
+
+
+def test_filter_requests_mixed_batch(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Mixed batch: my-mech-pending, timed-out, wait-for-timeout, and delivered."""
+    my_mech: str = handler_context.params.agent_mech_contract_addresses[0]
+    my_mech_lower: str = my_mech.lower()
+    handler_context.params.mech_to_max_delivery_rate = {my_mech_lower: 50}
+    ch = _make_contract_handler(handler_context)
+
+    reqs = [
+        _base_req(priorityMech=my_mech, status=1),  # → pending
+        _base_req(priorityMech="0xOther", status=hmod.TIMED_OUT_STATUS),  # → timed_out
+        _base_req(
+            priorityMech="0xOther",
+            status=hmod.WAIT_FOR_TIMEOUT_STATUS,
+            request_delivery_rate=60,
+        ),  # → wait (60 >= 50)
+        _base_req(priorityMech=my_mech, status=hmod.DELIVERED_STATUS),  # → skipped
+    ]
+
+    ch.filter_requests(reqs)
+
+    assert len(ch.pending_tasks) == 1
+    assert len(ch.unprocessed_timed_out_tasks) == 1
+    assert len(ch.wait_for_timeout_tasks) == 1
+
+
+def test_filter_requests_empty_list(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Empty request list is a no-op."""
+    ch = _make_contract_handler(handler_context)
+    ch.filter_requests([])
+
+    assert len(ch.pending_tasks) == 0

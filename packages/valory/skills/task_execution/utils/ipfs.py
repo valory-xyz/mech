@@ -44,6 +44,8 @@ def to_multihash(hash_string: str) -> str:
     """To multihash string."""
     # Decode the Base32 CID to bytes
     cid_bytes = multibase.decode(hash_string)
+    if not cid_bytes:
+        return ""
     # Remove the multicodec prefix (0x01) from the bytes
     multihash_bytes = multicodec.remove_prefix(cid_bytes)
     # Convert the multihash bytes to a hexadecimal string

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -20,66 +20,114 @@
 """Tests for the task_execution skill's dialogues wiring and self-addresses."""
 
 from typing import Any
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 import packages.valory.skills.task_execution.dialogues as dmod
+from packages.valory.protocols.acn_data_share.dialogues import (
+    AcnDataShareDialogue as BaseAcnDataShareDialogue,
+)
+from packages.valory.protocols.acn_data_share.dialogues import (
+    AcnDataShareDialogues as BaseAcnDataShareDialogues,
+)
+from packages.valory.protocols.contract_api.dialogues import (
+    ContractApiDialogue as BaseContractApiDialogue,
+)
+from packages.valory.protocols.contract_api.dialogues import (
+    ContractApiDialogues as BaseContractApiDialogues,
+)
+from packages.valory.protocols.ipfs.dialogues import IpfsDialogue as BaseIpfsDialogue
+from packages.valory.protocols.ipfs.dialogues import IpfsDialogues as BaseIpfsDialogues
+from packages.valory.protocols.ledger_api.dialogues import (
+    LedgerApiDialogue as BaseLedgerApiDialogue,
+)
+from packages.valory.protocols.ledger_api.dialogues import (
+    LedgerApiDialogues as BaseLedgerApiDialogues,
+)
 
 
 def _get_self_addr(dialogues_obj: Any) -> str:
-    """
-    Return the dialogue's configured self address.
-
-    Handles differences across AEA versions by checking both `self_address`
-    and `_self_address`.
-
-    :param dialogues_obj: A dialogues instance under test.
-    :return: The configured self address as a string.
-    :raises AttributeError: If neither attribute exists.
-    """
+    """Return the dialogue's configured self address."""
     for attr in ("self_address", "_self_address"):
         if hasattr(dialogues_obj, attr):
             return getattr(dialogues_obj, attr)
     raise AttributeError("Could not find self address on dialogues object")
 
 
-def test_ipfs_dialogues_uses_skill_id_for_self_address(
-    dialogue_skill_context: Any,
+@pytest.mark.parametrize(
+    "cls_name,expected_addr_attr",
+    [
+        ("IpfsDialogues", "skill_id"),
+        ("ContractDialogues", "skill_id"),
+        ("LedgerDialogues", "skill_id"),
+        ("AcnDataShareDialogues", "agent_address"),
+    ],
+)
+def test_dialogues_self_address(
+    dialogue_skill_context: Any, cls_name: str, expected_addr_attr: str
 ) -> None:
-    """IPFS dialogues should use the skill_id as self address."""
-    dlg = dmod.IpfsDialogues(
-        name="ipfs_dialogues", skill_context=dialogue_skill_context
-    )
-    assert _get_self_addr(dlg) == str(dialogue_skill_context.skill_id)
-    dlg.cleanup()  # should not raise
-
-
-def test_contract_dialogues_uses_skill_id_for_self_address(
-    dialogue_skill_context: Any,
-) -> None:
-    """Contract dialogues should use the skill_id as self address."""
-    dlg = dmod.ContractDialogues(
-        name="contract_dialogues", skill_context=dialogue_skill_context
-    )
-    assert _get_self_addr(dlg) == str(dialogue_skill_context.skill_id)
+    """Each dialogue class uses the correct self address from context."""
+    cls = getattr(dmod, cls_name)
+    dlg = cls(name=cls_name.lower(), skill_context=dialogue_skill_context)
+    expected = str(getattr(dialogue_skill_context, expected_addr_attr))
+    assert _get_self_addr(dlg) == expected
     dlg.cleanup()
 
 
-def test_ledger_dialogues_uses_skill_id_for_self_address(
-    dialogue_skill_context: Any,
-) -> None:
-    """Ledger dialogues should use the skill_id as self address."""
-    dlg = dmod.LedgerDialogues(
-        name="ledger_dialogues", skill_context=dialogue_skill_context
-    )
-    assert _get_self_addr(dlg) == str(dialogue_skill_context.skill_id)
-    dlg.cleanup()
+# ---------------------------------------------------------------------------
+# Closure coverage — role_from_first_message return lines
+# ---------------------------------------------------------------------------
 
 
-def test_acn_data_share_dialogues_uses_agent_address_for_self_address(
-    dialogue_skill_context: Any,
+def _capture_role_fn(cls: Any, base_cls: Any, ctx: Any) -> Any:
+    """Create instance, capturing the role_from_first_message closure via patched base init."""
+    captured: dict = {}
+
+    def capture_base_init(
+        self_: Any,
+        self_address: Any = None,
+        role_from_first_message: Any = None,
+        **kw: Any
+    ) -> None:
+        captured["fn"] = role_from_first_message
+
+    with (
+        patch(
+            "packages.valory.skills.task_execution.dialogues.Model.__init__",
+            return_value=None,
+        ),
+        patch.object(base_cls, "__init__", side_effect=capture_base_init),
+    ):
+        obj = cls.__new__(cls)
+        object.__setattr__(obj, "_context", ctx)
+        cls.__init__(obj, skill_context=ctx)
+
+    return captured["fn"]
+
+
+@pytest.mark.parametrize(
+    "cls_name,base_cls,expected_role",
+    [
+        ("IpfsDialogues", BaseIpfsDialogues, BaseIpfsDialogue.Role.SKILL),
+        (
+            "ContractDialogues",
+            BaseContractApiDialogues,
+            BaseContractApiDialogue.Role.AGENT,
+        ),
+        ("LedgerDialogues", BaseLedgerApiDialogues, BaseLedgerApiDialogue.Role.AGENT),
+        (
+            "AcnDataShareDialogues",
+            BaseAcnDataShareDialogues,
+            BaseAcnDataShareDialogue.Role.AGENT,
+        ),
+    ],
+)
+def test_role_from_first_message(
+    dialogue_skill_context: Any, cls_name: str, base_cls: Any, expected_role: Any
 ) -> None:
-    """ACN Data Share dialogues should use the agent_address from context as self address."""
-    dlg = dmod.AcnDataShareDialogues(
-        name="acn_dialogues", skill_context=dialogue_skill_context
-    )
-    assert _get_self_addr(dlg) == str(dialogue_skill_context.agent_address)
-    dlg.cleanup()
+    """Each dialogue closure returns the correct role."""
+    cls = getattr(dmod, cls_name)
+    fn = _capture_role_fn(cls, base_cls, dialogue_skill_context)
+    role = fn(MagicMock(), "some-address")
+    assert role == expected_role

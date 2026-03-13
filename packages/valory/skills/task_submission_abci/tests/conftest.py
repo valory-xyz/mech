@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,66 +17,121 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Conftest for the task_submission_abci."""
+"""Conftest for the task_submission_abci tests."""
 
+import contextlib
+import threading
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, Generator, Optional, Tuple, Type, cast
+from typing import Any, Generator
+from unittest.mock import MagicMock, patch
 
-import pytest
-
-from packages.valory.skills.abstract_round_abci.base import AbstractRound
+from packages.valory.protocols.contract_api import ContractApiMessage
+from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_submission_abci.behaviours import (
-    FundsSplittingBehaviour,
+    DONE_TASKS,
+    DONE_TASKS_LOCK,
+    PAYMENT_MODEL,
 )
 
 
-@pytest.fixture
-def run_to_completion() -> Callable[[Generator[Any, None, Any]], Any]:
-    """
-    Return a helper that exhausts a generator and yields its final value.
-
-    :returns: A function that runs a generator until completion and returns the StopIteration value.
-    :rtype: Callable[[Generator[Any, None, Any]], Any]
-    """
-
-    def _run(gen: Generator[Any, None, Any]) -> Any:
-        try:
-            while True:
-                next(gen)
-        except StopIteration as e:  # pragma: no cover - control path end
-            return e.value
-
-    return _run
+def _make_logger(include_debug: bool = False) -> SimpleNamespace:
+    """Create a no-op logger stub. Single source of truth for all test contexts."""
+    ns = SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+    if include_debug:
+        ns.debug = lambda *a, **k: None  # type: ignore[attr-defined]
+    return ns
 
 
-class DummyFundsSplit(FundsSplittingBehaviour):
-    """Concrete subclass to allow instantiation for unit testing only."""
+# ---------------------------------------------------------------------------
+# Context builders
+# ---------------------------------------------------------------------------
 
-    matching_round: Type[AbstractRound] = cast(
-        Type[AbstractRound], type("DummyRound", (), {})
+
+def _make_lock() -> threading.Lock:
+    return threading.Lock()
+
+
+def _make_ctx(
+    done_tasks: Any = None,
+    payment_model: Any = None,
+    lock: Any = None,
+    agent_mech_addresses: Any = None,
+) -> SimpleNamespace:
+    if lock is None:
+        lock = _make_lock()
+    shared_state: dict = {
+        DONE_TASKS_LOCK: lock,
+        DONE_TASKS: done_tasks if done_tasks is not None else [],
+    }
+    if payment_model is not None:
+        shared_state[PAYMENT_MODEL] = payment_model
+    return SimpleNamespace(
+        logger=_make_logger(include_debug=True),
+        params=SimpleNamespace(
+            profit_split_balance=100,
+            on_chain_service_id=1,
+            agent_mech_contract_addresses=agent_mech_addresses or ["0xMECH"],
+            task_wait_timeout=0.1,
+            default_chain_id="100",
+        ),
+        shared_state=shared_state,
     )
 
-    def async_act(self) -> Generator[None, None, None]:
-        """Satisfy abstract method for BaseBehaviour."""
-        if False:  # pragma: no cover - keep it a generator
-            yield
-        return None
 
+def _make_full_ctx(
+    done_tasks: Any = None,
+    payment_model: Any = None,
+    lock: Any = None,
+    agent_mech_addresses: Any = None,
+    **overrides: Any,
+) -> SimpleNamespace:
+    """Extended context with all params needed for complex behaviours.
 
-@pytest.fixture
-def fs_ctx() -> SimpleNamespace:
+    Use **overrides to set/override any param attribute, e.g.
+    ``_make_full_ctx(multisend_address="0xCUSTOM")``.
     """
-    Return a minimal skill context with logger and params used by _should_split_profits.
+    ctx = _make_ctx(
+        done_tasks=done_tasks,
+        payment_model=payment_model,
+        lock=lock,
+        agent_mech_addresses=agent_mech_addresses,
+    )
+    defaults = dict(
+        agent_mech_contract_address="0xMECH",
+        hash_checkpoint_address="0xHASH",
+        mech_marketplace_address="0xMARKET",
+        complementary_service_metadata_address="0xMETA",
+        metadata_hash="bafytest",
+        task_mutable_params=SimpleNamespace(latest_metadata_hash=None),
+        service_registry_address="0xSERVICE",
+        minimum_agent_balance=100,
+        agent_funding_amount=200,
+        service_owner_share=1000,
+        multisend_address="0xMULTI",
+        mech_staking_instance_address="0xSTAKE",
+        mech_max_delivery_rate=10,
+    )
+    defaults.update(overrides)
+    for attr, val in defaults.items():
+        setattr(ctx.params, attr, val)
+    # ctx.state is accessed by BaseBehaviour.shared_state property
+    ctx.state = SimpleNamespace(
+        mech_delivery_last_block_number=MagicMock(),
+        mech_agent_balance=MagicMock(),
+        tool_delivery_time=MagicMock(),
+        synchronized_data=SimpleNamespace(safe_contract_address="0xSAFE"),
+    )
+    return ctx
 
-    :returns: A context namespace exposing logger and params (profit_split_balance, agent_mech_contract_addresses).
-    :rtype: SimpleNamespace
-    """
+
+def _make_fs_ctx() -> SimpleNamespace:
+    """Minimal context for FundsSplittingBehaviour tests."""
     return SimpleNamespace(
-        logger=SimpleNamespace(
-            info=lambda *a, **k: None,
-            warning=lambda *a, **k: None,
-            error=lambda *a, **k: None,
-        ),
+        logger=_make_logger(),
         params=SimpleNamespace(
             profit_split_balance=10,
             on_chain_service_id=100,
@@ -85,66 +140,106 @@ def fs_ctx() -> SimpleNamespace:
     )
 
 
-@pytest.fixture
-def fs_behaviour(fs_ctx: SimpleNamespace) -> DummyFundsSplit:
-    """
-    Create a behaviour instance bound to the minimal context.
-
-    :param fs_ctx: The fake skill context.
-    :type fs_ctx: SimpleNamespace
-    :returns: A DummyFundsSplit behaviour ready for testing.
-    :rtype: DummyFundsSplit
-    """
-    return DummyFundsSplit(name="fs", skill_context=fs_ctx)
-
-
-@pytest.fixture
-def patch_mech_info(
-    monkeypatch: pytest.MonkeyPatch, fs_behaviour: DummyFundsSplit
-) -> Callable[[Dict[str, int]], None]:
-    """
-    Return a helper to stub _get_mech_info to return balances per mech address.
-
-    :param monkeypatch: Pytest monkeypatch fixture.
-    :type monkeypatch: pytest.MonkeyPatch
-    :param fs_behaviour: The behaviour instance under test.
-    :type fs_behaviour: DummyFundsSplit
-    :returns: A function that accepts a mapping {mech_address: balance} and applies the stub.
-    :rtype: Callable[[Dict[str, int]], None]
-    """
-
-    def _apply(balances_by_addr: Dict[str, int]) -> None:
-        """
-        Apply the stub for _get_mech_info, returning tuples (mech_type, balance_tracker, balance).
-
-        :param balances_by_addr: Mapping from mech address to desired balance.
-        :type balances_by_addr: Dict[str, int]
-        """
-
-        def _fake(
-            self: DummyFundsSplit, mech_address: str
-        ) -> Generator[None, None, Optional[Tuple[bytes, str, int]]]:
-            if False:  # pragma: no cover - make this a generator
-                yield
-            bal = balances_by_addr.get(mech_address)
-            if bal is None:
-                return None
-            return b"\x00", "0xBalanceTracker", bal
-
-        monkeypatch.setattr(DummyFundsSplit, "_get_mech_info", _fake)
-
-    return _apply
+def _make_benchmark_ctx() -> SimpleNamespace:
+    """Minimal context with benchmark_tool for async_act tests."""
+    return SimpleNamespace(
+        logger=_make_logger(include_debug=True),
+        params=SimpleNamespace(
+            task_wait_timeout=0.01,
+            agent_mech_contract_addresses=["0xMECH"],
+        ),
+        shared_state={
+            DONE_TASKS_LOCK: threading.Lock(),
+            DONE_TASKS: [],
+        },
+        # MagicMock supports the context-manager protocol automatically, so
+        # benchmark_tool.measure(id).local() and .consensus() work as with-targets.
+        benchmark_tool=MagicMock(),
+        agent_address="test_agent_address",
+    )
 
 
-@pytest.fixture(autouse=True)
-def _no_agent_deficits(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Default: no agent needs funding; tests can override via monkeypatch."""
+# ---------------------------------------------------------------------------
+# Utility functions
+# ---------------------------------------------------------------------------
 
-    def _stub(
-        self: FundsSplittingBehaviour,
-    ) -> Generator[None, None, Optional[Dict[str, int]]]:
+
+def _run_gen(gen: Generator[Any, Any, Any]) -> Any:
+    """Run a generator to completion, returning its final value."""
+    try:
+        while True:
+            next(gen)
+    except StopIteration as e:
+        return e.value
+
+
+def _gen_returning(value: Any) -> Any:
+    """Create a generator that returns `value` immediately."""
+
+    def _gen(*args: Any, **kwargs: Any) -> Any:
         if False:
             yield
-        return {}
+        return value
 
-    monkeypatch.setattr(DummyFundsSplit, "_get_agent_funding_amounts", _stub)
+    return _gen
+
+
+def _noop_gen() -> Generator:
+    """Generator that returns immediately with None."""
+    yield from ()
+
+
+def _noop_gen_with_args(*_args: object, **_kwargs: object) -> Generator:
+    """Generator that accepts any arguments and returns immediately."""
+    yield from ()
+
+
+# ---------------------------------------------------------------------------
+# Message builders
+# ---------------------------------------------------------------------------
+
+
+def _state_contract_msg(body: Any = None) -> MagicMock:
+    """Return a MagicMock with STATE performative and given body."""
+    msg = MagicMock()
+    msg.performative = ContractApiMessage.Performative.STATE
+    if body is not None:
+        msg.state.body = body
+    return msg
+
+
+def _error_contract_msg() -> MagicMock:
+    """Return a MagicMock with ERROR performative (non-STATE)."""
+    msg = MagicMock()
+    msg.performative = ContractApiMessage.Performative.ERROR
+    return msg
+
+
+def _raw_tx_contract_msg(body: Any = None) -> MagicMock:
+    """Return a MagicMock with RAW_TRANSACTION performative."""
+    msg = MagicMock()
+    msg.performative = ContractApiMessage.Performative.RAW_TRANSACTION
+    if body is not None:
+        msg.raw_transaction.body = body
+    return msg
+
+
+def _state_ledger_msg(body: Any = None) -> MagicMock:
+    """Return a MagicMock with STATE performative and given body (ledger API)."""
+    msg = MagicMock()
+    msg.performative = LedgerApiMessage.Performative.STATE
+    if body is not None:
+        msg.state.body = body
+    return msg
+
+
+def _error_ledger_msg() -> MagicMock:
+    """Return a MagicMock with non-STATE performative (ledger API)."""
+    msg = MagicMock()
+    msg.performative = LedgerApiMessage.Performative.ERROR
+    return msg
+
+
+def _mock_to_multihash() -> contextlib.AbstractContextManager:
+    """Patch to_multihash in behaviours; use as a context manager."""
+    return patch("packages.valory.skills.task_submission_abci.behaviours.to_multihash")

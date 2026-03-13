@@ -163,3 +163,12 @@ def test_params_wrong_type_raises(
     bad["agent_index"] = "not-an-int"
     with pytest.raises(AEAEnforceError):
         m.Params(name="params", **bad)
+
+
+def test_params_empty_mech_to_config_raises_value_error(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """Empty mech_to_config should raise ValueError when no address can be set."""
+    params_kwargs["mech_to_config"] = {}
+    with pytest.raises(ValueError, match="No mech contract addresses found"):
+        m.Params(name="params", **params_kwargs)
