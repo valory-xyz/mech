@@ -21,7 +21,7 @@
 
 from datetime import datetime
 from types import SimpleNamespace
-from typing import Any, Callable, Generator, Optional
+from typing import Any, Generator, Optional
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -138,50 +138,8 @@ def _make_shared_state(ctx=None) -> SharedState:  # type: ignore
 
 
 # ---------------------------------------------------------------------------
-# Factory fixtures
+# Fixtures
 # ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def make_ctx() -> Callable[[], MagicMock]:
-    """Factory fixture returning the _make_ctx helper."""
-    return _make_ctx
-
-
-@pytest.fixture
-def make_handler() -> Callable[..., HttpHandler]:
-    """Factory fixture returning the _make_handler helper."""
-    return _make_handler
-
-
-@pytest.fixture
-def make_http_msg() -> Callable[..., MagicMock]:
-    """Factory fixture returning the _make_http_msg helper."""
-    return _make_http_msg
-
-
-@pytest.fixture
-def make_dialogue() -> Callable[[], MagicMock]:
-    """Factory fixture returning the _make_dialogue helper."""
-    return _make_dialogue
-
-
-@pytest.fixture
-def make_round_sequence() -> Callable[..., MagicMock]:
-    """Factory fixture returning the _make_round_sequence helper."""
-    return _make_round_sequence
-
-
-@pytest.fixture
-def make_context() -> Callable[..., SimpleNamespace]:
-    """Factory fixture returning the _make_context helper."""
-    return _make_context
-
-
-@pytest.fixture
-def make_shared_state() -> Callable[..., SharedState]:
-    """Factory fixture returning the _make_shared_state helper."""
-    return _make_shared_state
 
 
 @pytest.fixture

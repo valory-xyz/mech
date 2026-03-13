@@ -11,15 +11,15 @@ fingerprint:
   composition.py: bafybeiflvcnopyly2h2vx4p25jicylwzxvyxbqbqc62ssqdnbh2hrusk4m
   dialogues.py: bafybeigph4dbt75rpfjoxp5zzplb4m5izwblbpt6qssnrvvl2joj6o5cke
   fsm_specification.yaml: bafybeibac4bsjjhmxljzptuus3xlkufsiaofgg77g7nq7qgeju7fa6lh3u
-  handlers.py: bafybeihst6hrmipodszjjqbnwkvtswefas7ihcyqrxpwgnwipea3xxjsim
+  handlers.py: bafybeihnzh6rkrsn6xvmio4c3borzothkj5u62qcbjnzr5gt6hcy6iudsu
   models.py: bafybeid2dmqyfe4pinh6glewhas24zvjntc4z3rtrkp3ji7z2bkq5sudhu
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
-  tests/conftest.py: bafybeifyemptw4npqhqmdixhlbvwy6blknwsrwdkpwk6fytljhvo2tteg4
-  tests/test_behaviours.py: bafybeiall74mu4rqpbqsp4top26z5watte7ngq7mzpmsk56ez2bxopeqte
-  tests/test_composition.py: bafybeids4xve23iyrut4g55truflyqr2bal3l3yf2hbuz5vsfe4h45neae
-  tests/test_dialogues.py: bafybeiepzr3e3olrq2agzui3eposoaxpn4ovnztjaea57utemldzuujd2e
-  tests/test_handlers.py: bafybeigz45asuc66fsfidiw3kjzmncmovs4mnpfv6gjxwerp53jlushvfm
-  tests/test_models.py: bafybeieqc2vqn6nwhbowid25keundabjnygu6wmn6jhby2iyidgugq5t24
+  tests/conftest.py: bafybeiaqouyzclh4wvnf36jgcmgzm7k4snfghnm3v4yowb4pomyn6qvezu
+  tests/test_behaviours.py: bafybeibjw3tusfxxmr3byy6sdmu7gefotya4xvhd7ia43ll7fgyqggx7ye
+  tests/test_composition.py: bafybeig7xdwuz7hqjfakrry2c4suzoq3ap3iyufk6zmqnc6p63urkzptrm
+  tests/test_dialogues.py: bafybeiaicu6h4d3rppxbjhkifwlrfpjmxd6y4sdqnlskdjqijkct2tvhci
+  tests/test_handlers.py: bafybeicekjso4qfxaiqpaapgosxkvr4tbce6evnxguhzunug4subrikgci
+  tests/test_models.py: bafybeif4iuuknrtx3tc72y2ii237dqtl6nlqgpdywy227sfqbvxkk6mugy
 fingerprint_ignore_patterns: []
 connections:
 - valory/http_server:0.22.0:bafybeid4oqsfkqo36lryoecymjnq4whme3tgupqfq6m4l7lbr5r4yxtswu
@@ -30,11 +30,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeiaalla55aprhvoumv4u7qt4v6l53fjmgln6wgyjr5e5tw7u4kscja
 - valory/registration_abci:0.1.0:bafybeiayry7tzttlivibbfnwikilbgdl54g3btvc4uhl4x5qqdv6a673o4
 - valory/reset_pause_abci:0.1.0:bafybeibsdhil35py7zjhielonaycxo7gp34jfufe2ynprjv2etwxnzcxqy
-- valory/task_submission_abci:0.1.0:bafybeihmox7g3xkjb774kqlu4ee2hlms72xtqrx2bcuigvmpytnlnvhvau
+- valory/task_submission_abci:0.1.0:bafybeihee3ojhkalghxc6u725e7hegajlnii3bzihctd24hccl2ldajxlm
 - valory/termination_abci:0.1.0:bafybeic3jppoya7jkmylbl5evcssl5qhppl6hadxebfxcxmi5o7qysce6a
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 - valory/delivery_rate_abci:0.1.0:bafybeied5aejittwqk3il2pvt52dlnvp4el5tan6azuxynfka3h4qv2w3u
-- valory/task_execution:0.1.0:bafybeidl7ckkl2elmqxbuglybyt6rcquyb7oe4rktplqthd5bmem4lqqh4
+- valory/task_execution:0.1.0:bafybeihty4ge54l3p2ez7liq3zn57vxn2t3ofzwrwp76cfdos5c5tggj7a
 behaviours:
   main:
     args: {}

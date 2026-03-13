@@ -1369,3 +1369,196 @@ def test_check_offchain_requester_balance_success(
     assert result["status"] == "ok"
     assert result["available_amount"] == 500
     assert result["required_amount"] == 100
+
+
+def test_check_offchain_requester_balance_exception(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """_check_offchain_requester_balance returns unavailable when an exception is raised."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    monkeypatch.setattr(
+        mh,
+        "_get_ledger_settings",
+        lambda: {"status": "ok", "rpc_address": "http://rpc", "chain_id": 100},
+    )
+
+    with patch.object(hmod, "EthereumApi", side_effect=RuntimeError("rpc down")):
+        result: Dict[str, Any] = mh._check_offchain_requester_balance(
+            "0xSENDER", 100
+        )  # lines 886-889
+
+    assert result["status"] == "unavailable"
+    assert result["required_amount"] == 100
+    assert "rpc down" in result["reason"]
+
+
+# ---------------------------------------------------------------------------
+# filter_requests edge cases
+# ---------------------------------------------------------------------------
+
+
+def _make_contract_handler(handler_context: SimpleNamespace) -> ContractHandler:
+    """Create a fresh ContractHandler with the given context."""
+    # Ensure mech_to_max_delivery_rate has our mech so the property doesn't KeyError
+    my_mech = handler_context.params.agent_mech_contract_addresses[0].lower()
+    handler_context.params.mech_to_max_delivery_rate.setdefault(my_mech, 0)
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+    return ch
+
+
+def _base_req(**overrides: Any) -> Dict[str, Any]:
+    """Return a minimal marketplace request dict, merging overrides."""
+    d: Dict[str, Any] = {
+        "tx_hash": "0xbase",
+        "block_number": 1,
+        "priorityMech": "0xMechAddr",
+        "requester": "0xReq",
+        "numRequests": 1,
+        "requestIds": [b"\x01" * 32],
+        "requestDatas": [b"\x02" * 32],
+        "requestId": "rid-1",
+        "status": 1,
+        "request_delivery_rate": 100,
+    }
+    d.update(overrides)
+    return d
+
+
+def test_filter_requests_missing_priority_mech_skips(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Request without 'priorityMech' key should be skipped (not crash)."""
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(status=hmod.DELIVERED_STATUS)
+    del req["priorityMech"]
+
+    ch.filter_requests([req])
+
+    # delivered + no matching mech → falls through to else (skipped)
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.unprocessed_timed_out_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_missing_delivery_rate_skips(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Request missing 'request_delivery_rate' with WAIT status should be skipped."""
+    my_mech: str = handler_context.params.agent_mech_contract_addresses[0].lower()
+    handler_context.params.mech_to_max_delivery_rate = {my_mech: 50}
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(
+        priorityMech="0xOther",
+        status=hmod.WAIT_FOR_TIMEOUT_STATUS,
+    )
+    del req["request_delivery_rate"]
+
+    ch.filter_requests([req])
+
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_none_status_goes_to_else(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Request with missing 'status' key should be skipped (falls to else)."""
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(priorityMech="0xOther")
+    del req["status"]
+
+    ch.filter_requests([req])
+
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.unprocessed_timed_out_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_delivered_for_my_mech_skipped(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Delivered request (status=3) for my mech goes to else branch."""
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(status=hmod.DELIVERED_STATUS)
+
+    ch.filter_requests([req])
+
+    assert len(ch.pending_tasks) == 0
+    assert len(ch.unprocessed_timed_out_tasks) == 0
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_wait_below_max_rate_skipped(
+    handler_context: SimpleNamespace,
+) -> None:
+    """WAIT_FOR_TIMEOUT with delivery rate below max is skipped."""
+    my_mech: str = handler_context.params.agent_mech_contract_addresses[0].lower()
+    handler_context.params.mech_to_max_delivery_rate = {my_mech: 200}
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(
+        priorityMech="0xOther",
+        status=hmod.WAIT_FOR_TIMEOUT_STATUS,
+        request_delivery_rate=100,
+    )
+
+    ch.filter_requests([req])
+
+    assert len(ch.wait_for_timeout_tasks) == 0
+
+
+def test_filter_requests_wait_at_max_rate_enqueued(
+    handler_context: SimpleNamespace,
+) -> None:
+    """WAIT_FOR_TIMEOUT with delivery rate >= max goes to wait_for_timeout_tasks."""
+    my_mech_lower: str = handler_context.params.agent_mech_contract_addresses[0].lower()
+    handler_context.params.mech_to_max_delivery_rate = {my_mech_lower: 100}
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(
+        priorityMech="0xOther",
+        status=hmod.WAIT_FOR_TIMEOUT_STATUS,
+        request_delivery_rate=100,
+    )
+
+    ch.filter_requests([req])
+
+    assert len(ch.wait_for_timeout_tasks) == 1
+
+
+def test_filter_requests_mixed_batch(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Mixed batch: my-mech-pending, timed-out, wait-for-timeout, and delivered."""
+    my_mech: str = handler_context.params.agent_mech_contract_addresses[0]
+    my_mech_lower: str = my_mech.lower()
+    handler_context.params.mech_to_max_delivery_rate = {my_mech_lower: 50}
+    ch = _make_contract_handler(handler_context)
+
+    reqs = [
+        _base_req(priorityMech=my_mech, status=1),  # → pending
+        _base_req(priorityMech="0xOther", status=hmod.TIMED_OUT_STATUS),  # → timed_out
+        _base_req(
+            priorityMech="0xOther",
+            status=hmod.WAIT_FOR_TIMEOUT_STATUS,
+            request_delivery_rate=60,
+        ),  # → wait (60 >= 50)
+        _base_req(priorityMech=my_mech, status=hmod.DELIVERED_STATUS),  # → skipped
+    ]
+
+    ch.filter_requests(reqs)
+
+    assert len(ch.pending_tasks) == 1
+    assert len(ch.unprocessed_timed_out_tasks) == 1
+    assert len(ch.wait_for_timeout_tasks) == 1
+
+
+def test_filter_requests_empty_list(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Empty request list is a no-op."""
+    ch = _make_contract_handler(handler_context)
+    ch.filter_requests([])
+
+    assert len(ch.pending_tasks) == 0

@@ -433,8 +433,9 @@ class ContractHandler(BaseHandler):
 
             self.context.logger.info(f"Evaluating request {req}.")
 
+            priority_mech = req.get("priorityMech", "")
             if (
-                req["priorityMech"].lower() == self.mech_address.lower()
+                priority_mech.lower() == self.mech_address.lower()
                 and status != DELIVERED_STATUS
             ):
                 self.context.logger.info(
@@ -450,7 +451,8 @@ class ContractHandler(BaseHandler):
 
             elif (
                 status == WAIT_FOR_TIMEOUT_STATUS
-                and req["request_delivery_rate"] >= self.mech_to_max_delivery_rate
+                and req.get("request_delivery_rate", 0)
+                >= self.mech_to_max_delivery_rate
             ):
                 self.context.logger.info(
                     f"Adding request with id {rid} to wait_for_timeout_tasks."
@@ -882,7 +884,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 ResponseKey.AVAILABLE_AMOUNT.value: int(available_amount),
                 ResponseKey.REASON.value: "balance check completed",
             }
-        except Exception as e:  # pragma: nocover
+        except Exception as e:
             return self._make_unavailable_balance_response(
                 required_amount, f"Balance check failed: {str(e)}"
             )

@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
+from typing import Any, ClassVar, Dict, Optional, Union
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -57,18 +57,23 @@ class GetHandlerTestCase:
 class TestHttpHandler:
     """Test HttpHandler of mech_abci."""
 
-    path_to_skill = PACKAGE_DIR
+    path_to_skill: ClassVar[Path] = PACKAGE_DIR
+    context: ClassVar[MagicMock]
+    handler: ClassVar[HttpHandler]
+    mech_handler: ClassVar[MechHttpHandler]
 
-    def setup_class(self) -> None:
-        """Setup the test class."""
-        self.context = MagicMock()
-        self.context.logger = MagicMock()
-        self.handler = HttpHandler(name="", skill_context=self.context)
-        self.mech_handler = MechHttpHandler(name="", skill_context=self.context)
-        self.mech_handler.context.shared_state = {}
-        self.handler.context.params.service_endpoint_base = "http://localhost:8080/"
-        self.mech_handler.setup()
-        self.handler.setup()
+    @classmethod
+    def setup_class(cls) -> None:
+        """Create handler instances for the test class."""
+        cls.context = MagicMock()
+        cls.context.logger = MagicMock()
+        cls.handler = HttpHandler(name="", skill_context=cls.context)
+        cls.mech_handler = MechHttpHandler(name="", skill_context=cls.context)
+        cls.mech_handler.context.shared_state = {}
+        cls.handler.context.params.service_endpoint_base = "http://localhost:8080/"
+        with patch.object(cls.mech_handler, "start_prometheus_server"):
+            cls.mech_handler.setup()
+        cls.handler.setup()
 
     def test_setup(self) -> None:
         """Test the setup method of the handler."""
@@ -100,27 +105,27 @@ class TestHttpHandler:
         "test_case",
         [
             GetHandlerTestCase(
-                name="Happy Path",
+                name="Happy Path: healthcheck",
                 url="http://localhost:8080/healthcheck",
                 method=HttpMethod.GET.value,
                 expected_handler="_handle_get_health",
             ),
             GetHandlerTestCase(
-                name="Happy Path",
+                name="Happy Path: signed requests",
                 url="http://localhost:8080/send_signed_requests",
                 method=HttpMethod.POST.value,
                 expected_handler="_handle_signed_requests",
                 is_mech_handler=True,
             ),
             GetHandlerTestCase(
-                name="Happy Path",
+                name="Happy Path: fetch offchain info",
                 url="http://localhost:8080/fetch_offchain_info",
                 method=HttpMethod.GET.value,
                 expected_handler="_handle_offchain_request_info",
                 is_mech_handler=True,
             ),
             GetHandlerTestCase(
-                name="Happy Path",
+                name="Happy Path: fetch offchain info with ID",
                 url="http://localhost:8080/fetch_offchain_info/1",
                 method=HttpMethod.GET.value,
                 expected_handler="_handle_offchain_request_info",
@@ -142,25 +147,16 @@ class TestHttpHandler:
     )
     def test_mech_get_handler(self, test_case: GetHandlerTestCase) -> None:
         """Test _get_handler."""
-        url = test_case.url
-        method = test_case.method
-        is_mech_handler = test_case.is_mech_handler
-
         if test_case.expected_handler is not None:
-            if is_mech_handler:
-                expected_handler = getattr(
-                    self.mech_handler, test_case.expected_handler
-                )
-            else:
-                expected_handler = getattr(self.handler, test_case.expected_handler)
+            owner = self.mech_handler if test_case.is_mech_handler else self.handler
+            expected_handler = getattr(owner, test_case.expected_handler)
         else:
-            expected_handler = test_case.expected_handler
-        expected_captures: Dict[Any, Any] = {}
+            expected_handler = None
 
-        handler, captures = self.handler._get_handler(url, method)
+        handler, captures = self.handler._get_handler(test_case.url, test_case.method)
 
         assert handler == expected_handler
-        assert captures == expected_captures
+        assert captures == {}
 
 
 # ---------------------------------------------------------------------------
@@ -171,76 +167,60 @@ class TestHttpHandler:
 class TestHttpHandlerProperties:
     """Tests for the shared_state-backed properties of HttpHandler."""
 
+    def setup_method(self) -> None:
+        """Create fresh ctx and handler for each test."""
+        self.ctx = _make_ctx()
+        self.h = _make_handler(self.ctx)
+
     def test_last_successful_read_none(self) -> None:
         """Test last successful read none."""
-        ctx = _make_ctx()
-        h = _make_handler(ctx)
-        assert h.last_successful_read is None  # line 152
+        assert self.h.last_successful_read is None
 
     def test_last_successful_read_set(self) -> None:
         """Test last successful read set."""
-        ctx = _make_ctx()
-        h = _make_handler(ctx)
-        ctx.shared_state[hmod.LAST_SUCCESSFUL_READ] = (100, 1.0)
-        assert h.last_successful_read == (100, 1.0)
+        self.ctx.shared_state[hmod.LAST_SUCCESSFUL_READ] = (100, 1.0)
+        assert self.h.last_successful_read == (100, 1.0)
 
     def test_last_attempt_ts(self) -> None:
         """Test last attempt ts."""
-        ctx = _make_ctx()
-        h = _make_handler(ctx)
-        assert h.last_attempt_ts is None  # line 160
-        ctx.shared_state[hmod.LAST_READ_ATTEMPT_TS] = 9.5
-        assert h.last_attempt_ts == 9.5
+        assert self.h.last_attempt_ts is None
+        self.ctx.shared_state[hmod.LAST_READ_ATTEMPT_TS] = 9.5
+        assert self.h.last_attempt_ts == 9.5
 
     def test_inflight_ts(self) -> None:
         """Test inflight ts."""
-        ctx = _make_ctx()
-        h = _make_handler(ctx)
-        assert h.inflight_ts is None  # line 165
-        ctx.shared_state[hmod.INFLIGHT_READ_TS] = 7.7
-        assert h.inflight_ts == 7.7
+        assert self.h.inflight_ts is None
+        self.ctx.shared_state[hmod.INFLIGHT_READ_TS] = 7.7
+        assert self.h.inflight_ts == 7.7
 
     def test_last_successful_executed_task(self) -> None:
         """Test last successful executed task."""
-        ctx = _make_ctx()
-        h = _make_handler(ctx)
-        assert h.last_successful_executed_task is None  # line 170
-        ctx.shared_state[hmod.LAST_SUCCESSFUL_EXECUTED_TASK] = ("req-1", 2.0)
-        assert h.last_successful_executed_task == ("req-1", 2.0)
+        assert self.h.last_successful_executed_task is None
+        self.ctx.shared_state[hmod.LAST_SUCCESSFUL_EXECUTED_TASK] = ("req-1", 2.0)
+        assert self.h.last_successful_executed_task == ("req-1", 2.0)
 
     def test_was_last_read_successful_defaults_true(self) -> None:
         """Test was last read successful defaults true."""
-        ctx = _make_ctx()
-        h = _make_handler(ctx)
-        assert (
-            h.was_last_read_successful is True
-        )  # line 178 — absent → not False → True
+        assert self.h.was_last_read_successful is True
 
     def test_was_last_read_successful_false(self) -> None:
         """Test was last read successful false."""
-        ctx = _make_ctx()
-        h = _make_handler(ctx)
-        ctx.shared_state[hmod.WAS_LAST_READ_SUCCESSFUL] = False
-        assert h.was_last_read_successful is False
+        self.ctx.shared_state[hmod.WAS_LAST_READ_SUCCESSFUL] = False
+        assert self.h.was_last_read_successful is False
 
     def test_last_tx(self) -> None:
         """Test last tx."""
-        ctx = _make_ctx()
-        h = _make_handler(ctx)
-        assert h.last_tx is None  # line 183
-        ctx.shared_state[hmod.LAST_TX] = ("0xabc", 3.0)
-        assert h.last_tx == ("0xabc", 3.0)
+        assert self.h.last_tx is None
+        self.ctx.shared_state[hmod.LAST_TX] = ("0xabc", 3.0)
+        assert self.h.last_tx == ("0xabc", 3.0)
 
     def test_synchronized_data(self) -> None:
         """Test synchronized data."""
-        ctx = _make_ctx()
-        h = _make_handler(ctx)
-        # SynchronizedData wraps the db from context.state; just verify no AttributeError
         with patch(
             "packages.valory.skills.mech_abci.handlers.SynchronizedData"
         ) as MockSD:
             MockSD.return_value = MagicMock(period_count=5)
-            h.synchronized_data  # line 188
+            self.h.synchronized_data
         assert MockSD.called
 
 
@@ -361,11 +341,13 @@ class TestHandleGetHealth:
     ) -> Dict:
         ctx = _make_ctx()
         ctx.params.reset_pause_duration = reset_pause
-        ctx.shared_state = shared_state or {}
         if round_sequence is None:
             round_sequence = _make_round_sequence()
         ctx.state.round_sequence = round_sequence
         h = _make_handler(ctx)
+        # Merge AFTER handler.setup() so test values aren't overwritten by init
+        if shared_state:
+            ctx.shared_state.update(shared_state)
 
         sent: Dict = {}
 
@@ -469,3 +451,119 @@ class TestHandleGetHealth:
         data = self._run(round_sequence=rs, shared_state=ss)
         # pending=5, ipfsq=0 (exception→0), waiting=0 → backlog_size=5
         assert data["progress"]["backlog_size"] == 5
+
+    def test_stuck_no_transition_liveness_fails(self) -> None:
+        """FSM data present, TM healthy, but transition too old → stuck-no-transition."""
+        from datetime import timedelta
+
+        old = datetime.now() - timedelta(
+            seconds=300
+        )  # 300s ago, factor=3 * pause=30 = 90
+        rs = _make_round_sequence(last_transition=old, stall_expired=False)
+        data = self._run(round_sequence=rs, reset_pause=30.0)
+        assert data["liveness"]["ok"] is False
+        assert data["liveness"]["reason"] == "stuck-no-transition"
+
+    def test_backlog_with_executed_task_covers_progress(self) -> None:
+        """Backlog + no recent FSM transition, but recent task execution → progress ok."""
+        from datetime import timedelta
+
+        old = datetime.now() - timedelta(seconds=300)
+        rs = _make_round_sequence(last_transition=old, stall_expired=False)
+        now = time.time()
+        ss = {
+            hmod.PENDING_TASKS: ["task1"],
+            hmod.LAST_READ_ATTEMPT_TS: now,
+            hmod.LAST_SUCCESSFUL_EXECUTED_TASK: ("req-1", now),
+        }
+        data = self._run(round_sequence=rs, shared_state=ss, reset_pause=30.0)
+        assert data["progress"]["ok"] is True
+        assert data["readiness"]["ok"] is True
+
+    def test_backlog_no_executed_task_no_transition_progress_fails(self) -> None:
+        """Backlog + no executed task + no recent transition → progress fails."""
+        rs = _make_round_sequence(last_transition=None)
+        now = time.time()
+        ss = {
+            hmod.PENDING_TASKS: ["task1"],
+            hmod.LAST_READ_ATTEMPT_TS: now,
+        }
+        data = self._run(round_sequence=rs, shared_state=ss)
+        assert data["progress"]["ok"] is False
+        assert data["progress"]["reason"] == "no-progress-with-backlog"
+
+    def test_backlog_no_executed_task_but_fast_transition_progress_ok(self) -> None:
+        """Backlog + no executed task but fast FSM transition → progress ok."""
+        rs = _make_round_sequence(last_transition=datetime.now(), stall_expired=False)
+        now = time.time()
+        ss = {
+            hmod.PENDING_TASKS: ["task1"],
+            hmod.LAST_READ_ATTEMPT_TS: now,
+        }
+        data = self._run(round_sequence=rs, shared_state=ss)
+        assert data["progress"]["ok"] is True
+
+    def test_all_three_dimensions_independent(self) -> None:
+        """Healthy only when ALL three dimensions are ok."""
+        # Liveness ok, readiness ok (idle), progress ok (idle)
+        rs = _make_round_sequence(last_transition=datetime.now(), stall_expired=False)
+        data = self._run(round_sequence=rs)
+        assert data["is_healthy"] is True
+
+        # Liveness fails → is_healthy False even if readiness/progress ok
+        rs_bad = _make_round_sequence(last_transition=None)
+        data2 = self._run(round_sequence=rs_bad)
+        assert data2["is_healthy"] is False
+
+    def test_wait_for_timeout_contributes_to_backlog(self) -> None:
+        """WAIT_FOR_TIMEOUT items add to backlog_size."""
+        rs = _make_round_sequence(last_transition=datetime.now(), stall_expired=False)
+        now = time.time()
+        ss = {
+            hmod.WAIT_FOR_TIMEOUT: ["w1", "w2"],
+            hmod.LAST_READ_ATTEMPT_TS: now,
+        }
+        data = self._run(round_sequence=rs, shared_state=ss)
+        assert data["progress"]["backlog_size"] == 2
+        assert data["progress"]["expected_work"] is True
+
+    def test_ipfs_tasks_contribute_to_backlog(self) -> None:
+        """IPFS_TASKS items add to backlog_size."""
+        rs = _make_round_sequence(last_transition=datetime.now(), stall_expired=False)
+        now = time.time()
+        ss = {
+            hmod.IPFS_TASKS: ["i1"],
+            hmod.LAST_READ_ATTEMPT_TS: now,
+        }
+        data = self._run(round_sequence=rs, shared_state=ss)
+        assert data["progress"]["backlog_size"] == 1
+
+    def test_deps_ok_takes_priority_over_inflight(self) -> None:
+        """When both deps and inflight are recent, reason should be 'deps-ok' not 'deps-inflight'."""
+        rs = _make_round_sequence(last_transition=datetime.now(), stall_expired=False)
+        now = time.time()
+        ss = {
+            hmod.PENDING_TASKS: ["task1"],
+            hmod.LAST_READ_ATTEMPT_TS: now,
+            hmod.INFLIGHT_READ_TS: now,
+        }
+        data = self._run(round_sequence=rs, shared_state=ss)
+        assert data["readiness"]["reason"] == "deps-ok"
+
+    def test_is_transitioning_fast_when_fsm_healthy(self) -> None:
+        """is_transitioning_fast is True when TM healthy and recent transition."""
+        rs = _make_round_sequence(
+            last_transition=datetime.now(), stall_expired=False, has_abci_app=True
+        )
+        data = self._run(round_sequence=rs, reset_pause=30.0)
+        assert data["is_transitioning_fast"] is True
+
+    def test_is_transitioning_fast_none_when_no_fsm(self) -> None:
+        """is_transitioning_fast is None when no FSM data."""
+        data = self._run(round_sequence=_make_round_sequence(last_transition=None))
+        assert data["is_transitioning_fast"] is None
+
+    def test_health_version_always_2(self) -> None:
+        """Response always includes health_version=2."""
+        data = self._run()
+        assert data["health_version"] == 2

@@ -42,33 +42,12 @@ from packages.valory.skills.abstract_round_abci.handlers import (
 from packages.valory.skills.task_submission_abci import handlers as task_handlers
 
 
-class TestHandlerAliases:
-    """Verify all handler type aliases in task_submission_abci.handlers are correct re-exports."""
-
-    def test_abci_handler(self) -> None:
-        """Test ABCIHandler is re-exported correctly."""
-        assert task_handlers.ABCIHandler is BaseABCIRoundHandler
-
-    def test_http_handler(self) -> None:
-        """Test HttpHandler is re-exported correctly."""
-        assert task_handlers.HttpHandler is BaseHttpHandler
-
-    def test_signing_handler(self) -> None:
-        """Test SigningHandler is re-exported correctly."""
-        assert task_handlers.SigningHandler is BaseSigningHandler
-
-    def test_ledger_api_handler(self) -> None:
-        """Test LedgerApiHandler is re-exported correctly."""
-        assert task_handlers.LedgerApiHandler is BaseLedgerApiHandler
-
-    def test_contract_api_handler(self) -> None:
-        """Test ContractApiHandler is re-exported correctly."""
-        assert task_handlers.ContractApiHandler is BaseContractApiHandler
-
-    def test_tendermint_handler(self) -> None:
-        """Test TendermintHandler is re-exported correctly."""
-        assert task_handlers.TendermintHandler is BaseTendermintHandler
-
-    def test_ipfs_handler(self) -> None:
-        """Test IpfsHandler is re-exported correctly."""
-        assert task_handlers.IpfsHandler is BaseIpfsHandler
+def test_all_handler_aliases_re_exported() -> None:
+    """All handler type aliases point to their expected base classes."""
+    assert task_handlers.ABCIHandler is BaseABCIRoundHandler
+    assert task_handlers.HttpHandler is BaseHttpHandler
+    assert task_handlers.SigningHandler is BaseSigningHandler
+    assert task_handlers.LedgerApiHandler is BaseLedgerApiHandler
+    assert task_handlers.ContractApiHandler is BaseContractApiHandler
+    assert task_handlers.TendermintHandler is BaseTendermintHandler
+    assert task_handlers.IpfsHandler is BaseIpfsHandler

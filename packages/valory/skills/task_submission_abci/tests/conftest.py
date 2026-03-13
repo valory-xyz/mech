@@ -19,12 +19,11 @@
 
 """Conftest for the task_submission_abci tests."""
 
+import contextlib
 import threading
 from types import SimpleNamespace
-from typing import Any, Callable, Generator
+from typing import Any, Generator
 from unittest.mock import MagicMock, patch
-
-import pytest
 
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
@@ -33,6 +32,19 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     DONE_TASKS_LOCK,
     PAYMENT_MODEL,
 )
+
+
+def _make_logger(include_debug: bool = False) -> SimpleNamespace:
+    """Create a no-op logger stub. Single source of truth for all test contexts."""
+    ns = SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+    )
+    if include_debug:
+        ns.debug = lambda *a, **k: None  # type: ignore[attr-defined]
+    return ns
+
 
 # ---------------------------------------------------------------------------
 # Context builders
@@ -58,12 +70,7 @@ def _make_ctx(
     if payment_model is not None:
         shared_state[PAYMENT_MODEL] = payment_model
     return SimpleNamespace(
-        logger=SimpleNamespace(
-            info=lambda *a, **k: None,
-            warning=lambda *a, **k: None,
-            error=lambda *a, **k: None,
-            debug=lambda *a, **k: None,
-        ),
+        logger=_make_logger(include_debug=True),
         params=SimpleNamespace(
             profit_split_balance=100,
             on_chain_service_id=1,
@@ -80,27 +87,37 @@ def _make_full_ctx(
     payment_model: Any = None,
     lock: Any = None,
     agent_mech_addresses: Any = None,
+    **overrides: Any,
 ) -> SimpleNamespace:
-    """Extended context with all params needed for complex behaviours."""
+    """Extended context with all params needed for complex behaviours.
+
+    Use **overrides to set/override any param attribute, e.g.
+    ``_make_full_ctx(multisend_address="0xCUSTOM")``.
+    """
     ctx = _make_ctx(
         done_tasks=done_tasks,
         payment_model=payment_model,
         lock=lock,
         agent_mech_addresses=agent_mech_addresses,
     )
-    ctx.params.agent_mech_contract_address = "0xMECH"
-    ctx.params.hash_checkpoint_address = "0xHASH"
-    ctx.params.mech_marketplace_address = "0xMARKET"
-    ctx.params.complementary_service_metadata_address = "0xMETA"
-    ctx.params.metadata_hash = "bafytest"
-    ctx.params.task_mutable_params = SimpleNamespace(latest_metadata_hash=None)
-    ctx.params.service_registry_address = "0xSERVICE"
-    ctx.params.minimum_agent_balance = 100
-    ctx.params.agent_funding_amount = 200
-    ctx.params.service_owner_share = 1000
-    ctx.params.multisend_address = "0xMULTI"
-    ctx.params.mech_staking_instance_address = "0xSTAKE"
-    ctx.params.mech_max_delivery_rate = 10
+    defaults = dict(
+        agent_mech_contract_address="0xMECH",
+        hash_checkpoint_address="0xHASH",
+        mech_marketplace_address="0xMARKET",
+        complementary_service_metadata_address="0xMETA",
+        metadata_hash="bafytest",
+        task_mutable_params=SimpleNamespace(latest_metadata_hash=None),
+        service_registry_address="0xSERVICE",
+        minimum_agent_balance=100,
+        agent_funding_amount=200,
+        service_owner_share=1000,
+        multisend_address="0xMULTI",
+        mech_staking_instance_address="0xSTAKE",
+        mech_max_delivery_rate=10,
+    )
+    defaults.update(overrides)
+    for attr, val in defaults.items():
+        setattr(ctx.params, attr, val)
     # ctx.state is accessed by BaseBehaviour.shared_state property
     ctx.state = SimpleNamespace(
         mech_delivery_last_block_number=MagicMock(),
@@ -114,11 +131,7 @@ def _make_full_ctx(
 def _make_fs_ctx() -> SimpleNamespace:
     """Minimal context for FundsSplittingBehaviour tests."""
     return SimpleNamespace(
-        logger=SimpleNamespace(
-            info=lambda *a, **k: None,
-            warning=lambda *a, **k: None,
-            error=lambda *a, **k: None,
-        ),
+        logger=_make_logger(),
         params=SimpleNamespace(
             profit_split_balance=10,
             on_chain_service_id=100,
@@ -130,12 +143,7 @@ def _make_fs_ctx() -> SimpleNamespace:
 def _make_benchmark_ctx() -> SimpleNamespace:
     """Minimal context with benchmark_tool for async_act tests."""
     return SimpleNamespace(
-        logger=SimpleNamespace(
-            info=lambda *a, **k: None,
-            warning=lambda *a, **k: None,
-            error=lambda *a, **k: None,
-            debug=lambda *a, **k: None,
-        ),
+        logger=_make_logger(include_debug=True),
         params=SimpleNamespace(
             task_wait_timeout=0.01,
             agent_mech_contract_addresses=["0xMECH"],
@@ -232,51 +240,6 @@ def _error_ledger_msg() -> MagicMock:
     return msg
 
 
-# ---------------------------------------------------------------------------
-# Pytest fixtures (factory versions of the helpers above)
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-def make_lock() -> Callable[[], threading.Lock]:
-    """Fixture factory for threading.Lock."""
-    return _make_lock
-
-
-@pytest.fixture
-def make_ctx() -> Callable[..., SimpleNamespace]:
-    """Fixture factory for minimal skill context."""
-    return _make_ctx
-
-
-@pytest.fixture
-def make_full_ctx() -> Callable[..., SimpleNamespace]:
-    """Fixture factory for extended skill context."""
-    return _make_full_ctx
-
-
-@pytest.fixture
-def make_fs_ctx() -> Callable[[], SimpleNamespace]:
-    """Fixture factory for FundsSplitting context."""
-    return _make_fs_ctx
-
-
-@pytest.fixture
-def make_benchmark_ctx() -> Callable[[], SimpleNamespace]:
-    """Fixture factory for benchmark context."""
-    return _make_benchmark_ctx
-
-
-@pytest.fixture
-def run_gen() -> Callable[[Generator[Any, Any, Any]], Any]:
-    """Fixture for running a generator to completion."""
-    return _run_gen
-
-
-@pytest.fixture
-def mock_to_multihash() -> Generator[MagicMock, None, None]:
-    """Patch to_multihash in behaviours and yield the mock."""
-    with patch(
-        "packages.valory.skills.task_submission_abci.behaviours.to_multihash"
-    ) as m:
-        yield m
+def _mock_to_multihash() -> contextlib.AbstractContextManager:
+    """Patch to_multihash in behaviours; use as a context manager."""
+    return patch("packages.valory.skills.task_submission_abci.behaviours.to_multihash")

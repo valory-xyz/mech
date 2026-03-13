@@ -318,68 +318,114 @@ class TestTransactionPreparationRound:
 class TestTaskSubmissionAbciApp:
     """Tests for the TaskSubmissionAbciApp FSM class attributes."""
 
-    def test_initial_round_cls(self) -> None:
-        """Test initial_round_cls is TaskPoolingRound."""
+    def test_app_class_attributes(self) -> None:
+        """Initial round, states, timeouts, and cross-period keys are configured correctly."""
         assert TaskSubmissionAbciApp.initial_round_cls is TaskPoolingRound
-
-    def test_initial_states(self) -> None:
-        """Test TaskPoolingRound is in initial_states."""
         assert TaskPoolingRound in TaskSubmissionAbciApp.initial_states
-
-    def test_final_states(self) -> None:
-        """Test all expected final states are present."""
         assert FinishedTaskPoolingRound in TaskSubmissionAbciApp.final_states
         assert FinishedWithoutTasksRound in TaskSubmissionAbciApp.final_states
         assert FinishedTaskExecutionWithErrorRound in TaskSubmissionAbciApp.final_states
-
-    def test_event_to_timeout_has_correct_values(self) -> None:
-        """Test event_to_timeout has correct values for task execution timeouts."""
         assert (
             TaskSubmissionAbciApp.event_to_timeout[Event.TASK_EXECUTION_ROUND_TIMEOUT]
             == 60.0
         )
         assert TaskSubmissionAbciApp.event_to_timeout[Event.ROUND_TIMEOUT] == 60.0
-
-    def test_cross_period_keys_include_done_tasks(self) -> None:
-        """Test done_tasks is in cross_period_persisted_keys."""
         assert "done_tasks" in TaskSubmissionAbciApp.cross_period_persisted_keys
-
-    def test_cross_period_keys_include_final_tx_hash(self) -> None:
-        """Test final_tx_hash is in cross_period_persisted_keys."""
         assert "final_tx_hash" in TaskSubmissionAbciApp.cross_period_persisted_keys
 
-    def test_pooling_round_done_transitions_to_tx_preparation(self) -> None:
-        """Test pooling round DONE event transitions to TransactionPreparationRound."""
-        transitions = TaskSubmissionAbciApp.transition_function[TaskPoolingRound]
-        assert transitions[Event.DONE] is TransactionPreparationRound
+    def test_fsm_transitions(self) -> None:
+        """All FSM transitions route to expected destination rounds."""
+        pooling = TaskSubmissionAbciApp.transition_function[TaskPoolingRound]
+        assert pooling[Event.DONE] is TransactionPreparationRound
+        assert pooling[Event.NO_TASKS] is FinishedWithoutTasksRound
+        assert pooling[Event.ROUND_TIMEOUT] is TaskPoolingRound
 
-    def test_pooling_round_no_tasks_transitions_to_finished_without_tasks(self) -> None:
-        """Test pooling round NO_TASKS event transitions to FinishedWithoutTasksRound."""
-        transitions = TaskSubmissionAbciApp.transition_function[TaskPoolingRound]
-        assert transitions[Event.NO_TASKS] is FinishedWithoutTasksRound
+        tx_prep = TaskSubmissionAbciApp.transition_function[TransactionPreparationRound]
+        assert tx_prep[Event.DONE] is FinishedTaskPoolingRound
+        assert tx_prep[Event.ERROR] is FinishedTaskExecutionWithErrorRound
+        assert tx_prep[Event.NO_MAJORITY] is FinishedTaskExecutionWithErrorRound
 
-    def test_pooling_round_timeout_loops_back(self) -> None:
-        """Test pooling round ROUND_TIMEOUT event loops back to TaskPoolingRound."""
-        transitions = TaskSubmissionAbciApp.transition_function[TaskPoolingRound]
-        assert transitions[Event.ROUND_TIMEOUT] is TaskPoolingRound
 
-    def test_tx_preparation_done_transitions_to_finished_pooling(self) -> None:
-        """Test tx preparation DONE event transitions to FinishedTaskPoolingRound."""
-        transitions = TaskSubmissionAbciApp.transition_function[
-            TransactionPreparationRound
-        ]
-        assert transitions[Event.DONE] is FinishedTaskPoolingRound
+# ---------------------------------------------------------------------------
+# TaskPoolingRound deduplication edge cases
+# ---------------------------------------------------------------------------
 
-    def test_tx_preparation_error_transitions_to_finished_error(self) -> None:
-        """Test tx preparation ERROR event transitions to FinishedTaskExecutionWithErrorRound."""
-        transitions = TaskSubmissionAbciApp.transition_function[
-            TransactionPreparationRound
-        ]
-        assert transitions[Event.ERROR] is FinishedTaskExecutionWithErrorRound
 
-    def test_tx_preparation_no_majority_transitions_to_finished_error(self) -> None:
-        """Test tx preparation NO_MAJORITY event transitions to FinishedTaskExecutionWithErrorRound."""
-        transitions = TaskSubmissionAbciApp.transition_function[
-            TransactionPreparationRound
-        ]
-        assert transitions[Event.NO_MAJORITY] is FinishedTaskExecutionWithErrorRound
+class TestTaskPoolingRoundDeduplication:
+    """Edge-case tests for the deduplication and sorting in end_block."""
+
+    def test_partial_overlap_across_agents(self) -> None:
+        """Agents submit overlapping but not identical sets → union, deduplicated."""
+        payloads = {
+            "agent-0": _payload_for("agent-0", [_make_task("r1"), _make_task("r2")]),
+            "agent-1": _payload_for("agent-1", [_make_task("r2"), _make_task("r3")]),
+            "agent-2": _payload_for("agent-2", [_make_task("r1"), _make_task("r3")]),
+        }
+        round_ = _make_pooling_round(payloads)
+        result = round_.end_block()
+        assert result is not None
+        sd = cast(SynchronizedData, result[0])
+        ids = [t["request_id"] for t in sd.done_tasks]
+        assert ids == ["r1", "r2", "r3"]
+
+    def test_task_missing_request_id_still_sorted(self) -> None:
+        """Task without 'request_id' key uses .get() fallback (empty string)."""
+        task_no_id = {"result": "ok"}
+        payloads = {
+            "agent-0": _payload_for("agent-0", [_make_task("b"), task_no_id]),
+            "agent-1": _payload_for("agent-1", [_make_task("a")]),
+            "agent-2": _payload_for("agent-2", []),
+        }
+        round_ = _make_pooling_round(payloads)
+        result = round_.end_block()
+        assert result is not None
+        sd = cast(SynchronizedData, result[0])
+        # None-id task sorts first (empty string < "a"), then "a", then "b"
+        ids = [t.get("request_id") for t in sd.done_tasks]
+        assert ids == [None, "a", "b"]
+
+    def test_single_agent_all_unique(self) -> None:
+        """One agent submits all tasks; others submit nothing → no dedup needed."""
+        payloads = {
+            "agent-0": _payload_for(
+                "agent-0", [_make_task("x"), _make_task("y"), _make_task("z")]
+            ),
+            "agent-1": _payload_for("agent-1", []),
+            "agent-2": _payload_for("agent-2", []),
+        }
+        round_ = _make_pooling_round(payloads)
+        result = round_.end_block()
+        assert result is not None
+        sd = cast(SynchronizedData, result[0])
+        assert len(sd.done_tasks) == 3
+        assert result[1] == Event.DONE
+
+    def test_all_agents_same_single_task(self) -> None:
+        """All agents report the same single task → deduplicated to 1."""
+        payloads = {
+            "agent-0": _payload_for("agent-0", [_make_task("same")]),
+            "agent-1": _payload_for("agent-1", [_make_task("same")]),
+            "agent-2": _payload_for("agent-2", [_make_task("same")]),
+        }
+        round_ = _make_pooling_round(payloads)
+        result = round_.end_block()
+        assert result is not None
+        sd = cast(SynchronizedData, result[0])
+        assert len(sd.done_tasks) == 1
+        assert sd.done_tasks[0]["request_id"] == "same"
+
+    def test_first_occurrence_wins_dedup(self) -> None:
+        """When duplicate request_ids have different data, first occurrence is kept."""
+        task_v1 = {"request_id": "dup", "result": "first"}
+        task_v2 = {"request_id": "dup", "result": "second"}
+        payloads = {
+            "agent-0": _payload_for("agent-0", [task_v1]),
+            "agent-1": _payload_for("agent-1", [task_v2]),
+            "agent-2": _payload_for("agent-2", []),
+        }
+        round_ = _make_pooling_round(payloads)
+        result = round_.end_block()
+        assert result is not None
+        sd = cast(SynchronizedData, result[0])
+        assert len(sd.done_tasks) == 1
+        assert sd.done_tasks[0]["result"] == "first"
