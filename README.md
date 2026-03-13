@@ -77,7 +77,7 @@ We highly encourage you to start with this base repo for future projects. You ca
 > **Warning**<br />
 The old repo is no longer the recommended approach for running and extending the project. Although it’s still remains available for legacy projects, we advise you to use the new base repo to ensure you are working with the most current and efficient setup. Access the new mech repo [here](https://github.com/valory-xyz/mech-quickstart). Start with the preferred method mentioned [above](#using-mech-quickstart-preffered-method).
 
-Follow the instructions below to run the AI Mech demo executing the tool in `./packages/valory/customs/openai_request.py`. Note that AI Mechs can be configured to work in two modes: *polling mode*, which periodically reads the chain, and *websocket mode*, which receives event updates from the chain. The default mode used by the demo is *polling*.
+Follow the instructions below to run the AI Mech demo. Note that AI Mechs can be configured to work in two modes: *polling mode*, which periodically reads the chain, and *websocket mode*, which receives event updates from the chain. The default mode used by the demo is *polling*.
 
 First, you need to configure the worker service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
 
@@ -97,7 +97,7 @@ You may customize the agent's behaviour by setting these environment variables.
 
 | Name                       | Type   | Sample Value                                                                                                                                                                                                                                                        | Description                                                            |
 | -------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `TOOLS_TO_PACKAGE_HASH`    | `dict` | `{"openai-gpt-3.5-turbo-instruct":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-3.5-turbo":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-4":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq"}` | Tracks services for each tool packages.                                |
+| `TOOLS_TO_PACKAGE_HASH`    | `dict` | `{"prediction-offline":"bafybei...","prediction-online":"bafybei..."}` | Tracks services for each tool packages.                                |
 | `API_KEYS`                 | `dict` | `{"openai":["dummy_api_key"], "google_api_key":["dummy_api_key"]}`                                                                                                                                                                                                      | Tracks API keys for each service.                                      |
 | `SERVICE_REGISTRY_ADDRESS` | `str`  | `"0x9338b5153AE39BB89f50468E608eD9d764B755fD"`                                                                                                                                                                                                                      | Smart contract which registers the services.                           |
 | `COMPLEMENTARY_SERVICE_METADATA_ADDRESS`   | `str`  | `"0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69"`                                                                                                                                                                                                                      | Smart contract which tracks metadata hash of the mech.                             |
@@ -158,33 +158,66 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 | Tools |
 |---|
+| packages/dvilela/customs/corcel_request |
+| packages/dvilela/customs/gemini_prediction |
 | packages/napthaai/customs/prediction_request_rag |
+| packages/napthaai/customs/prediction_request_reasoning |
+| packages/napthaai/customs/prediction_url_cot |
 | packages/napthaai/customs/resolve_market_reasoning |
 | packages/nickcom007/customs/prediction_request_sme |
-| packages/nickcom007/customs/sme_generation_request |
-| packages/valory/customs/native_transfer_request |
-| packages/valory/customs/openai_request |
+| packages/valory/customs/prediction_langchain |
 | packages/valory/customs/prediction_request |
-| packages/valory/customs/prediction_request_claude |
-| packages/valory/customs/prediction_request_embedding |
+| packages/valory/customs/prepare_tx |
 | packages/valory/customs/resolve_market |
+| packages/valory/customs/superforcaster |
+| packages/victorpolisetty/customs/dalle_request |
+| packages/victorpolisetty/customs/gemini_request |
 
 ## More on tools
 
-- **OpenAI request** (`openai_request.py`). Executes requests to the OpenAI API through the engine associated with the specific tool. It receives as input an arbitrary prompt and outputs the returned output by the OpenAI API.
-  - `openai-gpt-3.5-turbo`
-  - `openai-gpt-4`
-  - `openai-gpt-3.5-turbo-instruct`
-
-- **Stability AI request** (`stabilityai_request.py`): Executes requests to the Stability AI through the engine associated with the specific tool. It receives as input an arbitrary prompt and outputs the image data corresponding to the output of Stability AI.
-  - `stabilityai-stable-diffusion-v1-5`
-  - `stabilityai-stable-diffusion-xl-beta-v2-2-2`
-  - `stabilityai-stable-diffusion-512-v2-1`
-  - `stabilityai-stable-diffusion-768-v2-1`
-
-- **Native transfer request** (`native_transfer_request.py`): Parses user prompt in natural language as input into an Ethereum transaction.
-  - `transfer_native`
-
-- **Prediction request** (`prediction_request.py`): Outputs the estimated probability of occurrence (`p_yes`) or no occurrence (`p_no`) of a certain event specified as the input prompt in natural language.
+- **Prediction request** (`prediction_request.py`): Makes binary predictions on markets using web scraping, RAG, and LLM analysis.
   - `prediction-offline`: Uses only training data of the model to make the prediction.
-  - `prediction-online`: In addition to training data, it also uses online information to improve the prediction.
+  - `prediction-online`: Also uses online information to improve the prediction.
+  - `claude-prediction-offline`, `claude-prediction-online`: Legacy aliases.
+
+- **Prediction request SME** (`prediction_request_sme.py`): Generates Subject Matter Expert roles and uses them for market predictions with web search.
+  - `prediction-offline-sme`
+  - `prediction-online-sme`
+
+- **Prediction request reasoning** (`prediction_request_reasoning.py`): Multi-turn reasoning with web scraping for binary market predictions.
+  - `prediction-request-reasoning`
+  - `prediction-request-reasoning-claude`
+
+- **Prediction request RAG** (`prediction_request_rag.py`): RAG-based predictions using FAISS embeddings, web scraping, and PDF extraction.
+  - `prediction-request-rag`
+  - `prediction-request-rag-claude`
+
+- **Prediction URL CoT** (`prediction_url_cot.py`): Chain-of-thought reasoning with web retrieval for market predictions.
+  - `prediction-url-cot`
+  - `prediction-url-cot-claude`
+
+- **Prediction langchain** (`prediction_langchain.py`): Langgraph workflow with researcher and data analyzer agents using Tavily search.
+
+- **Superforcaster** (`superforcaster.py`): Calibrated probability forecasting with web scraping and document retrieval.
+  - `superforcaster`
+
+- **Resolve market** (`resolve_market.py`): Resolves closed markets by fetching news articles and analyzing outcomes.
+  - `close_market`
+
+- **Resolve market reasoning** (`resolve_market_reasoning.py`): Improved market resolution using embeddings and multi-stage reasoning.
+  - `resolve-market-reasoning-gpt-4.1`
+
+- **Prepare tx** (`prepare_tx.py`): Parses natural language into Ethereum transaction data.
+  - `native_transfer`
+
+- **DALL-E request** (`dalle_request.py`): Generates images via the OpenAI DALL-E API.
+  - `dall-e-2`, `dall-e-3`
+
+- **Gemini request** (`gemini_request.py`): Runs prompts against Google Gemini.
+  - `gemini-2.0-flash`, `gemini-2.0-flash-lite`
+
+- **Corcel request** (`corcel_request.py`): Makes LLM requests to Corcel.
+  - `corcel-prediction`, `corcel-completion`
+
+- **Gemini prediction** (`gemini_prediction.py`): Makes LLM prediction requests to Gemini.
+  - `gemini-prediction`, `gemini-completion`
