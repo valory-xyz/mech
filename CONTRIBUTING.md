@@ -15,19 +15,19 @@ Also mention potential effects on other branches/code might have from your chang
 For a clean workflow run checks in following order before making a PR or pushing the code
 
 - make clean
-- make formatters
+- make format
 - make code-checks
 - make security
 
 **Run only if you've modified an AbciApp definition**
-- make abci-docstrings
+- tox -e abci-docstrings
 
 **Only run following if you have modified a file in `packages/`**
 - make generators
 - make common-checks-1
 
 **else run**
-- make copyright
+- make common-checks-1
 
 **run this after making a commit**
 - make common-checks-2

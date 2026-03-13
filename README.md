@@ -5,7 +5,7 @@
 <h1 align="center" style="margin-bottom: 0;">
     Autonolas AI Mechs
     <br><a href="https://github.com/valory-xyz/mech/blob/main/LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/valory-xyz/mech"></a>
-    <a href="https://pypi.org/project/open-autonomy/0.10.7/"><img alt="Framework: Open Autonomy 0.10.7" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.10.7-blueviolet"></a>
+    <a href="https://pypi.org/project/open-autonomy/0.21.13/"><img alt="Framework: Open Autonomy 0.21.13" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.21.13-blueviolet"></a>
     <!-- <a href="https://github.com/valory-xyz/mech/releases/latest">
     <img alt="Latest release" src="https://img.shields.io/github/v/release/valory-xyz/mech"> -->
     </a>
@@ -79,18 +79,6 @@ The old repo is no longer the recommended approach for running and extending the
 
 Follow the instructions below to run the AI Mech demo. Note that AI Mechs can be configured to work in two modes: *polling mode*, which periodically reads the chain, and *websocket mode*, which receives event updates from the chain. The default mode used by the demo is *polling*.
 
-First, you need to configure the worker service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
-
-```bash
-# Copy the prefilled template
-cp .example.env .1env
-
-# Edit ".1env" and replace "dummy_api_key" with your OpenAI API key.
-
-# Source the env file
-source .1env
-```
-
 ##### Environment Variables
 
 You may customize the agent's behaviour by setting these environment variables.
@@ -116,39 +104,53 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 ### Option 1: Run the Mech as a standalone agent
 
-1. Ensure you have a file with a private key (`ethereum_private_key.txt`). You can generate a new private key file using the Open Autonomy CLI:
+1. Configure the standalone agent environment file:
+
+   ```bash
+   cp .example_agent.env .agentenv
+   ```
+
+2. Ensure you have a file with a private key (`ethereum_private_key.txt`). You can generate a new private key file using the Open Autonomy CLI:
 
    ```bash
    autonomy generate-key ethereum
    ```
 
-2. From one terminal, run the agent:
+3. Run the agent:
 
     ```bash
     bash run_agent.sh
     ```
 
-3. From another terminal, run the Tendermint node:
-
-    ```bash
-    bash run_tm.sh
-    ```
+    `run_agent.sh` starts Tendermint internally, so no separate `run_tm.sh` step is required.
 
 ### Option 2: Run the Mech as an agent service
 
-1. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
+1. Configure the service environment file:
+
+    ```bash
+    # Copy the prefilled template
+    cp .example.env .1env
+
+    # Edit values in ".1env", for example API_KEYS
+
+    # Source the env file
+    source .1env
+    ```
+
+2. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
 
     ```bash
     autonomy generate-key ethereum -n 1
     ```
 
-2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`:
+3. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`:
 
    ```bash
    ALL_PARTICIPANTS='["your_agent_address"]'
    ```
 
-3. Run, the service:
+4. Run the service:
 
     ```bash
     bash run_service.sh

@@ -1,15 +1,16 @@
 # DEPLOYMENT PROCESS
 
-use make release command:
-it creates tag, pushes to github and makes release that triggers deployment process
-release environment determined by suffix format `(<env_name>)` like `release v0.11 (prod)`
+Use the release script to create a tag, push it, and create a GitHub release.
+That release triggers the deployment workflow.
 
-list of environments supported is at release.yaml file
+Release environment is determined by the release title suffix `(<env_name>)`, for example: `Release 0.11 (prod)`.
+Supported suffixes are:
+- `prod` (production deployment)
+- `staging` (staging deployment)
 
-to use gommand you have to install gh command locally, and login with it
+You need `gh` installed locally and authenticated before running the script.
 
 `./make_release.sh <VERSION> <ENV_NAME> [OPTIONAL DESCRIPTION]`
 
 example:
 `./make_release.sh 0.11 prod 'some description'`
-
