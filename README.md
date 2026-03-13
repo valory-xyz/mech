@@ -5,7 +5,7 @@
 <h1 align="center" style="margin-bottom: 0;">
     Autonolas AI Mechs
     <br><a href="https://github.com/valory-xyz/mech/blob/main/LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/valory-xyz/mech"></a>
-    <a href="https://pypi.org/project/open-autonomy/0.10.7/"><img alt="Framework: Open Autonomy 0.10.7" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.10.7-blueviolet"></a>
+    <a href="https://pypi.org/project/open-autonomy/0.21.13/"><img alt="Framework: Open Autonomy 0.21.13" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.21.13-blueviolet"></a>
     <!-- <a href="https://github.com/valory-xyz/mech/releases/latest">
     <img alt="Latest release" src="https://img.shields.io/github/v/release/valory-xyz/mech"> -->
     </a>
@@ -79,25 +79,13 @@ The old repo is no longer the recommended approach for running and extending the
 
 Follow the instructions below to run the AI Mech demo executing the tool in `./packages/valory/customs/openai_request.py`. Note that AI Mechs can be configured to work in two modes: *polling mode*, which periodically reads the chain, and *websocket mode*, which receives event updates from the chain. The default mode used by the demo is *polling*.
 
-First, you need to configure the worker service. You need to create a `.1env` file which contains the service configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
-
-```bash
-# Copy the prefilled template
-cp .example.env .1env
-
-# Edit ".1env" and replace "dummy_api_key" with your OpenAI API key.
-
-# Source the env file
-source .1env
-```
-
 ##### Environment Variables
 
 You may customize the agent's behaviour by setting these environment variables.
 
 | Name                       | Type   | Sample Value                                                                                                                                                                                                                                                        | Description                                                            |
 | -------------------------- | ------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| `TOOLS_TO_PACKAGE_HASH`    | `dict` | `{"openai-gpt-3.5-turbo-instruct":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-3.5-turbo":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","openai-gpt-4":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq"}` | Tracks services for each tool packages.                                |
+| `TOOLS_TO_PACKAGE_HASH`    | `dict` | `{"openai-gpt-4.1-2025-04-14":"bafybeigz5brshryms5awq5zscxsxibjymdofm55dw5o6ud7gtwmodm3vmq","prediction-online":"bafybeihy7yv6nbvavnwgyqxmvxf5uzam773fv6lxngvyaxsrkmkwchr7bq"}` | Tracks services for each tool packages.                                |
 | `API_KEYS`                 | `dict` | `{"openai":["dummy_api_key"], "google_api_key":["dummy_api_key"]}`                                                                                                                                                                                                      | Tracks API keys for each service.                                      |
 | `SERVICE_REGISTRY_ADDRESS` | `str`  | `"0x9338b5153AE39BB89f50468E608eD9d764B755fD"`                                                                                                                                                                                                                      | Smart contract which registers the services.                           |
 | `COMPLEMENTARY_SERVICE_METADATA_ADDRESS`   | `str`  | `"0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69"`                                                                                                                                                                                                                      | Smart contract which tracks metadata hash of the mech.                             |
@@ -116,39 +104,53 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 ### Option 1: Run the Mech as a standalone agent
 
-1. Ensure you have a file with a private key (`ethereum_private_key.txt`). You can generate a new private key file using the Open Autonomy CLI:
+1. Configure the standalone agent environment file:
+
+   ```bash
+   cp .example_agent.env .agentenv
+   ```
+
+2. Ensure you have a file with a private key (`ethereum_private_key.txt`). You can generate a new private key file using the Open Autonomy CLI:
 
    ```bash
    autonomy generate-key ethereum
    ```
 
-2. From one terminal, run the agent:
+3. Run the agent:
 
     ```bash
     bash run_agent.sh
     ```
 
-3. From another terminal, run the Tendermint node:
-
-    ```bash
-    bash run_tm.sh
-    ```
+    `run_agent.sh` starts Tendermint internally, so no separate `run_tm.sh` step is required.
 
 ### Option 2: Run the Mech as an agent service
 
-1. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
+1. Configure the service environment file:
+
+    ```bash
+    # Copy the prefilled template
+    cp .example.env .1env
+
+    # Edit values in ".1env", for example API_KEYS
+
+    # Source the env file
+    source .1env
+    ```
+
+2. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
 
     ```bash
     autonomy generate-key ethereum -n 1
     ```
 
-2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`:
+3. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`:
 
    ```bash
    ALL_PARTICIPANTS='["your_agent_address"]'
    ```
 
-3. Run, the service:
+4. Run the service:
 
     ```bash
     bash run_service.sh
@@ -158,32 +160,38 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 
 | Tools |
 |---|
+| packages/dvilela/customs/corcel_request |
+| packages/dvilela/customs/gemini_prediction |
+| packages/jhehemann/customs/prediction_sentence_embeddings |
 | packages/napthaai/customs/prediction_request_rag |
+| packages/napthaai/customs/prediction_request_reasoning |
+| packages/napthaai/customs/prediction_url_cot |
 | packages/napthaai/customs/resolve_market_reasoning |
 | packages/nickcom007/customs/prediction_request_sme |
-| packages/nickcom007/customs/sme_generation_request |
-| packages/valory/customs/native_transfer_request |
 | packages/valory/customs/openai_request |
+| packages/valory/customs/prediction_langchain |
 | packages/valory/customs/prediction_request |
-| packages/valory/customs/prediction_request_claude |
-| packages/valory/customs/prediction_request_embedding |
+| packages/valory/customs/prepare_tx |
 | packages/valory/customs/resolve_market |
+| packages/valory/customs/superforcaster |
+| packages/valory/customs/tee_openai_request |
+| packages/victorpolisetty/customs/dalle_request |
+| packages/victorpolisetty/customs/gemini_request |
 
 ## More on tools
 
 - **OpenAI request** (`openai_request.py`). Executes requests to the OpenAI API through the engine associated with the specific tool. It receives as input an arbitrary prompt and outputs the returned output by the OpenAI API.
-  - `openai-gpt-3.5-turbo`
-  - `openai-gpt-4`
-  - `openai-gpt-3.5-turbo-instruct`
+  - `openai-gpt-4.1-2025-04-14`
 
-- **Stability AI request** (`stabilityai_request.py`): Executes requests to the Stability AI through the engine associated with the specific tool. It receives as input an arbitrary prompt and outputs the image data corresponding to the output of Stability AI.
-  - `stabilityai-stable-diffusion-v1-5`
-  - `stabilityai-stable-diffusion-xl-beta-v2-2-2`
-  - `stabilityai-stable-diffusion-512-v2-1`
-  - `stabilityai-stable-diffusion-768-v2-1`
+- **DALL-E request** (`dalle_request.py`): Generates images from text prompts using OpenAI image models.
+  - `dall-e-2`
+  - `dall-e-3`
 
-- **Native transfer request** (`native_transfer_request.py`): Parses user prompt in natural language as input into an Ethereum transaction.
-  - `transfer_native`
+- **Gemini request** (`gemini_request.py`): Executes prompt-based requests using Gemini models.
+  - `gemini-pro`
+  - `gemini-1.0-pro-001`
+  - `gemini-1.0-pro-latest`
+  - `gemini-1.5-pro-latest`
 
 - **Prediction request** (`prediction_request.py`): Outputs the estimated probability of occurrence (`p_yes`) or no occurrence (`p_no`) of a certain event specified as the input prompt in natural language.
   - `prediction-offline`: Uses only training data of the model to make the prediction.
