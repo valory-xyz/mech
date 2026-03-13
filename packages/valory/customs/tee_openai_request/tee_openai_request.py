@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024-2025 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
+
 import functools
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
@@ -25,7 +26,6 @@ import googleapiclient
 import openai
 import requests
 from tiktoken import encoding_for_model
-
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
@@ -140,7 +140,7 @@ def run(
     params = {"openaiApiKey": api_key, "chatQuery": prompt, "openAiModel": engine}
 
     # Request to agent contract in TEE
-    response = requests.get(AGENT_URL, params=params)
+    response = requests.get(AGENT_URL, params=params, timeout=60)
 
     if response.status_code == 200:
         json_response = response.json()

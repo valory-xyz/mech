@@ -14,9 +14,9 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        os: [ ubuntu-22.04, macos-15, windows-2025 ]
         python-version: [ "3.10" ]
-        poetry-version: ["1.8.0"]
+        poetry-version: ["2.3.2"]
 
     defaults:
       run:
@@ -38,7 +38,7 @@ jobs:
         virtualenvs-path: ~/my-custom-path
         installer-parallel: true
     - name: Check if dependencies can be locked
-      run: poetry lock --check
+      run: poetry lock
     - name: Poetry install requirements and check they can be locked
       run: poetry install --all-extras --no-interaction -vvv
 
@@ -48,7 +48,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ ubuntu-22.04 ]
         python-version: [ "3.10" ]
 
     timeout-minutes: 30
@@ -61,7 +61,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
-      run: pip install tomte[tox,cli]==0.2.14
+      run: pip install tomte[tox,cli]==0.6.2
     - name: Check copyright headers
       run: tomte check-copyright --author valory --exclude-part abci --exclude-part http_client --exclude-part ipfs --exclude-part ledger --exclude-part p2p_libp2p_client --exclude-part gnosis_safe --exclude-part gnosis_safe_proxy_factory --exclude-part multisend --exclude-part service_registry --exclude-part contracts --exclude-part skills --exclude-part protocols --exclude-part abstract_abci --exclude-part abstract_round_abci --exclude-part registration_abci --exclude-part reset_pause_abci --exclude-part termination_abci --exclude-part transaction_settlement_abci --exclude-part websocket_client --exclude-part contract_subscription --exclude-part mech --exclude-part mech_interact_abci  --exclude-part http_server
     - name: License compatibility check
@@ -80,7 +80,7 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
+        os: [ ubuntu-22.04 ]
         python-version: [ "3.10" ]
 
     timeout-minutes: 30
@@ -92,7 +92,7 @@ jobs:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
       run:  |
-        pip install tomte[tox,cli]==0.2.17
+        pip install tomte[tox,cli]==0.6.2
 
         # Install `mdspell` for spelling checks
         sudo npm install -g markdown-spellcheck
@@ -118,7 +118,7 @@ jobs:
 
   scan:
     name: gitleaks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v3
         with:
@@ -139,37 +139,62 @@ jobs:
 
     strategy:
       matrix:
-        os: [ ubuntu-latest ]
-        python-version: [ "3.10" ]
+        os: [ ubuntu-22.04, macos-15, windows-2025 ]
+        python-version: [ "3.10", "3.11", "3.12", "3.13", "3.14" ]
 
     timeout-minutes: 120
+    
+    env:
+      OPENAI_SECRET_KEY: ${{ secrets.OPENAI_API_KEY }}
+      STABILITY_API_KEY: ${{ secrets.STABILITY_AI_KEY }}
+      GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+      GOOGLE_ENGINE_ID: ${{ vars.GOOGLE_ENGINE_ID }}
+      CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+      REPLICATE_API_KEY: ${{ secrets.REPLICATE_API_KEY }}
+      NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
+      OPENROUTER_API_KEY: ${{ secrets.OPEN_ROUTER_API_KEY }}
+      GNOSIS_RPC_URL: ${{ secrets.GNOSIS_RPC_URL }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GRAPH_API_KEY: ${{ secrets.GRAPH_API_KEY }}
+    
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
         with:
           fetch-depth: 0
-      - uses: actions/setup-python@v3
+      - uses: actions/setup-python@v4
         with:
           python-version: ${{ matrix.python-version }}
-      - name: Install dependencies
+      - if: matrix.os == 'ubuntu-22.04'
+        name: Install dependencies (ubuntu-22.04)
         run: |
           sudo apt-get update --fix-missing
           sudo apt-get autoremove
           sudo apt-get autoclean
-          pip install tomte[tox,cli]==0.4.0
+          pip install tomte[tox,cli]==0.6.2
           pip install --user --upgrade setuptools
-      - name: Tool unit tests
-        env:
-          OPENAI_SECRET_KEY: ${{ secrets.OPENAI_API_KEY }}
-          STABILITY_API_KEY: ${{ secrets.STABILITY_AI_KEY }}
-          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
-          GOOGLE_ENGINE_ID: ${{ vars.GOOGLE_ENGINE_ID }}
-          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
-          REPLICATE_API_KEY: ${{ secrets.REPLICATE_API_KEY }}
-          NEWS_API_KEY: ${{ secrets.NEWS_API_KEY }}
-          OPENROUTER_API_KEY: ${{ secrets.OPEN_ROUTER_API_KEY }}
-          GNOSIS_RPC_URL: ${{ secrets.GNOSIS_RPC_URL }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GRAPH_API_KEY: ${{ secrets.GRAPH_API_KEY }}
+      - if: matrix.os == 'ubuntu-22.04'
+        name: Tool unit tests ubuntu-22.04
         run: |
           printenv
-          tox -e check-tools
+          tox -e py${{ matrix.python-version }}-linux
+      - if: matrix.os == 'macos-15'
+        name: Install dependencies (macos-15)
+        run: |
+          pip install tomte[tox,cli]==0.6.2
+          pip install --user --upgrade setuptools
+      - if: matrix.os == 'macos-15'
+        name: Tool unit tests macos-15
+        run: |
+          printenv
+          tox -e py${{ matrix.python-version }}-darwin
+      - if: matrix.os == 'windows-2025'
+        name: Install dependencies (windows-2025)
+        run: |
+          python -m pip install -U pip
+          pip install tomte[tox,cli]==0.6.2
+          pip install --upgrade setuptools
+      - if: matrix.os == 'windows-2025'
+        name: Tool unit tests windows-2025
+        run: |
+          printenv
+          tox -e py${{ matrix.python-version }}-win

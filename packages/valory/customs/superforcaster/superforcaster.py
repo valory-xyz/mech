@@ -17,6 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
+
 import functools
 import json
 import re
@@ -28,7 +29,6 @@ import openai
 import requests
 from openai import OpenAI
 from tiktoken import encoding_for_model
-
 
 client: Optional[OpenAI] = None
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]

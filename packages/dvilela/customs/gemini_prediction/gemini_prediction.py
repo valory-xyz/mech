@@ -25,7 +25,6 @@ from typing import Any, Callable, Dict, Optional, Tuple, Union
 import google.generativeai as genai
 from google.api_core.exceptions import GoogleAPIError
 
-
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 
@@ -114,7 +113,7 @@ OUTPUT_FORMAT
 """
 
 AVAILABLE_TOOLS = ["gemini-prediction", "gemini-completion"]
-AVAILABLE_MODELS = ["gemini-1.5-flash", "gemini-1.5-pro"]
+AVAILABLE_MODELS = ["gemini-2.0-flash", "gemini-2.0-flash-lite"]
 
 
 def error_response(msg: str) -> Tuple[str, None, None, None]:
@@ -138,7 +137,7 @@ def run(  # pylint: disable=too-many-return-statements
 ) -> Union[float, Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]]:
     """Run the task"""
 
-    model = kwargs.get("model", "gemini-1.5-flash")
+    model = kwargs.get("model", "gemini-2.0-flash")
     if model not in AVAILABLE_MODELS:
         return error_response(
             f"Model {model} is not an available model: {AVAILABLE_MODELS}"

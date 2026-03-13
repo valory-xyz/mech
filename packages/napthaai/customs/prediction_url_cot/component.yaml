@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiflni5dkn5fqe7fnu4lgbqxzfrgochhqfbgzwz3vlf5grijp3nkpm
-  prediction_url_cot.py: bafybeih5y7ax6rquu4h63hiwgyxjua7sre5nhnv3qro5rcflonrhogbj7m
+  prediction_url_cot.py: bafybeidfi3g6yoeic3cdqod4gxpol6vt43l74xn2i2yr7pv47lc3eqbspy
 fingerprint_ignore_patterns: []
 entry_point: prediction_url_cot.py
 callable: run
@@ -26,7 +26,7 @@ dependencies:
   anthropic:
     version: ==0.21.3
   tiktoken:
-    version: ==0.9.0
+    version: ==0.12.0
   pypdf2:
     version: ==3.0.1
   numpy:
@@ -34,4 +34,4 @@ dependencies:
   pydantic:
     version: '>=1.9.0,<3'
   openai:
-    version: ==1.93.0
+    version: ==1.30.2

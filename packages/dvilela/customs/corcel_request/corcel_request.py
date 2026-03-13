@@ -17,13 +17,13 @@
 #
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
+
 import functools
 import json
 import re
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import requests
-
 
 CORCEL_CALL_COST = 0.01
 

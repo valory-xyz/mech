@@ -22,7 +22,6 @@ from typing import Any, Dict, Optional, Tuple
 
 import google.generativeai as genai
 
-
 DEFAULT_GEMINI_SETTINGS = {
     "candidate_count": 1,
     "stop_sequences": None,
@@ -31,15 +30,10 @@ DEFAULT_GEMINI_SETTINGS = {
 }
 PREFIX = "gemini-"
 ENGINES = {
-    "chat": ["pro", "1.0-pro-001", "1.0-pro-latest", "1.5-pro-latest"],
+    "chat": ["2.0-flash", "2.0-flash-lite"],
 }
 
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["chat"]]
-
-
-def count_tokens(text: str) -> int:
-    """Count the number of tokens in a text using the Gemini model's tokenizer."""
-    return genai.count_message_tokens(prompt=text)
 
 
 def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:

@@ -5,7 +5,7 @@
 <h1 align="center" style="margin-bottom: 0;">
     Autonolas AI Mechs
     <br><a href="https://github.com/valory-xyz/mech/blob/main/LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/valory-xyz/mech"></a>
-    <a href="https://pypi.org/project/open-autonomy/0.21.11/"><img alt="Framework: Open Autonomy 0.21.11" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.21.11-blueviolet"></a>
+    <a href="https://pypi.org/project/open-autonomy/0.21.13/"><img alt="Framework: Open Autonomy 0.21.13" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.21.13-blueviolet"></a>
     <!-- <a href="https://github.com/valory-xyz/mech/releases/latest">
     <img alt="Latest release" src="https://img.shields.io/github/v/release/valory-xyz/mech"> -->
     </a>
@@ -89,7 +89,7 @@ You may customize the agent's behaviour by setting these environment variables.
 | `API_KEYS`                 | `dict` | `{"openai":["dummy_api_key"], "google_api_key":["dummy_api_key"]}`                                                                                                                                                                                                      | Tracks API keys for each service.                                      |
 | `SERVICE_REGISTRY_ADDRESS` | `str`  | `"0x9338b5153AE39BB89f50468E608eD9d764B755fD"`                                                                                                                                                                                                                      | Smart contract which registers the services.                           |
 | `COMPLEMENTARY_SERVICE_METADATA_ADDRESS`   | `str`  | `"0x0598081D48FB80B0A7E52FAD2905AE9beCd6fC69"`                                                                                                                                                                                                                      | Smart contract which tracks metadata hash of the mech.                             |
-| `MECH_MARKETPLACE_ADDRESS` | `str`  | `"0x4554fE75c1f5576c1d7F765B2A036c199Adae329"`                                                                                                                                                                                                                      | Marketplace for posting and delivering requests served by agent mechs. |
+| `MECH_MARKETPLACE_ADDRESS` | `str`  | `"0x4554fE75c1f5576c1d7F765B2A036c199Adae329"`                                                                                                                                                                                                                      | Marketplace for posting and delivering requests served by Olas mechs. |
 | `MECH_TO_SUBSCRIPTION`     | `dict` | `{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000","tokenId":"1"}}`                                                                                                                                        | Tracks mech's subscription details.                                    |
 | `MECH_TO_CONFIG`           | `dict` | `{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}`                                                                                                                                                          | Tracks mech's config.                                                  |
 
@@ -163,13 +163,11 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
 | packages/dvilela/customs/corcel_request |
 | packages/dvilela/customs/gemini_prediction |
 | packages/jhehemann/customs/prediction_sentence_embeddings |
-| packages/jhehemann/customs/prediction_sum_url_content |
 | packages/napthaai/customs/prediction_request_rag |
 | packages/napthaai/customs/prediction_request_reasoning |
 | packages/napthaai/customs/prediction_url_cot |
 | packages/napthaai/customs/resolve_market_reasoning |
 | packages/nickcom007/customs/prediction_request_sme |
-| packages/psouranis/customs/optimization_by_prompting |
 | packages/valory/customs/openai_request |
 | packages/valory/customs/prediction_langchain |
 | packages/valory/customs/prediction_request |

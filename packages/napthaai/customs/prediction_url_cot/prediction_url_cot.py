@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module implements a tool prediction url cot."""
+
 import functools
 import json
 import re
@@ -37,7 +38,6 @@ from pydantic import BaseModel, PositiveInt
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import Encoding, encoding_for_model, get_encoding
-
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
@@ -504,8 +504,8 @@ def get_urls_from_queries(
                 num=num,
             ):
                 results.append(url)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"Error searching for query {query!r}: {e}")
     unique_results = list(set(results))
     return unique_results
 

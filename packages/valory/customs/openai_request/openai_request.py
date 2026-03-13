@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023-2025 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
+
 import functools
 from typing import Any, Callable, Dict, Optional, Tuple, Union
 
@@ -25,7 +26,6 @@ import googleapiclient
 import openai
 from openai import OpenAI
 from tiktoken import encoding_for_model
-
 
 client: Optional[OpenAI] = None
 

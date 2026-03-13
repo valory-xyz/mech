@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024-2025 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -16,14 +16,13 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
+
 """This module contains tool tests."""
+
 from typing import List, Any
 
 from packages.victorpolisetty.customs.dalle_request import dalle_request
 from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
-from packages.jhehemann.customs.prediction_sentence_embeddings import (
-    prediction_sentence_embeddings,
-)
 from packages.napthaai.customs.prediction_request_reasoning import (
     prediction_request_reasoning,
 )
@@ -156,14 +155,3 @@ class TestDALLEGeneration(BaseToolTest):
     models = dalle_request.ALLOWED_MODELS
     prompts = ["Generate an image of a futuristic cityscape."]
     tool_module = dalle_request
-
-
-class TestPredictionSentenceEmbeddings(BaseToolTest):
-    """Test Prediction Sum URL Content."""
-
-    tools = prediction_sentence_embeddings.ALLOWED_TOOLS
-    models = prediction_sentence_embeddings.ALLOWED_MODELS
-    prompts = [
-        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
-    ]
-    tool_module = prediction_sentence_embeddings

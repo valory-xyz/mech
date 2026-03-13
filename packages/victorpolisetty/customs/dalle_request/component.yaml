@@ -7,12 +7,12 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiesmz5to2eh4fkhoadjkakefoloxpi7syxzm37lsp5uu5f6fopw4y
-  dalle_request.py: bafybeieio5kbmf3sdxq5z6zvm6gak4772twejgbwdyv5iezhywrdci6mb4
+  dalle_request.py: bafybeide3spmalhl6abceenir7k7eflewrcinwcb6at5df7qufztpc7wau
 fingerprint_ignore_patterns: []
 entry_point: dalle_request.py
 callable: run
 dependencies:
   openai:
-    version: ==1.93.0
+    version: ==1.30.2
   tiktoken:
-    version: ==0.9.0
+    version: ==0.12.0
