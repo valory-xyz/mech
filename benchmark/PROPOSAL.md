@@ -230,7 +230,7 @@ Timeline:  ──[market opens]──[content snapshot T₀]──────[m
 
 **How it works:**
 1. For each resolved market, we store a *content snapshot*: the web search results and scraped pages that were available at some point before resolution.
-2. Several tools already accept `source_links` as a kwarg — we extend this pattern so tools can be fed pre-fetched content instead of doing live search.
+2. Several tools already accept `source_content` as a kwarg — we extend this pattern so tools can be fed pre-fetched content instead of doing live search.
 3. During benchmarking, the runner injects cached content, bypassing live web search.
 
 ```python
@@ -252,10 +252,10 @@ Building snapshots:
 - **From open markets:** When `tournament.py` runs predictions on open markets, it also caches the web content. When the market resolves, we have both a prediction and its content snapshot.
 - **Retroactive (lossy):** For resolved markets where we don't have cached content, we can snapshot today. This introduces temporal contamination for recently resolved markets but is acceptable for markets that resolved > 6 months ago (the web has moved on, outcome-reporting articles are buried).
 
-**Prerequisite — all tools must support `source_links`:** All prediction tools must be retrofitted to accept `source_links` as a kwarg for evidence injection. Currently, superforcaster and gemini-prediction do not support this. Without universal `source_links` support, cached replay comparisons across tools are apples-to-oranges (some tools use cached content while others hit live web, contaminating temporal integrity). This is a blocking prerequisite for Phase 1.
+**Prerequisite — all tools must support `source_content`:** Several tools (prediction-request, prediction-url-cot, prediction-request-rag, prediction-request-reasoning, prediction-request-sme) already accept a kwarg for pre-fetched web content injection, currently named `source_links`. This should be renamed to `source_content` since the value is a `Dict[str, str]` mapping URLs to their HTML content, not a list of links. Superforcaster and gemini-prediction do not support this at all. All prediction tools must be retrofitted to accept `source_content` for cached replay to work — without it, comparisons across tools are apples-to-oranges (some use cached content while others hit live web, contaminating temporal integrity). This is a blocking prerequisite for Phase 1.
 
 **Cached replay policy:**
-- All tools participating in cached replay must accept `source_links` for evidence injection.
+- All tools participating in cached replay must accept `source_content` for evidence injection.
 - Rows must carry snapshot provenance and capture timestamp.
 - Retroactive snapshots (`snapshot_origin: retroactive`) cannot be mixed silently with contemporaneous snapshots (`snapshot_origin: contemporaneous`) — reports must stratify or filter by snapshot origin.
 - **Never the sole basis for production promotion.** Dev/CI/search use only.
@@ -561,7 +561,7 @@ def run_benchmark(
         prompt = render_prompt(prompt_template, q["question"])
         for tool, model in product(tools, models):
             kwargs = build_kwargs(tool, model, prompt, q, mode)
-            # In cached_replay mode, kwargs includes source_links from snapshot
+            # In cached_replay mode, kwargs includes source_content from snapshot
             # In production_replay mode, we score stored predictions (no re-running)
             #   — this means only tools that ran in production can be scored in this mode
             # In live mode (tournament), tools hit live web search
@@ -602,7 +602,7 @@ def run_benchmark(
 
 Reuses the exact `run()` functions and `KeyChain` from the existing codebase — no mocking, no abstraction layer.
 
-**Tool compatibility note:** All prediction tools must support `source_links` for evidence injection (see cached replay prerequisite in Part 2). The runner should validate this at startup and fail fast if a tool lacks support, rather than silently skipping it.
+**Tool compatibility note:** All prediction tools must support `source_content` for evidence injection (see cached replay prerequisite in Part 2). The runner should validate this at startup and fail fast if a tool lacks support, rather than silently skipping it.
 
 ### Tournament Runner
 
@@ -1160,7 +1160,7 @@ python benchmark/publish.py --results results/monthly_report.json
 ## Implementation Plan
 
 0. **Phase 0 — Prerequisites** (before benchmark work begins)
-   - Retrofit all prediction tools with `source_links` support (superforcaster, gemini-prediction)
+   - Retrofit all prediction tools with `source_content` support (superforcaster, gemini-prediction)
    - Coordinate trader-side request enrichment (market metadata in request payload)
 
 1. **Phase 1 — Foundation** (~3 days)
@@ -1201,7 +1201,7 @@ python benchmark/publish.py --results results/monthly_report.json
 
 ### Prerequisites (Blocking)
 
-1. **Retrofit all tools with `source_links` support.** Superforcaster and gemini-prediction currently lack this. All prediction tools must accept `source_links` for cached replay to work. This blocks Phase 1.
+1. **Retrofit all tools with `source_content` support.** Superforcaster and gemini-prediction currently lack this. All prediction tools must accept `source_content` for cached replay to work. This blocks Phase 1.
 2. **Trader-side request enrichment.** The trader must embed market metadata (market ID, platform, probability, liquidity, volume, spread) in the mech request payload. This is a trader repo change. The data lands on IPFS as part of the request and is available for benchmark analysis without reconstruction. This is a prerequisite for edge and PnL analysis on production data.
 
 ### Open Questions
