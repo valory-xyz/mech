@@ -194,8 +194,9 @@ Timeline:  ──────[prediction made]──────────[mar
 
 - **Source:** `fetch_production.py` — indexes on-chain Request/Deliver events + IPFS data
 - **Pros:** Perfect temporal integrity, represents actual production distribution
-- **Cons:** Limited to questions we've already seen in production, selection bias from trader
-- **Use for:** Final accuracy measurement, baseline establishment, production monitoring
+- **Cons:** Limited to questions we've already seen in production, selection bias from trader. **Cannot be used to evaluate new tools** — only tools that already ran in production have stored predictions. To compare a new tool against the production baseline on the same questions, use cached replay (with production-captured snapshots) or tournament mode.
+- **Use for:** Measuring accuracy of *current* production tools, establishing baselines, production monitoring, monthly accuracy reports.
+- **Not for:** Evaluating candidate tools or comparing alternatives — use cached replay or tournament for that.
 - **Primary truth source for published performance.**
 
 #### Mode 2: Forward-Looking Tournament (Out-of-Sample)
@@ -251,15 +252,17 @@ Building snapshots:
 - **From open markets:** When `tournament.py` runs predictions on open markets, it also caches the web content. When the market resolves, we have both a prediction and its content snapshot.
 - **Retroactive (lossy):** For resolved markets where we don't have cached content, we can snapshot today. This introduces temporal contamination for recently resolved markets but is acceptable for markets that resolved > 6 months ago (the web has moved on, outcome-reporting articles are buried).
 
+**Prerequisite — all tools must support `source_links`:** All prediction tools must be retrofitted to accept `source_links` as a kwarg for evidence injection. Currently, superforcaster and gemini-prediction do not support this. Without universal `source_links` support, cached replay comparisons across tools are apples-to-oranges (some tools use cached content while others hit live web, contaminating temporal integrity). This is a blocking prerequisite for Phase 1.
+
 **Cached replay policy:**
-- Allowed only for tools with explicit evidence injection support (i.e., tools that accept `source_links` or equivalent kwargs).
+- All tools participating in cached replay must accept `source_links` for evidence injection.
 - Rows must carry snapshot provenance and capture timestamp.
 - Retroactive snapshots (`snapshot_origin: retroactive`) cannot be mixed silently with contemporaneous snapshots (`snapshot_origin: contemporaneous`) — reports must stratify or filter by snapshot origin.
 - **Never the sole basis for production promotion.** Dev/CI/search use only.
 
 **Known limitations of cached replay:**
 
-1. **Retrieval performance is not tested.** Cached replay bypasses the tool's search query formulation — queries are fixed, and the tool receives pre-fetched results. Improvements to how a tool *searches* (query phrasing, source selection, filtering) cannot be evaluated this way. Retrieval improvements require tournament mode.
+1. **Retrieval performance is not tested.** Cached replay bypasses the tool's search query formulation — queries are fixed, and the tool receives pre-fetched results. Improvements to how a tool *searches* (query phrasing, source selection, filtering) cannot be evaluated this way. Retrieval improvements require tournament mode. This also means Level 3 code modifications targeting search strategy (query formulation, source filtering) **cannot be evaluated via cached replay** — they must go through the tournament pipeline.
 
 2. **Tools with built-in LLM search cannot be cached.** Some LLM APIs (e.g., models with native web search like Perplexity, or future OpenAI/Anthropic search features) perform retrieval internally. There is no way to inject cached content into these APIs. Such tools can only be evaluated via production replay or tournament mode. This is not a current blocker (no production tools use built-in LLM search today) but must be accounted for as the tool portfolio evolves.
 
@@ -272,13 +275,16 @@ Building snapshots:
 | Prompt sweep (50+ variants) | Cached Replay | Need instant results for iteration |
 | Parameter grid search | Cached Replay | Same |
 | CI regression check on PR | Cached Replay | Must complete in minutes |
-| Final validation before promotion | Tournament (if available) or Production Replay | Must be temporally clean |
+| Final validation before promotion | Tournament (if available) | Must be temporally clean + out-of-sample |
 | Monthly accuracy report | Production Replay | Reflects actual system performance |
+| Compare new tool vs production baseline | Cached Replay (with prod snapshots) or Tournament | Production replay can't score tools that haven't run in production |
 | Test retrieval improvements | Tournament | Cached replay can't test search quality |
 
 ---
 
 ## Part 3: Datasets — Where Ground Truth Comes From
+
+**Scope: binary markets only.** The benchmark supports binary outcome markets (yes/no) only. All tools output `p_yes` / `p_no` that sum to 1. Multi-outcome markets (e.g., "Who will win?" with 5+ candidates) from Polymarket must be filtered out during dataset construction. The scoring framework (Brier score, edge over market, calibration) assumes binary outcomes.
 
 ### 3a. Production Predictions (The Flywheel)
 
@@ -344,7 +350,7 @@ Omen and Polymarket markets have structurally different characteristics:
 - **hard set** (~50 questions) — questions where current tools perform worst, to focus improvement.
 - **stratified** — all sets should be balanced across categories, time horizons, and platforms (see Part 4).
 
-The hard set is automatically refreshed: after each full benchmark run, the bottom 20% by Brier score becomes the new hard set.
+**Hard set versioning:** The hard set is refreshed quarterly (not after every run). After a quarterly benchmark run, the bottom 20% by Brier score becomes the new hard set, and the previous hard set is archived with a version tag (e.g., `hard_set_2026Q1.jsonl`). This is important: if the hard set changes after every run, a tool that improves on previously-hard questions causes those questions to leave the hard set (replaced by new hard ones), making it impossible to track improvement on hard questions over time. Freezing per improvement cycle preserves this signal.
 
 **Eval set rotation:** The eval set must be refreshed periodically (quarterly) with new tournament results to prevent implicit overfitting. Old eval questions move to the dev set.
 
@@ -374,6 +380,7 @@ Metrics are not a flat list — they form a staged pipeline where earlier stages
 - Metric: `valid_structured_outputs / attempted_runs`
 - Rule: if < 80%, tool is marked unreliable and excluded from comparative ranking
 - Includes all `prediction_parse_status` values: `valid`, `invalid`, `malformed`, `timeout`, `error`
+- **Timeouts count as failures.** The benchmark runner must enforce the same `TASK_DEADLINE` (default 240s) as production. A tool that takes 10 minutes per question would time out in production, so it must time out in the benchmark too. Without matching timeouts, reliability numbers are meaningless.
 - This is computed on all attempted runs — no exclusions
 
 **Stage 2 — Market-Edge Analysis:**
@@ -386,8 +393,8 @@ Metrics are not a flat list — they form a staged pipeline where earlier stages
 - Paired comparison on identical eligible rows only
 
 **Stage 4 — Calibration Analysis:**
-- Reliability diagram + ECE (only when sample size is sufficient per bin)
-- Include category/time-horizon/platform calibration slices
+- Reliability diagram + ECE with minimum 20 samples per bin. With fewer than 200 total questions, use 5 bins instead of 10 deciles. Bins with fewer than 20 samples are reported but excluded from ECE calculation and flagged in output.
+- Stratified calibration (by category/time-horizon/platform) requires even larger datasets — only report stratified calibration when each stratum has sufficient samples for at least 5 bins of 20+. Otherwise, report only aggregate calibration and note the limitation.
 
 **Stage 5 — PnL Layer:**
 - Tier 1: Execution-aware simulated PnL with spread/slippage assumptions
@@ -555,7 +562,8 @@ def run_benchmark(
         for tool, model in product(tools, models):
             kwargs = build_kwargs(tool, model, prompt, q, mode)
             # In cached_replay mode, kwargs includes source_links from snapshot
-            # In production_replay mode, we use the stored prediction (no re-running)
+            # In production_replay mode, we score stored predictions (no re-running)
+            #   — this means only tools that ran in production can be scored in this mode
             # In live mode (tournament), tools hit live web search
 
             t0 = time.time()
@@ -594,7 +602,7 @@ def run_benchmark(
 
 Reuses the exact `run()` functions and `KeyChain` from the existing codebase — no mocking, no abstraction layer.
 
-**Tool compatibility note:** Not all current tools accept `source_links` or equivalent kwargs for evidence injection. Tools that lack this interface cannot participate in cached replay mode. The runner must validate tool compatibility per mode and report which tools were skipped and why.
+**Tool compatibility note:** All prediction tools must support `source_links` for evidence injection (see cached replay prerequisite in Part 2). The runner should validate this at startup and fail fast if a tool lacks support, rather than silently skipping it.
 
 ### Tournament Runner
 
@@ -616,6 +624,7 @@ def run_tournament(
                 "question_id": q["id"],
                 "tool": tool, "model": model,
                 "prompt_template": prompt_template,
+                "tool_ipfs_hash": get_tool_hash(tool),  # Pin exact tool code version
                 "p_yes": result["p_yes"],
                 "predicted_at": datetime.utcnow().isoformat(),
                 "market_prob_at_prediction": q["current_prob"],
@@ -629,6 +638,8 @@ def run_tournament(
 ```
 
 The tournament produces both temporally clean predictions *and* content snapshots that can be used for fast cached replay later. This means every tournament run contributes to both the eval set (via predictions) and the dev set (via cached content for replay).
+
+**Tool versioning:** Tournament predictions store `tool_ipfs_hash` — the IPFS hash of the exact tool code that ran. This is important because local tool code and IPFS-deployed code can diverge. When scoring tournament results weeks later, the hash provides an audit trail of exactly which code version produced the prediction.
 
 ### Compare: Regression Detection
 
@@ -783,7 +794,7 @@ def search_tool_variants(
 ```
 
 **Types of code modifications to search over:**
-- **Search strategy** — query formulation, source filtering, number of queries
+- **Search strategy** — query formulation, source filtering, number of queries. **Note: search strategy changes cannot be evaluated via cached replay** (cached replay bypasses the search pipeline entirely). These modifications must be validated through tournament mode.
 - **Reasoning pipeline** — add/remove/reorder reasoning steps
 - **Post-processing** — calibration adjustments (Platt scaling, isotonic regression on dev set, shrinkage toward base rates)
 - **Time-horizon adaptation** — different strategies for short vs long horizon questions
@@ -821,6 +832,16 @@ ensemble_configs = [
 ```
 
 Note on **extremization**: When multiple tools share the same information sources (same web search, same LLM), averaging washes out signal. Extremizing (pushing the average away from 0.5) corrects for this. The optimal extremization factor can be tuned on the dev set.
+
+**Cost-performance tradeoffs:** Ensembles and cascades multiply cost. A 3-tool ensemble costs ~3x per question. The benchmark must report cost-adjusted metrics alongside raw metrics to make fair comparisons:
+
+| Metric | Formula | Use |
+|--------|---------|-----|
+| **Edge per dollar** | `edge / cost_per_question` | Is the ensemble's edge gain worth the cost? |
+| **Brier improvement per dollar** | `(baseline_brier - candidate_brier) / cost_per_question` | Cost-normalized quality gain |
+| **Break-even trade size** | `cost_per_question / edge` | Minimum trade size where the tool pays for itself |
+
+A $0.15/question ensemble with +0.048 edge may be worse than a $0.05/question single tool with +0.035 edge, depending on trade size. The cascade config partially addresses this (cheap tool first, expensive tool only if uncertain), but the leaderboard should always include cost-adjusted columns so the tradeoff is visible.
 
 ---
 
@@ -1138,12 +1159,16 @@ python benchmark/publish.py --results results/monthly_report.json
 
 ## Implementation Plan
 
+0. **Phase 0 — Prerequisites** (before benchmark work begins)
+   - Retrofit all prediction tools with `source_links` support (superforcaster, gemini-prediction)
+   - Coordinate trader-side request enrichment (market metadata in request payload)
+
 1. **Phase 1 — Foundation** (~3 days)
    - Row schema definition with validation
-   - `fetch_resolved.py` for Polymarket API + Omen subgraph
-   - `runner.py` with cached replay mode (with tool compatibility checking)
-   - `scorer.py` with staged pipeline: reliability gate → edge → Brier → calibration → stratified analysis (including per-platform)
-   - `compare.py` with paired bootstrap significance testing and eligibility reporting
+   - `fetch_resolved.py` for Polymarket API + Omen subgraph (binary markets only)
+   - `runner.py` with cached replay mode, production timeout enforcement (`TASK_DEADLINE`)
+   - `scorer.py` with staged pipeline: reliability gate (80%) → edge → Brier → calibration (min 20/bin) → stratified analysis (per-platform)
+   - `compare.py` with paired bootstrap significance testing, eligibility reporting, cost-adjusted metrics
 
 2. **Phase 2 — Production Flywheel** (~3 days)
    - `fetch_production.py` — index on-chain Request/Deliver events, match to resolved markets, record market prices + liquidity at prediction time, assign provenance grades
@@ -1174,8 +1199,12 @@ python benchmark/publish.py --results results/monthly_report.json
    - Automated PR generation for winning variants
    - Resolve market reasoning tool benchmark pipeline
 
+### Prerequisites (Blocking)
+
+1. **Retrofit all tools with `source_links` support.** Superforcaster and gemini-prediction currently lack this. All prediction tools must accept `source_links` for cached replay to work. This blocks Phase 1.
+2. **Trader-side request enrichment.** The trader must embed market metadata (market ID, platform, probability, liquidity, volume, spread) in the mech request payload. This is a trader repo change. The data lands on IPFS as part of the request and is available for benchmark analysis without reconstruction. This is a prerequisite for edge and PnL analysis on production data.
+
 ### Open Questions
 
-1. **Tool input compatibility:** Not all tools accept `source_links` for evidence injection. Need to audit current tools and decide whether to add this interface to all tools or accept that some tools are tournament/production-only.
-2. **Market metadata at prediction time (trader-side):** The trader must be updated to embed market context (market ID, platform, probability, liquidity, volume, spread) in the mech request payload. This is a trader repo change, not a mech/tool change. The data lands on IPFS as part of the request and is available for benchmark analysis without reconstruction. This is a prerequisite for edge and PnL analysis on production data.
-3. **Built-in LLM search tools:** If/when tools using models with native web search are added, they cannot participate in cached replay. The benchmark must gracefully handle mixed-mode evaluation where some tools run in tournament mode and others in cached replay.
+1. **Built-in LLM search tools:** If/when tools using models with native web search are added, they cannot participate in cached replay. The benchmark must gracefully handle mixed-mode evaluation where some tools run in tournament mode and others in cached replay.
+2. **Fuzzy matching risk for production data:** `fetch_production.py` must match production predictions (prompt strings) to market resolutions. Prompts are not always identical to market titles — the trader may rephrase, add context, or combine questions. A bad fuzzy match silently assigns wrong ground truth. The `match_confidence` field flags weak matches, but the threshold for exclusion and the validation process for matching quality need to be defined during implementation.
