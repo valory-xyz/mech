@@ -71,17 +71,28 @@ class BaseToolTest:
 
     def _validate_response(self, response: Any) -> None:
         """Validate response."""
-        assert type(response) == tuple, "Response of the tool must be a tuple."
+        assert isinstance(response, tuple), "Response of the tool must be a tuple."
         assert len(response) == 5, "Response must have 5 elements."
-        assert type(response[0]) == str, "Response[0] must be a string."
-        assert type(response[1]) == str, "Response[1] must be a string."
+        deliver_msg = response[0]
+        assert isinstance(deliver_msg, str), "Response[0] must be a string."
+        assert deliver_msg != "Google API key not found", "Google API key is required to run the test."
+        assert deliver_msg != (
+            "The api_key client option must be set either by passing api_key to the client "
+            "or by setting the OPENAI_API_KEY environment variable"
+        ), "OpenAI API key is required to run the test."
+        assert "Unexpected error:" not in deliver_msg, "An unexpected error was found in the delivered message."
+        assert "p_yes" in deliver_msg, "The delivered message does not contain the expected output. p_yes missing."
+        assert "p_no" in deliver_msg, "The delivered message does not contain the expected output. p_no missing."
+        assert "confidence" in deliver_msg, "The delivered message does not contain the expected output. confidence missing."
+        assert "info_utility" in deliver_msg, "The delivered message does not contain the expected output. info_utility missing."
+        assert isinstance(response[1], str), "Response[1] must be a string."
         assert (
-            type(response[2]) == dict or response[2] is None
+            isinstance(response[2], dict) or response[2] is None
         ), "Response[2] must be a dictionary or None."
         assert (
-            type(response[3]) == TokenCounterCallback or response[3] is None
+            isinstance(response[3], TokenCounterCallback) or response[3] is None
         ), "Response[3] must be a TokenCounterCallback or None."
-        assert type(response[4]) == KeyChain, "Response[4] must be a KeyChain object."
+        assert isinstance(response[4], KeyChain), "Response[4] must be a KeyChain object."
 
     def test_run(self) -> None:
         """Test run method."""
