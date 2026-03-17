@@ -6,15 +6,16 @@ The old benchmark (olas-predict-benchmark, archived) used the Autocast dataset �
 
 We need a closed-loop system: **benchmark locally → validate → deploy → observe production → feed back → improve → repeat**.
 
-## Design Goals
+## Core Principles
 
-1. **Production data flywheel** — production predictions and outcomes continuously feed back into the benchmark dataset
-2. **Automated tool improvement** — systematically search for better prompts, models, tool configs, and tool code
-3. **Real prediction market questions** — Polymarket/Omen questions, not academic datasets
-4. **Temporal integrity** — never let a tool "predict" something it can Google the answer to
-5. **Edge over market** — measure whether predictions beat market consensus, not just standalone accuracy
-6. **Local pre-validation** — catch regressions and validate improvements before they hit production
-7. **Continuous loop** — the system runs perpetually: improve → benchmark → promote → observe → learn → improve
+1. **Temporal integrity is non-negotiable** — never let a tool "predict" something it can Google the answer to.
+2. **Production feedback must continuously refresh evaluation data** — production predictions and outcomes feed back into the benchmark dataset.
+3. **Market-edge at prediction time is the primary selection objective** — measure whether predictions beat market consensus, not just standalone accuracy.
+4. **Reliability and data quality are hard gates, not secondary diagnostics** — a tool that crashes or returns malformed output is unusable regardless of accuracy.
+5. **Every reported metric must disclose eligibility denominator and missingness** — no metric without context on what was included and excluded.
+6. **No major change is promotable without ablation tests and human review** — improvements must be understood, not just measured.
+7. **Promotion decisions require statistical evidence and canary discipline** — no shortcuts from local benchmark to full production.
+8. **Platform-aware evaluation** — Omen and Polymarket have different characteristics and must be tracked separately.
 
 ## The Closed Loop
 
@@ -70,6 +71,9 @@ benchmark/
 ├── search.py                       # Automated tool improvement search
 ├── compare.py                      # Compare two benchmark runs
 ├── promote.py                      # Promote winning config to production
+├── publish.py                      # Upload tool accuracy hashes to IPFS for traders
+├── review.py                       # Generate human review sets (wins/losses/outliers)
+├── ablation.py                     # Component ablation testing
 ├── results/                        # Timestamped run results (gitignored)
 └── prompts/
     └── templates.py                # Prompt template variants to test
@@ -77,7 +81,97 @@ benchmark/
 
 ---
 
-## Part 1: Temporal Integrity — The Core Constraint
+## Part 1: Data Schema — What We Log
+
+### Versioned Row Schema
+
+Each benchmark row must follow a versioned schema with strict validation at ingest and before scoring. This addresses a current gap: production data logging is insufficient for rigorous evaluation. The schema must be explicit so that missing fields are visible, not silently ignored.
+
+**Required fields per row:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `row_id` | str | Unique identifier |
+| `schema_version` | str | Schema version (e.g., `"1.0"`) |
+| `mode` | enum | `production_replay` \| `tournament` \| `cached_replay` |
+| `question_id` | str | Unique question identifier |
+| `market_id` | str | Platform-specific market ID |
+| `platform` | enum | `polymarket` \| `omen` |
+| `question_text` | str | Full question text |
+| `tool_name` | str | Tool identifier |
+| `tool_version` | str | Tool version / config hash |
+| `model` | str | LLM model used |
+| `prompt_template` | str | Prompt template identifier |
+| `config_hash` | str | Hash of full tool configuration |
+| `predicted_at` | datetime | When the prediction was made |
+| `prediction_lead_time_days` | float | Days between prediction and resolution |
+| `p_yes` | float | Predicted probability of yes |
+| `p_no` | float | Predicted probability of no |
+| `prediction_parse_status` | enum | `valid` \| `invalid` \| `malformed` \| `timeout` \| `error` |
+| `market_prob_at_prediction` | float? | Market probability when prediction was made |
+| `market_prob_source` | str? | Where market prob came from (API, subgraph, etc.) |
+| `market_prob_type` | enum? | `mid` \| `last` \| `bid` \| `ask` |
+| `market_liquidity_at_prediction` | float? | Market liquidity/volume at prediction time |
+| `execution_at` | datetime? | When trade was executed (nullable if no trade) |
+| `execution_price` | float? | Trade execution price |
+| `execution_size` | float? | Trade size |
+| `market_close_at` | datetime? | Market close date |
+| `resolved_at` | datetime? | When market resolved |
+| `final_outcome` | bool? | Market resolution |
+| `latency_ms` | int | Tool execution time |
+| `input_tokens` | int | LLM input tokens |
+| `output_tokens` | int | LLM output tokens |
+| `cost_usd` | float | Total cost |
+| `source_snapshot_id` | str? | Reference to cached content snapshot |
+| `snapshot_captured_at` | datetime? | When snapshot was taken |
+| `snapshot_origin` | enum? | `contemporaneous` \| `retroactive` |
+| `match_confidence` | float? | Confidence of market/outcome matching |
+
+**Action item — Trader-side request enrichment:** The trader must include market metadata (liquidity, current probability, spread, market ID, platform) as additional fields in the on-chain mech request. Currently, requests contain only a prompt with the market title. By embedding this context in the request payload:
+
+1. **It lands on IPFS automatically** — the request is stored on-chain with an IPFS hash, so all metadata is preserved at exactly the moment the prediction was requested. No after-the-fact reconstruction needed.
+2. **Tools can ignore it** — the metadata is available in `kwargs` but tools that don't need it simply don't read it. No tool changes required.
+3. **Benchmark gets ground truth for free** — `fetch_production.py` reads the request from IPFS and has contemporaneous market state without needing to query historical API data (which may not be available).
+4. **Future tools can use it** — tools that want to incorporate market price or liquidity into their reasoning can do so without separate API calls.
+
+This is a change to the trader's request construction, not to the mech or tools. The extra fields should include at minimum: `market_id`, `platform`, `market_prob_at_request` (with `market_prob_type`: mid/last/bid/ask), `market_liquidity`, and `market_volume`.
+
+### Completeness & Provenance Flags
+
+Per row, include boolean completeness flags:
+
+| Flag | Meaning |
+|------|---------|
+| `has_exact_prediction_timestamp` | Prediction time is known precisely (not reconstructed) |
+| `has_market_prob_same_timestamp` | Market probability captured at prediction time (not later) |
+| `has_evidence_snapshot` | Cached web content available for this prediction |
+| `has_execution_data_if_traded` | Trade data present when a trade was made |
+| `has_high_confidence_market_match` | Market/outcome matching confidence > threshold |
+
+Per row, include a **provenance grade**:
+
+| Grade | Criteria |
+|-------|----------|
+| **A** | Contemporaneous capture, high-confidence match, full timing context |
+| **B** | Temporally clean but partially missing market/execution context |
+| **C** | Reconstructed/retroactive snapshot or weak context |
+
+All reports must stratify by provenance grade. Rows within the same mode are not equally strong by default — provenance flags make this explicit.
+
+### Eligibility Matrix
+
+Every metric report must include: `n_total`, `n_eligible`, `n_excluded`, exclusion reason counts, and row IDs for exclusions.
+
+| Metric | Eligibility Requirements |
+|--------|------------------------|
+| Forecasting (Brier, log loss, calibration) | Valid prediction + resolved outcome |
+| Edge over market | Valid prediction + resolved outcome + market probability at prediction timestamp |
+| Execution PnL | Execution timestamp/price/size + mapped market state |
+| Reliability | All attempted runs (no exclusions) |
+
+---
+
+## Part 2: Temporal Integrity — The Core Constraint
 
 **The single most important property of a prediction benchmark is that the tool cannot see the answer.**
 
@@ -102,6 +196,7 @@ Timeline:  ──────[prediction made]──────────[mar
 - **Pros:** Perfect temporal integrity, represents actual production distribution
 - **Cons:** Limited to questions we've already seen in production, selection bias from trader
 - **Use for:** Final accuracy measurement, baseline establishment, production monitoring
+- **Primary truth source for published performance.**
 
 #### Mode 2: Forward-Looking Tournament (Out-of-Sample)
 
@@ -119,6 +214,7 @@ Timeline:  ──[market opens]──[we predict NOW]──────[market r
 - **Pros:** No temporal contamination, tests on never-before-seen questions, tests new tools on questions they haven't seen
 - **Cons:** Latency — you must wait for markets to resolve (days to months)
 - **Use for:** Evaluating new tools/prompts before production deployment, building the eval dataset
+- **Mandatory out-of-sample validation path for promotion candidates when available.**
 
 #### Mode 3: Cached Content Replay (Fast Iteration)
 
@@ -155,9 +251,17 @@ Building snapshots:
 - **From open markets:** When `tournament.py` runs predictions on open markets, it also caches the web content. When the market resolves, we have both a prediction and its content snapshot.
 - **Retroactive (lossy):** For resolved markets where we don't have cached content, we can snapshot today. This introduces temporal contamination for recently resolved markets but is acceptable for markets that resolved > 6 months ago (the web has moved on, outcome-reporting articles are buried).
 
-- **Pros:** Instant results, hermetic (deterministic), can compare tools on identical information
-- **Cons:** Doesn't test the tool's search query formulation (queries are fixed), snapshot may not perfectly represent what was available
-- **Use for:** Prompt sweeps, parameter search, regression testing in CI
+**Cached replay policy:**
+- Allowed only for tools with explicit evidence injection support (i.e., tools that accept `source_links` or equivalent kwargs).
+- Rows must carry snapshot provenance and capture timestamp.
+- Retroactive snapshots (`snapshot_origin: retroactive`) cannot be mixed silently with contemporaneous snapshots (`snapshot_origin: contemporaneous`) — reports must stratify or filter by snapshot origin.
+- **Never the sole basis for production promotion.** Dev/CI/search use only.
+
+**Known limitations of cached replay:**
+
+1. **Retrieval performance is not tested.** Cached replay bypasses the tool's search query formulation — queries are fixed, and the tool receives pre-fetched results. Improvements to how a tool *searches* (query phrasing, source selection, filtering) cannot be evaluated this way. Retrieval improvements require tournament mode.
+
+2. **Tools with built-in LLM search cannot be cached.** Some LLM APIs (e.g., models with native web search like Perplexity, or future OpenAI/Anthropic search features) perform retrieval internally. There is no way to inject cached content into these APIs. Such tools can only be evaluated via production replay or tournament mode. This is not a current blocker (no production tools use built-in LLM search today) but must be accounted for as the tool portfolio evolves.
 
 ### Which Mode When
 
@@ -170,12 +274,13 @@ Building snapshots:
 | CI regression check on PR | Cached Replay | Must complete in minutes |
 | Final validation before promotion | Tournament (if available) or Production Replay | Must be temporally clean |
 | Monthly accuracy report | Production Replay | Reflects actual system performance |
+| Test retrieval improvements | Tournament | Cached replay can't test search quality |
 
 ---
 
-## Part 2: Datasets — Where Ground Truth Comes From
+## Part 3: Datasets — Where Ground Truth Comes From
 
-### 2a. Production Predictions (The Flywheel)
+### 3a. Production Predictions (The Flywheel)
 
 This is the primary dataset. Our mech already makes predictions in production — we capture them and match against outcomes.
 
@@ -187,19 +292,19 @@ This is the primary dataset. Our mech already makes predictions in production �
 
 2. **Record prediction timing** — Crucially, the block timestamp of the Deliver event tells us *when* the prediction was made. This enables temporal analysis.
 
-3. **Match predictions to outcomes** — For each prediction, look up whether the underlying market has resolved. For Omen: query the subgraph. For Polymarket: query their API. Match by question text (fuzzy) or market ID if available.
+3. **Match predictions to outcomes** — For each prediction, look up whether the underlying market has resolved. For Omen: query the subgraph. For Polymarket: query their API. Match by question text (fuzzy) or market ID if available. Record `match_confidence` to flag weak matches.
 
-4. **Record market context at prediction time** — Where possible, capture the market probability at the time of prediction (from Polymarket/Omen APIs or cached data). This enables edge-over-market measurement.
+4. **Record market context at prediction time** — Capture market probability, liquidity, and spread at the time of prediction (from Polymarket/Omen APIs or cached data). This enables edge-over-market measurement and sizing analysis.
 
 ```jsonl
-{"id": "prod_001", "question": "Will X happen?", "tool": "prediction-online", "model": "gpt-4.1-2025-04-14", "p_yes": 0.72, "predicted_at": "2026-01-10T14:23:00Z", "market_prob_at_prediction": 0.65, "resolution": true, "resolved_at": "2026-02-15", "source": "production", "chain": "gnosis", "request_tx": "0xabc...", "time_horizon_days": 36}
+{"row_id": "prod_001", "schema_version": "1.0", "mode": "production_replay", "question_id": "q_001", "market_id": "poly_abc", "platform": "polymarket", "question_text": "Will X happen?", "tool_name": "prediction-online", "tool_version": "v1.2", "model": "gpt-4.1-2025-04-14", "config_hash": "abc123", "predicted_at": "2026-01-10T14:23:00Z", "prediction_lead_time_days": 36, "p_yes": 0.72, "p_no": 0.28, "prediction_parse_status": "valid", "market_prob_at_prediction": 0.65, "market_prob_source": "polymarket_api", "market_prob_type": "mid", "market_liquidity_at_prediction": 450000, "resolved_at": "2026-02-15", "final_outcome": true, "latency_ms": 12300, "input_tokens": 4200, "output_tokens": 850, "cost_usd": 0.042, "match_confidence": 0.95, "has_exact_prediction_timestamp": true, "has_market_prob_same_timestamp": true, "has_evidence_snapshot": false, "has_high_confidence_market_match": true, "provenance_grade": "A"}
 ```
 
-**Selection bias caveat:** Production data is not a random sample of all markets — the trader selects markets where it expects edge. This means production data is biased toward "tradeable" markets. The benchmark should track this and supplement with broader market data (see 2b) to avoid overfitting to the trader's selection criteria.
+**Selection bias caveat:** Production data is not a random sample of all markets — the trader selects markets where it expects edge. This means production data is biased toward "tradeable" markets. The benchmark should track this and supplement with broader market data (see 3b) to avoid overfitting to the trader's selection criteria.
 
 **Cadence:** Run `fetch_production.py` weekly. Incremental — only fetches newly resolved markets.
 
-### 2b. Resolved Prediction Markets (Cold Start + Breadth)
+### 3b. Resolved Prediction Markets (Cold Start + Breadth)
 
 Pull recently resolved markets from Polymarket and Omen for breadth beyond what the trader selects.
 
@@ -213,7 +318,7 @@ Pull recently resolved markets from Polymarket and Omen for breadth beyond what 
 
 **Important:** These markets can only be used with Cached Content Replay mode (Mode 3) or as tournament inputs *before* they resolve. Never run tools with live web search on already-resolved markets.
 
-### 2c. Open Markets (Tournament Feed)
+### 3c. Open Markets (Tournament Feed)
 
 ```jsonl
 {"id": "polymarket_xyz789", "question": "Will Y happen by Z?", "source": "polymarket", "category": "crypto", "current_prob": 0.45, "close_date": "2026-06-01", "volume_usd": 120000, "fetched_at": "2026-03-15T10:00:00Z"}
@@ -221,12 +326,23 @@ Pull recently resolved markets from Polymarket and Omen for breadth beyond what 
 
 `fetch_open.py` pulls currently open markets. These feed into the tournament (Mode 2). When they resolve, they become ground truth data with temporally clean predictions.
 
-### 2d. Dataset Splits
+### 3d. Platform-Specific Considerations
+
+Omen and Polymarket markets have structurally different characteristics:
+
+- **Question format:** Omen questions often come from the trader's selection and may be phrased differently than Polymarket questions.
+- **Liquidity:** Polymarket markets are typically higher volume, meaning market prices are more efficient (harder to beat).
+- **Resolution mechanics:** Different oracles and resolution processes may introduce different kinds of ambiguity.
+- **Tool performance may differ systematically by platform** — a tool tuned for Polymarket's question style may underperform on Omen, and vice versa.
+
+**Policy:** All metrics must be reported per-platform in addition to aggregate. If tool performance diverges significantly between platforms, maintain separate evaluation pipelines and consider platform-specific tool configurations. The `platform` field in the row schema enables this stratification.
+
+### 3e. Dataset Splits
 
 - **eval set** (~100+ questions) — never used during search/sweep, only for final scoring. Must be temporally clean (production replay or tournament predictions only).
 - **dev set** (~200+ questions) — used for sweep/search iterations. Can use cached replay.
 - **hard set** (~50 questions) — questions where current tools perform worst, to focus improvement.
-- **stratified** — all sets should be balanced across categories and time horizons (see Part 3).
+- **stratified** — all sets should be balanced across categories, time horizons, and platforms (see Part 4).
 
 The hard set is automatically refreshed: after each full benchmark run, the bottom 20% by Brier score becomes the new hard set.
 
@@ -234,16 +350,58 @@ The hard set is automatically refreshed: after each full benchmark run, the bott
 
 ---
 
-## Part 3: Scoring — What We Measure
+## Part 4: Scoring — What We Measure
 
-### Primary Metrics
+### Analysis Pipeline (Staged with Gates)
+
+Metrics are not a flat list — they form a staged pipeline where earlier stages gate later ones. This prevents spending time on forecasting quality analysis for a tool that can't reliably produce output.
+
+```
+┌─────────────────┐     ┌──────────────────┐     ┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  1. RELIABILITY  │────▶│  2. MARKET EDGE   │────▶│    3. BRIER     │────▶│ 4. CALIBRATION  │────▶│    5. PnL       │
+│     GATE         │     │                  │     │                 │     │                 │     │                 │
+│ valid outputs /  │     │ Primary selection│     │ Primary absolute│     │ Reliability     │     │ Tier 1: simul.  │
+│ attempted runs   │     │ metric for       │     │ forecasting     │     │ diagram + ECE   │     │ Tier 2: realized│
+│                  │     │ trading value    │     │ quality metric  │     │ (if n sufficient)│    │                 │
+│ GATE: <80% →     │     │                  │     │                 │     │                 │     │                 │
+│ tool is UNRELI-  │     │                  │     │                 │     │                 │     │                 │
+│ ABLE, excluded   │     │                  │     │                 │     │                 │     │                 │
+│ from ranking     │     │                  │     │                 │     │                 │     │                 │
+└─────────────────┘     └──────────────────┘     └─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+**Stage 1 — Reliability Gate:**
+- Metric: `valid_structured_outputs / attempted_runs`
+- Rule: if < 80%, tool is marked unreliable and excluded from comparative ranking
+- Includes all `prediction_parse_status` values: `valid`, `invalid`, `malformed`, `timeout`, `error`
+- This is computed on all attempted runs — no exclusions
+
+**Stage 2 — Market-Edge Analysis:**
+- Primary selection metric for trading value
+- Paired comparison on identical eligible rows only
+- Requires: valid prediction + resolved outcome + market probability at prediction timestamp
+
+**Stage 3 — Brier Score Analysis:**
+- Primary absolute forecasting quality metric
+- Paired comparison on identical eligible rows only
+
+**Stage 4 — Calibration Analysis:**
+- Reliability diagram + ECE (only when sample size is sufficient per bin)
+- Include category/time-horizon/platform calibration slices
+
+**Stage 5 — PnL Layer:**
+- Tier 1: Execution-aware simulated PnL with spread/slippage assumptions
+- Tier 2: Realized execution PnL (when execution data is available)
+
+### Metric Definitions
 
 | Metric | Formula | Why it matters |
 |--------|---------|----------------|
+| **Reliability** | `valid_outputs / attempted_runs` | Hard gate. A tool that crashes 20% of the time is unusable. |
 | **Brier score** | `mean((p_yes - outcome)²)` | Gold standard for probabilistic forecasting. Lower is better. Random = 0.25, perfect = 0.0. |
 | **Edge over market** | `mean((market_prob - outcome)² - (p_yes - outcome)²)` | Positive means tool beats market consensus. This is what generates trading profit. |
-| **Calibration error (ECE)** | Bin predictions by decile, compare mean prediction to actual frequency | Detects systematic overconfidence/underconfidence. A tool predicting 0.7 should be right ~70% of the time. |
-| **Resolution rate** | `valid_json_results / total_questions` | Tool reliability — a tool that crashes 20% of the time is unusable regardless of accuracy. |
+| **Calibration error (ECE)** | Bin predictions by decile, compare mean prediction to actual frequency | Detects systematic overconfidence/underconfidence. |
+| **Resolution rate** | `valid_json_results / total_questions` | Tool reliability — subset of the reliability gate metric. |
 
 **Edge over market is the most important metric for tool selection.** A tool with Brier score 0.20 that always agrees with the market (edge ≈ 0) generates zero trading profit. A tool with Brier score 0.22 that systematically disagrees with the market *in the right direction* (edge > 0) is far more valuable. The trader profits from the *difference* between the tool's prediction and the market price, not from standalone accuracy.
 
@@ -251,16 +409,20 @@ The hard set is automatically refreshed: after each full benchmark run, the bott
 
 | Metric | What it measures |
 |--------|-----------------|
-| **Discrimination (AUC-ROC)** | Can the tool rank questions by likelihood? Separable from calibration — a tool can rank well but be poorly calibrated, and vice versa. |
-| **Log loss** | `-mean(outcome * log(p_yes) + (1-outcome) * log(p_no))`. Heavily penalizes confident wrong predictions (p_yes=0.99 when outcome=false). |
-| **Sharpness** | `mean(abs(p_yes - 0.5))`. How far from 50/50 are predictions? Higher sharpness with good calibration is ideal. Low sharpness means the tool hedges too much. |
+| **Discrimination (AUC-ROC)** | Can the tool rank questions by likelihood? |
+| **Log loss** | `-mean(outcome * log(p_yes) + (1-outcome) * log(p_no))`. Heavily penalizes confident wrong predictions. |
+| **Sharpness** | `mean(abs(p_yes - 0.5))`. How far from 50/50 are predictions? Higher sharpness with good calibration is ideal. |
 | **Cost per question** | USD per prediction (from token counts). |
 | **Latency p50/p95** | Response time distribution. |
-| **Simulated PnL** | Simulate Kelly criterion or fixed-fraction betting against market odds using tool predictions. Closest proxy to actual trading value. |
+| **Simulated PnL** | Simulate Kelly criterion or fixed-fraction betting against market odds. Closest proxy to actual trading value. |
 
 ### Stratified Analysis
 
 Aggregate metrics hide important patterns. Always break down by:
+
+**Platform** — Polymarket vs Omen:
+- Different market efficiency, liquidity profiles, question styles
+- Tool performance may diverge systematically
 
 **Time horizon** — days between prediction and market resolution:
 - Short (< 7 days): tool should rely on current news, events likely already unfolding
@@ -282,11 +444,18 @@ Aggregate metrics hide important patterns. Always break down by:
 - Markets at 55/45 are "hard" (genuinely uncertain)
 - Tool value is highest on hard markets where the market itself is uncertain
 
+**Provenance grade** — A/B/C (see Part 1):
+- Ensures results aren't driven by low-quality data rows
+
 ```
 $ python benchmark/scorer.py results/run.json --stratify
 
-Overall:
-  Brier: 0.198  Edge: +0.033  Calibration: 0.045  Resolution: 96.8%
+Overall (n=200, eligible=194, excluded=6):
+  Reliability: 97.0%  Brier: 0.198  Edge: +0.033  Calibration: 0.045
+
+By platform:
+  polymarket: Brier: 0.191  Edge: +0.038  n=128
+  omen:       Brier: 0.209  Edge: +0.025  n=66
 
 By time horizon:
   Short (<7d):    Brier: 0.142  Edge: +0.051  n=45
@@ -303,13 +472,16 @@ By difficulty (market price distance from 0.5):
   Easy (>0.3):    Brier: 0.098  Edge: +0.012  n=78
   Medium (0.15-0.3): Brier: 0.209  Edge: +0.039  n=68
   Hard (<0.15):   Brier: 0.301  Edge: +0.048  n=54
-```
 
-This reveals *where* a tool adds value. A tool might be great at crypto but terrible at politics, or strong on short-horizon but useless on long-horizon questions.
+By provenance:
+  A: Brier: 0.195  Edge: +0.035  n=142
+  B: Brier: 0.204  Edge: +0.029  n=41
+  C: Brier: 0.210  Edge: +0.025  n=11
+```
 
 ---
 
-## Part 4: Statistical Methodology
+## Part 5: Statistical Methodology
 
 ### Significance Testing
 
@@ -357,12 +529,12 @@ Questions from the same time period or category may be correlated (e.g., all cry
 
 **Mitigation:**
 - **Cluster bootstrap:** Resample by time-period clusters rather than individual questions.
-- **Stratified eval set:** Ensure the eval set is balanced across categories and time periods, so no single cluster dominates.
+- **Stratified eval set:** Ensure the eval set is balanced across categories, time periods, and platforms, so no single cluster dominates.
 - **Report per-stratum results:** If a tool "improves" overall but only because it got better at one category, that's less convincing than broad improvement.
 
 ---
 
-## Part 5: Benchmark Runner
+## Part 6: Benchmark Runner
 
 ### Runner: Direct Tool Invocation
 
@@ -388,24 +560,41 @@ def run_benchmark(
 
             t0 = time.time()
             result = run_tool(**kwargs)
+            latency_ms = int((time.time() - t0) * 1000)
+
+            # Classify parse status
+            parse_status = classify_parse_status(result)
+
             results.append({
+                "row_id": generate_row_id(),
+                "schema_version": "1.0",
+                "mode": mode,
                 "question_id": q["id"],
-                "tool": tool, "model": model,
-                "p_yes": result["p_yes"],
-                "ground_truth": q["resolution"],
-                "market_prob": q.get("market_prob_at_prediction"),
+                "market_id": q.get("market_id"),
+                "platform": q.get("platform"),
+                "question_text": q["question"],
+                "tool_name": tool,
+                "model": model,
+                "prompt_template": prompt_template,
+                "p_yes": result.get("p_yes"),
+                "p_no": result.get("p_no"),
+                "prediction_parse_status": parse_status,
+                "final_outcome": q.get("resolution"),
+                "market_prob_at_prediction": q.get("market_prob_at_prediction"),
                 "predicted_at": datetime.utcnow().isoformat(),
-                "time_horizon_days": q.get("time_horizon_days"),
+                "prediction_lead_time_days": q.get("prediction_lead_time_days"),
                 "category": q.get("category"),
-                "latency_s": time.time() - t0,
-                "tokens_in": counter.input_tokens,
-                "tokens_out": counter.output_tokens,
+                "latency_ms": latency_ms,
+                "input_tokens": counter.input_tokens,
+                "output_tokens": counter.output_tokens,
                 "cost_usd": counter.total_cost,
             })
     return BenchmarkResult(results)
 ```
 
 Reuses the exact `run()` functions and `KeyChain` from the existing codebase — no mocking, no abstraction layer.
+
+**Tool compatibility note:** Not all current tools accept `source_links` or equivalent kwargs for evidence injection. Tools that lack this interface cannot participate in cached replay mode. The runner must validate tool compatibility per mode and report which tools were skipped and why.
 
 ### Tournament Runner
 
@@ -447,11 +636,11 @@ The tournament produces both temporally clean predictions *and* content snapshot
 $ python benchmark/compare.py results/baseline.json results/candidate.json
 
                         baseline  candidate  delta      95% CI          p-value
+Reliability             94.1%     96.8%     +2.7%  ↑
 Brier score             0.231     0.198     -0.033 ↓   [-0.052, -0.014] 0.003 *
 Edge over market        0.018     0.044     +0.026 ↑   [+0.008, +0.044] 0.008 *
 Calibration (ECE)       0.089     0.064     -0.025 ↓   [-0.041, -0.009] 0.011 *
 Discrimination (AUC)    0.72      0.76      +0.04  ↑
-Resolution rate         94.1%     96.8%     +2.7%  ↑
 Sharpness               0.18      0.22      +0.04  ↑
 Avg cost/question       $0.042    $0.038    -$0.004
 Avg latency (s)         12.3      11.8      -0.5
@@ -461,11 +650,17 @@ Per-tool breakdown (Brier / Edge):
   superforcaster        0.218/+0.021  0.189/+0.049  -0.029/-  +0.028 ↑
   prediction-rag        0.229/+0.020  0.194/+0.045  -0.035/-  +0.025 ↑
 
+By platform:
+  polymarket            0.221     0.189     -0.032
+  omen                  0.245     0.212     -0.033
+
 By time horizon:
   Short (<7d):          0.178     0.149     -0.029
   Medium (7-30d):       0.234     0.201     -0.033
   Long (>30d):          0.278     0.243     -0.035
 
+Eligibility: n_total=200, n_eligible=194, n_excluded=6
+  excluded: 3 timeout, 2 malformed, 1 no_market_prob
 Generalization check:
   Dev set Brier:        0.191     (gap from eval: 0.007 — OK)
 
@@ -474,7 +669,7 @@ N=200 questions, paired bootstrap 10k resamples, * = p<0.05
 
 ---
 
-## Part 6: Automated Tool Improvement (The Search)
+## Part 7: Automated Tool Improvement (The Search)
 
 Instead of manually tweaking tools, we systematically search the space of possible improvements. Each level of search is increasingly powerful but also more expensive.
 
@@ -629,7 +824,87 @@ Note on **extremization**: When multiple tools share the same information source
 
 ---
 
-## Part 7: Promotion Pipeline — Local Win to Production
+## Part 8: Ablation Policy
+
+For every promotion candidate, ablation testing is mandatory. The purpose is to understand *why* a tool performs better — not just *that* it does. Without ablation, we risk promoting complexity that adds no value or masks regressions in specific components.
+
+### Required Ablations
+
+Run the full candidate system and each ablation on the same data slice:
+
+| Ablation | What it tests |
+|----------|--------------|
+| No retrieval/live search | Is the tool's value coming from web search or from LLM reasoning? |
+| No base-rate module | Does base-rate awareness help? |
+| No calibration layer | Does post-hoc calibration add value? |
+| No post-processing/shrinkage | Is confidence shrinkage contributing? |
+| No ensemble/routing | Is the ensemble better than its best individual tool? |
+| No category-specific rules | Are category-specific strategies helping or overfitting? |
+
+### Ablation Report
+
+For each ablation, report delta vs full candidate across:
+- Reliability
+- Edge over market
+- Brier score
+- Calibration (ECE)
+- PnL (both tiers)
+
+### Promotion Rules Based on Ablation
+
+- If removing a component does **not hurt** any primary metric → component is non-essential complexity. Remove it.
+- If removing a component **improves** primary metrics → component is harmful. Remove it.
+- No major architecture change is trusted without ablation survival.
+
+---
+
+## Part 9: Human-in-the-Loop Review
+
+Automated metrics are necessary but not sufficient. Before any promotion, mandatory human review must be completed.
+
+### Review Set (Generated by `review.py`)
+
+After each benchmark run or canary cycle, generate a structured review set:
+
+- Top 10 losses (highest Brier score per question)
+- Top 10 wins (lowest Brier score per question where tool disagreed with market)
+- Largest market disagreements (where tool and market diverged most)
+- All invalid/malformed outputs
+- All low-confidence market/outcome matches (`match_confidence` below threshold)
+
+### Cause Taxonomy
+
+Each reviewed case must be labeled with a root cause:
+
+| Cause | Description |
+|-------|-------------|
+| `reasoning_error` | Tool had correct information but drew wrong conclusion |
+| `missing_bad_evidence` | Tool lacked or had incorrect source material |
+| `market_snapshot_error` | Market probability at prediction time was wrong or stale |
+| `resolution_ambiguity` | Market resolution was ambiguous or disputed |
+| `formatting_parse_failure` | Tool produced output that couldn't be parsed |
+| `execution_timing_issue` | Prediction timing relative to market was problematic |
+| `leakage_matching_issue` | Temporal leakage or incorrect question-market matching |
+
+### Feedback Loop
+
+Review artifacts feed back into:
+- **Hard set refresh** — cases with `reasoning_error` or `missing_bad_evidence` become hard set candidates
+- **Data quality fixes** — cases with `market_snapshot_error` or `leakage_matching_issue` trigger data pipeline fixes
+- **Search constraints** — failure patterns inform what the automated search should target
+- **Ablation priorities** — which components to ablate based on observed failure modes
+
+### Review Outcomes
+
+Each reviewed tool/configuration is classified as one of:
+- **Good** — passes all checks, suitable for production use
+- **Good for specific tests** — passes for certain categories/horizons but not others
+- **Needs fix** — reliability or data quality issues must be addressed first
+- **Promotion candidate** — passes all gates, ready for canary deployment
+
+---
+
+## Part 10: Promotion Pipeline — Local Win to Production
 
 ### Step 1: Local Validation (Automated)
 
@@ -641,29 +916,41 @@ python benchmark/runner.py --config candidate.yaml --dataset eval_set.jsonl --mo
 python benchmark/compare.py results/prod_baseline.json results/candidate_eval.json
 
 # Promotion gates:
-#   1. Edge over market must be positive (tool adds value beyond market consensus)
-#   2. Brier improvement over baseline must be significant (bootstrap p < 0.05)
-#   3. Resolution rate must not regress
-#   4. Cost must not increase by more than 2x
-#   5. No stratum regression: tool must not get worse in ANY category/horizon bucket by > 1 SD
+#   1. Reliability gate: ≥80% valid outputs (hard gate)
+#   2. Edge over market must be positive (tool adds value beyond market consensus)
+#   3. Brier improvement over baseline must be significant (bootstrap p < 0.05)
+#   4. Resolution rate must not regress
+#   5. Cost must not increase by more than 2x
+#   6. No stratum regression: tool must not get worse in ANY category/horizon/platform
+#      bucket by > 1 SD
 ```
 
-Gate 5 is important: a tool that improves overall by 0.03 Brier but gets catastrophically worse on crypto questions (because the search compensated by overfitting to politics) is not a safe promotion.
+Gate 6 is important: a tool that improves overall by 0.03 Brier but gets catastrophically worse on crypto questions (because the search compensated by overfitting to politics) is not a safe promotion.
 
-### Step 2: Tournament Validation (if time allows)
+### Step 2: Ablation Validation (Mandatory)
+
+Run ablation tests (see Part 8). All components of the candidate must demonstrate positive contribution. Non-essential complexity must be removed before promotion.
+
+### Step 3: Human Review (Mandatory)
+
+Complete the human review process (see Part 9). Review must be documented with cause taxonomy labels. Tool must be classified as "Promotion candidate" before proceeding.
+
+### Step 4: Tournament Validation (if time allows)
 
 Before canary deployment, enter the candidate in the forward-looking tournament for 2-4 weeks. This gives temporally clean out-of-sample results on never-before-seen questions.
 
-### Step 3: Canary Deployment
+### Step 5: Canary Deployment
 
 The mech supports multiple tools via `TOOLS_TO_PACKAGE_HASH`. To canary:
 
 1. **Register the improved tool** as a new IPFS package (e.g., `prediction-online-v2`)
 2. **Update `TOOLS_TO_PACKAGE_HASH`** to include both old and new tool
 3. **Configure the trader** to route a percentage (e.g., 10-20%) of predictions to the new tool
-4. **Monitor production metrics** via `fetch_production.py` for 2-4 weeks
+4. **Canary routing must be randomized** by request/market unit — not sequential or by category
+5. **Predefine minimum resolved sample** before any promotion decision (minimum 30 resolved markets)
+6. **Monitor production metrics** via `fetch_production.py` for 2-4 weeks
 
-### Step 4: Production Monitoring
+### Step 6: Production Monitoring
 
 ```
 Tool: prediction-online-v2 (canary, 2 weeks)
@@ -675,6 +962,10 @@ Tool: prediction-online-v2 (canary, 2 weeks)
   Avg cost:            $0.041
   Trader PnL impact:   +$142 vs counterfactual (estimated)
 
+  By platform:
+    polymarket:  +0.045 edge (n=19)
+    omen:        +0.035 edge (n=12)
+
   By category:
     crypto:    +0.052 edge (n=12)
     politics:  +0.031 edge (n=11)
@@ -684,24 +975,37 @@ Tool: prediction-online-v2 (canary, 2 weeks)
              Consider extending canary for higher confidence.
 ```
 
-### Step 5: Full Rollout or Rollback
+### Step 7: Full Rollout or Rollback
 
-If the canary shows improvement after sufficient resolved markets:
+**Fixed decision rules (defined ex-ante):**
+- Edge > 0 and better than baseline with CI support
+- No reliability regression
+- No severe stratum collapse (any platform/category/horizon bucket)
+- Bounded cost increase (< 2x)
+
+**If canary passes:**
 - **Promote:** Update production config to use new version
-- **Archive:** Old version's results become the new baseline
+- **Archive:** Old version's results become the new baseline, config hash frozen as rollback target
+- **Publish accuracy:** Upload tool accuracy hash to IPFS for traders (see Part 12)
 - **Feed back:** Production data from the new tool feeds into the next benchmark cycle
 
-If the canary underperforms:
-- **Rollback:** Remove from routing
+**If canary underperforms:**
+- **Rollback:** Remove from routing, revert to old version (kept with frozen config hash)
 - **Analyze:** Why did benchmark improvement not transfer to production?
   - Distribution shift (different question types in production vs benchmark?)
   - Temporal effects (tool relied on patterns that shifted?)
   - Selection bias (benchmark had different difficulty distribution?)
+  - Platform effects (canary ran on different Omen/Polymarket mix than benchmark?)
 - **Update benchmark:** Add failing cases to the hard set, adjust dataset composition
+
+**Automatic rollback conditions (defined ex-ante):**
+- Reliability drops below 80%
+- Edge turns negative with >20 resolved markets
+- Any single stratum collapses by >2 SD vs baseline
 
 ---
 
-## Part 8: The Full Cadence
+## Part 11: The Full Cadence
 
 ```
 Continuous:
@@ -717,19 +1021,48 @@ Monthly:
   - Full benchmark run against all tools (production replay mode)
   - Parameter sweep on dev set (Level 1)
   - Update hard set from worst performers
-  - Publish accuracy report with stratified analysis
+  - Publish accuracy report with stratified analysis (per-platform, per-category, etc.)
 
 Quarterly:
   - Prompt evolution search (Level 2)
   - Tool code modification search (Level 3)
   - Ensemble exploration (Level 4)
   - Refresh eval set with recent tournament predictions
-  - Promote best candidate through validation → tournament → canary pipeline
+  - Promote best candidate through validation → ablation → human review → tournament → canary
 ```
 
 ---
 
-## Part 9: Usage
+## Part 12: Additional Capabilities
+
+### Resolve Market Reasoning Tool
+
+The benchmark system should also be used to evaluate and improve the **resolve market reasoning tool** — the tool that determines whether a market has resolved and what the outcome is. Incorrect resolution reasoning leads to wrong ground truth labels, which corrupt the entire benchmark.
+
+**Approach:**
+- Maintain a curated set of markets with known, human-verified resolutions
+- Benchmark the resolve tool against this set separately
+- Track resolution accuracy, ambiguous-case handling, and edge cases
+- Improvements to the resolve tool should go through the same promotion pipeline
+
+### IPFS Accuracy Publication
+
+Traders need access to tool accuracy metrics to make informed routing decisions. After each promotion or monthly accuracy report:
+
+1. `publish.py` generates a structured accuracy report (JSON) with per-tool, per-platform, per-category metrics
+2. Upload to IPFS and record the hash
+3. Update the tool's metadata to reference the accuracy hash
+4. Traders can fetch and verify tool accuracy before routing requests
+
+```bash
+# Publish accuracy report to IPFS
+python benchmark/publish.py --results results/monthly_report.json --output-hash
+# Returns: QmXyz... (IPFS hash for trader consumption)
+```
+
+---
+
+## Part 13: Usage
 
 ### Quick Start
 
@@ -751,11 +1084,20 @@ python benchmark/search.py --mode prompts --generations 5 --dataset dev_set.json
 python benchmark/runner.py --config best_candidate.yaml --dataset eval_set.jsonl --mode cached_replay
 python benchmark/compare.py results/baseline.json results/best_candidate.json
 
-# 6. Enter tournament for out-of-sample validation
+# 6. Run ablation tests
+python benchmark/ablation.py --candidate best_candidate.yaml --dataset eval_set.jsonl
+
+# 7. Generate human review set
+python benchmark/review.py --results results/best_candidate.json --output review_set/
+
+# 8. Enter tournament for out-of-sample validation
 python benchmark/tournament.py --config best_candidate.yaml
 
-# 7. After tournament results look good, promote to canary
+# 9. After tournament results look good + human review complete, promote to canary
 python benchmark/promote.py --candidate best_candidate.yaml --canary-pct 10
+
+# 10. Publish accuracy to IPFS for traders
+python benchmark/publish.py --results results/monthly_report.json
 ```
 
 ### CI Integration
@@ -776,31 +1118,37 @@ python benchmark/promote.py --candidate best_candidate.yaml --canary-pct 10
 |---|---|
 | Autocast academic dataset (2022) | Real Polymarket/Omen markets + production data |
 | No temporal controls | Three modes: production replay, tournament, cached replay |
-| Binary accuracy only | Brier, edge over market, calibration, discrimination, log loss, sharpness, PnL |
+| Binary accuracy only | Staged pipeline: reliability → edge → Brier → calibration → PnL |
 | No market price comparison | Edge over market as primary metric |
 | Single prompt template | Automated prompt evolution via LLM |
 | No parameter variation | Grid search over models, temps, num_urls, queries |
 | No tool improvement | Automated code modification + ensemble search |
 | Live web search on resolved markets | Temporally controlled: cached content or pre-resolution predictions |
-| No stratified analysis | Breakdown by time horizon, category, difficulty, market efficiency |
+| No stratified analysis | Breakdown by platform, time horizon, category, difficulty, provenance |
 | No statistical rigor | Paired bootstrap, multiple comparison correction, minimum detectable effect |
 | One-shot run | Continuous tournament + improvement loop with production feedback |
-| No deployment pipeline | Tournament validation → canary deployment → statistical monitoring |
+| No deployment pipeline | Ablation → human review → tournament → canary → statistical monitoring |
 | Separate repo with git submodule | In-repo, directly imports tools |
 | No production feedback | Production outcomes feed back into benchmark dataset |
+| No data quality tracking | Versioned schema, completeness flags, provenance grades, eligibility matrix |
+| No ablation testing | Mandatory component ablation before promotion |
+| No human review | Structured review with cause taxonomy feeding back into system |
+| No accuracy publication | IPFS-published accuracy hashes for trader consumption |
+| No platform-specific analysis | Per-platform (Omen vs Polymarket) metrics and evaluation |
 
 ## Implementation Plan
 
 1. **Phase 1 — Foundation** (~3 days)
+   - Row schema definition with validation
    - `fetch_resolved.py` for Polymarket API + Omen subgraph
-   - `runner.py` with cached replay mode
-   - `scorer.py` with Brier score, edge over market, calibration, stratified analysis
-   - `compare.py` with paired bootstrap significance testing
+   - `runner.py` with cached replay mode (with tool compatibility checking)
+   - `scorer.py` with staged pipeline: reliability gate → edge → Brier → calibration → stratified analysis (including per-platform)
+   - `compare.py` with paired bootstrap significance testing and eligibility reporting
 
 2. **Phase 2 — Production Flywheel** (~3 days)
-   - `fetch_production.py` — index on-chain Request/Deliver events, match to resolved markets, record market prices at prediction time
+   - `fetch_production.py` — index on-chain Request/Deliver events, match to resolved markets, record market prices + liquidity at prediction time, assign provenance grades
    - Production replay mode in runner
-   - Dataset split management (eval/dev/hard) with stratified balancing
+   - Dataset split management (eval/dev/hard) with stratified balancing across categories and platforms
 
 3. **Phase 3 — Tournament** (~2 days)
    - `fetch_open.py` for currently open markets
@@ -812,12 +1160,22 @@ python benchmark/promote.py --candidate best_candidate.yaml --canary-pct 10
    - `search.py` — prompt evolution with generalization gap tracking
    - Ensemble testing framework
 
-5. **Phase 5 — Promotion Pipeline** (~2 days)
-   - `promote.py` — generate new tool package, update configs
-   - Production monitoring integration
+5. **Phase 5 — Validation & Promotion Pipeline** (~3 days)
+   - `ablation.py` — component ablation testing framework
+   - `review.py` — human review set generation with cause taxonomy
+   - `promote.py` — generate new tool package, update configs, with all gates
+   - `publish.py` — IPFS accuracy hash publication for traders
+   - Production monitoring integration with automatic rollback conditions
    - Canary rollback logic, stratum regression checks
 
-6. **Phase 6 — Tool Code Search** (ongoing)
+6. **Phase 6 — Tool Code Search & Resolve Tool** (ongoing)
    - Level 3 code modification search
    - Failure analysis with stratified breakdown
    - Automated PR generation for winning variants
+   - Resolve market reasoning tool benchmark pipeline
+
+### Open Questions
+
+1. **Tool input compatibility:** Not all tools accept `source_links` for evidence injection. Need to audit current tools and decide whether to add this interface to all tools or accept that some tools are tournament/production-only.
+2. **Market metadata at prediction time (trader-side):** The trader must be updated to embed market context (market ID, platform, probability, liquidity, volume, spread) in the mech request payload. This is a trader repo change, not a mech/tool change. The data lands on IPFS as part of the request and is available for benchmark analysis without reconstruction. This is a prerequisite for edge and PnL analysis on production data.
+3. **Built-in LLM search tools:** If/when tools using models with native web search are added, they cannot participate in cached replay. The benchmark must gracefully handle mixed-mode evaluation where some tools run in tournament mode and others in cached replay.
