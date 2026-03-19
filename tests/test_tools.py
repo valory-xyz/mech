@@ -60,6 +60,9 @@ PREDICTION_URL_COT_CONFIG = str(
 DALLE_REQUEST_CONFIG = str(
     PACKAGES_DIR / "victorpolisetty/customs/dalle_request/component.yaml"
 )
+SUPERFORCASTER_CONFIG = str(
+    PACKAGES_DIR / "valory/customs/superforcaster/component.yaml"
+)
 
 # Module paths
 PREDICTION_REQUEST_MODULE = "packages.valory.customs.prediction_request.prediction_request"
@@ -67,6 +70,7 @@ PREDICTION_REQUEST_RAG_MODULE = "packages.napthaai.customs.prediction_request_ra
 PREDICTION_REQUEST_REASONING_MODULE = "packages.napthaai.customs.prediction_request_reasoning.prediction_request_reasoning"
 PREDICTION_URL_COT_MODULE = "packages.napthaai.customs.prediction_url_cot.prediction_url_cot"
 DALLE_REQUEST_MODULE = "packages.victorpolisetty.customs.dalle_request.dalle_request"
+SUPERFORCASTER_MODULE = "packages.valory.customs.superforcaster.superforcaster"
 
 # Prompts
 PREDICTION_PROMPT = (
@@ -166,3 +170,11 @@ class TestDALLEGeneration(BaseIsolatedToolTest):
     module_path = DALLE_REQUEST_MODULE
     prompts = [DALLE_PROMPT]
     validate_prediction = False
+
+
+class TestSuperforcaster(BaseIsolatedToolTest):
+    """Test Superforcaster."""
+
+    component_yaml = SUPERFORCASTER_CONFIG
+    module_path = SUPERFORCASTER_MODULE
+    prompts = [PREDICTION_PROMPT]
