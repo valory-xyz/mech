@@ -138,6 +138,10 @@ dependencies:
     version: ==2.9.0
   readability-lxml:
     version: ==0.8.1
+  lxml_html_clean:
+    version: ==0.4.4
+  requests:
+    version: ==2.32.5
   replicate:
     version: ==0.15.7
   tavily-python:
@@ -148,6 +152,8 @@ dependencies:
     version: ==0.9.4
   google-generativeai:
     version: ==0.8.6
+  openai:
+    version: ==1.30.2
   openfactverification-kongzii:
     version: ==0.1.0
   httpx:

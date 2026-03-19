@@ -18,11 +18,16 @@ dependencies:
     version: ==2.95.0
   googlesearch-python:
     version: ==1.2.3
-  requests: {}
+  requests:
+    version: ==2.32.5
+  httpx:
+    version: ==0.25.2
   markdownify:
     version: ==0.11.6
   readability-lxml:
     version: ==0.8.1
+  lxml_html_clean:
+    version: ==0.4.4
   openai:
     version: ==1.30.2
   tiktoken:
@@ -38,4 +43,4 @@ dependencies:
   docstring-parser:
     version: ==0.15
   anthropic:
-    version: ==0.21.3
+    version: ==0.23.1

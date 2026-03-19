@@ -14,8 +14,11 @@ callable: run
 dependencies:
   openai:
     version: ==1.30.2
-  requests: {}
+  requests:
+    version: ==2.32.5
+  httpx:
+    version: ==0.25.2
   anthropic:
-    version: ==0.21.3
+    version: ==0.23.1
   google-api-python-client:
     version: ==2.95.0

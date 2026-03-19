@@ -15,7 +15,10 @@ callable: run
 params:
   default_model: gpt-4o-2024-08-06
 dependencies:
-  requests: {}
+  requests:
+    version: ==2.32.5
+  httpx:
+    version: ==0.25.2
   google-api-python-client:
     version: ==2.95.0
   googlesearch-python:
@@ -24,9 +27,11 @@ dependencies:
     version: ==0.12.0
   readability-lxml:
     version: ==0.8.1
+  lxml_html_clean:
+    version: ==0.4.4
   markdownify:
     version: ==0.11.6
   openai:
     version: ==1.30.2
   anthropic:
-    version: ==0.21.3
+    version: ==0.23.1
