@@ -43,34 +43,34 @@ from tests.shared_constants import (
 )
 
 PACKAGES_DIR = Path(__file__).parent.parent / "packages"
+COMPONENT_YAML_FILENAME = "component.yaml"
+
+
+def _component_config(relative_path: str) -> str:
+    """Build the full path to a component.yaml from a relative package path."""
+    return str(PACKAGES_DIR / relative_path / COMPONENT_YAML_FILENAME)
+
+
+def _module_path_from_config(component_yaml: str) -> str:
+    """Derive the Python module path from a component.yaml path.
+
+    e.g. '.../packages/valory/customs/prediction_request/component.yaml'
+      -> 'packages.valory.customs.prediction_request.prediction_request'
+    """
+    component_dir = Path(component_yaml).parent
+    module_name = component_dir.name
+    packages_idx = component_dir.parts.index("packages")
+    package_parts = component_dir.parts[packages_idx:]
+    return ".".join((*package_parts, module_name))
+
 
 # Component configs (component.yaml paths)
-PREDICTION_REQUEST_CONFIG = str(
-    PACKAGES_DIR / "valory/customs/prediction_request/component.yaml"
-)
-PREDICTION_REQUEST_RAG_CONFIG = str(
-    PACKAGES_DIR / "napthaai/customs/prediction_request_rag/component.yaml"
-)
-PREDICTION_REQUEST_REASONING_CONFIG = str(
-    PACKAGES_DIR / "napthaai/customs/prediction_request_reasoning/component.yaml"
-)
-PREDICTION_URL_COT_CONFIG = str(
-    PACKAGES_DIR / "napthaai/customs/prediction_url_cot/component.yaml"
-)
-DALLE_REQUEST_CONFIG = str(
-    PACKAGES_DIR / "victorpolisetty/customs/dalle_request/component.yaml"
-)
-SUPERFORCASTER_CONFIG = str(
-    PACKAGES_DIR / "valory/customs/superforcaster/component.yaml"
-)
-
-# Module paths
-PREDICTION_REQUEST_MODULE = "packages.valory.customs.prediction_request.prediction_request"
-PREDICTION_REQUEST_RAG_MODULE = "packages.napthaai.customs.prediction_request_rag.prediction_request_rag"
-PREDICTION_REQUEST_REASONING_MODULE = "packages.napthaai.customs.prediction_request_reasoning.prediction_request_reasoning"
-PREDICTION_URL_COT_MODULE = "packages.napthaai.customs.prediction_url_cot.prediction_url_cot"
-DALLE_REQUEST_MODULE = "packages.victorpolisetty.customs.dalle_request.dalle_request"
-SUPERFORCASTER_MODULE = "packages.valory.customs.superforcaster.superforcaster"
+PREDICTION_REQUEST_CONFIG = _component_config("valory/customs/prediction_request")
+PREDICTION_REQUEST_RAG_CONFIG = _component_config("napthaai/customs/prediction_request_rag")
+PREDICTION_REQUEST_REASONING_CONFIG = _component_config("napthaai/customs/prediction_request_reasoning")
+PREDICTION_URL_COT_CONFIG = _component_config("napthaai/customs/prediction_url_cot")
+DALLE_REQUEST_CONFIG = _component_config("victorpolisetty/customs/dalle_request")
+SUPERFORCASTER_CONFIG = _component_config("valory/customs/superforcaster")
 
 # Prompts
 PREDICTION_PROMPT = (
@@ -114,7 +114,6 @@ class BaseIsolatedToolTest:
     """Base class for tool tests that run in isolated component.yaml venvs."""
 
     component_yaml: str
-    module_path: str
     prompts: list
     callable_name: str = DEFAULT_CALLABLE
     validate_prediction: bool = True
@@ -123,7 +122,7 @@ class BaseIsolatedToolTest:
         """Run the tool in an isolated venv and validate results."""
         output = run_tool_in_isolated_venv(
             component_yaml=self.component_yaml,
-            module_path=self.module_path,
+            module_path=_module_path_from_config(self.component_yaml),
             prompts=self.prompts,
             callable_name=self.callable_name,
             validate_prediction=self.validate_prediction,
@@ -135,7 +134,6 @@ class TestPredictionOnline(BaseIsolatedToolTest):
     """Test Prediction Online."""
 
     component_yaml = PREDICTION_REQUEST_CONFIG
-    module_path = PREDICTION_REQUEST_MODULE
     prompts = [PREDICTION_PROMPT]
 
 
@@ -143,7 +141,6 @@ class TestPredictionRAG(BaseIsolatedToolTest):
     """Test Prediction RAG."""
 
     component_yaml = PREDICTION_REQUEST_RAG_CONFIG
-    module_path = PREDICTION_REQUEST_RAG_MODULE
     prompts = [PREDICTION_RAG_PROMPT]
 
 
@@ -151,7 +148,6 @@ class TestPredictionReasoning(BaseIsolatedToolTest):
     """Test Prediction Reasoning."""
 
     component_yaml = PREDICTION_REQUEST_REASONING_CONFIG
-    module_path = PREDICTION_REQUEST_REASONING_MODULE
     prompts = [PREDICTION_PROMPT]
 
 
@@ -159,7 +155,6 @@ class TestPredictionCOT(BaseIsolatedToolTest):
     """Test Prediction COT."""
 
     component_yaml = PREDICTION_URL_COT_CONFIG
-    module_path = PREDICTION_URL_COT_MODULE
     prompts = [PREDICTION_PROMPT]
 
 
@@ -167,7 +162,6 @@ class TestDALLEGeneration(BaseIsolatedToolTest):
     """Test DALL-E Generation."""
 
     component_yaml = DALLE_REQUEST_CONFIG
-    module_path = DALLE_REQUEST_MODULE
     prompts = [DALLE_PROMPT]
     validate_prediction = False
 
@@ -176,5 +170,4 @@ class TestSuperforcaster(BaseIsolatedToolTest):
     """Test Superforcaster."""
 
     component_yaml = SUPERFORCASTER_CONFIG
-    module_path = SUPERFORCASTER_MODULE
     prompts = [PREDICTION_PROMPT]
