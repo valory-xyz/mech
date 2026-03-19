@@ -269,13 +269,8 @@ LLM_SETTINGS = {
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
-    "claude-3-opus-20240229": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "claude-3-5-sonnet-20240620": {
-        "default_max_tokens": 1000,
+    "claude-4-sonnet-20250514": {
+        "default_max_tokens": 4096,
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
@@ -409,10 +404,10 @@ def multi_queries(
     model: str,
     num_queries: int,
     counter_callback: Optional[Callable] = None,
-    temperature: Optional[float] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
+    temperature: Optional[float] = LLM_SETTINGS["claude-4-sonnet-20250514"][
         "temperature"
     ],
-    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-4-sonnet-20250514"][
         "default_max_tokens"
     ],
 ) -> Tuple[List[str], Optional[Callable]]:
@@ -772,10 +767,10 @@ def fetch_additional_information(
     source_links: Optional[Dict] = None,
     num_urls: Optional[int] = NUM_URLS_PER_QUERY,
     num_queries: int = NUM_QUERIES,
-    temperature: Optional[float] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
+    temperature: Optional[float] = LLM_SETTINGS["claude-4-sonnet-20250514"][
         "temperature"
     ],
-    max_tokens: Optional[int] = LLM_SETTINGS["claude-3-5-sonnet-20240620"][
+    max_tokens: Optional[int] = LLM_SETTINGS["claude-4-sonnet-20250514"][
         "default_max_tokens"
     ],
     n_docs: int = N_DOCS,
@@ -899,7 +894,7 @@ def run(
     if model is None:
         raise ValueError("Model must be specified in kwargs")
     if "claude" in tool:  # maintain backwards compatibility
-        model = "claude-3-5-sonnet-20240620"
+        model = "claude-4-sonnet-20250514"
     print(f"MODEL for prediction url cot: {model}")
     with LLMClientManager(kwargs["api_keys"], model, embedding_provider):
         user_prompt = extract_question(kwargs["prompt"])

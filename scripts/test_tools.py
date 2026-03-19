@@ -83,7 +83,7 @@ TOOLS_TO_TEST = [
 ]
 
 MODEL_GPT = "gpt-4.1-2025-04-14"
-MODEL_CLAUDE = "claude-3-5-sonnet-20240620"
+MODEL_CLAUDE = "claude-4-sonnet-20250514"
 
 MARKETS = [
     """Will any women's football club publicly announce, before or on August 27, 2025, the signing of a player for a transfer fee exceeding £1.1 million?""",
