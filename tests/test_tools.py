@@ -17,152 +17,152 @@
 #
 # ------------------------------------------------------------------------------
 
-"""This module contains tool tests."""
+"""Tool tests running in isolated venvs matching production component.yaml dependencies.
 
-from typing import List, Any
+Each test class specifies a component.yaml and module path.  The test creates
+(or reuses) a virtual environment with exactly the dependencies declared in
+the component.yaml, then runs the tool inside that environment as a subprocess.
+This ensures tests exercise the same dependency versions as production.
+"""
 
-from packages.victorpolisetty.customs.dalle_request import dalle_request
-from packages.napthaai.customs.prediction_request_rag import prediction_request_rag
-from packages.napthaai.customs.prediction_request_reasoning import (
-    prediction_request_reasoning,
-)
-from packages.napthaai.customs.prediction_url_cot import prediction_url_cot
-from packages.valory.customs.prediction_request import prediction_request
-from packages.valory.skills.task_execution.utils.apis import KeyChain
-from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
-from tests.constants import (
-    OPENAI_SECRET_KEY,
-    STABILITY_API_KEY,
-    GOOGLE_API_KEY,
-    GOOGLE_ENGINE_ID,
-    CLAUDE_API_KEY,
-    REPLICATE_API_KEY,
-    NEWS_API_KEY,
-    OPENROUTER_API_KEY,
-    GNOSIS_RPC_URL,
-    GEMINI_API_KEY,
-    SERPER_API_KEY,
+from pathlib import Path
+from typing import Any, Dict, List
+
+import pytest
+
+from tests.conftest import run_tool_in_isolated_venv
+from tests.shared_constants import (
+    DEFAULT_CALLABLE,
+    DELIVER_MSG_PREVIEW_LENGTH,
+    RESULT_KEY_DELIVER_MSG,
+    RESULT_KEY_ERRORS,
+    RESULT_KEY_MODEL,
+    RESULT_KEY_RESULTS,
+    RESULT_KEY_SUCCESS,
+    RESULT_KEY_TOOL,
 )
 
+PACKAGES_DIR = Path(__file__).parent.parent / "packages"
 
-class BaseToolTest:
-    """Base tool test class."""
+# Component configs (component.yaml paths)
+PREDICTION_REQUEST_CONFIG = str(
+    PACKAGES_DIR / "valory/customs/prediction_request/component.yaml"
+)
+PREDICTION_REQUEST_RAG_CONFIG = str(
+    PACKAGES_DIR / "napthaai/customs/prediction_request_rag/component.yaml"
+)
+PREDICTION_REQUEST_REASONING_CONFIG = str(
+    PACKAGES_DIR / "napthaai/customs/prediction_request_reasoning/component.yaml"
+)
+PREDICTION_URL_COT_CONFIG = str(
+    PACKAGES_DIR / "napthaai/customs/prediction_url_cot/component.yaml"
+)
+DALLE_REQUEST_CONFIG = str(
+    PACKAGES_DIR / "victorpolisetty/customs/dalle_request/component.yaml"
+)
 
-    keys = KeyChain(
-        {
-            "openai": [OPENAI_SECRET_KEY],
-            "stabilityai": [STABILITY_API_KEY],
-            "google_api_key": [GOOGLE_API_KEY],
-            "google_engine_id": [GOOGLE_ENGINE_ID],
-            "anthropic": [CLAUDE_API_KEY],
-            "replicate": [REPLICATE_API_KEY],
-            "newsapi": [NEWS_API_KEY],
-            "openrouter": [OPENROUTER_API_KEY],
-            "gnosis_rpc_url": [GNOSIS_RPC_URL],
-            "gemini": [GEMINI_API_KEY],
-            "serperapi": [SERPER_API_KEY],
-        }
+# Module paths
+PREDICTION_REQUEST_MODULE = "packages.valory.customs.prediction_request.prediction_request"
+PREDICTION_REQUEST_RAG_MODULE = "packages.napthaai.customs.prediction_request_rag.prediction_request_rag"
+PREDICTION_REQUEST_REASONING_MODULE = "packages.napthaai.customs.prediction_request_reasoning.prediction_request_reasoning"
+PREDICTION_URL_COT_MODULE = "packages.napthaai.customs.prediction_url_cot.prediction_url_cot"
+DALLE_REQUEST_MODULE = "packages.victorpolisetty.customs.dalle_request.dalle_request"
+
+# Prompts
+PREDICTION_PROMPT = (
+    'Please take over the role of a Data Scientist to evaluate the given question. '
+    'With the given question "Will Apple release iPhone 17 by March 2025?" '
+    'and the `yes` option represented by `Yes` and the `no` option represented by `No`, '
+    "what are the respective probabilities of `p_yes` and `p_no` occurring?"
+)
+PREDICTION_RAG_PROMPT = (
+    'With the given question "Will FIFA publicly announce, on or before March 17, 2026, '
+    "the official withdrawal or disqualification of Iran's men's national soccer team "
+    "from the 2026 World Cup, as confirmed by an official FIFA statement or major news "
+    'outlet?" and the `yes` option represented by `Yes` and the `no` option represented '
+    "by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?"
+)
+DALLE_PROMPT = "Generate an image of a futuristic cityscape."
+
+
+def _format_failure(failure: Dict[str, Any]) -> str:
+    """Format a single test failure into a readable string."""
+    deliver_msg = failure.get(RESULT_KEY_DELIVER_MSG, "")[:DELIVER_MSG_PREVIEW_LENGTH]
+    errors = "; ".join(failure[RESULT_KEY_ERRORS])
+    return (
+        f"  model={failure[RESULT_KEY_MODEL]}, tool={failure[RESULT_KEY_TOOL]}:\n"
+        f"    errors: {errors}\n"
+        f"    deliver_msg: {deliver_msg}"
     )
-    models: List = [None]
-    tools: List[str]
-    prompts: List[str]
-    tool_module: Any = None
-    tool_callable: str = "run"
 
-    def _validate_response(self, response: Any) -> None:
-        """Validate response."""
-        assert isinstance(response, tuple), "Response of the tool must be a tuple."
-        assert len(response) == 5, "Response must have 5 elements."
-        deliver_msg = response[0]
-        assert isinstance(deliver_msg, str), "Response[0] must be a string."
-        assert deliver_msg != "Google API key not found", "Google API key is required to run the test."
-        assert deliver_msg != (
-            "The api_key client option must be set either by passing api_key to the client "
-            "or by setting the OPENAI_API_KEY environment variable"
-        ), "OpenAI API key is required to run the test."
-        assert "Unexpected error:" not in deliver_msg, "An unexpected error was found in the delivered message."
-        assert "p_yes" in deliver_msg, "The delivered message does not contain the expected output. p_yes missing."
-        assert "p_no" in deliver_msg, "The delivered message does not contain the expected output. p_no missing."
-        assert "confidence" in deliver_msg, "The delivered message does not contain the expected output. confidence missing."
-        assert "info_utility" in deliver_msg, "The delivered message does not contain the expected output. info_utility missing."
-        assert isinstance(response[1], str), "Response[1] must be a string."
-        assert (
-            isinstance(response[2], dict) or response[2] is None
-        ), "Response[2] must be a dictionary or None."
-        assert (
-            isinstance(response[3], TokenCounterCallback) or response[3] is None
-        ), "Response[3] must be a TokenCounterCallback or None."
-        assert isinstance(response[4], KeyChain), "Response[4] must be a KeyChain object."
+
+def _assert_all_passed(results: List[Dict[str, Any]]) -> None:
+    """Assert all tool invocation results passed, with detailed failure messages."""
+    assert results, "No test results returned from isolated runner."
+    failures = [r for r in results if not r[RESULT_KEY_SUCCESS]]
+    if not failures:
+        return
+    details = "\n".join(_format_failure(f) for f in failures)
+    pytest.fail(f"{len(failures)}/{len(results)} tool invocations failed:\n{details}")
+
+
+class BaseIsolatedToolTest:
+    """Base class for tool tests that run in isolated component.yaml venvs."""
+
+    component_yaml: str
+    module_path: str
+    prompts: list
+    callable_name: str = DEFAULT_CALLABLE
+    validate_prediction: bool = True
 
     def test_run(self) -> None:
-        """Test run method."""
-        assert self.tools, "Tools must be provided."
-        assert self.prompts, "Prompts must be provided."
-        assert self.tool_module, "Callable function must be provided."
-
-        for model in self.models:
-            for tool in self.tools:
-                for prompt in self.prompts:
-                    kwargs = dict(
-                        prompt=prompt,
-                        tool=tool,
-                        api_keys=self.keys,
-                        counter_callback=TokenCounterCallback(),
-                        model=model,
-                    )
-                    func = getattr(self.tool_module, self.tool_callable)
-                    response = func(**kwargs)
-                    self._validate_response(response)
+        """Run the tool in an isolated venv and validate results."""
+        output = run_tool_in_isolated_venv(
+            component_yaml=self.component_yaml,
+            module_path=self.module_path,
+            prompts=self.prompts,
+            callable_name=self.callable_name,
+            validate_prediction=self.validate_prediction,
+        )
+        _assert_all_passed(output[RESULT_KEY_RESULTS])
 
 
-class TestPredictionOnline(BaseToolTest):
+class TestPredictionOnline(BaseIsolatedToolTest):
     """Test Prediction Online."""
 
-    tools = prediction_request.ALLOWED_TOOLS
-    models = prediction_request.ALLOWED_MODELS
-    prompts = [
-        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
-    ]
-    tool_module = prediction_request
+    component_yaml = PREDICTION_REQUEST_CONFIG
+    module_path = PREDICTION_REQUEST_MODULE
+    prompts = [PREDICTION_PROMPT]
 
 
-class TestPredictionRAG(BaseToolTest):
+class TestPredictionRAG(BaseIsolatedToolTest):
     """Test Prediction RAG."""
 
-    tools = prediction_request_rag.ALLOWED_TOOLS
-    models = prediction_request_rag.ALLOWED_MODELS
-    prompts = [
-        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
-    ]
-    tool_module = prediction_request_rag
+    component_yaml = PREDICTION_REQUEST_RAG_CONFIG
+    module_path = PREDICTION_REQUEST_RAG_MODULE
+    prompts = [PREDICTION_RAG_PROMPT]
 
 
-class TestPredictionReasoning(BaseToolTest):
+class TestPredictionReasoning(BaseIsolatedToolTest):
     """Test Prediction Reasoning."""
 
-    tools = prediction_request_reasoning.ALLOWED_TOOLS
-    models = prediction_request_reasoning.ALLOWED_MODELS
-    prompts = [
-        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
-    ]
-    tool_module = prediction_request_reasoning
+    component_yaml = PREDICTION_REQUEST_REASONING_CONFIG
+    module_path = PREDICTION_REQUEST_REASONING_MODULE
+    prompts = [PREDICTION_PROMPT]
 
 
-class TestPredictionCOT(BaseToolTest):
+class TestPredictionCOT(BaseIsolatedToolTest):
     """Test Prediction COT."""
 
-    tools = prediction_url_cot.ALLOWED_TOOLS
-    models = prediction_url_cot.ALLOWED_MODELS
-    prompts = [
-        'Please take over the role of a Data Scientist to evaluate the given question. With the given question "Will Apple release iPhone 17 by March 2025?" and the `yes` option represented by `Yes` and the `no` option represented by `No`, what are the respective probabilities of `p_yes` and `p_no` occurring?'
-    ]
-    tool_module = prediction_url_cot
+    component_yaml = PREDICTION_URL_COT_CONFIG
+    module_path = PREDICTION_URL_COT_MODULE
+    prompts = [PREDICTION_PROMPT]
 
 
-class TestDALLEGeneration(BaseToolTest):
+class TestDALLEGeneration(BaseIsolatedToolTest):
     """Test DALL-E Generation."""
 
-    tools = dalle_request.ALLOWED_TOOLS
-    models = dalle_request.ALLOWED_MODELS
-    prompts = ["Generate an image of a futuristic cityscape."]
-    tool_module = dalle_request
+    component_yaml = DALLE_REQUEST_CONFIG
+    module_path = DALLE_REQUEST_MODULE
+    prompts = [DALLE_PROMPT]
+    validate_prediction = False
