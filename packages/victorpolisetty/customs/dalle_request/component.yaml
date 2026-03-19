@@ -14,5 +14,7 @@ callable: run
 dependencies:
   openai:
     version: ==1.30.2
+  httpx:
+    version: ==0.25.2
   tiktoken:
     version: ==0.12.0

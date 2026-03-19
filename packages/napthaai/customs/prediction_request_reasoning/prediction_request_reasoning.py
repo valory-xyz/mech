@@ -286,21 +286,6 @@ client: Optional[LLMClient] = None
 client_embedding: Optional[LLMClient] = None
 
 LLM_SETTINGS = {
-    "gpt-3.5-turbo-0125": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 4096,
-        "temperature": 0,
-    },
-    "gpt-4-0125-preview": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 8192,
-        "temperature": 0,
-    },
-    "gpt-4o-2024-08-06": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 4096,
-        "temperature": 0,
-    },
     "gpt-4.1-2025-04-14": {
         "default_max_tokens": 4096,
         "limit_max_tokens": 1_047_576,
@@ -311,29 +296,9 @@ LLM_SETTINGS = {
         "limit_max_tokens": 200_000,
         "temperature": 0,
     },
-    "claude-3-5-sonnet-20240620": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
     "claude-4-sonnet-20250514": {
         "default_max_tokens": 4096,
         "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "claude-3-opus-20240229": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 200_000,
-        "temperature": 0,
-    },
-    "databricks/dbrx-instruct:nitro": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 32_768,
-        "temperature": 0,
-    },
-    "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
-        "default_max_tokens": 1000,
-        "limit_max_tokens": 32_000,
         "temperature": 0,
     },
 }

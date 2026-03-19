@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibt7f7crtwvmkg7spy3jhscmlqltvyblzp32g6gj44v7tlo5lycuq
-  prediction_request_rag.py: bafybeicrjnhsie37nnis2iyp5jdhfu7fgq7ejkl3jcd4cdd6m44mhaazd4
+  prediction_request_rag.py: bafybeicogcsrzjcgqeqgawws2oyoj6ln4gwx32sqhdeofxjwr5qkhdrynq
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_rag.py
 callable: run
@@ -18,13 +18,18 @@ dependencies:
     version: ==2.95.0
   googlesearch-python:
     version: ==1.2.3
-  requests: {}
+  requests:
+    version: ==2.32.5
   markdownify:
     version: ==0.11.6
   readability-lxml:
     version: ==0.8.1
+  httpx:
+    version: ==0.25.2
+  lxml_html_clean:
+    version: ==0.4.4
   anthropic:
-    version: ==0.21.3
+    version: ==0.23.1
   tiktoken:
     version: ==0.12.0
   pydantic:

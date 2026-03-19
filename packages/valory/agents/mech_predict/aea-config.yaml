@@ -50,20 +50,20 @@ skills:
 - valory/transaction_settlement_abci:0.1.0:bafybeigspkourznaiagdkedyxjbjl6svhuhdwbvejr3jv3e3dil2hslose
 - valory/websocket_client:0.1.0:bafybeie63j65ffblz6g6oiaynjpz4ae5mgyjz2w6o5ovqitzdbnvqzlhzu
 customs:
-- valory/resolve_market:0.1.0:bafybeiagbltrenwtp2ko2ebephanjvykvljftgs65wo2wfefiib7joxece
-- valory/prediction_request:0.1.0:bafybeigcglxciuawbyvfgahcockjkcx2w22wi33ogpaz7b4ibcgxumfcpm
-- napthaai/resolve_market_reasoning:0.1.0:bafybeihe2qq7s64nm5pidctsafn35lh6x627tb425v5a4zycw3ngu2oa6u
-- napthaai/prediction_request_rag:0.1.0:bafybeiebotu6islwypjkbldafv45klsvalbbuixfzrostcksulzgjvdkre
-- napthaai/prediction_request_reasoning:0.1.0:bafybeia25at4jgny4r6z474d6ybpcghms2prn3qh2gvtgrom2szsdsodva
-- valory/prepare_tx:0.1.0:bafybeihnm3n7r6ywzlmxa6j5s67gtayu5qynparmsivq5aifftxduicf24
-- napthaai/prediction_url_cot:0.1.0:bafybeibxu24huuomban3kkvupvj6zrblpea3mjdnlp3vsxig4kc7xirlk4
-- valory/prediction_langchain:0.1.0:bafybeibs2i4ypvllzjrpghzaghvqjc4fvixv2lrsl6eoas3a2twqc6meqa
+- valory/resolve_market:0.1.0:bafybeifn3ecrbww2bnrcfqurft7c3ptc3fdtvfacadsjvyz6pndzi7py74
+- valory/prediction_request:0.1.0:bafybeicouot7bqu7vszbux2dvopth2wv2ktuv7cvjkpglpa5ls4q4dpmzi
+- napthaai/resolve_market_reasoning:0.1.0:bafybeiej2gtal7bhfnics5mfmwzv3sll6scd4esvorfjtju5zpbvh5apea
+- napthaai/prediction_request_rag:0.1.0:bafybeigav3tg2osbid4sycm7yso376erro4wojx6v47wcia333lsrjugmi
+- napthaai/prediction_request_reasoning:0.1.0:bafybeifjdufyjkevaeiqjqyf7s2praj2s7ensqafkwwrwnpxu2onbstnte
+- valory/prepare_tx:0.1.0:bafybeifsczpc3wq533xngleuvxrxitny56wfzdtd3koht2l2kp2arpyawq
+- napthaai/prediction_url_cot:0.1.0:bafybeig26xp4ujqgmx3jpdp25nmlj5kyq6fgdveloyebmdmxsi4tjozz2q
+- valory/prediction_langchain:0.1.0:bafybeifiw6rdeigls4pbaqwd3hbb3tq5y6psoacnezydjz2udioxullk4e
 - victorpolisetty/gemini_request:0.1.0:bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy
-- victorpolisetty/dalle_request:0.1.0:bafybeignggkudqjzae6nbxvx6o5m6ekqrbkkdkj6dnlax6d2z5xrgobgyy
-- valory/superforcaster:0.1.0:bafybeiapmn2m6hazjam53zxnrx7e3twnddcs64i63kryld7l67botfvuci
+- victorpolisetty/dalle_request:0.1.0:bafybeihmrgqr7z3wwsmyfsqoeif6am6mcvfswuk5pgk6bwwy6wik56yd5a
+- valory/superforcaster:0.1.0:bafybeiei2iulra7475w2peunnt6ds73lqzndk23ohtztzicraalkokiqre
 - dvilela/corcel_request:0.1.0:bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy
 - dvilela/gemini_prediction:0.1.0:bafybeifd5rfdp73qwibjcmgf732yryefa7aukse3ql3iunty3ho5ojuhnu
-- nickcom007/prediction_request_sme:0.1.0:bafybeihvntrd2hgni2kgo36qst3mmqtozkc2kbtkzdzbjqg42s66cnbwve
+- nickcom007/prediction_request_sme:0.1.0:bafybeifwknjs4uu4oyxunr44prfj267drj7ydzduhltj7vxtcbsk6pkxpu
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -138,6 +138,10 @@ dependencies:
     version: ==2.9.0
   readability-lxml:
     version: ==0.8.1
+  lxml_html_clean:
+    version: ==0.4.4
+  requests:
+    version: ==2.32.5
   replicate:
     version: ==0.15.7
   tavily-python:
@@ -148,6 +152,8 @@ dependencies:
     version: ==0.9.4
   google-generativeai:
     version: ==0.8.6
+  openai:
+    version: ==1.30.2
   openfactverification-kongzii:
     version: ==0.1.0
   httpx:

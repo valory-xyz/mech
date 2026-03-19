@@ -8,14 +8,17 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_request_sme.py: bafybeiasinqlfmzorklfch6n3l4nzwcluyevdzamfq3zvnd76bjq77phxm
+  prediction_request_sme.py: bafybeidd2mawf2vogholwkf4k4iz4j3qpoymkd74cfyumw4avfdm46ich4
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_sme.py
 callable: run
 params:
   default_model: gpt-4o-2024-08-06
 dependencies:
-  requests: {}
+  requests:
+    version: ==2.32.5
+  httpx:
+    version: ==0.25.2
   google-api-python-client:
     version: ==2.95.0
   googlesearch-python:
@@ -24,9 +27,11 @@ dependencies:
     version: ==0.12.0
   readability-lxml:
     version: ==0.8.1
+  lxml_html_clean:
+    version: ==0.4.4
   markdownify:
     version: ==0.11.6
   openai:
     version: ==1.30.2
   anthropic:
-    version: ==0.21.3
+    version: ==0.23.1

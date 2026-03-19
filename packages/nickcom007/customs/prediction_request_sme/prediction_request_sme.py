@@ -87,7 +87,6 @@ DEFAULT_OPENAI_SETTINGS = {
 }
 MAX_TOKENS = {
     "gpt-3.5-turbo-0125": 4096,
-    "gpt-4-0125-preview": 8192,
     "gpt-4o-2024-08-06": 4096,
     "gpt-4.1-2025-04-14": 4096,
 }

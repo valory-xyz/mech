@@ -72,7 +72,7 @@ security:
 # update copyright headers
 # generate latest hashes for updated packages
 .PHONY: generators
-generators: clean-cache fix-abci-app-specs
+generators: fix-abci-app-specs
 	tox -e abci-docstrings
 	tomte format-copyright --author valory --exclude-part abci --exclude-part http_client --exclude-part ipfs --exclude-part ledger --exclude-part p2p_libp2p_client --exclude-part gnosis_safe --exclude-part gnosis_safe_proxy_factory --exclude-part multisend --exclude-part service_registry --exclude-part protocols --exclude-part abstract_abci --exclude-part abstract_round_abci --exclude-part registration_abci --exclude-part reset_pause_abci --exclude-part termination_abci --exclude-part transaction_settlement_abci --exclude-part websocket_client --exclude-part contract_subscription
 	autonomy packages lock
