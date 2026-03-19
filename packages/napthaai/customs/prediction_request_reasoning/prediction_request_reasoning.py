@@ -286,16 +286,6 @@ client: Optional[LLMClient] = None
 client_embedding: Optional[LLMClient] = None
 
 LLM_SETTINGS = {
-    "gpt-3.5-turbo-0125": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 4096,
-        "temperature": 0,
-    },
-    "gpt-4o-2024-08-06": {
-        "default_max_tokens": 500,
-        "limit_max_tokens": 4096,
-        "temperature": 0,
-    },
     "gpt-4.1-2025-04-14": {
         "default_max_tokens": 4096,
         "limit_max_tokens": 1_047_576,
