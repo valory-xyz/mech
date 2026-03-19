@@ -37,7 +37,7 @@ from typing import Dict, List, Set
 
 import yaml
 
-from tests.shared_constants import PIP_EXECUTABLE, PYTHON_BIN_DIR, PYTHON_EXECUTABLE
+from tests.shared_constants import PIP_EXECUTABLE, VENV_BIN_DIR, PYTHON_EXECUTABLE
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +49,6 @@ VERSION_YAML_KEY = "version"
 VERSION_OPERATOR_PREFIXES = ("=", ">", "<", "!", "~")
 DEPS_HASH_LENGTH = 12
 PIP_INSTALL_TIMEOUT_SECONDS = 300
-PIP_BIN_DIR = PYTHON_BIN_DIR  # pip lives in the same bin dir as python
 
 # Tracks all venvs created during this session for teardown cleanup.
 _created_venvs: Set[Path] = set()
@@ -115,7 +114,7 @@ def _create_venv_with_pip(venv_dir: Path, component_name: str) -> None:
     that won't be affected by IDE/debugger injection.
     """
     venv.create(str(venv_dir), with_pip=False, clear=True)
-    python_exe = venv_dir / PIP_BIN_DIR / PYTHON_EXECUTABLE
+    python_exe = venv_dir / VENV_BIN_DIR / PYTHON_EXECUTABLE
     subprocess.check_call(
         [
             sys.executable,
@@ -163,7 +162,7 @@ def get_or_create_venv(component_yaml_path: str) -> Path:
     VENVS_DIR.mkdir(parents=True, exist_ok=True)
     _create_venv_with_pip(venv_dir, component_name)
 
-    pip_exe = venv_dir / PIP_BIN_DIR / PIP_EXECUTABLE
+    pip_exe = venv_dir / VENV_BIN_DIR / PIP_EXECUTABLE
     if pip_specs:
         logger.info(
             "[%s] Installing: %s", component_name, ", ".join(pip_specs)

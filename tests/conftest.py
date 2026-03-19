@@ -32,7 +32,7 @@ import pytest
 from tests.shared_constants import (
     DEFAULT_CALLABLE,
     DELIVER_MSG_PREVIEW_LENGTH,
-    PYTHON_BIN_DIR,
+    VENV_BIN_DIR,
     PYTHON_EXECUTABLE,
     RESULT_KEY_DELIVER_MSG,
     RESULT_KEY_ERRORS,
@@ -134,6 +134,8 @@ def _execute_runner(
         ],
         capture_output=True,
         text=True,
+        encoding="utf-8",
+        errors="replace",
         timeout=timeout,
         env=os.environ.copy(),
     )
@@ -143,10 +145,12 @@ def _log_subprocess_output(
     component_name: str, result: subprocess.CompletedProcess
 ) -> None:
     """Log stdout/stderr from the runner subprocess at DEBUG level."""
-    if result.stdout.strip():
-        logger.debug("[%s] Tool stdout:\n%s", component_name, result.stdout.strip())
-    if result.stderr.strip():
-        logger.debug("[%s] Tool stderr:\n%s", component_name, result.stderr.strip())
+    stdout = (result.stdout or "").strip()
+    stderr = (result.stderr or "").strip()
+    if stdout:
+        logger.debug("[%s] Tool stdout:\n%s", component_name, stdout)
+    if stderr:
+        logger.debug("[%s] Tool stderr:\n%s", component_name, stderr)
 
 
 def _log_results(component_name: str, all_results: List[Dict[str, Any]]) -> None:
@@ -213,7 +217,7 @@ def run_tool_in_isolated_venv(
 
     logger.info("[%s] Preparing isolated environment...", component_name)
     venv_dir = get_or_create_venv(component_yaml)
-    python_exe = venv_dir / PYTHON_BIN_DIR / PYTHON_EXECUTABLE
+    python_exe = venv_dir / VENV_BIN_DIR / PYTHON_EXECUTABLE
 
     config = _build_runner_config(module_path, callable_name, prompts, validate_prediction, required_env_vars)
 
@@ -227,7 +231,7 @@ def run_tool_in_isolated_venv(
 
         output = _parse_results_file(results_file)
         if not output:
-            return _make_error_result(result.returncode, result.stdout, result.stderr)
+            return _make_error_result(result.returncode, result.stdout or "", result.stderr or "")
 
         _log_results(component_name, output[RESULT_KEY_RESULTS])
         return output

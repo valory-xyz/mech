@@ -23,6 +23,8 @@ This module must have NO external dependencies — it is imported inside
 isolated venvs that only contain the tool's component.yaml dependencies.
 """
 
+import sys
+
 # KeyChain service name -> environment variable mapping.
 # Used to build the KeyChain from env vars and to determine
 # which env vars a tool requires based on its dependencies.
@@ -55,7 +57,9 @@ DEFAULT_CALLABLE = "run"
 # Truncation limit for deliver_msg previews in logs and failure output
 DELIVER_MSG_PREVIEW_LENGTH = 200
 
-# Platform-specific binary paths
-PYTHON_BIN_DIR = "bin"
-PYTHON_EXECUTABLE = "python"
-PIP_EXECUTABLE = "pip"
+# Platform-specific binary paths for venvs
+# Windows uses Scripts/ and .exe suffixes; Unix uses bin/ with no suffix.
+_IS_WINDOWS = sys.platform == "win32"
+VENV_BIN_DIR = "Scripts" if _IS_WINDOWS else "bin"
+PYTHON_EXECUTABLE = "python.exe" if _IS_WINDOWS else "python"
+PIP_EXECUTABLE = "pip.exe" if _IS_WINDOWS else "pip"
