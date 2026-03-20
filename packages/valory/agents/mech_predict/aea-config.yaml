@@ -282,6 +282,9 @@ models:
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
       default_chain_id: ${str:gnosis}
+      gnosis_ledger_rpc: ${str:http://localhost:8545}
+      polygon_ledger_rpc: ${str:http://localhost:8545}
+      base_ledger_rpc: ${str:http://localhost:8545}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
