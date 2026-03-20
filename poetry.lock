@@ -2487,8 +2487,8 @@ optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "open_aea_test_autonomy-0.21.14-py3-none-any.whl", hash = "sha256:532daf9eb073f97c27ea698fc43559ffe39a6aabc15b7b5c6eae3fee1718d68c"},
-    {file = "open_aea_test_autonomy-0.21.14.tar.gz", hash = "sha256:cd69190dfebdb5ce9935a727328137d669c48848b27924c146edf8b7200040d4"},
+    {file = "open_aea_test_autonomy-0.21.14-py3-none-any.whl", hash = "sha256:652a894ab2e8f652b9b934e45e2c4024ad4e6aa09f7544f6bb5636c8ad87caa7"},
+    {file = "open_aea_test_autonomy-0.21.14.tar.gz", hash = "sha256:93044030d672f7d234389eec72e3dff25e6591e02ef2d6ef2fa15ad1eff71c73"},
 ]
 
 [package.dependencies]
@@ -4542,4 +4542,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "6deed2669878e7b4ad482068aa300e05a4d4658106efb51c93fb784b14ebb68b"
+content-hash = "c5bbed7ce638196b4228304d315bfce98cb2900e282210b5cb0202a67a071d98"
