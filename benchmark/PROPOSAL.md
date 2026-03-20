@@ -350,9 +350,13 @@ Omen and Polymarket markets have structurally different characteristics:
 - **hard set** (~50 questions) — questions where current tools perform worst, to focus improvement.
 - **stratified** — all sets should be balanced across categories, time horizons, and platforms (see Part 4).
 
-**Hard set versioning:** The hard set is refreshed quarterly (not after every run). After a quarterly benchmark run, the bottom 20% by Brier score becomes the new hard set, and the previous hard set is archived with a version tag (e.g., `hard_set_2026Q1.jsonl`). This is important: if the hard set changes after every run, a tool that improves on previously-hard questions causes those questions to leave the hard set (replaced by new hard ones), making it impossible to track improvement on hard questions over time. Freezing per improvement cycle preserves this signal.
+**Refresh cadence is driven by data velocity, not fixed calendar intervals.** At expected throughput (2k-10k mech requests/day), fixed quarterly refreshes risk making the benchmark stale relative to current production behavior and market distribution. Refresh timing is tied to data volume:
 
-**Eval set rotation:** The eval set must be refreshed periodically (quarterly) with new tournament results to prevent implicit overfitting. Old eval questions move to the dev set.
+- **Dev set and production-monitoring datasets:** Refresh continuously or daily. These are working datasets for iteration and monitoring — staleness directly hinders development.
+- **Hard set:** Frozen within a given optimization/promotion cycle (so improvement on hard questions can be tracked), but refreshed on a shorter cadence — weekly or monthly depending on data volume, not quarterly. After each refresh cycle, the bottom 20% by Brier score becomes the new hard set, and the previous hard set is archived with a version tag (e.g., `hard_set_2026_w12.jsonl`).
+- **Eval set:** Refreshed monthly (or more frequently if tournament throughput supports it) with new tournament results to prevent implicit overfitting. Old eval questions move to the dev set.
+
+All dataset versions are tagged so that results remain comparable across refresh cycles. The key invariant: hard and eval sets are frozen *within* an optimization cycle but refreshed *between* cycles at a cadence matched to data velocity.
 
 ---
 
@@ -1029,27 +1033,30 @@ Tool: prediction-online-v2 (canary, 2 weeks)
 ## Part 11: The Full Cadence
 
 ```
-Continuous:
+Continuous / Daily:
   - Tournament runs on newly opened markets (automated)
   - score_tournament.py matches predictions to resolutions as markets close
+  - Dev set and production-monitoring datasets refresh with new data
+  - fetch_production.py pulls newly resolved production predictions (daily at expected volume)
 
 Weekly:
-  - fetch_production.py pulls newly resolved production predictions
   - Canary metrics reviewed (if active canary)
+  - Hard set refresh (if within an optimization cycle boundary)
+  - Quick benchmark regression check against production baseline
 
 Monthly:
   - fetch_resolved.py refreshes Polymarket/Omen datasets
   - Full benchmark run against all tools (production replay mode)
   - Parameter sweep on dev set (Level 1)
-  - Update hard set from worst performers
+  - Eval set rotation with recent tournament predictions
   - Publish accuracy report with stratified analysis (per-platform, per-category, etc.)
 
-Quarterly:
+Per optimization cycle (frequency driven by improvement velocity, typically 1-3 months):
   - Prompt evolution search (Level 2)
   - Tool code modification search (Level 3)
   - Ensemble exploration (Level 4)
-  - Refresh eval set with recent tournament predictions
   - Promote best candidate through validation → ablation → human review → tournament → canary
+  - Hard set frozen during cycle, refreshed at cycle boundary
 ```
 
 ---
@@ -1159,8 +1166,36 @@ python benchmark/publish.py --results results/monthly_report.json
 
 ## Implementation Plan
 
+### First Sprint — Smallest End-to-End Slice
+
+The first sprint delivers a minimal but complete pipeline: real production data in, scored baseline report out. This validates the schema, data path, and scoring logic before building anything else.
+
+1. **`schema.py` + validation**
+   - Implement the benchmark row schema in code
+   - Enforce `prediction_parse_status`, completeness flags, provenance grade, and eligibility-related fields
+   - Add fixture rows and validator tests
+
+2. **`fetch_production.py` on a narrow slice**
+   - Ingest a limited time window of real mech Request/Deliver data
+   - Normalize into benchmark rows conforming to the schema
+   - Preserve missingness explicitly instead of silently dropping rows
+   - Output a first `production_log.jsonl`
+
+3. **`scorer.py` with the gated baseline metrics**
+   - Reliability gate first
+   - Then Brier score
+   - Then edge-over-market where eligible
+   - Include `n_total`, `n_eligible`, `n_excluded`, exclusion reasons, and timing
+
+4. **Baseline reporting**
+   - Produce one human-readable and one machine-readable baseline report from real production rows
+   - Answer: how much data is valid, how much is eligible, and what is missing most often
+
+**In parallel with the first sprint:** Audit all prediction tools for `source_content` support and retrofit those that lack it (superforcaster, gemini-prediction). This unblocks cached replay without waiting for the sprint to complete.
+
+### Phased Rollout
+
 0. **Phase 0 — Prerequisites** (before benchmark work begins)
-   - Retrofit all prediction tools with `source_content` support (superforcaster, gemini-prediction)
    - Coordinate trader-side request enrichment (market metadata in request payload)
 
 1. **Phase 1 — Foundation** (~3 days)
