@@ -52,9 +52,9 @@ skills:
 customs:
 - valory/resolve_market:0.1.0:bafybeifefym253bznqivjk3ailiuxyzm5dqyfcwcr6ytmfybmbw2w6ttpm
 - valory/prediction_request:0.1.0:bafybeibmzee77gofhnfhfnwzyla7xts6eu5kyryynugmx76atdad5uay7m
-- napthaai/resolve_market_reasoning:0.1.0:bafybeibkmumpcimsekzxc4xczf7irf5yyzu2rujofgp5n6upgwkdov4gki
-- napthaai/prediction_request_rag:0.1.0:bafybeihgl7dfmikn3xdehxvr3geor6ckzjyhaeqhej55sh4clva7dok3pe
-- napthaai/prediction_request_reasoning:0.1.0:bafybeihqb6ljdsfcvyd7xrj5aku6pjwbfdgtfi2qdmvjrqsyv5o5exvziq
+- napthaai/resolve_market_reasoning:0.1.0:bafybeif3owhstd3nwyrbviryvuvgx6gvsrji5yfkn5dy34ypxicrzzkd3i
+- napthaai/prediction_request_rag:0.1.0:bafybeihmqdq2dihtqnrqikuludhkpvcojuqa22ccixu34tqeclhdsdtfca
+- napthaai/prediction_request_reasoning:0.1.0:bafybeidw7j6atnnlnsfjemdz4jruf35zm3nasdj2f4kh3zflfnoialzaoy
 - valory/prepare_tx:0.1.0:bafybeifhfervmgwtoiiyzvqc2wdetzvp4bmlwys5bk3vuef6ggclhbvwua
 - napthaai/prediction_url_cot:0.1.0:bafybeigwhie472zyouxbf7iztcn2q3uvo7yvf2ffgzcqdxqv7nqkgvfri4
 - valory/prediction_langchain:0.1.0:bafybeifiw6rdeigls4pbaqwd3hbb3tq5y6psoacnezydjz2udioxullk4e
@@ -101,7 +101,7 @@ dependencies:
   beautifulsoup4:
     version: ==4.12.2
   docstring-parser:
-    version: ==0.15
+    version: ==0.17.0
   faiss-cpu:
     version: ==1.13.2
   fastapi:
