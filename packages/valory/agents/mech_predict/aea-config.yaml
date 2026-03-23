@@ -50,20 +50,20 @@ skills:
 - valory/transaction_settlement_abci:0.1.0:bafybeiezf3kh5f4jmxnwoylc4krghzrkfknkc2r6vve3rgb5eumloco33e
 - valory/websocket_client:0.1.0:bafybeie63j65ffblz6g6oiaynjpz4ae5mgyjz2w6o5ovqitzdbnvqzlhzu
 customs:
-- valory/resolve_market:0.1.0:bafybeifn3ecrbww2bnrcfqurft7c3ptc3fdtvfacadsjvyz6pndzi7py74
+- valory/resolve_market:0.1.0:bafybeifefym253bznqivjk3ailiuxyzm5dqyfcwcr6ytmfybmbw2w6ttpm
 - valory/prediction_request:0.1.0:bafybeicxpxkxhelbkiuvkkkg2vzjwgv7gbz2ovlvsety2krbci3hjvbfom
-- napthaai/resolve_market_reasoning:0.1.0:bafybeiej2gtal7bhfnics5mfmwzv3sll6scd4esvorfjtju5zpbvh5apea
-- napthaai/prediction_request_rag:0.1.0:bafybeigav3tg2osbid4sycm7yso376erro4wojx6v47wcia333lsrjugmi
-- napthaai/prediction_request_reasoning:0.1.0:bafybeifjdufyjkevaeiqjqyf7s2praj2s7ensqafkwwrwnpxu2onbstnte
-- valory/prepare_tx:0.1.0:bafybeifsczpc3wq533xngleuvxrxitny56wfzdtd3koht2l2kp2arpyawq
-- napthaai/prediction_url_cot:0.1.0:bafybeig26xp4ujqgmx3jpdp25nmlj5kyq6fgdveloyebmdmxsi4tjozz2q
+- napthaai/resolve_market_reasoning:0.1.0:bafybeiekcm2jwmfxdwzl7meubpdhcesimufpyfrbvp57bp7cx6c3iyttp4
+- napthaai/prediction_request_rag:0.1.0:bafybeiawvu44fmsdxko2umiaxvuvchqsonnpohhmfcrswhvrvqncajs564
+- napthaai/prediction_request_reasoning:0.1.0:bafybeihe337ad5l3nk44n5gmculnk7ukjtem6l47fayfegce2na2h2uc6y
+- valory/prepare_tx:0.1.0:bafybeifhfervmgwtoiiyzvqc2wdetzvp4bmlwys5bk3vuef6ggclhbvwua
+- napthaai/prediction_url_cot:0.1.0:bafybeie22clo3qbn3krifrgjtdpxpxw224muxr2zbfbqxokifgvwtzgwz4
 - valory/prediction_langchain:0.1.0:bafybeifiw6rdeigls4pbaqwd3hbb3tq5y6psoacnezydjz2udioxullk4e
 - victorpolisetty/gemini_request:0.1.0:bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy
-- victorpolisetty/dalle_request:0.1.0:bafybeihmrgqr7z3wwsmyfsqoeif6am6mcvfswuk5pgk6bwwy6wik56yd5a
+- victorpolisetty/dalle_request:0.1.0:bafybeifxblnd6zjwibw25lnudt2qkcda2t5nf5bzc3rkpfok6ypt46oofa
 - valory/superforcaster:0.1.0:bafybeibefj27ntzziyouhdii57oxnd7r7kbaokdnfcgakw4vwgtajvnxgq
 - dvilela/corcel_request:0.1.0:bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy
 - dvilela/gemini_prediction:0.1.0:bafybeifd5rfdp73qwibjcmgf732yryefa7aukse3ql3iunty3ho5ojuhnu
-- nickcom007/prediction_request_sme:0.1.0:bafybeifwknjs4uu4oyxunr44prfj267drj7ydzduhltj7vxtcbsk6pkxpu
+- nickcom007/prediction_request_sme:0.1.0:bafybeih5z7v6tlk62ktkvmlbd3mqocdnruwhmhj3zhotaabjkrzcu3zagu
 default_ledger: ethereum
 required_ledgers:
 - ethereum

@@ -8,7 +8,9 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibbn67pnrrm4qm3n3kbelvbs3v7fjlrjniywmw2vbizarippidtvi
-  prediction_request_sme.py: bafybeidd2mawf2vogholwkf4k4iz4j3qpoymkd74cfyumw4avfdm46ich4
+  prediction_request_sme.py: bafybeifzy7oj3ww5i3quggyuf2q46qsvlkn3dgkpemfq5pxirkyxfn35kq
+  tiktoken_cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4: bafybeiggg7r65i4qy7x34qse3vq2csfbjx6odiu3el6ioqvtqlnzfjop5y
+  tiktoken_cache/fb374d419588a4632f3f557e76b4b70aebbca790: bafybeiecua2dclwdr3oi7no4amb4v7udcmoh7vzamcdm5iccpg4djjd3sy
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_sme.py
 callable: run
