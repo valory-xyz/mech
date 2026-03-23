@@ -1013,6 +1013,12 @@ def count_tokens(text: str, model: str, client: Optional["LLMClient"] = None) ->
             print("Using fallback enconding for Claude models")
             enc = get_encoding("cl100k_base")
             return len(enc.encode(text))
+
+    # Claude models without a client still need a fallback encoding
+    if "claude" in model.lower():
+        enc = get_encoding("cl100k_base")
+        return len(enc.encode(text))
+
     enc = get_model_encoding(model)
     return len(enc.encode(text))
 

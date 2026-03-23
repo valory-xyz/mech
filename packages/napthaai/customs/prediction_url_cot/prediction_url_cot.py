@@ -393,7 +393,12 @@ def count_tokens(text: str, model: str, client: Optional["LLMClient"] = None) ->
                 f"Unexpected error with Anthropic tokenizer: {type(e).__name__}: {e}, using fallback encoding"
             )
 
-        # Fallback encoding
+        # Fallback encoding for Claude
+        enc = get_encoding("cl100k_base")
+        return len(enc.encode(text))
+
+    # Claude models without a client still need a fallback encoding
+    if "claude" in model.lower():
         enc = get_encoding("cl100k_base")
         return len(enc.encode(text))
 
