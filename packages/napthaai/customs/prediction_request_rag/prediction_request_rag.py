@@ -20,6 +20,7 @@
 
 import functools
 import json
+import os
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
@@ -39,6 +40,11 @@ from pydantic import BaseModel, PositiveInt
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import encoding_for_model, get_encoding
+
+os.environ.setdefault(
+    "TIKTOKEN_CACHE_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "tiktoken_cache"),
+)
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
@@ -130,6 +136,8 @@ class LLMClientManager:
         """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.embedding_provider = embedding_provider
+        self._client: Optional[LLMClient] = None
+        self._client_embedding: Optional[LLMClient] = None
         if "gpt" in model:
             self.llm_provider = "openai"
         elif "claude" in model:
@@ -137,25 +145,22 @@ class LLMClientManager:
         else:
             self.llm_provider = "openrouter"
 
-    def __enter__(self) -> List:
+    def __enter__(self) -> Tuple[Optional["LLMClient"], Optional["LLMClient"]]:
         """Initializes and returns LLM and embedding clients."""
-        clients = []
-        global client
-        if self.llm_provider and client is None:
-            client = LLMClient(self.api_keys, self.llm_provider)
-            clients.append(client)
-        global client_embedding
-        if self.embedding_provider and client_embedding is None:
-            client_embedding = LLMClient(self.api_keys, self.embedding_provider)
-            clients.append(client_embedding)
-        return clients
+        if self.llm_provider:
+            self._client = LLMClient(self.api_keys, self.llm_provider)
+        if self.embedding_provider:
+            self._client_embedding = LLMClient(self.api_keys, self.embedding_provider)
+        return (self._client, self._client_embedding)
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        """Closes the LLM client"""
-        global client
-        if client is not None:
-            client.client.close()
-            client = None
+        """Closes the LLM and embedding clients."""
+        if self._client is not None:
+            self._client.client.close()
+            self._client = None
+        if self._client_embedding is not None:
+            self._client_embedding.client.close()
+            self._client_embedding = None
 
 
 # pylint: disable=too-few-public-methods
@@ -266,9 +271,6 @@ class LLMClient:
                 f"Error while generating the embeddings for the docs {e}"
             ) from e
 
-
-client: Optional[LLMClient] = None
-client_embedding: Optional[LLMClient] = None
 
 LLM_SETTINGS = {
     "gpt-3.5-turbo-0125": {
@@ -408,7 +410,7 @@ def truncate_text(text: str, model: str, max_tokens: int) -> str:
 
 
 # Utility: count tokens using model-specific tokenizer
-def count_tokens(text: str, model: str) -> int:
+def count_tokens(text: str, model: str, client: Optional["LLMClient"] = None) -> int:
     """Count the number of tokens in a text."""
     # Check if we're using a Claude model and we have an active client
     if "claude" in model.lower() and client and client.llm_provider == "anthropic":
@@ -433,6 +435,7 @@ def count_tokens(text: str, model: str) -> int:
 
 
 def multi_queries(
+    client: "LLMClient",
     prompt: str,
     model: str,
     num_queries: int,
@@ -466,7 +469,7 @@ def multi_queries(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
             model=model,
-            token_counter=count_tokens,
+            token_counter=functools.partial(count_tokens, client=client),
         )
     queries = parser_query_response(response.content, num_queries=num_queries)
     # remove empty queries, including ""
@@ -692,6 +695,7 @@ def extract_texts(
 
 
 def find_similar_chunks(
+    client_embedding: Optional["LLMClient"],
     query: str,
     docs_with_embeddings: List[ExtendedDocument],
     embedding_model: str,
@@ -721,7 +725,9 @@ def find_similar_chunks(
 
 
 def get_embeddings(
-    split_docs: List[ExtendedDocument], embedding_model: str
+    client_embedding: Optional["LLMClient"],
+    split_docs: List[ExtendedDocument],
+    embedding_model: str,
 ) -> List[ExtendedDocument]:
     """Get embeddings for the split documents: clean, truncate, then batch by token count."""
     # Preprocess each document: clean and truncate to DOC_TOKEN_LIMIT
@@ -789,6 +795,8 @@ def recursive_character_text_splitter(
 
 
 def fetch_additional_information(
+    client: "LLMClient",
+    client_embedding: Optional["LLMClient"],
     prompt: str,
     model: str,
     google_api_key: Optional[str],
@@ -807,6 +815,7 @@ def fetch_additional_information(
 
     try:
         queries, counter_callback = multi_queries(
+            client=client,
             prompt=prompt,
             model=model,
             num_queries=num_queries,
@@ -889,10 +898,11 @@ def fetch_additional_information(
         # truncate the split_docs to the first MAX_NR_DOCS documents
         split_docs = split_docs[:MAX_NR_DOCS]
     # Embed the documents
-    docs_with_embeddings = get_embeddings(split_docs, EMBEDDING_MODEL)
+    docs_with_embeddings = get_embeddings(client_embedding, split_docs, EMBEDDING_MODEL)
 
     # Find similar chunks
     similar_chunks = find_similar_chunks(
+        client_embedding=client_embedding,
         query=prompt,
         docs_with_embeddings=docs_with_embeddings,
         embedding_model=EMBEDDING_MODEL,
@@ -971,7 +981,10 @@ def run(
     if "claude" in tool:  # maintain backwards compatibility
         model = "claude-4-sonnet-20250514"
     print(f"MODEL for prediction request rag: {model}")
-    with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai"):
+    with LLMClientManager(kwargs["api_keys"], model, embedding_provider="openai") as (
+        llm_client,
+        embedding_client,
+    ):
         prompt = extract_question(kwargs["prompt"])
         max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[model]["default_max_tokens"])
         temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
@@ -983,7 +996,7 @@ def run(
         google_engine_id = api_keys.get("google_engine_id", None)
         serper_api_key = api_keys.get("serperapi", None)
         search_provider = api_keys.get("search_provider", "google")
-        if not client:
+        if not llm_client:
             raise RuntimeError("Client not initialized")
 
         # Make sure the model is supported
@@ -995,6 +1008,8 @@ def run(
             raise ValueError(f"Tool {tool} not supported.")
 
         additional_information, counter_callback = fetch_additional_information(
+            client=llm_client,
+            client_embedding=embedding_client,
             prompt=prompt,
             model=model,
             google_api_key=google_api_key,
@@ -1021,7 +1036,7 @@ def run(
             {"role": "user", "content": prediction_prompt},
         ]
 
-        response = client.completions(
+        response = llm_client.completions(
             model=model,
             messages=messages,
             temperature=temperature,
@@ -1040,7 +1055,7 @@ def run(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
                 model=model,
-                token_counter=count_tokens,
+                token_counter=functools.partial(count_tokens, client=llm_client),
             )
 
         results = parser_prediction_response(response.content)

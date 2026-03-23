@@ -21,6 +21,7 @@
 
 import functools
 import json
+import os
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
@@ -38,6 +39,11 @@ from pydantic import BaseModel, PositiveInt
 from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import Encoding, encoding_for_model, get_encoding
+
+os.environ.setdefault(
+    "TIKTOKEN_CACHE_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "tiktoken_cache"),
+)
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
@@ -113,6 +119,8 @@ class LLMClientManager:
         """Initializes with API keys, model, and embedding provider. Sets the LLM provider based on the model."""
         self.api_keys = api_keys
         self.embedding_provider = embedding_provider
+        self._client: Optional[LLMClient] = None
+        self._client_embedding: Optional[LLMClient] = None
         if "gpt" in model:
             self.llm_provider = "openai"
         elif "claude" in model:
@@ -120,25 +128,22 @@ class LLMClientManager:
         else:
             self.llm_provider = "openrouter"
 
-    def __enter__(self) -> List:
+    def __enter__(self) -> Tuple[Optional["LLMClient"], Optional["LLMClient"]]:
         """Initializes and returns LLM and embedding clients."""
-        clients = []
-        global client
-        if self.llm_provider and client is None:
-            client = LLMClient(self.api_keys, self.llm_provider)
-            clients.append(client)
-        global client_embedding
-        if self.embedding_provider and client_embedding is None:
-            client_embedding = LLMClient(self.api_keys, self.embedding_provider)
-            clients.append(client_embedding)
-        return clients
+        if self.llm_provider and self._client is None:
+            self._client = LLMClient(self.api_keys, self.llm_provider)
+        if self.embedding_provider and self._client_embedding is None:
+            self._client_embedding = LLMClient(self.api_keys, self.embedding_provider)
+        return (self._client, self._client_embedding)
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
-        """Closes the LLM client"""
-        global client
-        if client is not None:
-            client.client.close()
-            client = None
+        """Closes the LLM and embedding clients."""
+        if self._client is not None:
+            self._client.client.close()
+            self._client = None
+        if self._client_embedding is not None:
+            self._client_embedding.client.close()
+            self._client_embedding = None
 
 
 # pylint: disable=too-few-public-methods
@@ -260,9 +265,6 @@ class LLMClient:
         return None
 
 
-client: Optional[LLMClient] = None
-client_embedding: Optional[LLMClient] = None
-
 LLM_SETTINGS = {
     "claude-3-haiku-20240307": {
         "default_max_tokens": 1000,
@@ -367,7 +369,7 @@ def get_model_encoding(model: str) -> Encoding:
     return encoding_for_model(model)
 
 
-def count_tokens(text: str, model: str) -> int:
+def count_tokens(text: str, model: str, client: Optional["LLMClient"] = None) -> int:
     """Count the number of tokens in a text."""
     # Check if we're using a Claude model and we have an active client
     if "claude" in model.lower() and client and client.llm_provider == "anthropic":
@@ -400,6 +402,7 @@ def count_tokens(text: str, model: str) -> int:
 
 
 def multi_queries(
+    client: "LLMClient",
     prompt: str,
     model: str,
     num_queries: int,
@@ -438,7 +441,7 @@ def multi_queries(
             input_tokens=response.usage.prompt_tokens,
             output_tokens=response.usage.completion_tokens,
             model=model,
-            token_counter=count_tokens,
+            token_counter=functools.partial(count_tokens, client=client),
         )
     queries = parser_query_response(response.content, num_queries=num_queries)
     queries.append(prompt)
@@ -757,6 +760,8 @@ def clean_text(text: str) -> str:
 
 
 def fetch_additional_information(
+    client: "LLMClient",
+    client_embedding: Optional["LLMClient"],
     prompt: str,
     model: str,
     google_api_key: Optional[str],
@@ -779,6 +784,7 @@ def fetch_additional_information(
     # generate multiple queries for fetching information from the web
     try:
         queries, counter_callback = multi_queries(
+            client=client,
             prompt=prompt,
             model=model,
             num_queries=num_queries,
@@ -896,7 +902,10 @@ def run(
     if "claude" in tool:  # maintain backwards compatibility
         model = "claude-4-sonnet-20250514"
     print(f"MODEL for prediction url cot: {model}")
-    with LLMClientManager(kwargs["api_keys"], model, embedding_provider):
+    with LLMClientManager(kwargs["api_keys"], model, embedding_provider) as (
+        llm_client,
+        embedding_client,
+    ):
         user_prompt = extract_question(kwargs["prompt"])
         max_tokens = kwargs.get("max_tokens", LLM_SETTINGS[model]["default_max_tokens"])
         temperature = kwargs.get("temperature", LLM_SETTINGS[model]["temperature"])
@@ -910,7 +919,7 @@ def run(
         serper_api_key = api_keys.get("serperapi", None)
         search_provider = api_keys.get("search_provider", "google")
 
-        if not client:
+        if not llm_client:
             raise RuntimeError("Client not initialized")
 
         # Make sure the model is supported
@@ -922,6 +931,8 @@ def run(
             raise ValueError(f"Tool {tool} not supported.")
 
         additional_information, counter_callback = fetch_additional_information(
+            client=llm_client,
+            client_embedding=embedding_client,
             prompt=user_prompt,
             model=model,
             google_api_key=google_api_key,
@@ -955,7 +966,7 @@ def run(
             {"role": "user", "content": prediction_prompt},
         ]
 
-        response = client.completions(
+        response = llm_client.completions(
             model=model,
             messages=messages,
             temperature=temperature,
@@ -970,7 +981,7 @@ def run(
                 input_tokens=response.usage.prompt_tokens,
                 output_tokens=response.usage.completion_tokens,
                 model=model,
-                token_counter=count_tokens,
+                token_counter=functools.partial(count_tokens, client=llm_client),
             )
 
         results = parser_prediction_response(response.content)
