@@ -122,8 +122,6 @@ only respond with the format below using curly brackets to encapsulate the varia
 Do not respond with anything else other than the transaction object you constructed with the correct known variables the agent had before the request and the correct unknown values found in the user request prompt as input to the web3.py signing method.
 """
 
-client: Optional[OpenAI] = None
-
 
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
@@ -131,35 +129,31 @@ class OpenAIClientManager:
     def __init__(self, api_key: str):
         """Initializes with API keys"""
         self.api_key = api_key
+        self._client: Optional[OpenAI] = None
 
     def __enter__(self) -> OpenAI:
         """Initializes and returns LLM client."""
-        global client
-        if client is None:
-            client = OpenAI(api_key=self.api_key)
-        return client
+        self._client = OpenAI(api_key=self.api_key)
+        return self._client
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Closes the LLM client"""
-        global client
-        if client is not None:
-            client.close()
-            client = None
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
 
 def make_request_openai_request(
     prompt: str,
+    llm_client: OpenAI,
     engine: str = ENGINE,
     max_tokens: Optional[int] = None,
     temperature: Optional[float] = None,
 ) -> str:
     """Make openai request."""
-    if not client:
-        return "Client not initialized"
-
     max_tokens = max_tokens or MAX_TOKENS
     temperature = temperature or TEMPERATURE
-    moderation_result = client.moderations.create(input=prompt)
+    moderation_result = llm_client.moderations.create(input=prompt)
     if moderation_result.results[0].flagged:
         return "Moderation flagged the prompt as in violation of terms."
 
@@ -167,7 +161,7 @@ def make_request_openai_request(
         {"role": "system", "content": "You are a helpful assistant."},
         {"role": "user", "content": prompt},
     ]
-    response = client.chat.completions.create(
+    response = llm_client.chat.completions.create(
         model=engine,
         messages=messages,
         temperature=temperature,
@@ -181,10 +175,11 @@ def make_request_openai_request(
 
 def native_transfer(
     prompt: str,
+    llm_client: OpenAI,
 ) -> MechResponse:
     """Perform native transfer."""
     tool_prompt = NATIVE_TRANSFER_PROMPT.format(user_prompt=prompt)
-    response = make_request_openai_request(prompt=tool_prompt)
+    response = make_request_openai_request(prompt=tool_prompt, llm_client=llm_client)
 
     try:
         # parse the response to get the transaction object string itself
@@ -237,5 +232,5 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     if api_key is None:
         return error_response("No api key has been given.")
 
-    with OpenAIClientManager(api_key):
-        return transaction_builder(prompt)
+    with OpenAIClientManager(api_key) as llm_client:
+        return transaction_builder(prompt, llm_client=llm_client)

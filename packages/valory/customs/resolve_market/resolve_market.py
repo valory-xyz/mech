@@ -98,29 +98,24 @@ def with_key_rotation(func: Callable) -> Callable:
     return wrapper
 
 
-client: Optional[OpenAI] = None
-
-
 class OpenAIClientManager:
     """Client context manager for OpenAI."""
 
     def __init__(self, api_key: str):
         """Init OpenAIClientManager"""
         self.api_key = api_key
+        self._client: Optional[OpenAI] = None
 
     def __enter__(self) -> OpenAI:
         """Enter"""
-        global client
-        if client is None:
-            client = OpenAI(api_key=self.api_key)
-        return client
+        self._client = OpenAI(api_key=self.api_key)
+        return self._client
 
     def __exit__(self, exc_type, exc_value, traceback) -> None:  # type: ignore
         """Exit"""
-        global client
-        if client is not None:
-            client.close()
-            client = None
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
 
 DEFAULT_OPENAI_SETTINGS = {
@@ -294,7 +289,7 @@ class CloseMarketBehaviourMock:
 
     def do_llm_request(self, **kwargs: Any) -> str:
         """Do LLM request."""
-        with OpenAIClientManager(kwargs["api_keys"]["openai"]):
+        with OpenAIClientManager(kwargs["api_keys"]["openai"]) as llm_client:
             max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
             temperature = kwargs.get(
                 "temperature", DEFAULT_OPENAI_SETTINGS["temperature"]
@@ -304,10 +299,7 @@ class CloseMarketBehaviourMock:
             engine = kwargs.get("model", TOOL_TO_ENGINE[tool])
             print(f"ENGINE: {engine}")
 
-            if not client:
-                raise RuntimeError("Client not initialized")
-
-            moderation_result = client.moderations.create(input=prompt)
+            moderation_result = llm_client.moderations.create(input=prompt)
             if moderation_result.results[0].flagged:
                 return "Moderation flagged the prompt as in violation of terms."
 
@@ -315,7 +307,7 @@ class CloseMarketBehaviourMock:
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt},
             ]
-            response = client.chat.completions.create(
+            response = llm_client.chat.completions.create(
                 model=engine,
                 messages=messages,
                 temperature=temperature,
