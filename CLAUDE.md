@@ -235,7 +235,7 @@ The `KeyChain` class (in `packages/valory/skills/task_execution/utils/apis.py`) 
 - FSM apps define state transitions through Round classes
 - Each Round has an `end_block()` method determining next state
 - Consensus is reached when threshold of agents agree (typically 2/3)
-- See: [Open Autonomy FSM documentation](https://docs.autonolas.network/open-autonomy/key_concepts/fsm_app_introduction/)
+- See: [Open Autonomy FSM documentation](https://stack.olas.network/open-autonomy/key_concepts/fsm_app_introduction/)
 
 ### Package Versioning
 
