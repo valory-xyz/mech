@@ -24,6 +24,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -50,7 +51,7 @@ class TestLLMClientManager:
 
     def test_context_manager_returns_client_instance(self) -> None:
         """__enter__ returns a fresh LLMClient, __exit__ closes it."""
-        mock_keys = {"openai": "sk-test"}
+        mock_keys: Any = {"openai": "sk-test"}
         mgr = LLMClientManager(api_keys=mock_keys, model="gpt-4o-2024-08-06")
         with patch(
             "packages.valory.customs.prediction_request.prediction_request.LLMClient"
@@ -80,7 +81,7 @@ class TestLLMClientManager:
         clients_seen: list = []
 
         def create_and_record(key_suffix: str) -> None:
-            mock_keys = {"openai": f"sk-{key_suffix}"}
+            mock_keys: Any = {"openai": f"sk-{key_suffix}"}
             mgr = LLMClientManager(api_keys=mock_keys, model="gpt-4o-2024-08-06")
             with patch(
                 "packages.valory.customs.prediction_request.prediction_request.LLMClient"
