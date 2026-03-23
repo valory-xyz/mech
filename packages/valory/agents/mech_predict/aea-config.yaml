@@ -51,7 +51,7 @@ skills:
 - valory/websocket_client:0.1.0:bafybeie63j65ffblz6g6oiaynjpz4ae5mgyjz2w6o5ovqitzdbnvqzlhzu
 customs:
 - valory/resolve_market:0.1.0:bafybeifefym253bznqivjk3ailiuxyzm5dqyfcwcr6ytmfybmbw2w6ttpm
-- valory/prediction_request:0.1.0:bafybeiako6zr5pnp2ypxly4orffxe3b5pdd62uoiuxvukhqy6kd2nc7llq
+- valory/prediction_request:0.1.0:bafybeiho5bijhdncc3iteb6qorzvk6ktas2gqwulj2lldvmkesilp26y4a
 - napthaai/resolve_market_reasoning:0.1.0:bafybeiekcm2jwmfxdwzl7meubpdhcesimufpyfrbvp57bp7cx6c3iyttp4
 - napthaai/prediction_request_rag:0.1.0:bafybeiaoxdnxb7wnpbegfs63eqi7vrub6wsnxr2r4srhcktmkzraq7qngq
 - napthaai/prediction_request_reasoning:0.1.0:bafybeichcr64wl6jkgpp4vnqe6r2rtwmhutwvyxg3sagl3uynykeohcfbq
@@ -60,7 +60,7 @@ customs:
 - valory/prediction_langchain:0.1.0:bafybeifiw6rdeigls4pbaqwd3hbb3tq5y6psoacnezydjz2udioxullk4e
 - victorpolisetty/gemini_request:0.1.0:bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy
 - victorpolisetty/dalle_request:0.1.0:bafybeifxblnd6zjwibw25lnudt2qkcda2t5nf5bzc3rkpfok6ypt46oofa
-- valory/superforcaster:0.1.0:bafybeibefj27ntzziyouhdii57oxnd7r7kbaokdnfcgakw4vwgtajvnxgq
+- valory/superforcaster:0.1.0:bafybeidbfrp3j7tuhpdal3og3jxj2frgtbkalkcvyasuandxkglug3g3uq
 - dvilela/corcel_request:0.1.0:bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy
 - dvilela/gemini_prediction:0.1.0:bafybeifd5rfdp73qwibjcmgf732yryefa7aukse3ql3iunty3ho5ojuhnu
 - nickcom007/prediction_request_sme:0.1.0:bafybeih5z7v6tlk62ktkvmlbd3mqocdnruwhmhj3zhotaabjkrzcu3zagu
