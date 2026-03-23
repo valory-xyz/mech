@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiflni5dkn5fqe7fnu4lgbqxzfrgochhqfbgzwz3vlf5grijp3nkpm
-  prediction_url_cot.py: bafybeihfazhfdh2hxe7vbcgjkxrr6zp2i7c4d5rcylkoag3q2zhl4ypwra
+  prediction_url_cot.py: bafybeib52bytxdck3rwto46e6d2qkohmegtogglo6ee3b22qm2nebhmoe4
   tiktoken_cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4: bafybeiggg7r65i4qy7x34qse3vq2csfbjx6odiu3el6ioqvtqlnzfjop5y
   tiktoken_cache/fb374d419588a4632f3f557e76b4b70aebbca790: bafybeiecua2dclwdr3oi7no4amb4v7udcmoh7vzamcdm5iccpg4djjd3sy
 fingerprint_ignore_patterns: []
