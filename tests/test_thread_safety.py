@@ -19,6 +19,7 @@
 
 """Tests for thread-safety of LLM client management and tiktoken offline support."""
 
+import inspect
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -26,6 +27,23 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
+from tiktoken import get_encoding
+
+import packages.valory.customs.prediction_request.prediction_request as prediction_mod
+import packages.valory.customs.superforcaster.superforcaster as superforcaster_mod
+from packages.valory.customs.prediction_request.prediction_request import (
+    LLMClientManager,
+    count_tokens,
+    fetch_additional_information,
+    fetch_multi_queries_with_retry,
+    generate_prediction_with_retry,
+)
+from packages.valory.customs.superforcaster.superforcaster import (
+    OpenAIClientManager,
+)
+from packages.valory.customs.superforcaster.superforcaster import (
+    generate_prediction_with_retry as sf_generate_prediction_with_retry,
+)
 
 # ---------------------------------------------------------------------------
 # prediction_request: LLMClientManager no longer uses globals
@@ -37,10 +55,6 @@ class TestPredictionRequestClientManager:
 
     def test_context_manager_returns_client_instance(self) -> None:
         """__enter__ returns a fresh LLMClient, __exit__ closes it."""
-        from packages.valory.customs.prediction_request.prediction_request import (
-            LLMClientManager,
-        )
-
         mock_keys = {"openai": "sk-test"}
         mgr = LLMClientManager(api_keys=mock_keys, model="gpt-4o-2024-08-06")
         with patch(
@@ -57,18 +71,11 @@ class TestPredictionRequestClientManager:
 
     def test_no_global_client_variable(self) -> None:
         """The module must not define a module-level 'client' variable."""
-        import packages.valory.customs.prediction_request.prediction_request as mod
-
-        # The module should not have a top-level `client` attribute that is None
-        # (it may have the word 'client' in function params, but not as a global)
-        source = Path(mod.__file__).read_text(encoding="utf-8")
-        # Check there's no line like `client: Optional[LLMClient] = None`
-        # or `client = None` at module level (not inside a class/function)
+        source = Path(prediction_mod.__file__).read_text(encoding="utf-8")
         lines = source.split("\n")
         for i, line in enumerate(lines, 1):
             stripped = line.lstrip()
             if stripped.startswith("client:") or stripped.startswith("client ="):
-                # Only flag if it's at module level (no indentation)
                 if not line.startswith(" ") and not line.startswith("\t"):
                     pytest.fail(
                         f"Module-level 'client' variable found at line {i}: {line}"
@@ -76,10 +83,6 @@ class TestPredictionRequestClientManager:
 
     def test_concurrent_contexts_are_independent(self) -> None:
         """Two concurrent LLMClientManager contexts get independent clients."""
-        from packages.valory.customs.prediction_request.prediction_request import (
-            LLMClientManager,
-        )
-
         clients_seen = []
 
         def create_and_record(key_suffix: str) -> None:
@@ -98,7 +101,6 @@ class TestPredictionRequestClientManager:
             for f in as_completed(futures):
                 f.result()
 
-        # Each context must produce a distinct client object
         assert (
             len(set(clients_seen)) == 2
         ), "Concurrent contexts must get independent clients"
@@ -109,20 +111,12 @@ class TestPredictionRequestFunctionsAcceptClient:
 
     def test_count_tokens_without_client_uses_tiktoken(self) -> None:
         """count_tokens falls back to tiktoken when client is None."""
-        from packages.valory.customs.prediction_request.prediction_request import (
-            count_tokens,
-        )
-
         token_count = count_tokens("hello world", "gpt-4o-2024-08-06")
         assert isinstance(token_count, int)
         assert token_count > 0
 
     def test_count_tokens_with_client_for_claude(self) -> None:
         """count_tokens uses Anthropic tokenizer when client is provided for Claude models."""
-        from packages.valory.customs.prediction_request.prediction_request import (
-            count_tokens,
-        )
-
         mock_client = MagicMock()
         mock_client.llm_provider = "anthropic"
         mock_client.client.messages.count_tokens.return_value = SimpleNamespace(
@@ -137,12 +131,6 @@ class TestPredictionRequestFunctionsAcceptClient:
 
     def test_generate_prediction_requires_client_param(self) -> None:
         """generate_prediction_with_retry requires client as first param."""
-        import inspect
-
-        from packages.valory.customs.prediction_request.prediction_request import (
-            generate_prediction_with_retry,
-        )
-
         sig = inspect.signature(generate_prediction_with_retry)
         params = list(sig.parameters.keys())
         assert (
@@ -151,12 +139,6 @@ class TestPredictionRequestFunctionsAcceptClient:
 
     def test_fetch_additional_information_requires_client_param(self) -> None:
         """fetch_additional_information requires client as first param."""
-        import inspect
-
-        from packages.valory.customs.prediction_request.prediction_request import (
-            fetch_additional_information,
-        )
-
         sig = inspect.signature(fetch_additional_information)
         params = list(sig.parameters.keys())
         assert (
@@ -165,12 +147,6 @@ class TestPredictionRequestFunctionsAcceptClient:
 
     def test_fetch_multi_queries_requires_client_param(self) -> None:
         """fetch_multi_queries_with_retry requires client as first param."""
-        import inspect
-
-        from packages.valory.customs.prediction_request.prediction_request import (
-            fetch_multi_queries_with_retry,
-        )
-
         sig = inspect.signature(fetch_multi_queries_with_retry)
         params = list(sig.parameters.keys())
         assert (
@@ -188,10 +164,6 @@ class TestSuperforcasterClientManager:
 
     def test_context_manager_returns_client_instance(self) -> None:
         """__enter__ returns a fresh OpenAIClient, __exit__ closes it."""
-        from packages.valory.customs.superforcaster.superforcaster import (
-            OpenAIClientManager,
-        )
-
         mgr = OpenAIClientManager(api_key="sk-test")
         with patch(
             "packages.valory.customs.superforcaster.superforcaster.OpenAIClient"
@@ -207,9 +179,7 @@ class TestSuperforcasterClientManager:
 
     def test_no_global_client_variable(self) -> None:
         """The module must not define a module-level 'client' variable."""
-        import packages.valory.customs.superforcaster.superforcaster as mod
-
-        source = Path(mod.__file__).read_text(encoding="utf-8")
+        source = Path(superforcaster_mod.__file__).read_text(encoding="utf-8")
         lines = source.split("\n")
         for i, line in enumerate(lines, 1):
             stripped = line.lstrip()
@@ -221,13 +191,7 @@ class TestSuperforcasterClientManager:
 
     def test_generate_prediction_requires_client_param(self) -> None:
         """generate_prediction_with_retry requires client as first param."""
-        import inspect
-
-        from packages.valory.customs.superforcaster.superforcaster import (
-            generate_prediction_with_retry,
-        )
-
-        sig = inspect.signature(generate_prediction_with_retry)
+        sig = inspect.signature(sf_generate_prediction_with_retry)
         params = list(sig.parameters.keys())
         assert (
             params[0] == "client"
@@ -282,8 +246,6 @@ class TestTiktokenOfflineCache:
 
     def test_tiktoken_loads_from_bundled_cache(self) -> None:
         """tiktoken can load encodings from the bundled cache without network."""
-        from tiktoken import get_encoding
-
         cache_dir = str(self.PREDICTION_REQUEST_CACHE.resolve())
         with patch.dict(os.environ, {"TIKTOKEN_CACHE_DIR": cache_dir}):
             enc = get_encoding("cl100k_base")
@@ -296,12 +258,9 @@ class TestTiktokenOfflineCache:
 
     def test_prediction_request_sets_tiktoken_cache_dir(self) -> None:
         """prediction_request module sets TIKTOKEN_CACHE_DIR on load."""
-        import packages.valory.customs.prediction_request.prediction_request as mod
-
-        mod_dir = Path(mod.__file__).parent
+        mod_dir = Path(prediction_mod.__file__).parent
         expected = str(mod_dir / "tiktoken_cache")
         actual = os.environ.get("TIKTOKEN_CACHE_DIR", "")
-        # Either it matches our bundled path or was overridden by env
         assert actual != "", "TIKTOKEN_CACHE_DIR should be set after module import"
         assert (
             actual == expected or Path(actual).is_dir()
