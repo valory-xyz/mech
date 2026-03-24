@@ -147,3 +147,11 @@ bead325392d69c64be89a862c92134e5b8663832:packages/valory/skills/task_execution/s
 3ec9d3c0fd61cd3b3720c7c448515be4ca97ceee:packages/valory/customs/prediction_request/component.yaml:generic-api-key:13
 3ec9d3c0fd61cd3b3720c7c448515be4ca97ceee:packages/valory/customs/superforcaster/component.yaml:generic-api-key:13
 3ec9d3c0fd61cd3b3720c7c448515be4ca97ceee:packages/victorpolisetty/customs/dalle_request/component.yaml:generic-api-key:13
+f02cf8710cb139644fe3d882ed1f6a19f86f0cc3:packages/napthaai/customs/prediction_request_rag/component.yaml:generic-api-key:13
+f02cf8710cb139644fe3d882ed1f6a19f86f0cc3:packages/napthaai/customs/prediction_request_reasoning/component.yaml:generic-api-key:13
+f02cf8710cb139644fe3d882ed1f6a19f86f0cc3:packages/napthaai/customs/prediction_url_cot/component.yaml:generic-api-key:13
+f02cf8710cb139644fe3d882ed1f6a19f86f0cc3:packages/napthaai/customs/resolve_market_reasoning/component.yaml:generic-api-key:13
+f02cf8710cb139644fe3d882ed1f6a19f86f0cc3:packages/nickcom007/customs/prediction_request_sme/component.yaml:generic-api-key:14
+f02cf8710cb139644fe3d882ed1f6a19f86f0cc3:packages/valory/customs/prediction_request/component.yaml:generic-api-key:13
+f02cf8710cb139644fe3d882ed1f6a19f86f0cc3:packages/valory/customs/superforcaster/component.yaml:generic-api-key:13
+f02cf8710cb139644fe3d882ed1f6a19f86f0cc3:packages/victorpolisetty/customs/dalle_request/component.yaml:generic-api-key:13
