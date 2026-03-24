@@ -2499,14 +2499,14 @@ web3 = ">=7.0.0,<8"
 
 [[package]]
 name = "open-aea-test-autonomy"
-version = "0.21.14"
+version = "0.21.15"
 description = "Plugin containing test tools for open-autonomy packages."
 optional = false
 python-versions = "*"
 groups = ["main"]
 files = [
-    {file = "open_aea_test_autonomy-0.21.14-py3-none-any.whl", hash = "sha256:652a894ab2e8f652b9b934e45e2c4024ad4e6aa09f7544f6bb5636c8ad87caa7"},
-    {file = "open_aea_test_autonomy-0.21.14.tar.gz", hash = "sha256:93044030d672f7d234389eec72e3dff25e6591e02ef2d6ef2fa15ad1eff71c73"},
+    {file = "open_aea_test_autonomy-0.21.15-py3-none-any.whl", hash = "sha256:cead677c56921457b80572d33da7a8bfea9908539d206f516bdf6578e9fa203b"},
+    {file = "open_aea_test_autonomy-0.21.15.tar.gz", hash = "sha256:08f08e68442781b3208f4accba8585c069fd95facf75e7aab274eabf19d7484a"},
 ]
 
 [package.dependencies]
@@ -4561,4 +4561,4 @@ propcache = ">=0.2.1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.10,<3.15"
-content-hash = "18e4271585bb0cb14e50e1fe2613588ef4ca6ba7069a22e9366f8d36313430bc"
+content-hash = "6804dbe5df570040edded9200ecee0c7a9b7f0370cf35711bc746156db2e38bf"
