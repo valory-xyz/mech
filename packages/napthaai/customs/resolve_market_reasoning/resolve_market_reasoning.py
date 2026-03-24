@@ -46,13 +46,14 @@ from pydantic import BaseModel, Field
 from readability import Document as ReadabilityDocument
 from tiktoken import Encoding, encoding_for_model, get_encoding
 
+
 def _ensure_tiktoken_cache() -> None:
     """Decode bundled tiktoken data to a temp cache dir if not already present."""
     cache_dir = os.path.join(tempfile.gettempdir(), "tiktoken_cache")
     os.makedirs(cache_dir, exist_ok=True)
     os.environ.setdefault("TIKTOKEN_CACHE_DIR", cache_dir)
     try:
-        from . import tiktoken_data
+        from . import tiktoken_data  # pylint: disable=import-outside-toplevel
     except ImportError:
         return
     for name, data in [
