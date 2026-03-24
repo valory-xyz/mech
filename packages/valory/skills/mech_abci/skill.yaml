@@ -27,14 +27,14 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeigzfvbwdm7b3y7s6ft7rwdqmzrafltz7imvczcptfgwah7lfsyupe
-- valory/registration_abci:0.1.0:bafybeiggcghpx2nncrvofqpu6khhqcu3irigu3jangd3e7dzv6aw6jtse4
-- valory/reset_pause_abci:0.1.0:bafybeidxfy3gyjjahke7gftbakecdlwr5gng5ccnvlshjpgppp7b6pu2ea
-- valory/task_submission_abci:0.1.0:bafybeifhn7iwa2lmm5txmod3o2qzy4ja3ov7hv73v4pjvqbylz23yjpxf4
-- valory/termination_abci:0.1.0:bafybeif43h3yc4e6cqieqi2dj7oa55lrircamorkcrgt2kjofua7y2vcgu
-- valory/transaction_settlement_abci:0.1.0:bafybeiezf3kh5f4jmxnwoylc4krghzrkfknkc2r6vve3rgb5eumloco33e
-- valory/delivery_rate_abci:0.1.0:bafybeiadifqzv7jtcnwqfqyd3ulmr5fnu2igv5niahea32cvuxsmv22fbu
-- valory/task_execution:0.1.0:bafybeicjdisoustpstsj4gowyury4me6vf6ueaekfqho7jm6qfhkq2jzrm
+- valory/abstract_round_abci:0.1.0:bafybeiamwgraw77dsawauz7fxabiqsa344vrieiljw37eufbl55ijpdmha
+- valory/registration_abci:0.1.0:bafybeiajjkzebtdlvnsjhhqojgomf2cy6ciridpx3purwbj7frfble5spm
+- valory/reset_pause_abci:0.1.0:bafybeiepj7ek22rgw2blhu3s423xu4u7hjcptluvkcduhvweyrahbzsfkq
+- valory/task_submission_abci:0.1.0:bafybeida7puuegik7n5um3rx4kqy3s7npr6ebe7tnxcpcunfkk7ogo65xe
+- valory/termination_abci:0.1.0:bafybeigmozjv5tm2nzoj4kwtzo433m75su3mkmk5ulgcasjpomi3b6uaom
+- valory/transaction_settlement_abci:0.1.0:bafybeie2lj22nrliky4xuobpihpaglhju6x4oaq56765ueoxgcqgjahb34
+- valory/delivery_rate_abci:0.1.0:bafybeifjvvapcdzfdq3ooivjw42hwbvbdmcrrqewsjanzrdrh4ekiayvdu
+- valory/task_execution:0.1.0:bafybeidazic7knv3k2zoyyxahgvut62nddquijijix26sv6rxctlhopigi
 behaviours:
   main:
     args: {}
