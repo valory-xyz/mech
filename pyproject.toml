@@ -58,7 +58,7 @@ prometheus_client = "==0.23.1"
 werkzeug = "==3.1.6"
 attrs = "==25.4.0"
 py-eth-sig-utils = "==0.4.0"
-aea-helpers = ">=0.1.0"
+aea-helpers = ">=0.21.15"
 
 [tool.poetry.group.dev.dependencies]
 setuptools = "^78.0.1"
