@@ -51,7 +51,7 @@ skills:
 - valory/websocket_client:0.1.0:bafybeie63j65ffblz6g6oiaynjpz4ae5mgyjz2w6o5ovqitzdbnvqzlhzu
 customs:
 - valory/resolve_market:0.1.0:bafybeifefym253bznqivjk3ailiuxyzm5dqyfcwcr6ytmfybmbw2w6ttpm
-- valory/prediction_request:0.1.0:bafybeibmzee77gofhnfhfnwzyla7xts6eu5kyryynugmx76atdad5uay7m
+- valory/prediction_request:0.1.0:bafybeif7y6somgdxzy5xsqkd37saf3hcxu464jupt6sc4d2oih6cgu47i4
 - napthaai/resolve_market_reasoning:0.1.0:bafybeif3owhstd3nwyrbviryvuvgx6gvsrji5yfkn5dy34ypxicrzzkd3i
 - napthaai/prediction_request_rag:0.1.0:bafybeihmqdq2dihtqnrqikuludhkpvcojuqa22ccixu34tqeclhdsdtfca
 - napthaai/prediction_request_reasoning:0.1.0:bafybeidw7j6atnnlnsfjemdz4jruf35zm3nasdj2f4kh3zflfnoialzaoy
