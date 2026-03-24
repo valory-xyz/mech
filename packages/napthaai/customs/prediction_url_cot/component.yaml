@@ -7,11 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiflni5dkn5fqe7fnu4lgbqxzfrgochhqfbgzwz3vlf5grijp3nkpm
-  prediction_url_cot.py: bafybeib52bytxdck3rwto46e6d2qkohmegtogglo6ee3b22qm2nebhmoe4
+  prediction_url_cot.py: bafybeic32nwkvndppj2chxiqhxsuulo5ffo6it2j54yy47tzid66ohbriy
   tests/__init__.py: bafybeia2zevyo6fxbwf7dj4vkhd3fnsvog5sqvepqg4qjgzydlhsuwnn7q
-  tests/test_prediction_url_cot.py: bafybeidopie2elugbeidojgb5x4lc6pcsxb6cygguznpgqlwvfeiwvii64
-  tiktoken_cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4: bafybeiggg7r65i4qy7x34qse3vq2csfbjx6odiu3el6ioqvtqlnzfjop5y
-  tiktoken_cache/fb374d419588a4632f3f557e76b4b70aebbca790: bafybeiecua2dclwdr3oi7no4amb4v7udcmoh7vzamcdm5iccpg4djjd3sy
+  tests/test_prediction_url_cot.py: bafybeigpkh52uhskjb6ohwb6i7chhtlvdyluxcpqsbyz472c5akjyro3f4
+  tiktoken_data.py: bafybeidtf3jgwzxger54tpnh7ocu2jzr6goaykzzgove2hfoznucmjd25y
 fingerprint_ignore_patterns: []
 entry_point: prediction_url_cot.py
 callable: run
