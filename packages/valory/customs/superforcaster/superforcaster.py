@@ -18,10 +18,12 @@
 # ------------------------------------------------------------------------------
 """Contains the job definitions"""
 
+import base64
 import functools
 import json
 import os
 import re
+import tempfile
 import time
 from datetime import date
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -30,12 +32,26 @@ import openai
 import requests
 from tiktoken import encoding_for_model
 
-# Point tiktoken at bundled encoding data to avoid runtime downloads.
-# Uses setdefault so an explicit TIKTOKEN_CACHE_DIR env var takes precedence.
-os.environ.setdefault(
-    "TIKTOKEN_CACHE_DIR",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "tiktoken_cache"),
-)
+def _ensure_tiktoken_cache() -> None:
+    """Decode bundled tiktoken data to a temp cache dir if not already present."""
+    cache_dir = os.path.join(tempfile.gettempdir(), "tiktoken_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    os.environ.setdefault("TIKTOKEN_CACHE_DIR", cache_dir)
+    try:
+        from . import tiktoken_data
+    except ImportError:
+        return
+    for name, data in [
+        (tiktoken_data.CL100K_CACHE_NAME, tiktoken_data.CL100K_BASE),
+        (tiktoken_data.O200K_CACHE_NAME, tiktoken_data.O200K_BASE),
+    ]:
+        path = os.path.join(cache_dir, name)
+        if not os.path.exists(path):
+            with open(path, "wb") as f:
+                f.write(base64.b64decode(data))
+
+
+_ensure_tiktoken_cache()
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
 MaxCostResponse = float
