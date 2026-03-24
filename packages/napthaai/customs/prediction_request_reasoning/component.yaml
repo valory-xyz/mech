@@ -7,7 +7,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeib36ew6vbztldut5xayk5553rylrq7yv4cpqyhwc5ktvd4cx67vwu
-  prediction_request_reasoning.py: bafybeicybcycoe73tnswgeig4dnllymrvwymzktwby6zbrinsb7ybn2hyu
+  prediction_request_reasoning.py: bafybeickogipnpcaceqbrq7lg7bqixwuk5a33ygi5l4kp33dfw6z3h4i7m
+  tests/__init__.py: bafybeieu3toasuyaehkqounrtylk5bjer7qgvnt6ccjcsi6jlfig7wfrka
+  tests/test_prediction_request_reasoning.py: bafybeial3afaryh6ffkfwcw5v55vuasipbu73fw2fdvif5f5vhssakr3bq
+  tiktoken_cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4: bafybeiggg7r65i4qy7x34qse3vq2csfbjx6odiu3el6ioqvtqlnzfjop5y
+  tiktoken_cache/fb374d419588a4632f3f557e76b4b70aebbca790: bafybeiecua2dclwdr3oi7no4amb4v7udcmoh7vzamcdm5iccpg4djjd3sy
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_reasoning.py
 callable: run
@@ -41,6 +45,6 @@ dependencies:
   faiss-cpu:
     version: ==1.13.2
   docstring-parser:
-    version: ==0.15
+    version: ==0.17.0
   anthropic:
     version: ==0.23.1

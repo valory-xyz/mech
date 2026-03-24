@@ -7,7 +7,11 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibt7f7crtwvmkg7spy3jhscmlqltvyblzp32g6gj44v7tlo5lycuq
-  prediction_request_rag.py: bafybeicogcsrzjcgqeqgawws2oyoj6ln4gwx32sqhdeofxjwr5qkhdrynq
+  prediction_request_rag.py: bafybeian67yixaflczsbz5itr6q3eevqobmda3wrz7os7cgszzovya5nae
+  tests/__init__.py: bafybeifcgilmgfwx7kaap67cfnuokrhfrabi6bnvqiudyzgf2idu64dvxq
+  tests/test_prediction_request_rag.py: bafybeibtkh6lhxdoknidwyg7iimcmixoyfs2g6y6ewg4ela365nmhsg2j4
+  tiktoken_cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4: bafybeiggg7r65i4qy7x34qse3vq2csfbjx6odiu3el6ioqvtqlnzfjop5y
+  tiktoken_cache/fb374d419588a4632f3f557e76b4b70aebbca790: bafybeiecua2dclwdr3oi7no4amb4v7udcmoh7vzamcdm5iccpg4djjd3sy
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_rag.py
 callable: run
@@ -39,7 +43,7 @@ dependencies:
   openai:
     version: ==1.30.2
   docstring-parser:
-    version: ==0.15
+    version: ==0.17.0
   pypdf2:
     version: ==3.0.1
   numpy:

@@ -50,20 +50,20 @@ skills:
 - valory/transaction_settlement_abci:0.1.0:bafybeiezf3kh5f4jmxnwoylc4krghzrkfknkc2r6vve3rgb5eumloco33e
 - valory/websocket_client:0.1.0:bafybeie63j65ffblz6g6oiaynjpz4ae5mgyjz2w6o5ovqitzdbnvqzlhzu
 customs:
-- valory/resolve_market:0.1.0:bafybeifn3ecrbww2bnrcfqurft7c3ptc3fdtvfacadsjvyz6pndzi7py74
-- valory/prediction_request:0.1.0:bafybeicouot7bqu7vszbux2dvopth2wv2ktuv7cvjkpglpa5ls4q4dpmzi
-- napthaai/resolve_market_reasoning:0.1.0:bafybeiej2gtal7bhfnics5mfmwzv3sll6scd4esvorfjtju5zpbvh5apea
-- napthaai/prediction_request_rag:0.1.0:bafybeigav3tg2osbid4sycm7yso376erro4wojx6v47wcia333lsrjugmi
-- napthaai/prediction_request_reasoning:0.1.0:bafybeifjdufyjkevaeiqjqyf7s2praj2s7ensqafkwwrwnpxu2onbstnte
-- valory/prepare_tx:0.1.0:bafybeifsczpc3wq533xngleuvxrxitny56wfzdtd3koht2l2kp2arpyawq
-- napthaai/prediction_url_cot:0.1.0:bafybeig26xp4ujqgmx3jpdp25nmlj5kyq6fgdveloyebmdmxsi4tjozz2q
+- valory/resolve_market:0.1.0:bafybeifefym253bznqivjk3ailiuxyzm5dqyfcwcr6ytmfybmbw2w6ttpm
+- valory/prediction_request:0.1.0:bafybeibmzee77gofhnfhfnwzyla7xts6eu5kyryynugmx76atdad5uay7m
+- napthaai/resolve_market_reasoning:0.1.0:bafybeif3owhstd3nwyrbviryvuvgx6gvsrji5yfkn5dy34ypxicrzzkd3i
+- napthaai/prediction_request_rag:0.1.0:bafybeihmqdq2dihtqnrqikuludhkpvcojuqa22ccixu34tqeclhdsdtfca
+- napthaai/prediction_request_reasoning:0.1.0:bafybeidw7j6atnnlnsfjemdz4jruf35zm3nasdj2f4kh3zflfnoialzaoy
+- valory/prepare_tx:0.1.0:bafybeifhfervmgwtoiiyzvqc2wdetzvp4bmlwys5bk3vuef6ggclhbvwua
+- napthaai/prediction_url_cot:0.1.0:bafybeigwhie472zyouxbf7iztcn2q3uvo7yvf2ffgzcqdxqv7nqkgvfri4
 - valory/prediction_langchain:0.1.0:bafybeifiw6rdeigls4pbaqwd3hbb3tq5y6psoacnezydjz2udioxullk4e
 - victorpolisetty/gemini_request:0.1.0:bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy
-- victorpolisetty/dalle_request:0.1.0:bafybeihmrgqr7z3wwsmyfsqoeif6am6mcvfswuk5pgk6bwwy6wik56yd5a
-- valory/superforcaster:0.1.0:bafybeiei2iulra7475w2peunnt6ds73lqzndk23ohtztzicraalkokiqre
+- victorpolisetty/dalle_request:0.1.0:bafybeianzfvct4johldzpxvybbhihb4flpl4o4ohrmhurv3qarykickw44
+- valory/superforcaster:0.1.0:bafybeidbfrp3j7tuhpdal3og3jxj2frgtbkalkcvyasuandxkglug3g3uq
 - dvilela/corcel_request:0.1.0:bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy
 - dvilela/gemini_prediction:0.1.0:bafybeifd5rfdp73qwibjcmgf732yryefa7aukse3ql3iunty3ho5ojuhnu
-- nickcom007/prediction_request_sme:0.1.0:bafybeifwknjs4uu4oyxunr44prfj267drj7ydzduhltj7vxtcbsk6pkxpu
+- nickcom007/prediction_request_sme:0.1.0:bafybeidwsd3in3gfpf4umidhli47efjg3v24zy2f3k3uiyytra4rdvs4lu
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -101,7 +101,7 @@ dependencies:
   beautifulsoup4:
     version: ==4.12.2
   docstring-parser:
-    version: ==0.15
+    version: ==0.17.0
   faiss-cpu:
     version: ==1.13.2
   fastapi:

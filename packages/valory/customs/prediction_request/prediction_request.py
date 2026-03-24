@@ -21,6 +21,7 @@
 
 import functools
 import json
+import os
 import re
 import time
 from collections import defaultdict
@@ -41,6 +42,13 @@ from markdownify import markdownify as md
 from pydantic import BaseModel, PositiveInt
 from readability import Document
 from tiktoken import encoding_for_model, get_encoding
+
+# Point tiktoken at bundled encoding data to avoid runtime downloads.
+# Uses setdefault so an explicit TIKTOKEN_CACHE_DIR env var takes precedence.
+os.environ.setdefault(
+    "TIKTOKEN_CACHE_DIR",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "tiktoken_cache"),
+)
 
 # `STOP_WORDS` retrieved from https://github.com/explosion/spaCy/blob/v3.7.5/spacy/lang/en/stop_words.py
 STOP_WORDS = set("""
@@ -220,6 +228,7 @@ class LLMClientManager:
     def __init__(self, api_keys: List, model: str):
         """Initializes with API keys and llm provider"""
         self.api_keys = api_keys
+        self._client: Optional["LLMClient"] = None
         if "gpt" in model:
             self.llm_provider = "openai"
         elif "claude" in model:
@@ -227,19 +236,16 @@ class LLMClientManager:
         else:
             self.llm_provider = "openrouter"
 
-    def __enter__(self) -> Any:
+    def __enter__(self) -> "LLMClient":
         """Initializes and returns LLM client."""
-        global client
-        if client is None:
-            client = LLMClient(self.api_keys, self.llm_provider)
-        return client
+        self._client = LLMClient(self.api_keys, self.llm_provider)
+        return self._client
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
         """Closes the LLM client"""
-        global client
-        if client is not None:
-            client.client.close()
-            client = None
+        if self._client is not None:
+            self._client.client.close()
+            self._client = None
 
 
 class Usage:
@@ -351,9 +357,6 @@ class ExtendedDocument(BaseModel):
     embedding: Optional[List[float]] = None
 
 
-client: Optional[LLMClient] = None
-
-
 # Clean text by removing emojis and non-printable characters.
 def clean_text(text: str) -> str:
     """Remove emojis and non-printable characters, collapse whitespace."""
@@ -387,7 +390,7 @@ def clean_text(text: str) -> str:
     return text
 
 
-def count_tokens(text: str, model: str) -> int:
+def count_tokens(text: str, model: str, client: Optional["LLMClient"] = None) -> int:
     """Count the number of tokens in a text."""
     # Check if we're using a Claude model and we have an active client
     if "claude" in model.lower() and client and client.llm_provider == "anthropic":
@@ -411,9 +414,15 @@ def count_tokens(text: str, model: str) -> int:
                 f"Unexpected error with Anthropic tokenizer: {type(e).__name__}: {e}, using fallback encoding"
             )
 
-        # Fallback encoding
+        # Fallback encoding for Claude
         enc = get_encoding("cl100k_base")
         return len(enc.encode(text))
+
+    # Claude models without a client still need a fallback encoding
+    if "claude" in model.lower():
+        enc = get_encoding("cl100k_base")
+        return len(enc.encode(text))
+
     # Workaround since tiktoken does not have support yet for gpt4.1
     # https://github.com/openai/tiktoken/issues/395
     if model == "gpt-4.1-2025-04-14":
@@ -792,6 +801,7 @@ def extract_multi_queries(text: str) -> Any:
 
 
 def fetch_multi_queries_with_retry(
+    client: "LLMClient",
     model: str,
     messages: List[Dict[str, str]],
     temperature: float,
@@ -800,10 +810,6 @@ def fetch_multi_queries_with_retry(
     delay: int = COMPLETION_DELAY,
     counter_callback: Optional[Callable] = None,
 ) -> Tuple[dict, Optional[Callable]]:
-    """Attempt to fetch multi-queries with retries on failure."""
-    if not client:
-        raise RuntimeError("Client not initialized")
-
     """Attempt to fetch multi-queries with retries on failure."""
     attempt = 0
     while attempt < retries:
@@ -827,7 +833,7 @@ def fetch_multi_queries_with_retry(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
                     model=model,
-                    token_counter=count_tokens,
+                    token_counter=functools.partial(count_tokens, client=client),
                 )
             return json_data, counter_callback
         except Exception as e:
@@ -838,6 +844,7 @@ def fetch_multi_queries_with_retry(
 
 
 def generate_prediction_with_retry(
+    client: "LLMClient",
     model: str,
     messages: List[Dict[str, str]],
     temperature: float,
@@ -847,8 +854,6 @@ def generate_prediction_with_retry(
     counter_callback: Optional[Callable] = None,
 ) -> Tuple[Any, Optional[Callable]]:
     """Attempt to generate a prediction with retries on failure."""
-    if not client:
-        raise Exception("Client not initialized")
     attempt = 0
     tool_errors = []
     while attempt < retries:
@@ -874,7 +879,7 @@ def generate_prediction_with_retry(
                     input_tokens=response.usage.prompt_tokens,
                     output_tokens=response.usage.completion_tokens,
                     model=model,
-                    token_counter=count_tokens,
+                    token_counter=functools.partial(count_tokens, client=client),
                 )
             return extracted_block, counter_callback
         except Exception as e:
@@ -890,6 +895,7 @@ def generate_prediction_with_retry(
 
 
 def fetch_additional_information(
+    client: "LLMClient",
     user_prompt: str,
     engine: str,
     temperature: float,
@@ -904,9 +910,6 @@ def fetch_additional_information(
     source_links: Optional[Dict] = None,
 ) -> Tuple[str, Any]:
     """Fetch additional information."""
-    if not client:
-        raise RuntimeError("Client not initialized")
-
     url_query_prompt = URL_QUERY_PROMPT.format(
         user_prompt=user_prompt, num_queries=DEFAULT_NUM_QUERIES
     )
@@ -916,6 +919,7 @@ def fetch_additional_information(
     ]
     try:
         json_data, counter_callback = fetch_multi_queries_with_retry(
+            client=client,
             model=engine,
             messages=messages,
             temperature=temperature,
@@ -1035,7 +1039,11 @@ def summarize(text: str, compression_factor: float) -> str:
 
 
 def adjust_additional_information(
-    user_prompt: str, prompt_template: str, additional_information: str, model: str
+    user_prompt: str,
+    prompt_template: str,
+    additional_information: str,
+    model: str,
+    client: Optional["LLMClient"] = None,
 ) -> str:
     """Adjust the additional_information to fit within the token budget"""
 
@@ -1043,7 +1051,7 @@ def adjust_additional_information(
     final_prompt = prompt_template.format(
         user_prompt=user_prompt, additional_information=""
     )
-    prompt_tokens = count_tokens(text=final_prompt, model=model)
+    prompt_tokens = count_tokens(text=final_prompt, model=model, client=client)
 
     # Calculate available tokens for additional_information
     MAX_PREDICTION_PROMPT_TOKENS = (
@@ -1053,7 +1061,9 @@ def adjust_additional_information(
     available_tokens = cast(int, MAX_PREDICTION_PROMPT_TOKENS) - prompt_tokens - BUFFER
 
     # Encode the additional_information
-    additional_info_tokens = count_tokens(text=additional_information, model=model)
+    additional_info_tokens = count_tokens(
+        text=additional_information, model=model, client=client
+    )
 
     # If additional_information exceeds available tokens, truncate it
     if additional_info_tokens > available_tokens:
@@ -1087,7 +1097,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     if "claude" in tool:  # maintain backwards compatibility
         engine = "claude-4-sonnet-20250514"
     print(f"ENGINE used for {tool}: {engine}")
-    with LLMClientManager(kwargs["api_keys"], engine):
+    with LLMClientManager(kwargs["api_keys"], engine) as llm_client:
         user_prompt = kwargs["prompt"]  # question
         max_tokens = kwargs.get(
             "max_tokens", LLM_SETTINGS[engine]["default_max_tokens"]
@@ -1112,6 +1122,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         additional_information = ""
         if tool in ["prediction-online", "claude-prediction-online"]:
             additional_information, counter_callback = fetch_additional_information(
+                llm_client,
                 user_prompt,
                 engine,
                 temperature,
@@ -1136,7 +1147,11 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         if additional_information:
             # check the limit of tokens
             additional_information = adjust_additional_information(
-                user_prompt, active_prompt, additional_information, engine
+                user_prompt,
+                active_prompt,
+                additional_information,
+                engine,
+                client=llm_client,
             )
         prediction_prompt = active_prompt.format(
             user_prompt=user_prompt, additional_information=additional_information
@@ -1147,6 +1162,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         ]
 
         extracted_block, counter_callback = generate_prediction_with_retry(
+            client=llm_client,
             model=engine,
             messages=messages,
             temperature=temperature,
