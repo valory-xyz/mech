@@ -7,11 +7,10 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiesmz5to2eh4fkhoadjkakefoloxpi7syxzm37lsp5uu5f6fopw4y
-  dalle_request.py: bafybeidacm2ehnbqmtazx7zkldjoou3wy3vr23rc2yctxjcldnhreonujm
+  dalle_request.py: bafybeibdd65k6nolz6vbbrobgde3ffftiohqijnnbzriojkoznzjisecxm
   tests/__init__.py: bafybeicu4nfean2itwfwwjypz7ej5uoew7fkj64xwcmufqnyttqe7fsj24
-  tests/test_dalle_request.py: bafybeieztt4dehchuwocizv4ehcqrstu4mz4soks424ktmsz3celfftxd4
-  tiktoken_cache/9b5ad71b2ce5302211f9c61530b329a4922fc6a4: bafybeiggg7r65i4qy7x34qse3vq2csfbjx6odiu3el6ioqvtqlnzfjop5y
-  tiktoken_cache/fb374d419588a4632f3f557e76b4b70aebbca790: bafybeiecua2dclwdr3oi7no4amb4v7udcmoh7vzamcdm5iccpg4djjd3sy
+  tests/test_dalle_request.py: bafybeid6su42wv3mlahypter326b3pwnjgyh6rf5lorb6v4eag2epprioa
+  tiktoken_data.py: bafybeidtf3jgwzxger54tpnh7ocu2jzr6goaykzzgove2hfoznucmjd25y
 fingerprint_ignore_patterns: []
 entry_point: dalle_request.py
 callable: run

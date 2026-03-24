@@ -28,17 +28,13 @@ import pytest
 from tiktoken import get_encoding
 
 import packages.nickcom007.customs.prediction_request_sme.prediction_request_sme as module
+from packages.nickcom007.customs.prediction_request_sme import tiktoken_data
 from packages.nickcom007.customs.prediction_request_sme.prediction_request_sme import (
     OpenAIClientManager,
+    _ensure_tiktoken_cache,
     fetch_additional_information,
     get_sme_role,
 )
-
-TIKTOKEN_CACHE = Path(module.__file__).parent / "tiktoken_cache"
-EXPECTED_CACHE_FILES = {
-    "9b5ad71b2ce5302211f9c61530b329a4922fc6a4",
-    "fb374d419588a4632f3f557e76b4b70aebbca790",
-}
 
 
 class TestOpenAIClientManager:
@@ -85,24 +81,30 @@ class TestFunctionsAcceptClient:
 
 
 class TestTiktokenOfflineCache:
-    """Verify tiktoken cache files are bundled and usable."""
+    """Verify tiktoken data is bundled and decodable."""
 
-    def test_cache_dir_exists(self) -> None:
-        """tiktoken_cache directory exists in the package."""
-        assert TIKTOKEN_CACHE.is_dir()
+    def test_ensure_tiktoken_cache_creates_files(self) -> None:
+        """_ensure_tiktoken_cache writes decoded BPE files to cache dir."""
+        _ensure_tiktoken_cache()
+        cache_dir = os.environ.get("TIKTOKEN_CACHE_DIR", "")
+        assert cache_dir != "", "TIKTOKEN_CACHE_DIR should be set"
+        assert Path(cache_dir).is_dir()
+        files = list(Path(cache_dir).iterdir())
+        assert len(files) >= 2
 
-    def test_has_all_cache_files(self) -> None:
-        """Package bundles both cl100k_base and o200k_base."""
-        actual = {f.name for f in TIKTOKEN_CACHE.iterdir()}
-        assert EXPECTED_CACHE_FILES.issubset(actual)
+    def test_tiktoken_loads_from_decoded_cache(self) -> None:
+        """Tiktoken can load encodings after _ensure_tiktoken_cache runs."""
+        _ensure_tiktoken_cache()
+        enc = get_encoding("cl100k_base")
+        assert len(enc.encode("hello world")) > 0
+        enc2 = get_encoding("o200k_base")
+        assert len(enc2.encode("hello world")) > 0
 
-    def test_cache_files_are_non_empty(self) -> None:
-        """All cache files should contain data."""
-        for name in EXPECTED_CACHE_FILES:
-            assert (TIKTOKEN_CACHE / name).stat().st_size > 0
-
-    def test_tiktoken_loads_from_bundled_cache(self) -> None:
-        """Tiktoken can load encodings from the bundled cache."""
-        with patch.dict(os.environ, {"TIKTOKEN_CACHE_DIR": str(TIKTOKEN_CACHE)}):
-            enc = get_encoding("cl100k_base")
-            assert len(enc.encode("hello world")) > 0
+    def test_tiktoken_data_module_exists(self) -> None:
+        """tiktoken_data.py has the expected constants."""
+        assert hasattr(tiktoken_data, "CL100K_BASE")
+        assert hasattr(tiktoken_data, "O200K_BASE")
+        assert hasattr(tiktoken_data, "CL100K_CACHE_NAME")
+        assert hasattr(tiktoken_data, "O200K_CACHE_NAME")
+        assert len(tiktoken_data.CL100K_BASE) > 0
+        assert len(tiktoken_data.O200K_BASE) > 0

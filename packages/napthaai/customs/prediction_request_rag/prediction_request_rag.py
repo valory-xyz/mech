@@ -18,10 +18,12 @@
 # ------------------------------------------------------------------------------
 """This module implements a tool for making binary predictions on markets using RAG."""
 
+import base64
 import functools
 import json
 import os
 import re
+import tempfile
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from itertools import islice
@@ -41,10 +43,27 @@ from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import encoding_for_model, get_encoding
 
-os.environ.setdefault(
-    "TIKTOKEN_CACHE_DIR",
-    os.path.join(os.path.dirname(os.path.abspath(__file__)), "tiktoken_cache"),
-)
+
+def _ensure_tiktoken_cache() -> None:
+    """Decode bundled tiktoken data to a temp cache dir if not already present."""
+    cache_dir = os.path.join(tempfile.gettempdir(), "tiktoken_cache")
+    os.makedirs(cache_dir, exist_ok=True)
+    os.environ.setdefault("TIKTOKEN_CACHE_DIR", cache_dir)
+    try:
+        from . import tiktoken_data  # pylint: disable=import-outside-toplevel
+    except ImportError:
+        return
+    for name, data in [
+        (tiktoken_data.CL100K_CACHE_NAME, tiktoken_data.CL100K_BASE),
+        (tiktoken_data.O200K_CACHE_NAME, tiktoken_data.O200K_BASE),
+    ]:
+        path = os.path.join(cache_dir, name)
+        if not os.path.exists(path):
+            with open(path, "wb") as f:
+                f.write(base64.b64decode(data))
+
+
+_ensure_tiktoken_cache()
 
 MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
 MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
