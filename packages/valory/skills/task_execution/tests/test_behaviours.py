@@ -20,6 +20,7 @@
 """This package contains the tests for the behaviours."""
 
 import json
+import re
 import time
 from concurrent.futures import Future
 from types import SimpleNamespace
@@ -2062,3 +2063,144 @@ def test_filter_out_incompatible_reqs_different_payment_type_drops_task(
     behaviour._filter_out_incompatible_reqs()
     # task with mismatched payment type should be filtered out
     assert shared_state[beh_mod.TIMED_OUT_TASKS] == []
+
+
+# ---------------------------------------------------------------------------
+# Phase 1: Response schema enrichment (_handle_done_task)
+# ---------------------------------------------------------------------------
+
+ISO_8601_UTC_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?Z$")
+
+SAMPLE_TOOL = "sum"
+SAMPLE_TOOL_HASH = "bafybei_sample_hash"
+
+
+def _call_handle_done_task(
+    behaviour: Any,
+    monkeypatch: Any,
+    fake_dialogue: Any,
+    task_result: Any = None,
+    tool: str = SAMPLE_TOOL,
+    tool_hash: str = SAMPLE_TOOL_HASH,
+) -> Dict[str, Any]:
+    """Call _handle_done_task directly and capture the stored IPFS payload.
+
+    :param behaviour: The TaskExecutionBehaviour instance.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param fake_dialogue: Dialogue stub.
+    :param task_result: The 5-tuple task result, or None for failure path.
+    :param tool: Tool name.
+    :param tool_hash: Tool IPFS hash.
+    :returns: Parsed JSON response dict that would be stored to IPFS.
+    """
+    req_id = 999
+    behaviour._executing_task = {
+        "requestId": req_id,
+        "requestIdWithNonce": "999-nonce",
+        "contract_address": "0xmech",
+        "tool": tool,
+        "model": "gpt-4o",
+        "params": {"temperature": 0.7},
+        "is_offchain": False,
+        "request_delivery_rate": 100,
+    }
+    behaviour._tools_to_package_hash[tool] = tool_hash
+    behaviour._invalid_request = task_result is None
+    behaviour.tool_execution_start_time = time.perf_counter() - 1.5
+
+    stored_payloads: list = []
+
+    def capture_store(files: Dict[str, str], **k: Any) -> Tuple[object, Any]:
+        stored_payloads.append(files)
+        return object(), fake_dialogue
+
+    monkeypatch.setattr(behaviour, "_build_ipfs_store_file_req", capture_store)
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda msg, dlg, cb, error_cb=None: None,
+    )
+
+    behaviour._handle_done_task(task_result)
+
+    assert len(stored_payloads) == 1
+    return json.loads(stored_payloads[0][str(req_id)])
+
+
+def _make_success_result() -> Tuple[str, str, Dict, SimpleNamespace, object]:
+    """Build a valid 5-tuple task result for the success path."""
+    token_cb = SimpleNamespace(cost_dict={"input": 10}, actual_model="gpt-4o")
+    return (
+        "prediction: yes",
+        "Will BTC hit $100k?",
+        {"tx": "0xabc"},
+        token_cb,
+        object(),
+    )
+
+
+def test_handle_done_task_success_has_schema_version(
+    behaviour: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """Success response contains schema_version matching the module constant."""
+    payload = _call_handle_done_task(
+        behaviour, monkeypatch, fake_dialogue, task_result=_make_success_result()
+    )
+    assert payload["schema_version"] == beh_mod.RESPONSE_SCHEMA_VERSION
+
+
+def test_handle_done_task_success_has_executed_at(
+    behaviour: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """Success response contains executed_at in ISO 8601 UTC with Z suffix."""
+    payload = _call_handle_done_task(
+        behaviour, monkeypatch, fake_dialogue, task_result=_make_success_result()
+    )
+    assert "executed_at" in payload
+    assert ISO_8601_UTC_RE.match(
+        payload["executed_at"]
+    ), f"executed_at is not ISO 8601 UTC: {payload['executed_at']}"
+
+
+def test_handle_done_task_success_metadata_has_tool_hash(
+    behaviour: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """Success metadata contains tool_hash matching _tools_to_package_hash."""
+    payload = _call_handle_done_task(
+        behaviour, monkeypatch, fake_dialogue, task_result=_make_success_result()
+    )
+    assert payload["metadata"]["tool_hash"] == SAMPLE_TOOL_HASH
+
+
+def test_handle_done_task_success_metadata_has_execution_latency_ms(
+    behaviour: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """Success metadata contains execution_latency_ms as a positive integer."""
+    payload = _call_handle_done_task(
+        behaviour, monkeypatch, fake_dialogue, task_result=_make_success_result()
+    )
+    latency = payload["metadata"]["execution_latency_ms"]
+    assert isinstance(latency, int)
+    assert latency >= 0
+
+
+def test_handle_done_task_failure_has_schema_version_and_executed_at(
+    behaviour: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """Failure response still contains schema_version and executed_at."""
+    payload = _call_handle_done_task(
+        behaviour, monkeypatch, fake_dialogue, task_result=None
+    )
+    assert payload["schema_version"] == beh_mod.RESPONSE_SCHEMA_VERSION
+    assert "executed_at" in payload
+    assert ISO_8601_UTC_RE.match(payload["executed_at"])
+
+
+def test_handle_done_task_failure_has_no_metadata(
+    behaviour: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """Failure response does not contain metadata (no spurious tool_hash/latency)."""
+    payload = _call_handle_done_task(
+        behaviour, monkeypatch, fake_dialogue, task_result=None
+    )
+    assert "metadata" not in payload

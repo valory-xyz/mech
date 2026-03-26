@@ -24,6 +24,7 @@ import threading
 import time
 from asyncio import Future
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
@@ -80,6 +81,7 @@ REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
+RESPONSE_SCHEMA_VERSION = "2.0"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -739,6 +741,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_done_task(self, task_result: Any) -> None:
         """Handle done tasks"""
+        executed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         executing_task = cast(Dict[str, Any], self._executing_task)
         self.context.logger.info(f"Handling done task {executing_task}.")
         req_id = executing_task.get("requestId", None)
@@ -752,7 +755,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         tool_params = executing_task.get("params", None)
         is_offchain = executing_task.get("is_offchain", False)
         result_msg = self._ipfs_error_reason or "Invalid response"
-        response = {"requestId": req_id, "result": result_msg, "tool": tool}
+        response = {
+            "schema_version": RESPONSE_SCHEMA_VERSION,
+            "requestId": req_id,
+            "result": result_msg,
+            "tool": tool,
+            "executed_at": executed_at,
+        }
         task_executor = self.context.agent_address
         self._done_task = {
             "request_id": req_id,
@@ -763,6 +772,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "is_offchain": is_offchain,
             **executing_task,
         }
+
+        # compute tool execution duration before building metadata
+        # if tool exec start time is 0.0, set to current time
+        # it can be 0.0 if _prepare_task was not called due to other checks such as tool not valid
+        # or stepping in but tool not found or tool to pricing not found for dynamic mechs
+        tool_exec_time_duration = time.perf_counter() - (
+            self.tool_execution_start_time or time.perf_counter()
+        )
+
         if task_result is not None and len(task_result) == 5:
             # task succeeded
             deliver_msg, prompt, transaction, counter_callback, keychain = task_result
@@ -775,6 +793,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "model": actual_model or model,
                 "tool": tool,
                 "params": tool_params,
+                "tool_hash": self._tools_to_package_hash.get(tool or ""),
+                "execution_latency_ms": int(tool_exec_time_duration * 1000),
             }
             response = {
                 **response,
@@ -789,14 +809,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # update the keychain, it's possible that rotations happened
             # we want to use the most up-to-date key priority
             self._keychain = keychain
-
-        # fetch the time duration for tool execution to complete
-        # if tool exec start time is 0.0, set to current time
-        # it can be 0.0 if _prepare_task was not called due to other checks such as tool not valid
-        # or stepping in but tool not found or tool to pricing not found for dynamic mechs
-        tool_exec_time_duration = time.perf_counter() - (
-            self.tool_execution_start_time or time.perf_counter()
-        )
         self.context.logger.info(
             f"Request id {req_id!r} with {tool=}, took {tool_exec_time_duration} seconds to complete execution. "
             f"Request's result:\n{task_result}"
