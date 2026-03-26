@@ -27,14 +27,14 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeiamwgraw77dsawauz7fxabiqsa344vrieiljw37eufbl55ijpdmha
-- valory/registration_abci:0.1.0:bafybeiajjkzebtdlvnsjhhqojgomf2cy6ciridpx3purwbj7frfble5spm
-- valory/reset_pause_abci:0.1.0:bafybeiepj7ek22rgw2blhu3s423xu4u7hjcptluvkcduhvweyrahbzsfkq
-- valory/task_submission_abci:0.1.0:bafybeida7puuegik7n5um3rx4kqy3s7npr6ebe7tnxcpcunfkk7ogo65xe
-- valory/termination_abci:0.1.0:bafybeigmozjv5tm2nzoj4kwtzo433m75su3mkmk5ulgcasjpomi3b6uaom
-- valory/transaction_settlement_abci:0.1.0:bafybeie2lj22nrliky4xuobpihpaglhju6x4oaq56765ueoxgcqgjahb34
-- valory/delivery_rate_abci:0.1.0:bafybeifjvvapcdzfdq3ooivjw42hwbvbdmcrrqewsjanzrdrh4ekiayvdu
-- valory/task_execution:0.1.0:bafybeidazic7knv3k2zoyyxahgvut62nddquijijix26sv6rxctlhopigi
+- valory/abstract_round_abci:0.1.0:bafybeia4gzaxgykfkcerb3cublmei7bmozqn36tzfbnmzkrg2xdrrjfnfa
+- valory/registration_abci:0.1.0:bafybeicaxkyzvqokzne42b2ijgvlnjshowdijakrantdhnvfagbgp4lyym
+- valory/reset_pause_abci:0.1.0:bafybeicwt35bzw43ujjrbztjloeg424zbqxsro5vufsnhfmmvxu4h3dpva
+- valory/task_submission_abci:0.1.0:bafybeiadi3ncl5nxrwxxa2zwinvtbscyhnowkseswcu7lpxlc7p3fau7mq
+- valory/termination_abci:0.1.0:bafybeic7eeg5aw322ahs6ukvivwnzusqkejmmdep7raurhtn4r5wgv534u
+- valory/transaction_settlement_abci:0.1.0:bafybeig5qnrsryhean563pxhrfkcfs6qssi5edzm656oieupvcci7ftbvy
+- valory/delivery_rate_abci:0.1.0:bafybeicqxj462lbkfhuj6izpw7gjn6hehfztzxazjaxiexlcgyh4fyqo3a
+- valory/task_execution:0.1.0:bafybeigculcy5zfp2yacduwmvpgs2hbjtiu2k3oyody7mw7psl3a4thneq
 behaviours:
   main:
     args: {}
