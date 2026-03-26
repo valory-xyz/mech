@@ -45,7 +45,7 @@ protocols:
 - valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeibxobgu6jkq24e6csed5kzbbgghjyaun5wbv3ldnhrxoedqbezbsu
+- valory/abstract_round_abci:0.1.0:bafybeihygetmlgnhawrbyswvpvv3wpztr2hlhxkljmohp4r7qcmvglpwdq
 behaviours:
   task_execution:
     args: {}
