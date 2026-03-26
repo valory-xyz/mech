@@ -781,21 +781,30 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.tool_execution_start_time or time.perf_counter()
         )
 
-        if task_result is not None and len(task_result) == 5:
-            # task succeeded
-            deliver_msg, prompt, transaction, counter_callback, keychain = task_result
+        if task_result is not None and len(task_result) >= 5:
+            # task succeeded — unpack based on tuple length
+            # 6-tuple: tool returned used_params (new contract)
+            # 5-tuple: tool did not return used_params (old contract)
+            if len(task_result) == 6:
+                deliver_msg, prompt, transaction, counter_callback, used_params, keychain = task_result
+            else:
+                deliver_msg, prompt, transaction, counter_callback, keychain = task_result
+                used_params = None
             cost_dict = {}
             actual_model = None
             if counter_callback is not None:
                 cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
                 actual_model = cast(TokenCounterCallback, counter_callback).actual_model
+            # prefer runtime params reported by the tool, fall back to component.yaml
+            resolved_params = used_params or tool_params
             metadata = {
                 "model": actual_model or model,
                 "tool": tool,
-                "params": tool_params,
                 "tool_hash": self._tools_to_package_hash.get(tool or ""),
                 "execution_latency_ms": int(tool_exec_time_duration * 1000),
             }
+            if resolved_params is not None:
+                metadata["params"] = resolved_params
             response = {
                 **response,
                 "result": deliver_msg,

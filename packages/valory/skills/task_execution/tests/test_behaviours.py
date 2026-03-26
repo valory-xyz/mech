@@ -24,7 +24,7 @@ import re
 import time
 from concurrent.futures import Future
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, Generator, Tuple
+from typing import Any, Callable, Dict, Generator, Optional, Tuple
 from unittest.mock import MagicMock
 
 import pytest
@@ -2204,3 +2204,59 @@ def test_handle_done_task_failure_has_no_metadata(
         behaviour, monkeypatch, fake_dialogue, task_result=None
     )
     assert "metadata" not in payload
+
+
+# --- Phase 3: Runtime params enrichment ---
+
+
+def _make_success_result_with_params(
+    used_params: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, str, Dict, SimpleNamespace, Optional[Dict[str, Any]], object]:
+    """Build a valid 6-tuple task result with runtime used_params."""
+    token_cb = SimpleNamespace(cost_dict={"input": 10}, actual_model="gpt-4o")
+    return (
+        "prediction: yes",
+        "Will BTC hit $100k?",
+        {"tx": "0xabc"},
+        token_cb,
+        used_params,
+        object(),  # keychain
+    )
+
+
+def test_handle_done_task_success_metadata_has_runtime_params(
+    behaviour: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """When tool returns a 6-tuple with used_params, metadata.params reflects runtime values."""
+    runtime_params = {"model": "gpt-4o", "temperature": 0.0, "max_tokens": 500}
+    result = _make_success_result_with_params(used_params=runtime_params)
+    payload = _call_handle_done_task(
+        behaviour, monkeypatch, fake_dialogue, task_result=result
+    )
+    assert payload["metadata"]["params"] == runtime_params
+    # must NOT be the static component.yaml params
+    assert payload["metadata"]["params"] != {"temperature": 0.7}
+
+
+def test_handle_done_task_success_metadata_falls_back_to_tool_params(
+    behaviour: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """When tool returns a 5-tuple (old contract), metadata.params uses component.yaml values."""
+    result = _make_success_result()  # 5-tuple, no used_params
+    payload = _call_handle_done_task(
+        behaviour, monkeypatch, fake_dialogue, task_result=result
+    )
+    # Falls back to executing_task["params"] which is {"temperature": 0.7}
+    assert payload["metadata"]["params"] == {"temperature": 0.7}
+
+
+def test_handle_done_task_success_6tuple_with_none_params_falls_back(
+    behaviour: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """A 6-tuple with used_params=None falls back to component.yaml tool_params."""
+    result = _make_success_result_with_params(used_params=None)
+    payload = _call_handle_done_task(
+        behaviour, monkeypatch, fake_dialogue, task_result=result
+    )
+    # used_params is None, so falls back to executing_task["params"]
+    assert payload["metadata"]["params"] == {"temperature": 0.7}
