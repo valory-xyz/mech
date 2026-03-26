@@ -31,20 +31,20 @@ contracts:
 - valory/olas_mech:0.1.0:bafybeibraj4uypb5pafavzrbeyfdlnbcchm5vefpuev5dhiypqb7av25om
 - valory/mech_marketplace:0.1.0:bafybeiapnlzimazvfivnrxxiy4syd77xqeswn5un24isa7m3562ozqsgn4
 - valory/complementary_service_metadata:0.1.0:bafybeibjk5gdgc54wx5bz4fl2666urmfj6mx3ocqxyumqpj7wq5fdg4diu
-- valory/gnosis_safe:0.1.0:bafybeih4ktqfd4jkprpn7i5mebnsnddh65jhgx4yz5tkkpf2kvful3wkoa
+- valory/gnosis_safe:0.1.0:bafybeigvdzcxzbkxutlslmfswnvic4u6nhrq24naeqsivcg6obrwwe4jde
 - valory/multisend:0.1.0:bafybeihx7c3xj6c5v4tgvu3ipnj7seyc4dkmovoyzu4isgbwdrhj2oo6uq
-- valory/service_registry:0.1.0:bafybeidgaofqjehczv4seqj6hvyxuctsbksnlkbp4ezoq7rgogmtmudyba
+- valory/service_registry:0.1.0:bafybeic27nhh5x36mddl5idljsddtzzc5ur6phf2zptgp5qodw5vios3ua
 - valory/hash_checkpoint:0.1.0:bafybeihpds2kkr5okehfa4ohbalur3fihzyk5xz3we7thshsoh5jbgn7jy
 - valory/balance_tracker:0.1.0:bafybeigitc6tsfopaib7vtk5gsvozbnwiuwryvpweqj6kjrmijtnvzqkzi
-- valory/erc20:0.1.0:bafybeig6qnl2ecljaczcd6e4hwsm7aw7655oyj23dyxtyvc5ayu3kzcl5e
+- valory/erc20:0.1.0:bafybeigrirltkxasogjtrorb36x4v3tjm7v23erxth2sbarvyrnvt2367q
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeiamwgraw77dsawauz7fxabiqsa344vrieiljw37eufbl55ijpdmha
-- valory/transaction_settlement_abci:0.1.0:bafybeie2lj22nrliky4xuobpihpaglhju6x4oaq56765ueoxgcqgjahb34
-- valory/task_execution:0.1.0:bafybeidazic7knv3k2zoyyxahgvut62nddquijijix26sv6rxctlhopigi
+- valory/abstract_round_abci:0.1.0:bafybeibxobgu6jkq24e6csed5kzbbgghjyaun5wbv3ldnhrxoedqbezbsu
+- valory/transaction_settlement_abci:0.1.0:bafybeifnen24ae4i3nprgyt3dlqklco26cwnlx7phu2bcusrewv6haxumm
+- valory/task_execution:0.1.0:bafybeifwxzc53csqyupa6frifgnhkiaxqyyw3xfqwvwww6itx4p63ar5le
 behaviours:
   main:
     args: {}
