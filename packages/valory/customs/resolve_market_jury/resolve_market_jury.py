@@ -21,7 +21,7 @@
 Fans out a market question to N independent AI voters (each with native web search),
 then an Anthropic Claude judge synthesizes the final verdict.
 
-Drop-in replacement for resolve_market_reasoning — same input kwargs, same output
+Drop-in replacement for resolve_market_reasoning -- same input kwargs, same output
 tuple shape, same JSON result schema ({is_valid, is_determinable, has_occurred}).
 """
 
@@ -32,7 +32,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-import anthropic
 import openai
 
 # ---------------------------------------------------------------------------
@@ -57,7 +56,7 @@ JUDGE_MODEL = "claude-sonnet-4-20250514"
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
-N_VOTER_CALLS = 3  # default number of voters
+N_VOTER_CALLS = 4  # default number of voters
 N_JUDGE_CALLS = 1
 N_MODEL_CALLS = N_VOTER_CALLS + N_JUDGE_CALLS
 
@@ -89,15 +88,15 @@ INSTRUCTIONS:
 * Think through the problem step by step, showing your reasoning:
   1. Identify the key event described and the deadline date.
   2. Search for credible news articles, official statements, or records.
-  3. Pay attention to dates — an article dated BEFORE the deadline reporting the \
+  3. Pay attention to dates -- an article dated BEFORE the deadline reporting the \
 event happened is strong evidence it occurred. An article dated AFTER the deadline \
 discussing whether it WILL happen suggests it did not.
   4. Consider the intent and spirit of the question, not just literal keywords. \
 For example, legislation "addressing AI's impact on the workforce" reasonably \
 covers white-collar employment even without that exact phrase.
 * There are only two possible outcomes: the event happened (true) or it did not \
-(false). If you cannot determine the answer with reasonable confidence, set \
-is_determinable to false — do NOT guess when evidence is insufficient.
+(false). If your confidence is below 0.7, set is_determinable to false -- do \
+NOT guess when evidence is insufficient.
 
 VALIDITY RULES:
 * Questions with relative dates ("in 6 months") are invalid.
@@ -110,13 +109,13 @@ CRITICAL: Respond with ONLY valid JSON. No markdown, no text before or after.
     "is_valid": true,
     "is_determinable": true or false,
     "has_occurred": true or false or null,
-    "confidence": "high" or "medium" or "low",
+    "confidence": 0.0 to 1.0,
     "reasoning": "Step-by-step explanation, 200 words max. What you found, why you reached this verdict.",
     "sources": ["url1", "url2"]
 }}"""
 
 JUDGE_PROMPT = """You are a senior analyst synthesizing independent fact-checker \
-assessments of a prediction market question. You have access to web search — \
+assessments of a prediction market question. You have access to web search -- \
 use it to verify disputed claims when the voters disagree.
 
 Question: "{question}"
@@ -160,7 +159,7 @@ class VoterResult:
     is_valid: Optional[bool] = None
     is_determinable: Optional[bool] = None
     has_occurred: Optional[bool] = None
-    confidence: str = ""
+    confidence: float = 0.0
     reasoning: str = ""
     sources: List[str] = field(default_factory=list)
     error: Optional[str] = None
@@ -200,9 +199,15 @@ VOTER_REGISTRY: Dict[str, VoterConfig] = {
         key_name="openrouter",
         search_cost=0.014,
     ),
+    "claude": VoterConfig(
+        adapter="_adapter_openrouter",
+        model="anthropic/claude-haiku-4-5",
+        key_name="openrouter",
+        search_cost=0.01,
+    ),
 }
 
-DEFAULT_VOTERS = ["openai", "grok", "gemini"]
+DEFAULT_VOTERS = ["openai", "grok", "gemini", "claude"]
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +258,7 @@ def _parse_vote(raw: str, voter: str, model: str) -> VoterResult:
         is_valid=data.get("is_valid"),
         is_determinable=data.get("is_determinable"),
         has_occurred=data.get("has_occurred"),
-        confidence=data.get("confidence", ""),
+        confidence=float(data.get("confidence", 0.0)),
         reasoning=data.get("reasoning", ""),
         sources=data.get("sources", []),
     )
@@ -353,7 +358,7 @@ def cast_vote(
     question: str,
     api_keys: Any,
 ) -> VoterResult:
-    """Uniform entry point — delegates to provider-specific adapter."""
+    """Uniform entry point -- delegates to provider-specific adapter."""
     config = VOTER_REGISTRY[voter_name]
     api_key = api_keys[config.key_name]
     prompt = VOTER_PROMPT.format(question=question)
@@ -404,9 +409,7 @@ def _run_judge(
     votes: List[VoterResult],
     api_key: str,
 ) -> dict:
-    """Anthropic Claude judge — synthesizes voter results into final verdict."""
-    client = anthropic.Anthropic(api_key=api_key)
-
+    """Judge -- synthesizes voter results into final verdict via OpenRouter."""
     formatted_votes = ""
     for i, v in enumerate(votes, 1):
         vote_data = {
@@ -420,18 +423,19 @@ def _run_judge(
         formatted_votes += f"\nVoter {i}:\n{json.dumps(vote_data, indent=2)}\n"
 
     prompt = JUDGE_PROMPT.format(question=question, votes=formatted_votes)
+    client = openai.OpenAI(api_key=api_key, base_url=OPENROUTER_BASE_URL)
+    judge_model = f"anthropic/{JUDGE_MODEL}:online"
 
     for attempt in range(JUDGE_MAX_RETRIES):
         try:
-            response = client.messages.create(
-                model=JUDGE_MODEL,
-                max_tokens=4096,
-                tools=[{"type": "web_search_20250305", "name": "web_search"}],
+            response = client.chat.completions.create(
+                model=judge_model,
                 messages=[{"role": "user", "content": prompt}],
+                timeout=JUDGE_TIMEOUT,
             )
             break
-        except anthropic._exceptions.OverloadedError:
-            if attempt < JUDGE_MAX_RETRIES - 1:
+        except openai.APIStatusError as err:
+            if err.status_code == 529 and attempt < JUDGE_MAX_RETRIES - 1:
                 print(
                     f"  Judge overloaded, retrying in {JUDGE_RETRY_DELAY}s "
                     f"(attempt {attempt + 1}/{JUDGE_MAX_RETRIES})..."
@@ -440,13 +444,7 @@ def _run_judge(
             else:
                 raise
 
-    # Extract text from response — with web search, response contains
-    # multiple blocks (search results + text). Take the last text block
-    # which contains the final JSON verdict.
-    raw = ""
-    for block in response.content:
-        if hasattr(block, "text"):
-            raw = block.text
+    raw = response.choices[0].message.content or ""
     data = _extract_json(raw)
     if data is None:
         return {
@@ -490,7 +488,7 @@ def _build_consensus_result(votes: List[VoterResult]) -> dict:
         "is_determinable": True,
         "has_occurred": decided[0].has_occurred,
         "votes": [asdict(v) for v in votes],
-        "judge_reasoning": "Unanimous voter consensus — judge skipped.",
+        "judge_reasoning": "Unanimous voter consensus -- judge skipped.",
         "agreement_ratio": 1.0,
         "n_voters": len(votes),
         "n_successful": len(decided),
@@ -524,19 +522,14 @@ def with_key_rotation(func: Callable) -> Callable:
             try:
                 result: MechResponse = func(*args, **kwargs)
                 return result + (api_keys,)
-            except anthropic.RateLimitError:
-                service = "anthropic"
-                if retries_left.get(service, 0) <= 0:
-                    raise
-                retries_left[service] -= 1
-                api_keys.rotate(service)
-                return execute()
             except openai.RateLimitError:
+                rotated = False
                 for service in ("openai", "openrouter"):
                     if retries_left.get(service, 0) > 0:
                         retries_left[service] -= 1
                         api_keys.rotate(service)
-                else:
+                        rotated = True
+                if not rotated:
                     raise
                 return execute()
             except Exception as e:  # pylint: disable=broad-except
@@ -549,7 +542,7 @@ def with_key_rotation(func: Callable) -> Callable:
 
 
 # ---------------------------------------------------------------------------
-# run() — mech tool entry point
+# run() -- mech tool entry point
 # ---------------------------------------------------------------------------
 
 
@@ -602,16 +595,16 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         }
         return json.dumps(result), "All voters failed", None, counter_callback
 
-    # 3. Unanimous early exit (cost saving — skip judge)
+    # 3. Unanimous early exit (cost saving -- skip judge)
     if _all_agree(votes):
-        print("  Unanimous consensus — skipping judge.")
+        print("  Unanimous consensus -- skipping judge.")
         result = _build_consensus_result(votes)
         reasoning = "\n---\n".join(v.reasoning for v in votes if v.reasoning)
         return json.dumps(result), reasoning, None, counter_callback
 
     # 4. Judge synthesizes (only when voters disagree or partial)
-    print("  Voters disagree — running judge...")
-    verdict = _run_judge(prompt, votes, api_keys["anthropic"])
+    print("  Voters disagree -- running judge...")
+    verdict = _run_judge(prompt, votes, api_keys["openrouter"])
 
     # 5. Build result with vote metadata
     result = {

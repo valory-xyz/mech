@@ -9,7 +9,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeidhvnegqju7tped7kihc32cwqu7vtwxd52ptez5jojl2i3jhzbhum
-  resolve_market_jury.py: bafybeid3gaqjsydesybfqxoyhqg2vkiyuyxhdvutkclkn2jw3iwfngetey
+  resolve_market_jury.py: bafybeidoyhp5svtaou4dg6iigi277exyiqz4gtetzfehhbx4tjxelgzvxm
   tests/__init__.py: bafybeicggjf4h2fusp4uazyuewugcwwf5v5zx4lzcd65ke63lz33watniy
 fingerprint_ignore_patterns: []
 entry_point: resolve_market_jury.py
@@ -19,5 +19,3 @@ params:
 dependencies:
   openai:
     version: '>=1.30.0'
-  anthropic:
-    version: '>=0.40.0'
