@@ -52,7 +52,7 @@ DEFAULT_DELIVERY_RATE = 100
 OPENAI_MODEL = "gpt-4.1-2025-04-14"
 GROK_MODEL = "x-ai/grok-4.1-fast"
 GEMINI_MODEL = "google/gemini-2.5-flash"
-JUDGE_MODEL = "claude-sonnet-4-20250514"
+JUDGE_MODEL = "claude-sonnet-4"
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 
@@ -105,6 +105,12 @@ VALIDITY RULES:
 Question: "{question}"
 
 CRITICAL: Respond with ONLY valid JSON. No markdown, no text before or after.
+CONSISTENCY RULES:
+- If has_occurred is true or false, then is_determinable MUST be true and confidence \
+should be >= 0.7.
+- If has_occurred is null, then is_determinable MUST be false and confidence should \
+be < 0.7.
+- confidence reflects how sure you are of your answer (0.0 = no idea, 1.0 = certain).
 {{
     "is_valid": true,
     "is_determinable": true or false,
@@ -201,7 +207,7 @@ VOTER_REGISTRY: Dict[str, VoterConfig] = {
     ),
     "claude": VoterConfig(
         adapter="_adapter_openrouter",
-        model="anthropic/claude-haiku-4-5",
+        model="anthropic/claude-haiku-4.5",
         key_name="openrouter",
         search_cost=0.01,
     ),
@@ -252,13 +258,22 @@ def _parse_vote(raw: str, voter: str, model: str) -> VoterResult:
             model=model,
             error=f"Unparseable JSON: {raw[:200]}",
         )
+    has_occurred = data.get("has_occurred")
+    is_determinable = data.get("is_determinable")
+    confidence = float(data.get("confidence", 0.0))
+
+    # Enforce consistency: null answer means not determinable
+    if has_occurred is None:
+        is_determinable = False
+        confidence = min(confidence, 0.5)
+
     return VoterResult(
         voter=voter,
         model=model,
         is_valid=data.get("is_valid"),
-        is_determinable=data.get("is_determinable"),
-        has_occurred=data.get("has_occurred"),
-        confidence=float(data.get("confidence", 0.0)),
+        is_determinable=is_determinable,
+        has_occurred=has_occurred,
+        confidence=confidence,
         reasoning=data.get("reasoning", ""),
         sources=data.get("sources", []),
     )
@@ -297,11 +312,11 @@ def _adapter_openai(
             timeout=VOTER_TIMEOUT,
         )
         text_parts = []
-        for item in response.output:
+        for item in response.output:  # pragma: no branch
             if hasattr(item, "text"):
                 text_parts.append(item.text)
             elif hasattr(item, "content"):
-                for block in item.content:
+                for block in item.content:  # pragma: no branch
                     if hasattr(block, "text"):
                         text_parts.append(block.text)
         raw = "\n".join(text_parts)
@@ -426,7 +441,7 @@ def _run_judge(
     client = openai.OpenAI(api_key=api_key, base_url=OPENROUTER_BASE_URL)
     judge_model = f"anthropic/{JUDGE_MODEL}:online"
 
-    for attempt in range(JUDGE_MAX_RETRIES):
+    for attempt in range(JUDGE_MAX_RETRIES):  # pragma: no branch
         try:
             response = client.chat.completions.create(
                 model=judge_model,
@@ -593,30 +608,34 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             "n_voters": len(selected_voters),
             "n_successful": 0,
         }
-        return json.dumps(result), "All voters failed", None, counter_callback
+        return json.dumps(result), "All voters failed.", None, counter_callback
 
     # 3. Unanimous early exit (cost saving -- skip judge)
     if _all_agree(votes):
         print("  Unanimous consensus -- skipping judge.")
         result = _build_consensus_result(votes)
-        reasoning = "\n---\n".join(v.reasoning for v in votes if v.reasoning)
-        return json.dumps(result), reasoning, None, counter_callback
+        return (
+            json.dumps(result),
+            result["judge_reasoning"],
+            None,
+            counter_callback,
+        )
 
     # 4. Judge synthesizes (only when voters disagree or partial)
     print("  Voters disagree -- running judge...")
     verdict = _run_judge(prompt, votes, api_keys["openrouter"])
 
     # 5. Build result with vote metadata
+    judge_reasoning = verdict.get("judge_reasoning", "")
     result = {
         "is_valid": verdict.get("is_valid", True),
         "is_determinable": verdict.get("is_determinable", True),
         "has_occurred": verdict.get("has_occurred"),
         "votes": [asdict(v) for v in votes],
-        "judge_reasoning": verdict.get("judge_reasoning", ""),
+        "judge_reasoning": judge_reasoning,
         "agreement_ratio": _compute_agreement(votes),
         "n_voters": len(selected_voters),
         "n_successful": len(votes),
     }
 
-    reasoning = "\n---\n".join(v.reasoning for v in votes if v.reasoning)
-    return json.dumps(result), reasoning, None, counter_callback
+    return json.dumps(result), judge_reasoning, None, counter_callback

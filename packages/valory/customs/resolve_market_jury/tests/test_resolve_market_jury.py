@@ -84,40 +84,32 @@ def _mock_api_keys() -> MagicMock:
 class TestExtractJson:
     """Tests for JSON extraction from LLM responses."""
 
-    def test_plain_json(self) -> None:
-        """Parse plain JSON string."""
-        assert _extract_json('{"a": 1}') == {"a": 1}
-
-    def test_json_with_whitespace(self) -> None:
-        """Parse JSON with leading/trailing whitespace."""
-        assert _extract_json('  {"a": 1}  ') == {"a": 1}
-
-    def test_markdown_fenced(self) -> None:
-        """Parse JSON inside markdown fences."""
-        text = '```json\n{"a": 1}\n```'
-        assert _extract_json(text) == {"a": 1}
-
-    def test_markdown_fenced_no_lang(self) -> None:
-        """Parse JSON in fences without language tag."""
-        text = '```\n{"a": 1}\n```'
-        assert _extract_json(text) == {"a": 1}
-
-    def test_json_embedded_in_text(self) -> None:
-        """Extract JSON from surrounding text."""
-        text = 'Here is the result: {"a": 1} and more text.'
-        assert _extract_json(text) == {"a": 1}
-
-    def test_no_json(self) -> None:
-        """Return None when no JSON found."""
-        assert _extract_json("no json here") is None
-
-    def test_invalid_json_in_braces(self) -> None:
-        """Return None for malformed JSON in braces."""
-        assert _extract_json("{not: valid json}") is None
-
-    def test_invalid_json_in_fences(self) -> None:
-        """Return None for malformed JSON in fences."""
-        assert _extract_json("```json\n{bad}\n```") is None
+    @pytest.mark.parametrize(
+        "text, expected",
+        [
+            ('{"a": 1}', {"a": 1}),
+            ('  {"a": 1}  ', {"a": 1}),
+            ('```json\n{"a": 1}\n```', {"a": 1}),
+            ('```\n{"a": 1}\n```', {"a": 1}),
+            ('Here is the result: {"a": 1} and more text.', {"a": 1}),
+            ("no json here", None),
+            ("{not: valid json}", None),
+            ("```json\n{bad}\n```", None),
+        ],
+        ids=[
+            "plain_json",
+            "whitespace",
+            "markdown_fenced",
+            "markdown_no_lang",
+            "embedded_in_text",
+            "no_json",
+            "invalid_braces",
+            "invalid_fences",
+        ],
+    )
+    def test_extract(self, text: str, expected: Optional[dict]) -> None:
+        """Extract JSON from various formats."""
+        assert _extract_json(text) == expected
 
 
 # ---------------------------------------------------------------------------
@@ -130,14 +122,16 @@ class TestParseVote:
 
     def test_valid_response(self) -> None:
         """Parse a well-formed voter response."""
-        raw = json.dumps({
-            "is_valid": True,
-            "is_determinable": True,
-            "has_occurred": False,
-            "confidence": 0.85,
-            "reasoning": "Found evidence",
-            "sources": ["http://a.com"],
-        })
+        raw = json.dumps(
+            {
+                "is_valid": True,
+                "is_determinable": True,
+                "has_occurred": False,
+                "confidence": 0.85,
+                "reasoning": "Found evidence",
+                "sources": ["http://a.com"],
+            }
+        )
         result = _parse_vote(raw, "test", "model")
         assert result.has_occurred is False
         assert result.confidence == 0.85
@@ -165,20 +159,21 @@ class TestParseVote:
 class TestDecidedVotes:
     """Tests for _decided_votes filtering."""
 
-    def test_filters_indeterminate(self) -> None:
-        """Indeterminate votes are excluded."""
-        votes = [_vote(is_determinable=False), _vote()]
-        assert len(_decided_votes(votes)) == 1
-
-    def test_filters_invalid(self) -> None:
-        """Invalid votes are excluded."""
-        votes = [_vote(is_valid=False), _vote()]
-        assert len(_decided_votes(votes)) == 1
-
-    def test_filters_errors(self) -> None:
-        """Votes with errors are excluded."""
-        votes = [_vote(error="failed"), _vote()]
-        assert len(_decided_votes(votes)) == 1
+    @pytest.mark.parametrize(
+        "bad_vote, expected_count",
+        [
+            (_vote(is_determinable=False), 1),
+            (_vote(is_valid=False), 1),
+            (_vote(error="failed"), 1),
+        ],
+        ids=["indeterminate", "invalid", "error"],
+    )
+    def test_filters_bad_votes(
+        self, bad_vote: VoterResult, expected_count: int
+    ) -> None:
+        """Bad votes are excluded, good ones kept."""
+        votes = [bad_vote, _vote()]
+        assert len(_decided_votes(votes)) == expected_count
 
     def test_all_valid(self) -> None:
         """All valid votes pass through."""
@@ -189,33 +184,33 @@ class TestDecidedVotes:
 class TestAllAgree:
     """Tests for _all_agree consensus check."""
 
-    def test_unanimous_yes(self) -> None:
-        """All yes is unanimous."""
-        votes = [_vote(has_occurred=True), _vote(has_occurred=True)]
-        assert _all_agree(votes) is True
-
-    def test_unanimous_no(self) -> None:
-        """All no is unanimous."""
-        votes = [_vote(has_occurred=False), _vote(has_occurred=False)]
-        assert _all_agree(votes) is True
-
-    def test_disagreement(self) -> None:
-        """Mixed votes are not unanimous."""
-        votes = [_vote(has_occurred=True), _vote(has_occurred=False)]
-        assert _all_agree(votes) is False
-
-    def test_single_vote(self) -> None:
-        """Single vote is not unanimous (need at least 2)."""
-        assert _all_agree([_vote()]) is False
-
-    def test_ignores_indeterminate(self) -> None:
-        """Indeterminate votes are ignored, remaining can be unanimous."""
-        votes = [
-            _vote(has_occurred=True),
-            _vote(has_occurred=True),
-            _vote(is_determinable=False),
-        ]
-        assert _all_agree(votes) is True
+    @pytest.mark.parametrize(
+        "votes, expected",
+        [
+            ([_vote(has_occurred=True), _vote(has_occurred=True)], True),
+            ([_vote(has_occurred=False), _vote(has_occurred=False)], True),
+            ([_vote(has_occurred=True), _vote(has_occurred=False)], False),
+            ([_vote()], False),
+            (
+                [
+                    _vote(has_occurred=True),
+                    _vote(has_occurred=True),
+                    _vote(is_determinable=False),
+                ],
+                True,
+            ),
+        ],
+        ids=[
+            "unanimous_yes",
+            "unanimous_no",
+            "disagreement",
+            "single",
+            "ignores_indet",
+        ],
+    )
+    def test_all_agree(self, votes: list, expected: bool) -> None:
+        """Check consensus detection."""
+        assert _all_agree(votes) is expected
 
 
 class TestBuildConsensusResult:
@@ -283,9 +278,11 @@ class TestAdapterOpenai:
         mock_client = MagicMock(spec=[])  # no 'responses' attr
         mock_client.chat = MagicMock()
         mock_client.chat.completions.create.return_value.choices = [
-            MagicMock(message=MagicMock(
-                content='{"is_valid": true, "has_occurred": false, "confidence": 0.8}'
-            ))
+            MagicMock(
+                message=MagicMock(
+                    content='{"is_valid": true, "has_occurred": false, "confidence": 0.8}'
+                )
+            )
         ]
 
         with patch(f"{MODULE}.openai.OpenAI", return_value=mock_client):
@@ -313,6 +310,32 @@ class TestAdapterOpenai:
             result = _adapter_openai("openai", "gpt-4.1", "prompt", "key")
             assert result.has_occurred is True
 
+    def test_responses_api_mixed_items(self) -> None:
+        """Handles mix of items: some with text, some with content, some with neither."""
+        mock_client = MagicMock()
+        # Item with neither text nor content
+        skip_item = MagicMock(spec=[])  # no text, no content
+        # Item with content but inner block has no text
+        no_text_block = MagicMock(spec=[])  # no text attr
+        content_item = MagicMock(spec=[])
+        content_item.content = [no_text_block]
+        # Item with text (the actual response)
+        text_item = MagicMock()
+        text_item.text = '{"is_valid": true, "has_occurred": false, "confidence": 0.8}'
+        mock_client.responses.create.return_value.output = [
+            skip_item,
+            content_item,
+            text_item,
+        ]
+
+        with patch(f"{MODULE}.openai.OpenAI", return_value=mock_client):
+            from packages.valory.customs.resolve_market_jury.resolve_market_jury import (
+                _adapter_openai,
+            )
+
+            result = _adapter_openai("openai", "gpt-4.1", "prompt", "key")
+            assert result.has_occurred is False
+
 
 class TestAdapterOpenrouter:
     """Tests for OpenRouter adapter."""
@@ -321,9 +344,11 @@ class TestAdapterOpenrouter:
         """Appends :online to model slug."""
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value.choices = [
-            MagicMock(message=MagicMock(
-                content='{"is_valid": true, "has_occurred": true, "confidence": 0.9}'
-            ))
+            MagicMock(
+                message=MagicMock(
+                    content='{"is_valid": true, "has_occurred": true, "confidence": 0.9}'
+                )
+            )
         ]
 
         with patch(f"{MODULE}.openai.OpenAI", return_value=mock_client):
@@ -365,10 +390,12 @@ class TestRunJudge:
         """Judge parses valid JSON response."""
         mock_client = MagicMock()
         mock_client.chat.completions.create.return_value.choices = [
-            MagicMock(message=MagicMock(
-                content='{"is_valid": true, "is_determinable": true, '
-                '"has_occurred": false, "judge_reasoning": "majority"}'
-            ))
+            MagicMock(
+                message=MagicMock(
+                    content='{"is_valid": true, "is_determinable": true, '
+                    '"has_occurred": false, "judge_reasoning": "majority"}'
+                )
+            )
         ]
 
         with patch(f"{MODULE}.openai.OpenAI", return_value=mock_client):
@@ -405,15 +432,21 @@ class TestRunJudge:
             __import__("openai").APIStatusError(
                 message="overloaded", response=err, body=None
             ),
-            MagicMock(choices=[
-                MagicMock(message=MagicMock(
-                    content='{"is_valid": true, "has_occurred": true}'
-                ))
-            ]),
+            MagicMock(
+                choices=[
+                    MagicMock(
+                        message=MagicMock(
+                            content='{"is_valid": true, "has_occurred": true}'
+                        )
+                    )
+                ]
+            ),
         ]
 
-        with patch(f"{MODULE}.openai.OpenAI", return_value=mock_client), \
-                patch(f"{MODULE}.time.sleep"):
+        with (
+            patch(f"{MODULE}.openai.OpenAI", return_value=mock_client),
+            patch(f"{MODULE}.time.sleep"),
+        ):
             from packages.valory.customs.resolve_market_jury.resolve_market_jury import (
                 _run_judge,
             )
@@ -431,9 +464,11 @@ class TestRunJudge:
         )
         mock_client.chat.completions.create.side_effect = api_err
 
-        with patch(f"{MODULE}.openai.OpenAI", return_value=mock_client), \
-                patch(f"{MODULE}.time.sleep"), \
-                pytest.raises(__import__("openai").APIStatusError):
+        with (
+            patch(f"{MODULE}.openai.OpenAI", return_value=mock_client),
+            patch(f"{MODULE}.time.sleep"),
+            pytest.raises(__import__("openai").APIStatusError),
+        ):
             from packages.valory.customs.resolve_market_jury.resolve_market_jury import (
                 _run_judge,
             )
@@ -539,7 +574,7 @@ class TestWithKeyRotation:
         assert "bad" in result[0]
 
     def test_rate_limit_rotates_keys(self) -> None:
-        """RateLimitError triggers key rotation and retry."""
+        """Verify RateLimitError triggers key rotation and retry."""
         keys = _mock_api_keys()
         keys.max_retries.return_value = {"openai": 2, "openrouter": 2}
         call_count = 0
@@ -564,7 +599,7 @@ class TestWithKeyRotation:
         assert keys.rotate.called
 
     def test_rate_limit_exhausted_raises(self) -> None:
-        """RateLimitError raises when retries exhausted."""
+        """Verify RateLimitError raises when retries exhausted."""
         keys = _mock_api_keys()
         keys.max_retries.return_value = {"openai": 0, "openrouter": 0}
 
@@ -632,8 +667,10 @@ class TestRun:
         keys = _mock_api_keys()
         unanimous_votes = [_vote(has_occurred=True)] * 3
 
-        with patch(f"{MODULE}.collect_votes", return_value=unanimous_votes), \
-                patch(f"{MODULE}._run_judge") as mock_judge:
+        with (
+            patch(f"{MODULE}.collect_votes", return_value=unanimous_votes),
+            patch(f"{MODULE}._run_judge") as mock_judge,
+        ):
             result = run(
                 prompt="q?",
                 tool="resolve-market-jury-v1",
@@ -654,8 +691,10 @@ class TestRun:
             "judge_reasoning": "majority wins",
         }
 
-        with patch(f"{MODULE}.collect_votes", return_value=mixed_votes), \
-                patch(f"{MODULE}._run_judge", return_value=judge_verdict):
+        with (
+            patch(f"{MODULE}.collect_votes", return_value=mixed_votes),
+            patch(f"{MODULE}._run_judge", return_value=judge_verdict),
+        ):
             result = run(
                 prompt="q?",
                 tool="resolve-market-jury-v1",
