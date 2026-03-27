@@ -7,10 +7,9 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeifvbuxt54l5jsxextf6ru5yvimkfdg4gfkcsnmyvsyqcsgclg7vey
-  superforcaster.py: bafybeib2jvenlollxftjtbjdh5mzvunbktesbkc64vr74kuqv35fumyube
+  superforcaster.py: bafybeibnc4epxzokmdnjztebffowe6w3zlhwcvk5zaqifikf7pi4rnbfm4
   tests/__init__.py: bafybeidegv7yfxpdytmvepvcqquzawanqjczrqdp2cesxxdx5vvdfmdgue
-  tests/test_superforcaster.py: bafybeicoocvkk4wtib42nokvdilw5pztmwn7z4lmcdjxa333ii5cymtjmm
-  tiktoken_data.py: bafybeidtf3jgwzxger54tpnh7ocu2jzr6goaykzzgove2hfoznucmjd25y
+  tests/test_superforcaster.py: bafybeidioqrlw4berbk4xeie6qqtpqxwdzdbub3w27okx6uebnszg3fn7y
 fingerprint_ignore_patterns: []
 entry_point: superforcaster.py
 callable: run
