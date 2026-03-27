@@ -1,7 +1,7 @@
 {
     "dev": {
         "custom/dvilela/corcel_request/0.1.0": "bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy",
-        "custom/dvilela/gemini_prediction/0.1.0": "bafybeifd5rfdp73qwibjcmgf732yryefa7aukse3ql3iunty3ho5ojuhnu",
+        "custom/dvilela/gemini_prediction/0.1.0": "bafybeihhkxazvbj7q6amaawdiryt7yotwwaeod6hk6oplxihdclrkhstly",
         "custom/napthaai/prediction_request_rag/0.1.0": "bafybeihqpsw2bew76pem47avq5ktk4umch4jhquphoczypih2mfjaqzteu",
         "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeibaji2g4u4gbiuhorsl73o2iamtar3yahiejjl6jx3d7tngbityge",
         "custom/napthaai/prediction_url_cot/0.1.0": "bafybeidfgrsazo5ey5ajg6anbetud4mxyv43rioguhfxmuqfoxfog2bnhe",
@@ -11,11 +11,11 @@
         "custom/valory/prediction_request/0.1.0": "bafybeihatfaalkmuavus2qzozjyjiqgjkzz7q56tv3sx6qzhvozwneuyli",
         "custom/valory/prepare_tx/0.1.0": "bafybeifhfervmgwtoiiyzvqc2wdetzvp4bmlwys5bk3vuef6ggclhbvwua",
         "custom/valory/resolve_market/0.1.0": "bafybeifefym253bznqivjk3ailiuxyzm5dqyfcwcr6ytmfybmbw2w6ttpm",
-        "custom/valory/superforcaster/0.1.0": "bafybeic4zhpu3f4gu6cevpvntl77bshdn2qa4sy6ddogsnmqoefnfzjyxy",
+        "custom/valory/superforcaster/0.1.0": "bafybeidgdcbtraxqreenukxi2fenboaubovtyyc5ke7nzcopy54pi7r4wi",
         "custom/victorpolisetty/dalle_request/0.1.0": "bafybeienobnlvdrnot5trsz5r6xnryxrveajkjkzpxckn3gweswdakwaiu",
         "custom/victorpolisetty/gemini_request/0.1.0": "bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy",
-        "agent/valory/mech_predict/0.1.0": "bafybeidcba3qatc43kypdyhcbvjvumel2hvkfefohycb3ncfhbxrkhzm6i",
-        "service/valory/mech_predict/0.1.0": "bafybeigqmaue4hi552j24pnr4jbb6xz2yz7i74wu7ahxjm37vz7c7nikg4"
+        "agent/valory/mech_predict/0.1.0": "bafybeibtlo4g3uzb3vvwy32mkx4zm3tj7bil7jisk4dloiswumdme5mxlu",
+        "service/valory/mech_predict/0.1.0": "bafybeigic5r4hpam5ejcym5tbzsbshwjmh3m4zmexnmbqrk3haujt56t5u"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",

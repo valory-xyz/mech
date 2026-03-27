@@ -168,6 +168,7 @@ DEFAULT_OPENAI_SETTINGS = {
 DEFAULT_OPENAI_MODEL = "gpt-4.1-2025-04-14"
 ALLOWED_TOOLS = ["superforcaster"]
 ALLOWED_MODELS = [DEFAULT_OPENAI_MODEL]
+MAX_SOURCES = 5
 COMPLETION_RETRIES = 3
 COMPLETION_DELAY = 2
 
@@ -382,7 +383,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         return max_cost
 
     openai_api_key = kwargs["api_keys"]["openai"]
-    serper_api_key = kwargs["api_keys"]["serperapi"]
+    source_links = kwargs.get("source_links", None)
     with OpenAIClientManager(openai_api_key) as llm_client:
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
@@ -393,15 +394,25 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         question = extract_question(prompt)
 
-        print("Fetching additional sources...")
-        serper_response = fetch_additional_sources(question, serper_api_key)
-        sources_data = serper_response.json()
-        print(f"Additional sources fetched: {sources_data}")
-        # choose top 5 results
-        organic_data = sources_data.get("organic", [])[:5]
-        misc_data = sources_data.get("peopleAlsoAsk", [])
-        print("Formating sources...")
-        sources = format_sources_data(organic_data, misc_data)
+        if source_links:
+            print("Using provided source content (cached replay)...")
+            organic_data = [
+                {"position": i, "title": url, "link": url, "snippet": content}
+                for i, (url, content) in enumerate(
+                    list(source_links.items())[:MAX_SOURCES], start=1
+                )
+            ]
+            sources = format_sources_data(organic_data, [])
+        else:
+            serper_api_key = kwargs["api_keys"]["serperapi"]
+            print("Fetching additional sources...")
+            serper_response = fetch_additional_sources(question, serper_api_key)
+            sources_data = serper_response.json()
+            print(f"Additional sources fetched: {sources_data}")
+            organic_data = sources_data.get("organic", [])[:MAX_SOURCES]
+            misc_data = sources_data.get("peopleAlsoAsk", [])
+            print("Formating sources...")
+            sources = format_sources_data(organic_data, misc_data)
 
         print("Updating prompt...")
         prediction_prompt = PREDICTION_PROMPT.format(
