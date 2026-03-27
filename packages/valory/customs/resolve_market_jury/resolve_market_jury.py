@@ -79,74 +79,68 @@ TOOL_TO_ENGINE = {
 # Shared voter prompt
 # ---------------------------------------------------------------------------
 
-VOTER_PROMPT = """You are an expert fact-checker resolving a prediction market question.
-The question specifies a deadline date that has already passed. Your task is to determine whether the event actually happened before that deadline.
+VOTER_PROMPT = """You are an expert fact checker. A prediction market question asked \
+whether an event would happen before a given date. That date has now passed. Your \
+role is to determine whether the event actually happened before the date.
 
 INSTRUCTIONS:
-* Read the question carefully. Pay close attention to EVERY qualifier, condition, and constraint.
-* The question will contain specific conditions that ALL must be met for the answer to be "yes". These may include:
-  - A specific deadline date (the event must have occurred ON OR BEFORE this date)
-  - A specific actor (who must perform the action — e.g., a government, company, institution)
-  - A specific action (what exactly must happen — e.g., "publicly announce", "officially confirm")
-  - Specific thresholds (e.g., "at least 10%", "exceed $4.00", "affecting 50%")
-  - A specific source requirement (e.g., "confirmed by a scientific institution", "as reported by AAA")
-* Do NOT conflate related events with the exact event described. For example:
-  - Private citizens finding meteorite fragments is NOT the same as "confirmed by a scientific institution"
-  - Widespread blackouts are NOT the same as "a nationwide rationing schedule"
-  - A price of $3.95 does NOT meet a threshold of "$4.00 or more"
-  - An existing bill reaching a vote is NOT the same as a "new bill being introduced"
-* Search the web for evidence. Use reliable, verifiable sources.
+* Search the web for recent, reliable information about the question below.
+* Think through the problem step by step:
+  1. Identify the key event described and the deadline date.
+  2. Search for credible news articles, official statements, or records.
+  3. Pay attention to dates — an article dated BEFORE the deadline reporting the \
+event happened is strong evidence it occurred. An article dated AFTER the deadline \
+discussing whether it WILL happen suggests it did not.
+  4. Consider the intent and spirit of the question, not just literal keywords. \
+For example, legislation "addressing AI's impact on the workforce" reasonably \
+covers white-collar employment even without that exact phrase.
+* There are only two possible outcomes: the event happened (Yes) or it did not (No).
+* If you cannot determine the answer with reasonable confidence, say so.
 
-DETERMINING YOUR ANSWER:
-* If the evidence clearly shows ALL conditions were met before the deadline: has_occurred = true.
-* If the evidence clearly shows any condition was NOT met: has_occurred = false.
-* IMPORTANT — when to set is_determinable = false:
-  - You found conflicting evidence and cannot confidently decide
-  - The event is too recent or niche and reliable sources do not cover it yet
-  - You are less than 80% confident in your answer
-  - Do NOT default to true/false when uncertain — returning is_determinable = false is the correct and expected response when evidence is insufficient
-* When to set is_valid = false:
-  - The question is ambiguous, self-contradictory, or has no clear resolution criteria
-  - The question uses relative dates ("in 6 months") instead of absolute dates
-  - The question asks about subjective opinions rather than verifiable facts
+VALIDITY RULES:
+* Questions with relative dates ("in 6 months") are invalid.
+* Questions about opinions rather than facts are invalid.
 
 Question: "{question}"
 
-CRITICAL: Respond with ONLY valid JSON. No markdown, no text before or after the JSON.
+CRITICAL: Respond with ONLY valid JSON. No markdown, no text before or after.
 {{
-    "is_valid": true or false,
+    "is_valid": true,
     "is_determinable": true or false,
     "has_occurred": true or false or null,
     "confidence": "high" or "medium" or "low",
-    "reasoning": "200 words max. State which specific conditions you checked and whether each was met.",
+    "reasoning": "Step-by-step explanation, 200 words max. Cite sources by name.",
     "sources": ["url1", "url2"]
 }}"""
 
-JUDGE_PROMPT = """You are the final judge resolving a prediction market question.
-Your role is to synthesize the independent assessments below into a single verdict.
-You do NOT search the web — you evaluate the evidence the voters already gathered.
+JUDGE_PROMPT = """You are a senior analyst synthesizing independent fact-checker \
+assessments of a prediction market question. You do NOT search the web — you \
+evaluate the evidence the voters already gathered.
 
 Question: "{question}"
 
 Voter assessments:
 {votes}
 
-Rules:
-1. MAJORITY RULE: If a clear majority of voters agree (e.g., 2 out of 3), you MUST follow the majority UNLESS the minority voter provides specific, verifiable evidence (named sources, URLs, concrete facts) that directly contradicts the majority AND the majority's reasoning has a clear factual error or logical flaw. Simply having a different opinion is NOT enough to override the majority.
-2. If voters UNANIMOUSLY agree, follow their consensus.
-3. If any voter says the question is invalid with sound reasoning, mark as invalid.
-4. If voters are split with no clear majority, or if multiple voters report low confidence, set is_determinable = false.
-5. If voters disagree on whether the event occurred but there IS a majority, weigh:
-   - Does the minority voter cite specific verifiable sources the majority missed?
-   - Does the minority voter identify a factual error in the majority's reasoning?
-   - Only override the majority if the answer to BOTH questions is yes.
+DECISION PROCESS:
+1. Review each voter's evidence and sources, not just their verdict.
+2. If all voters with a definitive answer agree, follow their consensus.
+3. If voters disagree:
+   a. Count definitive votes (ignore indeterminate ones).
+   b. Follow the majority UNLESS the minority cites specific, named sources \
+(URLs, official records) that the majority missed AND those sources directly \
+contradict the majority's conclusion.
+   c. When evidence quality is similar on both sides, follow the majority.
+4. If no clear majority exists, or evidence is too weak, set is_determinable \
+to false.
+5. If a voter flags the question as invalid with sound reasoning, mark invalid.
 
-Respond in JSON only (no markdown fences, no text before or after the JSON object):
+Respond in JSON only (no markdown fences, no text before or after):
 {{
     "is_valid": true or false,
     "is_determinable": true or false,
     "has_occurred": true or false or null,
-    "judge_reasoning": "explanation. If overriding majority, explicitly state what factual error you found."
+    "judge_reasoning": "Which voters you agreed with and why. Cite evidence."
 }}"""
 
 
@@ -274,24 +268,41 @@ def _adapter_openai(
     prompt: str,
     api_key: str,
 ) -> VoterResult:
-    """Run OpenAI voter with native web_search tool via Responses API."""
+    """Run OpenAI voter with native web_search tool.
+
+    Uses the Responses API if available (openai >= 1.66), otherwise falls
+    back to a search-capable chat completions model.
+    """
     client = openai.OpenAI(api_key=api_key)
-    response = client.responses.create(
-        model=model,
-        tools=[{"type": "web_search"}],
-        input=prompt,
-        timeout=VOTER_TIMEOUT,
-    )
-    # Extract text from response output items
-    text_parts = []
-    for item in response.output:
-        if hasattr(item, "text"):
-            text_parts.append(item.text)
-        elif hasattr(item, "content"):
-            for block in item.content:
-                if hasattr(block, "text"):
-                    text_parts.append(block.text)
-    raw = "\n".join(text_parts)
+
+    # Try Responses API first (openai >= 1.66)
+    if hasattr(client, "responses"):
+        response = client.responses.create(
+            model=model,
+            tools=[{"type": "web_search"}],
+            input=prompt,
+            timeout=VOTER_TIMEOUT,
+        )
+        text_parts = []
+        for item in response.output:
+            if hasattr(item, "text"):
+                text_parts.append(item.text)
+            elif hasattr(item, "content"):
+                for block in item.content:
+                    if hasattr(block, "text"):
+                        text_parts.append(block.text)
+        raw = "\n".join(text_parts)
+    else:
+        # Fallback: use search-capable model via chat completions
+        search_model = "gpt-4o-search-preview"
+        response_cc = client.chat.completions.create(
+            model=search_model,
+            messages=[{"role": "user", "content": prompt}],
+            timeout=VOTER_TIMEOUT,
+        )
+        raw = response_cc.choices[0].message.content or ""
+        model = search_model
+
     return _parse_vote(raw, voter_name, model)
 
 
