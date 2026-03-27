@@ -36,8 +36,12 @@ import openai
 import requests
 from openai import OpenAI
 
-MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MechResponseWithKeys = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]], Any
+]
+MechResponse = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]
+]
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -90,7 +94,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 api_keys.rotate(service)
                 return execute()
             except Exception as e:
-                return str(e), "", None, None, api_keys
+                return str(e), "", None, None, None, api_keys
 
         mech_response = execute()
         return mech_response

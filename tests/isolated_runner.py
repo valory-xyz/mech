@@ -54,8 +54,8 @@ BENCHMARKS_MODULE_FILE = "benchmarks.py"
 APIS_MODULE_NAME = "task_execution_apis"
 BENCHMARKS_MODULE_NAME = "task_execution_benchmarks"
 
-# Expected response tuple length from tool `run()` calls
-EXPECTED_RESPONSE_LENGTH = 5
+# Expected response tuple lengths from tool `run()` calls
+EXPECTED_RESPONSE_LENGTHS = (5, 6)
 
 # Prediction response fields that must appear in deliver_msg
 PREDICTION_FIELDS = ("p_yes", "p_no", "confidence", "info_utility")
@@ -181,8 +181,8 @@ def validate_response(response: Any, validate_prediction: bool = True) -> List[s
     """Validate a tool response. Returns a list of error strings (empty = pass)."""
     if not isinstance(response, tuple):
         return ["Response of the tool must be a tuple."]
-    if len(response) != EXPECTED_RESPONSE_LENGTH:
-        return [f"Response must have {EXPECTED_RESPONSE_LENGTH} elements, got {len(response)}."]
+    if len(response) not in EXPECTED_RESPONSE_LENGTHS:
+        return [f"Response must have {EXPECTED_RESPONSE_LENGTHS} elements, got {len(response)}."]
 
     errors: List[str] = []
     deliver_msg = response[0]

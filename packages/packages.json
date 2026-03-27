@@ -1,21 +1,21 @@
 {
     "dev": {
-        "custom/dvilela/corcel_request/0.1.0": "bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy",
-        "custom/dvilela/gemini_prediction/0.1.0": "bafybeihhkxazvbj7q6amaawdiryt7yotwwaeod6hk6oplxihdclrkhstly",
-        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeihqpsw2bew76pem47avq5ktk4umch4jhquphoczypih2mfjaqzteu",
-        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeibaji2g4u4gbiuhorsl73o2iamtar3yahiejjl6jx3d7tngbityge",
-        "custom/napthaai/prediction_url_cot/0.1.0": "bafybeidfgrsazo5ey5ajg6anbetud4mxyv43rioguhfxmuqfoxfog2bnhe",
-        "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeiddqmdvttu6d5z5reuhan6yxteirzecjsz5su5tqph6z4wibendp4",
-        "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeicvhedq6jvluraeee5374j42hwqgzznq5lzrza7iyxunkd7shwuvi",
-        "custom/valory/prediction_langchain/0.1.0": "bafybeifiw6rdeigls4pbaqwd3hbb3tq5y6psoacnezydjz2udioxullk4e",
-        "custom/valory/prediction_request/0.1.0": "bafybeihatfaalkmuavus2qzozjyjiqgjkzz7q56tv3sx6qzhvozwneuyli",
-        "custom/valory/prepare_tx/0.1.0": "bafybeifhfervmgwtoiiyzvqc2wdetzvp4bmlwys5bk3vuef6ggclhbvwua",
-        "custom/valory/resolve_market/0.1.0": "bafybeifefym253bznqivjk3ailiuxyzm5dqyfcwcr6ytmfybmbw2w6ttpm",
-        "custom/valory/superforcaster/0.1.0": "bafybeidgdcbtraxqreenukxi2fenboaubovtyyc5ke7nzcopy54pi7r4wi",
-        "custom/victorpolisetty/dalle_request/0.1.0": "bafybeienobnlvdrnot5trsz5r6xnryxrveajkjkzpxckn3gweswdakwaiu",
+        "custom/dvilela/corcel_request/0.1.0": "bafybeic74xc32orfiffumv3cxe7o4vktzobk6gszjecuhto4or7k5ppi5y",
+        "custom/dvilela/gemini_prediction/0.1.0": "bafybeictddan5snyawy7eh6ybyes6s5bkzkebwap62qy2h5463mnbycowm",
+        "custom/napthaai/prediction_request_rag/0.1.0": "bafybeifj5waf3nc3rtsnhdcpas5jsjq6xz4iiy7ep64pnpa4q4mwlpzvha",
+        "custom/napthaai/prediction_request_reasoning/0.1.0": "bafybeifhsbj64zipgehqj7l26pr6kzdeort4d6f7jrreftko3jfvbfleaq",
+        "custom/napthaai/prediction_url_cot/0.1.0": "bafybeie7vjkusfypzi3c4ew4enz4zt4jgeiky75qlev3vdemgjmcgkquom",
+        "custom/napthaai/resolve_market_reasoning/0.1.0": "bafybeifulrvds2cfaoibvoemcjuokzmucvcjjiamotr5df2e2cb6ljc4ai",
+        "custom/nickcom007/prediction_request_sme/0.1.0": "bafybeiakfhuzfg72budq2feuvypwe7icxp7l7gbnbuo5hmhgow423fb4zu",
+        "custom/valory/prediction_langchain/0.1.0": "bafybeigmfxamjzj7ss6mrlf3gglaq3o5nzpkyhre3w6s63bix3o4svvwsi",
+        "custom/valory/prediction_request/0.1.0": "bafybeicpf5prulgnt6tqfutokktrtkpt3dpcbpzofizi7bn4azs24iwuji",
+        "custom/valory/prepare_tx/0.1.0": "bafybeifyve3gy32tq5pbakanf7ipwairk4ifo3hm2ydq6oun543o4wkoyq",
+        "custom/valory/resolve_market/0.1.0": "bafybeifabnhlkp4scpdwvubny6guryqitqd7xay6om2qi7eews6wxqfyde",
+        "custom/valory/superforcaster/0.1.0": "bafybeicyhabk6xqqsomwfgguulhzux7g3ad7byymqf6sawj3hjiltklava",
+        "custom/victorpolisetty/dalle_request/0.1.0": "bafybeiahwziadzu2dzp5udli6q3rvct74caoeyqi7xxpb34jnxo342irdy",
         "custom/victorpolisetty/gemini_request/0.1.0": "bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy",
-        "agent/valory/mech_predict/0.1.0": "bafybeibtlo4g3uzb3vvwy32mkx4zm3tj7bil7jisk4dloiswumdme5mxlu",
-        "service/valory/mech_predict/0.1.0": "bafybeigic5r4hpam5ejcym5tbzsbshwjmh3m4zmexnmbqrk3haujt56t5u"
+        "agent/valory/mech_predict/0.1.0": "bafybeigqkviz72l2elcsyric6puw63kpifgu33kde45turr52k2fc53cma",
+        "service/valory/mech_predict/0.1.0": "bafybeia3rgufqc52tf62lb2lhfzxa6a63kqisetckf6nhqnwrwvo5pjiza"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",
@@ -54,8 +54,8 @@
         "skill/valory/reset_pause_abci/0.1.0": "bafybeidcnf77bc3o7pssa5zesilpbm4ley2k45taii5j5rrvvty7uhu3lq",
         "skill/valory/termination_abci/0.1.0": "bafybeia33hlouukdpwaxctunauudv5gpfdxndimra7yqiof4a3skcwdqkq",
         "skill/valory/delivery_rate_abci/0.1.0": "bafybeifpoqkcdwpyq4lijumyt3gzj3vs3pfxxm4xefqxagd4b5pg6x3vty",
-        "skill/valory/mech_abci/0.1.0": "bafybeifkutq4zmcd7xfdyoisqy74zfko6obxhvkfscqkeuymsnorq7ydb4",
-        "skill/valory/task_execution/0.1.0": "bafybeih6dsrn2v4ftizcl2tdpp6ftx2d4hpfqvqascfx3ggmufczhofyty",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeid3bjxx6a4p7fqryk4tveu7epy4oh7aw52ieaairojxmpu5xlb7qe"
+        "skill/valory/mech_abci/0.1.0": "bafybeicjb3z3fb7pahkvhfwadaljlc2n7zyqqtfsd5wvm5fb3ifc6ot3nu",
+        "skill/valory/task_execution/0.1.0": "bafybeifzhdxu4dpbql5h4tsa7imh32q5q6etzldqihhokxnucwqam3el3e",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeieyy6uw3i6yll74vbgdlxtfs5czsd3dkogp2hk23574xxajna7pcm"
     }
 }
