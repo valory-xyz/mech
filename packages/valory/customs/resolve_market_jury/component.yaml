@@ -2,15 +2,15 @@ name: resolve_market_jury
 author: valory
 version: 0.1.0
 type: custom
-description: Multi-model jury tool for resolving prediction markets.
-  Fans out to N AI voters with native web search, then an
-  Anthropic Claude judge synthesizes the final verdict.
+description: Multi-model jury tool for resolving prediction markets. Fans out to N
+  AI voters with native web search, then an Anthropic Claude judge synthesizes the
+  final verdict.
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeigqnbsb27bonlnfkfzfyqhj3vof3c6xbvlhhmrydtpvr4qkfhtoe
-  resolve_market_jury.py: bafybeigqnbsb27bonlnfkfzfyqhj3vof3c6xbvlhhmrydtpvr4qkfhtoe
-  tests/__init__.py: bafybeigqnbsb27bonlnfkfzfyqhj3vof3c6xbvlhhmrydtpvr4qkfhtoe
+  __init__.py: bafybeihecl5y4nl3qlflcq6xg2m6hdbp6to6h47hyx3nslghhcqd6scr4q
+  resolve_market_jury.py: bafybeie4lx6paqo6esapopb5dmte5ugqxembylmq5jzfwmky2gpwalz42u
+  tests/__init__.py: bafybeiclm77hh24jxhytuvqybkrklprogg4h2phljezr5qqdp6cbjb73pm
 fingerprint_ignore_patterns: []
 entry_point: resolve_market_jury.py
 callable: run
