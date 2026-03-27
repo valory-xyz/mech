@@ -19,12 +19,9 @@
 
 """This module implements a Mech tool for binary predictions."""
 
-import base64
 import functools
 import json
-import os
 import re
-import tempfile
 import time
 from collections import defaultdict
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -44,28 +41,6 @@ from markdownify import markdownify as md
 from pydantic import BaseModel, PositiveInt
 from readability import Document
 from tiktoken import encoding_for_model, get_encoding
-
-
-def _ensure_tiktoken_cache() -> None:
-    """Decode bundled tiktoken data to a temp cache dir if not already present."""
-    cache_dir = os.path.join(tempfile.gettempdir(), "tiktoken_cache")
-    os.makedirs(cache_dir, exist_ok=True)
-    os.environ.setdefault("TIKTOKEN_CACHE_DIR", cache_dir)
-    try:
-        from . import tiktoken_data  # pylint: disable=import-outside-toplevel
-    except ImportError:
-        return
-    for name, data in [
-        (tiktoken_data.CL100K_CACHE_NAME, tiktoken_data.CL100K_BASE),
-        (tiktoken_data.O200K_CACHE_NAME, tiktoken_data.O200K_BASE),
-    ]:
-        path = os.path.join(cache_dir, name)
-        if not os.path.exists(path):
-            with open(path, "wb") as f:
-                f.write(base64.b64decode(data))
-
-
-_ensure_tiktoken_cache()
 
 # `STOP_WORDS` retrieved from https://github.com/explosion/spaCy/blob/v3.7.5/spacy/lang/en/stop_words.py
 STOP_WORDS = set("""

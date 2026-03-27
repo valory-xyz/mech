@@ -7,10 +7,9 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiflni5dkn5fqe7fnu4lgbqxzfrgochhqfbgzwz3vlf5grijp3nkpm
-  prediction_url_cot.py: bafybeic32nwkvndppj2chxiqhxsuulo5ffo6it2j54yy47tzid66ohbriy
+  prediction_url_cot.py: bafybeiaj5ud6cvtnnyibc4ljsionlu2sygsopk6pj2sbeccqhgog7z254i
   tests/__init__.py: bafybeia2zevyo6fxbwf7dj4vkhd3fnsvog5sqvepqg4qjgzydlhsuwnn7q
-  tests/test_prediction_url_cot.py: bafybeigpkh52uhskjb6ohwb6i7chhtlvdyluxcpqsbyz472c5akjyro3f4
-  tiktoken_data.py: bafybeidtf3jgwzxger54tpnh7ocu2jzr6goaykzzgove2hfoznucmjd25y
+  tests/test_prediction_url_cot.py: bafybeifzgixiicp3yekiu6uecm4qc6yyrukirg6lhqesf5eg4fvotps7fi
 fingerprint_ignore_patterns: []
 entry_point: prediction_url_cot.py
 callable: run

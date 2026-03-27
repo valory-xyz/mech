@@ -51,19 +51,19 @@ skills:
 - valory/websocket_client:0.1.0:bafybeie63j65ffblz6g6oiaynjpz4ae5mgyjz2w6o5ovqitzdbnvqzlhzu
 customs:
 - valory/resolve_market:0.1.0:bafybeifefym253bznqivjk3ailiuxyzm5dqyfcwcr6ytmfybmbw2w6ttpm
-- valory/prediction_request:0.1.0:bafybeigloinnqa5fuznlkl5invwxip4ajo2v2uluudhwgpqqnuvoj37e2i
-- napthaai/resolve_market_reasoning:0.1.0:bafybeie22pwq3ddn5qkncolmkzosvhr7wii4ikicoudj4sbagc3ghnl26a
-- napthaai/prediction_request_rag:0.1.0:bafybeicni4dpmdawykq7q7zs54dhskzy6zvmvhfaqfhjiryrrq6l72zuri
-- napthaai/prediction_request_reasoning:0.1.0:bafybeig66pohqut6nma4vasyz3okj2ncgzh5thap4zcndvbdorh47qiqk4
+- valory/prediction_request:0.1.0:bafybeihatfaalkmuavus2qzozjyjiqgjkzz7q56tv3sx6qzhvozwneuyli
+- napthaai/resolve_market_reasoning:0.1.0:bafybeiddqmdvttu6d5z5reuhan6yxteirzecjsz5su5tqph6z4wibendp4
+- napthaai/prediction_request_rag:0.1.0:bafybeihqpsw2bew76pem47avq5ktk4umch4jhquphoczypih2mfjaqzteu
+- napthaai/prediction_request_reasoning:0.1.0:bafybeibaji2g4u4gbiuhorsl73o2iamtar3yahiejjl6jx3d7tngbityge
 - valory/prepare_tx:0.1.0:bafybeifhfervmgwtoiiyzvqc2wdetzvp4bmlwys5bk3vuef6ggclhbvwua
-- napthaai/prediction_url_cot:0.1.0:bafybeia2khpemzoakr225h2jskm5hs6mkgx6exnybsl3m35irpvj7eks3e
+- napthaai/prediction_url_cot:0.1.0:bafybeidfgrsazo5ey5ajg6anbetud4mxyv43rioguhfxmuqfoxfog2bnhe
 - valory/prediction_langchain:0.1.0:bafybeifiw6rdeigls4pbaqwd3hbb3tq5y6psoacnezydjz2udioxullk4e
 - victorpolisetty/gemini_request:0.1.0:bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy
-- victorpolisetty/dalle_request:0.1.0:bafybeiamxolrtxyprdia64un5w53c5tdj4cnx3dxksog42oukz47tjvp3a
-- valory/superforcaster:0.1.0:bafybeicr4ob5mzvacgqb3nx2g25k4ml3wdyar4nfovqmhe2ownmevvh6pm
+- victorpolisetty/dalle_request:0.1.0:bafybeienobnlvdrnot5trsz5r6xnryxrveajkjkzpxckn3gweswdakwaiu
+- valory/superforcaster:0.1.0:bafybeic4zhpu3f4gu6cevpvntl77bshdn2qa4sy6ddogsnmqoefnfzjyxy
 - dvilela/corcel_request:0.1.0:bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy
 - dvilela/gemini_prediction:0.1.0:bafybeifd5rfdp73qwibjcmgf732yryefa7aukse3ql3iunty3ho5ojuhnu
-- nickcom007/prediction_request_sme:0.1.0:bafybeieqakllioqvpjuhja3r3iacsaxvnfdxqu5l4qtjwvboaik3vggfga
+- nickcom007/prediction_request_sme:0.1.0:bafybeicvhedq6jvluraeee5374j42hwqgzznq5lzrza7iyxunkd7shwuvi
 default_ledger: ethereum
 required_ledgers:
 - ethereum

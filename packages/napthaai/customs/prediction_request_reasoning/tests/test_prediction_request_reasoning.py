@@ -20,18 +20,14 @@
 """Unit tests for prediction_request_reasoning: thread-safe client and offline tiktoken."""
 
 import inspect
-import os
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from tiktoken import get_encoding
 
 import packages.napthaai.customs.prediction_request_reasoning.prediction_request_reasoning as module
-from packages.napthaai.customs.prediction_request_reasoning import tiktoken_data
 from packages.napthaai.customs.prediction_request_reasoning.prediction_request_reasoning import (
     LLMClientManager,
-    _ensure_tiktoken_cache,
     count_tokens,
     do_reasoning_with_retry,
     fetch_additional_information,
@@ -107,33 +103,3 @@ class TestFunctionsAcceptClient:
         """fetch_additional_information requires client as first param."""
         params = list(inspect.signature(fetch_additional_information).parameters)
         assert params[0] == "client"
-
-
-class TestTiktokenOfflineCache:
-    """Verify tiktoken data is bundled and decodable."""
-
-    def test_ensure_tiktoken_cache_creates_files(self) -> None:
-        """_ensure_tiktoken_cache writes decoded BPE files to cache dir."""
-        _ensure_tiktoken_cache()
-        cache_dir = os.environ.get("TIKTOKEN_CACHE_DIR", "")
-        assert cache_dir != "", "TIKTOKEN_CACHE_DIR should be set"
-        assert Path(cache_dir).is_dir()
-        files = list(Path(cache_dir).iterdir())
-        assert len(files) >= 2
-
-    def test_tiktoken_loads_from_decoded_cache(self) -> None:
-        """Tiktoken can load encodings after _ensure_tiktoken_cache runs."""
-        _ensure_tiktoken_cache()
-        enc = get_encoding("cl100k_base")
-        assert len(enc.encode("hello world")) > 0
-        enc2 = get_encoding("o200k_base")
-        assert len(enc2.encode("hello world")) > 0
-
-    def test_tiktoken_data_module_exists(self) -> None:
-        """tiktoken_data.py has the expected constants."""
-        assert hasattr(tiktoken_data, "CL100K_BASE")
-        assert hasattr(tiktoken_data, "O200K_BASE")
-        assert hasattr(tiktoken_data, "CL100K_CACHE_NAME")
-        assert hasattr(tiktoken_data, "O200K_CACHE_NAME")
-        assert len(tiktoken_data.CL100K_BASE) > 0
-        assert len(tiktoken_data.O200K_BASE) > 0

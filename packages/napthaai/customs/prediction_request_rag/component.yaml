@@ -7,10 +7,9 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeibt7f7crtwvmkg7spy3jhscmlqltvyblzp32g6gj44v7tlo5lycuq
-  prediction_request_rag.py: bafybeiaycgom34nubc5bvnyx7eegi3znycpywihhnl5dqn332z5shn52h4
+  prediction_request_rag.py: bafybeihq45zlxibwzk4t326t2vkrkfm5vcj7mfyanihygj5bl3p7mhgfzq
   tests/__init__.py: bafybeifcgilmgfwx7kaap67cfnuokrhfrabi6bnvqiudyzgf2idu64dvxq
-  tests/test_prediction_request_rag.py: bafybeifftr2caflglura5ma6a4l2efvbsiwqymsyz6lsqsmaqebsvdixka
-  tiktoken_data.py: bafybeidtf3jgwzxger54tpnh7ocu2jzr6goaykzzgove2hfoznucmjd25y
+  tests/test_prediction_request_rag.py: bafybeied7hmyjn27hqhbyksjxplmrdwq6ey7dcxi5sglttnbqj2a3tigrq
 fingerprint_ignore_patterns: []
 entry_point: prediction_request_rag.py
 callable: run
