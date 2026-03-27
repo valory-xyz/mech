@@ -8,9 +8,9 @@ description: Multi-model jury tool for resolving prediction markets. Fans out to
 license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
-  __init__.py: bafybeihecl5y4nl3qlflcq6xg2m6hdbp6to6h47hyx3nslghhcqd6scr4q
-  resolve_market_jury.py: bafybeie4lx6paqo6esapopb5dmte5ugqxembylmq5jzfwmky2gpwalz42u
-  tests/__init__.py: bafybeiclm77hh24jxhytuvqybkrklprogg4h2phljezr5qqdp6cbjb73pm
+  __init__.py: bafybeidhvnegqju7tped7kihc32cwqu7vtwxd52ptez5jojl2i3jhzbhum
+  resolve_market_jury.py: bafybeid3gaqjsydesybfqxoyhqg2vkiyuyxhdvutkclkn2jw3iwfngetey
+  tests/__init__.py: bafybeicggjf4h2fusp4uazyuewugcwwf5v5zx4lzcd65ke63lz33watniy
 fingerprint_ignore_patterns: []
 entry_point: resolve_market_jury.py
 callable: run

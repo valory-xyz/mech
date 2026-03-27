@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2024-2025 Valory AG
+#   Copyright 2024-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -79,13 +79,14 @@ TOOL_TO_ENGINE = {
 # Shared voter prompt
 # ---------------------------------------------------------------------------
 
-VOTER_PROMPT = """You are an expert fact checker. A prediction market question asked \
-whether an event would happen before a given date. That date has now passed. Your \
-role is to determine whether the event actually happened before the date.
+VOTER_PROMPT = """You are an expert fact checker. You have access to web search. \
+A prediction market question asked whether an event would happen before a given \
+date. That date has now passed. Your role is to determine whether the event \
+actually happened before the date.
 
 INSTRUCTIONS:
 * Search the web for recent, reliable information about the question below.
-* Think through the problem step by step:
+* Think through the problem step by step, showing your reasoning:
   1. Identify the key event described and the deadline date.
   2. Search for credible news articles, official statements, or records.
   3. Pay attention to dates — an article dated BEFORE the deadline reporting the \
@@ -94,8 +95,9 @@ discussing whether it WILL happen suggests it did not.
   4. Consider the intent and spirit of the question, not just literal keywords. \
 For example, legislation "addressing AI's impact on the workforce" reasonably \
 covers white-collar employment even without that exact phrase.
-* There are only two possible outcomes: the event happened (Yes) or it did not (No).
-* If you cannot determine the answer with reasonable confidence, say so.
+* There are only two possible outcomes: the event happened (true) or it did not \
+(false). If you cannot determine the answer with reasonable confidence, set \
+is_determinable to false — do NOT guess when evidence is insufficient.
 
 VALIDITY RULES:
 * Questions with relative dates ("in 6 months") are invalid.
@@ -109,13 +111,13 @@ CRITICAL: Respond with ONLY valid JSON. No markdown, no text before or after.
     "is_determinable": true or false,
     "has_occurred": true or false or null,
     "confidence": "high" or "medium" or "low",
-    "reasoning": "Step-by-step explanation, 200 words max. Cite sources by name.",
+    "reasoning": "Step-by-step explanation, 200 words max. What you found, why you reached this verdict.",
     "sources": ["url1", "url2"]
 }}"""
 
 JUDGE_PROMPT = """You are a senior analyst synthesizing independent fact-checker \
-assessments of a prediction market question. You do NOT search the web — you \
-evaluate the evidence the voters already gathered.
+assessments of a prediction market question. You have access to web search — \
+use it to verify disputed claims when the voters disagree.
 
 Question: "{question}"
 
@@ -127,10 +129,10 @@ DECISION PROCESS:
 2. If all voters with a definitive answer agree, follow their consensus.
 3. If voters disagree:
    a. Count definitive votes (ignore indeterminate ones).
-   b. Follow the majority UNLESS the minority cites specific, named sources \
-(URLs, official records) that the majority missed AND those sources directly \
-contradict the majority's conclusion.
-   c. When evidence quality is similar on both sides, follow the majority.
+   b. Search the web to verify the specific claims in dispute.
+   c. Follow the majority UNLESS your own research or the minority's sources \
+show a clear factual error in the majority's reasoning.
+   d. When evidence quality is similar on both sides, follow the majority.
 4. If no clear majority exists, or evidence is too weak, set is_determinable \
 to false.
 5. If a voter flags the question as invalid with sound reasoning, mark invalid.
@@ -272,6 +274,12 @@ def _adapter_openai(
 
     Uses the Responses API if available (openai >= 1.66), otherwise falls
     back to a search-capable chat completions model.
+
+    :param voter_name: registry key for this voter.
+    :param model: OpenAI model name.
+    :param prompt: formatted voter prompt.
+    :param api_key: OpenAI API key.
+    :return: parsed vote result.
     """
     client = openai.OpenAI(api_key=api_key)
 
@@ -417,7 +425,8 @@ def _run_judge(
         try:
             response = client.messages.create(
                 model=JUDGE_MODEL,
-                max_tokens=1024,
+                max_tokens=4096,
+                tools=[{"type": "web_search_20250305", "name": "web_search"}],
                 messages=[{"role": "user", "content": prompt}],
             )
             break
@@ -431,7 +440,13 @@ def _run_judge(
             else:
                 raise
 
-    raw = response.content[0].text
+    # Extract text from response — with web search, response contains
+    # multiple blocks (search results + text). Take the last text block
+    # which contains the final JSON verdict.
+    raw = ""
+    for block in response.content:
+        if hasattr(block, "text"):
+            raw = block.text
     data = _extract_json(raw)
     if data is None:
         return {
