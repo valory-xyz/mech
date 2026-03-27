@@ -796,7 +796,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 cost_dict = cast(TokenCounterCallback, counter_callback).cost_dict
                 actual_model = cast(TokenCounterCallback, counter_callback).actual_model
             # prefer runtime params reported by the tool, fall back to component.yaml
-            resolved_params = used_params or tool_params
+            resolved_params = used_params if used_params is not None else tool_params
             metadata = {
                 "model": actual_model or model,
                 "tool": tool,
