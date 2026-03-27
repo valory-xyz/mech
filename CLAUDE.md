@@ -13,7 +13,7 @@ This is the **Autonolas AI Mechs** repository for the Predict Agent Economy. It 
 ### Core Components
 
 **Agent Service Architecture:**
-- Built on Open Autonomy (v0.21.13) framework which uses ABCI (Application Blockchain Interface)
+- Built on Open Autonomy (v0.21.16) framework which uses ABCI (Application Blockchain Interface)
 - Agents run as autonomous services with consensus via Tendermint
 - Services are composed of multiple **skills** that define behaviors and state machines
 - Skills communicate through FSM (Finite State Machine) rounds

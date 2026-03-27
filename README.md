@@ -5,7 +5,7 @@
 <h1 align="center" style="margin-bottom: 0;">
     Autonolas AI Mechs
     <br><a href="https://github.com/valory-xyz/mech/blob/main/LICENSE"><img alt="License: Apache-2.0" src="https://img.shields.io/github/license/valory-xyz/mech"></a>
-    <a href="https://pypi.org/project/open-autonomy/0.21.14/"><img alt="Framework: Open Autonomy 0.21.14" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.21.14-blueviolet"></a>
+    <a href="https://pypi.org/project/open-autonomy/0.21.16/"><img alt="Framework: Open Autonomy 0.21.16" src="https://img.shields.io/badge/framework-Open%20Autonomy%200.21.16-blueviolet"></a>
     <!-- <a href="https://github.com/valory-xyz/mech/releases/latest">
     <img alt="Latest release" src="https://img.shields.io/github/v/release/valory-xyz/mech"> -->
     </a>
@@ -116,45 +116,28 @@ Now, you have two options to run the worker: as a standalone agent or as a servi
    autonomy generate-key ethereum
    ```
 
-3. Run the agent:
+3. Install the mech CLI from [mech-server](https://github.com/valory-xyz/mech-server):
 
     ```bash
-    bash run_agent.sh
+    pip install mech-server
     ```
 
-    `run_agent.sh` starts Tendermint internally, so no separate `run_tm.sh` step is required.
-
-### Option 2: Run the Mech as an agent service
-
-1. Configure the service environment file:
+4. Set up and run the mech:
 
     ```bash
-    # Copy the prefilled template
-    cp .example.env .1env
-
-    # Edit values in ".1env", for example API_KEYS
-
-    # Source the env file
-    source .1env
+    mech setup -c gnosis
+    mech run -c gnosis          # production (Docker deployment)
+    mech run -c gnosis --dev    # development (host, Tendermint + agent)
     ```
 
-2. Ensure you have a file with the agent address and private key (`keys.json`). You can generate a new private key file using the Open Autonomy CLI:
+### Releases
 
-    ```bash
-    autonomy generate-key ethereum -n 1
-    ```
+To create a release, use the `aea-helpers` CLI:
 
-3. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` contains the agent address from `keys.json`:
-
-   ```bash
-   ALL_PARTICIPANTS='["your_agent_address"]'
-   ```
-
-4. Run the service:
-
-    ```bash
-    bash run_service.sh
-    ```
+```bash
+pip install aea-helpers
+aea-helpers make-release --version <VERSION> --env <ENV> --description "<DESCRIPTION>"
+```
 
 ## Included tools
 
