@@ -899,7 +899,7 @@ def fetch_additional_information(
     num_urls: int,
     num_words: int,
     counter_callback: Optional[Callable] = None,
-    source_links: Optional[Dict] = None,
+    source_content: Optional[Dict[str, str]] = None,
 ) -> Tuple[str, Any]:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -924,7 +924,7 @@ def fetch_additional_information(
         print(f"Fetch multi queries with retry failed with exception: {e}")
         json_data = {"queries": [user_prompt]}
 
-    if not source_links:
+    if source_content is None:
         # remove empty queries, including ""
         queries = json_data["queries"]
         queries = [query for query in queries if query.strip() != ""]
@@ -955,7 +955,7 @@ def fetch_additional_information(
         docs = extract_texts(urls, num_words)
     else:
         docs = []
-        for url, content in islice(source_links.items(), 3):
+        for url, content in islice(source_content.items(), 3):
             doc = extract_text(html=content, num_words=num_words)
             if doc and doc.text != "":
                 doc.url = url
@@ -1126,7 +1126,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
                 num_urls,
                 num_words,  # type: ignore
                 counter_callback=counter_callback,
-                source_links=kwargs.get("source_links", None),
+                source_content=kwargs.get("source_content", None),
             )
         elif "claude" not in engine:
             # used improved prompt in all models except the Claude ones

@@ -52,19 +52,19 @@ skills:
 customs:
 - valory/resolve_market:0.1.0:bafybeifefym253bznqivjk3ailiuxyzm5dqyfcwcr6ytmfybmbw2w6ttpm
 - valory/resolve_market_jury:0.1.0:bafybeigezfbl7r57trujgtdpxrbv3iqblgvr5udf2xkvmgmpv6yp6g56by
-- valory/prediction_request:0.1.0:bafybeihatfaalkmuavus2qzozjyjiqgjkzz7q56tv3sx6qzhvozwneuyli
+- valory/prediction_request:0.1.0:bafybeibgvzwcr66jdyywdfwygyzpkjglbhweb65wf2fj54fqx4odizbofm
 - napthaai/resolve_market_reasoning:0.1.0:bafybeiddqmdvttu6d5z5reuhan6yxteirzecjsz5su5tqph6z4wibendp4
-- napthaai/prediction_request_rag:0.1.0:bafybeihqpsw2bew76pem47avq5ktk4umch4jhquphoczypih2mfjaqzteu
-- napthaai/prediction_request_reasoning:0.1.0:bafybeibaji2g4u4gbiuhorsl73o2iamtar3yahiejjl6jx3d7tngbityge
+- napthaai/prediction_request_rag:0.1.0:bafybeiathjvxrj6pnz566igm3vgucrzq3hds4bsqesgbb4p7oq3dki2hvu
+- napthaai/prediction_request_reasoning:0.1.0:bafybeicmzaopani3qjsl4lby443tbnxu77hiajk7s4wpid5zu6z2eoxhyy
 - valory/prepare_tx:0.1.0:bafybeifhfervmgwtoiiyzvqc2wdetzvp4bmlwys5bk3vuef6ggclhbvwua
-- napthaai/prediction_url_cot:0.1.0:bafybeidfgrsazo5ey5ajg6anbetud4mxyv43rioguhfxmuqfoxfog2bnhe
+- napthaai/prediction_url_cot:0.1.0:bafybeib6tnwhyyipc3g26k5vnhzgu7v2asybpxqdm7ocn6a7gdnqj6ybki
 - valory/prediction_langchain:0.1.0:bafybeifiw6rdeigls4pbaqwd3hbb3tq5y6psoacnezydjz2udioxullk4e
 - victorpolisetty/gemini_request:0.1.0:bafybeiarvmrz7674nmsvcf6lkbw4rvmhorckq5wvydmw3zczvvd5uomlyy
 - victorpolisetty/dalle_request:0.1.0:bafybeienobnlvdrnot5trsz5r6xnryxrveajkjkzpxckn3gweswdakwaiu
-- valory/superforcaster:0.1.0:bafybeic4zhpu3f4gu6cevpvntl77bshdn2qa4sy6ddogsnmqoefnfzjyxy
+- valory/superforcaster:0.1.0:bafybeihm34ym67qso7egas47xlzjfgkbttyv6h57x3qxxoygoaff3sjrsy
 - dvilela/corcel_request:0.1.0:bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy
 - dvilela/gemini_prediction:0.1.0:bafybeifd5rfdp73qwibjcmgf732yryefa7aukse3ql3iunty3ho5ojuhnu
-- nickcom007/prediction_request_sme:0.1.0:bafybeicvhedq6jvluraeee5374j42hwqgzznq5lzrza7iyxunkd7shwuvi
+- nickcom007/prediction_request_sme:0.1.0:bafybeif523nhn4aueq2vsdgh76fukk6d2tafzv7wxbwtgbif6azv3ewbni
 default_ledger: ethereum
 required_ledgers:
 - ethereum
