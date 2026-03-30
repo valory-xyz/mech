@@ -924,7 +924,7 @@ def fetch_additional_information(
         print(f"Fetch multi queries with retry failed with exception: {e}")
         json_data = {"queries": [user_prompt]}
 
-    if not source_content:
+    if source_content is None:
         # remove empty queries, including ""
         queries = json_data["queries"]
         queries = [query for query in queries if query.strip() != ""]

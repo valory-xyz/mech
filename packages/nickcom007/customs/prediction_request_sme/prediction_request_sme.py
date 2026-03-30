@@ -445,7 +445,7 @@ def fetch_additional_information(
     )
     json_data = json.loads(response.choices[0].message.content)
 
-    if not source_content:
+    if source_content is None:
         # Determine which search provider to use
         if search_provider == "serper":
             if not serper_api_key:

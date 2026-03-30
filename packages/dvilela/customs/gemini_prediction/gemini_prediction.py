@@ -76,7 +76,7 @@ def _build_additional_info(
     source_content: Optional[Dict[str, str]],
 ) -> str:
     """Build additional information string from source links."""
-    if not source_content:
+    if source_content is None:
         return ""
     return "\n".join(
         f"ARTICLE {i}, URL: {url}, CONTENT: {content}"

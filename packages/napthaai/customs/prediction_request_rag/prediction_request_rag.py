@@ -829,7 +829,7 @@ def fetch_additional_information(
         queries = [prompt]
 
     # get the top URLs for the queries
-    if not source_content:
+    if source_content is None:
         # Determine which search provider to use
         if search_provider == "serper":
             if not serper_api_key:

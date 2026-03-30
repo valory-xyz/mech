@@ -394,7 +394,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         question = extract_question(prompt)
 
-        if source_content:
+        if source_content is not None:
             print("Using provided source content (cached replay)...")
             organic_data = [
                 {"position": i, "title": url, "link": url, "snippet": content}
