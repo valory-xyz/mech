@@ -164,7 +164,11 @@ def _validate_deliver_msg(deliver_msg: str, validate_prediction: bool) -> List[s
 
 
 def _validate_response_types(response: tuple) -> List[str]:
-    """Validate the types of response elements [1] through [4]."""
+    """Validate the types of response elements.
+
+    5-tuple (no key rotation): (result, prompt, tx_data, callback, used_params)
+    6-tuple (key rotation):    (result, prompt, tx_data, callback, used_params, api_keys)
+    """
     errors: List[str] = []
     if not isinstance(response[1], str):
         errors.append("Response[1] must be a string.")
@@ -172,8 +176,10 @@ def _validate_response_types(response: tuple) -> List[str]:
         errors.append("Response[2] must be a dictionary or None.")
     if response[3] is not None and type(response[3]).__name__ != TOKEN_COUNTER_CLASS_NAME:
         errors.append(f"Response[3] must be a {TOKEN_COUNTER_CLASS_NAME} or None.")
-    if type(response[4]).__name__ != KEYCHAIN_CLASS_NAME:
-        errors.append(f"Response[4] must be a {KEYCHAIN_CLASS_NAME} object.")
+    if not (isinstance(response[4], dict) or response[4] is None):
+        errors.append("Response[4] must be a dict (used_params) or None.")
+    if len(response) == 6 and type(response[5]).__name__ != KEYCHAIN_CLASS_NAME:
+        errors.append(f"Response[5] must be a {KEYCHAIN_CLASS_NAME} object.")
     return errors
 
 
