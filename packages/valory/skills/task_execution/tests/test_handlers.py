@@ -113,8 +113,10 @@ def test_ipfs_handler_calls_callback_and_clears(
     assert "nonce-1" not in handler_context.params.req_to_deadline
 
 
-def test_ipfs_handler_deadline_expired_skips_callback(handler_context: Any) -> None:
-    """Skip the stored IPFS callback when its deadline has already expired."""
+def test_ipfs_handler_deadline_expired_still_invokes_callback(
+    handler_context: Any,
+) -> None:
+    """Invoke the callback even when the deadline has expired, so task state is cleaned up."""
     handler: IpfsHandler = IpfsHandler(name="ipfs", skill_context=handler_context)
     handler.setup()
 
@@ -132,9 +134,9 @@ def test_ipfs_handler_deadline_expired_skips_callback(handler_context: Any) -> N
     )
     handler.handle(msg)
 
-    assert called["ok"] is False
-    assert handler_context.params.in_flight_req
-    assert handler_context.params.is_cold_start
+    assert called["ok"] is True  # callback must run for cleanup
+    assert not handler_context.params.in_flight_req  # flag cleared via normal path
+    assert not handler_context.params.is_cold_start  # set False via normal path
     assert "nonce-1" not in handler_context.params.req_to_callback
     assert "nonce-1" not in handler_context.params.req_to_error_callback
     assert "nonce-1" not in handler_context.params.req_to_deadline

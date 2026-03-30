@@ -932,6 +932,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_get_task(self, message: IpfsMessage, dialogue: Dialogue) -> None:
         """Handle the response from ipfs for a task request."""
+        if (
+            self._request_handling_deadline
+            and time.time() > self._request_handling_deadline
+        ):
+            self.context.logger.warning(
+                "Task data arrived after deadline. "
+                "Skipping tool execution and cleaning up."
+            )
+            self._executing_task = None
+            self._async_result = None
+            self._request_handling_deadline = None
+            self.tool_preparation_start_time = 0.0
+            return
+
         task_data = [json.loads(content) for content in message.files.values()][0]
         is_data_valid = (
             task_data
