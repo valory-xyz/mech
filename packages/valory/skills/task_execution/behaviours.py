@@ -786,9 +786,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # 6-tuple: tool returned used_params (new contract)
             # 5-tuple: tool did not return used_params (old contract)
             if len(task_result) == 6:
-                deliver_msg, prompt, transaction, counter_callback, used_params, keychain = task_result
+                (
+                    deliver_msg,
+                    prompt,
+                    transaction,
+                    counter_callback,
+                    used_params,
+                    keychain,
+                ) = task_result
             else:
-                deliver_msg, prompt, transaction, counter_callback, keychain = task_result
+                deliver_msg, prompt, transaction, counter_callback, keychain = (
+                    task_result
+                )
                 used_params = None
             cost_dict = {}
             actual_model = None
