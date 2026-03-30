@@ -252,7 +252,7 @@ Building snapshots:
 - **From open markets:** When `tournament.py` runs predictions on open markets, it also caches the web content. When the market resolves, we have both a prediction and its content snapshot.
 - **Retroactive (lossy):** For resolved markets where we don't have cached content, we can snapshot today. This introduces temporal contamination for recently resolved markets but is acceptable for markets that resolved > 6 months ago (the web has moved on, outcome-reporting articles are buried).
 
-**Prerequisite — all tools must support `source_content`:** Several tools (prediction-request, prediction-url-cot, prediction-request-rag, prediction-request-reasoning, prediction-request-sme) already accept a kwarg for pre-fetched web content injection, currently named `source_links`. This should be renamed to `source_content` since the value is a `Dict[str, str]` mapping URLs to their HTML content, not a list of links. Superforcaster and gemini-prediction do not support this at all. All prediction tools must be retrofitted to accept `source_content` for cached replay to work — without it, comparisons across tools are apples-to-oranges (some use cached content while others hit live web, contaminating temporal integrity). This is a blocking prerequisite for Phase 1.
+**Prerequisite — all tools must support `source_content`:** All prediction tools now accept a `source_content` kwarg (`Dict[str, str]` mapping URLs to their HTML content) for pre-fetched web content injection. This enables cached replay so that comparisons across tools use the same content snapshot rather than hitting live web, preserving temporal integrity.
 
 **Cached replay policy:**
 - All tools participating in cached replay must accept `source_content` for evidence injection.

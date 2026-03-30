@@ -1027,7 +1027,7 @@ def fetch_additional_information(  # pylint: disable=too-many-statements
     serper_api_key: Optional[str],
     search_provider: str,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
-    source_links: Optional[Dict] = None,
+    source_content: Optional[Dict] = None,
     num_urls: int = DEFAULT_NUM_URLS,
     num_queries: int = DEFAULT_NUM_QUERIES,
     temperature: float = LLM_SETTINGS["gpt-4.1-2025-04-14"]["temperature"],
@@ -1051,7 +1051,7 @@ def fetch_additional_information(  # pylint: disable=too-many-statements
         queries = [prompt]
 
     # get the top URLs for the queries
-    if not source_links:
+    if not source_content:
         # Determine which search provider to use
         if search_provider == "serper":
             if not serper_api_key:
@@ -1082,7 +1082,9 @@ def fetch_additional_information(  # pylint: disable=too-many-statements
         )
     else:
         docs = []
-        for url, content in islice(source_links.items(), num_urls or len(source_links)):
+        for url, content in islice(
+            source_content.items(), num_urls or len(source_content)
+        ):
             doc = extract_text(html=content)
             if doc:
                 doc.url = url
@@ -1240,7 +1242,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             serper_api_key=serper_api_key,
             search_provider=search_provider,
             counter_callback=counter_callback,
-            source_links=kwargs.get("source_links", None),
+            source_content=kwargs.get("source_content", None),
             num_urls=num_urls,
             num_queries=num_queries,
             temperature=temperature,

@@ -383,7 +383,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         return max_cost
 
     openai_api_key = kwargs["api_keys"]["openai"]
-    source_links = kwargs.get("source_links", None)
+    source_content = kwargs.get("source_content", None)
     with OpenAIClientManager(openai_api_key) as llm_client:
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
@@ -394,12 +394,12 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         question = extract_question(prompt)
 
-        if source_links:
+        if source_content:
             print("Using provided source content (cached replay)...")
             organic_data = [
                 {"position": i, "title": url, "link": url, "snippet": content}
                 for i, (url, content) in enumerate(
-                    list(source_links.items())[:MAX_SOURCES], start=1
+                    list(source_content.items())[:MAX_SOURCES], start=1
                 )
             ]
             sources = format_sources_data(organic_data, [])

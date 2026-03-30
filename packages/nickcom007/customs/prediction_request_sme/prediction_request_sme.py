@@ -422,7 +422,7 @@ def fetch_additional_information(
     num_urls: int,
     num_words: int,
     counter_callback: Optional[Callable] = None,
-    source_links: Optional[Dict] = None,
+    source_content: Optional[Dict] = None,
 ) -> Tuple[str, Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information."""
 
@@ -445,7 +445,7 @@ def fetch_additional_information(
     )
     json_data = json.loads(response.choices[0].message.content)
 
-    if not source_links:
+    if not source_content:
         # Determine which search provider to use
         if search_provider == "serper":
             if not serper_api_key:
@@ -467,7 +467,7 @@ def fetch_additional_information(
         texts = extract_texts(urls, num_words)
     else:
         texts = []
-        for url, content in islice(source_links.items(), 3):
+        for url, content in islice(source_content.items(), 3):
             doc: dict = {}
             text = (
                 extract_text(html=content, num_words=num_words),
@@ -593,7 +593,7 @@ def run(
         prompt = kwargs["prompt"]
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
-        source_links = kwargs.get("source_links", None)
+        source_content = kwargs.get("source_content", None)
         num_urls = kwargs.get("num_urls", NUM_URLS_EXTRACT)
         num_words = kwargs.get("num_words", DEFAULT_NUM_WORDS)
         api_keys = kwargs.get("api_keys", {})
@@ -630,7 +630,7 @@ def run(
                 num_urls=num_urls,
                 num_words=num_words,
                 counter_callback=counter_callback,
-                source_links=source_links,
+                source_content=source_content,
             )
         else:
             additional_information = None

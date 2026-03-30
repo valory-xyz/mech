@@ -73,14 +73,14 @@ MAX_SOURCES = 5
 
 
 def _build_additional_info(
-    source_links: Optional[Dict[str, str]],
+    source_content: Optional[Dict[str, str]],
 ) -> str:
     """Build additional information string from source links."""
-    if not source_links:
+    if not source_content:
         return ""
     return "\n".join(
         f"ARTICLE {i}, URL: {url}, CONTENT: {content}"
-        for i, (url, content) in enumerate(list(source_links.items())[:MAX_SOURCES])
+        for i, (url, content) in enumerate(list(source_content.items())[:MAX_SOURCES])
     )
 
 
@@ -191,8 +191,8 @@ def run(  # pylint: disable=too-many-return-statements
         return error_response("No prompt has been given.")
 
     if tool_name == "gemini-prediction":
-        source_links = kwargs.get("source_links")
-        additional_info = _build_additional_info(source_links)
+        source_content = kwargs.get("source_content")
+        additional_info = _build_additional_info(source_content)
         prompt = PREDICTION_OFFLINE_PROMPT.format(
             user_prompt=prompt,
             additional_information=additional_info,
