@@ -804,7 +804,7 @@ def fetch_additional_information(
     serper_api_key: Optional[str],
     search_provider: str,
     counter_callback: Optional[Callable] = None,
-    source_content: Optional[Dict] = None,
+    source_content: Optional[Dict[str, str]] = None,
     num_urls: int = DEFAULT_NUM_URLS,
     num_queries: int = DEFAULT_NUM_QUERIES,
     temperature: float = LLM_SETTINGS["claude-4-sonnet-20250514"]["temperature"],

@@ -899,7 +899,7 @@ def fetch_additional_information(
     num_urls: int,
     num_words: int,
     counter_callback: Optional[Callable] = None,
-    source_content: Optional[Dict] = None,
+    source_content: Optional[Dict[str, str]] = None,
 ) -> Tuple[str, Any]:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(
