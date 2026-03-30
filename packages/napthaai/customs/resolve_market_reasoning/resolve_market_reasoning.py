@@ -1091,7 +1091,13 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         print(f"Determinable: {determinable_results}")
 
         if not determinable_results.is_determinable:
-            return determinable_results.json(), reasoning, None, counter_callback, used_params
+            return (
+                determinable_results.json(),
+                reasoning,
+                None,
+                counter_callback,
+                used_params,
+            )
 
         # Make the prediction
         messages = [
