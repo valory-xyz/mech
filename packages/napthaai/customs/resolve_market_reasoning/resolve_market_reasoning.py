@@ -1018,7 +1018,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         }
 
         if not valid_results.is_valid:
-            return valid_results.json(), None, None, None, used_params
+            return valid_results.json(), None, None, counter_callback, used_params
 
         (
             additional_information,
@@ -1091,7 +1091,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         print(f"Determinable: {determinable_results}")
 
         if not determinable_results.is_determinable:
-            return determinable_results.json(), reasoning, None, None, used_params
+            return determinable_results.json(), reasoning, None, counter_callback, used_params
 
         # Make the prediction
         messages = [

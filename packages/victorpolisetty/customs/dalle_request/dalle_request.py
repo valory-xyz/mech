@@ -132,7 +132,7 @@ def run(**kwargs: Any) -> MechResponse:
                 None,
                 None,
                 None,
-                used_params,
+                None,
             )
         if size not in ALLOWED_SIZE:
             return (
@@ -140,7 +140,7 @@ def run(**kwargs: Any) -> MechResponse:
                 None,
                 None,
                 None,
-                used_params,
+                None,
             )
         if quality not in ALLOWED_QUALITY:
             return (
@@ -148,7 +148,7 @@ def run(**kwargs: Any) -> MechResponse:
                 None,
                 None,
                 None,
-                used_params,
+                None,
             )
 
         response = llm_client.images.generate(
