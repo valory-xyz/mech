@@ -22,6 +22,8 @@ from typing import Any, Dict, Optional, Tuple
 
 import google.generativeai as genai
 
+MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]]
+
 DEFAULT_GEMINI_SETTINGS = {
     "candidate_count": 1,
     "stop_sequences": None,
@@ -36,7 +38,7 @@ ENGINES = {
 ALLOWED_TOOLS = [PREFIX + value for value in ENGINES["chat"]]
 
 
-def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, Any]:
+def run(**kwargs: Any) -> MechResponse:
     """Run the task"""
 
     api_key = kwargs["api_keys"]["gemini"]
@@ -46,6 +48,7 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, An
     if tool not in ALLOWED_TOOLS:
         return (
             f"Model {tool} is not in the list of supported models.",
+            None,
             None,
             None,
             None,
@@ -84,6 +87,11 @@ def run(**kwargs: Any) -> Tuple[Optional[str], Optional[Dict[str, Any]], Any, An
         )
 
     except Exception as e:
-        return f"An error occurred: {str(e)}", None, None, None
+        return f"An error occurred: {str(e)}", None, None, None, None
 
-    return response.text, prompt, None, counter_callback
+    used_params = {
+        "model": tool,
+        "temperature": temperature,
+        "max_output_tokens": max_output_tokens,
+    }
+    return response.text, prompt, None, counter_callback, used_params
