@@ -22,7 +22,9 @@ from typing import Any, Dict, Optional, Tuple
 
 import google.generativeai as genai
 
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]]
+MechResponse = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]
+]
 
 DEFAULT_GEMINI_SETTINGS = {
     "candidate_count": 1,
