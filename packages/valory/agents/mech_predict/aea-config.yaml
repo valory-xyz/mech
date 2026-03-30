@@ -63,7 +63,7 @@ customs:
 - victorpolisetty/dalle_request:0.1.0:bafybeienobnlvdrnot5trsz5r6xnryxrveajkjkzpxckn3gweswdakwaiu
 - valory/superforcaster:0.1.0:bafybeihm34ym67qso7egas47xlzjfgkbttyv6h57x3qxxoygoaff3sjrsy
 - dvilela/corcel_request:0.1.0:bafybeifpareiesif37wt4gxe2e5ojplegskfemnb3nmcsj4qph74tyfcqy
-- dvilela/gemini_prediction:0.1.0:bafybeiae4gyxk4h7tpblp3l6j6hm25zuwu2om54r44ozpqjklu6abssoiu
+- dvilela/gemini_prediction:0.1.0:bafybeifd5rfdp73qwibjcmgf732yryefa7aukse3ql3iunty3ho5ojuhnu
 - nickcom007/prediction_request_sme:0.1.0:bafybeif523nhn4aueq2vsdgh76fukk6d2tafzv7wxbwtgbif6azv3ewbni
 default_ledger: ethereum
 required_ledgers:
