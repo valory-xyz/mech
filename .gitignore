@@ -2,10 +2,10 @@
 *private_key.txt
 packages/fetchai/
 packages/open_aea/
-packages/valory/
-!packages/valory/customs
-!packages/valory/agents
-!packages/valory/services
+packages/valory/*
+!packages/valory/customs/
+!packages/valory/agents/
+!packages/valory/services/
 
 *test_mech.py
 
@@ -38,3 +38,5 @@ mech_service/
 tools_test_results/
 
 .claude
+benchmark/datasets/
+benchmark/reports/
