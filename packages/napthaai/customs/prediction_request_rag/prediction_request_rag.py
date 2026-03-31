@@ -23,7 +23,6 @@ import json
 import re
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
-from itertools import islice
 from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Union
 
 import PyPDF2
@@ -668,9 +667,10 @@ def process_in_batches(
 
 def extract_texts(
     urls: List[str], num_words: Optional[int] = None
-) -> List[ExtendedDocument]:
+) -> Tuple[List[ExtendedDocument], Dict[str, Any]]:
     """Extract texts from URLs with improved error handling, excluding failed URLs."""
     extracted_texts = []
+    raw_source_content: Dict[str, Any] = {"pages": {}, "pdfs": {}}
     for batch in process_in_batches(urls=urls) or []:
         for future, url in batch:
             if future is None:
@@ -683,11 +683,12 @@ def extract_texts(
                 if isinstance(result, requests.Response) and result.status_code == 200:
                     # Check if URL ends with .pdf or content starts with %PDF
                     is_pdf = url.endswith(".pdf") or result.content[:4] == b"%PDF"
-                    doc = (
-                        extract_text_from_pdf(url, num_words=num_words)
-                        if is_pdf
-                        else extract_text(html=result.text, num_words=num_words)
-                    )
+                    if is_pdf:
+                        doc = extract_text_from_pdf(url, num_words=num_words)
+                        raw_source_content["pdfs"][url] = doc.text if doc else ""
+                    else:
+                        raw_source_content["pages"][url] = result.text
+                        doc = extract_text(html=result.text, num_words=num_words)
 
                     if doc:
                         doc.url = url
@@ -695,7 +696,7 @@ def extract_texts(
             except Exception as e:
                 print(f"Error processing {url}: {e}")
                 continue
-    return extracted_texts
+    return extracted_texts, raw_source_content
 
 
 def find_similar_chunks(
@@ -808,12 +809,12 @@ def fetch_additional_information(
     serper_api_key: Optional[str],
     search_provider: str,
     counter_callback: Optional[Callable] = None,
-    source_content: Optional[Dict[str, str]] = None,
+    source_content: Optional[Dict[str, Any]] = None,
     num_urls: int = DEFAULT_NUM_URLS,
     num_queries: int = DEFAULT_NUM_QUERIES,
     temperature: float = LLM_SETTINGS["claude-4-sonnet-20250514"]["temperature"],
     max_tokens: int = LLM_SETTINGS["claude-4-sonnet-20250514"]["default_max_tokens"],
-) -> Tuple[str, Optional[Callable[..., None]]]:
+) -> Tuple[str, Dict[str, Any], Optional[Callable[..., None]]]:
     """Fetch additional information to help answer the user prompt."""
     # generate multiple queries for fetching information from the web
 
@@ -859,18 +860,19 @@ def fetch_additional_information(
         urls = list(set(urls))
 
         # Extract text and dates from the URLs
-        docs = extract_texts(
+        docs, raw_source_content = extract_texts(
             urls=urls,
         )
     else:
+        raw_source_content = source_content
         docs = []
-        for url, content in islice(
-            source_content.items(), num_urls or len(source_content)
-        ):
-            doc = extract_text(html=content)
+        for url, html in source_content.get("pages", {}).items():
+            doc = extract_text(html=html)
             if doc:
                 doc.url = url
                 docs.append(doc)
+        for url, text in source_content.get("pdfs", {}).items():
+            docs.append(ExtendedDocument(text=text, url=url))
 
     # Remove None values from the list
     docs = [doc for doc in docs if doc]
@@ -924,7 +926,7 @@ def fetch_additional_information(
         ]
     )
 
-    return additional_information, counter_callback
+    return additional_information, raw_source_content, counter_callback
 
 
 def extract_question(prompt: str) -> str:
@@ -1013,21 +1015,24 @@ def run(
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} not supported.")
 
-        additional_information, counter_callback = fetch_additional_information(
-            client=llm_client,
-            client_embedding=embedding_client,
-            prompt=prompt,
-            model=model,
-            google_api_key=google_api_key,
-            google_engine_id=google_engine_id,
-            serper_api_key=serper_api_key,
-            search_provider=search_provider,
-            counter_callback=counter_callback,
-            source_content=kwargs.get("source_content", None),
-            num_urls=num_urls,
-            num_queries=num_queries,
-            temperature=temperature,
-            max_tokens=max_tokens,
+        return_source_content = kwargs.get("return_source_content", False)
+        additional_information, source_content, counter_callback = (
+            fetch_additional_information(
+                client=llm_client,
+                client_embedding=embedding_client,
+                prompt=prompt,
+                model=model,
+                google_api_key=google_api_key,
+                google_engine_id=google_engine_id,
+                serper_api_key=serper_api_key,
+                search_provider=search_provider,
+                counter_callback=counter_callback,
+                source_content=kwargs.get("source_content", None),
+                num_urls=num_urls,
+                num_queries=num_queries,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
         )
 
         # Generate the prediction prompt
@@ -1055,6 +1060,8 @@ def run(
             "num_urls": num_urls,
             "num_queries": num_queries,
         }
+        if return_source_content:
+            used_params["source_content"] = source_content
 
         if not response or response.content is None:
             return (

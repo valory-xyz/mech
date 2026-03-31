@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=1.0.0, <2.0.0'
 fingerprint:
   __init__.py: bafybeiflni5dkn5fqe7fnu4lgbqxzfrgochhqfbgzwz3vlf5grijp3nkpm
-  prediction_url_cot.py: bafybeighkngkp5myd4uvzko6evl6tex5off56ug3raktxsloyptfexxwva
+  prediction_url_cot.py: bafybeihjclmhb677qkoupvma2suomtamr7u3runnsdarg5i4bqhhx3ugai
   tests/__init__.py: bafybeia2zevyo6fxbwf7dj4vkhd3fnsvog5sqvepqg4qjgzydlhsuwnn7q
   tests/test_prediction_url_cot.py: bafybeifzgixiicp3yekiu6uecm4qc6yyrukirg6lhqesf5eg4fvotps7fi
 fingerprint_ignore_patterns: []
