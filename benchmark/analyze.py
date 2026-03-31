@@ -71,12 +71,17 @@ def row_brier(row: dict[str, Any]) -> float | None:
 
 def section_overall(scores: dict[str, Any]) -> str:
     o = scores["overall"]
+    if scores["total_rows"] == 0:
+        return "## Overall\n\nNo predictions to score."
+
+    rel_str = f"{o['reliability']:.0%}" if o["reliability"] is not None else "N/A"
+    brier_str = str(o["brier"]) if o["brier"] is not None else "N/A"
     lines = [
         "## Overall",
         "",
         f"- Predictions scored: {scores['valid_rows']} / {scores['total_rows']}"
-        f" ({o['reliability']:.0%} reliability)",
-        f"- Overall Brier: {o['brier']}",
+        f" ({rel_str} reliability)",
+        f"- Overall Brier: {brier_str}",
         f"  - 0.0 = perfect, 0.25 = random guessing, 1.0 = maximally wrong",
     ]
     return "\n".join(lines)
@@ -121,13 +126,14 @@ def section_weak_spots(scores: dict[str, Any]) -> str:
             brier = stats.get("brier")
             if brier is not None and brier > BRIER_WEAK_THRESHOLD:
                 found = True
+                label = "worse than random (0.25)" if brier > BRIER_RANDOM else "materially weak"
                 lines.append(
                     f"- **{name}** ({section_name}): Brier {brier:.4f} (n={stats['n']})"
-                    f" — worse than random guessing"
+                    f" — {label}"
                 )
 
     if not found:
-        lines.append("No weak spots detected (all Brier scores below 0.30).")
+        lines.append(f"No weak spots detected (all Brier scores below {BRIER_WEAK_THRESHOLD}).")
 
     return "\n".join(lines)
 
