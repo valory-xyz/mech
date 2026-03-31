@@ -126,7 +126,7 @@ def section_weak_spots(scores: dict[str, Any]) -> str:
             brier = stats.get("brier")
             if brier is not None and brier > BRIER_WEAK_THRESHOLD:
                 found = True
-                label = "worse than random (0.25)" if brier > BRIER_RANDOM else "materially weak"
+                label = "anti-predictive (worse than coin flip)" if brier > 0.5 else "weak performance"
                 lines.append(
                     f"- **{name}** ({section_name}): Brier {brier:.4f} (n={stats['n']})"
                     f" — {label}"
@@ -162,7 +162,7 @@ def _deduplicate_by_question(
     """Keep only the worst (or best) prediction per unique question."""
     seen: dict[str, tuple[float, dict[str, Any]]] = {}
     for b, row in scored:
-        q = row["question_text"]
+        q = row.get("question_text", "")
         if q not in seen:
             seen[q] = (b, row)
         elif keep == "worst" and b > seen[q][0]:
