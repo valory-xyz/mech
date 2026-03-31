@@ -88,7 +88,7 @@ def _capture_role_fn(cls: Any, base_cls: Any, ctx: Any) -> Any:
         self_: Any,
         self_address: Any = None,
         role_from_first_message: Any = None,
-        **kw: Any
+        **kw: Any,
     ) -> None:
         captured["fn"] = role_from_first_message
 
