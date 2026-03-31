@@ -464,15 +464,20 @@ class ResolvedMarkets:
     def __init__(self) -> None:
         self.by_id: dict[str, dict[str, Any]] = {}
         self.by_title: dict[str, dict[str, Any]] = {}
+        self._seen: set[int] = set()
 
     def add(self, market_id: Optional[str], title: str, data: dict[str, Any]) -> None:
         if market_id:
             self.by_id[market_id] = data
         if title:
             self.by_title[title.lower()] = data
+        self._seen.add(id(data))
 
     def __len__(self) -> int:
-        return len(self.by_title)
+        return len(self._seen)
+
+    def __bool__(self) -> bool:
+        return len(self._seen) > 0
 
 
 def fetch_omen_resolved(resolved_after: int) -> ResolvedMarkets:
@@ -522,7 +527,7 @@ def fetch_polymarket_resolved(resolved_after: int) -> ResolvedMarkets:
     """Bulk fetch Polymarket markets that resolved after the given timestamp.
 
     The subgraph doesn't support filtering bets by resolution time, so we:
-    1. Fetch a wide candidate window (90 days) of bets
+    1. Fetch a wide candidate window (POLYMARKET_CANDIDATE_WINDOW_DAYS) of bets
     2. Post-filter to resolved questions only
     3. Only include markets where resolution.blockTimestamp > resolved_after
     4. Deduplicate by question ID
