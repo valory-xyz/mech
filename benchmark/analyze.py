@@ -76,6 +76,8 @@ def section_overall(scores: dict[str, Any]) -> str:
 
     rel_str = f"{o['reliability']:.0%}" if o["reliability"] is not None else "N/A"
     brier_str = str(o["brier"]) if o["brier"] is not None else "N/A"
+    acc_str = f"{o['accuracy']:.0%}" if o.get("accuracy") is not None else "N/A"
+    sharp_str = f"{o['sharpness']:.4f}" if o.get("sharpness") is not None else "N/A"
     lines = [
         "## Overall",
         "",
@@ -83,6 +85,9 @@ def section_overall(scores: dict[str, Any]) -> str:
         f" ({rel_str} reliability)",
         f"- Overall Brier: {brier_str}",
         f"  - 0.0 = perfect, 0.25 = random guessing, 1.0 = maximally wrong",
+        f"- Accuracy: {acc_str}",
+        f"- Sharpness: {sharp_str}",
+        f"  - 0.0 = all predictions at 50/50, 0.5 = maximally decisive",
     ]
     return "\n".join(lines)
 
@@ -100,7 +105,12 @@ def section_tool_ranking(scores: dict[str, Any]) -> str:
         if stats.get("reliability") is not None and stats["reliability"] < RELIABILITY_ISSUE_THRESHOLD:
             flags = f" — {stats['reliability']:.0%} reliability"
         brier = stats["brier"] if stats["brier"] is not None else "N/A"
-        lines.append(f"{i}. **{tool}** — Brier: {brier} (n={stats['n']}){flags}")
+        acc = f"{stats['accuracy']:.0%}" if stats.get("accuracy") is not None else "N/A"
+        sharp = f"{stats['sharpness']:.4f}" if stats.get("sharpness") is not None else "N/A"
+        lines.append(
+            f"{i}. **{tool}** — Brier: {brier}, Acc: {acc},"
+            f" Sharp: {sharp} (n={stats['n']}){flags}"
+        )
 
     return "\n".join(lines)
 
