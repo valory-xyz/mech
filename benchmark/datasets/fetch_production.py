@@ -510,7 +510,7 @@ def fetch_omen_resolved(resolved_after: int) -> ResolvedMarkets:
 
         resolved_at_ts = fpmm.get("currentAnswerTimestamp")
         data = {
-            "outcome": outcome == 1,
+            "outcome": outcome == 0,  # outcomes=["Yes","No"], index 0 = Yes
             "resolved_at_ts": int(resolved_at_ts) if resolved_at_ts else None,
         }
 
