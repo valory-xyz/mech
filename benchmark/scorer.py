@@ -25,6 +25,7 @@ DEFAULT_INPUT = Path(__file__).parent / "datasets" / "production_log.jsonl"
 DEFAULT_OUTPUT = Path(__file__).parent / "results" / "scores.json"
 
 RELIABILITY_GATE = 0.80
+MIN_SAMPLE_SIZE = 30
 
 
 # ---------------------------------------------------------------------------
@@ -61,7 +62,7 @@ def compute_group_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
     """
     total = len(rows)
     if total == 0:
-        return {"brier": None, "reliability": None, "n": 0}
+        return {"brier": None, "reliability": None, "n": 0, "decision_worthy": False}
 
     valid = [
         r for r in rows
@@ -70,9 +71,15 @@ def compute_group_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
         and r["p_yes"] is not None
     ]
     reliability = len(valid) / total
+    worthy = len(valid) >= MIN_SAMPLE_SIZE
 
     if not valid:
-        return {"brier": None, "reliability": round(reliability, 4), "n": total}
+        return {
+            "brier": None,
+            "reliability": round(reliability, 4),
+            "n": total,
+            "decision_worthy": False,
+        }
 
     scores = [brier_score(r["p_yes"], r["final_outcome"]) for r in valid]
     avg_brier = sum(scores) / len(scores)
@@ -81,6 +88,7 @@ def compute_group_stats(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "brier": round(avg_brier, 4),
         "reliability": round(reliability, 4),
         "n": total,
+        "decision_worthy": worthy,
     }
 
 
@@ -170,6 +178,71 @@ def group_by_composite(
 
 
 # ---------------------------------------------------------------------------
+# Calibration
+# ---------------------------------------------------------------------------
+
+CALIBRATION_BINS = [
+    (0.0, 0.1), (0.1, 0.2), (0.2, 0.3), (0.3, 0.4), (0.4, 0.5),
+    (0.5, 0.6), (0.6, 0.7), (0.7, 0.8), (0.8, 0.9), (0.9, 1.01),
+]
+
+
+def _bin_label(lo: float, hi: float) -> str:
+    """Human-readable label for a calibration bin."""
+    hi_display = 1.0 if hi > 1.0 else hi
+    return f"{lo:.1f}-{hi_display:.1f}"
+
+
+def compute_calibration(
+    rows: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Bucket valid predictions by p_yes range, compare predicted vs realized.
+
+    Returns a list of bin dicts sorted by probability range:
+    ``{"bin": "0.7-0.8", "avg_predicted": 0.74, "realized_rate": 0.81, "n": 42, "gap": -0.07}``
+
+    Positive gap = overconfident (predicted > realized).
+    Negative gap = underconfident (predicted < realized).
+    """
+    valid = [
+        r for r in rows
+        if r.get("prediction_parse_status") == "valid"
+        and r.get("final_outcome") is not None
+        and r.get("p_yes") is not None
+    ]
+
+    bins: dict[str, list[dict[str, Any]]] = {
+        _bin_label(lo, hi): [] for lo, hi in CALIBRATION_BINS
+    }
+
+    for row in valid:
+        p = row["p_yes"]
+        for lo, hi in CALIBRATION_BINS:
+            if lo <= p < hi:
+                bins[_bin_label(lo, hi)].append(row)
+                break
+
+    result = []
+    for lo, hi in CALIBRATION_BINS:
+        label = _bin_label(lo, hi)
+        group = bins[label]
+        if not group:
+            continue
+        avg_pred = sum(r["p_yes"] for r in group) / len(group)
+        realized = sum(1 for r in group if r["final_outcome"]) / len(group)
+        gap = round(avg_pred - realized, 4)
+        result.append({
+            "bin": label,
+            "avg_predicted": round(avg_pred, 4),
+            "realized_rate": round(realized, 4),
+            "n": len(group),
+            "gap": gap,
+        })
+
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Main scoring
 # ---------------------------------------------------------------------------
 
@@ -218,6 +291,13 @@ def score(rows: list[dict[str, Any]]) -> dict[str, Any]:
     # Monthly trend
     trend = group_by_month(rows)
 
+    # Calibration — overall and per-tool
+    calibration = compute_calibration(rows)
+    calibration_by_tool = {
+        tool: compute_calibration(group)
+        for tool, group in group_by(rows, "tool_name").items()
+    }
+
     return {
         "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "total_rows": total,
@@ -230,6 +310,8 @@ def score(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "by_tool_platform": by_tool_platform,
         "by_tool_platform_horizon": by_tool_platform_horizon,
         "trend": trend,
+        "calibration": calibration,
+        "calibration_by_tool": calibration_by_tool,
     }
 
 
@@ -272,10 +354,16 @@ def main() -> None:
     if overall["reliability"] is not None and overall["reliability"] < RELIABILITY_GATE:
         print(f"WARNING: Reliability {overall['reliability']} is below {RELIABILITY_GATE} gate")
 
-    print("\nBy tool:")
-    for tool, stats in sorted(result["by_tool"].items(), key=lambda x: x[1].get("brier") or 999):
-        flag = " UNRELIABLE" if stats["reliability"] is not None and stats["reliability"] < RELIABILITY_GATE else ""
-        print(f"  {tool}: Brier={stats['brier']}, Reliability={stats['reliability']}, n={stats['n']}{flag}")
+    print("\nBy tool (decision-worthy):")
+    ranked = sorted(result["by_tool"].items(), key=lambda x: x[1].get("brier") or 999)
+    for tool, stats in ranked:
+        flags = []
+        if stats["reliability"] is not None and stats["reliability"] < RELIABILITY_GATE:
+            flags.append("UNRELIABLE")
+        if not stats["decision_worthy"]:
+            flags.append(f"LOW-SAMPLE<{MIN_SAMPLE_SIZE}")
+        suffix = f"  [{', '.join(flags)}]" if flags else ""
+        print(f"  {tool}: Brier={stats['brier']}, n={stats['n']}{suffix}")
 
     print("\nBy platform:")
     for platform, stats in result["by_platform"].items():
@@ -297,6 +385,15 @@ def main() -> None:
     print("\nTrend:")
     for entry in result["trend"]:
         print(f"  {entry['month']}: Brier={entry['brier']}, n={entry['n']}")
+
+    print("\nCalibration (overall):")
+    print(f"  {'Bin':<10} {'Predicted':>10} {'Realized':>10} {'Gap':>8} {'n':>6}")
+    for b in result["calibration"]:
+        direction = "over" if b["gap"] > 0 else "under" if b["gap"] < 0 else ""
+        print(
+            f"  {b['bin']:<10} {b['avg_predicted']:>10.4f} {b['realized_rate']:>10.4f}"
+            f" {b['gap']:>+8.4f} {b['n']:>6}  {direction}"
+        )
 
 
 if __name__ == "__main__":
