@@ -741,10 +741,13 @@ def process_in_batches(
             yield futures
 
 
-def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDocument]:
+def extract_texts(
+    urls: List[str], num_words: Optional[int]
+) -> Tuple[List[ExtendedDocument], Dict[str, Any]]:
     """Extract texts from URLs"""
     max_allowed = 5
     extracted_docs: List[ExtendedDocument] = []
+    raw_source_content: Dict[str, Any] = {"pages": {}, "pdfs": {}}
     count = 0
     stop = False
     for batch in process_in_batches(urls=urls):
@@ -758,7 +761,9 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDoc
                     # Check if URL ends with .pdf or content starts with %PDF
                     if url.endswith(".pdf") or result.content[:4] == b"%PDF":
                         doc = extract_text_from_pdf(url, num_words=num_words)
+                        raw_source_content["pdfs"][url] = doc.text if doc else ""
                     else:
+                        raw_source_content["pages"][url] = result.text
                         doc = extract_text(html=result.text, num_words=num_words)
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
@@ -773,7 +778,7 @@ def extract_texts(urls: List[str], num_words: Optional[int]) -> List[ExtendedDoc
                 break
         if stop:
             break
-    return extracted_docs
+    return extracted_docs, raw_source_content
 
 
 def extract_json_string(text: str) -> str:
@@ -903,8 +908,8 @@ def fetch_additional_information(
     num_urls: int,
     num_words: int,
     counter_callback: Optional[Callable] = None,
-    source_content: Optional[Dict[str, str]] = None,
-) -> Tuple[str, Any]:
+    source_content: Optional[Dict[str, Any]] = None,
+) -> Tuple[str, Dict[str, Any], Any]:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(
         user_prompt=user_prompt, num_queries=DEFAULT_NUM_QUERIES
@@ -956,14 +961,17 @@ def fetch_additional_information(
                 engine=google_engine,
                 num=num_urls,
             )
-        docs = extract_texts(urls, num_words)
+        docs, raw_source_content = extract_texts(urls, num_words)
     else:
+        raw_source_content = source_content
         docs = []
-        for url, content in islice(source_content.items(), 3):
-            doc = extract_text(html=content, num_words=num_words)
+        for url, html in islice(source_content.get("pages", {}).items(), 3):
+            doc = extract_text(html=html, num_words=num_words)
             if doc and doc.text != "":
                 doc.url = url
                 docs.append(doc)
+        for url, text in source_content.get("pdfs", {}).items():
+            docs.append(ExtendedDocument(text=text, url=url))
 
     if len(docs) > MAX_NR_DOCS:
         # truncate the split_docs to the first MAX_NR_DOCS documents
@@ -975,7 +983,7 @@ def fetch_additional_information(
             for i, doc in enumerate(docs)
         ]
     )
-    return additional_information, counter_callback
+    return additional_information, raw_source_content, counter_callback
 
 
 def _tokenize_words(text: str) -> List[str]:
@@ -1114,23 +1122,27 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
+        return_source_content = api_keys.get("return_source_content", "false") == "true"
         active_prompt = PREDICTION_PROMPT
         additional_information = ""
+        source_content: Dict[str, Any] = {}
         if tool in ["prediction-online", "claude-prediction-online"]:
-            additional_information, counter_callback = fetch_additional_information(
-                llm_client,
-                user_prompt,
-                engine,
-                temperature,
-                max_tokens,
-                google_api_key,
-                google_engine_id,
-                serper_api_key,
-                search_provider,
-                num_urls,
-                num_words,  # type: ignore
-                counter_callback=counter_callback,
-                source_content=kwargs.get("source_content", None),
+            additional_information, source_content, counter_callback = (
+                fetch_additional_information(
+                    llm_client,
+                    user_prompt,
+                    engine,
+                    temperature,
+                    max_tokens,
+                    google_api_key,
+                    google_engine_id,
+                    serper_api_key,
+                    search_provider,
+                    num_urls,
+                    num_words,  # type: ignore
+                    counter_callback=counter_callback,
+                    source_content=kwargs.get("source_content", None),
+                )
             )
         elif "claude" not in engine:
             # used improved prompt in all models except the Claude ones
@@ -1175,4 +1187,6 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             "num_urls": num_urls,
             "num_words": num_words,
         }
+        if return_source_content:
+            used_params["source_content"] = source_content
         return extracted_block, prediction_prompt, None, counter_callback, used_params

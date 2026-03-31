@@ -388,6 +388,9 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
     openai_api_key = kwargs["api_keys"]["openai"]
     source_content = kwargs.get("source_content", None)
+    return_source_content = (
+        kwargs["api_keys"].get("return_source_content", "false") == "true"
+    )
     with OpenAIClientManager(openai_api_key) as llm_client:
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
@@ -400,18 +403,17 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
         if source_content is not None:
             print("Using provided source content (cached replay)...")
-            organic_data = [
-                {"position": i, "title": url, "link": url, "snippet": content}
-                for i, (url, content) in enumerate(
-                    list(source_content.items())[:MAX_SOURCES], start=1
-                )
-            ]
-            sources = format_sources_data(organic_data, [])
+            captured_source_content = source_content
+            serper_data = source_content.get("serper_response", source_content)
+            organic_data = serper_data.get("organic", [])[:MAX_SOURCES]
+            misc_data = serper_data.get("peopleAlsoAsk", [])
+            sources = format_sources_data(organic_data, misc_data)
         else:
             serper_api_key = kwargs["api_keys"]["serperapi"]
             print("Fetching additional sources...")
             serper_response = fetch_additional_sources(question, serper_api_key)
             sources_data = serper_response.json()
+            captured_source_content = {"serper_response": sources_data}
             print(f"Additional sources fetched: {sources_data}")
             organic_data = sources_data.get("organic", [])[:MAX_SOURCES]
             misc_data = sources_data.get("peopleAlsoAsk", [])
@@ -444,4 +446,6 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             "temperature": temperature,
             "max_tokens": max_tokens,
         }
+        if return_source_content:
+            used_params["source_content"] = captured_source_content
         return extracted_block, prediction_prompt, None, counter_callback, used_params
