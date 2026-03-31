@@ -252,7 +252,13 @@ Building snapshots:
 - **From open markets:** When `tournament.py` runs predictions on open markets, it also caches the web content. When the market resolves, we have both a prediction and its content snapshot.
 - **Retroactive (lossy):** For resolved markets where we don't have cached content, we can snapshot today. This introduces temporal contamination for recently resolved markets but is acceptable for markets that resolved > 6 months ago (the web has moved on, outcome-reporting articles are buried).
 
-**Prerequisite — all tools must support `source_content`:** All prediction tools now accept a `source_content` kwarg (`Dict[str, str]` mapping URLs to their HTML content) for pre-fetched web content injection. This enables cached replay so that comparisons across tools use the same content snapshot rather than hitting live web, preserving temporal integrity.
+**Prerequisite — all tools must support `source_content`:** All prediction tools now accept a `source_content` kwarg for pre-fetched web content injection. This enables cached replay so that comparisons across tools use the same content snapshot rather than hitting live web, preserving temporal integrity.
+
+The `source_content` format is a structured dict with named keys, extensible without invalidating existing datasets:
+- **Web-fetching tools** (prediction_request, prediction_request_sme, prediction_request_rag, prediction_request_reasoning, prediction_url_cot): `{"pages": {url: raw_html, ...}, "pdfs": {url: extracted_text, ...}}`
+- **Superforcaster**: `{"serper_response": <full Serper API JSON response>}`
+
+Tools capture `source_content` into `used_params` when `return_source_content` is set to `"true"` in `API_KEYS` (same pattern as `search_provider`). Pages store raw HTML (re-extracted during replay); PDFs store extracted text (since `extract_text_from_pdf` re-downloads from the URL, which can't be replayed).
 
 **Cached replay policy:**
 - All tools participating in cached replay must accept `source_content` for evidence injection.
@@ -1191,7 +1197,7 @@ The first sprint delivers a minimal but complete pipeline: real production data 
    - Produce one human-readable and one machine-readable baseline report from real production rows
    - Answer: how much data is valid, how much is eligible, and what is missing most often
 
-**In parallel with the first sprint:** Audit all prediction tools for `source_content` support and retrofit those that lack it (superforcaster, gemini-prediction). This unblocks cached replay without waiting for the sprint to complete.
+**In parallel with the first sprint:** ~~Audit all prediction tools for `source_content` support and retrofit those that lack it (superforcaster, gemini-prediction).~~ Done — all online prediction tools now support `source_content` with structured capture. This unblocks cached replay without waiting for the sprint to complete.
 
 ### Phased Rollout
 
@@ -1236,7 +1242,7 @@ The first sprint delivers a minimal but complete pipeline: real production data 
 
 ### Prerequisites (Blocking)
 
-1. **Retrofit all tools with `source_content` support.** Superforcaster and gemini-prediction currently lack this. All prediction tools must accept `source_content` for cached replay to work. This blocks Phase 1.
+1. **Retrofit all tools with `source_content` support.** All online prediction tools now support `source_content` with structured capture via the `return_source_content` flag. Offline tools (e.g. gemini-prediction) don't fetch web content and don't need this. This blocks Phase 1.
 2. **Trader-side request enrichment.** The trader must embed market metadata (market ID, platform, probability, liquidity, volume, spread) in the mech request payload. This is a trader repo change. The data lands on IPFS as part of the request and is available for benchmark analysis without reconstruction. This is a prerequisite for edge and PnL analysis on production data.
 
 ### Open Questions
