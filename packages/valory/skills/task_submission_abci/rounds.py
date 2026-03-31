@@ -118,7 +118,7 @@ class TaskPoolingRound(CollectionRound):
                 synchronized_data_class=SynchronizedData,
                 **{
                     get_name(SynchronizedData.done_tasks): unique_done_tasks,
-                }
+                },
             )
             if len(unique_done_tasks) > 0:
                 return synchronized_data, Event.DONE
@@ -146,7 +146,7 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
                         synchronized_data_class=SynchronizedData,
                         **{
                             get_name(SynchronizedData.done_tasks): [],
-                        }
+                        },
                     ),
                     Event.ERROR,
                 )
@@ -157,7 +157,7 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
                     get_name(
                         SynchronizedData.most_voted_tx_hash
                     ): self.most_voted_payload,
-                }
+                },
             )
             return state, Event.DONE
         if not self.is_majority_possible(
@@ -169,7 +169,7 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
                     synchronized_data_class=SynchronizedData,
                     **{
                         get_name(SynchronizedData.done_tasks): [],
-                    }
+                    },
                 ),
                 Event.NO_MAJORITY,
             )
