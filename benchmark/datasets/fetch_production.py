@@ -69,31 +69,149 @@ MECH_MARKETPLACE_POLYGON_URL = os.environ.get(
     "https://api.subgraph.autonolas.tech/api/proxy/marketplace-polygon",
 )
 
-# Category classification keywords
+# Category keywords for classifying prediction market questions.
+# Matched using word boundaries (\b) to avoid substring false positives.
+# Falls back to "other" if no keywords match.
 CATEGORY_KEYWORDS: dict[str, list[str]] = {
+    "business": [
+        "business", "corp", "corporate", "merger", "acquisition", "startup",
+        "ceo", "cfo", "layoff", "hiring", "strike", "labor union", "trade union",
+        "bankruptcy", "ipo", "company", "brand", "retail", "supply chain",
+        "logistics", "management", "industry", "commercial", "monopoly",
+        "antitrust", "executive", "stellantis", "byd", "tesla", "revenue", "profit",
+    ],
     "crypto": [
-        "bitcoin", "btc", "eth", "ethereum", "crypto", "token",
-        "defi", "blockchain", "solana", "sol",
+        "crypto", "cryptocurrency", "bitcoin", "btc", "ethereum", "eth",
+        "blockchain", "web3", "defi", "nft", "token", "wallet", "coinbase",
+        "binance", "solana", "doge", "stablecoin", "altcoin", "mining",
+        "ledger", "satoshi", "airdrop", "smart contract", "bull run",
     ],
     "politics": [
-        "president", "election", "vote", "congress", "senate",
-        "parliament", "minister", "governor", "democrat", "republican",
+        "politics", "political", "election", "vote", "poll", "ballot",
+        "democrat", "republican", "congress", "senate", "parliament",
+        "president", "prime minister", "biden", "trump", "harris", "campaign",
+        "legislation", "bill", "law", "supreme court", "governor", "mayor",
+        "tory", "labour", "party", "impeachment", "regulatory", "uscis",
+        "federal court",
     ],
-    "sports": [
-        "championship", "league", "cup", "match", "tournament",
-        "team", "nba", "nfl", "fifa", "premier league",
-    ],
-    "economics": [
-        "gdp", "inflation", "fed", "interest rate", "unemployment",
-        "recession", "federal reserve", "central bank",
+    "science": [
+        "science", "physics", "chemistry", "biology", "astronomy", "nasa",
+        "space", "rocket", "spacex", "laboratory", "experiment", "discovery",
+        "research", "scientist", "nobel prize", "atom", "molecule", "dna",
+        "genetics", "telescope", "quantum", "fusion", "superconductor",
+        "study", "peer-reviewed", "comet", "asteroid",
     ],
     "tech": [
-        "openai", "google", "apple", "microsoft", "launch", "release",
-        "software", "chip", "semiconductor",
+        "technology", "tech", "ai", "artificial intelligence", "gpt", "llm",
+        "software", "hardware", "app", "google", "apple", "microsoft", "meta",
+        "server", "cloud", "algorithm", "robot", "cyber", "silicon", "chip",
+        "semiconductor", "nvidia", "virtual reality", "metaverse", "device",
+        "smartphone", "adobe", "semrush",
     ],
-    "geopolitics": [
-        "war", "conflict", "sanctions", "treaty", "nato", "invasion",
-        "military", "ceasefire",
+    "trending": [
+        "trending", "viral", "trend", "tiktok", "meme", "challenge", "hashtag",
+        "breaking", "hype", "buzz", "influencer", "youtuber", "streamer",
+        "mrbeast", "drama", "cancel culture",
+    ],
+    "fashion": [
+        "fashion", "clothing", "apparel", "luxury", "gucci", "prada", "nike",
+        "adidas", "sneaker", "shoe", "runway", "designer", "style", "vogue",
+        "wear", "textile", "fashion collection", "couture", "handbag",
+    ],
+    "social": [
+        "social", "society", "demographic", "population", "census", "birth rate",
+        "inequality", "human rights", "protest", "civil rights", "gender",
+        "race", "immigration", "poverty", "class", "community", "homelessness",
+        "socio-economic", "student",
+    ],
+    "health": [
+        "health", "medicine", "medical", "doctor", "hospital", "virus",
+        "disease", "cancer", "vaccine", "drug", "pharmaceutical", "fda",
+        "covid", "pandemic", "therapy", "surgery", "mental health", "diet",
+        "nutrition", "obesity", "who", "treatment",
+    ],
+    "sustainability": [
+        "sustainability", "sustainable", "climate", "carbon", "green",
+        "renewable", "solar", "wind", "energy", "electric vehicle", "ev",
+        "emission", "pollution", "environment", "recycle", "plastic",
+        "global warming", "net zero", "clean energy",
+    ],
+    "internet": [
+        "internet", "website", "domain", "url", "broadband", "fiber", "wifi",
+        "5g", "browser", "search engine", "online", "digital", "connectivity",
+        "network", "router", "isp", "cybersecurity", "hack", "ddos",
+    ],
+    "travel": [
+        "travel", "tourism", "airline", "flight", "airport", "plane", "boeing",
+        "airbus", "hotel", "resort", "visa", "passport", "destination", "cruise",
+        "vacation", "booking", "airbnb", "expedia", "trip", "passenger",
+        "transportation", "tour", "bus", "ntsb",
+    ],
+    "food": [
+        "food", "drink", "restaurant", "dining", "mcdonalds", "starbucks",
+        "burger", "meat", "plant-based", "agriculture", "farming", "crop",
+        "harvest", "beer", "wine", "spirit", "coffee", "sugar", "grocery",
+        "supermarket", "chef", "cooking",
+    ],
+    "pets": [
+        "pet", "pets", "dog", "cat", "puppy", "kitten", "veterinarian", "vet",
+        "breed", "animal shelter", "adoption", "kibble", "leash", "domestic animal",
+    ],
+    "animals": [
+        "animal", "wildlife", "zoo", "species", "extinction",
+        "wildlife conservation", "nature conservation", "lion", "tiger", "whale",
+        "bear", "biodiversity", "safari", "jungle", "forest", "fauna", "marine",
+    ],
+    "curiosities": [
+        "curiosities", "mystery", "ufo", "alien", "flat earth", "paranormal",
+        "ghost", "psychic", "anomaly", "weird", "strange", "guinness",
+        "record breaker", "bizarre", "hoax", "conspiracy", "qanon",
+    ],
+    "music": [
+        "music", "song", "album", "artist", "concert", "tour", "spotify",
+        "grammy", "billboard", "singer", "band", "rapper", "genre", "hip hop",
+        "chart", "musical", "vocalist",
+    ],
+    "economics": [
+        "economy", "economic", "inflation", "recession", "gdp", "cpi",
+        "interest rate", "fed", "federal reserve", "central bank",
+        "unemployment", "jobs report", "macro", "debt", "deficit",
+        "yield curve", "treasury", "fiscal", "mortgage", "freddie mac",
+    ],
+    "arts": [
+        "art", "arts", "museum", "painting", "auction", "sothebys", "christies",
+        "gallery", "masterpiece", "sculpture", "exhibition", "cultural",
+        "literature", "novel", "biography", "author", "poet",
+    ],
+    "entertainment": [
+        "entertainment", "movie", "film", "cinema", "hollywood", "actor",
+        "actress", "netflix", "disney", "hbo", "box office", "oscar", "tv",
+        "series", "streaming", "show", "theater", "gambling", "betting",
+        "poker", "casino", "lottery",
+    ],
+    "weather": [
+        "weather", "forecast", "hurricane", "storm", "tornado", "temperature",
+        "rain", "snow", "heatwave", "drought", "flood", "meteorology",
+        "monsoon", "el nino", "tropical", "dissipate", "noaa",
+    ],
+    "sports": [
+        "sports", "sport", "football", "basketball", "soccer", "baseball",
+        "nfl", "nba", "mlb", "fifa", "olympics", "world cup", "medal",
+        "champion", "league", "sports team", "athlete", "score", "match",
+        "tournament", "ufc", "boxing", "f1", "liverpool", "transfer",
+        "player", "tennis", "grand slam",
+    ],
+    "finance": [
+        "finance", "financial", "stock", "share", "market", "wall street",
+        "sp500", "nasdaq", "dow jones", "trade", "investor", "dividend",
+        "portfolio", "hedge fund", "equity", "bond", "earnings", "bloomberg",
+        "etf", "short", "long", "robinhood", "close",
+    ],
+    "international": [
+        "international", "global", "war", "conflict", "ukraine", "russia",
+        "israel", "gaza", "china", "un", "united nations", "nato", "treaty",
+        "diplomacy", "foreign", "border", "geopolitics", "summit", "sanction",
+        "ambassador", "territory",
     ],
 }
 
