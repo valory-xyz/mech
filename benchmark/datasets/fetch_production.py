@@ -516,9 +516,17 @@ def fetch_polymarket_resolved(timestamp_gt: int) -> ResolvedMarkets:
             continue
 
         winning_index = int(resolution["winningIndex"])
+        outcomes = metadata.get("outcomes") or []
+        # Neg-risk markets have outcomes ["Yes", "No"] (inverted).
+        # Use the outcomes array to determine what the winning index means.
+        if outcomes and winning_index < len(outcomes):
+            outcome = outcomes[winning_index].lower() == "yes"
+        else:
+            outcome = winning_index == 1
+
         resolved_at_ts = resolution.get("blockTimestamp")
         data = {
-            "outcome": winning_index == 1,
+            "outcome": outcome,
             "resolved_at_ts": int(resolved_at_ts) if resolved_at_ts else None,
         }
 
