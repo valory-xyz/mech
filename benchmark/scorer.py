@@ -139,6 +139,36 @@ def group_by_horizon(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     return {h: compute_group_stats(group) for h, group in groups.items()}
 
 
+def _composite_key(row: dict[str, Any], fields: list[str]) -> str:
+    """Build a composite grouping key from multiple fields."""
+    return " | ".join(str(row.get(f, "unknown")) for f in fields)
+
+
+def group_by_composite(
+    rows: list[dict[str, Any]],
+    fields: list[str],
+    *,
+    horizon: bool = False,
+) -> dict[str, Any]:
+    """Group rows by a composite key, optionally sub-grouped by horizon.
+
+    When *horizon* is False, returns ``{key: stats}``.
+    When *horizon* is True, returns ``{key: {horizon_bucket: stats}}``.
+    """
+    groups: dict[str, list[dict[str, Any]]] = defaultdict(list)
+    for row in rows:
+        key = _composite_key(row, fields)
+        groups[key].append(row)
+
+    if not horizon:
+        return {k: compute_group_stats(g) for k, g in groups.items()}
+
+    result: dict[str, dict[str, Any]] = {}
+    for key, group in groups.items():
+        result[key] = group_by_horizon(group)
+    return result
+
+
 # ---------------------------------------------------------------------------
 # Main scoring
 # ---------------------------------------------------------------------------
@@ -177,6 +207,14 @@ def score(rows: list[dict[str, Any]]) -> dict[str, Any]:
     # Per-horizon
     by_horizon = group_by_horizon(rows)
 
+    # Tool × platform cross breakdown
+    by_tool_platform = group_by_composite(rows, ["tool_name", "platform"])
+
+    # Tool × platform × horizon breakdown
+    by_tool_platform_horizon = group_by_composite(
+        rows, ["tool_name", "platform"], horizon=True,
+    )
+
     # Monthly trend
     trend = group_by_month(rows)
 
@@ -189,6 +227,8 @@ def score(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "by_platform": by_platform,
         "by_category": by_category,
         "by_horizon": by_horizon,
+        "by_tool_platform": by_tool_platform,
+        "by_tool_platform_horizon": by_tool_platform_horizon,
         "trend": trend,
     }
 
@@ -240,6 +280,19 @@ def main() -> None:
     print("\nBy platform:")
     for platform, stats in result["by_platform"].items():
         print(f"  {platform}: Brier={stats['brier']}, n={stats['n']}")
+
+    print("\nBy tool × platform:")
+    for key, stats in sorted(
+        result["by_tool_platform"].items(),
+        key=lambda x: x[1].get("brier") or 999,
+    ):
+        print(f"  {key}: Brier={stats['brier']}, n={stats['n']}")
+
+    print("\nBy tool × platform × horizon:")
+    for key, horizons in sorted(result["by_tool_platform_horizon"].items()):
+        print(f"  {key}:")
+        for h, stats in sorted(horizons.items()):
+            print(f"    {h}: Brier={stats['brier']}, n={stats['n']}")
 
     print("\nTrend:")
     for entry in result["trend"]:
