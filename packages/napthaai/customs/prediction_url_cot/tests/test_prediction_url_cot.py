@@ -17,20 +17,25 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Unit tests for prediction_url_cot: thread-safe client and offline tiktoken."""
+"""Unit tests for prediction_url_cot: thread-safe client, offline tiktoken, and source_content."""
 
 import inspect
+from concurrent.futures import Future
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+import requests
 
 import packages.napthaai.customs.prediction_url_cot.prediction_url_cot as module
 from packages.napthaai.customs.prediction_url_cot.prediction_url_cot import (
+    ExtendedDocument,
     LLMClientManager,
     count_tokens,
+    extract_texts,
     fetch_additional_information,
     multi_queries,
+    run,
 )
 
 
@@ -97,3 +102,278 @@ class TestFunctionsAcceptClient:
         """fetch_additional_information requires client as first param."""
         params = list(inspect.signature(fetch_additional_information).parameters)
         assert params[0] == "client"
+
+
+COT_MODULE = "packages.napthaai.customs.prediction_url_cot.prediction_url_cot"
+
+
+def _make_html_future(url: str, html: str) -> tuple:
+    """Create a (future, url) pair with a fake HTML response."""
+    response = MagicMock(spec=requests.Response)
+    response.status_code = 200
+    response.text = html
+    response.content = b"<html>"
+    future: Future = Future()
+    future.set_result(response)
+    return (future, url)
+
+
+def _make_pdf_future(url: str) -> tuple:
+    """Create a (future, url) pair with a fake PDF response."""
+    response = MagicMock(spec=requests.Response)
+    response.status_code = 200
+    response.text = ""
+    response.content = b"%PDF-1.4 fake content"
+    future: Future = Future()
+    future.set_result(response)
+    return (future, url)
+
+
+class TestExtractTextsCapture:
+    """Verify extract_texts captures raw source content correctly."""
+
+    @patch(f"{COT_MODULE}.process_in_batches")
+    def test_html_pages_captured(self, mock_batches: MagicMock) -> None:
+        """HTML responses are stored in raw_source_content['pages']."""
+        html = "<html><body>Hello world</body></html>"
+        mock_batches.return_value = [[_make_html_future("http://example.com", html)]]
+
+        _, raw_sc = extract_texts(["http://example.com"])
+
+        assert "http://example.com" in raw_sc["pages"]
+        assert raw_sc["pages"]["http://example.com"] == html
+        assert not raw_sc["pdfs"]
+
+    @patch(f"{COT_MODULE}.extract_text_from_pdf")
+    @patch(f"{COT_MODULE}.process_in_batches")
+    def test_pdf_captured(
+        self, mock_batches: MagicMock, mock_pdf_extract: MagicMock
+    ) -> None:
+        """PDF responses are stored in raw_source_content['pdfs']."""
+        mock_batches.return_value = [[_make_pdf_future("http://example.com/doc.pdf")]]
+        mock_pdf_extract.return_value = ExtendedDocument(
+            text="pdf content", url="http://example.com/doc.pdf"
+        )
+
+        _, raw_sc = extract_texts(["http://example.com/doc.pdf"])
+
+        assert "http://example.com/doc.pdf" in raw_sc["pdfs"]
+        assert raw_sc["pdfs"]["http://example.com/doc.pdf"] == "pdf content"
+        assert not raw_sc["pages"]
+
+    @patch(f"{COT_MODULE}.extract_text_from_pdf")
+    @patch(f"{COT_MODULE}.process_in_batches")
+    def test_failed_pdf_stores_empty_string(
+        self, mock_batches: MagicMock, mock_pdf_extract: MagicMock
+    ) -> None:
+        """When extract_text_from_pdf returns None, empty string is stored."""
+        mock_batches.return_value = [[_make_pdf_future("http://example.com/doc.pdf")]]
+        mock_pdf_extract.return_value = None
+
+        _, raw_sc = extract_texts(["http://example.com/doc.pdf"])
+
+        assert raw_sc["pdfs"]["http://example.com/doc.pdf"] == ""
+
+    @patch(f"{COT_MODULE}.extract_text_from_pdf")
+    @patch(f"{COT_MODULE}.process_in_batches")
+    def test_mixed_html_and_pdf(
+        self, mock_batches: MagicMock, mock_pdf_extract: MagicMock
+    ) -> None:
+        """Both HTML and PDF are captured in their respective keys."""
+        html = "<html><body>page</body></html>"
+        mock_batches.return_value = [
+            [
+                _make_html_future("http://example.com", html),
+                _make_pdf_future("http://example.com/doc.pdf"),
+            ]
+        ]
+        mock_pdf_extract.return_value = ExtendedDocument(
+            text="pdf text", url="http://example.com/doc.pdf"
+        )
+
+        _, raw_sc = extract_texts(["http://example.com", "http://example.com/doc.pdf"])
+
+        assert "http://example.com" in raw_sc["pages"]
+        assert "http://example.com/doc.pdf" in raw_sc["pdfs"]
+
+    @patch(f"{COT_MODULE}.process_in_batches")
+    def test_non_200_not_captured(self, mock_batches: MagicMock) -> None:
+        """Non-200 responses are not stored in raw_source_content."""
+        response = MagicMock(spec=requests.Response)
+        response.status_code = 404
+        future: Future = Future()
+        future.set_result(response)
+        mock_batches.return_value = [[(future, "http://example.com")]]
+
+        _, raw_sc = extract_texts(["http://example.com"])
+
+        assert not raw_sc["pages"]
+        assert not raw_sc["pdfs"]
+
+
+class TestFetchReplayPath:
+    """Verify fetch_additional_information replays from structured source_content."""
+
+    @patch(f"{COT_MODULE}.multi_queries")
+    def test_pages_replayed(self, mock_queries: MagicMock) -> None:
+        """Pages in source_content are processed and passed through."""
+        source_content = {
+            "pages": {
+                "http://example.com": "<html><body>test content here</body></html>",
+            },
+            "pdfs": {},
+        }
+        mock_queries.return_value = (["test query"], None)
+
+        result, raw_sc, _ = fetch_additional_information(
+            client=MagicMock(),
+            client_embedding=MagicMock(),
+            prompt="test",
+            model="claude-4-sonnet-20250514",
+            google_api_key=None,
+            google_engine_id=None,
+            serper_api_key=None,
+            search_provider="google",
+            source_content=source_content,
+        )
+
+        assert raw_sc is source_content
+        assert "http://example.com" in result
+
+    @patch(f"{COT_MODULE}.multi_queries")
+    def test_pdfs_replayed(self, mock_queries: MagicMock) -> None:
+        """Pdfs in source_content are loaded as ExtendedDocuments."""
+        source_content = {
+            "pages": {},
+            "pdfs": {
+                "http://example.com/doc.pdf": "pdf extracted text for testing",
+            },
+        }
+        mock_queries.return_value = (["test query"], None)
+
+        result, _, _ = fetch_additional_information(
+            client=MagicMock(),
+            client_embedding=MagicMock(),
+            prompt="test",
+            model="claude-4-sonnet-20250514",
+            google_api_key=None,
+            google_engine_id=None,
+            serper_api_key=None,
+            search_provider="google",
+            source_content=source_content,
+        )
+
+        assert "pdf extracted text for testing" in result
+
+    @patch(f"{COT_MODULE}.multi_queries")
+    def test_empty_source_content(self, mock_queries: MagicMock) -> None:
+        """Empty source_content produces empty result without error."""
+        source_content: dict = {"pages": {}, "pdfs": {}}
+        mock_queries.return_value = (["test query"], None)
+
+        result, _, _ = fetch_additional_information(
+            client=MagicMock(),
+            client_embedding=MagicMock(),
+            prompt="test",
+            model="claude-4-sonnet-20250514",
+            google_api_key=None,
+            google_engine_id=None,
+            serper_api_key=None,
+            search_provider="google",
+            source_content=source_content,
+        )
+
+        assert result == ""
+
+
+def _make_mock_api_keys(return_source_content: str = "false") -> MagicMock:
+    """Create a mock api_keys object (KeyChain-like) for run()."""
+    services = {
+        "openai": "sk-test",
+        "google_api_key": None,
+        "google_engine_id": None,
+        "serperapi": None,
+        "search_provider": "google",
+        "return_source_content": return_source_content,
+    }
+    mock_keys = MagicMock()
+    mock_keys.__getitem__ = MagicMock(side_effect=lambda k: services[k])
+    mock_keys.get = MagicMock(
+        side_effect=lambda k, default=None: services.get(k, default)
+    )
+    mock_keys.max_retries = MagicMock(
+        return_value={"openai": 0, "anthropic": 0, "google_api_key": 0, "openrouter": 0}
+    )
+    return mock_keys
+
+
+class TestRunFlagBehavior:
+    """Verify return_source_content flag controls source_content in used_params."""
+
+    @patch(f"{COT_MODULE}.parser_prediction_response", return_value='{"p_yes": 0.5}')
+    @patch(f"{COT_MODULE}.fetch_additional_information")
+    @patch(f"{COT_MODULE}.LLMClientManager")
+    def test_flag_on_includes_source_content(
+        self,
+        mock_mgr: MagicMock,
+        mock_fetch: MagicMock,
+        mock_parser: MagicMock,
+    ) -> None:
+        """When return_source_content is 'true', used_params contains source_content."""
+        mock_llm = MagicMock()
+        mock_embed = MagicMock()
+        mock_mgr.return_value.__enter__ = MagicMock(return_value=(mock_llm, mock_embed))
+        mock_mgr.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_fetch.return_value = (
+            "additional info",
+            {"pages": {"http://x.com": "<html/>"}},
+            None,
+        )
+
+        mock_llm.completions.return_value = MagicMock(
+            content="<p_yes>0.5</p_yes>",
+            usage=MagicMock(prompt_tokens=10, completion_tokens=5),
+        )
+
+        result = run(
+            tool="prediction-url-cot",
+            model="claude-4-sonnet-20250514",
+            prompt="test",
+            api_keys=_make_mock_api_keys("true"),
+        )
+
+        used_params = result[4]
+        assert "source_content" in used_params
+
+    @patch(f"{COT_MODULE}.parser_prediction_response", return_value='{"p_yes": 0.5}')
+    @patch(f"{COT_MODULE}.fetch_additional_information")
+    @patch(f"{COT_MODULE}.LLMClientManager")
+    def test_flag_off_excludes_source_content(
+        self,
+        mock_mgr: MagicMock,
+        mock_fetch: MagicMock,
+        mock_parser: MagicMock,
+    ) -> None:
+        """When return_source_content is 'false', used_params omits source_content."""
+        mock_llm = MagicMock()
+        mock_embed = MagicMock()
+        mock_mgr.return_value.__enter__ = MagicMock(return_value=(mock_llm, mock_embed))
+        mock_mgr.return_value.__exit__ = MagicMock(return_value=False)
+
+        mock_fetch.return_value = ("additional info", {"pages": {}}, None)
+
+        mock_llm.completions.return_value = MagicMock(
+            content="<p_yes>0.5</p_yes>",
+            usage=MagicMock(prompt_tokens=10, completion_tokens=5),
+        )
+
+        result = run(
+            tool="prediction-url-cot",
+            model="claude-4-sonnet-20250514",
+            prompt="test",
+            api_keys=_make_mock_api_keys("false"),
+        )
+
+        used_params = result[4]
+        assert "source_content" not in used_params
