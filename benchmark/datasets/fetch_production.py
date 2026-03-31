@@ -235,9 +235,11 @@ DELIVERS_QUERY = """
     toolResponse
     request {
       id
+      blockTimestamp
       parsedRequest {
         questionTitle
         tool
+        content
       }
     }
   }
@@ -261,6 +263,7 @@ OMEN_BETS_QUERY = """
     timestamp
     outcomeIndex
     fixedProductMarketMaker {
+      id
       currentAnswer
       currentAnswerTimestamp
       question
@@ -348,14 +351,38 @@ def _paginated_fetch(
 # ---------------------------------------------------------------------------
 
 
+def _parse_request_context(content_str: str) -> dict[str, Any]:
+    """Parse request_context from parsedRequest.content JSON.
+
+    Returns dict with market_id, market_type, market_prob, market_liquidity_usd,
+    market_close_at if present (schema_version 2.0+). Empty dict otherwise.
+    """
+    if not content_str:
+        return {}
+    try:
+        content = json.loads(content_str)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    ctx = content.get("request_context")
+    if not isinstance(ctx, dict):
+        return {}
+    return {
+        "market_id": ctx.get("market_id"),
+        "market_type": ctx.get("type"),
+        "market_prob": ctx.get("market_prob"),
+        "market_liquidity_usd": ctx.get("market_liquidity_usd"),
+        "market_close_at": ctx.get("market_close_at"),
+    }
+
+
 def fetch_deliveries(
     marketplace_url: str,
     timestamp_gt: int,
 ) -> list[dict[str, Any]]:
     """Bulk fetch all recent deliveries with prediction data.
 
-    Returns list of dicts with: question_title, tool, model, toolResponse, timestamp, deliver_id.
     Skips deliveries with null parsedRequest (IPFS failures on subgraph side).
+    Extracts market_id from request_context when available (schema v2.0+).
     """
     raw = _paginated_fetch(
         marketplace_url, DELIVERS_QUERY, "delivers", timestamp_gt,
@@ -375,17 +402,28 @@ def fetch_deliveries(
             skipped += 1
             continue
 
+        request_ts = int(request.get("blockTimestamp") or 0) or None
+        delivery_ts = int(d["blockTimestamp"])
+        ctx = _parse_request_context(parsed.get("content", ""))
+
         deliveries.append({
             "deliver_id": d["id"],
-            "timestamp": int(d["blockTimestamp"]),
+            "timestamp": delivery_ts,
+            "request_timestamp": request_ts,
             "model": d.get("model"),
             "tool_response": d.get("toolResponse"),
             "tool": parsed.get("tool") or "unknown",
             "question_title": question_title,
+            "market_id": ctx.get("market_id"),
+            "market_prob": ctx.get("market_prob"),
         })
 
     if skipped:
         log.info("  skipped %d deliveries with null parsedRequest", skipped)
+
+    has_market_id = sum(1 for d in deliveries if d["market_id"])
+    if deliveries:
+        log.info("  %d/%d deliveries have market_id", has_market_id, len(deliveries))
 
     return deliveries
 
@@ -395,18 +433,33 @@ def fetch_deliveries(
 # ---------------------------------------------------------------------------
 
 
-def fetch_omen_resolved(timestamp_gt: int) -> dict[str, dict[str, Any]]:
+class ResolvedMarkets:
+    """Resolved markets indexed by both market_id and question title."""
+
+    def __init__(self) -> None:
+        self.by_id: dict[str, dict[str, Any]] = {}
+        self.by_title: dict[str, dict[str, Any]] = {}
+
+    def add(self, market_id: Optional[str], title: str, data: dict[str, Any]) -> None:
+        if market_id:
+            self.by_id[market_id] = data
+        if title:
+            self.by_title[title.lower()] = data
+
+    def __len__(self) -> int:
+        return len(self.by_title)
+
+
+def fetch_omen_resolved(timestamp_gt: int) -> ResolvedMarkets:
     """Bulk fetch resolved Omen markets.
 
-    Returns dict keyed by lowercase question title → {outcome, resolved_at_ts}.
+    Indexes by both market ID (fpmm address) and question title.
     """
     raw = _paginated_fetch(
         PREDICT_OMEN_SUBGRAPH_URL, OMEN_BETS_QUERY, "bets", timestamp_gt,
     )
 
-    # Deduplicate: multiple bets can reference the same market.
-    # We just need the market outcome, keyed by question title.
-    markets: dict[str, dict[str, Any]] = {}
+    markets = ResolvedMarkets()
     for bet in raw:
         fpmm = bet.get("fixedProductMarketMaker") or {}
         current_answer = fpmm.get("currentAnswer")
@@ -419,30 +472,36 @@ def fetch_omen_resolved(timestamp_gt: int) -> dict[str, dict[str, Any]]:
             continue
 
         question_raw = fpmm.get("question", "")
-        title = _extract_question_title(question_raw).lower()
+        title = _extract_question_title(question_raw)
         if not title:
             continue
 
         resolved_at_ts = fpmm.get("currentAnswerTimestamp")
-        markets[title] = {
-            "outcome": outcome == 1,  # 1 = Yes
+        data = {
+            "outcome": outcome == 1,
             "resolved_at_ts": int(resolved_at_ts) if resolved_at_ts else None,
         }
+
+        # Omen market ID is the fpmm contract address (the bet entity's id prefix)
+        # but the fpmm id from the subgraph is the FixedProductMarketMakerCreation id
+        # which matches request_context.market_id
+        market_id = fpmm.get("id")
+        markets.add(market_id, title, data)
 
     return markets
 
 
-def fetch_polymarket_resolved(timestamp_gt: int) -> dict[str, dict[str, Any]]:
+def fetch_polymarket_resolved(timestamp_gt: int) -> ResolvedMarkets:
     """Bulk fetch resolved Polymarket markets.
 
-    Returns dict keyed by lowercase question title → {outcome, resolved_at_ts}.
+    Indexes by both question ID and question title.
     Post-filters bets to only those with resolved questions.
     """
     raw = _paginated_fetch(
         PREDICT_POLYMARKET_SUBGRAPH_URL, POLYMARKET_BETS_QUERY, "bets", timestamp_gt,
     )
 
-    markets: dict[str, dict[str, Any]] = {}
+    markets = ResolvedMarkets()
     for bet in raw:
         question = bet.get("question") or {}
         resolution = question.get("resolution")
@@ -450,16 +509,20 @@ def fetch_polymarket_resolved(timestamp_gt: int) -> dict[str, dict[str, Any]]:
             continue
 
         metadata = question.get("metadata") or {}
-        title = (metadata.get("title") or "").strip().lower()
+        title = (metadata.get("title") or "").strip()
         if not title:
             continue
 
         winning_index = int(resolution["winningIndex"])
         resolved_at_ts = resolution.get("blockTimestamp")
-        markets[title] = {
-            "outcome": winning_index == 1,  # 1 = Yes
+        data = {
+            "outcome": winning_index == 1,
             "resolved_at_ts": int(resolved_at_ts) if resolved_at_ts else None,
         }
+
+        # Polymarket question ID matches request_context.market_id
+        market_id = question.get("id")
+        markets.add(market_id, title, data)
 
     return markets
 
@@ -476,20 +539,30 @@ def _extract_question_title(question: str) -> str:
     return question.split(QUESTION_DATA_SEPARATOR)[0].strip()
 
 
-def _match_title(delivery_title: str, markets: dict[str, dict[str, Any]]) -> tuple[Optional[dict[str, Any]], float]:
-    """Match a delivery's question title to a resolved market.
+def _match_delivery(
+    delivery: dict[str, Any],
+    markets: ResolvedMarkets,
+) -> tuple[Optional[dict[str, Any]], float]:
+    """Match a delivery to a resolved market.
 
+    Tries market_id first (deterministic), falls back to title matching (heuristic).
     Returns (market_data, match_confidence).
     """
-    key = delivery_title.lower()
+    # 1. Deterministic match via market_id (from request_context, schema v2.0+)
+    market_id = delivery.get("market_id")
+    if market_id and market_id in markets.by_id:
+        return markets.by_id[market_id], 1.0
 
-    # Exact match
-    if key in markets:
-        return markets[key], 1.0
+    # 2. Fallback: title matching (for older requests without market_id)
+    key = delivery["question_title"].lower()
+
+    # Exact title match
+    if key in markets.by_title:
+        return markets.by_title[key], 1.0
 
     # Prefix match (min 20 chars to avoid false positives)
     if len(key) >= 20:
-        for market_title, market_data in markets.items():
+        for market_title, market_data in markets.by_title.items():
             if len(market_title) >= 20 and (
                 key.startswith(market_title) or market_title.startswith(key)
             ):
@@ -620,14 +693,19 @@ def build_row(
     """Build a production_log row from a delivery matched to a resolved market."""
     question_text = delivery["question_title"]
     parsed = parse_tool_response(delivery["tool_response"])
-    predicted_at_ts = delivery["timestamp"]
+    delivery_ts = delivery["timestamp"]
+    request_ts = delivery.get("request_timestamp")
     resolved_at_ts = market["resolved_at_ts"]
 
     prediction_lead_time_days: Optional[float] = None
-    if predicted_at_ts and resolved_at_ts and resolved_at_ts > predicted_at_ts:
+    if delivery_ts and resolved_at_ts and resolved_at_ts > delivery_ts:
         prediction_lead_time_days = round(
-            (resolved_at_ts - predicted_at_ts) / 86400, 1
+            (resolved_at_ts - delivery_ts) / 86400, 1
         )
+
+    response_latency_seconds: Optional[int] = None
+    if request_ts and delivery_ts and delivery_ts > request_ts:
+        response_latency_seconds = delivery_ts - request_ts
 
     return {
         "row_id": _make_row_id(platform, delivery["deliver_id"]),
@@ -639,11 +717,15 @@ def build_row(
         "p_no": parsed["p_no"],
         "prediction_parse_status": parsed["prediction_parse_status"],
         "final_outcome": market["outcome"],
-        "predicted_at": _ts_to_iso(predicted_at_ts),
+        "requested_at": _ts_to_iso(request_ts),
+        "predicted_at": _ts_to_iso(delivery_ts),
         "resolved_at": _ts_to_iso(resolved_at_ts),
+        "response_latency_seconds": response_latency_seconds,
         "prediction_lead_time_days": prediction_lead_time_days,
         "category": classify_category(question_text),
         "match_confidence": match_confidence,
+        "market_id": delivery.get("market_id"),
+        "market_prob_at_request": delivery.get("market_prob"),
     }
 
 
@@ -702,7 +784,7 @@ def append_rows(output_path: Path, rows: list[dict[str, Any]]) -> int:
 def process_platform(
     platform: str,
     marketplace_url: str,
-    resolved_markets: dict[str, dict[str, Any]],
+    resolved_markets: ResolvedMarkets,
     timestamp_gt: int,
     existing_ids: set[str],
 ) -> tuple[list[dict[str, Any]], int]:
@@ -714,11 +796,12 @@ def process_platform(
     deliveries = fetch_deliveries(marketplace_url, timestamp_gt)
     log.info("%s: %d deliveries, %d resolved markets", platform, len(deliveries), len(resolved_markets))
 
-    if not deliveries or not resolved_markets:
+    if not deliveries or not len(resolved_markets):
         return [], 0
 
     rows: list[dict[str, Any]] = []
-    matched = 0
+    matched_by_id = 0
+    matched_by_title = 0
     max_ts = 0
 
     for delivery in deliveries:
@@ -726,18 +809,23 @@ def process_platform(
         if row_id in existing_ids:
             continue
 
-        market, confidence = _match_title(delivery["question_title"], resolved_markets)
+        market, confidence = _match_delivery(delivery, resolved_markets)
         if market is None:
             continue
 
-        matched += 1
+        if delivery.get("market_id") and confidence == 1.0:
+            matched_by_id += 1
+        else:
+            matched_by_title += 1
+
         row = build_row(delivery, market, confidence, platform)
         rows.append(row)
         max_ts = max(max_ts, delivery["timestamp"])
 
+    total_matched = matched_by_id + matched_by_title
     log.info(
-        "%s: %d deliveries matched to resolved markets, %d rows built",
-        platform, matched, len(rows),
+        "%s: %d matched (%d by market_id, %d by title), %d rows built",
+        platform, total_matched, matched_by_id, matched_by_title, len(rows),
     )
     return rows, max_ts
 
