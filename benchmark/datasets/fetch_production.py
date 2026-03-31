@@ -755,9 +755,10 @@ def build_row(
             (resolved_at_ts - delivery_ts) / 86400, 1
         )
 
-    latency_ms: Optional[int] = None
+    # Block-level granularity (~5s Gnosis, ~12s Ethereum), not sub-second
+    latency_s: Optional[int] = None
     if request_ts and delivery_ts and delivery_ts > request_ts:
-        latency_ms = (delivery_ts - request_ts) * 1000
+        latency_s = delivery_ts - request_ts
 
     return {
         "row_id": _make_row_id(platform, delivery["deliver_id"]),
@@ -781,7 +782,7 @@ def build_row(
         "requested_at": _ts_to_iso(request_ts),
         "predicted_at": _ts_to_iso(delivery_ts),
         "resolved_at": _ts_to_iso(resolved_at_ts),
-        "latency_ms": latency_ms,
+        "latency_s": latency_s,
         "prediction_lead_time_days": prediction_lead_time_days,
         "category": classify_category(question_text),
         "match_confidence": match_confidence,
