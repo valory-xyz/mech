@@ -416,6 +416,8 @@ def fetch_deliveries(
             "question_title": question_title,
             "market_id": ctx.get("market_id"),
             "market_prob": ctx.get("market_prob"),
+            "market_liquidity_usd": ctx.get("market_liquidity_usd"),
+            "market_close_at": ctx.get("market_close_at"),
         })
 
     if skipped:
@@ -703,29 +705,36 @@ def build_row(
             (resolved_at_ts - delivery_ts) / 86400, 1
         )
 
-    response_latency_seconds: Optional[int] = None
+    latency_ms: Optional[int] = None
     if request_ts and delivery_ts and delivery_ts > request_ts:
-        response_latency_seconds = delivery_ts - request_ts
+        latency_ms = (delivery_ts - request_ts) * 1000
 
     return {
         "row_id": _make_row_id(platform, delivery["deliver_id"]),
+        "schema_version": "1.0",
+        "mode": "production_replay",
+        "market_id": delivery.get("market_id"),
         "platform": platform,
         "question_text": question_text,
         "tool_name": delivery["tool"],
+        "tool_version": None,
         "model": delivery["model"],
+        "prompt_template": None,
+        "config_hash": None,
         "p_yes": parsed["p_yes"],
         "p_no": parsed["p_no"],
         "prediction_parse_status": parsed["prediction_parse_status"],
+        "market_prob_at_prediction": delivery.get("market_prob"),
+        "market_liquidity_at_prediction": delivery.get("market_liquidity_usd"),
+        "market_close_at": delivery.get("market_close_at"),
         "final_outcome": market["outcome"],
         "requested_at": _ts_to_iso(request_ts),
         "predicted_at": _ts_to_iso(delivery_ts),
         "resolved_at": _ts_to_iso(resolved_at_ts),
-        "response_latency_seconds": response_latency_seconds,
+        "latency_ms": latency_ms,
         "prediction_lead_time_days": prediction_lead_time_days,
         "category": classify_category(question_text),
         "match_confidence": match_confidence,
-        "market_id": delivery.get("market_id"),
-        "market_prob_at_request": delivery.get("market_prob"),
     }
 
 
