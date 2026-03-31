@@ -52,6 +52,10 @@ DEFAULT_BATCH_SIZE = 1000
 HTTP_TIMEOUT = 60
 PROBABILITY_SUM_TOLERANCE = 0.05
 
+# Max age for pending deliveries (days). Deliveries older than this
+# are dropped from the pending store to keep the state file small.
+PENDING_MAX_AGE_DAYS = 90
+
 # Subgraph endpoints — read from env with defaults
 PREDICT_OMEN_SUBGRAPH_URL = os.environ.get(
     "PREDICT_OMEN_SUBGRAPH_URL",
@@ -841,25 +845,19 @@ def append_rows(output_path: Path, rows: list[dict[str, Any]]) -> int:
 # ---------------------------------------------------------------------------
 
 
-def process_platform(
-    platform: str,
-    marketplace_url: str,
+def _match_and_build(
+    deliveries: list[dict[str, Any]],
     resolved_markets: ResolvedMarkets,
-    delivery_ts_gt: int,
     existing_ids: set[str],
-) -> tuple[list[dict[str, Any]], int, int]:
-    """Process one platform: fetch deliveries, match to resolved markets, build rows.
+    platform: str,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int, int, int, int]:
+    """Match deliveries to resolved markets and build rows.
 
-    Returns (rows, max_delivery_timestamp, max_resolved_timestamp).
+    Returns (rows, still_pending, matched_by_id, matched_by_title,
+             max_delivery_ts, max_resolved_ts).
     """
-    log.info("%s: fetching deliveries...", platform)
-    deliveries = fetch_deliveries(marketplace_url, delivery_ts_gt)
-    log.info("%s: %d deliveries, %d resolved markets", platform, len(deliveries), len(resolved_markets))
-
-    if not deliveries or not len(resolved_markets):
-        return [], 0, 0
-
     rows: list[dict[str, Any]] = []
+    still_pending: list[dict[str, Any]] = []
     matched_by_id = 0
     matched_by_title = 0
     max_delivery_ts = 0
@@ -872,6 +870,7 @@ def process_platform(
 
         market, confidence = _match_delivery(delivery, resolved_markets)
         if market is None:
+            still_pending.append(delivery)
             continue
 
         if delivery.get("market_id") and confidence == 1.0:
@@ -885,12 +884,72 @@ def process_platform(
         if market.get("resolved_at_ts"):
             max_resolved_ts = max(max_resolved_ts, market["resolved_at_ts"])
 
-    total_matched = matched_by_id + matched_by_title
+    return rows, still_pending, matched_by_id, matched_by_title, max_delivery_ts, max_resolved_ts
+
+
+def process_platform(
+    platform: str,
+    marketplace_url: str,
+    resolved_markets: ResolvedMarkets,
+    delivery_ts_gt: int,
+    existing_ids: set[str],
+    pending_deliveries: list[dict[str, Any]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], int, int]:
+    """Process one platform: fetch deliveries, match to resolved markets, build rows.
+
+    Also retries previously pending (unmatched) deliveries against newly
+    resolved markets. Unmatched deliveries are returned as still-pending
+    for the next run.
+
+    Returns (rows, still_pending, max_delivery_timestamp, max_resolved_timestamp).
+    """
+    # 1. Retry pending deliveries from previous runs
+    rows_from_pending: list[dict[str, Any]] = []
+    remaining_pending: list[dict[str, Any]] = []
+    if pending_deliveries and resolved_markets:
+        rows_from_pending, remaining_pending, p_id, p_title, _, _ = _match_and_build(
+            pending_deliveries, resolved_markets, existing_ids, platform,
+        )
+        if rows_from_pending:
+            log.info("%s: matched %d previously pending deliveries", platform, len(rows_from_pending))
+
+    # 2. Fetch and process new deliveries
+    log.info("%s: fetching deliveries...", platform)
+    new_deliveries = fetch_deliveries(marketplace_url, delivery_ts_gt)
+    log.info("%s: %d new deliveries, %d resolved markets, %d pending from before",
+             platform, len(new_deliveries), len(resolved_markets), len(pending_deliveries))
+
+    rows_from_new: list[dict[str, Any]] = []
+    new_pending: list[dict[str, Any]] = []
+    max_delivery_ts = 0
+    max_resolved_ts = 0
+    matched_by_id = 0
+    matched_by_title = 0
+
+    if new_deliveries:
+        rows_from_new, new_pending, matched_by_id, matched_by_title, max_delivery_ts, max_resolved_ts = (
+            _match_and_build(new_deliveries, resolved_markets, existing_ids, platform)
+        )
+
+    all_rows = rows_from_pending + rows_from_new
+    all_pending = remaining_pending + new_pending
+
+    # Prune old pending deliveries to keep state file small
+    cutoff = int(time.time()) - (PENDING_MAX_AGE_DAYS * 86400)
+    before_prune = len(all_pending)
+    all_pending = [d for d in all_pending if d["timestamp"] > cutoff]
+    pruned = before_prune - len(all_pending)
+    if pruned:
+        log.info("%s: pruned %d pending deliveries older than %d days", platform, pruned, PENDING_MAX_AGE_DAYS)
+
+    total_matched = len(all_rows)
     log.info(
-        "%s: %d matched (%d by market_id, %d by title), %d rows built",
-        platform, total_matched, matched_by_id, matched_by_title, len(rows),
+        "%s: %d matched (%d by market_id, %d by title, %d from pending), "
+        "%d still pending, %d rows built",
+        platform, total_matched, matched_by_id, matched_by_title,
+        len(rows_from_pending), len(all_pending), len(all_rows),
     )
-    return rows, max_delivery_ts, max_resolved_ts
+    return all_rows, all_pending, max_delivery_ts, max_resolved_ts
 
 
 # ---------------------------------------------------------------------------
@@ -941,12 +1000,13 @@ def main() -> None:
     omen_state = state.get("omen", {})
     omen_delivery_ts = max(lookback_ts, omen_state.get("last_delivery_timestamp", 0))
     omen_resolved_ts = max(lookback_ts, omen_state.get("last_resolved_timestamp", 0))
-    log.info("Omen: deliveries since %s, resolved since %s",
-             _ts_to_iso(omen_delivery_ts), _ts_to_iso(omen_resolved_ts))
+    omen_pending = omen_state.get("pending_deliveries", [])
+    log.info("Omen: deliveries since %s, resolved since %s, %d pending",
+             _ts_to_iso(omen_delivery_ts), _ts_to_iso(omen_resolved_ts), len(omen_pending))
     omen_markets = fetch_omen_resolved(resolved_after=omen_resolved_ts)
 
-    omen_rows, omen_max_del_ts, omen_max_res_ts = process_platform(
-        "omen", MECH_MARKETPLACE_GNOSIS_URL, omen_markets, omen_delivery_ts, existing_ids,
+    omen_rows, omen_still_pending, omen_max_del_ts, omen_max_res_ts = process_platform(
+        "omen", MECH_MARKETPLACE_GNOSIS_URL, omen_markets, omen_delivery_ts, existing_ids, omen_pending,
     )
     all_rows.extend(omen_rows)
 
@@ -954,12 +1014,13 @@ def main() -> None:
     poly_state = state.get("polymarket", {})
     poly_delivery_ts = max(lookback_ts, poly_state.get("last_delivery_timestamp", 0))
     poly_resolved_ts = max(lookback_ts, poly_state.get("last_resolved_timestamp", 0))
-    log.info("Polymarket: deliveries since %s, resolved since %s",
-             _ts_to_iso(poly_delivery_ts), _ts_to_iso(poly_resolved_ts))
+    poly_pending = poly_state.get("pending_deliveries", [])
+    log.info("Polymarket: deliveries since %s, resolved since %s, %d pending",
+             _ts_to_iso(poly_delivery_ts), _ts_to_iso(poly_resolved_ts), len(poly_pending))
     poly_markets = fetch_polymarket_resolved(resolved_after=poly_resolved_ts)
 
-    poly_rows, poly_max_del_ts, poly_max_res_ts = process_platform(
-        "polymarket", MECH_MARKETPLACE_POLYGON_URL, poly_markets, poly_delivery_ts, existing_ids,
+    poly_rows, poly_still_pending, poly_max_del_ts, poly_max_res_ts = process_platform(
+        "polymarket", MECH_MARKETPLACE_POLYGON_URL, poly_markets, poly_delivery_ts, existing_ids, poly_pending,
     )
     all_rows.extend(poly_rows)
 
@@ -970,17 +1031,20 @@ def main() -> None:
     else:
         log.info("No new rows to write")
 
-    # Update incremental state — separate cursors, subtract 1 for same-block safety
-    if omen_max_del_ts or omen_max_res_ts:
+    # Update incremental state — separate cursors, subtract 1 for same-block safety.
+    # Pending deliveries are persisted for retry on next run.
+    if omen_max_del_ts or omen_max_res_ts or omen_still_pending:
         state["omen"] = {
             "last_delivery_timestamp": (omen_max_del_ts - 1) if omen_max_del_ts else omen_state.get("last_delivery_timestamp", 0),
             "last_resolved_timestamp": (omen_max_res_ts - 1) if omen_max_res_ts else omen_state.get("last_resolved_timestamp", 0),
+            "pending_deliveries": omen_still_pending,
             "last_run": _ts_to_iso(now),
         }
-    if poly_max_del_ts or poly_max_res_ts:
+    if poly_max_del_ts or poly_max_res_ts or poly_still_pending:
         state["polymarket"] = {
             "last_delivery_timestamp": (poly_max_del_ts - 1) if poly_max_del_ts else poly_state.get("last_delivery_timestamp", 0),
             "last_resolved_timestamp": (poly_max_res_ts - 1) if poly_max_res_ts else poly_state.get("last_resolved_timestamp", 0),
+            "pending_deliveries": poly_still_pending,
             "last_run": _ts_to_iso(now),
         }
 
