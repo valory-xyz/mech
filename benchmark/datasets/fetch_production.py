@@ -49,7 +49,7 @@ QUESTION_DATA_SEPARATOR = "\u241f"
 
 DEFAULT_LOOKBACK_DAYS = 7
 DEFAULT_BATCH_SIZE = 1000
-HTTP_TIMEOUT = 30
+HTTP_TIMEOUT = 60
 
 # Subgraph endpoints — read from env with defaults
 PREDICT_OMEN_SUBGRAPH_URL = os.environ.get(
@@ -246,7 +246,8 @@ DELIVERS_QUERY = """
 }
 """
 
-# Omen: bulk fetch resolved bets (outcome comes with the bet)
+# Omen: bulk fetch bets on markets that resolved after the cutoff.
+# Filters by resolution time (currentAnswerTimestamp), not bet placement time.
 OMEN_BETS_QUERY = """
 {
   bets(
@@ -255,8 +256,10 @@ OMEN_BETS_QUERY = """
     orderBy: timestamp
     orderDirection: desc
     where: {
-      fixedProductMarketMaker_: { currentAnswer_not: null }
-      timestamp_gt: %(timestamp_gt)s
+      fixedProductMarketMaker_: {
+        currentAnswer_not: null
+        currentAnswerTimestamp_gt: %(resolved_after)s
+      }
     }
   ) {
     id
@@ -272,7 +275,9 @@ OMEN_BETS_QUERY = """
 }
 """
 
-# Polymarket: bulk fetch bets, post-filter for resolved
+# Polymarket: bulk fetch bets from a wide window, post-filter for resolved.
+# The subgraph doesn't support filtering by resolution timestamp directly,
+# so we fetch a broad candidate window and filter in Python.
 POLYMARKET_BETS_QUERY = """
 {
   bets(
@@ -300,27 +305,43 @@ POLYMARKET_BETS_QUERY = """
 }
 """
 
+# How far back to fetch Polymarket bets to find recently resolved markets.
+# Bets may have been placed months before the market resolves.
+POLYMARKET_CANDIDATE_WINDOW_DAYS = 30
+
 # ---------------------------------------------------------------------------
 # Subgraph helpers
 # ---------------------------------------------------------------------------
 
 
+MAX_RETRIES = 3
+
+
 def _post_graphql(url: str, payload: dict[str, Any]) -> dict[str, Any]:
-    """Post a GraphQL query and return the JSON response data."""
+    """Post a GraphQL query and return the JSON response data. Retries on timeout."""
     headers = {"Content-Type": "application/json"}
-    resp = requests.post(url, json=payload, headers=headers, timeout=HTTP_TIMEOUT)
-    resp.raise_for_status()
-    body = resp.json()
-    if "errors" in body:
-        raise RuntimeError(f"GraphQL errors from {url}: {body['errors']}")
-    return body.get("data", {})
+    for attempt in range(1, MAX_RETRIES + 1):
+        try:
+            resp = requests.post(url, json=payload, headers=headers, timeout=HTTP_TIMEOUT)
+            resp.raise_for_status()
+            body = resp.json()
+            if "errors" in body:
+                raise RuntimeError(f"GraphQL errors from {url}: {body['errors']}")
+            return body.get("data", {})
+        except requests.exceptions.ReadTimeout:
+            if attempt < MAX_RETRIES:
+                wait = attempt * 10
+                log.warning("Timeout on %s (attempt %d/%d), retrying in %ds", url, attempt, MAX_RETRIES, wait)
+                time.sleep(wait)
+            else:
+                raise
 
 
 def _paginated_fetch(
     url: str,
     query_template: str,
     entity_key: str,
-    timestamp_gt: int,
+    template_vars: dict[str, Any],
     batch_size: int = DEFAULT_BATCH_SIZE,
 ) -> list[dict[str, Any]]:
     """Fetch all records from a subgraph using pagination."""
@@ -328,11 +349,7 @@ def _paginated_fetch(
     skip = 0
 
     while True:
-        query = query_template % {
-            "first": batch_size,
-            "skip": skip,
-            "timestamp_gt": timestamp_gt,
-        }
+        query = query_template % {**template_vars, "first": batch_size, "skip": skip}
         data = _post_graphql(url, {"query": query})
         batch = data.get(entity_key, [])
         if not batch:
@@ -385,7 +402,8 @@ def fetch_deliveries(
     Extracts market_id from request_context when available (schema v2.0+).
     """
     raw = _paginated_fetch(
-        marketplace_url, DELIVERS_QUERY, "delivers", timestamp_gt,
+        marketplace_url, DELIVERS_QUERY, "delivers",
+        {"timestamp_gt": timestamp_gt},
     )
 
     deliveries = []
@@ -452,13 +470,15 @@ class ResolvedMarkets:
         return len(self.by_title)
 
 
-def fetch_omen_resolved(timestamp_gt: int) -> ResolvedMarkets:
-    """Bulk fetch resolved Omen markets.
+def fetch_omen_resolved(resolved_after: int) -> ResolvedMarkets:
+    """Bulk fetch Omen markets that resolved after the given timestamp.
 
+    Filters by resolution time (currentAnswerTimestamp), not bet placement time.
     Indexes by both market ID (fpmm address) and question title.
     """
     raw = _paginated_fetch(
-        PREDICT_OMEN_SUBGRAPH_URL, OMEN_BETS_QUERY, "bets", timestamp_gt,
+        PREDICT_OMEN_SUBGRAPH_URL, OMEN_BETS_QUERY, "bets",
+        {"resolved_after": resolved_after},
     )
 
     markets = ResolvedMarkets()
@@ -493,14 +513,19 @@ def fetch_omen_resolved(timestamp_gt: int) -> ResolvedMarkets:
     return markets
 
 
-def fetch_polymarket_resolved(timestamp_gt: int) -> ResolvedMarkets:
-    """Bulk fetch resolved Polymarket markets.
+def fetch_polymarket_resolved(resolved_after: int) -> ResolvedMarkets:
+    """Bulk fetch Polymarket markets that resolved after the given timestamp.
 
-    Indexes by both question ID and question title.
-    Post-filters bets to only those with resolved questions.
+    The subgraph doesn't support filtering bets by resolution time, so we:
+    1. Fetch a wide candidate window (90 days) of bets
+    2. Post-filter to resolved questions only
+    3. Only include markets where resolution.blockTimestamp > resolved_after
+    4. Deduplicate by question ID
     """
+    candidate_window = int(time.time()) - (POLYMARKET_CANDIDATE_WINDOW_DAYS * 86400)
     raw = _paginated_fetch(
-        PREDICT_POLYMARKET_SUBGRAPH_URL, POLYMARKET_BETS_QUERY, "bets", timestamp_gt,
+        PREDICT_POLYMARKET_SUBGRAPH_URL, POLYMARKET_BETS_QUERY, "bets",
+        {"timestamp_gt": candidate_window},
     )
 
     markets = ResolvedMarkets()
@@ -508,6 +533,15 @@ def fetch_polymarket_resolved(timestamp_gt: int) -> ResolvedMarkets:
         question = bet.get("question") or {}
         resolution = question.get("resolution")
         if resolution is None:
+            continue
+
+        resolved_at_ts = resolution.get("blockTimestamp")
+        if not resolved_at_ts:
+            continue
+
+        # Only include markets that resolved after our cutoff
+        resolved_at_int = int(resolved_at_ts)
+        if resolved_at_int <= resolved_after:
             continue
 
         metadata = question.get("metadata") or {}
@@ -524,10 +558,9 @@ def fetch_polymarket_resolved(timestamp_gt: int) -> ResolvedMarkets:
         else:
             outcome = winning_index == 1
 
-        resolved_at_ts = resolution.get("blockTimestamp")
         data = {
             "outcome": outcome,
-            "resolved_at_ts": int(resolved_at_ts) if resolved_at_ts else None,
+            "resolved_at_ts": resolved_at_int,
         }
 
         # Polymarket question ID matches request_context.market_id
@@ -885,10 +918,14 @@ def main() -> None:
 
     all_rows: list[dict[str, Any]] = []
 
+    # Delivery lookback: use user's --lookback-days (or incremental state)
+    # Resolution lookback: same cutoff — we want markets that resolved in this window
+    # These are separate because Polymarket fetches a wider candidate window internally
+
     # --- Omen (Gnosis chain) ---
     omen_ts = max(lookback_ts, state.get("omen", {}).get("last_delivery_timestamp", 0))
-    log.info("Omen: fetching resolved markets since %s", _ts_to_iso(omen_ts))
-    omen_markets = fetch_omen_resolved(omen_ts)
+    log.info("Omen: fetching markets resolved since %s", _ts_to_iso(omen_ts))
+    omen_markets = fetch_omen_resolved(resolved_after=omen_ts)
 
     omen_rows, omen_max_ts = process_platform(
         "omen", MECH_MARKETPLACE_GNOSIS_URL, omen_markets, omen_ts, existing_ids,
@@ -897,8 +934,8 @@ def main() -> None:
 
     # --- Polymarket (Polygon chain) ---
     poly_ts = max(lookback_ts, state.get("polymarket", {}).get("last_delivery_timestamp", 0))
-    log.info("Polymarket: fetching resolved markets since %s", _ts_to_iso(poly_ts))
-    poly_markets = fetch_polymarket_resolved(poly_ts)
+    log.info("Polymarket: fetching markets resolved since %s", _ts_to_iso(poly_ts))
+    poly_markets = fetch_polymarket_resolved(resolved_after=poly_ts)
 
     poly_rows, poly_max_ts = process_platform(
         "polymarket", MECH_MARKETPLACE_POLYGON_URL, poly_markets, poly_ts, existing_ids,
