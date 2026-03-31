@@ -43,8 +43,12 @@ from readability import Document as ReadabilityDocument
 from requests.exceptions import RequestException, TooManyRedirects
 from tiktoken import Encoding, encoding_for_model, get_encoding
 
-MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MechResponseWithKeys = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]], Any
+]
+MechResponse = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]
+]
 MaxCostResponse = float
 
 
@@ -129,7 +133,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 return execute()
             except Exception as e:
                 print(f"Unexpected error: {e}")
-                return str(e), "", None, None, api_keys
+                return str(e), "", None, None, None, api_keys
 
         mech_response = execute()
         return mech_response
@@ -1282,17 +1286,32 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             temperature=temperature,
             max_tokens=max_tokens,
         )
+        used_params = {
+            "model": model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+            "num_urls": num_urls,
+            "num_queries": num_queries,
+        }
+
         if not response_prediction or response_prediction.content is None:
             return (
                 "Response Prediction Not Valid",
                 prediction_prompt,
                 None,
                 counter_callback,
+                used_params,
             )
 
         prediction = parser_prediction_response(response_prediction.content)
         if not prediction:
-            return "Prediction Not Valid", prediction_prompt, None, counter_callback
+            return (
+                "Prediction Not Valid",
+                prediction_prompt,
+                None,
+                counter_callback,
+                used_params,
+            )
 
         if counter_callback:
             counter_callback(
@@ -1307,4 +1326,5 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             reasoning_prompt + "////" + prediction_prompt,
             None,
             counter_callback,
+            used_params,
         )

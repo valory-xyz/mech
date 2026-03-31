@@ -36,8 +36,12 @@ import openai
 import requests
 from openai import OpenAI
 
-MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MechResponseWithKeys = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]], Any
+]
+MechResponse = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]
+]
 
 
 def with_key_rotation(func: Callable) -> Callable:
@@ -90,7 +94,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 api_keys.rotate(service)
                 return execute()
             except Exception as e:
-                return str(e), "", None, None, api_keys
+                return str(e), "", None, None, None, api_keys
 
         mech_response = execute()
         return mech_response
@@ -429,7 +433,7 @@ class CloseMarketBehaviourMock:
 @with_key_rotation
 def run(
     **kwargs: Any,
-) -> Union[float, Tuple[Optional[str], Optional[Dict[str, Any]], Any]]:
+) -> Union[float, MechResponse]:
     """Run the task"""
     tool = kwargs["tool"]
 
@@ -455,4 +459,15 @@ def run(
     market_behavior = CloseMarketBehaviourMock(**kwargs)
     question = kwargs.pop("prompt", None)
     result = market_behavior._get_answer(question)
-    return result
+
+    if result is None:
+        return "No answer could be determined.", None, None, counter_callback, None
+
+    temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
+    max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
+    used_params = {
+        "model": engine,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
+    return json.dumps(result), question, None, counter_callback, used_params

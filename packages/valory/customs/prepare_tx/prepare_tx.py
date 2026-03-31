@@ -32,8 +32,12 @@ import googleapiclient
 import openai
 from openai import OpenAI
 
-MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MechResponseWithKeys = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]], Any
+]
+MechResponse = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]
+]
 MaxCostResponse = float
 
 
@@ -90,7 +94,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 api_keys.rotate(service)
                 return execute()
             except Exception as e:
-                return str(e), "", None, None, api_keys
+                return str(e), "", None, None, None, api_keys
 
         mech_response = execute()
         return mech_response
@@ -185,14 +189,14 @@ def native_transfer(
         # parse the response to get the transaction object string itself
         parsed_txs = ast.literal_eval(response)
     except SyntaxError:
-        return response, None, None, None
+        return response, None, None, None, {}
 
     # build the transaction object, unknowns are referenced from parsed_txs
     transaction = {  # noqa: F841
         "to_address": str(parsed_txs["to_address"]),
         "value": int(parsed_txs["wei_value"]),
     }
-    return response, prompt, None, None
+    return response, prompt, None, None, {}
 
 
 AVAILABLE_TOOLS = {
@@ -200,9 +204,9 @@ AVAILABLE_TOOLS = {
 }
 
 
-def error_response(msg: str) -> Tuple[str, None, None, None]:
+def error_response(msg: str) -> Tuple[str, None, None, None, None]:
     """Return an error mech response."""
-    return msg, None, None, None
+    return msg, None, None, None, None
 
 
 @with_key_rotation
@@ -233,4 +237,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         return error_response("No api key has been given.")
 
     with OpenAIClientManager(api_key) as llm_client:
-        return transaction_builder(prompt, llm_client=llm_client)
+        response, prompt_used, tx_data, cb, used_params = transaction_builder(
+            prompt, llm_client=llm_client
+        )
+        return response, prompt_used, tx_data, cb, used_params

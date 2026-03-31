@@ -29,8 +29,12 @@ import openai
 import requests
 from tiktoken import encoding_for_model
 
-MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MechResponseWithKeys = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]], Any
+]
+MechResponse = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]
+]
 MaxCostResponse = float
 
 N_MODEL_CALLS = 1
@@ -68,7 +72,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 api_keys.rotate("openrouter")
                 return execute()
             except Exception as e:
-                return str(e), "", None, None, api_keys
+                return str(e), "", None, None, None, api_keys
 
         mech_response = execute()
         return mech_response
@@ -435,4 +439,9 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             counter_callback=counter_callback,
         )
 
-        return extracted_block, prediction_prompt, None, counter_callback
+        used_params = {
+            "model": model,
+            "temperature": temperature,
+            "max_tokens": max_tokens,
+        }
+        return extracted_block, prediction_prompt, None, counter_callback, used_params

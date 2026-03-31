@@ -38,8 +38,12 @@ import openai
 # Types (mech tool contract)
 # ---------------------------------------------------------------------------
 
-MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MechResponseWithKeys = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]], Any
+]
+MechResponse = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]
+]
 MaxCostResponse = float
 
 DEFAULT_DELIVERY_RATE = 100
@@ -549,7 +553,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 return execute()
             except Exception as e:  # pylint: disable=broad-except
                 print(f"Unexpected error in run(): {e}")
-                return str(e), "", None, None, api_keys
+                return str(e), "", None, None, None, api_keys
 
         return execute()
 
@@ -608,17 +612,26 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             "n_voters": len(selected_voters),
             "n_successful": 0,
         }
-        return json.dumps(result), "All voters failed.", None, counter_callback
+        return json.dumps(result), "All voters failed.", None, counter_callback, None
+
+    voter_models = [VOTER_REGISTRY[v].model for v in selected_voters]
+    used_params = {
+        "model": JUDGE_MODEL,
+        "voter_models": voter_models,
+        "n_voters": len(selected_voters),
+    }
 
     # 3. Unanimous early exit (cost saving -- skip judge)
     if _all_agree(votes):
         print("  Unanimous consensus -- skipping judge.")
         result = _build_consensus_result(votes)
+        used_params["model"] = voter_models[0]  # judge was not called
         return (
             json.dumps(result),
             result["judge_reasoning"],
             None,
             counter_callback,
+            used_params,
         )
 
     # 4. Judge synthesizes (only when voters disagree or partial)
@@ -638,4 +651,4 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         "n_successful": len(votes),
     }
 
-    return json.dumps(result), judge_reasoning, None, counter_callback
+    return json.dumps(result), judge_reasoning, None, counter_callback, used_params

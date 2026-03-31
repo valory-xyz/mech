@@ -54,8 +54,8 @@ BENCHMARKS_MODULE_FILE = "benchmarks.py"
 APIS_MODULE_NAME = "task_execution_apis"
 BENCHMARKS_MODULE_NAME = "task_execution_benchmarks"
 
-# Expected response tuple length from tool `run()` calls
-EXPECTED_RESPONSE_LENGTH = 5
+# Expected response tuple lengths from tool `run()` calls
+EXPECTED_RESPONSE_LENGTHS = (5, 6)
 
 # Prediction response fields that must appear in deliver_msg
 PREDICTION_FIELDS = ("p_yes", "p_no", "confidence", "info_utility")
@@ -164,7 +164,11 @@ def _validate_deliver_msg(deliver_msg: str, validate_prediction: bool) -> List[s
 
 
 def _validate_response_types(response: tuple) -> List[str]:
-    """Validate the types of response elements [1] through [4]."""
+    """Validate the types of response elements.
+
+    5-tuple (no key rotation): (result, prompt, tx_data, callback, used_params)
+    6-tuple (key rotation):    (result, prompt, tx_data, callback, used_params, api_keys)
+    """
     errors: List[str] = []
     if not isinstance(response[1], str):
         errors.append("Response[1] must be a string.")
@@ -172,8 +176,10 @@ def _validate_response_types(response: tuple) -> List[str]:
         errors.append("Response[2] must be a dictionary or None.")
     if response[3] is not None and type(response[3]).__name__ != TOKEN_COUNTER_CLASS_NAME:
         errors.append(f"Response[3] must be a {TOKEN_COUNTER_CLASS_NAME} or None.")
-    if type(response[4]).__name__ != KEYCHAIN_CLASS_NAME:
-        errors.append(f"Response[4] must be a {KEYCHAIN_CLASS_NAME} object.")
+    if not (isinstance(response[4], dict) or response[4] is None):
+        errors.append("Response[4] must be a dict (used_params) or None.")
+    if len(response) == 6 and type(response[5]).__name__ != KEYCHAIN_CLASS_NAME:
+        errors.append(f"Response[5] must be a {KEYCHAIN_CLASS_NAME} object.")
     return errors
 
 
@@ -181,8 +187,8 @@ def validate_response(response: Any, validate_prediction: bool = True) -> List[s
     """Validate a tool response. Returns a list of error strings (empty = pass)."""
     if not isinstance(response, tuple):
         return ["Response of the tool must be a tuple."]
-    if len(response) != EXPECTED_RESPONSE_LENGTH:
-        return [f"Response must have {EXPECTED_RESPONSE_LENGTH} elements, got {len(response)}."]
+    if len(response) not in EXPECTED_RESPONSE_LENGTHS:
+        return [f"Response must have {EXPECTED_RESPONSE_LENGTHS} elements, got {len(response)}."]
 
     errors: List[str] = []
     deliver_msg = response[0]

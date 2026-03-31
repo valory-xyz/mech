@@ -52,8 +52,12 @@ GOOGLE_RATE_LIMIT_EXCEEDED_CODE = 429
 DEFAULT_DELIVERY_RATE = 100
 
 
-MechResponseWithKeys = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any, Any]
-MechResponse = Tuple[str, Optional[str], Optional[Dict[str, Any]], Any]
+MechResponseWithKeys = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]], Any
+]
+MechResponse = Tuple[
+    str, Optional[str], Optional[Dict[str, Any]], Any, Optional[Dict[str, Any]]
+]
 MaxCostResponse = float
 
 
@@ -146,7 +150,7 @@ def with_key_rotation(func: Callable) -> Callable:
                 return execute()
             except Exception as e:  # pylint: disable=broad-except
                 print(f"Unexpected error: {e}")
-                return str(e), "", None, None, api_keys
+                return str(e), "", None, None, None, api_keys
 
         mech_response = execute()
         return mech_response
@@ -1007,8 +1011,14 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         valid_results = Valid.from_response(response_valid)
         print(f"Valid: {valid_results}")
 
+        used_params = {
+            "model": engine,
+            "temperature": DEFAULT_OPENAI_SETTINGS["temperature"],
+            "max_tokens": max_tokens,
+        }
+
         if not valid_results.is_valid:
-            return valid_results.json(), None, None, None
+            return valid_results.json(), None, None, counter_callback, used_params
 
         (
             additional_information,
@@ -1081,7 +1091,13 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         print(f"Determinable: {determinable_results}")
 
         if not determinable_results.is_determinable:
-            return determinable_results.json(), reasoning, None, None
+            return (
+                determinable_results.json(),
+                reasoning,
+                None,
+                counter_callback,
+                used_params,
+            )
 
         # Make the prediction
         messages = [
@@ -1143,4 +1159,4 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
                 model=engine,
                 token_counter=count_tokens,
             )
-        return results.json(), reasoning, None, counter_callback
+        return results.json(), reasoning, None, counter_callback, used_params
