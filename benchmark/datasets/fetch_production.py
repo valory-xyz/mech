@@ -50,6 +50,7 @@ QUESTION_DATA_SEPARATOR = "\u241f"
 DEFAULT_LOOKBACK_DAYS = 7
 DEFAULT_BATCH_SIZE = 1000
 HTTP_TIMEOUT = 60
+PROBABILITY_SUM_TOLERANCE = 0.05
 
 # Subgraph endpoints — read from env with defaults
 PREDICT_OMEN_SUBGRAPH_URL = os.environ.get(
@@ -651,7 +652,11 @@ def parse_tool_response(tool_response: Optional[str]) -> dict[str, Any]:
                 p_yes = float(p_yes)
                 p_no = float(p_no)
 
-                if 0.0 <= p_yes <= 1.0 and 0.0 <= p_no <= 1.0:
+                if (
+                    0.0 <= p_yes <= 1.0
+                    and 0.0 <= p_no <= 1.0
+                    and abs(p_yes + p_no - 1.0) <= PROBABILITY_SUM_TOLERANCE
+                ):
                     return {
                         "p_yes": p_yes,
                         "p_no": p_no,
@@ -676,7 +681,11 @@ def parse_tool_response(tool_response: Optional[str]) -> dict[str, Any]:
         try:
             p_yes = float(p_yes_match.group(1))
             p_no = float(p_no_match.group(1))
-            if 0.0 <= p_yes <= 1.0 and 0.0 <= p_no <= 1.0:
+            if (
+                0.0 <= p_yes <= 1.0
+                and 0.0 <= p_no <= 1.0
+                and abs(p_yes + p_no - 1.0) <= PROBABILITY_SUM_TOLERANCE
+            ):
                 return {
                     "p_yes": p_yes,
                     "p_no": p_no,
