@@ -835,24 +835,25 @@ def process_platform(
     platform: str,
     marketplace_url: str,
     resolved_markets: ResolvedMarkets,
-    timestamp_gt: int,
+    delivery_ts_gt: int,
     existing_ids: set[str],
-) -> tuple[list[dict[str, Any]], int]:
+) -> tuple[list[dict[str, Any]], int, int]:
     """Process one platform: fetch deliveries, match to resolved markets, build rows.
 
-    Returns (rows, max_delivery_timestamp).
+    Returns (rows, max_delivery_timestamp, max_resolved_timestamp).
     """
     log.info("%s: fetching deliveries...", platform)
-    deliveries = fetch_deliveries(marketplace_url, timestamp_gt)
+    deliveries = fetch_deliveries(marketplace_url, delivery_ts_gt)
     log.info("%s: %d deliveries, %d resolved markets", platform, len(deliveries), len(resolved_markets))
 
     if not deliveries or not len(resolved_markets):
-        return [], 0
+        return [], 0, 0
 
     rows: list[dict[str, Any]] = []
     matched_by_id = 0
     matched_by_title = 0
-    max_ts = 0
+    max_delivery_ts = 0
+    max_resolved_ts = 0
 
     for delivery in deliveries:
         row_id = _make_row_id(platform, delivery["deliver_id"])
@@ -870,14 +871,16 @@ def process_platform(
 
         row = build_row(delivery, market, confidence, platform)
         rows.append(row)
-        max_ts = max(max_ts, delivery["timestamp"])
+        max_delivery_ts = max(max_delivery_ts, delivery["timestamp"])
+        if market.get("resolved_at_ts"):
+            max_resolved_ts = max(max_resolved_ts, market["resolved_at_ts"])
 
     total_matched = matched_by_id + matched_by_title
     log.info(
         "%s: %d matched (%d by market_id, %d by title), %d rows built",
         platform, total_matched, matched_by_id, matched_by_title, len(rows),
     )
-    return rows, max_ts
+    return rows, max_delivery_ts, max_resolved_ts
 
 
 # ---------------------------------------------------------------------------
@@ -918,27 +921,35 @@ def main() -> None:
 
     all_rows: list[dict[str, Any]] = []
 
-    # Delivery lookback: use user's --lookback-days (or incremental state)
-    # Resolution lookback: same cutoff — we want markets that resolved in this window
-    # These are separate because Polymarket fetches a wider candidate window internally
+    # Two separate cursors per platform:
+    # - last_delivery_timestamp: for the marketplace delivery query
+    # - last_resolved_timestamp: for the resolved markets query
+    # These advance independently because deliveries and resolutions
+    # happen at different times.
 
     # --- Omen (Gnosis chain) ---
-    omen_ts = max(lookback_ts, state.get("omen", {}).get("last_delivery_timestamp", 0))
-    log.info("Omen: fetching markets resolved since %s", _ts_to_iso(omen_ts))
-    omen_markets = fetch_omen_resolved(resolved_after=omen_ts)
+    omen_state = state.get("omen", {})
+    omen_delivery_ts = max(lookback_ts, omen_state.get("last_delivery_timestamp", 0))
+    omen_resolved_ts = max(lookback_ts, omen_state.get("last_resolved_timestamp", 0))
+    log.info("Omen: deliveries since %s, resolved since %s",
+             _ts_to_iso(omen_delivery_ts), _ts_to_iso(omen_resolved_ts))
+    omen_markets = fetch_omen_resolved(resolved_after=omen_resolved_ts)
 
-    omen_rows, omen_max_ts = process_platform(
-        "omen", MECH_MARKETPLACE_GNOSIS_URL, omen_markets, omen_ts, existing_ids,
+    omen_rows, omen_max_del_ts, omen_max_res_ts = process_platform(
+        "omen", MECH_MARKETPLACE_GNOSIS_URL, omen_markets, omen_delivery_ts, existing_ids,
     )
     all_rows.extend(omen_rows)
 
     # --- Polymarket (Polygon chain) ---
-    poly_ts = max(lookback_ts, state.get("polymarket", {}).get("last_delivery_timestamp", 0))
-    log.info("Polymarket: fetching markets resolved since %s", _ts_to_iso(poly_ts))
-    poly_markets = fetch_polymarket_resolved(resolved_after=poly_ts)
+    poly_state = state.get("polymarket", {})
+    poly_delivery_ts = max(lookback_ts, poly_state.get("last_delivery_timestamp", 0))
+    poly_resolved_ts = max(lookback_ts, poly_state.get("last_resolved_timestamp", 0))
+    log.info("Polymarket: deliveries since %s, resolved since %s",
+             _ts_to_iso(poly_delivery_ts), _ts_to_iso(poly_resolved_ts))
+    poly_markets = fetch_polymarket_resolved(resolved_after=poly_resolved_ts)
 
-    poly_rows, poly_max_ts = process_platform(
-        "polymarket", MECH_MARKETPLACE_POLYGON_URL, poly_markets, poly_ts, existing_ids,
+    poly_rows, poly_max_del_ts, poly_max_res_ts = process_platform(
+        "polymarket", MECH_MARKETPLACE_POLYGON_URL, poly_markets, poly_delivery_ts, existing_ids,
     )
     all_rows.extend(poly_rows)
 
@@ -949,15 +960,17 @@ def main() -> None:
     else:
         log.info("No new rows to write")
 
-    # Update incremental state (subtract 1 to catch same-block deliveries on next run)
-    if omen_max_ts:
+    # Update incremental state — separate cursors, subtract 1 for same-block safety
+    if omen_max_del_ts or omen_max_res_ts:
         state["omen"] = {
-            "last_delivery_timestamp": omen_max_ts - 1,
+            "last_delivery_timestamp": (omen_max_del_ts - 1) if omen_max_del_ts else omen_state.get("last_delivery_timestamp", 0),
+            "last_resolved_timestamp": (omen_max_res_ts - 1) if omen_max_res_ts else omen_state.get("last_resolved_timestamp", 0),
             "last_run": _ts_to_iso(now),
         }
-    if poly_max_ts:
+    if poly_max_del_ts or poly_max_res_ts:
         state["polymarket"] = {
-            "last_delivery_timestamp": poly_max_ts - 1,
+            "last_delivery_timestamp": (poly_max_del_ts - 1) if poly_max_del_ts else poly_state.get("last_delivery_timestamp", 0),
+            "last_resolved_timestamp": (poly_max_res_ts - 1) if poly_max_res_ts else poly_state.get("last_resolved_timestamp", 0),
             "last_run": _ts_to_iso(now),
         }
 
