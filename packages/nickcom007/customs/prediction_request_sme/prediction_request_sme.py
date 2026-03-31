@@ -622,7 +622,7 @@ def run(
             print("Using default SME introduction.")
             sme_introduction = "You are a helpful assistant."
 
-        return_source_content = kwargs.get("return_source_content", False)
+        return_source_content = api_keys.get("return_source_content", "false") == "true"
         if tool.startswith("prediction-online"):
             additional_information, source_content, counter_callback = (
                 fetch_additional_information(

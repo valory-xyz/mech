@@ -1122,7 +1122,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} is not supported.")
 
-        return_source_content = kwargs.get("return_source_content", False)
+        return_source_content = api_keys.get("return_source_content", "false") == "true"
         active_prompt = PREDICTION_PROMPT
         additional_information = ""
         source_content: Dict[str, Any] = {}

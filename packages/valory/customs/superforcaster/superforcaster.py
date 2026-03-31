@@ -388,7 +388,9 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
 
     openai_api_key = kwargs["api_keys"]["openai"]
     source_content = kwargs.get("source_content", None)
-    return_source_content = kwargs.get("return_source_content", False)
+    return_source_content = (
+        kwargs["api_keys"].get("return_source_content", "false") == "true"
+    )
     with OpenAIClientManager(openai_api_key) as llm_client:
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])

@@ -1234,7 +1234,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
         if tool not in ALLOWED_TOOLS:
             raise ValueError(f"Tool {tool} not supported.")
 
-        return_source_content = kwargs.get("return_source_content", False)
+        return_source_content = api_keys.get("return_source_content", "false") == "true"
         (
             additional_information,
             source_content,
