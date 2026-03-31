@@ -24,11 +24,15 @@ from typing import Any
 
 import pytest
 
+import time
+
 from benchmark.datasets.fetch_production import (
+    PENDING_MAX_AGE_DAYS,
     PROBABILITY_SUM_TOLERANCE,
     ResolvedMarkets,
     _extract_question_title,
     _make_row_id,
+    _match_and_build,
     _match_delivery,
     _parse_request_context,
     build_row,
@@ -528,3 +532,132 @@ class TestDeduplication:
         id3 = _make_row_id("polymarket", "0xabc")
         assert id1 == id2
         assert id1 != id3
+
+
+# ---------------------------------------------------------------------------
+# Pending deliveries (_match_and_build)
+# ---------------------------------------------------------------------------
+
+
+def _make_delivery(
+    deliver_id: str = "0xabc",
+    question_title: str = "Will Bitcoin hit $100k by June?",
+    market_id: str | None = None,
+    timestamp: int | None = None,
+) -> dict[str, Any]:
+    """Build a minimal delivery dict for testing."""
+    return {
+        "deliver_id": deliver_id,
+        "timestamp": timestamp or int(time.time()),
+        "request_timestamp": None,
+        "model": "gpt-4.1",
+        "tool_response": '{"p_yes": 0.7, "p_no": 0.3, "confidence": 0.8}',
+        "tool": "superforcaster",
+        "question_title": question_title,
+        "market_id": market_id,
+        "market_prob": None,
+        "market_liquidity_usd": None,
+        "market_close_at": None,
+    }
+
+
+class TestMatchAndBuild:
+    """Tests for _match_and_build and pending delivery logic."""
+
+    def test_matched_delivery_becomes_row(self) -> None:
+        markets = ResolvedMarkets()
+        markets.add("0xm1", "Will Bitcoin hit $100k by June?", {"outcome": True, "resolved_at_ts": 2000})
+        deliveries = [_make_delivery(deliver_id="0xd1")]
+
+        rows, pending, _, _, _, _ = _match_and_build(deliveries, markets, set(), "omen")
+        assert len(rows) == 1
+        assert len(pending) == 0
+        assert rows[0]["p_yes"] == 0.7
+
+    def test_unmatched_delivery_goes_to_pending(self) -> None:
+        markets = ResolvedMarkets()  # empty — no resolved markets
+        deliveries = [_make_delivery(deliver_id="0xd1")]
+
+        rows, pending, _, _, _, _ = _match_and_build(deliveries, markets, set(), "omen")
+        assert len(rows) == 0
+        assert len(pending) == 1
+        assert pending[0]["deliver_id"] == "0xd1"
+
+    def test_pending_delivery_matched_on_retry(self) -> None:
+        """Simulates: delivery created in run 1 (unmatched),
+        market resolves, run 2 retries and matches."""
+        # Run 1: no resolved markets
+        deliveries = [_make_delivery(deliver_id="0xd1")]
+        _, pending, _, _, _, _ = _match_and_build(deliveries, ResolvedMarkets(), set(), "omen")
+        assert len(pending) == 1
+
+        # Run 2: market resolved
+        markets = ResolvedMarkets()
+        markets.add(None, "Will Bitcoin hit $100k by June?", {"outcome": True, "resolved_at_ts": 2000})
+        rows, still_pending, _, _, _, _ = _match_and_build(pending, markets, set(), "omen")
+        assert len(rows) == 1
+        assert len(still_pending) == 0
+
+    def test_already_emitted_row_not_duplicated(self) -> None:
+        """If a delivery was already emitted (row_id in existing_ids), skip it."""
+        markets = ResolvedMarkets()
+        markets.add(None, "Will Bitcoin hit $100k by June?", {"outcome": True, "resolved_at_ts": 2000})
+        delivery = _make_delivery(deliver_id="0xd1")
+        existing = {_make_row_id("omen", "0xd1")}
+
+        rows, pending, _, _, _, _ = _match_and_build([delivery], markets, existing, "omen")
+        assert len(rows) == 0
+        assert len(pending) == 0  # not pending either — already emitted
+
+    def test_mixed_matched_and_unmatched(self) -> None:
+        markets = ResolvedMarkets()
+        markets.add(None, "Will Bitcoin hit $100k by June?", {"outcome": True, "resolved_at_ts": 2000})
+        deliveries = [
+            _make_delivery(deliver_id="0xd1", question_title="Will Bitcoin hit $100k by June?"),
+            _make_delivery(deliver_id="0xd2", question_title="Will ETH hit $5k?"),
+            _make_delivery(deliver_id="0xd3", question_title="Will Bitcoin hit $100k by June?"),
+        ]
+
+        rows, pending, _, _, _, _ = _match_and_build(deliveries, markets, set(), "omen")
+        assert len(rows) == 2  # d1 and d3 match
+        assert len(pending) == 1  # d2 unmatched
+
+
+class TestPendingAgeCap:
+    """Tests for the 90-day pending delivery pruning."""
+
+    def test_recent_delivery_kept(self) -> None:
+        """Delivery from today should not be pruned."""
+        now = int(time.time())
+        cutoff = now - (PENDING_MAX_AGE_DAYS * 86400)
+        delivery = _make_delivery(timestamp=now)
+        assert delivery["timestamp"] > cutoff
+
+    def test_old_delivery_pruned(self) -> None:
+        """Delivery older than PENDING_MAX_AGE_DAYS should be pruned."""
+        now = int(time.time())
+        cutoff = now - (PENDING_MAX_AGE_DAYS * 86400)
+        old_ts = cutoff - 86400  # 1 day older than cutoff
+        delivery = _make_delivery(timestamp=old_ts)
+        assert delivery["timestamp"] <= cutoff
+
+
+class TestPendingInState:
+    """Tests that pending deliveries round-trip through state file."""
+
+    def test_pending_persisted_and_loaded(self, tmp_path: Path) -> None:
+        state_path = tmp_path / ".fetch_state.json"
+        pending = [_make_delivery(deliver_id="0xpending1")]
+        state = {
+            "omen": {
+                "last_delivery_timestamp": 100,
+                "last_resolved_timestamp": 200,
+                "pending_deliveries": pending,
+                "last_run": "2026-03-31T00:00:00Z",
+            }
+        }
+        save_fetch_state(state_path, state)
+        loaded = load_fetch_state(state_path)
+        loaded_pending = loaded["omen"]["pending_deliveries"]
+        assert len(loaded_pending) == 1
+        assert loaded_pending[0]["deliver_id"] == "0xpending1"
