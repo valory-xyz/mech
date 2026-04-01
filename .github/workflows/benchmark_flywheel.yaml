@@ -1,8 +1,6 @@
 name: benchmark-flywheel
 
 on:
-  push:
-    branches: [feat/benchmark-workflow-ci]  # TEMP: remove before merging
   schedule:
     - cron: '0 6 * * *'  # daily at 6am UTC
   workflow_dispatch:
