@@ -146,13 +146,23 @@ PDF replay is unchanged — PDFs already store extracted text in both modes.
 
 | | `mode="raw"` (tournament) | `mode="cleaned"` (production) |
 |---|---|---|
-| **Storage cost** | High (~50-200KB/page) | Low (estimate TBD — measure after first tool) |
+| **Storage cost** | High (~100-286 KB/page, ~539 KB total for 3 pages) | Low (~1.8 KB/page, ~5.9 KB total for 3 pages) |
 | **Test extraction logic changes** | Yes | No — frozen at capture-time extraction |
 | **Test `num_words` variations** | Yes | No — truncation baked in at capture time |
 | **Test prompt/model changes** | Yes | Yes |
 | **Replay fidelity** | Full pipeline | LLM-only (prompt + model) |
 
 Cached replay with `"cleaned"` mode becomes strictly a **prompt/model evaluation tool**. For retrieval or extraction improvements, use tournament mode with `"raw"`.
+
+### Measured Storage Impact (prediction_request, 3 pages)
+
+| Config | `used_params` size |
+|--------|--------------------|
+| No source_content | 102 B |
+| Cleaned (default) | 5.9 KB |
+| Raw | 538.8 KB |
+
+**Cleaned reduces source_content overhead by 98.9% vs raw** (5.8 KB vs 538.7 KB).
 
 ## Tool-specific Concerns
 
