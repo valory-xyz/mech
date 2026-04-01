@@ -16,4 +16,4 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""Benchmark package."""
+"""Benchmark test package."""
