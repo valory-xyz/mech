@@ -126,7 +126,7 @@ jobs:
           gitleaks detect --report-format json --report-path leak_report -v
 
   unit_tests:
-    continue-on-error: True
+    continue-on-error: False
     needs:
       - lock_check
       - copyright_and_dependencies_check
@@ -186,9 +186,7 @@ jobs:
   integration_tests:
     continue-on-error: True
     needs:
-      - lock_check
-      - copyright_and_dependencies_check
-      - linter_checks
+      - unit_tests
     runs-on: ubuntu-22.04
 
     timeout-minutes: 120
