@@ -176,19 +176,34 @@ def _make_failed_future(url: str, status: int = 404) -> tuple:
 
 
 class TestExtractTextsCapture:
-    """Verify extract_texts captures raw source content correctly."""
+    """Verify extract_texts captures source content correctly."""
 
     @patch(f"{MODULE}.process_in_batches")
-    def test_html_pages_captured(self, mock_batches: MagicMock) -> None:
-        """HTML responses are stored in raw_source_content['pages']."""
+    def test_cleaned_mode_stores_extracted_text(self, mock_batches: MagicMock) -> None:
+        """In cleaned mode (default), extracted text is stored instead of raw HTML."""
         html = "<html><body>Hello world</body></html>"
         mock_batches.return_value = [[_make_html_future("http://example.com", html)]]
 
         _, raw_sc = extract_texts(["http://example.com"], num_words=300)
 
+        assert raw_sc["mode"] == "cleaned"
         assert "http://example.com" in raw_sc["pages"]
-        assert raw_sc["pages"]["http://example.com"] == html
+        assert raw_sc["pages"]["http://example.com"] != html
+        assert "Hello world" in raw_sc["pages"]["http://example.com"]
         assert not raw_sc["pdfs"]
+
+    @patch(f"{MODULE}.process_in_batches")
+    def test_raw_mode_stores_html(self, mock_batches: MagicMock) -> None:
+        """In raw mode, raw HTML is stored."""
+        html = "<html><body>Hello world</body></html>"
+        mock_batches.return_value = [[_make_html_future("http://example.com", html)]]
+
+        _, raw_sc = extract_texts(
+            ["http://example.com"], num_words=300, source_content_mode="raw"
+        )
+
+        assert raw_sc["mode"] == "raw"
+        assert raw_sc["pages"]["http://example.com"] == html
 
     @patch(f"{MODULE}.extract_text_from_pdf")
     @patch(f"{MODULE}.process_in_batches")
@@ -259,9 +274,40 @@ class TestExtractTextsCapture:
 class TestFetchReplayPath:
     """Verify fetch_additional_information replays from structured source_content."""
 
-    def test_pages_replayed(self) -> None:
-        """Pages in source_content are processed via extract_text."""
+    def test_cleaned_mode_uses_text_directly(self) -> None:
+        """In cleaned mode, cached text is used directly without re-extraction."""
         source_content = {
+            "mode": "cleaned",
+            "pages": {
+                "http://example.com": "test content here",
+            },
+            "pdfs": {},
+        }
+        mock_client = MagicMock()
+
+        result, raw_sc, _ = fetch_additional_information(
+            client=mock_client,
+            user_prompt="test",
+            engine="gpt-4o",
+            temperature=0.0,
+            max_tokens=100,
+            google_api_key=None,
+            google_engine=None,
+            serper_api_key=None,
+            search_provider="google",
+            num_urls=3,
+            num_words=300,
+            source_content=source_content,
+        )
+
+        assert raw_sc is source_content
+        assert "test content here" in result
+        assert "http://example.com" in result
+
+    def test_raw_mode_re_extracts(self) -> None:
+        """In raw mode, HTML is re-extracted via extract_text."""
+        source_content = {
+            "mode": "raw",
             "pages": {
                 "http://example.com": "<html><body>test content here</body></html>",
             },
@@ -286,6 +332,33 @@ class TestFetchReplayPath:
 
         assert raw_sc is source_content
         assert "http://example.com" in result
+
+    def test_missing_mode_defaults_to_cleaned(self) -> None:
+        """Source content without mode key defaults to cleaned (no re-extraction)."""
+        source_content = {
+            "pages": {
+                "http://example.com": "already cleaned text",
+            },
+            "pdfs": {},
+        }
+        mock_client = MagicMock()
+
+        result, raw_sc, _ = fetch_additional_information(
+            client=mock_client,
+            user_prompt="test",
+            engine="gpt-4o",
+            temperature=0.0,
+            max_tokens=100,
+            google_api_key=None,
+            google_engine=None,
+            serper_api_key=None,
+            search_provider="google",
+            num_urls=3,
+            num_words=300,
+            source_content=source_content,
+        )
+
+        assert "already cleaned text" in result
 
     def test_pdfs_replayed(self) -> None:
         """Pdfs in source_content are loaded as ExtendedDocuments."""
@@ -439,3 +512,29 @@ class TestRunFlagBehavior:
 
         used_params = result[4]
         assert "source_content" not in used_params
+
+    @patch(f"{MODULE}.LLMClientManager")
+    def test_invalid_source_content_mode_returns_error(
+        self, mock_mgr: MagicMock
+    ) -> None:
+        """Invalid source_content_mode returns error string (caught by @with_key_rotation)."""
+        mock_mgr.return_value.__enter__ = MagicMock(return_value=MagicMock())
+        mock_mgr.return_value.__exit__ = MagicMock(return_value=False)
+
+        services = {
+            "openai": ["sk-test"],
+            "search_provider": ["google"],
+            "source_content_mode": ["invalid"],
+        }
+        mock_keys = MagicMock()
+        mock_keys.__getitem__ = lambda self, key: services[key][0]
+        mock_keys.get = lambda key, default="": services.get(key, [default])[0]
+
+        result = run(
+            tool="prediction-online",
+            model="gpt-4.1-2025-04-14",
+            prompt="test",
+            api_keys=mock_keys,
+        )
+
+        assert "Invalid source_content_mode" in result[0]

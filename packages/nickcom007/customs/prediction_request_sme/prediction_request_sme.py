@@ -384,12 +384,14 @@ def process_in_batches(
 
 
 def extract_texts(
-    urls: List[str], num_words: int = 300
+    urls: List[str],
+    num_words: int = 300,
+    source_content_mode: str = "cleaned",
 ) -> Tuple[List[Dict], Dict[str, Any]]:
     """Extract texts from URLs"""
     max_allowed = 5
     extracted_texts = []
-    raw_source_content: Dict[str, Any] = {"pages": {}}
+    raw_source_content: Dict[str, Any] = {"mode": source_content_mode, "pages": {}}
     count = 0
     stop = False
     for batch in process_in_batches(urls=urls):
@@ -398,9 +400,12 @@ def extract_texts(
                 result = future.result()
                 if result.status_code != 200:
                     continue
-                raw_source_content["pages"][url] = result.text
                 doc: Dict = {}
                 text = extract_text(html=result.text, num_words=num_words)
+                if source_content_mode == "raw":
+                    raw_source_content["pages"][url] = result.text
+                else:
+                    raw_source_content["pages"][url] = text if text else ""
                 doc["text"] = text
                 doc["url"] = url
                 extracted_texts.append(doc)
@@ -431,6 +436,7 @@ def fetch_additional_information(
     num_words: int,
     counter_callback: Optional[Callable] = None,
     source_content: Optional[Dict[str, Any]] = None,
+    source_content_mode: str = "cleaned",
 ) -> Tuple[str, Dict[str, Any], Optional[Callable[[int, int, str], None]]]:
     """Fetch additional information."""
 
@@ -472,15 +478,17 @@ def fetch_additional_information(
                 api_key=google_api_key,
                 engine=google_engine,
             )
-        texts, raw_source_content = extract_texts(urls, num_words)
+        texts, raw_source_content = extract_texts(urls, num_words, source_content_mode)
     else:
         raw_source_content = source_content
         texts = []
-        for url, html in islice(source_content.get("pages", {}).items(), 3):
-            doc: dict = {}
-            text = extract_text(html=html, num_words=num_words)
-            doc["text"] = text
-            doc["url"] = url
+        mode = source_content.get("mode", "cleaned")
+        for url, content in islice(source_content.get("pages", {}).items(), 3):
+            if mode == "raw":
+                text = extract_text(html=content, num_words=num_words)
+            else:
+                text = content
+            doc: dict = {"text": text, "url": url}
             texts.append(doc)
     # Format the additional information
     additional_information = "\n".join(
@@ -623,6 +631,11 @@ def run(
             sme_introduction = "You are a helpful assistant."
 
         return_source_content = api_keys.get("return_source_content", "false") == "true"
+        source_content_mode = api_keys.get("source_content_mode", "cleaned")
+        if source_content_mode not in ("cleaned", "raw"):
+            raise ValueError(
+                f"Invalid source_content_mode: {source_content_mode!r}. Must be 'cleaned' or 'raw'."
+            )
         if tool.startswith("prediction-online"):
             additional_information, source_content, counter_callback = (
                 fetch_additional_information(
@@ -639,6 +652,7 @@ def run(
                     num_words=num_words,
                     counter_callback=counter_callback,
                     source_content=source_content,
+                    source_content_mode=source_content_mode,
                 )
             )
         else:

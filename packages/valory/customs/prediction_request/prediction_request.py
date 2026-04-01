@@ -742,12 +742,18 @@ def process_in_batches(
 
 
 def extract_texts(
-    urls: List[str], num_words: Optional[int]
+    urls: List[str],
+    num_words: Optional[int],
+    source_content_mode: str = "cleaned",
 ) -> Tuple[List[ExtendedDocument], Dict[str, Any]]:
     """Extract texts from URLs"""
     max_allowed = 5
     extracted_docs: List[ExtendedDocument] = []
-    raw_source_content: Dict[str, Any] = {"pages": {}, "pdfs": {}}
+    raw_source_content: Dict[str, Any] = {
+        "mode": source_content_mode,
+        "pages": {},
+        "pdfs": {},
+    }
     count = 0
     stop = False
     for batch in process_in_batches(urls=urls):
@@ -763,8 +769,11 @@ def extract_texts(
                         doc = extract_text_from_pdf(url, num_words=num_words)
                         raw_source_content["pdfs"][url] = doc.text if doc else ""
                     else:
-                        raw_source_content["pages"][url] = result.text
                         doc = extract_text(html=result.text, num_words=num_words)
+                        if source_content_mode == "raw":
+                            raw_source_content["pages"][url] = result.text
+                        else:
+                            raw_source_content["pages"][url] = doc.text if doc else ""
             except requests.exceptions.ReadTimeout:
                 print(f"Request timed out: {url}.")
             except Exception as e:
@@ -909,6 +918,7 @@ def fetch_additional_information(
     num_words: int,
     counter_callback: Optional[Callable] = None,
     source_content: Optional[Dict[str, Any]] = None,
+    source_content_mode: str = "cleaned",
 ) -> Tuple[str, Dict[str, Any], Any]:
     """Fetch additional information."""
     url_query_prompt = URL_QUERY_PROMPT.format(
@@ -961,12 +971,16 @@ def fetch_additional_information(
                 engine=google_engine,
                 num=num_urls,
             )
-        docs, raw_source_content = extract_texts(urls, num_words)
+        docs, raw_source_content = extract_texts(urls, num_words, source_content_mode)
     else:
         raw_source_content = source_content
         docs = []
-        for url, html in islice(source_content.get("pages", {}).items(), 3):
-            doc = extract_text(html=html, num_words=num_words)
+        mode = source_content.get("mode", "cleaned")
+        for url, content in islice(source_content.get("pages", {}).items(), 3):
+            if mode == "raw":
+                doc = extract_text(html=content, num_words=num_words)
+            else:
+                doc = ExtendedDocument(text=content, url=url)
             if doc and doc.text != "":
                 doc.url = url
                 docs.append(doc)
@@ -1123,6 +1137,11 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             raise ValueError(f"Tool {tool} is not supported.")
 
         return_source_content = api_keys.get("return_source_content", "false") == "true"
+        source_content_mode = api_keys.get("source_content_mode", "cleaned")
+        if source_content_mode not in ("cleaned", "raw"):
+            raise ValueError(
+                f"Invalid source_content_mode: {source_content_mode!r}. Must be 'cleaned' or 'raw'."
+            )
         active_prompt = PREDICTION_PROMPT
         additional_information = ""
         source_content: Dict[str, Any] = {}
@@ -1142,6 +1161,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
                     num_words,  # type: ignore
                     counter_callback=counter_callback,
                     source_content=kwargs.get("source_content", None),
+                    source_content_mode=source_content_mode,
                 )
             )
         elif "claude" not in engine:

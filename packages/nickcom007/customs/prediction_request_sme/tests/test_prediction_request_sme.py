@@ -93,19 +93,33 @@ def _make_html_future(url: str, html: str) -> tuple:
 
 
 class TestExtractTextsCapture:
-    """Verify extract_texts captures raw source content correctly."""
+    """Verify extract_texts captures source content correctly."""
 
     @patch(f"{SME_MODULE}.process_in_batches")
-    def test_html_pages_captured(self, mock_batches: MagicMock) -> None:
-        """HTML responses are stored in raw_source_content['pages']."""
+    def test_cleaned_mode_stores_extracted_text(self, mock_batches: MagicMock) -> None:
+        """In cleaned mode (default), extracted text is stored instead of raw HTML."""
         html = "<html><body>Hello world</body></html>"
         mock_batches.return_value = [[_make_html_future("http://example.com", html)]]
 
         _, raw_sc = extract_texts(["http://example.com"], num_words=300)
 
+        assert raw_sc["mode"] == "cleaned"
         assert "http://example.com" in raw_sc["pages"]
+        assert raw_sc["pages"]["http://example.com"] != html
+        assert "Hello world" in raw_sc["pages"]["http://example.com"]
+
+    @patch(f"{SME_MODULE}.process_in_batches")
+    def test_raw_mode_stores_html(self, mock_batches: MagicMock) -> None:
+        """In raw mode, raw HTML is stored."""
+        html = "<html><body>Hello world</body></html>"
+        mock_batches.return_value = [[_make_html_future("http://example.com", html)]]
+
+        _, raw_sc = extract_texts(
+            ["http://example.com"], num_words=300, source_content_mode="raw"
+        )
+
+        assert raw_sc["mode"] == "raw"
         assert raw_sc["pages"]["http://example.com"] == html
-        assert "pdfs" not in raw_sc
 
     @patch(f"{SME_MODULE}.process_in_batches")
     def test_non_200_not_captured(self, mock_batches: MagicMock) -> None:
@@ -124,13 +138,7 @@ class TestExtractTextsCapture:
 class TestFetchReplayPath:
     """Verify fetch_additional_information replays from structured source_content."""
 
-    def test_pages_replayed(self) -> None:
-        """Pages in source_content are processed via extract_text."""
-        source_content = {
-            "pages": {
-                "http://example.com": "<html><body>test content here</body></html>",
-            },
-        }
+    def _make_mock_client(self) -> MagicMock:
         mock_client = MagicMock()
         mock_client.moderations.create.return_value = MagicMock(
             results=[MagicMock(flagged=False)]
@@ -139,9 +147,19 @@ class TestFetchReplayPath:
             choices=[MagicMock(message=MagicMock(content='{"queries": ["test"]}'))],
             usage=MagicMock(prompt_tokens=10, completion_tokens=5),
         )
+        return mock_client
 
-        _, raw_sc, _ = fetch_additional_information(
-            client=mock_client,
+    def test_cleaned_mode_uses_text_directly(self) -> None:
+        """In cleaned mode, cached text is used directly without re-extraction."""
+        source_content = {
+            "mode": "cleaned",
+            "pages": {
+                "http://example.com": "test content here",
+            },
+        }
+
+        result, raw_sc, _ = fetch_additional_information(
+            client=self._make_mock_client(),
             prompt="test",
             engine="gpt-4o",
             temperature=0.0,
@@ -156,21 +174,66 @@ class TestFetchReplayPath:
         )
 
         assert raw_sc is source_content
+        assert "test content here" in result
+
+    def test_raw_mode_re_extracts(self) -> None:
+        """In raw mode, HTML is re-extracted via extract_text."""
+        source_content = {
+            "mode": "raw",
+            "pages": {
+                "http://example.com": "<html><body>test content here</body></html>",
+            },
+        }
+
+        result, raw_sc, _ = fetch_additional_information(
+            client=self._make_mock_client(),
+            prompt="test",
+            engine="gpt-4o",
+            temperature=0.0,
+            max_tokens=100,
+            google_api_key=None,
+            google_engine=None,
+            serper_api_key=None,
+            search_provider="google",
+            num_urls=3,
+            num_words=300,
+            source_content=source_content,
+        )
+
+        assert raw_sc is source_content
+        assert "http://example.com" in result
+
+    def test_missing_mode_defaults_to_cleaned(self) -> None:
+        """Source content without mode key defaults to cleaned."""
+        source_content = {
+            "pages": {
+                "http://example.com": "already cleaned text",
+            },
+        }
+
+        result, _, _ = fetch_additional_information(
+            client=self._make_mock_client(),
+            prompt="test",
+            engine="gpt-4o",
+            temperature=0.0,
+            max_tokens=100,
+            google_api_key=None,
+            google_engine=None,
+            serper_api_key=None,
+            search_provider="google",
+            num_urls=3,
+            num_words=300,
+            source_content=source_content,
+        )
+
+        assert "already cleaned text" in result
 
     def test_empty_source_content(self) -> None:
         """Empty source_content produces empty result without error."""
         source_content: dict = {"pages": {}}
-        mock_client = MagicMock()
-        mock_client.moderations.create.return_value = MagicMock(
-            results=[MagicMock(flagged=False)]
-        )
-        mock_client.chat.completions.create.return_value = MagicMock(
-            choices=[MagicMock(message=MagicMock(content='{"queries": ["test"]}'))],
-            usage=MagicMock(prompt_tokens=10, completion_tokens=5),
-        )
 
         result, _, _ = fetch_additional_information(
-            client=mock_client,
+            client=self._make_mock_client(),
             prompt="test",
             engine="gpt-4o",
             temperature=0.0,
