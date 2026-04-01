@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import statistics
+from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -92,6 +94,13 @@ def section_overall(scores: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _sample_label(stats: dict[str, Any]) -> str:
+    """Return a sample-size label for ranking context."""
+    if stats.get("decision_worthy") is False:
+        return " ⚠ low sample"
+    return ""
+
+
 def section_tool_ranking(scores: dict[str, Any]) -> str:
     tools = scores.get("by_tool", {})
     ranked = sorted(
@@ -104,6 +113,7 @@ def section_tool_ranking(scores: dict[str, Any]) -> str:
         flags = ""
         if stats.get("reliability") is not None and stats["reliability"] < RELIABILITY_ISSUE_THRESHOLD:
             flags = f" — {stats['reliability']:.0%} reliability"
+        flags += _sample_label(stats)
         brier = stats["brier"] if stats["brier"] is not None else "N/A"
         acc = f"{stats['accuracy']:.0%}" if stats.get("accuracy") is not None else "N/A"
         sharp = f"{stats['sharpness']:.4f}" if stats.get("sharpness") is not None else "N/A"
@@ -118,7 +128,7 @@ def section_tool_ranking(scores: dict[str, Any]) -> str:
 def section_platform(scores: dict[str, Any]) -> str:
     platforms = scores.get("by_platform", {})
     lines = ["## Platform Comparison", ""]
-    for platform, stats in sorted(platforms.items(), key=lambda x: x[1].get("brier") or 999):
+    for platform, stats in sorted(platforms.items(), key=lambda x: x[1].get("brier") if x[1].get("brier") is not None else 999):
         lines.append(f"- **{platform}**: Brier: {stats['brier']} (n={stats['n']})")
     return "\n".join(lines)
 
@@ -265,6 +275,154 @@ def section_sample_size_warnings(scores: dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def section_tool_platform(scores: dict[str, Any]) -> str:
+    """Tool × platform cross breakdown table."""
+    data = scores.get("by_tool_platform", {})
+    if not data:
+        return "## Tool × Platform\n\nNo cross-breakdown data available."
+
+    lines = [
+        "## Tool × Platform",
+        "",
+        "| Tool | Platform | Brier | Accuracy | Sharpness | n |",
+        "|------|----------|-------|----------|-----------|---|",
+    ]
+    for key, stats in sorted(
+        data.items(),
+        key=lambda x: x[1].get("brier") if x[1].get("brier") is not None else 999,
+    ):
+        parts = key.split(" | ")
+        tool = parts[0] if parts else key
+        platform = parts[1] if len(parts) > 1 else "?"
+        brier = f"{stats['brier']:.4f}" if stats.get("brier") is not None else "N/A"
+        acc = f"{stats['accuracy']:.0%}" if stats.get("accuracy") is not None else "N/A"
+        sharp = f"{stats['sharpness']:.4f}" if stats.get("sharpness") is not None else "N/A"
+        label = _sample_label(stats)
+        lines.append(f"| {tool} | {platform} | {brier} | {acc} | {sharp} | {stats['n']}{label} |")
+
+    return "\n".join(lines)
+
+
+def section_tool_platform_horizon(scores: dict[str, Any]) -> str:
+    """Tool × platform × horizon breakdown."""
+    data = scores.get("by_tool_platform_horizon", {})
+    if not data:
+        return "## Tool × Platform × Horizon\n\nNo horizon breakdown data available."
+
+    lines = [
+        "## Tool × Platform × Horizon",
+        "",
+        "| Tool | Platform | Horizon | Brier | Accuracy | n |",
+        "|------|----------|---------|-------|----------|---|",
+    ]
+    for key, horizons in sorted(data.items()):
+        parts = key.split(" | ")
+        tool = parts[0] if parts else key
+        platform = parts[1] if len(parts) > 1 else "?"
+        for horizon in ["short_lt_7d", "medium_7_30d", "long_gt_30d"]:
+            stats = horizons.get(horizon)
+            if not stats or stats.get("n", 0) == 0:
+                continue
+            brier = f"{stats['brier']:.4f}" if stats.get("brier") is not None else "N/A"
+            acc = f"{stats['accuracy']:.0%}" if stats.get("accuracy") is not None else "N/A"
+            h_label = {"short_lt_7d": "<7d", "medium_7_30d": "7-30d", "long_gt_30d": ">30d"}[horizon]
+            lines.append(f"| {tool} | {platform} | {h_label} | {brier} | {acc} | {stats['n']} |")
+
+    return "\n".join(lines)
+
+
+def section_calibration(scores: dict[str, Any]) -> str:
+    """Calibration analysis — are predictions overconfident or underconfident?"""
+    cal = scores.get("calibration", [])
+    if not cal:
+        return "## Calibration\n\nNo calibration data available."
+
+    lines = [
+        "## Calibration",
+        "",
+        "| Predicted Range | Avg Predicted | Realized Yes-Rate | Gap | n |",
+        "|-----------------|---------------|-------------------|-----|---|",
+    ]
+    for bucket in cal:
+        if bucket.get("n", 0) == 0:
+            continue
+        avg_p = f"{bucket['avg_predicted']:.2f}"
+        realized = f"{bucket['realized_rate']:.2f}"
+        gap = bucket["gap"]
+        gap_str = f"{gap:+.2f}"
+        lines.append(f"| {bucket['bin']} | {avg_p} | {realized} | {gap_str} | {bucket['n']} |")
+
+    # Summary interpretation
+    lines.append("")
+    high_conf = [b for b in cal if b.get("avg_predicted", 0) > 0.7 and b.get("n", 0) > 0]
+    low_conf = [b for b in cal if b.get("avg_predicted", 0) < 0.3 and b.get("n", 0) > 0]
+    if high_conf:
+        avg_gap = sum(b["gap"] for b in high_conf) / len(high_conf)
+        if avg_gap < -0.1:
+            lines.append("**High-confidence predictions are overconfident** — predicted high yes-probability"
+                         " but realized rate is much lower.")
+        elif avg_gap > 0.1:
+            lines.append("**High-confidence predictions are underconfident** — realized rate exceeds predictions.")
+    if low_conf:
+        avg_gap = sum(b["gap"] for b in low_conf) / len(low_conf)
+        if avg_gap > 0.1:
+            lines.append("**Low-confidence predictions are underconfident** — predicted low yes-probability"
+                         " but events happen more often than predicted.")
+
+    return "\n".join(lines)
+
+
+def section_parse_breakdown(rows: list[dict[str, Any]]) -> str:
+    """Per-tool parse status breakdown."""
+    by_tool: dict[str, Counter] = defaultdict(Counter)
+    for row in rows:
+        by_tool[row.get("tool_name", "unknown")][row.get("prediction_parse_status", "unknown")] += 1
+
+    lines = [
+        "## Parse/Error Breakdown by Tool",
+        "",
+        "| Tool | Valid | Malformed | Missing | Error | Total |",
+        "|------|-------|-----------|---------|-------|-------|",
+    ]
+    for tool in sorted(by_tool):
+        c = by_tool[tool]
+        total = sum(c.values())
+        lines.append(
+            f"| {tool} | {c.get('valid', 0)} | {c.get('malformed', 0)}"
+            f" | {c.get('missing_fields', 0)} | {c.get('error', 0)} | {total} |"
+        )
+
+    return "\n".join(lines)
+
+
+def section_latency(rows: list[dict[str, Any]]) -> str:
+    """Latency breakdown by tool."""
+    by_tool: dict[str, list[int]] = defaultdict(list)
+    for row in rows:
+        lat = row.get("latency_s")
+        if lat is not None and lat > 0:
+            by_tool[row.get("tool_name", "unknown")].append(lat)
+
+    if not by_tool:
+        return "## Latency\n\nNo latency data available."
+
+    lines = [
+        "## Latency (seconds)",
+        "",
+        "| Tool | Median | Mean | p95 | n |",
+        "|------|--------|------|-----|---|",
+    ]
+    for tool in sorted(by_tool, key=lambda t: statistics.median(by_tool[t])):
+        vals = sorted(by_tool[tool])
+        med = statistics.median(vals)
+        mean = statistics.mean(vals)
+        p95_idx = min(int(len(vals) * 0.95), len(vals) - 1)
+        p95 = vals[p95_idx]
+        lines.append(f"| {tool} | {med:.0f}s | {mean:.0f}s | {p95:.0f}s | {len(vals)} |")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # Report assembly
 # ---------------------------------------------------------------------------
@@ -278,8 +436,13 @@ def generate_report(scores: dict[str, Any], rows: list[dict[str, Any]]) -> str:
         section_overall(scores),
         section_tool_ranking(scores),
         section_platform(scores),
+        section_tool_platform(scores),
+        section_tool_platform_horizon(scores),
+        section_calibration(scores),
         section_weak_spots(scores),
         section_reliability_issues(scores),
+        section_parse_breakdown(rows),
+        section_latency(rows),
         section_worst_predictions(rows),
         section_best_predictions(rows),
         section_trend(scores),
