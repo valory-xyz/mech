@@ -131,6 +131,15 @@ for url, content in source_content.get("pages", {}).items():
         doc = ExtendedDocument(text=content, url=url)
 ```
 
+**Note: `prediction_request_sme` uses plain `dict` (`doc["text"]`/`doc["url"]`), not `ExtendedDocument`.** Its cleaned-mode replay path must use:
+```python
+if mode == "raw":
+    text = extract_text(html=content, num_words=num_words)
+else:
+    text = content
+doc = {"text": text, "url": url}
+```
+
 PDF replay is unchanged — PDFs already store extracted text in both modes.
 
 ## Tradeoffs for Cached Replay
@@ -144,6 +153,16 @@ PDF replay is unchanged — PDFs already store extracted text in both modes.
 | **Replay fidelity** | Full pipeline | LLM-only (prompt + model) |
 
 Cached replay with `"cleaned"` mode becomes strictly a **prompt/model evaluation tool**. For retrieval or extraction improvements, use tournament mode with `"raw"`.
+
+## Tool-specific Concerns
+
+1. **`prediction_request_sme`** uses plain `dict` (`doc["text"]`/`doc["url"]`) instead of `ExtendedDocument`. The replay path must construct dicts, not `ExtendedDocument` objects (see Change 3 above).
+
+2. **`prediction_url_cot`** runs `clean_text()` + `.strip()` on docs after extraction (lines 850-851). In cleaned mode, the stored text was already cleaned at capture time, so `clean_text()` runs twice. This is harmless (idempotent) but worth noting.
+
+3. **`prediction_request_rag` and `prediction_request_reasoning`** chunk docs via `recursive_character_text_splitter()` after extraction. This works fine in cleaned mode — chunking operates on the text regardless of whether it came from HTML extraction or was stored directly.
+
+4. **`num_words` is baked in at capture time in cleaned mode.** If replay is called with a different `num_words`, it has no effect — the text is already truncated. Future improvement: store `capture_num_words` in the source_content dict so the replay path can warn on mismatch.
 
 ## Test Updates
 
