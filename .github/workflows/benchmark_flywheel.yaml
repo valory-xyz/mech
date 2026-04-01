@@ -1,0 +1,69 @@
+name: benchmark-flywheel
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # daily at 6am UTC
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: 'Number of days to look back for data'
+        required: false
+        default: '7'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      # Download previous run's data (if it exists)
+      - name: Download previous benchmark data
+        uses: dawidd6/action-download-artifact@v3
+        with:
+          name: benchmark-data
+          path: benchmark/datasets/
+          workflow: benchmark_flywheel.yaml
+          if_no_artifact_found: warn
+        continue-on-error: true
+
+      - name: Fetch production data
+        run: |
+          python benchmark/datasets/fetch_production.py \
+            --lookback-days ${{ github.event.inputs.lookback_days || '7' }}
+
+      - name: Score
+        run: |
+          mkdir -p benchmark/results
+          python benchmark/scorer.py
+
+      - name: Analyze
+        run: python benchmark/analyze.py
+
+      # Upload data files for next run (persists between runs)
+      - name: Upload benchmark data
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-data
+          path: |
+            benchmark/datasets/production_log.jsonl
+            benchmark/datasets/.fetch_state.json
+          retention-days: 90
+
+      # Upload results for viewing
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: |
+            benchmark/results/scores.json
+            benchmark/results/report.md
+          retention-days: 90

@@ -38,5 +38,6 @@ mech_service/
 tools_test_results/
 
 .claude
-benchmark/datasets/
-benchmark/reports/
+benchmark/datasets/.fetch_state.json
+benchmark/datasets/production_log.jsonl
+benchmark/results/
