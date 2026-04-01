@@ -136,11 +136,21 @@ def _load_utils(project_root: str) -> Tuple[Any, Any]:
     return apis_mod.KeyChain, benchmarks_mod.TokenCounterCallback
 
 
+def _collect_keys(env_var: str) -> List[str]:
+    """Collect API keys. Plural env var (JSON array) takes precedence over singular."""
+    plural = os.environ.get(f"{env_var}S", "")
+    if plural:
+        keys = json.loads(plural)
+        return [k for k in keys if k]
+    single = os.environ.get(env_var, "")
+    return [single] if single else [""]
+
+
 def build_keychain(keychain_cls: Any, service_to_env_var: Dict[str, str]) -> Any:
     """Build a KeyChain from environment variables."""
     return keychain_cls(
         {
-            service: [os.environ.get(env_var, "")]
+            service: _collect_keys(env_var)
             for service, env_var in service_to_env_var.items()
         }
     )
