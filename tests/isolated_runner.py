@@ -140,7 +140,12 @@ def _collect_keys(env_var: str) -> List[str]:
     """Collect API keys. Plural env var (JSON array) takes precedence over singular."""
     plural = os.environ.get(f"{env_var}S", "")
     if plural:
-        keys = json.loads(plural)
+        try:
+            keys = json.loads(plural)
+        except json.JSONDecodeError as e:
+            raise ValueError(
+                f"{env_var}S must be a JSON array (e.g. '[\"key1\",\"key2\"]'), got: {plural[:50]}"
+            ) from e
         return [k for k in keys if k]
     single = os.environ.get(env_var, "")
     return [single] if single else [""]
@@ -212,7 +217,10 @@ def validate_response(response: Any, validate_prediction: bool = True) -> List[s
 
 def _check_required_env_vars(required_env_vars: List[str]) -> List[str]:
     """Return list of missing env var names (empty if all present)."""
-    return [var for var in required_env_vars if not os.environ.get(var)]
+    return [
+        var for var in required_env_vars
+        if not os.environ.get(var) and not os.environ.get(f"{var}S")
+    ]
 
 
 def _make_error_result(errors: List[str]) -> Dict[str, Any]:
