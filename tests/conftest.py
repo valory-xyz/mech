@@ -32,7 +32,6 @@ import pytest
 from tests.shared_constants import (
     DEFAULT_CALLABLE,
     DELIVER_MSG_PREVIEW_LENGTH,
-    VENV_BIN_DIR,
     PYTHON_EXECUTABLE,
     RESULT_KEY_DELIVER_MSG,
     RESULT_KEY_ERRORS,
@@ -42,8 +41,13 @@ from tests.shared_constants import (
     RESULT_KEY_SUCCESS,
     RESULT_KEY_TOOL,
     SERVICE_TO_ENV_VAR,
+    VENV_BIN_DIR,
 )
-from tests.venv_manager import cleanup_all_venvs, get_or_create_venv, parse_component_deps
+from tests.venv_manager import (
+    cleanup_all_venvs,
+    get_or_create_venv,
+    parse_component_deps,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,16 +78,20 @@ def _required_env_vars_for_component(component_yaml: str) -> List[str]:
     services: List[str] = []
     for pkg in deps:
         services.extend(DEPENDENCY_TO_SERVICES.get(pkg, []))
-    return list(dict.fromkeys(
-        SERVICE_TO_ENV_VAR[s]
-        for s in services
-        if s in SERVICE_TO_ENV_VAR
-    ))
+    return list(
+        dict.fromkeys(
+            SERVICE_TO_ENV_VAR[s] for s in services if s in SERVICE_TO_ENV_VAR
+        )
+    )
 
 
 def _check_env_vars(required_env_vars: List[str]) -> None:
     """Fail fast if required API key env vars are not set."""
-    missing = [var for var in required_env_vars if not os.environ.get(var)]
+    missing = [
+        var
+        for var in required_env_vars
+        if not os.environ.get(var) and not os.environ.get(f"{var}S")
+    ]
     if not missing:
         return
     pytest.fail(
@@ -167,7 +175,12 @@ def _log_results(component_name: str, all_results: List[Dict[str, Any]]) -> None
             preview,
         )
     passed = sum(r[RESULT_KEY_SUCCESS] for r in all_results)
-    logger.info("[%s] Completed: %d/%d combinations passed", component_name, passed, len(all_results))
+    logger.info(
+        "[%s] Completed: %d/%d combinations passed",
+        component_name,
+        passed,
+        len(all_results),
+    )
 
 
 def _make_error_result(returncode: int, stdout: str, stderr: str) -> Dict[str, Any]:
@@ -212,16 +225,24 @@ def run_tool_in_isolated_venv(
     component_name = Path(component_yaml).parent.name
 
     required_env_vars = _required_env_vars_for_component(component_yaml)
-    logger.info("[%s] Required API keys: %s", component_name, ", ".join(required_env_vars) or "(none)")
+    logger.info(
+        "[%s] Required API keys: %s",
+        component_name,
+        ", ".join(required_env_vars) or "(none)",
+    )
     _check_env_vars(required_env_vars)
 
     logger.info("[%s] Preparing isolated environment...", component_name)
     venv_dir = get_or_create_venv(component_yaml)
     python_exe = venv_dir / VENV_BIN_DIR / PYTHON_EXECUTABLE
 
-    config = _build_runner_config(module_path, callable_name, prompts, validate_prediction, required_env_vars)
+    config = _build_runner_config(
+        module_path, callable_name, prompts, validate_prediction, required_env_vars
+    )
 
-    with tempfile.NamedTemporaryFile(mode="w", suffix=RESULTS_FILE_SUFFIX, delete=False) as tmp:
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=RESULTS_FILE_SUFFIX, delete=False
+    ) as tmp:
         results_file = tmp.name
 
     try:
@@ -231,7 +252,9 @@ def run_tool_in_isolated_venv(
 
         output = _parse_results_file(results_file)
         if not output:
-            return _make_error_result(result.returncode, result.stdout or "", result.stderr or "")
+            return _make_error_result(
+                result.returncode, result.stdout or "", result.stderr or ""
+            )
 
         _log_results(component_name, output[RESULT_KEY_RESULTS])
         return output
