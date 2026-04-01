@@ -141,6 +141,7 @@ class TestSuperforcasterSourceContent:
 
         used_params = result[4]
         assert "source_content" in used_params
+        assert "mode" in used_params["source_content"]
         assert "serper_response" in used_params["source_content"]
         assert used_params["source_content"]["serper_response"] == FAKE_SERPER_RESPONSE
 

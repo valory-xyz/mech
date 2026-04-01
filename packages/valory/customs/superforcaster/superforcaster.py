@@ -391,6 +391,11 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
     return_source_content = (
         kwargs["api_keys"].get("return_source_content", "false") == "true"
     )
+    source_content_mode = kwargs["api_keys"].get("source_content_mode", "cleaned")
+    if source_content_mode not in ("cleaned", "raw"):
+        raise ValueError(
+            f"Invalid source_content_mode: {source_content_mode!r}. Must be 'cleaned' or 'raw'."
+        )
     with OpenAIClientManager(openai_api_key) as llm_client:
         max_tokens = kwargs.get("max_tokens", DEFAULT_OPENAI_SETTINGS["max_tokens"])
         temperature = kwargs.get("temperature", DEFAULT_OPENAI_SETTINGS["temperature"])
@@ -413,7 +418,12 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             print("Fetching additional sources...")
             serper_response = fetch_additional_sources(question, serper_api_key)
             sources_data = serper_response.json()
-            captured_source_content = {"serper_response": sources_data}
+            # mode tag included for consistency across tools; content is identical
+            # regardless of mode since Serper returns structured JSON, not HTML
+            captured_source_content = {
+                "mode": source_content_mode,
+                "serper_response": sources_data,
+            }
             print(f"Additional sources fetched: {sources_data}")
             organic_data = sources_data.get("organic", [])[:MAX_SOURCES]
             misc_data = sources_data.get("peopleAlsoAsk", [])

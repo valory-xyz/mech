@@ -139,16 +139,29 @@ class TestExtractTextsCapture:
     """Verify extract_texts captures raw source content correctly."""
 
     @patch(f"{REASONING_MODULE}.process_in_batches")
-    def test_html_pages_captured(self, mock_batches: MagicMock) -> None:
-        """HTML responses are stored in raw_source_content['pages']."""
+    def test_cleaned_mode_stores_extracted_text(self, mock_batches: MagicMock) -> None:
+        """In cleaned mode (default), extracted text is stored instead of raw HTML."""
         html = "<html><body>Hello world</body></html>"
         mock_batches.return_value = [[_make_html_future("http://example.com", html)]]
 
         _, raw_sc = extract_texts(["http://example.com"])
 
+        assert raw_sc["mode"] == "cleaned"
         assert "http://example.com" in raw_sc["pages"]
-        assert raw_sc["pages"]["http://example.com"] == html
+        assert raw_sc["pages"]["http://example.com"] != html
+        assert "Hello world" in raw_sc["pages"]["http://example.com"]
         assert not raw_sc["pdfs"]
+
+    @patch(f"{REASONING_MODULE}.process_in_batches")
+    def test_raw_mode_stores_html(self, mock_batches: MagicMock) -> None:
+        """In raw mode, raw HTML is stored."""
+        html = "<html><body>Hello world</body></html>"
+        mock_batches.return_value = [[_make_html_future("http://example.com", html)]]
+
+        _, raw_sc = extract_texts(["http://example.com"], source_content_mode="raw")
+
+        assert raw_sc["mode"] == "raw"
+        assert raw_sc["pages"]["http://example.com"] == html
 
     @patch(f"{REASONING_MODULE}.extract_text_from_pdf")
     @patch(f"{REASONING_MODULE}.process_in_batches")
@@ -225,7 +238,7 @@ class TestFetchReplayPath:
     @patch(f"{REASONING_MODULE}.get_embeddings")
     @patch(f"{REASONING_MODULE}.multi_questions_response")
     @patch(f"{REASONING_MODULE}.multi_queries")
-    def test_pages_replayed(
+    def test_cleaned_mode_uses_text_directly(
         self,
         mock_queries: MagicMock,
         mock_questions: MagicMock,
@@ -233,8 +246,53 @@ class TestFetchReplayPath:
         mock_similar: MagicMock,
         mock_refusion: MagicMock,
     ) -> None:
-        """Pages in source_content are processed and passed through."""
+        """In cleaned mode, cached text is used directly without re-extraction."""
         source_content = {
+            "mode": "cleaned",
+            "pages": {
+                "http://example.com": "test content here",
+            },
+            "pdfs": {},
+        }
+        mock_queries.return_value = (["test query"], None)
+        mock_questions.return_value = (["question 1"], None)
+        doc = ExtendedDocument(text="test content here", url="http://example.com")
+        mock_embeddings.return_value = [doc]
+        mock_similar.return_value = [doc]
+        mock_refusion.return_value = [doc]
+
+        result, raw_sc, _, _ = fetch_additional_information(
+            client=MagicMock(),
+            client_embedding=MagicMock(),
+            prompt="test",
+            model="gpt-4.1-2025-04-14",
+            google_api_key=None,
+            google_engine_id=None,
+            serper_api_key=None,
+            search_provider="google",
+            source_content=source_content,
+        )
+
+        assert raw_sc is source_content
+        assert "test content here" in result
+        assert "http://example.com" in result
+
+    @patch(f"{REASONING_MODULE}.reciprocal_rank_refusion")
+    @patch(f"{REASONING_MODULE}.find_similar_chunks")
+    @patch(f"{REASONING_MODULE}.get_embeddings")
+    @patch(f"{REASONING_MODULE}.multi_questions_response")
+    @patch(f"{REASONING_MODULE}.multi_queries")
+    def test_raw_mode_re_extracts(
+        self,
+        mock_queries: MagicMock,
+        mock_questions: MagicMock,
+        mock_embeddings: MagicMock,
+        mock_similar: MagicMock,
+        mock_refusion: MagicMock,
+    ) -> None:
+        """In raw mode, HTML is re-extracted via extract_text."""
+        source_content = {
+            "mode": "raw",
             "pages": {
                 "http://example.com": "<html><body>test content here</body></html>",
             },

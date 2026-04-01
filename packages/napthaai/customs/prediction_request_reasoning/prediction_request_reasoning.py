@@ -683,11 +683,17 @@ def extract_text(
 
 
 def extract_texts(
-    urls: List[str], num_words: Optional[int] = None
+    urls: List[str],
+    num_words: Optional[int] = None,
+    source_content_mode: str = "cleaned",
 ) -> Tuple[List[ExtendedDocument], Dict[str, Any]]:
     """Extract texts from URLs with improved error handling, excluding failed URLs."""
     extracted_texts = []
-    raw_source_content: Dict[str, Any] = {"pages": {}, "pdfs": {}}
+    raw_source_content: Dict[str, Any] = {
+        "mode": source_content_mode,
+        "pages": {},
+        "pdfs": {},
+    }
     for batch in process_in_batches(urls=urls) or []:
         for future, url in batch:
             if future is None:
@@ -704,8 +710,11 @@ def extract_texts(
                         doc = extract_text_from_pdf(url, num_words=num_words)
                         raw_source_content["pdfs"][url] = doc.text if doc else ""
                     else:
-                        raw_source_content["pages"][url] = result.text
                         doc = extract_text(html=result.text, num_words=num_words)
+                        if source_content_mode == "raw":
+                            raw_source_content["pages"][url] = result.text
+                        else:
+                            raw_source_content["pages"][url] = doc.text if doc else ""
 
                     if doc:
                         doc.url = url
@@ -1033,6 +1042,7 @@ def fetch_additional_information(  # pylint: disable=too-many-statements
     search_provider: str,
     counter_callback: Optional[Callable[[int, int, str], None]] = None,
     source_content: Optional[Dict[str, Any]] = None,
+    source_content_mode: str = "cleaned",
     num_urls: int = DEFAULT_NUM_URLS,
     num_queries: int = DEFAULT_NUM_QUERIES,
     temperature: float = LLM_SETTINGS["gpt-4.1-2025-04-14"]["temperature"],
@@ -1084,12 +1094,17 @@ def fetch_additional_information(  # pylint: disable=too-many-statements
         # Extract text and dates from the URLs
         docs, raw_source_content = extract_texts(
             urls=urls,
+            source_content_mode=source_content_mode,
         )
     else:
         raw_source_content = source_content
         docs = []
-        for url, html in source_content.get("pages", {}).items():
-            doc = extract_text(html=html)
+        mode = source_content.get("mode", "cleaned")
+        for url, content in source_content.get("pages", {}).items():
+            if mode == "raw":
+                doc = extract_text(html=content)
+            else:
+                doc = ExtendedDocument(text=content, url=url)
             if doc:
                 doc.url = url
                 docs.append(doc)
@@ -1182,7 +1197,9 @@ def extract_question(prompt: str) -> str:
 
 
 @with_key_rotation
-def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
+def run(  # pylint: disable=too-many-statements
+    **kwargs: Any,
+) -> Union[MaxCostResponse, MechResponse]:
     """Run the task"""
     tool = kwargs["tool"]
     model = kwargs.get("model")
@@ -1235,6 +1252,11 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             raise ValueError(f"Tool {tool} not supported.")
 
         return_source_content = api_keys.get("return_source_content", "false") == "true"
+        source_content_mode = api_keys.get("source_content_mode", "cleaned")
+        if source_content_mode not in ("cleaned", "raw"):
+            raise ValueError(
+                f"Invalid source_content_mode: {source_content_mode!r}. Must be 'cleaned' or 'raw'."
+            )
         (
             additional_information,
             source_content,
@@ -1251,6 +1273,7 @@ def run(**kwargs: Any) -> Union[MaxCostResponse, MechResponse]:
             search_provider=search_provider,
             counter_callback=counter_callback,
             source_content=kwargs.get("source_content", None),
+            source_content_mode=source_content_mode,
             num_urls=num_urls,
             num_queries=num_queries,
             temperature=temperature,
