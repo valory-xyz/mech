@@ -358,16 +358,22 @@ def section_calibration(scores: dict[str, Any]) -> str:
     low_conf = [b for b in cal if b.get("avg_predicted", 0) < 0.3 and b.get("n", 0) > 0]
     if high_conf:
         avg_gap = sum(b["gap"] for b in high_conf) / len(high_conf)
-        if avg_gap < -0.1:
-            lines.append("**High-confidence predictions are overconfident** — predicted high yes-probability"
-                         " but realized rate is much lower.")
-        elif avg_gap > 0.1:
-            lines.append("**High-confidence predictions are underconfident** — realized rate exceeds predictions.")
+        if avg_gap > 0.1:
+            lines.append(
+                "**High-confidence predictions are overconfident** — predicted high yes-probability"
+                " but realized rate is much lower."
+            )
+        elif avg_gap < -0.1:
+            lines.append(
+                "**High-confidence predictions are underconfident** — realized rate exceeds predictions."
+            )
     if low_conf:
         avg_gap = sum(b["gap"] for b in low_conf) / len(low_conf)
-        if avg_gap > 0.1:
-            lines.append("**Low-confidence predictions are underconfident** — predicted low yes-probability"
-                         " but events happen more often than predicted.")
+        if avg_gap < -0.1:
+            lines.append(
+                "**Low-confidence predictions are underconfident** — predicted low yes-probability"
+                " but events happen more often than predicted."
+            )
 
     return "\n".join(lines)
 

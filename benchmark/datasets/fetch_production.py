@@ -885,6 +885,7 @@ def _match_and_build(
 
         row = build_row(delivery, market, confidence, platform)
         rows.append(row)
+        existing_ids.add(row_id)
         max_delivery_ts = max(max_delivery_ts, delivery["timestamp"])
         if market.get("resolved_at_ts"):
             max_resolved_ts = max(max_resolved_ts, market["resolved_at_ts"])
