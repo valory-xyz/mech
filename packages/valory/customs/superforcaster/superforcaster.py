@@ -188,7 +188,6 @@ Question:
 {question}
 
 Today's date: {today}
-Your pretraining knowledge cutoff: October 2023
 
 We have retrieved the following information for this question:
 <background>{sources}</background>
@@ -220,6 +219,13 @@ negativity bias and sensationalism bias by considering reasons to why your provi
 might be biased or exaggerated. Think like a superforecaster. Use <thinking></thinking> tags
 for this section of your response.
 
+BASE-RATE ANCHORING (mandatory before outputting any probability):
+- Identify the event category (e.g. regulatory action, product launch, weather event).
+- Before adjusting based on evidence, consider: what is the base rate for this
+  type of event resolving "Yes"? Use this as your starting point.
+- Only move away from the base rate when you have specific, concrete evidence
+  -- not general plausibility or "sounds likely" reasoning.
+
 5. Output an initial probability (prediction) as a single number between 0 and 1 given steps 1-4.
 Use <tentative></tentative> tags.
 
@@ -232,6 +238,23 @@ Recall that your performance will be evaluated according to the Brier score. Be 
 probabilities. Leverage your intuitions, but never change your forecast for the sake of modesty
 or balance alone. Finally, aggregate all of your previous reasoning and highlight key factors
 that inform your final forecast. Use <thinking></thinking> tags for this portion of your response.
+
+TAIL DISCIPLINE (mandatory before final answer):
+- First, review your findings from steps 1-4. If the sources confirm the event
+  has ALREADY occurred or been officially completed (e.g. agreement signed,
+  contract awarded, data published, official statement issued), then deadline
+  skepticism does not apply -- maintain high probability based on the evidence.
+- If the event has NOT yet occurred according to the sources:
+  - p_yes above 0.90 requires evidence of a specific verifiable institutional
+    commitment (signed agreement, published schedule, awarded contract).
+  - p_yes above 0.80 requires strong, specific, verifiable evidence -- not just
+    "this seems likely" or "this company often does this."
+  - When the question includes a specific deadline ("on or before [date]"),
+    consider whether the deadline is realistic given the current evidence stage.
+    Intentions, plans, and proposals are NOT the same as completed actions.
+  - Absence of evidence that the event has occurred IS evidence against it.
+  - General plausibility, company reputation, or past patterns alone do NOT
+    justify probabilities above 0.80.
 
 7. Output your final prediction (a number between 0 and 1 with an asterisk at the beginning and
 end of the decimal) in <answer></answer> tags.
