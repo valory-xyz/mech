@@ -48,6 +48,11 @@ class TokenCounterCallback:
             "input": 0.00054,
             "output": 0.00054,
         },
+        "openai/gpt-4.1:online": {"input": 0.002, "output": 0.008},
+        "x-ai/grok-4.1-fast:online": {"input": 0.0002, "output": 0.0005},
+        "google/gemini-2.5-flash:online": {"input": 0.0003, "output": 0.0025},
+        "anthropic/claude-haiku-4.5:online": {"input": 0.001, "output": 0.005},
+        "anthropic/claude-sonnet-4:online": {"input": 0.003, "output": 0.015},
     }
 
     def __init__(self) -> None:
@@ -59,6 +64,7 @@ class TokenCounterCallback:
             "total_tokens": 0,
             "input_cost": 0,
             "output_cost": 0,
+            "extra_cost": 0,
             "total_cost": 0,
         }
 
@@ -90,18 +96,39 @@ class TokenCounterCallback:
         self.cost_dict[f"{tokens_type}_cost"] += cost
 
     def __call__(self, model: str, token_counter: Callable, **kwargs: Any) -> None:
-        """Callback to count the number of tokens used in a generation."""
+        """Callback to count the number of tokens used in a generation.
+
+        :param model: model identifier used for cost lookup.
+        :param token_counter: function to count tokens from raw text.
+        :param kwargs: token counting params plus optional ``call_cost`` (gross provider cost in USD).
+        """
         self.actual_model = model
         if model not in list(TokenCounterCallback.TOKEN_PRICES.keys()):
             raise ValueError(f"Model {model} not supported.")
         try:
+            # Snapshot token costs before adding this call, so we can
+            # compute the delta and derive extra_cost from call_cost.
+            input_cost_before = self.cost_dict["input_cost"]
+            output_cost_before = self.cost_dict["output_cost"]
             self.calculate_cost("input", model, token_counter, **kwargs)
             self.calculate_cost("output", model, token_counter, **kwargs)
+
+            call_cost = kwargs.get("call_cost")
+            if call_cost is not None:
+                # Derive extra_cost so that total matches call_cost.
+                this_token_cost = (self.cost_dict["input_cost"] - input_cost_before) + (
+                    self.cost_dict["output_cost"] - output_cost_before
+                )
+                surcharge = max(0.0, float(call_cost) - this_token_cost)
+                if surcharge > 0:
+                    self.cost_dict["extra_cost"] += surcharge
             self.cost_dict["total_tokens"] = (
                 self.cost_dict["input_tokens"] + self.cost_dict["output_tokens"]
             )
             self.cost_dict["total_cost"] = (
-                self.cost_dict["input_cost"] + self.cost_dict["output_cost"]
+                self.cost_dict["input_cost"]
+                + self.cost_dict["output_cost"]
+                + self.cost_dict["extra_cost"]
             )
         except Exception as e:
             logging.error(f"Error in TokenCounterCallback: {e}")
