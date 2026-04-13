@@ -25,6 +25,7 @@ import yaml
 
 from packages.valory.skills.task_execution.utils.ipfs import (
     CID_PREFIX,
+    CID_PREFIX_NO_MH,
     ComponentPackageLoader,
     get_ipfs_file_hash,
     to_multihash,
@@ -70,6 +71,26 @@ class TestGetIpfsFileHash:
 
         assert result == "f_fallback_cid"
         # Verify fallback CID.from_string was called with the prefixed hex
+        assert mock_cid_cls.from_string.call_args_list[1][0][0] == expected_cid_input
+
+    def test_fallback_34_byte_raw_multihash(self) -> None:
+        """34-byte data with 0x1220 prefix uses CID_PREFIX_NO_MH (no double header)."""
+        digest = bytes(range(32))  # 32-byte fake digest
+        raw_multihash = b"\x12\x20" + digest  # 34 bytes total
+        expected_cid_input = CID_PREFIX_NO_MH + raw_multihash.hex()
+
+        fake_cid = MagicMock()
+        fake_cid.__str__ = MagicMock(return_value="f_mh_cid")  # type: ignore[method-assign]
+        with patch(
+            "packages.valory.skills.task_execution.utils.ipfs.CID"
+        ) as mock_cid_cls:
+            mock_cid_cls.from_string.side_effect = [
+                Exception("not a cid"),  # try block fails
+                fake_cid,  # fallback succeeds
+            ]
+            result = get_ipfs_file_hash(raw_multihash)
+
+        assert result == "f_mh_cid"
         assert mock_cid_cls.from_string.call_args_list[1][0][0] == expected_cid_input
 
     def test_cid_prefix_constant(self) -> None:

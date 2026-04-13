@@ -26,6 +26,10 @@ from multibase import multibase
 from multicodec import multicodec
 
 CID_PREFIX = "f01701220"
+# CIDv1 prefix without the multihash header (multibase-f + version 1 + dag-pb)
+CID_PREFIX_NO_MH = "f0170"
+# Raw sha2-256 multihash header
+SHA2_256_MH_PREFIX = b"\x12\x20"
 
 
 def get_ipfs_file_hash(data: bytes) -> str:
@@ -33,9 +37,12 @@ def get_ipfs_file_hash(data: bytes) -> str:
     try:
         return str(CID.from_string(data.decode()))
     except Exception:  # noqa
-        # if something goes wrong, fallback to sha256
-        file_hash = data.hex()
-        file_hash = CID_PREFIX + file_hash
+        # New mech contracts emit 34-byte raw multihash (0x1220 + 32-byte digest).
+        # Old contracts emit 32-byte raw digest without the multihash header.
+        if len(data) == 34 and data[:2] == SHA2_256_MH_PREFIX:
+            file_hash = CID_PREFIX_NO_MH + data.hex()
+        else:
+            file_hash = CID_PREFIX + data.hex()
         file_hash = str(CID.from_string(file_hash))
         return file_hash
 

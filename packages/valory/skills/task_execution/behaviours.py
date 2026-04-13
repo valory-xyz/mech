@@ -651,7 +651,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
         self._request_handling_deadline = None
-        ipfs_hash = get_ipfs_file_hash(task_data["data"])
+        try:
+            ipfs_hash = get_ipfs_file_hash(task_data["data"])
+        except Exception as e:  # pylint: disable=W0718
+            self.context.logger.warning(
+                f"Malformed IPFS data for request {request_id}: {e}. "
+                f"Skipping request."
+            )
+            self._invalid_request = True
+            return
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
         self.send_message(
@@ -946,7 +954,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.tool_preparation_start_time = 0.0
             return
 
-        task_data = [json.loads(content) for content in message.files.values()][0]
+        try:
+            task_data = [
+                json.loads(content) for content in message.files.values()
+            ][0]
+        except (json.JSONDecodeError, IndexError, TypeError) as e:
+            self.context.logger.warning(
+                f"Malformed IPFS content for task "
+                f"{self._executing_task}: {e}. Skipping request."
+            )
+            self._invalid_request = True
+            return
         is_data_valid = (
             task_data
             and isinstance(task_data, dict)
