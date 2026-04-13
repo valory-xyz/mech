@@ -2267,15 +2267,14 @@ def test_handle_done_task_success_6tuple_with_none_params_falls_back(
 # ---------------------------------------------------------------------------
 
 
-def test_34_byte_multihash_data_processes_correctly(
+def test_34_byte_multihash_data_skipped_gracefully(
     behaviour: Any,
     shared_state: Dict[str, Any],
     params_stub: Any,
-    fake_dialogue: Any,
     monkeypatch: Any,
     disable_polling: Callable[[], None],
 ) -> None:
-    """34-byte multihash data (0x1220 prefix) is parsed correctly by Fix 1."""
+    """34-byte multihash data (0x1220 prefix) is caught and skipped, not crashed."""
     disable_polling()
     monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
 
@@ -2297,30 +2296,20 @@ def test_34_byte_multihash_data_processes_correctly(
     )
     params_stub.request_id_to_num_timeouts[req_id] = 0
 
-    # Do NOT mock get_ipfs_file_hash — let the real code run
     send_calls: list = []
-
-    def send_message_stub(
-        msg: Any,
-        dlg: Any,
-        callback: Callable[[Any, Any], None],
-        error_callback: Any = None,
-    ) -> None:
-        send_calls.append(1)
-        params_stub.in_flight_req = True
-
     monkeypatch.setattr(
-        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+        behaviour,
+        "send_message",
+        lambda *a, **k: send_calls.append(1),
     )
-    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
 
     params_stub.in_flight_req = False
     behaviour.act()
 
-    # Fix 1 handles 34-byte data — should NOT be invalid
-    assert behaviour._invalid_request is False
-    # IPFS get request should have been sent
-    assert len(send_calls) == 1
+    # Defensive try/except catches the ValueError, marks invalid
+    assert behaviour._invalid_request is True
+    # No IPFS message should have been sent
+    assert len(send_calls) == 0
 
 
 def test_empty_ipfs_data_sets_invalid_request(
