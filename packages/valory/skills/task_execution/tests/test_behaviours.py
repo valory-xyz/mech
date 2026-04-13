@@ -2260,3 +2260,271 @@ def test_handle_done_task_success_6tuple_with_none_params_falls_back(
     )
     # used_params is None, so falls back to executing_task["params"]
     assert payload["metadata"]["params"] == {"temperature": 0.7}
+
+
+# ---------------------------------------------------------------------------
+# Malformed on-chain data: defensive error handling
+# ---------------------------------------------------------------------------
+
+
+def test_34_byte_multihash_data_skipped_gracefully(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    monkeypatch: Any,
+    disable_polling: Callable[[], None],
+) -> None:
+    """34-byte multihash data (0x1220 prefix) is caught and skipped, not crashed."""
+    disable_polling()
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
+
+    # Real failing data from production: 34-byte raw multihash
+    data_34 = (
+        b"\x12\x20\xab\x80\xef\x3c\xd4\xd9\xcb\xde"
+        b"\xe7\x20\xa8\x09\xb9\xa5\xf0\xc6\x50\xc9"
+        b"\xf6\x57\x6c\xa4\xb4\x56\x90\x42\x7f\xfb"
+        b"\x97\x24\xd8\x31"
+    )
+    req_id = 777
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": req_id,
+            "request_delivery_rate": 100,
+            "data": data_34,
+            "contract_address": "0xmech",
+        }
+    )
+    params_stub.request_id_to_num_timeouts[req_id] = 0
+
+    send_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda *a, **k: send_calls.append(1),
+    )
+
+    params_stub.in_flight_req = False
+    behaviour.act()
+
+    # Defensive try/except catches the ValueError, marks invalid
+    assert behaviour._invalid_request is True
+    # No IPFS message should have been sent
+    assert len(send_calls) == 0
+
+
+def test_empty_ipfs_data_sets_invalid_request(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    monkeypatch: Any,
+    disable_polling: Callable[[], None],
+) -> None:
+    """Empty bytes data triggers graceful skip via Fix 2, not a crash."""
+    disable_polling()
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
+
+    req_id = 888
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": req_id,
+            "request_delivery_rate": 100,
+            "data": b"",
+            "contract_address": "0xmech",
+        }
+    )
+    params_stub.request_id_to_num_timeouts[req_id] = 0
+
+    send_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda *a, **k: send_calls.append(1),
+    )
+
+    params_stub.in_flight_req = False
+    behaviour.act()
+
+    assert behaviour._invalid_request is True
+    assert len(send_calls) == 0
+
+
+def test_non_bytes_ipfs_data_sets_invalid_request(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    monkeypatch: Any,
+    disable_polling: Callable[[], None],
+) -> None:
+    """Non-bytes data field (e.g. None) is caught by Fix 2."""
+    disable_polling()
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
+
+    req_id = 889
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": req_id,
+            "request_delivery_rate": 100,
+            "data": None,
+            "contract_address": "0xmech",
+        }
+    )
+    params_stub.request_id_to_num_timeouts[req_id] = 0
+
+    send_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda *a, **k: send_calls.append(1),
+    )
+
+    params_stub.in_flight_req = False
+    behaviour.act()
+
+    assert behaviour._invalid_request is True
+    assert len(send_calls) == 0
+
+
+def test_malformed_ipfs_content_sets_invalid_request(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    disable_polling: Callable[[], None],
+) -> None:
+    """Non-JSON IPFS content is caught and marked invalid."""
+    patch_ipfs_multihash()
+    disable_polling()
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
+
+    req_id = 999
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": req_id,
+            "request_delivery_rate": 100,
+            "data": b"valid-pointer",
+            "contract_address": "0xmech",
+        }
+    )
+    params_stub.request_id_to_num_timeouts[req_id] = 0
+
+    # Return garbage (non-JSON) from IPFS
+    garbage_response = SimpleNamespace(files={"task.json": "NOT VALID JSON {{{"})
+
+    def send_message_stub(
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Any = None,
+    ) -> None:
+        callback(garbage_response, dlg)
+        params_stub.in_flight_req = True
+
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
+
+    params_stub.in_flight_req = False
+    behaviour.act()
+
+    assert behaviour._invalid_request is True
+
+
+def test_empty_ipfs_files_sets_invalid_request(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    disable_polling: Callable[[], None],
+) -> None:
+    """Empty files dict from IPFS is caught and marked invalid."""
+    patch_ipfs_multihash()
+    disable_polling()
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
+
+    req_id = 1000
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": req_id,
+            "request_delivery_rate": 100,
+            "data": b"valid-pointer",
+            "contract_address": "0xmech",
+        }
+    )
+    params_stub.request_id_to_num_timeouts[req_id] = 0
+
+    # Return empty files from IPFS → IndexError on [0]
+    empty_response = SimpleNamespace(files={})
+
+    def send_message_stub(
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Any = None,
+    ) -> None:
+        callback(empty_response, dlg)
+        params_stub.in_flight_req = True
+
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
+
+    params_stub.in_flight_req = False
+    behaviour.act()
+
+    assert behaviour._invalid_request is True
+
+
+def test_valid_32_byte_data_still_works(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable[[], None],
+    disable_polling: Callable[[], None],
+) -> None:
+    """Normal 32-byte data still processes correctly after the defensive fix."""
+    patch_ipfs_multihash()
+    disable_polling()
+    monkeypatch.setattr(behaviour, "_ensure_payment_model", lambda: True)
+
+    req_id = 42
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": req_id,
+            "request_delivery_rate": 100,
+            "data": b"\xa2" * 32,  # standard 32-byte digest
+            "contract_address": "0xmech",
+        }
+    )
+    params_stub.request_id_to_num_timeouts[req_id] = 0
+
+    send_calls: list = []
+
+    def send_message_stub(
+        msg: Any,
+        dlg: Any,
+        callback: Callable[[Any, Any], None],
+        error_callback: Any = None,
+    ) -> None:
+        send_calls.append(1)
+        params_stub.in_flight_req = True
+
+    monkeypatch.setattr(
+        behaviour, "_build_ipfs_get_file_req", lambda *a, **k: (object(), fake_dialogue)
+    )
+    monkeypatch.setattr(behaviour, "send_message", send_message_stub)
+
+    params_stub.in_flight_req = False
+    behaviour.act()
+
+    # Should NOT be marked invalid — normal path
+    assert behaviour._invalid_request is False
+    # IPFS get request should have been sent
+    assert len(send_calls) == 1
