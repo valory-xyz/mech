@@ -956,10 +956,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         try:
             task_data = [json.loads(content) for content in message.files.values()][0]
-        except (json.JSONDecodeError, IndexError, TypeError) as e:
+        except (json.JSONDecodeError, IndexError, TypeError, UnicodeDecodeError) as e:
+            executing_task = cast(Dict[str, Any], self._executing_task)
+            req_id = executing_task.get("requestId", "unknown")
             self.context.logger.warning(
-                f"Malformed IPFS content for task "
-                f"{self._executing_task}: {e}. Skipping request."
+                f"Malformed IPFS content for request {req_id}: {e}. "
+                f"Skipping request."
             )
             self._invalid_request = True
             return
