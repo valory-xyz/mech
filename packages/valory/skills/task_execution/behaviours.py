@@ -955,9 +955,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             return
 
         try:
-            task_data = [
-                json.loads(content) for content in message.files.values()
-            ][0]
+            task_data = [json.loads(content) for content in message.files.values()][0]
         except (json.JSONDecodeError, IndexError, TypeError) as e:
             self.context.logger.warning(
                 f"Malformed IPFS content for task "
