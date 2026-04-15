@@ -20,6 +20,7 @@
 """This package contains a scaffold of a handler."""
 
 import json
+import re
 import threading
 import time
 import urllib.parse
@@ -71,6 +72,12 @@ TIMED_OUT_STATUS = 2
 WAIT_FOR_TIMEOUT_STATUS = 1
 DELIVERED_STATUS = 3
 PROMETHEUS_PORT = 9000
+
+# Off-chain HTTP hardening
+MAX_HTTP_BODY_BYTES = 1_048_576  # 1MB cap on inbound HTTP bodies
+IPFS_HASH_RE = re.compile(r"^0x[0-9a-fA-F]+$")
+# 0x + 32-byte (64 hex) or 34-byte multihash (68 hex) payload
+VALID_IPFS_HASH_LENGTHS = (66, 70)
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -574,7 +581,18 @@ class MechHttpHandler(AbstractResponseHandler):
             request_delivery_rate = int(data[RequestKey.DELIVERY_RATE.value])
         except Exception as e:
             self.context.logger.error(
-                f"Error processing signed request. body={http_msg.body!r} error={str(e)}."
+                f"Error processing signed request. body_len={len(http_msg.body)} "
+                f"error={str(e)}."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+
+        if len(ipfs_hash) not in VALID_IPFS_HASH_LENGTHS or not IPFS_HASH_RE.match(
+            ipfs_hash
+        ):
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id}: invalid ipfs_hash "
+                f"format (len={len(ipfs_hash)})."
             )
             self._handle_bad_request(http_msg, http_dialogue)
             return
@@ -770,7 +788,13 @@ class MechHttpHandler(AbstractResponseHandler):
 
     def _parse_http_body(self, http_msg: HttpMessage) -> Dict[str, str]:
         """Parse form-urlencoded HTTP body into a flat key-value dictionary."""
-        request_data = http_msg.body.decode(ENCODING_UTF8)
+        body = http_msg.body
+        if len(body) > MAX_HTTP_BODY_BYTES:
+            raise ValueError(
+                f"HTTP body is {len(body)} bytes, exceeds cap of "
+                f"{MAX_HTTP_BODY_BYTES}"
+            )
+        request_data = body.decode(ENCODING_UTF8)
         parsed_data = urllib.parse.parse_qs(request_data)
         return {key: value[0] for key, value in parsed_data.items()}
 
