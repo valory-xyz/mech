@@ -1662,3 +1662,52 @@ def test_signed_requests_rejects_invalid_ipfs_hash(
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
     assert handler_context.shared_state["pending_tasks"] == []
+
+
+@pytest.mark.parametrize(
+    "delivery_rate_str,case_id",
+    [
+        ("-1", "negative"),
+        (str(hmod.MAX_DELIVERY_RATE + 1), "above_uint256"),
+    ],
+)
+def test_signed_requests_rejects_out_of_range_delivery_rate(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    delivery_rate_str: str,
+    case_id: str,
+) -> None:
+    """Delivery rate outside [MIN_DELIVERY_RATE, MAX_DELIVERY_RATE] is rejected."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(
+        delivery_rate=delivery_rate_str, request_id=f"req-{case_id}"
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_signed_requests_accepts_zero_delivery_rate(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """delivery_rate=0 is accepted so free off-chain tasks can be enqueued."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(delivery_rate="0", request_id="req-zero-rate")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
