@@ -2528,3 +2528,151 @@ def test_valid_32_byte_data_still_works(
     assert behaviour._invalid_request is False
     # IPFS get request should have been sent
     assert len(send_calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# IPFS task payload size cap
+# ---------------------------------------------------------------------------
+
+
+def test_handle_get_task_rejects_oversized_ipfs_payload(
+    behaviour: Any, params_stub: Any, monkeypatch: Any
+) -> None:
+    """IPFS payload above cap is rejected before JSON parsing runs."""
+    behaviour._executing_task = {"requestId": 99}
+    behaviour._request_handling_deadline = None
+    behaviour._invalid_request = False
+
+    padding = "x" * (beh_mod.IPFS_MAX_TASK_BYTES + 1)
+    payload = json.dumps({"prompt": padding, "tool": "sum"})
+    msg = SimpleNamespace(files={"task.json": payload})
+
+    loads_calls: list = []
+    original_loads = beh_mod.json.loads
+
+    def spy_loads(*args: Any, **kwargs: Any) -> Any:
+        loads_calls.append(args)
+        return original_loads(*args, **kwargs)
+
+    monkeypatch.setattr(beh_mod.json, "loads", spy_loads)
+
+    behaviour._handle_get_task(msg, MagicMock())
+
+    assert behaviour._invalid_request is True
+    assert loads_calls == [], "json.loads was called despite oversized payload"
+
+
+# ---------------------------------------------------------------------------
+# task_data prompt type and length validation
+# ---------------------------------------------------------------------------
+
+
+def _track_mech_lookup(calls: list) -> Callable[[], str]:
+    """Return a stub for _get_designated_marketplace_mech_address that records calls."""
+
+    def _lookup() -> str:
+        calls.append(True)
+        return "0xmech"
+
+    return _lookup
+
+
+def test_handle_get_task_rejects_non_string_prompt(
+    behaviour: Any, monkeypatch: Any
+) -> None:
+    """Non-string prompt is rejected before the designated-mech lookup runs."""
+    behaviour._executing_task = {"requestId": 7}
+    behaviour._request_handling_deadline = None
+    behaviour._invalid_request = False
+
+    mech_lookup_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "_get_designated_marketplace_mech_address",
+        _track_mech_lookup(mech_lookup_calls),
+    )
+
+    payload = json.dumps({"prompt": {"nested": "dict"}, "tool": "sum"})
+    msg = SimpleNamespace(files={"task.json": payload})
+
+    behaviour._handle_get_task(msg, MagicMock())
+
+    assert behaviour._invalid_request is True
+    assert mech_lookup_calls == [], "type check did not gate the happy path"
+
+
+def test_handle_get_task_rejects_prompt_over_cap(
+    behaviour: Any, monkeypatch: Any
+) -> None:
+    """Oversized prompt is rejected before the designated-mech lookup runs."""
+    behaviour._executing_task = {"requestId": 8}
+    behaviour._request_handling_deadline = None
+    behaviour._invalid_request = False
+
+    mech_lookup_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "_get_designated_marketplace_mech_address",
+        _track_mech_lookup(mech_lookup_calls),
+    )
+
+    huge_prompt = "A" * (beh_mod.MAX_PROMPT_BYTES + 1)
+    payload = json.dumps({"prompt": huge_prompt, "tool": "sum"})
+    msg = SimpleNamespace(files={"task.json": payload})
+
+    behaviour._handle_get_task(msg, MagicMock())
+
+    assert behaviour._invalid_request is True
+    assert mech_lookup_calls == [], "prompt cap did not gate the happy path"
+
+
+# ---------------------------------------------------------------------------
+# Payment-model request deadline
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_payment_model_resets_stuck_inflight_request(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """Stale payment-model in_flight_req is cleared after PAYMENT_MODEL_REQUEST_TIMEOUT."""
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = True
+    behaviour._payment_model_request_sent_at = (
+        time.time() - beh_mod.PAYMENT_MODEL_REQUEST_TIMEOUT - 1.0
+    )
+
+    result = behaviour._ensure_payment_model()
+
+    assert result is False
+    assert params_stub.in_flight_req is False
+    assert behaviour._payment_model_request_sent_at is None
+
+
+def test_ensure_payment_model_does_not_reset_fresh_inflight_request(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """Fresh payment-model request is not reset before the timeout elapses."""
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = True
+    sent_at = time.time()
+    behaviour._payment_model_request_sent_at = sent_at
+
+    result = behaviour._ensure_payment_model()
+
+    assert result is False
+    assert params_stub.in_flight_req is True
+    assert behaviour._payment_model_request_sent_at == sent_at
+
+
+def test_ensure_payment_model_does_not_reset_inflight_from_other_flow(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """When no payment-model timestamp exists, in_flight_req is not tampered with."""
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = True
+    behaviour._payment_model_request_sent_at = None
+
+    result = behaviour._ensure_payment_model()
+
+    assert result is False
+    assert params_stub.in_flight_req is True

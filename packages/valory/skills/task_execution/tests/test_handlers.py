@@ -412,7 +412,7 @@ def test_signed_requests_balance_scenarios(
     )
     mh.setup()
 
-    ipfs_hash: str = "0x" + "ab" * 64
+    ipfs_hash: str = "0x" + "ab" * 32
     body: Dict[str, str] = {
         "ipfs_hash": ipfs_hash,
         "request_id": request_id,
@@ -477,7 +477,7 @@ def test_fetch_offchain_request_info_returns_insufficient_balance_response(
     mh.setup()
 
     request_id = "req-insufficient-fetch"
-    ipfs_hash: str = "0x" + "ab" * 64
+    ipfs_hash: str = "0x" + "ab" * 32
     send_msg: Any = make_http_msg(
         {
             "ipfs_hash": ipfs_hash,
@@ -525,7 +525,7 @@ def test_signed_requests_rollback_partial_enqueue(
 
     handler_context.shared_state["ipfs_tasks"] = FailingList()
 
-    ipfs_hash: str = "0x" + "ab" * 64
+    ipfs_hash: str = "0x" + "ab" * 32
     body: Dict[str, str] = {
         "ipfs_hash": ipfs_hash,
         "request_id": "req-rollback",
@@ -1564,3 +1564,150 @@ def test_filter_requests_empty_list(
     ch.filter_requests([])
 
     assert len(ch.pending_tasks) == 0
+
+
+# ---------------------------------------------------------------------------
+# Offchain HTTP body cap and ipfs_hash format validation
+# ---------------------------------------------------------------------------
+
+
+def _make_signed_request_body(
+    ipfs_hash: str = "0x" + "ab" * 32,
+    delivery_rate: str = "123",
+    request_id: str = "req-hardening",
+) -> Dict[str, str]:
+    """Build a valid signed-request body used by hardening tests."""
+    return {
+        "ipfs_hash": ipfs_hash,
+        "request_id": request_id,
+        "ipfs_data": '{"foo":"bar"}',
+        "delivery_rate": delivery_rate,
+        "sender": "0x0000000000000000000000000000000000000001",
+    }
+
+
+def _install_balance_ok(mh: Any, monkeypatch: Any) -> None:
+    """Make _check_offchain_requester_balance return an OK, sufficient response."""
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: {
+            "status": "ok",
+            "required_amount": int(delivery_rate),
+            "available_amount": int(delivery_rate) + 1,
+            "reason": "ok",
+        },
+    )
+
+
+def test_signed_requests_rejects_oversized_http_body(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """HTTP body larger than MAX_HTTP_BODY_BYTES is rejected with 400 before decode."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    padding_bytes = hmod.MAX_HTTP_BODY_BYTES + 1
+    base = _make_signed_request_body(request_id="req-oversized")
+    base["ipfs_data"] = '{"foo":"' + "x" * padding_bytes + '"}'
+    http_msg: Any = make_http_msg(base)
+    assert len(http_msg.body) > hmod.MAX_HTTP_BODY_BYTES
+
+    parse_calls: List[Any] = []
+    original_parse_qs = hmod.urllib.parse.parse_qs
+
+    def spy_parse_qs(*args: Any, **kwargs: Any) -> Any:
+        parse_calls.append(args)
+        return original_parse_qs(*args, **kwargs)
+
+    monkeypatch.setattr(hmod.urllib.parse, "parse_qs", spy_parse_qs)
+
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+    assert parse_calls == [], "parse_qs was called despite oversized body"
+
+
+@pytest.mark.parametrize(
+    "bad_hash,case_id",
+    [
+        ("0xabc", "too_short"),
+        ("0x" + "ab" * 33, "wrong_length_66_byte_hex"),
+        ("0x" + "ab" * 64, "far_too_long"),
+        ("ab" * 32, "missing_0x_prefix"),
+        ("0x" + "z" * 64, "non_hex_chars"),
+    ],
+)
+def test_signed_requests_rejects_invalid_ipfs_hash(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    bad_hash: str,
+    case_id: str,
+) -> None:
+    """Malformed ipfs_hash strings are rejected with 400, nothing enqueued."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(ipfs_hash=bad_hash, request_id=f"req-{case_id}")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+@pytest.mark.parametrize(
+    "delivery_rate_str,case_id",
+    [
+        ("-1", "negative"),
+        (str(hmod.MAX_DELIVERY_RATE + 1), "above_uint256"),
+    ],
+)
+def test_signed_requests_rejects_out_of_range_delivery_rate(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    delivery_rate_str: str,
+    case_id: str,
+) -> None:
+    """Delivery rate outside [MIN_DELIVERY_RATE, MAX_DELIVERY_RATE] is rejected."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(
+        delivery_rate=delivery_rate_str, request_id=f"req-{case_id}"
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_signed_requests_accepts_zero_delivery_rate(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """delivery_rate=0 is accepted so free off-chain tasks can be enqueued."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(delivery_rate="0", request_id="req-zero-rate")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
