@@ -83,6 +83,7 @@ SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
+MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -988,13 +989,22 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         is_data_valid = (
             task_data
             and isinstance(task_data, dict)
-            and "prompt" in task_data
-            and "tool" in task_data
+            and isinstance(task_data.get("prompt"), str)
+            and isinstance(task_data.get("tool"), str)
         )  # pylint: disable=C0301
 
         executing_task = cast(Dict[str, Any], self._executing_task)
         if not is_data_valid:
             self.context.logger.warning(f"Invalid {task_data=} for {executing_task=}.")
+            self._invalid_request = True
+            return
+
+        prompt_bytes = len(task_data["prompt"].encode("utf-8", errors="replace"))
+        if prompt_bytes > MAX_PROMPT_BYTES:
+            self.context.logger.warning(
+                f"Prompt for request {req_id} is {prompt_bytes} bytes, "
+                f"exceeds cap of {MAX_PROMPT_BYTES}. Skipping request."
+            )
             self._invalid_request = True
             return
 

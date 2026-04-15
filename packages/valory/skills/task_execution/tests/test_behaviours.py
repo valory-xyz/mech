@@ -2560,3 +2560,67 @@ def test_handle_get_task_rejects_oversized_ipfs_payload(
 
     assert behaviour._invalid_request is True
     assert loads_calls == [], "json.loads was called despite oversized payload"
+
+
+# ---------------------------------------------------------------------------
+# task_data prompt type and length validation
+# ---------------------------------------------------------------------------
+
+
+def _track_mech_lookup(calls: list) -> Callable[[], str]:
+    """Return a stub for _get_designated_marketplace_mech_address that records calls."""
+
+    def _lookup() -> str:
+        calls.append(True)
+        return "0xmech"
+
+    return _lookup
+
+
+def test_handle_get_task_rejects_non_string_prompt(
+    behaviour: Any, monkeypatch: Any
+) -> None:
+    """Non-string prompt is rejected before the designated-mech lookup runs."""
+    behaviour._executing_task = {"requestId": 7}
+    behaviour._request_handling_deadline = None
+    behaviour._invalid_request = False
+
+    mech_lookup_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "_get_designated_marketplace_mech_address",
+        _track_mech_lookup(mech_lookup_calls),
+    )
+
+    payload = json.dumps({"prompt": {"nested": "dict"}, "tool": "sum"})
+    msg = SimpleNamespace(files={"task.json": payload})
+
+    behaviour._handle_get_task(msg, MagicMock())
+
+    assert behaviour._invalid_request is True
+    assert mech_lookup_calls == [], "type check did not gate the happy path"
+
+
+def test_handle_get_task_rejects_prompt_over_cap(
+    behaviour: Any, monkeypatch: Any
+) -> None:
+    """Oversized prompt is rejected before the designated-mech lookup runs."""
+    behaviour._executing_task = {"requestId": 8}
+    behaviour._request_handling_deadline = None
+    behaviour._invalid_request = False
+
+    mech_lookup_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "_get_designated_marketplace_mech_address",
+        _track_mech_lookup(mech_lookup_calls),
+    )
+
+    huge_prompt = "A" * (beh_mod.MAX_PROMPT_BYTES + 1)
+    payload = json.dumps({"prompt": huge_prompt, "tool": "sum"})
+    msg = SimpleNamespace(files={"task.json": payload})
+
+    behaviour._handle_get_task(msg, MagicMock())
+
+    assert behaviour._invalid_request is True
+    assert mech_lookup_calls == [], "prompt cap did not gate the happy path"
