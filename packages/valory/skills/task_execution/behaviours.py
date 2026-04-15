@@ -978,7 +978,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             (
                 len(content)
                 if isinstance(content, (bytes, bytearray))
-                else len(content.encode("utf-8", errors="replace"))
+                else len(content.encode("utf-8"))
             )
             for content in message.files.values()
         )
@@ -994,8 +994,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         try:
             task_data = [json.loads(content) for content in message.files.values()][0]
         except (json.JSONDecodeError, IndexError, TypeError, UnicodeDecodeError) as e:
-            executing_task = cast(Dict[str, Any], self._executing_task)
-            req_id = executing_task.get("requestId", "unknown")
             self.context.logger.warning(
                 f"Malformed IPFS content for request {req_id}: {e}. "
                 f"Skipping request."
@@ -1009,13 +1007,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             and isinstance(task_data.get("tool"), str)
         )  # pylint: disable=C0301
 
-        executing_task = cast(Dict[str, Any], self._executing_task)
         if not is_data_valid:
             self.context.logger.warning(f"Invalid {task_data=} for {executing_task=}.")
             self._invalid_request = True
             return
 
-        prompt_bytes = len(task_data["prompt"].encode("utf-8", errors="replace"))
+        prompt_bytes = len(task_data["prompt"].encode("utf-8"))
         if prompt_bytes > MAX_PROMPT_BYTES:
             self.context.logger.warning(
                 f"Prompt for request {req_id} is {prompt_bytes} bytes, "

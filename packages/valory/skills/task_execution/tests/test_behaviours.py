@@ -2654,13 +2654,14 @@ def test_ensure_payment_model_does_not_reset_fresh_inflight_request(
     """Fresh payment-model request is not reset before the timeout elapses."""
     params_stub.use_mech_marketplace = True
     params_stub.in_flight_req = True
-    behaviour._payment_model_request_sent_at = time.time()
+    sent_at = time.time()
+    behaviour._payment_model_request_sent_at = sent_at
 
     result = behaviour._ensure_payment_model()
 
     assert result is False
     assert params_stub.in_flight_req is True
-    assert behaviour._payment_model_request_sent_at is not None
+    assert behaviour._payment_model_request_sent_at == sent_at
 
 
 def test_ensure_payment_model_does_not_reset_inflight_from_other_flow(
