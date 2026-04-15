@@ -82,6 +82,7 @@ INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
+IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -952,6 +953,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._async_result = None
             self._request_handling_deadline = None
             self.tool_preparation_start_time = 0.0
+            return
+
+        executing_task = cast(Dict[str, Any], self._executing_task)
+        req_id = executing_task.get("requestId", "unknown")
+        total_bytes = sum(
+            (
+                len(content)
+                if isinstance(content, (bytes, bytearray))
+                else len(content.encode("utf-8", errors="replace"))
+            )
+            for content in message.files.values()
+        )
+        if total_bytes > IPFS_MAX_TASK_BYTES:
+            self.context.logger.warning(
+                f"IPFS task payload for request {req_id} is "
+                f"{total_bytes} bytes, exceeds cap of {IPFS_MAX_TASK_BYTES}. "
+                f"Skipping request."
+            )
+            self._invalid_request = True
             return
 
         try:

@@ -2528,3 +2528,35 @@ def test_valid_32_byte_data_still_works(
     assert behaviour._invalid_request is False
     # IPFS get request should have been sent
     assert len(send_calls) == 1
+
+
+# ---------------------------------------------------------------------------
+# IPFS task payload size cap
+# ---------------------------------------------------------------------------
+
+
+def test_handle_get_task_rejects_oversized_ipfs_payload(
+    behaviour: Any, params_stub: Any, monkeypatch: Any
+) -> None:
+    """IPFS payload above cap is rejected before JSON parsing runs."""
+    behaviour._executing_task = {"requestId": 99}
+    behaviour._request_handling_deadline = None
+    behaviour._invalid_request = False
+
+    padding = "x" * (beh_mod.IPFS_MAX_TASK_BYTES + 1)
+    payload = json.dumps({"prompt": padding, "tool": "sum"})
+    msg = SimpleNamespace(files={"task.json": payload})
+
+    loads_calls: list = []
+    original_loads = beh_mod.json.loads
+
+    def spy_loads(*args: Any, **kwargs: Any) -> Any:
+        loads_calls.append(args)
+        return original_loads(*args, **kwargs)
+
+    monkeypatch.setattr(beh_mod.json, "loads", spy_loads)
+
+    behaviour._handle_get_task(msg, MagicMock())
+
+    assert behaviour._invalid_request is True
+    assert loads_calls == [], "json.loads was called despite oversized payload"
