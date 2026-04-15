@@ -2624,3 +2624,54 @@ def test_handle_get_task_rejects_prompt_over_cap(
 
     assert behaviour._invalid_request is True
     assert mech_lookup_calls == [], "prompt cap did not gate the happy path"
+
+
+# ---------------------------------------------------------------------------
+# Payment-model request deadline
+# ---------------------------------------------------------------------------
+
+
+def test_ensure_payment_model_resets_stuck_inflight_request(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """Stale payment-model in_flight_req is cleared after PAYMENT_MODEL_REQUEST_TIMEOUT."""
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = True
+    behaviour._payment_model_request_sent_at = (
+        time.time() - beh_mod.PAYMENT_MODEL_REQUEST_TIMEOUT - 1.0
+    )
+
+    result = behaviour._ensure_payment_model()
+
+    assert result is False
+    assert params_stub.in_flight_req is False
+    assert behaviour._payment_model_request_sent_at is None
+
+
+def test_ensure_payment_model_does_not_reset_fresh_inflight_request(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """Fresh payment-model request is not reset before the timeout elapses."""
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = True
+    behaviour._payment_model_request_sent_at = time.time()
+
+    result = behaviour._ensure_payment_model()
+
+    assert result is False
+    assert params_stub.in_flight_req is True
+    assert behaviour._payment_model_request_sent_at is not None
+
+
+def test_ensure_payment_model_does_not_reset_inflight_from_other_flow(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """When no payment-model timestamp exists, in_flight_req is not tampered with."""
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = True
+    behaviour._payment_model_request_sent_at = None
+
+    result = behaviour._ensure_payment_model()
+
+    assert result is False
+    assert params_stub.in_flight_req is True

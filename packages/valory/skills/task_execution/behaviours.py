@@ -84,6 +84,7 @@ STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
+PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -203,6 +204,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._async_result: Optional[Future] = None
         self._keychain: Optional[KeyChain] = None
         self._ignored_request_ids: Set[int] = set()
+        self._payment_model_request_sent_at: Optional[float] = None
         # We fetch the requests and their status on the startup so this should be fairly accurate
         self.last_status_check_time: float = time.time()
         self.tool_preparation_start_time: float = 0.0
@@ -228,6 +230,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self.context.outbox.put_message(message=contract_api_msg)
         self.params.in_flight_req = True
+        self._payment_model_request_sent_at = time.time()
 
     def setup(self) -> None:
         """Implement the setup."""
@@ -241,11 +244,24 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if not self.params.use_mech_marketplace:
             return True
 
-        if self.params.in_flight_req:
-            return False
-
         if self.payment_model:
+            self._payment_model_request_sent_at = None
             return True
+
+        if self.params.in_flight_req:
+            sent_at = self._payment_model_request_sent_at
+            if (
+                sent_at is not None
+                and time.time() - sent_at > PAYMENT_MODEL_REQUEST_TIMEOUT
+            ):
+                self.context.logger.warning(
+                    f"Payment-model request has been in flight for "
+                    f">{PAYMENT_MODEL_REQUEST_TIMEOUT}s with no response. "
+                    f"Resetting in_flight_req so it can be retried."
+                )
+                self.params.in_flight_req = False
+                self._payment_model_request_sent_at = None
+            return False
 
         self.context.logger.info("Setting the mech's payment model...")
         self._request_payment_model()
