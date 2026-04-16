@@ -110,7 +110,7 @@ models:
     class_name: Params
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.1.0
+    version: ==2.2.1
   py-multibase:
     version: ==1.0.3
   py-multicodec:
