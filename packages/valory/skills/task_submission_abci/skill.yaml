@@ -28,14 +28,14 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/olas_mech:0.1.0:bafybeibraj4uypb5pafavzrbeyfdlnbcchm5vefpuev5dhiypqb7av25om
+- valory/olas_mech:0.1.0:bafybeibxiv7wlt3ckgfnvwlzolxry4n7wwaiqcg3l43mv3g4fnbxr2qwgy
 - valory/mech_marketplace:0.1.0:bafybeiapnlzimazvfivnrxxiy4syd77xqeswn5un24isa7m3562ozqsgn4
 - valory/complementary_service_metadata:0.1.0:bafybeibjk5gdgc54wx5bz4fl2666urmfj6mx3ocqxyumqpj7wq5fdg4diu
 - valory/gnosis_safe:0.1.0:bafybeice337zvg3ol4cwpw2iikxcukmthwmw32ytwtdnkcju222qfc323y
 - valory/multisend:0.1.0:bafybeihx7c3xj6c5v4tgvu3ipnj7seyc4dkmovoyzu4isgbwdrhj2oo6uq
 - valory/service_registry:0.1.0:bafybeigefenwg3lj4nvwc3cs5zxyhv4nvwnwbw5x7afwyijkjbbgbf2l7e
-- valory/hash_checkpoint:0.1.0:bafybeihpds2kkr5okehfa4ohbalur3fihzyk5xz3we7thshsoh5jbgn7jy
-- valory/balance_tracker:0.1.0:bafybeigitc6tsfopaib7vtk5gsvozbnwiuwryvpweqj6kjrmijtnvzqkzi
+- valory/hash_checkpoint:0.1.0:bafybeibtskfso2he4dfu5h6hwqdp7i3lplzljc7yn6prnbqbpuqa2y6eze
+- valory/balance_tracker:0.1.0:bafybeicwyd2w5f56d5sswezj5q2dd5vnwe3y7vssslk7tpsxegvq7faesy
 - valory/erc20:0.1.0:bafybeifq6zn2p5nafi6bmtf4xo3ctgymazr2udtlwyiwjf5g5mpndsthfy
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
@@ -44,7 +44,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeihygetmlgnhawrbyswvpvv3wpztr2hlhxkljmohp4r7qcmvglpwdq
 - valory/transaction_settlement_abci:0.1.0:bafybeiajyrszyyo6z4lxogutv4ougiaeoxak6xkq5gtrbey32gbgnirznq
-- valory/task_execution:0.1.0:bafybeig7pzey3umn2uub6gkafnam5znwic4skziyp2l5wcqcp2xmljcwde
+- valory/task_execution:0.1.0:bafybeihb7zuchx5yxbza7lgn6kglsz7ejqy5dgixfohydfnkxev5af5z4a
 behaviours:
   main:
     args: {}
