@@ -1060,7 +1060,7 @@ def test_contract_handler_mech_type_and_mech_types_body_keys(
 
     body: Dict[str, Any] = {
         "mech_type": "token",
-        "mech_types": {"token": "0xBT"},
+        "mech_types": {"token": "0xBT"},  # nosec B105
     }
     ch: ContractHandler = ContractHandler(
         name="contract", skill_context=handler_context
@@ -1075,7 +1075,7 @@ def test_contract_handler_mech_type_and_mech_types_body_keys(
 
     assert handler_context.shared_state[hmod.PAYMENT_MODEL] == "token"  # lines 348-349
     assert handler_context.shared_state[hmod.PAYMENT_INFO] == {
-        "token": "0xBT"
+        "token": "0xBT"  # nosec B105
     }  # lines 354-355
 
 
