@@ -1,0 +1,21 @@
+name: news_sentiment
+author: pablodance
+version: 0.1.0
+type: custom
+description: >
+  News Sentiment Analysis tool for Olas Mech. Given a ticker, company name, or
+  topic, fetches recent news from Google News RSS and curated outlets (BBC,
+  Reuters, AP, Al Jazeera, NYT) in parallel, then uses Claude (claude-sonnet-4-6)
+  to classify sentiment as positive/neutral/negative with a numeric score,
+  confidence, and bull_probability. Supports English and Spanish.
+license: Apache-2.0
+aea_version: ">=1.0.0, <2.0.0"
+fingerprint: {}
+fingerprint_ignore_patterns: []
+entry_point: news_sentiment.py
+callable: run
+dependencies:
+  feedparser:
+    version: ">=6.0.10,<7.0.0"
+  anthropic:
+    version: ">=0.20.0,<1.0.0"
