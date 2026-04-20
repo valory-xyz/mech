@@ -51,7 +51,7 @@ _Note that Mechs which were deployed before the Mech Marketplace contracts (call
 This repository contains a demo AI Mech. You can clone and extend the codebase to create your own AI Mech. You need the following requirements installed in your system:
 
 - [Python](https://www.python.org/) (recommended `3.10`)
-- [Poetry](https://python-poetry.org/docs/)
+- [uv](https://docs.astral.sh/uv/)
 - [Docker Engine](https://docs.docker.com/engine/install/)
 - [Docker Compose](https://docs.docker.com/compose/install/)
 - [Tendermint](https://docs.tendermint.com/v0.34/introduction/install.html) `==0.34.19`
@@ -66,10 +66,11 @@ Only continue reading this README if you know what you are doing and you are spe
 
 Follow these instructions to have your local environment prepared to run the demo below, as well as to build your own AI Mech.
 
-1. Create a Poetry virtual environment and install the dependencies:
+1. Create a virtual environment and install the dependencies:
 
     ```bash
-    poetry install && poetry shell
+    uv sync
+    source .venv/bin/activate
     ```
 
 2. Fetch the software packages using the [Open Autonomy](https://stack.olas.network/open-autonomy/) CLI:
