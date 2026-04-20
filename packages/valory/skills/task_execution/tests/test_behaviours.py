@@ -1821,65 +1821,94 @@ def test_handle_timeout_task_limit_reached_calls_handle_done(
     assert len(handle_done_calls) == 1
 
 
-def test_handle_timeout_task_limit_reached_preserves_error_reason(
-    behaviour: Any, params_stub: Any, monkeypatch: Any
-) -> None:
-    """Terminal delivery uses the passed error_reason when limit is reached."""
-    behaviour._executing_task = {"requestId": 11, "request_delivery_rate": 100}
+def _setup_timeout_delivery_capture(
+    behaviour: Any,
+    monkeypatch: Any,
+    fake_dialogue: Any,
+    req_id: int,
+) -> list:
+    """Wire up a behaviour to capture the on-chain payload from a timeout delivery.
+
+    Sets _executing_task with enough fields for _handle_done_task to run
+    the full failure path, monkeypatches the IPFS store builder and
+    send_message to capture the stored payload, and returns the capture
+    list so the test can assert on the final response dict.
+
+    :param behaviour: the TaskExecutionBehaviour instance.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param fake_dialogue: dialogue stub to return from the fake store builder.
+    :param req_id: the requestId to seed.
+    :returns: list that will be populated with the parsed payload dict.
+    """
+    behaviour._executing_task = {
+        "requestId": req_id,
+        "requestIdWithNonce": f"{req_id}-nonce",
+        "contract_address": "0xmech",
+        "tool": "some_tool",
+        "model": "gpt-4o",
+        "request_delivery_rate": 100,
+    }
+    behaviour._tools_to_package_hash["some_tool"] = "QmHash"
     behaviour._async_result = None
+    behaviour.tool_execution_start_time = time.perf_counter() - 1.0
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    stored_payloads: list = []
+
+    def capture_store(files: Dict[str, str], **k: Any) -> Tuple[object, Any]:
+        stored_payloads.append(files)
+        return object(), fake_dialogue
+
+    monkeypatch.setattr(behaviour, "_build_ipfs_store_file_req", capture_store)
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda msg, dlg, cb, error_cb=None: None,
+    )
+    return stored_payloads
+
+
+def test_handle_timeout_task_limit_reached_preserves_error_reason(
+    behaviour: Any, params_stub: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """Terminal on-chain result contains error_reason detail when limit reached."""
     params_stub.request_id_to_num_timeouts[11] = 0
     params_stub.timeout_limit = 1
-    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
-    handle_done_calls: list = []
-    monkeypatch.setattr(
-        behaviour, "_handle_done_task", lambda r: handle_done_calls.append(r)
-    )
+    stored = _setup_timeout_delivery_capture(behaviour, monkeypatch, fake_dialogue, 11)
     detail = "Request data could not be retrieved from IPFS (detail: timed out)"
     behaviour._handle_timeout_task(error_reason=detail)
-    assert len(handle_done_calls) == 1
-    terminal_msg = handle_done_calls[0][0]
-    assert "Task timed out 1 times during execution." in terminal_msg
-    assert detail in terminal_msg
+    assert len(stored) == 1
+    payload = json.loads(stored[0]["11"])
+    assert "Task timed out 1 times during execution." in payload["result"]
+    assert detail in payload["result"]
 
 
 def test_handle_timeout_task_limit_reached_preserves_preexisting_reason(
-    behaviour: Any, params_stub: Any, monkeypatch: Any
+    behaviour: Any, params_stub: Any, monkeypatch: Any, fake_dialogue: Any
 ) -> None:
-    """Pre-existing _ipfs_error_reason is included in terminal delivery."""
-    behaviour._executing_task = {"requestId": 12, "request_delivery_rate": 100}
-    behaviour._async_result = None
+    """Pre-existing _ipfs_error_reason is preserved into the on-chain result."""
     params_stub.request_id_to_num_timeouts[12] = 0
     params_stub.timeout_limit = 1
+    stored = _setup_timeout_delivery_capture(behaviour, monkeypatch, fake_dialogue, 12)
     behaviour._ipfs_error_reason = "pre-existing reason"
-    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
-    handle_done_calls: list = []
-    monkeypatch.setattr(
-        behaviour, "_handle_done_task", lambda r: handle_done_calls.append(r)
-    )
     behaviour._handle_timeout_task()
-    assert len(handle_done_calls) == 1
-    assert "pre-existing reason" in handle_done_calls[0][0]
+    assert len(stored) == 1
+    payload = json.loads(stored[0]["12"])
+    assert "pre-existing reason" in payload["result"]
 
 
 def test_handle_timeout_task_limit_reached_no_reason_generic_message(
-    behaviour: Any, params_stub: Any, monkeypatch: Any
+    behaviour: Any, params_stub: Any, monkeypatch: Any, fake_dialogue: Any
 ) -> None:
-    """Backward-compat: falls back to the generic message with no reason."""
-    behaviour._executing_task = {"requestId": 13, "request_delivery_rate": 100}
-    behaviour._async_result = None
+    """With no reason set, on-chain result contains the generic timeout message."""
     params_stub.request_id_to_num_timeouts[13] = 0
     params_stub.timeout_limit = 1
+    stored = _setup_timeout_delivery_capture(behaviour, monkeypatch, fake_dialogue, 13)
     behaviour._ipfs_error_reason = None
-    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
-    handle_done_calls: list = []
-    monkeypatch.setattr(
-        behaviour, "_handle_done_task", lambda r: handle_done_calls.append(r)
-    )
     behaviour._handle_timeout_task()
-    assert len(handle_done_calls) == 1
-    terminal_msg = handle_done_calls[0][0]
-    assert "Task timed out 1 times during execution." in terminal_msg
-    assert "Last detail:" not in terminal_msg
+    assert len(stored) == 1
+    payload = json.loads(stored[0]["13"])
+    assert "Task timed out 1 times during execution." in payload["result"]
+    assert "Last detail:" not in payload["result"]
 
 
 # ---------------------------------------------------------------------------

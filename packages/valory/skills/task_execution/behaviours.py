@@ -983,6 +983,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 if preserved_reason
                 else f"{base_msg} "
             )
+            # _handle_done_task uses _ipfs_error_reason as the "result"
+            # field of the on-chain response on the failure path.
+            self._ipfs_error_reason = terminal_msg
             task_result = (
                 terminal_msg,
                 "",
