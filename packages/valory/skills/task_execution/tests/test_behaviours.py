@@ -1546,10 +1546,44 @@ def test_send_message_registers_callback_and_deadline(
 # ---------------------------------------------------------------------------
 
 
-def test_handle_ipfs_error_sets_state(behaviour: Any) -> None:
-    """_handle_ipfs_error sets _ipfs_error_reason and _invalid_request."""
-    behaviour._handle_ipfs_error("some error detail")
-    assert "some error detail" in (behaviour._ipfs_error_reason or "")
+def test_handle_ipfs_error_non_timeout_sets_invalid(behaviour: Any) -> None:
+    """Non-timeout IPFS errors mark the request invalid on the first attempt."""
+    behaviour._handle_ipfs_error("IPFS API returned status 404")
+    assert "IPFS API returned status 404" in (behaviour._ipfs_error_reason or "")
+    assert behaviour._invalid_request is True
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "timed out",
+        "The read operation timed out",
+        "<urlopen error timed out>",
+        "TIMED OUT",
+        "Read operation Timed Out",
+    ],
+)
+def test_handle_ipfs_error_timeout_routes_to_retry(
+    behaviour: Any, monkeypatch: Any, reason: str
+) -> None:
+    """Timeout-class IPFS errors route through the retry machinery."""
+    behaviour._executing_task = {"requestId": 1, "request_delivery_rate": 100}
+    captured: Dict[str, Any] = {}
+
+    def fake_handle_timeout_task(error_reason: Any = None) -> None:
+        captured["called"] = True
+        captured["error_reason"] = error_reason
+
+    monkeypatch.setattr(behaviour, "_handle_timeout_task", fake_handle_timeout_task)
+    behaviour._handle_ipfs_error(reason)
+    assert captured.get("called") is True
+    assert reason in (captured.get("error_reason") or "")
+    assert behaviour._invalid_request is False
+
+
+def test_handle_ipfs_error_empty_reason_is_not_timeout(behaviour: Any) -> None:
+    """Empty reason is not treated as a timeout; falls through to invalid path."""
+    behaviour._handle_ipfs_error("")
     assert behaviour._invalid_request is True
 
 
@@ -1785,6 +1819,67 @@ def test_handle_timeout_task_limit_reached_calls_handle_done(
     )
     behaviour._handle_timeout_task()
     assert len(handle_done_calls) == 1
+
+
+def test_handle_timeout_task_limit_reached_preserves_error_reason(
+    behaviour: Any, params_stub: Any, monkeypatch: Any
+) -> None:
+    """Terminal delivery uses the passed error_reason when limit is reached."""
+    behaviour._executing_task = {"requestId": 11, "request_delivery_rate": 100}
+    behaviour._async_result = None
+    params_stub.request_id_to_num_timeouts[11] = 0
+    params_stub.timeout_limit = 1
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    handle_done_calls: list = []
+    monkeypatch.setattr(
+        behaviour, "_handle_done_task", lambda r: handle_done_calls.append(r)
+    )
+    detail = "Request data could not be retrieved from IPFS (detail: timed out)"
+    behaviour._handle_timeout_task(error_reason=detail)
+    assert len(handle_done_calls) == 1
+    terminal_msg = handle_done_calls[0][0]
+    assert "Task timed out 1 times during execution." in terminal_msg
+    assert detail in terminal_msg
+
+
+def test_handle_timeout_task_limit_reached_preserves_preexisting_reason(
+    behaviour: Any, params_stub: Any, monkeypatch: Any
+) -> None:
+    """Pre-existing _ipfs_error_reason is included in terminal delivery."""
+    behaviour._executing_task = {"requestId": 12, "request_delivery_rate": 100}
+    behaviour._async_result = None
+    params_stub.request_id_to_num_timeouts[12] = 0
+    params_stub.timeout_limit = 1
+    behaviour._ipfs_error_reason = "pre-existing reason"
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    handle_done_calls: list = []
+    monkeypatch.setattr(
+        behaviour, "_handle_done_task", lambda r: handle_done_calls.append(r)
+    )
+    behaviour._handle_timeout_task()
+    assert len(handle_done_calls) == 1
+    assert "pre-existing reason" in handle_done_calls[0][0]
+
+
+def test_handle_timeout_task_limit_reached_no_reason_generic_message(
+    behaviour: Any, params_stub: Any, monkeypatch: Any
+) -> None:
+    """Backward-compat: falls back to the generic message with no reason."""
+    behaviour._executing_task = {"requestId": 13, "request_delivery_rate": 100}
+    behaviour._async_result = None
+    params_stub.request_id_to_num_timeouts[13] = 0
+    params_stub.timeout_limit = 1
+    behaviour._ipfs_error_reason = None
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    handle_done_calls: list = []
+    monkeypatch.setattr(
+        behaviour, "_handle_done_task", lambda r: handle_done_calls.append(r)
+    )
+    behaviour._handle_timeout_task()
+    assert len(handle_done_calls) == 1
+    terminal_msg = handle_done_calls[0][0]
+    assert "Task timed out 1 times during execution." in terminal_msg
+    assert "Last detail:" not in terminal_msg
 
 
 # ---------------------------------------------------------------------------
