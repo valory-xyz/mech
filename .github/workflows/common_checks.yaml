@@ -123,7 +123,7 @@ jobs:
           gitleaks detect --report-format json --report-path leak_report -v
 
   test:
-    continue-on-error: True
+    continue-on-error: False
     needs:
       - lock_check
       - copyright_and_dependencies_check
@@ -189,3 +189,19 @@ jobs:
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false
+
+  all_checks_passed:
+    name: All checks passed
+    if: always()
+    needs:
+      - lock_check
+      - copyright_and_dependencies_check
+      - linter_checks
+      - scan
+      - test
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Fail if any required job failed or was cancelled
+        if: ${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}
+        run: exit 1
+      - run: echo "All required checks passed."
