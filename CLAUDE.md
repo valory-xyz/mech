@@ -10,7 +10,8 @@ Autonolas AI Mechs — a decentralized task execution service built on the Open 
 
 ```bash
 # Install dependencies
-poetry install && poetry shell
+uv sync
+source .venv/bin/activate
 
 # Sync packages from remote IPFS registry
 autonomy packages sync --update-packages

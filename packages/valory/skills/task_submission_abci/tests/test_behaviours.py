@@ -1154,7 +1154,7 @@ class TestTokenTransfer:
     def test_get_token_address_success(self) -> None:
         """Test get token address success."""
         b = self._make_b()
-        msg = _state_contract_msg({"token_address": "0xTOKEN"})
+        msg = _state_contract_msg({"token_address": "0xTOKEN"})  # nosec B105
         with patch.object(
             b, "get_contract_api_response", side_effect=_gen_returning(msg)
         ):

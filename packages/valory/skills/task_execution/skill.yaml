@@ -15,7 +15,7 @@ fingerprint:
   tests/conftest.py: bafybeib43nrx6rozfp5ez3dkevy2qzj2yclzs7kmlnqnowd3mhfhqxvxsi
   tests/test_behaviours.py: bafybeibp3yojr6y77e3mksrbelqeog6qifdpcrdo4bqduk4gpg42us2kba
   tests/test_dialogues.py: bafybeig2phgjrv7ugdx4olviuclaxegvyzkcw7t2ztzrp3xcj2ygqs4344
-  tests/test_handlers.py: bafybeigslk2cmfc67sf2lksqhnsjvfkxmzrm2ymhqlj2eueal6hixw64si
+  tests/test_handlers.py: bafybeiduj6dmmdweroe7uwchp7k6pyeyk5uwmcy3wqa7vpese5ks3trllq
   tests/test_models.py: bafybeidyzmub74c3m6zopwgxy43o2mx5tvig4wmahgyhoiur4qz55jgwaq
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
@@ -31,13 +31,13 @@ fingerprint:
   utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
 fingerprint_ignore_patterns: []
 connections:
-- valory/ledger:0.19.0:bafybeid5uwx4uqxkiibw6kazr7my5mk5kcqg2dx2owtcf7kcpbs2jrns2e
-- valory/ipfs:0.1.0:bafybeib44s5rdz5xwzwuncm2gwo6zvqsy6yefvbf5znmjc4mw3goql23ha
+- valory/ledger:0.19.0:bafybeidqf5dmueqm655z3bkw36mviobpcpuek4bhha7iq2nnz6sfu32kva
+- valory/ipfs:0.1.0:bafybeiddxbjccmzkknny5pbfupxgexp4w4pwiu2rny4a6vnlxwqs3mmfo4
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 contracts:
-- valory/olas_mech:0.1.0:bafybeibraj4uypb5pafavzrbeyfdlnbcchm5vefpuev5dhiypqb7av25om
-- valory/mech_marketplace:0.1.0:bafybeiapnlzimazvfivnrxxiy4syd77xqeswn5un24isa7m3562ozqsgn4
-- valory/balance_tracker:0.1.0:bafybeigitc6tsfopaib7vtk5gsvozbnwiuwryvpweqj6kjrmijtnvzqkzi
+- valory/olas_mech:0.1.0:bafybeidzg7wkjlbjnci2by5kadzdg7jkltqifksu6gt7jltf6stz5ouroa
+- valory/mech_marketplace:0.1.0:bafybeidnd7vjgmpyyova5u723y74hc4xwhbtstvsgiqqdzxb334nuomicy
+- valory/balance_tracker:0.1.0:bafybeicwyd2w5f56d5sswezj5q2dd5vnwe3y7vssslk7tpsxegvq7faesy
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
@@ -45,7 +45,7 @@ protocols:
 - valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeihygetmlgnhawrbyswvpvv3wpztr2hlhxkljmohp4r7qcmvglpwdq
+- valory/abstract_round_abci:0.1.0:bafybeihgbc5geup3ljdfgyontr2p5e4myxjkthaplm5ei727uw2pawstcy
 behaviours:
   task_execution:
     args: {}
@@ -110,7 +110,7 @@ models:
     class_name: Params
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.1.0
+    version: ==2.2.1
   py-multibase:
     version: ==1.0.3
   py-multicodec:
