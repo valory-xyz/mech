@@ -123,7 +123,7 @@ jobs:
           gitleaks detect --report-format json --report-path leak_report -v
 
   test:
-    continue-on-error: True
+    continue-on-error: False
     needs:
       - lock_check
       - copyright_and_dependencies_check
@@ -198,6 +198,7 @@ jobs:
       - copyright_and_dependencies_check
       - linter_checks
       - scan
+      - test
     runs-on: ubuntu-22.04
     steps:
       - name: Fail if any required job failed or was cancelled
