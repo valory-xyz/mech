@@ -27,14 +27,14 @@ contracts: []
 protocols:
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeihgbc5geup3ljdfgyontr2p5e4myxjkthaplm5ei727uw2pawstcy
-- valory/registration_abci:0.1.0:bafybeib7midws7obgz34tqsebowa73z46pm34hhsssa3rjet2npp5ekvwm
-- valory/reset_pause_abci:0.1.0:bafybeiezqq76bdcrlgshyo2e544sm3u57amerpwla3sacosle5zivaij24
-- valory/task_submission_abci:0.1.0:bafybeiahccbebqxtbusxc5ispbzljbb7v3rberctimrv2gtvocebkgck5e
-- valory/termination_abci:0.1.0:bafybeigp6mrueymod7a7arxn2p5mvvz2klvhhda3pls32z4fyxibqjisqu
-- valory/transaction_settlement_abci:0.1.0:bafybeic6f4ujckiutqxueagohb5iv7kgzpamhuhiq7shn6fmiwbkt3cqny
-- valory/delivery_rate_abci:0.1.0:bafybeibheck73evaonbm5edhg5bfzgoqibpbd7yxeac2tgeswbisj7rmx4
-- valory/task_execution:0.1.0:bafybeieg3y4dmgq35s7woiigcik7lu6wfd7t5ekvdmzrpjsavlm65p7j4a
+- valory/abstract_round_abci:0.1.0:bafybeiesqybjt2d3cwazu5xurye7znnkidem2qhudfvjnaprbk6p5flfe4
+- valory/registration_abci:0.1.0:bafybeidywralavqvrmzxomdgnthngqfzhbpop6n23pwf67lg2p6ndvt3fy
+- valory/reset_pause_abci:0.1.0:bafybeiahbkc4gfcmcvifbs6dvhtcj6wtjr7bvvdxunhxxquglkv365lu3e
+- valory/task_submission_abci:0.1.0:bafybeig7hlq72uocs26kk2spfgnjrb2hqxzjdbyrqunuv226gdrmwhh35m
+- valory/termination_abci:0.1.0:bafybeic7wo6vp7ag2yhirxgftim6mjmo225v2lixfxuj5q6rdp7mj6ujqy
+- valory/transaction_settlement_abci:0.1.0:bafybeiemyjkxj2ifzjr5kubtebpyezocl33zxt7gwf7yongg6zlbfjilte
+- valory/delivery_rate_abci:0.1.0:bafybeiba5d2worrdxnzukyeyywiersijytfm4j43mijyqrshpddoum5aim
+- valory/task_execution:0.1.0:bafybeiddxqhz6czd3g6a7zd526xfbkj3gvr7oqdcrkltldnhjijg3xemui
 behaviours:
   main:
     args: {}
