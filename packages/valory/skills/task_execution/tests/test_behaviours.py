@@ -1546,10 +1546,44 @@ def test_send_message_registers_callback_and_deadline(
 # ---------------------------------------------------------------------------
 
 
-def test_handle_ipfs_error_sets_state(behaviour: Any) -> None:
-    """_handle_ipfs_error sets _ipfs_error_reason and _invalid_request."""
-    behaviour._handle_ipfs_error("some error detail")
-    assert "some error detail" in (behaviour._ipfs_error_reason or "")
+def test_handle_ipfs_error_non_timeout_sets_invalid(behaviour: Any) -> None:
+    """Non-timeout IPFS errors mark the request invalid on the first attempt."""
+    behaviour._handle_ipfs_error("IPFS API returned status 404")
+    assert "IPFS API returned status 404" in (behaviour._ipfs_error_reason or "")
+    assert behaviour._invalid_request is True
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "timed out",
+        "The read operation timed out",
+        "<urlopen error timed out>",
+        "TIMED OUT",
+        "Read operation Timed Out",
+    ],
+)
+def test_handle_ipfs_error_timeout_routes_to_retry(
+    behaviour: Any, monkeypatch: Any, reason: str
+) -> None:
+    """Timeout-class IPFS errors route through the retry machinery."""
+    behaviour._executing_task = {"requestId": 1, "request_delivery_rate": 100}
+    captured: Dict[str, Any] = {}
+
+    def fake_handle_timeout_task(error_reason: Any = None) -> None:
+        captured["called"] = True
+        captured["error_reason"] = error_reason
+
+    monkeypatch.setattr(behaviour, "_handle_timeout_task", fake_handle_timeout_task)
+    behaviour._handle_ipfs_error(reason)
+    assert captured.get("called") is True
+    assert reason in (captured.get("error_reason") or "")
+    assert behaviour._invalid_request is False
+
+
+def test_handle_ipfs_error_empty_reason_is_not_timeout(behaviour: Any) -> None:
+    """Empty reason is not treated as a timeout; falls through to invalid path."""
+    behaviour._handle_ipfs_error("")
     assert behaviour._invalid_request is True
 
 
@@ -1785,6 +1819,96 @@ def test_handle_timeout_task_limit_reached_calls_handle_done(
     )
     behaviour._handle_timeout_task()
     assert len(handle_done_calls) == 1
+
+
+def _setup_timeout_delivery_capture(
+    behaviour: Any,
+    monkeypatch: Any,
+    fake_dialogue: Any,
+    req_id: int,
+) -> list:
+    """Wire up a behaviour to capture the on-chain payload from a timeout delivery.
+
+    Sets _executing_task with enough fields for _handle_done_task to run
+    the full failure path, monkeypatches the IPFS store builder and
+    send_message to capture the stored payload, and returns the capture
+    list so the test can assert on the final response dict.
+
+    :param behaviour: the TaskExecutionBehaviour instance.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param fake_dialogue: dialogue stub to return from the fake store builder.
+    :param req_id: the requestId to seed.
+    :returns: list that will be populated with the parsed payload dict.
+    """
+    behaviour._executing_task = {
+        "requestId": req_id,
+        "requestIdWithNonce": f"{req_id}-nonce",
+        "contract_address": "0xmech",
+        "tool": "some_tool",
+        "model": "gpt-4o",
+        "request_delivery_rate": 100,
+    }
+    behaviour._tools_to_package_hash["some_tool"] = "QmHash"
+    behaviour._async_result = None
+    behaviour.tool_execution_start_time = time.perf_counter() - 1.0
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    stored_payloads: list = []
+
+    def capture_store(files: Dict[str, str], **k: Any) -> Tuple[object, Any]:
+        stored_payloads.append(files)
+        return object(), fake_dialogue
+
+    monkeypatch.setattr(behaviour, "_build_ipfs_store_file_req", capture_store)
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda msg, dlg, cb, error_cb=None: None,
+    )
+    return stored_payloads
+
+
+def test_handle_timeout_task_limit_reached_preserves_error_reason(
+    behaviour: Any, params_stub: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """Terminal on-chain result contains error_reason detail when limit reached."""
+    params_stub.request_id_to_num_timeouts[11] = 0
+    params_stub.timeout_limit = 1
+    stored = _setup_timeout_delivery_capture(behaviour, monkeypatch, fake_dialogue, 11)
+    detail = "Request data could not be retrieved from IPFS (detail: timed out)"
+    behaviour._handle_timeout_task(error_reason=detail)
+    assert len(stored) == 1
+    payload = json.loads(stored[0]["11"])
+    assert "Task timed out 1 times during execution." in payload["result"]
+    assert detail in payload["result"]
+
+
+def test_handle_timeout_task_limit_reached_preserves_preexisting_reason(
+    behaviour: Any, params_stub: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """Pre-existing _ipfs_error_reason is preserved into the on-chain result."""
+    params_stub.request_id_to_num_timeouts[12] = 0
+    params_stub.timeout_limit = 1
+    stored = _setup_timeout_delivery_capture(behaviour, monkeypatch, fake_dialogue, 12)
+    behaviour._ipfs_error_reason = "pre-existing reason"
+    behaviour._handle_timeout_task()
+    assert len(stored) == 1
+    payload = json.loads(stored[0]["12"])
+    assert "pre-existing reason" in payload["result"]
+
+
+def test_handle_timeout_task_limit_reached_no_reason_generic_message(
+    behaviour: Any, params_stub: Any, monkeypatch: Any, fake_dialogue: Any
+) -> None:
+    """With no reason set, on-chain result contains the generic timeout message."""
+    params_stub.request_id_to_num_timeouts[13] = 0
+    params_stub.timeout_limit = 1
+    stored = _setup_timeout_delivery_capture(behaviour, monkeypatch, fake_dialogue, 13)
+    behaviour._ipfs_error_reason = None
+    behaviour._handle_timeout_task()
+    assert len(stored) == 1
+    payload = json.loads(stored[0]["13"])
+    assert "Task timed out 1 times during execution." in payload["result"]
+    assert "Last detail:" not in payload["result"]
 
 
 # ---------------------------------------------------------------------------

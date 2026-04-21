@@ -750,11 +750,32 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _handle_ipfs_error(self, reason: str) -> None:
         """Handle an IPFS error reported by the handler.
 
+        Classify the error: a reason containing the substring "timed out"
+        is treated as a transient socket-level timeout from the IPFS
+        client and routed through :meth:`_handle_timeout_task`, so the
+        task is retried up to ``timeout_limit`` times before a terminal
+        error is delivered on-chain. Everything else (malformed content,
+        gateway HTTP errors, missing content) is a terminal failure and
+        marks the request invalid on the first attempt.
+
+        The "timed out" substring is the message forwarded verbatim by
+        ``aea_cli_ipfs.ipfs_client.TimeoutError``, which wraps the
+        underlying ``socket.timeout`` or ``urllib`` timeout. See
+        ``plugins/aea-cli-ipfs/aea_cli_ipfs/ipfs_client.py`` in open-aea
+        for the producing sites.
+
         :param reason: the error reason from the IPFS connection.
         """
-        self._ipfs_error_reason = (
+        full_reason = (
             f"Request data could not be retrieved from IPFS (detail: {reason})"
         )
+        if reason and "timed out" in reason.lower():
+            # Transient timeout: retry via the existing timeout machinery.
+            # Pass full_reason so terminal delivery (if timeout_limit is
+            # reached) reflects the IPFS detail.
+            self._handle_timeout_task(error_reason=full_reason)
+            return
+        self._ipfs_error_reason = full_reason
         self._invalid_request = True
 
     def _get_designated_marketplace_mech_address(self) -> str:
@@ -888,8 +909,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # create a new executor
         self._executor = ProcessPool(max_workers=1)
 
-    def _handle_timeout_task(self) -> None:
-        """Handle timeout tasks"""
+    def _handle_timeout_task(self, error_reason: Optional[str] = None) -> None:
+        """Handle timeout tasks.
+
+        :param error_reason: optional underlying error reason (e.g. an IPFS
+            timeout detail) to include in the terminal delivery when
+            ``timeout_limit`` has been reached. When provided, this takes
+            precedence over any previously set ``_ipfs_error_reason``.
+        :returns: None
+        """
+        # Preserve the reason across the reset below so that, if we end
+        # up delivering a terminal result due to timeout_limit, the
+        # message reflects the underlying cause instead of only the
+        # generic "timed out N times" string.
+        preserved_reason = error_reason or self._ipfs_error_reason
         self.params.in_flight_req = False
         self.params.is_cold_start = False
         self._request_handling_deadline = None
@@ -942,8 +975,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Task {req_id} has reached the timeout limit of{self.params.timeout_limit}. "
                 f"It won't be added to the end of the queue again."
             )
+            base_msg = (
+                f"Task timed out {self.params.timeout_limit} times during execution."
+            )
+            terminal_msg = (
+                f"{base_msg} Last detail: {preserved_reason}"
+                if preserved_reason
+                else f"{base_msg} "
+            )
+            # _handle_done_task uses _ipfs_error_reason as the "result"
+            # field of the on-chain response on the failure path.
+            self._ipfs_error_reason = terminal_msg
             task_result = (
-                f"Task timed out {self.params.timeout_limit} times during execution. ",
+                terminal_msg,
                 "",
                 None,
                 None,
