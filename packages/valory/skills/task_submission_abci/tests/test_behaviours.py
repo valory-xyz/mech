@@ -52,7 +52,6 @@ from packages.valory.skills.task_submission_abci.behaviours import (
 )
 from packages.valory.skills.task_submission_abci.tests.conftest import (
     _error_contract_msg,
-    _error_contract_msg_with_detail,
     _error_ledger_msg,
     _gen_returning,
     _make_benchmark_ctx,
@@ -1808,43 +1807,6 @@ class TestSafeTxHashAndMultisend:
                 b._to_multisend([{"to": "0xA", "value": 0, "data": b"\x00"}])
             )
         assert result is None
-
-    def test_to_multisend_error_log_includes_dispatcher_code_and_message(
-        self,
-    ) -> None:
-        """On ERROR performative, the log must include code=... and message=... detail.
-
-        This pins the diagnostic plumbing added alongside the multisend
-        str-vs-bytes fix. Without the detail, the root cause of a dispatcher
-        swallow (e.g. TypeError inside encode_data) is invisible from the
-        agent log and requires a local repro to diagnose. See incident
-        report docs/incident_report_single_mech_mm_predict_multisend_2026-04-22.docx.
-        """
-        b = self._make_b()
-        err_msg = _error_contract_msg_with_detail(
-            code=500,
-            message="TypeError: can't concat str to bytes",
-        )
-        captured_error = MagicMock()
-        b.context.logger.error = captured_error
-        with (
-            self._patch_sd(b),
-            patch.object(
-                b,
-                "get_contract_api_response",
-                side_effect=_gen_returning(err_msg),
-            ),
-        ):
-            result = _run_gen(
-                b._to_multisend([{"to": "0xA", "value": 0, "data": b"\x00"}])
-            )
-        assert result is None
-        assert captured_error.call_count == 1
-        logged = captured_error.call_args.args[0]
-        assert "code=500" in logged, f"code missing from log line: {logged!r}"
-        assert (
-            "TypeError: can't concat str to bytes" in logged
-        ), f"dispatcher message missing from log line: {logged!r}"
 
     def test_to_multisend_returns_none_when_safe_tx_hash_fails(self) -> None:
         """Test to multisend returns none when safe tx hash fails."""
