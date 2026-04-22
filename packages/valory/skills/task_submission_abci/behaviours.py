@@ -1407,7 +1407,7 @@ class TransactionPreparationBehaviour(
             self.context.logger.error(
                 f"Couldn't compile the multisend tx. "
                 f"Expected performative {ContractApiMessage.Performative.RAW_TRANSACTION.value}, "  # type: ignore
-                f"received {response.performative.value}."
+                f"received {response.performative.value}. Response: {response}"
             )
             return None
 
