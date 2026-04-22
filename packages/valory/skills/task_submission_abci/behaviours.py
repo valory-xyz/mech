@@ -1404,10 +1404,19 @@ class TransactionPreparationBehaviour(
             chain_id=self.params.default_chain_id,
         )
         if response.performative != ContractApiMessage.Performative.RAW_TRANSACTION:
+            error_detail = ""
+            if response.performative == ContractApiMessage.Performative.ERROR:
+                parts = []
+                if response.is_set("code"):
+                    parts.append(f"code={response.code}")
+                if response.is_set("message"):
+                    parts.append(f"message={response.message!r}")
+                if parts:
+                    error_detail = " " + " ".join(parts)
             self.context.logger.error(
                 f"Couldn't compile the multisend tx. "
                 f"Expected performative {ContractApiMessage.Performative.RAW_TRANSACTION.value}, "  # type: ignore
-                f"received {response.performative.value}."
+                f"received {response.performative.value}.{error_detail}"
             )
             return None
 

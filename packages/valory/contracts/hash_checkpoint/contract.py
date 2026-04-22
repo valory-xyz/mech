@@ -104,7 +104,7 @@ class HashCheckpointContract(Contract):
 
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi(abi_element_identifier="checkpoint", args=[data])
-        return {"data": data}
+        return {"data": bytes.fromhex(data[2:])}  # type: ignore
 
     @classmethod
     def get_latest_hash(

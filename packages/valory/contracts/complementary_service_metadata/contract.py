@@ -137,4 +137,4 @@ class ComplementaryServiceMetadata(Contract):
         data = contract_interface.encode_abi(
             abi_element_identifier="changeHash", args=[service_id, metadata_hash]
         )
-        return dict(data=data)
+        return dict(data=bytes.fromhex(data[2:]))

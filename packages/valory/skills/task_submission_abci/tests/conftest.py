@@ -215,6 +215,18 @@ def _error_contract_msg() -> MagicMock:
     return msg
 
 
+def _error_contract_msg_with_detail(
+    code: int = 500, message: str = "boom"
+) -> MagicMock:
+    """Return an ERROR MagicMock with explicit code + message, mimicking the ledger dispatcher."""
+    msg = MagicMock()
+    msg.performative = ContractApiMessage.Performative.ERROR
+    msg.code = code
+    msg.message = message
+    msg.is_set = MagicMock(side_effect=lambda key: key in {"code", "message"})
+    return msg
+
+
 def _raw_tx_contract_msg(body: Any = None) -> MagicMock:
     """Return a MagicMock with RAW_TRANSACTION performative."""
     msg = MagicMock()
