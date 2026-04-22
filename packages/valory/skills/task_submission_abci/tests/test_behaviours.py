@@ -26,7 +26,12 @@ from typing import Any, Callable, Dict, Generator, Optional, Tuple, Type
 from unittest.mock import MagicMock, patch
 
 import pytest
+from aea_ledger_ethereum import EthereumApi
 
+from packages.valory.contracts.complementary_service_metadata.contract import (
+    ComplementaryServiceMetadata,
+)
+from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
 from packages.valory.skills.task_submission_abci.behaviours import (
     DONE_TASKS,
@@ -3335,3 +3340,70 @@ class TestTransPrepContractErrors:
         with patch.object(b, "get_contract_api_response", side_effect=_side_effect):
             result = _run_gen(b._get_marketplace_tasks_deliver_data(marketplace_tasks))
         assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Contract-helper bytes-return invariant
+# ---------------------------------------------------------------------------
+
+
+class TestContractHelpersReturnBytes:
+    """Pin the bytes-return invariant on tx-building contract helpers.
+
+    Regression guard for the open-autonomy 0.21.18 refactor that removed the
+    HexBytes(data) coercion inside multisend.encode_data. Both helpers below
+    used to return the raw encode_abi str; the skill-level tests mock
+    get_contract_api_response at the dispatcher boundary and do not exercise
+    these helpers' real return shapes, so without this class a future revert
+    of bytes.fromhex(data[2:]) would not be caught by CI.
+
+    Lives here rather than under packages/valory/contracts/<name>/tests/
+    because first-party contracts do not have their own tests/ infrastructure
+    today; introducing it for only two contracts would establish a new
+    convention mid-repo.
+    """
+
+    _SAMPLE_ENCODE_ABI = "0x5b34eba0" + "ab" * 32
+
+    @staticmethod
+    def _mock_contract_instance() -> MagicMock:
+        instance = MagicMock()
+        instance.encode_abi.return_value = (
+            TestContractHelpersReturnBytes._SAMPLE_ENCODE_ABI
+        )
+        return instance
+
+    def test_hash_checkpoint_get_checkpoint_data_returns_bytes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """HashCheckpointContract.get_checkpoint_data must return data as bytes."""
+        monkeypatch.setattr(
+            HashCheckpointContract,
+            "get_instance",
+            classmethod(lambda cls, *_, **__: self._mock_contract_instance()),
+        )
+        result = HashCheckpointContract.get_checkpoint_data(
+            ledger_api=MagicMock(spec=EthereumApi),
+            contract_address="0x0000000000000000000000000000000000000001",
+            data=b"\xab" * 32,
+        )
+        assert isinstance(result["data"], bytes)
+        assert result["data"].hex() == self._SAMPLE_ENCODE_ABI[2:]
+
+    def test_complementary_service_metadata_get_update_hash_tx_data_returns_bytes(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """ComplementaryServiceMetadata.get_update_hash_tx_data must return data as bytes."""
+        monkeypatch.setattr(
+            ComplementaryServiceMetadata,
+            "get_instance",
+            classmethod(lambda cls, *_, **__: self._mock_contract_instance()),
+        )
+        result = ComplementaryServiceMetadata.get_update_hash_tx_data(
+            ledger_api=MagicMock(spec=EthereumApi),
+            contract_address="0x0000000000000000000000000000000000000002",
+            service_id=42,
+            metadata_hash=b"\xcd" * 32,
+        )
+        assert isinstance(result["data"], bytes)
+        assert result["data"].hex() == self._SAMPLE_ENCODE_ABI[2:]
