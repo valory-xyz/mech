@@ -25,8 +25,6 @@ import time
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
-from web3 import Web3
-from web3.types import TxReceipt
 from typing import Callable, cast
 from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
 from enum import Enum

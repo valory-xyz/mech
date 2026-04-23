@@ -28,14 +28,14 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/olas_mech:0.1.0:bafybeicge3yunhgsoe4uavapmieeqfpfbdebgk4qcm7z6i4ovrms4q4bkq
+- valory/olas_mech:0.1.0:bafybeifzqxc4zba76ddmrkzerkm3mnooc2g2wmhvyuzdmxz5bcozkc6zey
 - valory/mech_marketplace:0.1.0:bafybeifhsokyqboq6acuvysjrypuly3ozpsopgzlwmgp5qzojyfmbqm67u
 - valory/complementary_service_metadata:0.1.0:bafybeifnbc2b4ohnhxx7lt3kmgz7f2tb7746bmrxe7cfh2z36zvrmkabra
 - valory/gnosis_safe:0.1.0:bafybeihljnuo6jiyqfvow4vgxy5ih4eha2pjtguh7o6pabe24lbd6mwjaa
 - valory/multisend:0.1.0:bafybeic4534fd4axozjmykpstgjynxzpkpfvnvyjt7hz32ajfe3fmwhn7m
 - valory/service_registry:0.1.0:bafybeifuexvcj6w3j2lludzxi3rgu2nn2b3toyifxiy46hv726o2bxivjm
-- valory/hash_checkpoint:0.1.0:bafybeiejb5n3bsqiigjvoz624t75xzczlzpl5yfz6fmepcja3skinubpt4
-- valory/balance_tracker:0.1.0:bafybeicwyd2w5f56d5sswezj5q2dd5vnwe3y7vssslk7tpsxegvq7faesy
+- valory/hash_checkpoint:0.1.0:bafybeiawzbwb3w72i355tvlqvdf5nzuytaoy5bwuyh67d7oxf4z2w6islu
+- valory/balance_tracker:0.1.0:bafybeifzy2rgjeruqiehmcewu2yfvt3ktqe6th5lkxr6rnegswwvk4dham
 - valory/erc20:0.1.0:bafybeigjxwhx4li5hmyv3hrtatwq65gl4wihqysaq5pqlpmw5o4lymfv6y
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
@@ -44,7 +44,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiesqybjt2d3cwazu5xurye7znnkidem2qhudfvjnaprbk6p5flfe4
 - valory/transaction_settlement_abci:0.1.0:bafybeiemyjkxj2ifzjr5kubtebpyezocl33zxt7gwf7yongg6zlbfjilte
-- valory/task_execution:0.1.0:bafybeiddxqhz6czd3g6a7zd526xfbkj3gvr7oqdcrkltldnhjijg3xemui
+- valory/task_execution:0.1.0:bafybeiciq4njbumy33eyo66mqouvqzh5qjdh24xdqcdnjybgg4lfovwzv4
 behaviours:
   main:
     args: {}
@@ -181,8 +181,6 @@ models:
     args: {}
     class_name: TendermintDialogues
 dependencies:
-  web3:
-    version: <8,>=7.0.0
   py-multibase:
     version: ==1.0.3
   py-multicodec:
