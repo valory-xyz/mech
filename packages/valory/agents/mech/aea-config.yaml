@@ -15,15 +15,15 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 - valory/websocket_client:0.1.0:bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea
 contracts:
-- valory/olas_mech:0.1.0:bafybeicge3yunhgsoe4uavapmieeqfpfbdebgk4qcm7z6i4ovrms4q4bkq
+- valory/olas_mech:0.1.0:bafybeifzqxc4zba76ddmrkzerkm3mnooc2g2wmhvyuzdmxz5bcozkc6zey
 - valory/complementary_service_metadata:0.1.0:bafybeifnbc2b4ohnhxx7lt3kmgz7f2tb7746bmrxe7cfh2z36zvrmkabra
 - valory/gnosis_safe:0.1.0:bafybeihljnuo6jiyqfvow4vgxy5ih4eha2pjtguh7o6pabe24lbd6mwjaa
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeihpzvi2rxvdzujrqivnynsoqezklval6j3qeoxaitquktvwscqgra
-- valory/hash_checkpoint:0.1.0:bafybeiejb5n3bsqiigjvoz624t75xzczlzpl5yfz6fmepcja3skinubpt4
+- valory/hash_checkpoint:0.1.0:bafybeiawzbwb3w72i355tvlqvdf5nzuytaoy5bwuyh67d7oxf4z2w6islu
 - valory/multisend:0.1.0:bafybeic4534fd4axozjmykpstgjynxzpkpfvnvyjt7hz32ajfe3fmwhn7m
 - valory/service_registry:0.1.0:bafybeifuexvcj6w3j2lludzxi3rgu2nn2b3toyifxiy46hv726o2bxivjm
 - valory/mech_marketplace:0.1.0:bafybeifhsokyqboq6acuvysjrypuly3ozpsopgzlwmgp5qzojyfmbqm67u
-- valory/balance_tracker:0.1.0:bafybeicwyd2w5f56d5sswezj5q2dd5vnwe3y7vssslk7tpsxegvq7faesy
+- valory/balance_tracker:0.1.0:bafybeifzy2rgjeruqiehmcewu2yfvt3ktqe6th5lkxr6rnegswwvk4dham
 - valory/erc20:0.1.0:bafybeigjxwhx4li5hmyv3hrtatwq65gl4wihqysaq5pqlpmw5o4lymfv6y
 protocols:
 - open_aea/signing:1.0.0:bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye
@@ -39,16 +39,16 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeib5qjkpfsxjcur4asube6kctmy2xsrg2hzcele2tmvsstula4lt54
 - valory/abstract_round_abci:0.1.0:bafybeiesqybjt2d3cwazu5xurye7znnkidem2qhudfvjnaprbk6p5flfe4
-- valory/contract_subscription:0.1.0:bafybeibtcbtgm5ptzn6srfts3lxts5722sygmkypcknv5ocmydqwcvgeem
-- valory/mech_abci:0.1.0:bafybeicrwkf6aal56pevj3pdhdzo3jqxwlamasywqqsefj3qcnntpkdxtu
+- valory/contract_subscription:0.1.0:bafybeieb23kops6bm47gmbedmps4cakvda6wft6bfimyukun55dcvzgoxy
+- valory/mech_abci:0.1.0:bafybeigazp6qtygcltjjh6hhlw2ffb7vgaavoa3gm5uv3iffsv5gbmkv2q
 - valory/registration_abci:0.1.0:bafybeidywralavqvrmzxomdgnthngqfzhbpop6n23pwf67lg2p6ndvt3fy
 - valory/reset_pause_abci:0.1.0:bafybeiahbkc4gfcmcvifbs6dvhtcj6wtjr7bvvdxunhxxquglkv365lu3e
-- valory/delivery_rate_abci:0.1.0:bafybeiba5d2worrdxnzukyeyywiersijytfm4j43mijyqrshpddoum5aim
-- valory/task_execution:0.1.0:bafybeiddxqhz6czd3g6a7zd526xfbkj3gvr7oqdcrkltldnhjijg3xemui
-- valory/task_submission_abci:0.1.0:bafybeibviye7sfaocc5buy2biiinrzrgbtnplub2ueeivkykavrx53e2i4
+- valory/delivery_rate_abci:0.1.0:bafybeifthsx7lomlgv6zura6ajrvupvzh5nt2a7ceg7ero5pwomhae2ecy
+- valory/task_execution:0.1.0:bafybeiciq4njbumy33eyo66mqouvqzh5qjdh24xdqcdnjybgg4lfovwzv4
+- valory/task_submission_abci:0.1.0:bafybeicxbqkyr6decpjkq255uhlmjrahkxuq3lg42a5635nhlfiy6zimku
 - valory/termination_abci:0.1.0:bafybeic7wo6vp7ag2yhirxgftim6mjmo225v2lixfxuj5q6rdp7mj6ujqy
 - valory/transaction_settlement_abci:0.1.0:bafybeiemyjkxj2ifzjr5kubtebpyezocl33zxt7gwf7yongg6zlbfjilte
-- valory/websocket_client:0.1.0:bafybeie63j65ffblz6g6oiaynjpz4ae5mgyjz2w6o5ovqitzdbnvqzlhzu
+- valory/websocket_client:0.1.0:bafybeiadglkwaznvyvawunacrwg5wb54ekwnumzujnsg2uiu2i4vtoiwpu
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -83,26 +83,14 @@ dependencies:
     version: <4.0.0,>=3.8.5
   asn1crypto:
     version: <1.5.0,>=1.4.0
-  attrs:
-    version: ==25.4.0
   certifi:
     version: ==2026.2.25
   ecdsa:
     version: '>=0.15'
-  eth-abi:
-    version: ==5.2.0
-  eth-utils:
-    version: ==5.3.0
-  eth_typing:
-    version: ==5.2.1
   grpcio:
     version: ==1.78.0
-  hexbytes:
-    version: ==1.3.1
   hypothesis:
     version: ==6.151.9
-  ipfshttpclient:
-    version: ==0.8.0a2
   multidict:
     version: ==6.7.1
   open-aea-cli-ipfs:
@@ -117,42 +105,30 @@ dependencies:
     version: ==0.22.0
   openapi-spec-validator:
     version: <0.8.0,>=0.7.0
-  packaging:
-    version: ==26
   pebble:
     version: ==5.1.3
+  prometheus_client:
+    version: ==0.23.1
   protobuf:
-    version: <6,>=5
+    version: <7,>=5
   py-ecc:
-    version: ==8.0.0
-  py-eth-sig-utils:
-    version: ==0.4.0
+    version: <10,>=8
   py-multibase:
     version: ==1.0.3
   py-multicodec:
     version: ==0.2.1
-  pycryptodome:
-    version: ==3.20.0
   pytest:
     version: <10,>=8.2
   pytest-asyncio:
     version: ==1.3.0
-  pytz:
-    version: ==2022.2.1
   PyYAML:
     version: ==6.0.1
   requests:
     version: ==2.32.5
-  typing_extensions:
-    version: <=4.15.0,>=3.10.0.2
   web3:
     version: <8,>=7.0.0
   websocket_client:
     version: <1,>=0.32.0
-  werkzeug:
-    version: ==3.1.6
-  prometheus_client:
-    version: ==0.23.1
 customs: []
 default_connection: null
 ---
