@@ -15,7 +15,7 @@ connections:
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 - valory/websocket_client:0.1.0:bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea
 contracts:
-- valory/olas_mech:0.1.0:bafybeifzqxc4zba76ddmrkzerkm3mnooc2g2wmhvyuzdmxz5bcozkc6zey
+- valory/olas_mech:0.1.0:bafybeic7tj2e4xit74p6dcgmi5qjoqa4sjgybcd2fb6m6n6t2tpsllgajq
 - valory/complementary_service_metadata:0.1.0:bafybeifnbc2b4ohnhxx7lt3kmgz7f2tb7746bmrxe7cfh2z36zvrmkabra
 - valory/gnosis_safe:0.1.0:bafybeihljnuo6jiyqfvow4vgxy5ih4eha2pjtguh7o6pabe24lbd6mwjaa
 - valory/gnosis_safe_proxy_factory:0.1.0:bafybeihpzvi2rxvdzujrqivnynsoqezklval6j3qeoxaitquktvwscqgra
@@ -39,16 +39,16 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeib5qjkpfsxjcur4asube6kctmy2xsrg2hzcele2tmvsstula4lt54
 - valory/abstract_round_abci:0.1.0:bafybeiesqybjt2d3cwazu5xurye7znnkidem2qhudfvjnaprbk6p5flfe4
-- valory/contract_subscription:0.1.0:bafybeieb23kops6bm47gmbedmps4cakvda6wft6bfimyukun55dcvzgoxy
-- valory/mech_abci:0.1.0:bafybeigazp6qtygcltjjh6hhlw2ffb7vgaavoa3gm5uv3iffsv5gbmkv2q
+- valory/contract_subscription:0.1.0:bafybeifgrorszj2tvgkyvx3q3uj4dy4v4yz5v6c5qkndicace7duai2bxm
+- valory/mech_abci:0.1.0:bafybeidw4kjbngtbtrlw4impkdj2qs2w6a5x434lp7km3rc27flwtmg6ru
 - valory/registration_abci:0.1.0:bafybeidywralavqvrmzxomdgnthngqfzhbpop6n23pwf67lg2p6ndvt3fy
 - valory/reset_pause_abci:0.1.0:bafybeiahbkc4gfcmcvifbs6dvhtcj6wtjr7bvvdxunhxxquglkv365lu3e
-- valory/delivery_rate_abci:0.1.0:bafybeifthsx7lomlgv6zura6ajrvupvzh5nt2a7ceg7ero5pwomhae2ecy
-- valory/task_execution:0.1.0:bafybeiciq4njbumy33eyo66mqouvqzh5qjdh24xdqcdnjybgg4lfovwzv4
-- valory/task_submission_abci:0.1.0:bafybeicxbqkyr6decpjkq255uhlmjrahkxuq3lg42a5635nhlfiy6zimku
+- valory/delivery_rate_abci:0.1.0:bafybeiaxlsvb4g3bimhgm3twhxkahg2gn3ptaqwyq62iw2l2dfvjf576ki
+- valory/task_execution:0.1.0:bafybeiekvtrmpdpb5l33payhkatvydxzazt5cwd27anzoumg66j2ltyhcq
+- valory/task_submission_abci:0.1.0:bafybeia6sqz6x6f4furdbm7ipgnriz5egh24cqri6qpn64arehuptil5vy
 - valory/termination_abci:0.1.0:bafybeic7wo6vp7ag2yhirxgftim6mjmo225v2lixfxuj5q6rdp7mj6ujqy
 - valory/transaction_settlement_abci:0.1.0:bafybeiemyjkxj2ifzjr5kubtebpyezocl33zxt7gwf7yongg6zlbfjilte
-- valory/websocket_client:0.1.0:bafybeiadglkwaznvyvawunacrwg5wb54ekwnumzujnsg2uiu2i4vtoiwpu
+- valory/websocket_client:0.1.0:bafybeieksbce3beqrgbkb7a7yax6ccmv7o2ouy7o6lxrfn6gxqa5k4ybhy
 default_ledger: ethereum
 required_ledgers:
 - ethereum
@@ -113,10 +113,6 @@ dependencies:
     version: <7,>=5
   py-ecc:
     version: <10,>=8
-  py-multibase:
-    version: ==1.0.3
-  py-multicodec:
-    version: ==0.2.1
   pytest:
     version: <10,>=8.2
   pytest-asyncio:

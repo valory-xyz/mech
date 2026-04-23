@@ -20,7 +20,7 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/olas_mech:0.1.0:bafybeifzqxc4zba76ddmrkzerkm3mnooc2g2wmhvyuzdmxz5bcozkc6zey
+- valory/olas_mech:0.1.0:bafybeic7tj2e4xit74p6dcgmi5qjoqa4sjgybcd2fb6m6n6t2tpsllgajq
 - valory/gnosis_safe:0.1.0:bafybeihljnuo6jiyqfvow4vgxy5ih4eha2pjtguh7o6pabe24lbd6mwjaa
 - valory/multisend:0.1.0:bafybeic4534fd4axozjmykpstgjynxzpkpfvnvyjt7hz32ajfe3fmwhn7m
 protocols:
@@ -157,9 +157,5 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
-dependencies:
-  py-multibase:
-    version: ==1.0.3
-  py-multicodec:
-    version: ==0.2.1
+dependencies: {}
 is_abstract: true

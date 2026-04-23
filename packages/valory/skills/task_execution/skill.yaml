@@ -21,13 +21,13 @@ fingerprint:
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
   tests/utils/test_benchmarks.py: bafybeifhadhmpwhulgvxm3wgodwstnw3v2lq6uetntww3ia5r7trirfecm
   tests/utils/test_cost_calculation.py: bafybeiglkqnmurf6ner2wy2k6vy4zmfehfgzh2ctzn4ae2t3qhoaqs7he4
-  tests/utils/test_ipfs.py: bafybeie36a2x3n5cdbjptynjehvba4pjbjyco2ihs22wfariftykalqtz4
+  tests/utils/test_ipfs.py: bafybeig7ew26yfre64eajxd2cxl2b6w4jyit5tlr62q6hjcwhlvylrwesq
   tests/utils/test_task.py: bafybeigdfi37m5taw6jecd7t2bg54ctcv4u3js5u3xd2lyckoazy4efpv4
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeih75sdickbk25zvduf2jolikmsfmh6c2rmju5lrdkhyhipmg23u2y
   utils/benchmarks.py: bafybeihymvrz2d6wwyshr44e5kam3bmifjtagmasb6tdsqlujdscl2pnh4
   utils/cost_calculation.py: bafybeic7siuvsglg7txjpzidskelw32r7lfphupzzrlnir6dbw3wng5v6u
-  utils/ipfs.py: bafybeidnea53cncr62gvv5bnhadorlgja7ujmobxcd66c3ueg4ozwfo344
+  utils/ipfs.py: bafybeiagbhhgvyo7mjdqvs5wrxy27bpzydd4aim7ntspv2ebygt7ewitra
   utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
 fingerprint_ignore_patterns: []
 connections:
@@ -35,7 +35,7 @@ connections:
 - valory/ipfs:0.1.0:bafybeic4cubtc6jbejq7yt7fjlibuixofb6wqpfoc5vt2h4wpaahi5y5bi
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 contracts:
-- valory/olas_mech:0.1.0:bafybeifzqxc4zba76ddmrkzerkm3mnooc2g2wmhvyuzdmxz5bcozkc6zey
+- valory/olas_mech:0.1.0:bafybeic7tj2e4xit74p6dcgmi5qjoqa4sjgybcd2fb6m6n6t2tpsllgajq
 - valory/mech_marketplace:0.1.0:bafybeifhsokyqboq6acuvysjrypuly3ozpsopgzlwmgp5qzojyfmbqm67u
 - valory/balance_tracker:0.1.0:bafybeifzy2rgjeruqiehmcewu2yfvt3ktqe6th5lkxr6rnegswwvk4dham
 protocols:
@@ -111,10 +111,6 @@ models:
 dependencies:
   open-aea-ledger-ethereum:
     version: ==2.2.1
-  py-multibase:
-    version: ==1.0.3
-  py-multicodec:
-    version: ==0.2.1
   PyYAML:
     version: ==6.0.1
   prometheus_client:

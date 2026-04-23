@@ -22,12 +22,13 @@
 
 import json
 import time
+from enum import Enum
+from typing import Callable, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
-from typing import Callable, cast
+
 from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
-from enum import Enum
 
 JOB_QUEUE = "pending_tasks"
 SUBSCRIPTION_ID = "subscription_id"

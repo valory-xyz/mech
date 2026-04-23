@@ -40,6 +40,12 @@ _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
 )
 
+# Block-identifier shapes actually used by callers: an int block number or the
+# literal strings "earliest"/"latest". Web3 accepts both as-is in its filter
+# dicts; a dedicated local alias keeps the public signatures readable without
+# reintroducing the web3.types import.
+BlockIdentifier = Union[int, str]
+
 PAYMENT_TYPE_NATIVE_NVM = (
     "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"  # nosec
 )
@@ -296,8 +302,8 @@ class OlasMechContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
-        from_block: Union[int, str] = "earliest",
-        to_block: Union[int, str] = "latest",
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
     ) -> JSONLike:
         """Get the Request events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -331,8 +337,8 @@ class OlasMechContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
-        from_block: Union[int, str] = "earliest",
-        to_block: Union[int, str] = "latest",
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
     ) -> JSONLike:
         """Get the Deliver events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -378,8 +384,8 @@ class OlasMechContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
-        from_block: Union[int, str] = "earliest",
-        to_block: Union[int, str] = "latest",
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
         max_block_window: int = 1000,
         **kwargs: Any,
     ) -> JSONLike:
@@ -417,7 +423,7 @@ class OlasMechContract(Contract):
         ledger_api: LedgerApi,
         contract_address: str,
         contract_addresses: List[str],
-        from_block: Union[int, str] = "earliest",
+        from_block: BlockIdentifier = "earliest",
         max_block_window: int = 1000,
         **kwargs: Any,
     ) -> JSONLike:
@@ -572,8 +578,8 @@ class OlasMechContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
-        from_block: Union[int, str] = "earliest",
-        to_block: Union[int, str] = "latest",
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
     ) -> JSONLike:
         """Get the Request events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -603,8 +609,8 @@ class OlasMechContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
-        from_block: Union[int, str] = "earliest",
-        to_block: Union[int, str] = "latest",
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
     ) -> JSONLike:
         """Get the Deliver events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
@@ -635,8 +641,8 @@ class OlasMechContract(Contract):
         ledger_api: LedgerApi,
         contract_address: str,
         marketplace_address: str,
-        from_block: Union[int, str] = "earliest",
-        to_block: Union[int, str] = "latest",
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
         max_block_window: int = 1000,
         **kwargs: Any,
     ) -> JSONLike:
@@ -745,8 +751,8 @@ class OlasMechContract(Contract):
         ledger_api: EthereumApi,
         event: Any,
         address: str,
-        from_block: Union[int, str] = "earliest",
-        to_block: Union[int, str] = "latest",
+        from_block: BlockIdentifier = "earliest",
+        to_block: BlockIdentifier = "latest",
     ) -> List:
         """Helper method to extract the events.
 
