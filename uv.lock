@@ -212,15 +212,6 @@ wheels = [
 ]
 
 [[package]]
-name = "base58"
-version = "2.1.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/7f/45/8ae61209bb9015f516102fa559a2914178da1d5868428bd86a1b4421141d/base58-2.1.1.tar.gz", hash = "sha256:c5d0cb3f5b6e81e8e35da5754388ddcc6d0d14b6c6a132cb93d69ed580a7278c", size = 6528, upload-time = "2021-10-30T22:12:17.858Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/4a/45/ec96b29162a402fc4c1c5512d114d7b3787b9d1c2ec241d9568b4816ee23/base58-2.1.1-py3-none-any.whl", hash = "sha256:11a36f4d3ce51dfc1043f3218591ac4eb1ceb172919cebe05b52a5bcc8d245c2", size = 5621, upload-time = "2021-10-30T22:12:16.658Z" },
-]
-
-[[package]]
 name = "bcrypt"
 version = "5.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1428,19 +1419,6 @@ wheels = [
 ]
 
 [[package]]
-name = "ipfshttpclient"
-version = "0.8.0a2"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "multiaddr" },
-    { name = "requests" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/82/06/afdf32558638f873ae1b63803729bb0fb15a8b6c805aed995c49b28db2e8/ipfshttpclient-0.8.0a2.tar.gz", hash = "sha256:0d80e95ee60b02c7d414e79bf81a36fc3c8fbab74265475c52f70b2620812135", size = 113509, upload-time = "2021-05-30T18:06:03.884Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/a0/ba/053527fbf8b3d75df19c8a6309f1f839c8ee721e4e36cfd966a0c83f6394/ipfshttpclient-0.8.0a2-py3-none-any.whl", hash = "sha256:ce6bac0e3963c4ced74d7eb6978125362bb05bbe219088ca48f369ce14d3cc39", size = 82564, upload-time = "2021-05-30T18:01:09.001Z" },
-]
-
-[[package]]
 name = "isodate"
 version = "0.7.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1628,17 +1606,10 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "asn1crypto" },
-    { name = "attrs" },
     { name = "certifi" },
     { name = "ecdsa" },
-    { name = "eth-abi" },
-    { name = "eth-typing" },
-    { name = "eth-utils" },
     { name = "grpcio" },
-    { name = "hexbytes" },
     { name = "hypothesis" },
-    { name = "ipfshttpclient" },
-    { name = "multiaddr" },
     { name = "multidict" },
     { name = "open-aea-cli-ipfs" },
     { name = "open-aea-helpers" },
@@ -1649,26 +1620,18 @@ dependencies = [
     { name = "openai" },
     { name = "openapi-core" },
     { name = "openapi-spec-validator" },
-    { name = "packaging" },
     { name = "pebble" },
     { name = "pip" },
     { name = "prometheus-client" },
-    { name = "protobuf" },
     { name = "py-ecc" },
-    { name = "py-eth-sig-utils" },
     { name = "py-multibase" },
     { name = "py-multicodec" },
-    { name = "pycryptodome" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "pytz" },
     { name = "pyyaml" },
     { name = "requests" },
-    { name = "toml" },
-    { name = "typing-extensions" },
     { name = "web3" },
     { name = "websocket-client" },
-    { name = "werkzeug" },
 ]
 
 [package.dev-dependencies]
@@ -1681,17 +1644,10 @@ dev = [
 requires-dist = [
     { name = "aiohttp", specifier = ">=3.8.5,<4.0.0" },
     { name = "asn1crypto", specifier = ">=1.4.0,<1.5.0" },
-    { name = "attrs", specifier = "==25.4.0" },
     { name = "certifi", specifier = "==2026.2.25" },
     { name = "ecdsa", specifier = ">=0.15" },
-    { name = "eth-abi", specifier = "==5.2.0" },
-    { name = "eth-typing", specifier = "==5.2.1" },
-    { name = "eth-utils", specifier = "==5.3.0" },
     { name = "grpcio", specifier = "==1.78.0" },
-    { name = "hexbytes", specifier = "==1.3.1" },
     { name = "hypothesis", specifier = "==6.21.6" },
-    { name = "ipfshttpclient", specifier = "==0.8.0a2" },
-    { name = "multiaddr", specifier = "==0.0.9" },
     { name = "multidict", specifier = "==6.7.1" },
     { name = "open-aea-cli-ipfs", specifier = "==2.2.1" },
     { name = "open-aea-helpers", specifier = "==0.21.19" },
@@ -1702,27 +1658,19 @@ requires-dist = [
     { name = "openai", specifier = "==1.30.2" },
     { name = "openapi-core", specifier = "==0.22.0" },
     { name = "openapi-spec-validator", specifier = ">=0.7.0,<0.8.0" },
-    { name = "packaging", specifier = "==26" },
     { name = "pebble", specifier = "==5.1.3" },
     { name = "pip", specifier = ">=24.0" },
     { name = "prometheus-client", specifier = "==0.23.1" },
     { name = "prometheus-client", specifier = ">=0.23.1,<0.24" },
-    { name = "protobuf", specifier = ">=5,<6" },
     { name = "py-ecc", specifier = "==8.0.0" },
-    { name = "py-eth-sig-utils", specifier = "==0.4.0" },
     { name = "py-multibase", specifier = "==1.0.3" },
     { name = "py-multicodec", specifier = "==0.2.1" },
-    { name = "pycryptodome", specifier = "==3.20.0" },
     { name = "pytest", specifier = ">=8.2,<10" },
     { name = "pytest-asyncio", specifier = "==1.3.0" },
-    { name = "pytz", specifier = "==2022.2.1" },
     { name = "pyyaml", specifier = "==6.0.1" },
     { name = "requests", specifier = "==2.32.5" },
-    { name = "toml", specifier = "==0.10.2" },
-    { name = "typing-extensions", specifier = ">=3.10.0.2,<=4.15.0" },
     { name = "web3", specifier = ">=7.0.0,<8" },
     { name = "websocket-client", specifier = ">=0.32.0,<1" },
-    { name = "werkzeug", specifier = "==3.1.6" },
 ]
 
 [package.metadata.requires-dev]
@@ -1746,21 +1694,6 @@ version = "1.0"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/f9/4f/cb781d0ac5d079adabc77dc4f0bc99fc81c390029bd33c6e70552139e762/morphys-1.0-py2.py3-none-any.whl", hash = "sha256:76d6dbaa4d65f597e59d332c81da786d83e4669387b9b2a750cfec74e7beec20", size = 5618, upload-time = "2017-01-10T20:08:56.872Z" },
-]
-
-[[package]]
-name = "multiaddr"
-version = "0.0.9"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "base58" },
-    { name = "netaddr" },
-    { name = "six" },
-    { name = "varint" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/12/f4/fa5353022ad8e0fd364bfa8b474f9562c36ce1305fad31fe52b849e30795/multiaddr-0.0.9.tar.gz", hash = "sha256:30b2695189edc3d5b90f1c303abb8f02d963a3a4edf2e7178b975eb417ab0ecf", size = 24726, upload-time = "2019-12-23T07:06:21.146Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/51/59/df732566d951c33f00a4022fc5bf9c5d1661b1c2cdaf56e75a1a5fa8f829/multiaddr-0.0.9-py2.py3-none-any.whl", hash = "sha256:5c0f862cbcf19aada2a899f80ef896ddb2e85614e0c8f04dd287c06c69dac95b", size = 16281, upload-time = "2019-12-23T07:06:18.915Z" },
 ]
 
 [[package]]
@@ -1899,15 +1832,6 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/0c/f7/addf1087b860ac60e6f382240f64fb99f8bfb532bb06f7c542b83c29ca61/multidict-6.7.1-cp314-cp314t-win_amd64.whl", hash = "sha256:497bde6223c212ba11d462853cfa4f0ae6ef97465033e7dc9940cdb3ab5b48e5", size = 53542, upload-time = "2026-01-26T02:46:08.809Z" },
     { url = "https://files.pythonhosted.org/packages/4c/81/4629d0aa32302ef7b2ec65c75a728cc5ff4fa410c50096174c1632e70b3e/multidict-6.7.1-cp314-cp314t-win_arm64.whl", hash = "sha256:2bbd113e0d4af5db41d5ebfe9ccaff89de2120578164f86a5d17d5a576d1e5b2", size = 44719, upload-time = "2026-01-26T02:46:11.146Z" },
     { url = "https://files.pythonhosted.org/packages/81/08/7036c080d7117f28a4af526d794aab6a84463126db031b007717c1a6676e/multidict-6.7.1-py3-none-any.whl", hash = "sha256:55d97cc6dae627efa6a6e548885712d4864b81110ac76fa4e534c03819fa4a56", size = 12319, upload-time = "2026-01-26T02:46:44.004Z" },
-]
-
-[[package]]
-name = "netaddr"
-version = "1.3.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/54/90/188b2a69654f27b221fba92fda7217778208532c962509e959a9cee5229d/netaddr-1.3.0.tar.gz", hash = "sha256:5c3c3d9895b551b763779ba7db7a03487dc1f8e3b385af819af341ae9ef6e48a", size = 2260504, upload-time = "2024-05-28T21:30:37.743Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/cc/f4fe2c7ce68b92cbf5b2d379ca366e1edae38cccaad00f69f529b460c3ef/netaddr-1.3.0-py3-none-any.whl", hash = "sha256:c2c6a8ebe5554ce33b7d5b3a306b71bbb373e000bbbf2350dd5213cc56e3dbbe", size = 2262023, upload-time = "2024-05-28T21:30:34.191Z" },
 ]
 
 [[package]]
@@ -2317,21 +2241,6 @@ wheels = [
 ]
 
 [[package]]
-name = "py-eth-sig-utils"
-version = "0.4.0"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "eth-abi" },
-    { name = "py-ecc" },
-    { name = "pycryptodome" },
-    { name = "rlp" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/be/3a/39ccef3364026226cddb01ad201d2fee5a9591864fdb4ed6dc1077d6d9a0/py_eth_sig_utils-0.4.0.tar.gz", hash = "sha256:bdf76b06677a43eba42e29ddebe6832bfbdda4c09a6b171d0de318e5a06992ad", size = 10345, upload-time = "2020-01-13T14:44:15.672Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/f3/5e/c8104c8fba709014af9fb230ed9d9e33665dc0a9248aa733a694bf421543/py_eth_sig_utils-0.4.0-py3-none-any.whl", hash = "sha256:8f2fe9b8d3c475bfca3b3bb901f6ef79e42b7b4abcd00ad5de5d483fff8359e9", size = 11637, upload-time = "2020-01-13T14:44:14.512Z" },
-]
-
-[[package]]
 name = "py-multibase"
 version = "1.0.3"
 source = { registry = "https://pypi.org/simple" }
@@ -2682,15 +2591,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/b9/88/815e53084c5079a59df912825a279f41dd2e0df82281770eadc732f5352c/python_discovery-1.2.1.tar.gz", hash = "sha256:180c4d114bff1c32462537eac5d6a332b768242b76b69c0259c7d14b1b680c9e", size = 58457, upload-time = "2026-03-26T22:30:44.496Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/67/0f/019d3949a40280f6193b62bc010177d4ce702d0fce424322286488569cd3/python_discovery-1.2.1-py3-none-any.whl", hash = "sha256:b6a957b24c1cd79252484d3566d1b49527581d46e789aaf43181005e56201502", size = 31674, upload-time = "2026-03-26T22:30:43.396Z" },
-]
-
-[[package]]
-name = "pytz"
-version = "2022.2.1"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/24/0c/401283bb1499768e33ddd2e1a35817c775405c1f047a9dc088a29ce2ea5d/pytz-2022.2.1.tar.gz", hash = "sha256:cea221417204f2d1a2aa03ddae3e867921971d0d76f14d87abb4414415bbdcf5", size = 316105, upload-time = "2022-08-13T02:07:59.396Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/d5/50/54451e88e3da4616286029a3a17fc377de817f66a0f50e1faaee90161724/pytz-2022.2.1-py2.py3-none-any.whl", hash = "sha256:220f481bdafa09c3955dfbdddb7b57780e9a94f5127e35456a48589b9e0c0197", size = 500564, upload-time = "2022-08-13T02:07:57.135Z" },
 ]
 
 [[package]]
@@ -3085,15 +2985,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/e8/c4/ba2f8066cceb6f23394729afe52f3bf7adec04bf9ed2c820b39e19299111/sortedcontainers-2.4.0.tar.gz", hash = "sha256:25caa5a06cc30b6b83d11423433f65d1f9d76c4c6a0c90e3379eaa43b9bfdb88", size = 30594, upload-time = "2021-05-16T22:03:42.897Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/32/46/9cb0e58b2deb7f82b84065f37f3bffeb12413f947f9388e4cac22c4621ce/sortedcontainers-2.4.0-py2.py3-none-any.whl", hash = "sha256:a163dcaede0f1c021485e957a39245190e74249897e2ae4b2aa38595db237ee0", size = 29575, upload-time = "2021-05-16T22:03:41.177Z" },
-]
-
-[[package]]
-name = "toml"
-version = "0.10.2"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/be/ba/1f744cdc819428fc6b5084ec34d9b30660f6f9daaf70eead706e3203ec3c/toml-0.10.2.tar.gz", hash = "sha256:b3bda1d108d5dd99f4a20d24d9c348e91c4db7ab1b749200bded2f839ccbe68f", size = 22253, upload-time = "2020-11-01T01:40:22.204Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/6f/7120676b6d73228c96e17f1f794d8ab046fc910d781c8d151120c3f1569e/toml-0.10.2-py2.py3-none-any.whl", hash = "sha256:806143ae5bfb6a3c6e736a764057db0e6a0e05e338b5630894a5f779cabb4f9b", size = 16588, upload-time = "2020-11-01T01:40:20.672Z" },
 ]
 
 [[package]]
