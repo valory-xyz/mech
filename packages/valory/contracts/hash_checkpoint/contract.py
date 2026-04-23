@@ -18,15 +18,13 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the hash checkpoint contract definition."""
-from enum import Enum
-from typing import Any, Dict, List, cast
+from typing import Any, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
-from web3.types import BlockIdentifier, TxReceipt
 
 
 class HashCheckpointContract(Contract):

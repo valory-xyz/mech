@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihlplpj6vl7iovtja5zzrhz6gm2ixtvvhmxgbnvpola3kkj2ma7uq
   build/AgentMech.json: bafybeigtikt7m5nyhlsxscgfciejkfvot56a7gbwe2og6dziwzvgkvo7hq
-  contract.py: bafybeicwripyjpop5havewggnshv742hskjgcssiq44uxrjlokq2hfbuxy
+  contract.py: bafybeidesosiempdbq3ynuglgphws7ybzzoveaoekbc7pmxx6qlpue56ue
 fingerprint_ignore_patterns: []
 class_name: OlasMechContract
 contract_interface_paths:
@@ -16,13 +16,5 @@ contract_interface_paths:
 dependencies:
   open-aea-ledger-ethereum:
     version: ==2.2.1
-  web3:
-    version: <8,>=7.0.0
-  eth-abi:
-    version: ==5.2.0
-  eth-utils:
-    version: ==5.3.0
-  hexbytes: {}
-  eth_typing: {}
 contracts:
 - valory/mech_marketplace:0.1.0:bafybeifhsokyqboq6acuvysjrypuly3ozpsopgzlwmgp5qzojyfmbqm67u
