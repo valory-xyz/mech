@@ -7,14 +7,14 @@ description: An abci skill that implements logic for updating the delivery rates
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeih2phhvtx53qmheegfvpirkdyo7jnrtvm3wvln22tdg63zg3vg4xa
+  __init__.py: bafybeiduvkoamzbidgwmhsopns4hcynljp65nnaj5qwfj5wcqk72hd36mu
   behaviours.py: bafybeia3tphit7qu5bznz5dphkzo4qcgo3u3a6izcalozbdva3v2wg2yzu
-  dialogues.py: bafybeihivlcez2nongmmtj5frrv6mlejayh4g7tbihnjbnbjc4xpg3ulxy
+  dialogues.py: bafybeihu6i2mjaznhiisafriktjgu752q2lj74o3firmumt4tnjwfebjf4
   fsm_specification.yaml: bafybeifurkk2plflg3p5rgh7bn3nf2z3tf6pamnha76lvz7vfmu36gpony
-  handlers.py: bafybeihu7vlfwnsammubxfkfkzf57cym3caxj7o7f4lm5rd5rix3yufe4i
-  models.py: bafybeifaxz3ev3xxlxv6iblvu53ykim5dqyatgtzzfgtked7euvp4rhh44
+  handlers.py: bafybeibdgriykww5b5doshykjwohvqmjy2sotdwrk3y7i4ts246a4unwy4
+  models.py: bafybeibs5y5iqfhdzpkinkbr4zripwfxszfkt4p4mjf62r4yy226v5tmx4
   payloads.py: bafybeifpjamx7ii5vh25vbqpiw4xdx7rnphh5xbbsrs6dxpovhjkhgfuq4
-  rounds.py: bafybeicboa6uzgisrkeernrtae3y6u6b546r5ayloxnbcgwenidolsne6u
+  rounds.py: bafybeicmijjylf7mvgejkp5d7fyen6jfttmrc2wz4yf4e2ovs2vwhwg224
   tests/__init__.py: bafybeih37qbhmo2pojtefignkuuhnbrkho5tdy3zchprgiynzpijqqbhui
   tests/test_behaviours.py: bafybeibagrsjmrr6w5jwhykgps2dqmnct55q7udfkuymo375wf4v6m66ke
 fingerprint_ignore_patterns: []
