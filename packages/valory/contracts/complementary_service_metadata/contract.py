@@ -19,13 +19,12 @@
 
 """This module contains the class to connect to the ComplementaryServiceMetadata contract."""
 
-from typing import Any, Optional, Dict
+from typing import Any, Dict, Optional
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
-
 
 PUBLIC_ID = PublicId.from_str("valory/complementary_service_metadata:0.1.0")
 

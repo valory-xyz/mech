@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigim3df7lcxmr4gjugo73fyrwfkkpll7jykgjp7nij6ugbkc7igyy
   build/BalanceTracker.json: bafybeide7fhlz2x56wiroancnk4n5grgl2wginv52ybhg5bsgubcokw3yu
-  contract.py: bafybeieq3neqdfxuvbthq5yzixauer55f4tyzydwp2f3ohgm2frc2zdzqi
+  contract.py: bafybeigmh3gtqsixhrfa735gtuzrem77hluq76ekbxa2mxwfv6cfmo5yvm
 fingerprint_ignore_patterns: []
 class_name: BalanceTrackerContract
 contract_interface_paths:

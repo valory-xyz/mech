@@ -18,13 +18,16 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of UpdateDeliveryRateAbciApp."""
+
 from dataclasses import dataclass
-from typing import Any, Optional, Type, Dict, List
+from typing import Any, Dict, Optional, Type
 
 from aea.exceptions import enforce
 
 from packages.valory.skills.abstract_round_abci.base import AbciApp
-from packages.valory.skills.abstract_round_abci.models import BaseParams
+from packages.valory.skills.abstract_round_abci.models import (
+    BaseParams,
+)
 from packages.valory.skills.abstract_round_abci.models import (
     BenchmarkTool as BaseBenchmarkTool,
 )
@@ -32,7 +35,9 @@ from packages.valory.skills.abstract_round_abci.models import Requests as BaseRe
 from packages.valory.skills.abstract_round_abci.models import (
     SharedState as BaseSharedState,
 )
-from packages.valory.skills.abstract_round_abci.models import TypeCheckMixin
+from packages.valory.skills.abstract_round_abci.models import (
+    TypeCheckMixin,
+)
 from packages.valory.skills.abstract_round_abci.utils import check_type
 from packages.valory.skills.delivery_rate_abci.rounds import DeliveryRateUpdateAbciApp
 

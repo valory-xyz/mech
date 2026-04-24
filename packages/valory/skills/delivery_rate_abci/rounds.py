@@ -86,7 +86,7 @@ class UpdateDeliveryRateRound(CollectSameUntilThresholdRound):
                     get_name(
                         SynchronizedData.most_voted_tx_hash
                     ): self.most_voted_payload,
-                }
+                },
             )
             return state, Event.DONE
         if not self.is_majority_possible(

@@ -18,6 +18,7 @@
 # ------------------------------------------------------------------------------
 
 """This module contains the shared state for the abci skill of Mech."""
+
 from typing import Any
 
 from aea.skills.base import Model

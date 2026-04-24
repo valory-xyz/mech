@@ -37,7 +37,7 @@ connections:
 contracts:
 - valory/olas_mech:0.1.0:bafybeic7tj2e4xit74p6dcgmi5qjoqa4sjgybcd2fb6m6n6t2tpsllgajq
 - valory/mech_marketplace:0.1.0:bafybeifhsokyqboq6acuvysjrypuly3ozpsopgzlwmgp5qzojyfmbqm67u
-- valory/balance_tracker:0.1.0:bafybeifzy2rgjeruqiehmcewu2yfvt3ktqe6th5lkxr6rnegswwvk4dham
+- valory/balance_tracker:0.1.0:bafybeic3hsy34eq23ld24qkm5kbtx3k45cw2dx4eoangyvsavsz5pj3w7i
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la

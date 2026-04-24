@@ -31,7 +31,9 @@ import pytest
 ZERO_ETHER_VALUE = 0
 
 
-def _run_generator(gen: Generator, values: Optional[List[Any]] = None) -> Any:
+def _run_generator(
+    gen: Generator[Any, Any, Any], values: Optional[List[Any]] = None
+) -> Any:
     """Drive a generator to completion, sending values from the list."""
     values = values or []
     idx = 0
@@ -52,8 +54,8 @@ class _FakeBehaviour:
         self.params = MagicMock()
         self.params.mech_to_max_delivery_rate = mech_to_max_delivery_rate
         self.context = MagicMock()
-        self._should_update_fn = None  # type: ignore
-        self._get_tx_fn = None  # type: ignore
+        self._should_update_fn: Any = None
+        self._get_tx_fn: Any = None
 
     def _should_update_delivery_rate(
         self, mech_address: str, delivery_rate: int
@@ -167,7 +169,9 @@ class TestGetDeliveryRateUpdateTxs:
         b._should_update_fn = _make_gen(True)
         call_count = {"n": 0}
 
-        def tx_gen(*args: Any) -> Generator:
+        def tx_gen(
+            *args: Any,
+        ) -> Generator[None, None, Optional[Dict[str, Any]]]:
             yield
             call_count["n"] += 1
             if call_count["n"] == 1:
@@ -199,11 +203,11 @@ class TestSourceCodeContinuePresent:
             if node.name != "get_delivery_rate_update_txs":
                 continue
             # Find the `if tx is None:` block
-            for i, stmt in enumerate(node.body):
+            for _i, stmt in enumerate(node.body):
                 if not isinstance(stmt, ast.For):
                     continue
                 for_body = stmt.body
-                for j, inner in enumerate(for_body):
+                for _j, inner in enumerate(for_body):
                     if not isinstance(inner, ast.If):
                         continue
                     # Check if it's the `tx is None` check

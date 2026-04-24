@@ -1438,6 +1438,7 @@ class TransactionPreparationBehaviour(
         Note that this is the transaction that the safe will execute, with the provided data.
 
         :param data: the safe tx data.
+        :yield: messages exchanged with the contract API.
         :return: the tx hash
         """
         response = yield from self.get_contract_api_response(

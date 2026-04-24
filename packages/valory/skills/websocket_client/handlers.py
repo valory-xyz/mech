@@ -20,12 +20,9 @@
 
 """This package contains a scaffold of a handler."""
 
-import json
-import time
 from enum import Enum
 from typing import Callable, cast
 
-from aea.protocols.base import Message
 from aea.skills.base import Handler
 
 from packages.valory.protocols.websocket_client.message import WebsocketClientMessage

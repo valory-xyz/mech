@@ -91,8 +91,17 @@ def _make_full_ctx(
 ) -> SimpleNamespace:
     """Extended context with all params needed for complex behaviours.
 
-    Use **overrides to set/override any param attribute, e.g.
+    Use ``**overrides`` to set/override any param attribute, e.g.
     ``_make_full_ctx(multisend_address="0xCUSTOM")``.
+
+    :param done_tasks: optional DONE_TASKS stub shared across agents.
+    :param payment_model: optional PaymentModel stub.
+    :param lock: optional DONE_TASKS_LOCK stub.
+    :param agent_mech_addresses: optional AGENT_MECH_ADDRESSES stub.
+    :param overrides: arbitrary additional param attributes to set on the
+        returned context's ``params`` namespace.
+    :return: a SimpleNamespace shaped like a real skill context, ready
+        to hand to the behaviour under test.
     """
     ctx = _make_ctx(
         done_tasks=done_tasks,
