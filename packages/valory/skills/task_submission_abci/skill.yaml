@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeief4scodmm56tczhdfvucyntzmofzuvdhp2bkxufk6m57lmndordm
+  behaviours.py: bafybeidg5te2okx5hdc6p5jlvjfhlhqtzrm2nhhhy2wmttq467p7tyq72e
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
@@ -17,7 +17,7 @@ fingerprint:
   rounds.py: bafybeignyyeclernusma4n4cv2vytsfxxl32kth7xgjueyjikfk7kmuzie
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
-  tests/conftest.py: bafybeigss5pdbp64hoflvgk5dmjzmj7kdumjdwaop3kw6s6r7guleen3qe
+  tests/conftest.py: bafybeihxi2j5lkdlq3rwydag2bzrv67exegutggxmgku3mq5pmrdth3pjq
   tests/test_behaviours.py: bafybeieimcrlz5w5sl5gwlukjjzo4lcntula6ggfdeq7hdl2s2wfjq45c4
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
@@ -28,14 +28,14 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/olas_mech:0.1.0:bafybeicge3yunhgsoe4uavapmieeqfpfbdebgk4qcm7z6i4ovrms4q4bkq
+- valory/olas_mech:0.1.0:bafybeic7tj2e4xit74p6dcgmi5qjoqa4sjgybcd2fb6m6n6t2tpsllgajq
 - valory/mech_marketplace:0.1.0:bafybeifhsokyqboq6acuvysjrypuly3ozpsopgzlwmgp5qzojyfmbqm67u
-- valory/complementary_service_metadata:0.1.0:bafybeifnbc2b4ohnhxx7lt3kmgz7f2tb7746bmrxe7cfh2z36zvrmkabra
+- valory/complementary_service_metadata:0.1.0:bafybeihukaditdbnvhkxnt2bfqtclfnniw6l2dwks4dx3hhzlvt46ilduq
 - valory/gnosis_safe:0.1.0:bafybeihljnuo6jiyqfvow4vgxy5ih4eha2pjtguh7o6pabe24lbd6mwjaa
 - valory/multisend:0.1.0:bafybeic4534fd4axozjmykpstgjynxzpkpfvnvyjt7hz32ajfe3fmwhn7m
 - valory/service_registry:0.1.0:bafybeifuexvcj6w3j2lludzxi3rgu2nn2b3toyifxiy46hv726o2bxivjm
-- valory/hash_checkpoint:0.1.0:bafybeiejb5n3bsqiigjvoz624t75xzczlzpl5yfz6fmepcja3skinubpt4
-- valory/balance_tracker:0.1.0:bafybeicwyd2w5f56d5sswezj5q2dd5vnwe3y7vssslk7tpsxegvq7faesy
+- valory/hash_checkpoint:0.1.0:bafybeicullhpijo2t7v2najfc5antzwofqe4ctqhvl5nwuoct54q7d4jcu
+- valory/balance_tracker:0.1.0:bafybeic3hsy34eq23ld24qkm5kbtx3k45cw2dx4eoangyvsavsz5pj3w7i
 - valory/erc20:0.1.0:bafybeigjxwhx4li5hmyv3hrtatwq65gl4wihqysaq5pqlpmw5o4lymfv6y
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
@@ -44,7 +44,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeiesqybjt2d3cwazu5xurye7znnkidem2qhudfvjnaprbk6p5flfe4
 - valory/transaction_settlement_abci:0.1.0:bafybeiemyjkxj2ifzjr5kubtebpyezocl33zxt7gwf7yongg6zlbfjilte
-- valory/task_execution:0.1.0:bafybeiddxqhz6czd3g6a7zd526xfbkj3gvr7oqdcrkltldnhjijg3xemui
+- valory/task_execution:0.1.0:bafybeig57bhaohkufuudvpli3enkfq4fon7ypta7mcrtraakcxnd2khcym
 behaviours:
   main:
     args: {}
@@ -181,12 +181,6 @@ models:
     args: {}
     class_name: TendermintDialogues
 dependencies:
-  web3:
-    version: <8,>=7.0.0
-  py-multibase:
-    version: ==1.0.3
-  py-multicodec:
-    version: ==0.2.1
   prometheus_client:
     version: ==0.23.1
 is_abstract: true

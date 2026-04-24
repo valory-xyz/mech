@@ -21,19 +21,13 @@
 
 import logging
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, cast
+from typing import Any, Dict, List, Optional, Set, Union, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
-from eth_typing import ChecksumAddress
-from eth_utils import event_abi_to_log_topic
-from hexbytes import HexBytes
-from web3 import Web3
-from web3._utils.events import get_event_data
-from web3.types import BlockIdentifier, FilterParams, TxReceipt
 
 from packages.valory.contracts.mech_marketplace.contract import (
     DELIVERY_RATE_INDEX,
@@ -45,6 +39,12 @@ PUBLIC_ID = PublicId.from_str("valory/olas_mech:0.1.0")
 _logger = logging.getLogger(
     f"aea.packages.{PUBLIC_ID.author}.contracts.{PUBLIC_ID.name}.contract"
 )
+
+# Block-identifier shapes actually used by callers: an int block number or the
+# literal strings "earliest"/"latest". Web3 accepts both as-is in its filter
+# dicts; a dedicated local alias keeps the public signatures readable without
+# reintroducing the web3.types import.
+BlockIdentifier = Union[int, str]
 
 PAYMENT_TYPE_NATIVE_NVM = (
     "803dd08fe79d91027fc9024e254a0942372b92f3ccabc1bd19f4a5c2b251c316"  # nosec
@@ -174,9 +174,9 @@ class MechOperation(Enum):
     DELEGATE_CALL = 1
 
 
-def pad_address_for_topic(address: str) -> HexBytes:
+def pad_address_for_topic(address: str) -> bytes:
     """Left-pad an Ethereum address to 32 bytes for use in a topic."""
-    return HexBytes(Ox + address[Ox_CHARS:].zfill(TOPIC_CHARS))
+    return bytes.fromhex(address[Ox_CHARS:].zfill(TOPIC_CHARS))
 
 
 class OlasMechContract(Contract):
@@ -310,10 +310,10 @@ class OlasMechContract(Contract):
         all_entries = []
         for abi in partial_abis:
             contract_instance = ledger_api.api.eth.contract(contract_address, abi=abi)
-            event_abi = contract_instance.events.Request().abi
+            event = contract_instance.events.Request()
             entries = cls.get_event_entries(
                 ledger_api=ledger_api,
-                event_abi=event_abi,
+                event=event,
                 address=contract_instance.address,
                 from_block=from_block,
                 to_block=to_block,
@@ -323,8 +323,8 @@ class OlasMechContract(Contract):
 
         request_events = list(
             {
-                "tx_hash": entry.transactionHash.to_0x_hex(),
-                "block_number": entry.blockNumber,
+                "tx_hash": "0x" + entry["transactionHash"].hex(),
+                "block_number": entry["blockNumber"],
                 **entry["args"],
                 "contract_address": contract_address,
             }
@@ -345,10 +345,10 @@ class OlasMechContract(Contract):
         all_entries = []
         for abi in partial_abis:
             contract_instance = ledger_api.api.eth.contract(contract_address, abi=abi)
-            event_abi = contract_instance.events.Deliver().abi
+            event = contract_instance.events.Deliver()
             entries = cls.get_event_entries(
                 ledger_api=ledger_api,
-                event_abi=event_abi,
+                event=event,
                 address=contract_instance.address,
                 from_block=from_block,
                 to_block=to_block,
@@ -357,8 +357,8 @@ class OlasMechContract(Contract):
 
         deliver_events = list(
             {
-                "tx_hash": entry.transactionHash.to_0x_hex(),
-                "block_number": entry.blockNumber,
+                "tx_hash": "0x" + entry["transactionHash"].hex(),
+                "block_number": entry["blockNumber"],
                 **entry["args"],
             }
             for entry in all_entries
@@ -370,7 +370,7 @@ class OlasMechContract(Contract):
         cls,
         ledger_api: LedgerApi,
         contract_address: str,
-        tx_receipt: TxReceipt,
+        tx_receipt: Dict[str, Any],
     ) -> JSONLike:
         """Process transaction receipt to filter contract events."""
 
@@ -390,14 +390,15 @@ class OlasMechContract(Contract):
         **kwargs: Any,
     ) -> JSONLike:
         """Get the requests that are not delivered."""
+        ledger_api = cast(EthereumApi, ledger_api)
         if from_block == "earliest":
             from_block = 0
 
         current_block = ledger_api.api.eth.block_number
         requests, delivers = [], []
         for from_block_batch in range(int(from_block), current_block, max_block_window):
-            to_block_batch = (from_block_batch + max_block_window) - 1
-            if to_block_batch >= current_block:
+            to_block_batch: Union[int, str] = (from_block_batch + max_block_window) - 1
+            if isinstance(to_block_batch, int) and to_block_batch >= current_block:
                 to_block_batch = "latest"
             requests_batch: List[Dict[str, Any]] = cls.get_request_events(
                 ledger_api, contract_address, from_block_batch, to_block_batch
@@ -505,7 +506,7 @@ class OlasMechContract(Contract):
             args=[
                 request_id,
                 bytes.fromhex(data),
-                Web3.to_checksum_address(mech_staking_instance),
+                ledger_api.api.to_checksum_address(mech_staking_instance),
                 mech_service_id,
             ],
         )
@@ -583,19 +584,19 @@ class OlasMechContract(Contract):
         """Get the Request events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        event_abi = contract_instance.events.Request().abi
+        event = contract_instance.events.Request()
         entries = cls.get_event_entries(
             ledger_api=ledger_api,
             from_block=from_block,
             to_block=to_block,
-            event_abi=event_abi,
+            event=event,
             address=contract_instance.address,
         )
 
         request_events = list(
             {
-                "tx_hash": entry.transactionHash.to_0x_hex(),
-                "block_number": entry.blockNumber,
+                "tx_hash": "0x" + entry["transactionHash"].hex(),
+                "block_number": entry["blockNumber"],
                 **entry["args"],
                 "contract_address": contract_address,
             }
@@ -614,10 +615,10 @@ class OlasMechContract(Contract):
         """Get the Deliver events emitted by the contract."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
-        event_abi = contract_instance.events.Deliver().abi
+        event = contract_instance.events.Deliver()
         entries = cls.get_event_entries(
             ledger_api=ledger_api,
-            event_abi=event_abi,
+            event=event,
             address=contract_instance.address,
             from_block=from_block,
             to_block=to_block,
@@ -625,8 +626,8 @@ class OlasMechContract(Contract):
 
         deliver_events = list(
             {
-                "tx_hash": entry.transactionHash.to_0x_hex(),
-                "block_number": entry.blockNumber,
+                "tx_hash": "0x" + entry["transactionHash"].hex(),
+                "block_number": entry["blockNumber"],
                 **entry["args"],
                 "contract_address": contract_address,
             }
@@ -646,15 +647,18 @@ class OlasMechContract(Contract):
         **kwargs: Any,
     ) -> JSONLike:
         """Get the requests that are not delivered."""
+        ledger_api = cast(EthereumApi, ledger_api)
         if from_block == "earliest":
             from_block = 0
 
         current_block = ledger_api.api.eth.block_number
-        checksumed_contract_address = Web3.to_checksum_address(contract_address)
+        checksumed_contract_address = ledger_api.api.to_checksum_address(
+            contract_address
+        )
         requests, delivers = [], []
         for from_block_batch in range(int(from_block), current_block, max_block_window):
-            to_block_batch = (from_block_batch + max_block_window) - 1
-            if to_block_batch >= current_block:
+            to_block_batch: Union[int, str] = (from_block_batch + max_block_window) - 1
+            if isinstance(to_block_batch, int) and to_block_batch >= current_block:
                 to_block_batch = "latest"
             requests_batch: List[Dict[str, Any]] = (
                 cls.get_marketplace_mech_request_events(
@@ -745,23 +749,26 @@ class OlasMechContract(Contract):
     def get_event_entries(
         cls,
         ledger_api: EthereumApi,
-        event_abi: Any,
-        address: ChecksumAddress,
+        event: Any,
+        address: str,
         from_block: BlockIdentifier = "earliest",
         to_block: BlockIdentifier = "latest",
     ) -> List:
-        """Helper method to extract the events."""
+        """Helper method to extract the events.
 
-        event_topic = event_abi_to_log_topic(event_abi)
-
-        filter_params: FilterParams = {
+        :param ledger_api: the ledger API object
+        :param event: a ``ContractEvent`` instance (e.g.
+            ``contract_instance.events.Request()``)
+        :param address: the contract address whose logs to scan
+        :param from_block: from which block to start the search
+        :param to_block: at which block to end the search
+        :return: the parsed event entries
+        """
+        filter_params: Dict[str, Any] = {
             "fromBlock": from_block,
             "toBlock": to_block,
             "address": address,
-            "topics": [event_topic],
+            "topics": [event.topic],
         }
-
-        w3 = ledger_api.api.eth
-        logs = w3.get_logs(filter_params)
-        entries = [get_event_data(w3.codec, event_abi, log) for log in logs]
-        return entries
+        logs = ledger_api.api.eth.get_logs(filter_params)
+        return [event.process_log(log) for log in logs]

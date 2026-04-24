@@ -61,6 +61,8 @@ jobs:
       run: tox -e liccheck
     - name: Check dependencies
       run: tox -e check-dependencies
+    - name: Check third-party package hashes match upstream
+      run: tox -e check-third-party-hashes
     # skipping this link because of 500 errors even if the link is reachable
     - name: Check doc links
       run: tomte check-doc-links -n https://ethglobal.com/showcase/ai-mechs-dt36e -n https://marketplace.olas.network/ethereum/ai-agents/21 -n https://marketplace.olas.network/polygon/ai-agents/3

@@ -1,6 +1,4 @@
-"""
-Dialogues
-"""
+"""Dialogues."""
 
 from typing import Any
 

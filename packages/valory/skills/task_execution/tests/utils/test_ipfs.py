@@ -95,14 +95,14 @@ class TestToMultihash:
         mock_cid_str = "bafytesthash"
         with (
             patch(
-                "packages.valory.skills.task_execution.utils.ipfs.multibase"
+                "packages.valory.skills.task_execution.utils.ipfs.multibase_decode"
             ) as mock_mb,
             patch(
-                "packages.valory.skills.task_execution.utils.ipfs.multicodec"
+                "packages.valory.skills.task_execution.utils.ipfs.multicodec_remove_prefix"
             ) as mock_mc,
         ):
-            mock_mb.decode.return_value = decoded_with_prefix
-            mock_mc.remove_prefix.return_value = multihash_bytes
+            mock_mb.return_value = decoded_with_prefix
+            mock_mc.return_value = multihash_bytes
 
             result = to_multihash(mock_cid_str)
 
@@ -110,26 +110,26 @@ class TestToMultihash:
         assert result == expected
 
     def test_calls_multibase_decode(self) -> None:
-        """multibase.decode is called with the input CID string."""
+        """multibase_decode is called with the input CID string encoded as ascii bytes."""
         with (
             patch(
-                "packages.valory.skills.task_execution.utils.ipfs.multibase"
+                "packages.valory.skills.task_execution.utils.ipfs.multibase_decode"
             ) as mock_mb,
             patch(
-                "packages.valory.skills.task_execution.utils.ipfs.multicodec"
+                "packages.valory.skills.task_execution.utils.ipfs.multicodec_remove_prefix"
             ) as mock_mc,
         ):
-            mock_mb.decode.return_value = b"\x00" * 10
-            mock_mc.remove_prefix.return_value = b"\x00" * 8
+            mock_mb.return_value = b"\x00" * 10
+            mock_mc.return_value = b"\x00" * 8
             to_multihash("some-cid")
-        mock_mb.decode.assert_called_once_with("some-cid")
+        mock_mb.assert_called_once_with(b"some-cid")
 
     def test_empty_decode_returns_empty_string(self) -> None:
-        """Return empty string when multibase.decode yields empty bytes."""
+        """Return empty string when multibase_decode yields empty bytes."""
         with patch(
-            "packages.valory.skills.task_execution.utils.ipfs.multibase"
+            "packages.valory.skills.task_execution.utils.ipfs.multibase_decode"
         ) as mock_mb:
-            mock_mb.decode.return_value = b""
+            mock_mb.return_value = b""
             assert to_multihash("empty-cid") == ""
 
 

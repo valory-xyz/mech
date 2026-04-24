@@ -7,20 +7,20 @@ description: An abci skill that implements logic for updating the delivery rates
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  __init__.py: bafybeichkazmroftew6ifqoe4tud2faoo24hza5sgfghapmlp4l2rqjwee
-  behaviours.py: bafybeibj2xcgfyrvw3dqrizejv6c3id3a3d2z3vbd7te7htp5d4cez4yna
-  dialogues.py: bafybeicpmnp6nf4rautp2246dk3rj54k6kcjbbkekc7hvanh2um3y3ckdm
+  __init__.py: bafybeiduvkoamzbidgwmhsopns4hcynljp65nnaj5qwfj5wcqk72hd36mu
+  behaviours.py: bafybeia3tphit7qu5bznz5dphkzo4qcgo3u3a6izcalozbdva3v2wg2yzu
+  dialogues.py: bafybeihu6i2mjaznhiisafriktjgu752q2lj74o3firmumt4tnjwfebjf4
   fsm_specification.yaml: bafybeifurkk2plflg3p5rgh7bn3nf2z3tf6pamnha76lvz7vfmu36gpony
-  handlers.py: bafybeibl2xi6ikicoamazml6uh2tiqhni7tgekmtwt672c43utdlbbyi34
-  models.py: bafybeibgzaawtuk45ivbjccnwnt3hoit52m324icfhrclke62xqw7wsegm
+  handlers.py: bafybeibdgriykww5b5doshykjwohvqmjy2sotdwrk3y7i4ts246a4unwy4
+  models.py: bafybeibs5y5iqfhdzpkinkbr4zripwfxszfkt4p4mjf62r4yy226v5tmx4
   payloads.py: bafybeifpjamx7ii5vh25vbqpiw4xdx7rnphh5xbbsrs6dxpovhjkhgfuq4
-  rounds.py: bafybeihwqthwavbxookhkq53fy2oj5zui526fpnvcdteiv6k4wjcyey27q
+  rounds.py: bafybeicmijjylf7mvgejkp5d7fyen6jfttmrc2wz4yf4e2ovs2vwhwg224
   tests/__init__.py: bafybeih37qbhmo2pojtefignkuuhnbrkho5tdy3zchprgiynzpijqqbhui
-  tests/test_behaviours.py: bafybeib75tjemgnu3s66v2sug5pk4266yxqlll6il6dvwgztlb46hvohcy
+  tests/test_behaviours.py: bafybeibagrsjmrr6w5jwhykgps2dqmnct55q7udfkuymo375wf4v6m66ke
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/olas_mech:0.1.0:bafybeicge3yunhgsoe4uavapmieeqfpfbdebgk4qcm7z6i4ovrms4q4bkq
+- valory/olas_mech:0.1.0:bafybeic7tj2e4xit74p6dcgmi5qjoqa4sjgybcd2fb6m6n6t2tpsllgajq
 - valory/gnosis_safe:0.1.0:bafybeihljnuo6jiyqfvow4vgxy5ih4eha2pjtguh7o6pabe24lbd6mwjaa
 - valory/multisend:0.1.0:bafybeic4534fd4axozjmykpstgjynxzpkpfvnvyjt7hz32ajfe3fmwhn7m
 protocols:
@@ -157,9 +157,5 @@ models:
   tendermint_dialogues:
     args: {}
     class_name: TendermintDialogues
-dependencies:
-  py-multibase:
-    version: ==1.0.3
-  py-multicodec:
-    version: ==0.2.1
+dependencies: {}
 is_abstract: true

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2025 Valory AG
+#   Copyright 2025-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -86,7 +86,7 @@ class UpdateDeliveryRateRound(CollectSameUntilThresholdRound):
                     get_name(
                         SynchronizedData.most_voted_tx_hash
                     ): self.most_voted_payload,
-                }
+                },
             )
             return state, Event.DONE
         if not self.is_majority_possible(

@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeibgl4hnpsd3vokfs6cfkg4elgqu7nm4yhs6sh373j6erwvgpjdqeu
-  behaviours.py: bafybeiawcxlvtzr7757s6ury6xwvuv4ydz6yzec2vhxft77gqihvmncowy
-  dialogues.py: bafybeicc26sbiipnfublma3ywvh54elbx5y5sj7xckq3xyqyfmmoamiouy
-  handlers.py: bafybeibqfinswattz7gu4pijjxvixp5gtrgfz5idsz3uzlgrjw2vanjiu4
-  models.py: bafybeicuei7xoozvgr6kyp6cp7b6gqonlkmlgkvhhff37iecnjqzhkvbgi
+  behaviours.py: bafybeiebgmxaukekjjpn5ly2blbc3qqwpmbuybrfhgfzqu3bz67reoqphi
+  dialogues.py: bafybeifrkojenunhczquu2vyliqzzesdthtswxpbh3a63egbdiyzpk423q
+  handlers.py: bafybeie24wlsyhzmyrsjuxcoleovnuduejomv3gri3bajzrsfj7ed76dku
+  models.py: bafybeib2fjl4s34n5rcbvs5uauhizae3rp5uall5g56x2yeh46yuf25tgm
 fingerprint_ignore_patterns: []
 connections:
 - valory/websocket_client:0.1.0:bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea
@@ -35,7 +35,5 @@ models:
       websocket_provider: ws://localhost:8001
       subscription_id: websocket-subscription
     class_name: Params
-dependencies:
-  web3:
-    version: <8,>=7.0.0
+dependencies: {}
 is_abstract: true

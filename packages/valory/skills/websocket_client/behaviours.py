@@ -20,28 +20,25 @@
 
 """This package contains a scaffold of a behaviour."""
 
-import json
-import re
-from abc import ABC
 from datetime import datetime
-from typing import Any, Dict, Generator, List, Optional, Set, Type, cast
+from typing import Any, List, Optional, cast
 
-from aea.mail.base import Envelope
 from aea.skills.behaviours import SimpleBehaviour
 
 from packages.valory.connections.websocket_client.connection import (
     PUBLIC_ID as WEBSOCKET_CLIENT_CONNECTION,
 )
-from packages.valory.connections.websocket_client.connection import WebSocketClient
+from packages.valory.connections.websocket_client.connection import (
+    WebSocketClient,
+)
 from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
 from packages.valory.skills.websocket_client.dialogues import (
-    WebsocketClientDialogue,
     WebsocketClientDialogues,
 )
 from packages.valory.skills.websocket_client.handlers import (
-    WEBSOCKET_SUBSCRIPTION_STATUS,
-    WEBSOCKET_SUBSCRIPTIONS,
     SubscriptionStatus,
+    WEBSOCKET_SUBSCRIPTIONS,
+    WEBSOCKET_SUBSCRIPTION_STATUS,
 )
 from packages.valory.skills.websocket_client.models import Params
 
@@ -58,7 +55,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
         self._ws_client_connection: Optional[WebSocketClient] = None
         self._subscription_required: bool = True
         self._missed_parts: bool = False
-        self._last_subscription_check = None
+        self._last_subscription_check: Optional[float] = None
         super().__init__(**kwargs)
 
     @property
@@ -85,6 +82,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
 
     @property
     def subscribed(self) -> bool:
+        """Return whether the current subscription status is SUBSCRIBED."""
         return (
             SubscriptionStatus(self.subscription_status)
             == SubscriptionStatus.SUBSCRIBED
@@ -92,6 +90,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
 
     @property
     def subscribing(self) -> bool:
+        """Return whether the current subscription status is SUBSCRIBING."""
         return (
             SubscriptionStatus(self.subscription_status)
             == SubscriptionStatus.SUBSCRIBING
@@ -99,6 +98,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
 
     @property
     def checking_subscription(self) -> bool:
+        """Return whether the current subscription status is CHECKING_SUBSCRIPTION."""
         return (
             SubscriptionStatus(self.subscription_status)
             == SubscriptionStatus.CHECKING_SUBSCRIPTION
@@ -106,6 +106,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
 
     @property
     def unsubscribed(self) -> bool:
+        """Return whether the current subscription status is UNSUBSCRIBED."""
         return (
             SubscriptionStatus(self.subscription_status)
             == SubscriptionStatus.UNSUBSCRIBED
@@ -159,7 +160,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
         provider: str,
         subscription_id: str,
         subscription_payload: Optional[str] = None,
-    ) -> Generator[None, None, WebsocketClientMessage]:
+    ) -> None:
         """Subscribe to a websocket using websocket client connection."""
         self.context.logger.info(
             f"Creating websocket subscription using provider={provider} payload={subscription_payload}"
@@ -167,7 +168,7 @@ class SubscriptionBehaviour(SimpleBehaviour):
         websocket_client_dialogues = cast(
             WebsocketClientDialogues, self.context.websocket_client_dialogues
         )
-        (websocket_client_message, _) = websocket_client_dialogues.create(
+        websocket_client_message, _ = websocket_client_dialogues.create(
             counterparty=str(WEBSOCKET_CLIENT_CONNECTION),
             performative=WebsocketClientMessage.Performative.SUBSCRIBE,
             subscription_id=subscription_id,
@@ -181,12 +182,12 @@ class SubscriptionBehaviour(SimpleBehaviour):
     def _check_subscription(
         self,
         subscription_id: int,
-    ) -> Generator[None, None, WebsocketClientMessage]:
+    ) -> None:
         """Subscribe to a websocket using websocket client connection."""
         websocket_client_dialogues = cast(
             WebsocketClientDialogues, self.context.websocket_client_dialogues
         )
-        (websocket_client_message, _) = websocket_client_dialogues.create(
+        websocket_client_message, _ = websocket_client_dialogues.create(
             counterparty=str(WEBSOCKET_CLIENT_CONNECTION),
             performative=WebsocketClientMessage.Performative.CHECK_SUBSCRIPTION,
             subscription_id=subscription_id,
@@ -199,12 +200,12 @@ class SubscriptionBehaviour(SimpleBehaviour):
         self,
         payload: str,
         subscription_id: int,
-    ) -> Generator[None, None, WebsocketClientMessage]:
+    ) -> None:
         """Subscribe to a websocket using websocket client connection."""
         websocket_client_dialogues = cast(
             WebsocketClientDialogues, self.context.websocket_client_dialogues
         )
-        (websocket_client_message, _) = websocket_client_dialogues.create(
+        websocket_client_message, _ = websocket_client_dialogues.create(
             counterparty=str(WEBSOCKET_CLIENT_CONNECTION),
             performative=WebsocketClientMessage.Performative.SEND,
             payload=payload,

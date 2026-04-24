@@ -20,16 +20,12 @@
 
 """This package contains a scaffold of a handler."""
 
-import json
-import time
-
-from aea.protocols.base import Message
-from aea.skills.base import Handler
-from web3 import Web3
-from web3.types import TxReceipt
-from typing import Callable, cast
-from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
 from enum import Enum
+from typing import Callable, cast
+
+from aea.skills.base import Handler
+
+from packages.valory.protocols.websocket_client.message import WebsocketClientMessage
 
 JOB_QUEUE = "pending_tasks"
 SUBSCRIPTION_ID = "subscription_id"

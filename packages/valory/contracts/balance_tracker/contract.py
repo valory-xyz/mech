@@ -20,14 +20,12 @@
 """This module contains the balance_tracker contract definition."""
 
 import logging
-from typing import Any, cast
 
 from aea.common import JSONLike
 from aea.configurations.base import PublicId
 from aea.contracts.base import Contract
 from aea.crypto.base import LedgerApi
 from aea_ledger_ethereum import EthereumApi
-
 
 PUBLIC_ID = PublicId.from_str("valory/balance_tracker:0.1.0")
 
