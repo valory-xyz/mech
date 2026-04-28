@@ -118,11 +118,16 @@ jobs:
       - uses: actions/checkout@v3
         with:
           fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
       - run: |
-          wget https://github.com/zricethezav/gitleaks/releases/download/v8.10.1/gitleaks_8.10.1_linux_x64.tar.gz && \
-          tar -xzf gitleaks_8.10.1_linux_x64.tar.gz && \
-          sudo install gitleaks /usr/bin && \
-          gitleaks detect --report-format json --report-path leak_report -v
+          wget https://github.com/zricethezav/gitleaks/releases/download/v8.10.1/gitleaks_8.10.1_linux_x64.tar.gz
+          tar -xzf gitleaks_8.10.1_linux_x64.tar.gz
+          sudo install gitleaks /usr/bin
+          pip install 'tomte[cli] @ git+https://github.com/valory-xyz/tomte.git@55a396a9b96b3738068f031ea05fabeda2723ee5'
+          GITLEAKS_CONFIG=$(python -c "from tomte.configs import GITLEAKS_TOML; print(GITLEAKS_TOML)")
+          gitleaks detect --config="$GITLEAKS_CONFIG" --report-format json --report-path leak_report -v
 
   test:
     continue-on-error: False
