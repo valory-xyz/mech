@@ -47,7 +47,7 @@ Repository = "https://github.com/valory-xyz/mech"
 [dependency-groups]
 dev = [
     "setuptools>=78.0.1,<79",
-    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@08e9cd419cc8ec62a176b462baf7737332138dee",
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@dd66747d22b475b190fe60347bd3b9d746585f96",
 ]
 
 [tool.uv]
