@@ -1,0 +1,22 @@
+# mech `.gitleaks.toml` — extends the fleet canonical from `valory-xyz/open-autonomy`.
+#
+# The canonical lives in OA so that every Valory agent repo gets the
+# same secret-detection rules without forking. Only mech-specific
+# allowlist entries (e.g. fixture CIDs) belong here.
+#
+# Until OA's Wave 2a (PR #2492) merges, the `[extend] path` below points
+# at the branch ref to fetch the canonical during CI. Once that PR
+# merges, repin to the canonical merge SHA:
+#
+#   path = "https://raw.githubusercontent.com/valory-xyz/open-autonomy/<MERGE_SHA>/.gitleaks.toml"
+
+[extend]
+path = "https://raw.githubusercontent.com/valory-xyz/open-autonomy/chore/cleanup-wave2a/.gitleaks.toml"
+
+[allowlist]
+description = "mech-specific additions on top of OA canonical"
+regexes = [
+    # IPFS CIDs (bafybei… 52 chars). Show up in packages.json fingerprints
+    # and skill manifests; not secrets.
+    '''bafybei[a-z2-7]{52}''',
+]

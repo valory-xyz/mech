@@ -47,7 +47,7 @@ Repository = "https://github.com/valory-xyz/mech"
 [dependency-groups]
 dev = [
     "setuptools>=78.0.1,<79",
-    "tomte[cli, tests]>=0.6.5",
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@ff0ca24f3227e7a1e55f9a56f974e4d2ead88448",
 ]
 
 [tool.uv]
@@ -57,3 +57,47 @@ prerelease = "allow"
 [tool.uv.build-backend]
 module-name = ["packages"]
 module-root = ""
+
+
+# -- linter configs (folded from .pylintrc per Wave 2a) -----------------------
+#
+# Folded into pyproject.toml so the repo stops carrying .pylintrc.
+# Pylint auto-discovers from pyproject.toml, so the existing tox env
+# keeps working without a `--rcfile=` flag change.
+#
+# Phase 2b's `tomte scaffold tox` will move per-repo `ignored-modules`
+# and per-repo `disable=` extras to `[tool.tomte.scaffold]` keys at
+# scaffold time (rendered into `--ignored-modules=…` / `--disable=…`
+# CLI flags by the scaffolder, per David's review on
+# `valory-xyz/tomte#46` — the principle: tomte ships base configs
+# only, never enumerates downstream library names). Until then, the
+# library list lives here in mech's own pyproject where pylint reads it.
+
+[tool.pylint.master]
+ignore-patterns = [".*_pb2.py", "contract_dispatcher.py", "test_abci_messages.py", "test_tendermint_messages.py"]
+ignore = ["packages/valory/protocols/abci", "packages/valory/connections/abci/gogoproto"]
+
+[tool.pylint."messages control"]
+# C0103 invalid-name; R0801 similar-lines; C0301 line-too-long;
+# C0201 consider-iterating-dictionary; C0204 bad-mcs-classmethod-argument;
+# C0209 consider-using-f-string; W1203 logging-fstring-interpolation;
+# C0302 too-many-lines; R1735 use-dict-literal; R1729 use-a-generator;
+# W0511 fixme; E0611 no-name-in-module; R0913 too-many-arguments;
+# R0917 too-many-positional-arguments
+disable = ["C0103", "R0801", "C0301", "C0201", "C0204", "C0209", "W1203", "C0302", "R1735", "R1729", "W0511", "E0611", "R0913", "R0917"]
+
+[tool.pylint.imports]
+ignored-modules = ["pandas", "numpy", "aea_cli_ipfs", "compose", "multidict", "gql", "anthropic", "tiktoken"]
+
+[tool.pylint.design]
+max-public-methods = 58
+max-args = 6
+max-parents = 10
+max-branches = 36
+max-attributes = 8
+
+[tool.pylint.similarities]
+min-similarity-lines = 10
+ignore-comments = "yes"
+ignore-docstrings = "yes"
+ignore-imports = "no"
