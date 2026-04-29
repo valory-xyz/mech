@@ -1671,7 +1671,7 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "setuptools", specifier = ">=78.0.1,<79" },
-    { name = "tomte", extras = ["cli", "tests"], git = "https://github.com/valory-xyz/tomte.git?rev=738a8e9261ef423fe81037ef43133f34e64b93c7" },
+    { name = "tomte", extras = ["cli", "tests"], git = "https://github.com/valory-xyz/tomte.git?rev=7c4eafbadec4e9cadfcf2f5dee4b201f17f69cb9" },
 ]
 
 [[package]]
@@ -2997,7 +2997,7 @@ wheels = [
 [[package]]
 name = "tomte"
 version = "0.7.0"
-source = { git = "https://github.com/valory-xyz/tomte.git?rev=738a8e9261ef423fe81037ef43133f34e64b93c7#738a8e9261ef423fe81037ef43133f34e64b93c7" }
+source = { git = "https://github.com/valory-xyz/tomte.git?rev=7c4eafbadec4e9cadfcf2f5dee4b201f17f69cb9#7c4eafbadec4e9cadfcf2f5dee4b201f17f69cb9" }
 
 [package.optional-dependencies]
 cli = [

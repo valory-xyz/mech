@@ -47,7 +47,7 @@ Repository = "https://github.com/valory-xyz/mech"
 [dependency-groups]
 dev = [
     "setuptools>=78.0.1,<79",
-    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@738a8e9261ef423fe81037ef43133f34e64b93c7",
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@7c4eafbadec4e9cadfcf2f5dee4b201f17f69cb9",
 ]
 
 [tool.uv]
@@ -82,7 +82,7 @@ open_autonomy_version = "0.21.19"
 open_aea_version = "2.2.1"
 check_handlers_ignores = "-i abstract_abci -i contract_subscription -i task_execution -i websocket_client"
 local_extensions = "tox.ini"
-tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@738a8e9261ef423fe81037ef43133f34e64b93c7"
+tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@7c4eafbadec4e9cadfcf2f5dee4b201f17f69cb9"
 
 [tool.uv.build-backend]
 module-name = ["packages"]
