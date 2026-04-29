@@ -10,14 +10,12 @@ requires-python = ">=3.10,<3.15"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-    # OA / open-aea / plugins — pinned exactly (framework contract).
     "open-autonomy==0.21.19",
     "open-aea-ledger-ethereum==2.2.1",
     "open-aea-ledger-cosmos==2.2.1",
     "open-aea-test-autonomy==0.21.19",
     "open-aea-cli-ipfs==2.2.1",
     "open-aea-helpers==0.21.19",
-    # Framework/lib deps — ranges match upstream open-autonomy v0.21.19.
     "requests>=2.32.5",
     "grpcio==1.78.0",
     "asn1crypto<1.5.0,>=1.4.0",
@@ -32,7 +30,6 @@ dependencies = [
     "websocket_client<1,>=0.32.0",
     "pytest>=8.2,<10",
     "PyYAML>=6",
-    # Mech-specific deps (no OA anchor) — narrow ranges.
     "openai==1.30.2",
     "openapi-core<0.23,>=0.22",
     "openapi-spec-validator>=0.7.0,<0.8.0",
@@ -55,8 +52,6 @@ default-groups = "all"
 prerelease = "allow"
 
 [tool.tomte]
-# Per-repo identity consumed by `tomte tox`. The wrapper renders
-# tomte's canonical tox.ini with these values substituted.
 packages_paths = "packages/valory"
 pytest_targets = [
     "packages/valory/skills/mech_abci/tests",
