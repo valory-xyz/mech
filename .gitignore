@@ -64,3 +64,4 @@ log
 mech/
 mech_service/
 .coverage
+.tomte-tox.ini

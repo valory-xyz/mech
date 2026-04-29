@@ -47,12 +47,42 @@ Repository = "https://github.com/valory-xyz/mech"
 [dependency-groups]
 dev = [
     "setuptools>=78.0.1,<79",
-    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@feeea393f0f21fea3f8b6c654cd7b8cf925f30ef",
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@738a8e9261ef423fe81037ef43133f34e64b93c7",
 ]
 
 [tool.uv]
 default-groups = "all"
 prerelease = "allow"
+
+[tool.tomte]
+# Per-repo identity consumed by `tomte tox`. The wrapper renders
+# tomte's canonical tox.ini with these values substituted.
+packages_paths = "packages/valory"
+pytest_targets = [
+    "packages/valory/skills/mech_abci/tests",
+    "packages/valory/skills/task_submission_abci/tests",
+    "packages/valory/skills/task_execution/tests",
+]
+service_specific_packages = [
+    "packages/valory/connections/websocket_client",
+    "packages/valory/contracts/balance_tracker",
+    "packages/valory/contracts/complementary_service_metadata",
+    "packages/valory/contracts/hash_checkpoint",
+    "packages/valory/contracts/olas_mech",
+    "packages/valory/skills/contract_subscription",
+    "packages/valory/skills/delivery_rate_abci",
+    "packages/valory/skills/mech_abci",
+    "packages/valory/skills/task_execution",
+    "packages/valory/skills/task_submission_abci",
+    "packages/valory/skills/websocket_client",
+]
+service_public_id = "valory/mech"
+known_first_party = "autonomy"
+open_autonomy_version = "0.21.19"
+open_aea_version = "2.2.1"
+check_handlers_ignores = "-i abstract_abci -i contract_subscription -i task_execution -i websocket_client"
+local_extensions = "tox.ini"
+tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@738a8e9261ef423fe81037ef43133f34e64b93c7"
 
 [tool.uv.build-backend]
 module-name = ["packages"]
