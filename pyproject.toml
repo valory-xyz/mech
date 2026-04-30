@@ -16,26 +16,26 @@ dependencies = [
     "open-aea-test-autonomy==0.21.19",
     "open-aea-cli-ipfs==2.2.1",
     "open-aea-helpers==0.21.19",
-    "requests>=2.32.5",
+    "requests==2.32.5",
     "grpcio==1.78.0",
-    "asn1crypto<1.5.0,>=1.4.0",
-    "hypothesis>=6",
-    "web3<8,>=7.0.0",
-    "pytest-asyncio>=1.3",
-    "aiohttp<4.0.0,>=3.8.5",
-    "certifi",
-    "multidict",
-    "ecdsa>=0.15",
-    "py-ecc<10,>=8",
-    "websocket_client<1,>=0.32.0",
-    "pytest>=8.2,<10",
-    "PyYAML>=6",
+    "asn1crypto==1.4.0",
+    "hypothesis==6.21.6",
+    "web3==7.14.1",
+    "pytest-asyncio==1.3.0",
+    "aiohttp==3.13.4",
+    "certifi==2026.2.25",
+    "multidict==6.7.1",
+    "ecdsa==0.19.2",
+    "py-ecc==8.0.0",
+    "websocket_client==0.59.0",
+    "pytest==8.4.2",
+    "PyYAML==6.0.1",
     "openai==1.30.2",
-    "openapi-core<0.23,>=0.22",
-    "openapi-spec-validator>=0.7.0,<0.8.0",
-    "prometheus-client>=0.23.1,<0.24",
-    "pebble>=5.1,<6",
-    "pip>=24.0",
+    "openapi-core==0.22.0",
+    "openapi-spec-validator==0.7.2",
+    "prometheus-client==0.23.1",
+    "pebble==5.1.3",
+    "pip==26.0.1",
 ]
 
 [project.urls]
@@ -44,7 +44,7 @@ Repository = "https://github.com/valory-xyz/mech"
 [dependency-groups]
 dev = [
     "setuptools>=78.0.1,<79",
-    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@7c4eafbadec4e9cadfcf2f5dee4b201f17f69cb9",
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@e3dcda641f4add9fe36bc8f5127b7a8863d7711e",
 ]
 
 [tool.uv]
@@ -58,26 +58,9 @@ pytest_targets = [
     "packages/valory/skills/task_submission_abci/tests",
     "packages/valory/skills/task_execution/tests",
 ]
-service_specific_packages = [
-    "packages/valory/connections/websocket_client",
-    "packages/valory/contracts/balance_tracker",
-    "packages/valory/contracts/complementary_service_metadata",
-    "packages/valory/contracts/hash_checkpoint",
-    "packages/valory/contracts/olas_mech",
-    "packages/valory/skills/contract_subscription",
-    "packages/valory/skills/delivery_rate_abci",
-    "packages/valory/skills/mech_abci",
-    "packages/valory/skills/task_execution",
-    "packages/valory/skills/task_submission_abci",
-    "packages/valory/skills/websocket_client",
-]
-service_public_id = "valory/mech"
-known_first_party = "autonomy"
-open_autonomy_version = "0.21.19"
-open_aea_version = "2.2.1"
 check_handlers_ignores = "-i abstract_abci -i contract_subscription -i task_execution -i websocket_client"
 local_extensions = "tox.ini"
-tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@7c4eafbadec4e9cadfcf2f5dee4b201f17f69cb9"
+tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@e3dcda641f4add9fe36bc8f5127b7a8863d7711e"
 
 [tool.uv.build-backend]
 module-name = ["packages"]
