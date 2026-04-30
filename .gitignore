@@ -65,3 +65,4 @@ mech/
 mech_service/
 .coverage
 .tomte-tox.ini
+.darglint
