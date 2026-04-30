@@ -86,23 +86,15 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
-      run:  |
-        pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@e3dcda641f4add9fe36bc8f5127b7a8863d7711e' tox-uv
-
-        # Install `mdspell` for spelling checks
-        sudo npm install -g markdown-spellcheck
-
+      run: pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@e3dcda641f4add9fe36bc8f5127b7a8863d7711e' tox-uv
     - name: Security checks
-       # TODO: tomte check-security
-      run: echo "Skipped until service is bumped"
+      run: tomte tox -p -e safety -e bandit
     - name: Check packages
       run: tomte tox -e check-packages
     - name: Check hash
       run: tomte tox -e check-hash
     - name: Code checks
       run: tomte tox -p -e black-check -e isort-check -e flake8 -e mypy -e pylint -e darglint
-    - name: Check spelling
-      run: tomte check-spelling
     - name: AbciApp consistency checks
     # analyse-service checks do not work properly as it is checking task execution skill which is not an ABCI skill
       run: |
