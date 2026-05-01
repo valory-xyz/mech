@@ -54,7 +54,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
-      run: pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@92cb14f4696bf3eba3ceec36e1a915961d5c7992' tox-uv
+      run: pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1' tox-uv
     - name: Check copyright headers
       run: tomte check-copyright --author valory --exclude-part websocket_client --exclude-part contract_subscription
     - name: License compatibility check
@@ -86,7 +86,7 @@ jobs:
       with:
         python-version: ${{ matrix.python-version }}
     - name: Install dependencies
-      run: pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@92cb14f4696bf3eba3ceec36e1a915961d5c7992' tox-uv
+      run: pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1' tox-uv
     - name: Security checks
       run: tomte tox -p -e safety -e bandit
     - name: Check packages
@@ -117,7 +117,7 @@ jobs:
           wget https://github.com/zricethezav/gitleaks/releases/download/v8.10.1/gitleaks_8.10.1_linux_x64.tar.gz
           tar -xzf gitleaks_8.10.1_linux_x64.tar.gz
           sudo install gitleaks /usr/bin
-          pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@92cb14f4696bf3eba3ceec36e1a915961d5c7992' tox-uv
+          pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1' tox-uv
           tomte tox -e gitleaks
 
   test:
@@ -147,7 +147,7 @@ jobs:
           sudo apt-get update --fix-missing
           sudo apt-get autoremove
           sudo apt-get autoclean
-          pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@92cb14f4696bf3eba3ceec36e1a915961d5c7992' tox-uv
+          pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1' tox-uv
           pip install --user --upgrade setuptools
 
       - if: matrix.os == 'ubuntu-22.04'
@@ -158,7 +158,7 @@ jobs:
       - if: matrix.os == 'macos-15'
         name: Install dependencies (macos-15)
         run: |
-          pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@92cb14f4696bf3eba3ceec36e1a915961d5c7992' tox-uv
+          pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1' tox-uv
           pip install --user --upgrade setuptools
 
       - if: matrix.os == 'macos-15'
@@ -170,7 +170,7 @@ jobs:
         name: Install dependencies (windows-2025)
         run: |
           python -m pip install -U pip
-          pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@92cb14f4696bf3eba3ceec36e1a915961d5c7992' tox-uv
+          pip install 'tomte[tox,cli] @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1' tox-uv
           pip install --upgrade setuptools
 
       - if: matrix.os == 'windows-2025'
