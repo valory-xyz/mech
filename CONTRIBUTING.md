@@ -52,7 +52,6 @@ def some_method(some_arg: Type) -> ReturnType:
     - types of exceptions it might raise
     """
 ```
-- After editing documentation use `tomte check-spelling` to ensure spelling is correct.
 
 ### Some more suggestions to help you write better code.
 
