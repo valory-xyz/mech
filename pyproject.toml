@@ -10,12 +10,12 @@ requires-python = ">=3.10,<3.15"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-    "open-autonomy==0.21.19",
-    "open-aea-ledger-ethereum==2.2.1",
-    "open-aea-ledger-cosmos==2.2.1",
-    "open-aea-test-autonomy==0.21.19",
-    "open-aea-cli-ipfs==2.2.1",
-    "open-aea-helpers==0.21.19",
+    "open-autonomy==0.21.20",
+    "open-aea-ledger-ethereum==2.2.3",
+    "open-aea-ledger-cosmos==2.2.3",
+    "open-aea-test-autonomy==0.21.20",
+    "open-aea-cli-ipfs==2.2.3",
+    "open-aea-helpers==0.21.20",
     "requests==2.32.5",
     "grpcio==1.78.0",
     "asn1crypto==1.4.0",
@@ -44,7 +44,7 @@ Repository = "https://github.com/valory-xyz/mech"
 [dependency-groups]
 dev = [
     "setuptools>=78.0.1,<79",
-    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1",
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@v0.7.0",
 ]
 
 [tool.uv]
@@ -68,7 +68,7 @@ check_handlers_ignores = [
     "task_execution",
     "websocket_client",
 ]
-tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@54780e1e34d4a5bd908f4ece1fae86437bded2c1"
+tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@v0.7.0"
 
 [tool.uv.build-backend]
 module-name = ["packages"]
