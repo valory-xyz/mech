@@ -15,6 +15,6 @@ contract_interface_paths:
   ethereum: build/AgentMech.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.2.1
+    version: ==2.2.3
 contracts:
-- valory/mech_marketplace:0.1.0:bafybeifhsokyqboq6acuvysjrypuly3ozpsopgzlwmgp5qzojyfmbqm67u
+- valory/mech_marketplace:0.1.0:bafybeie5xz3kb2xndqcyrsjyol5u6awaxaylpnazhf24fxmi3z4kuizwii

@@ -10,16 +10,17 @@ requires-python = ">=3.10,<3.15"
 readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
-    # OA / open-aea / plugins — pinned exactly (framework contract).
-    "open-autonomy==0.21.19",
-    "open-aea-ledger-ethereum==2.2.1",
-    "open-aea-ledger-cosmos==2.2.1",
-    "open-aea-test-autonomy==0.21.19",
-    "open-aea-cli-ipfs==2.2.1",
-    "open-aea-helpers==0.21.19",
-    # Framework/lib deps — ranges match upstream open-autonomy v0.21.19.
+    # Framework contract — strict.
+    "open-autonomy==0.21.20",
+    "open-aea-ledger-ethereum==2.2.3",
+    "open-aea-ledger-cosmos==2.2.3",
+    "open-aea-test-autonomy==0.21.20",
+    "open-aea-cli-ipfs==2.2.3",
+    "open-aea-helpers==0.21.20",
+    # Mech is a framework (mech-predict / similar are the apps),
+    # so non-OA deps use ranges aligned with the package YAMLs.
     "requests>=2.32.5",
-    "grpcio==1.78.0",
+    "grpcio>=1.78.0,<2",
     "asn1crypto<1.5.0,>=1.4.0",
     "hypothesis>=6",
     "web3<8,>=7.0.0",
@@ -30,14 +31,13 @@ dependencies = [
     "ecdsa>=0.15",
     "py-ecc<10,>=8",
     "websocket_client<1,>=0.32.0",
-    "pytest>=8.2,<10",
+    "pytest<10,>=8.2",
     "PyYAML>=6",
-    # Mech-specific deps (no OA anchor) — narrow ranges.
-    "openai==1.30.2",
+    "openai>=1.30,<2",
     "openapi-core<0.23,>=0.22",
-    "openapi-spec-validator>=0.7.0,<0.8.0",
-    "prometheus-client>=0.23.1,<0.24",
-    "pebble>=5.1,<6",
+    "openapi-spec-validator<0.8.0,>=0.7.0",
+    "prometheus_client<0.24,>=0.23.1",
+    "pebble<6,>=5.1",
     "pip>=24.0",
 ]
 
@@ -47,12 +47,34 @@ Repository = "https://github.com/valory-xyz/mech"
 [dependency-groups]
 dev = [
     "setuptools>=78.0.1,<79",
-    "tomte[cli, tests]>=0.6.5",
+    # TODO: flip to ==0.7.0 once tomte v0.7.0 publishes to PyPI.
+    "tomte[cli, tests] @ git+https://github.com/valory-xyz/tomte.git@v0.7.0",
 ]
 
 [tool.uv]
 default-groups = "all"
 prerelease = "allow"
+
+[tool.tomte]
+# delivery_rate_abci tests are flaky / incomplete; drop this field once
+# those land so tomte's default discovery picks up everything.
+pytest_targets = [
+    "packages/valory/skills/mech_abci/tests",
+    "packages/valory/skills/task_submission_abci/tests",
+    "packages/valory/skills/task_execution/tests",
+]
+# Auto-merged with packages.json third_party. Listed names are utility
+# skills whose handlers don't conform to the ABCI shape.
+check_handlers_ignores = [
+    "contract_subscription",
+    "task_execution",
+    "websocket_client",
+]
+# Leading space is load-bearing for the template render
+# (`tomte[<extras>]$TOMTE_DEP_PIN`).
+# TODO: when tomte v0.7.0 hits PyPI, flip to `tomte_dep_pin = "==0.7.0"`
+# (no leading space) so the rendered string becomes `tomte[<extras>]==0.7.0`.
+tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@v0.7.0"
 
 [tool.uv.build-backend]
 module-name = ["packages"]

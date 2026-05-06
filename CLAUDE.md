@@ -41,7 +41,7 @@ make generators
 make fix-abci-app-specs
 ```
 
-Individual tox environments: `tox -e black-check`, `tox -e isort-check`, `tox -e flake8`, `tox -e mypy`, `tox -e pylint`, `tox -e darglint`.
+Individual tox environments: `tomte tox -e black-check`, `tomte tox -e isort-check`, `tomte tox -e flake8`, `tomte tox -e mypy`, `tomte tox -e pylint`, `tomte tox -e darglint`.
 
 ## Architecture
 
@@ -99,5 +99,5 @@ Background skills run concurrently outside the FSM consensus loop:
 
 - After modifying skill code, run `make fix-abci-app-specs` to update FSM specs
 - After modifying packages, run `autonomy packages lock` to update hashes
-- Package hashes in `packages/packages.json` must stay in sync — CI checks this via `tox -e check-hash`
+- Package hashes in `packages/packages.json` must stay in sync — CI checks this via `tomte tox -e check-hash`
 - The `packages/` directory is an Open Autonomy local registry; third-party packages are synced from IPFS
