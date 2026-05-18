@@ -43,5 +43,5 @@ models:
     class_name: Params
 dependencies:
   web3:
-    version: <8,>=7.0.0
+    version: <8,>=7.15.0
 is_abstract: false
