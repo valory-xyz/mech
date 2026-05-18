@@ -39,7 +39,7 @@ protocols:
 skills:
 - valory/abstract_abci:0.1.0:bafybeib5qjkpfsxjcur4asube6kctmy2xsrg2hzcele2tmvsstula4lt54
 - valory/abstract_round_abci:0.1.0:bafybeibvbfkmkqjidukhkzzz7nd33gna64hjhcn3blon5xcleilbt63zn4
-- valory/contract_subscription:0.1.0:bafybeid54vlzq42vbeqdr3yu4b7fmjivd7dj4fiqe2rejr7u6woq7ai6ca
+- valory/contract_subscription:0.1.0:bafybeicqlkmfpttw4hbbaakr6xos62rd6ytjwkyzlfli4xpvl5yqcycf6q
 - valory/mech_abci:0.1.0:bafybeid2dl22zqz2jrluyyxdrocb4kt4golzx3uxas4hci43xkhn2q6hmy
 - valory/registration_abci:0.1.0:bafybeihkfla7hppssqk2dojuxjuy233jrilablud4avtazagt2javcihya
 - valory/reset_pause_abci:0.1.0:bafybeiakhczviqep47o5txatkdbzui6bk5o554cnspdkauapvmdykk2tkm
@@ -120,7 +120,7 @@ dependencies:
   requests:
     version: '>=2.32.5'
   web3:
-    version: <8,>=7.0.0
+    version: <8,>=7.15.0
   websocket_client:
     version: <1,>=0.32.0
 customs: []
