@@ -28,23 +28,23 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/olas_mech:0.1.0:bafybeidfs5qmlatazvswwntl54z7gh3psr3kzarxvayw7pcwatiwjmm6fi
-- valory/mech_marketplace:0.1.0:bafybeic7lwclbcpyn6y5tzchytj73wgpide7px572wixxgkcdmwk72lnpa
+- valory/olas_mech:0.1.0:bafybeifvxzldiclpk7ztinivtjaf3y7yfrkw677y73tb2cukkywbagawc4
+- valory/mech_marketplace:0.1.0:bafybeifwx6owth25ud4pknu2s2vcxitt3w2eotjkavmwksdhmur2xd5qgy
 - valory/complementary_service_metadata:0.1.0:bafybeihukaditdbnvhkxnt2bfqtclfnniw6l2dwks4dx3hhzlvt46ilduq
-- valory/gnosis_safe:0.1.0:bafybeieaxcd3wrjxgw7yzmlbxr6tcwj3u7kiixb6fzu2shwy5hthzzyxuq
-- valory/multisend:0.1.0:bafybeih73g7nltnmfqfa75qurljjk7xu7cvd3d2uzt4bqogcw5rgrrmu2m
-- valory/service_registry:0.1.0:bafybeiccha6qwov4pqsnnhnprldppaqlb7djcujcqqlmtgbukq4a5fmvvq
-- valory/hash_checkpoint:0.1.0:bafybeicsr42jre7gcbjydsqemtbwv3mt6ftt66o5bgc2z2326otvz4nobu
-- valory/balance_tracker:0.1.0:bafybeiepxgzcao7twciq6wzacvp36e2gfdktje6uvofaheytudv4aburoq
-- valory/erc20:0.1.0:bafybeidhafsjqsj7umr5mgb3v4t52sbcnwhlfk7hqgulbdvui4yhfrgrjy
+- valory/gnosis_safe:0.1.0:bafybeif6cfjeruji2ovns6dhc5qivvjr7t7rh5mmudgh5gvumezin26qne
+- valory/multisend:0.1.0:bafybeidl74hh6g34kgxay3fzapz26dhfmc6s2kjnt6edmaxgrklhge3omy
+- valory/service_registry:0.1.0:bafybeihktixbuw7dz3oa2xzfvpuchbnid7eob224n3spm77xx2yj2wixcm
+- valory/hash_checkpoint:0.1.0:bafybeicvml7stv45k5ix44kc2c3xowxvl6m6pzosrkwbxq3ymnnju5g7oe
+- valory/balance_tracker:0.1.0:bafybeibb7bzedhht262sn2t4vklcjcaa5fibermmcepnqi2wrcorkyz4qa
+- valory/erc20:0.1.0:bafybeig4tin5v5ahiiz4fysocl7gjhpjtgzko3w6cr2iz3q5a4bxutwewu
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeibvbfkmkqjidukhkzzz7nd33gna64hjhcn3blon5xcleilbt63zn4
-- valory/transaction_settlement_abci:0.1.0:bafybeiceijjjlvbq2tnadeqdrm7nka7gqgwzvmlgjuzbacgnkljry5h72a
-- valory/task_execution:0.1.0:bafybeiaqfqlix53nzryohhkeswhrz4rn3ls2en27oki7qysjw7dylaymhq
+- valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
+- valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
+- valory/task_execution:0.1.0:bafybeigy6h6po63cshmsjl57nioupmu3jppiivfdqm4jbnrkaszlwilubu
 behaviours:
   main:
     args: {}
