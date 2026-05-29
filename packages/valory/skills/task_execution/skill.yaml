@@ -32,12 +32,12 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections:
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
-- valory/ipfs:0.1.0:bafybeicxrwakpakexuixxp6yo25sosikrjs4mvzfvzklpqk5fa3yy3hh5a
+- valory/ipfs:0.1.0:bafybeihxytzo7tunodztv424xsnnufewbowucdsxtdzdcik2rskcn7plta
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 contracts:
-- valory/olas_mech:0.1.0:bafybeidfs5qmlatazvswwntl54z7gh3psr3kzarxvayw7pcwatiwjmm6fi
-- valory/mech_marketplace:0.1.0:bafybeic7lwclbcpyn6y5tzchytj73wgpide7px572wixxgkcdmwk72lnpa
-- valory/balance_tracker:0.1.0:bafybeiepxgzcao7twciq6wzacvp36e2gfdktje6uvofaheytudv4aburoq
+- valory/olas_mech:0.1.0:bafybeifvxzldiclpk7ztinivtjaf3y7yfrkw677y73tb2cukkywbagawc4
+- valory/mech_marketplace:0.1.0:bafybeifwx6owth25ud4pknu2s2vcxitt3w2eotjkavmwksdhmur2xd5qgy
+- valory/balance_tracker:0.1.0:bafybeibb7bzedhht262sn2t4vklcjcaa5fibermmcepnqi2wrcorkyz4qa
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
@@ -45,7 +45,7 @@ protocols:
 - valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeibvbfkmkqjidukhkzzz7nd33gna64hjhcn3blon5xcleilbt63zn4
+- valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 behaviours:
   task_execution:
     args: {}
@@ -110,7 +110,7 @@ models:
     class_name: Params
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.2.6
+    version: ==2.2.7
   PyYAML:
     version: ==6.0.1
   prometheus_client:
