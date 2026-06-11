@@ -42,6 +42,8 @@ class TokenCounterCallback:
         "claude-3-5-sonnet-20240620": {"input": 0.003, "output": 0.015},
         "claude-4-sonnet-20250514": {"input": 0.003, "output": 0.015},
         "claude-3-opus-20240229": {"input": 0.015, "output": 0.075},
+        "claude-fable-5": {"input": 0.01, "output": 0.05},
+        "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
         "cohere/command-r-plus": {"input": 0.003, "output": 0.015},
         "databricks/dbrx-instruct:nitro": {"input": 0.0009, "output": 0.0009},
         "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
