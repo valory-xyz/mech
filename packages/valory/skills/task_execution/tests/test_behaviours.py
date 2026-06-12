@@ -1678,6 +1678,110 @@ def test_get_executing_task_result_exception(behaviour: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
+# _handle_done_task: offchain skips IPFS and finalizes via local CID;
+# onchain path keeps uploading to IPFS.
+# ---------------------------------------------------------------------------
+
+
+def _seed_executing_task(
+    behaviour: Any,
+    params_stub: Any,
+    is_offchain: bool,
+    req_id: int = 7,
+) -> None:
+    """Wire enough state on the behaviour for _handle_done_task to run end-to-end."""
+    my_mech = params_stub.agent_mech_contract_address.lower()
+    params_stub.mech_to_config = {
+        my_mech: SimpleNamespace(is_marketplace_mech=True, use_dynamic_pricing=False)
+    }
+    behaviour._executing_task = {
+        "requestId": req_id,
+        "tool": "mytool",
+        "is_offchain": is_offchain,
+        "contract_address": params_stub.agent_mech_contract_address,
+    }
+    behaviour._done_task = None  # _handle_done_task assigns it
+    behaviour._invalid_request = True  # take the "Invalid response" failure shape
+    behaviour._ipfs_error_reason = None
+
+
+def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Off-chain path skips the IPFS store call and writes a locally-computed CID."""
+    # Catches a mutation that flipped the gating predicate: any future change
+    # that fires the IPFS upload on the off-chain branch makes this test fail
+    # because send_message would then be invoked.
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=11)
+
+    send_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda *a, **k: send_calls.append((a, k)),
+    )
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    # The IPFS store request must not have been sent.
+    assert send_calls == []
+
+    # The done_task is published with the locally-derived multihash.
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    done = done_tasks[0]
+    assert done["request_id"] == 11
+    assert isinstance(done["task_result"], str) and len(done["task_result"]) > 0
+    # Result string is hex (no 0x), matching the existing to_multihash output shape.
+    int(done["task_result"], 16)
+    assert behaviour._executing_task is None
+
+
+def test_handle_done_task_onchain_still_uploads_to_ipfs(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """On-chain path keeps the IPFS upload, locking in the off-chain gate."""
+    # If a future refactor accidentally pulled the on-chain path through the
+    # new local-CID branch, the IPFS upload would not fire and this test would
+    # notice.
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=12)
+
+    monkeypatch.setattr(
+        behaviour,
+        "_build_ipfs_store_file_req",
+        lambda files, **k: (object(), fake_dialogue),
+    )
+    send_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda msg, dlg, cb, **k: send_calls.append((msg, dlg, cb)),
+    )
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    assert len(send_calls) == 1
+    # IPFS callback is the existing store-response handler, not the local path.
+    # Bound methods compare unequal across access, so check by name.
+    assert send_calls[0][2].__func__ is behaviour._handle_store_response.__func__
+    # The IPFS path defers finalization to the callback; done_tasks empty for now.
+    assert shared_state[beh_mod.DONE_TASKS] == []
+
+
+# ---------------------------------------------------------------------------
 # _handle_store_response branches
 # ---------------------------------------------------------------------------
 

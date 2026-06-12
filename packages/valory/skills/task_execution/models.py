@@ -117,6 +117,9 @@ class Params(Model):
         self.gnosis_ledger_rpc: str = kwargs.get("gnosis_ledger_rpc", "")
         self.polygon_ledger_rpc: str = kwargs.get("polygon_ledger_rpc", "")
         self.base_ledger_rpc: str = kwargs.get("base_ledger_rpc", "")
+        self.payment_type_to_asset_address: Dict[str, str] = kwargs.get(
+            "payment_type_to_asset_address", {}
+        )
         self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing", {})
         if self.tools_to_pricing:
             self._ensure_same_keys(

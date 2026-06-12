@@ -63,6 +63,7 @@ from packages.valory.skills.task_execution.utils.ipfs import (
     get_ipfs_file_hash,
     to_multihash,
 )
+from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
 from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
@@ -897,6 +898,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 reason=response["result"],
             )
 
+        if is_offchain:
+            # Off-chain path: skip the IPFS upload so the response stays private,
+            # compute the same CID a real IPFS upload would have produced, and
+            # finalize the done_task synchronously. The on-chain commitment
+            # (``task_result`` as multihash hex, derived inside _finalize_done_task)
+            # is unchanged.
+            response_bytes = json.dumps(response).encode("utf-8")
+            local_cid = compute_cidv1(response_bytes)
+            self.context.logger.info(
+                f"Off-chain response for request {req_id} kept private; "
+                f"local CID {local_cid}."
+            )
+            self._finalize_done_task(local_cid)
+            return
+
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
         )
@@ -1269,13 +1285,30 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             return
 
-        executing_task = self._executing_task
-        # if sender is not present, use mech address
-        req_id = executing_task["requestId"]
         ipfs_hash = to_v1(message.ipfs_hash)
+        req_id = self._executing_task["requestId"]
         self.context.logger.info(
             f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
         )
+        self._finalize_done_task(ipfs_hash)
+
+    def _finalize_done_task(self, cid: str) -> None:
+        """Apply the CID to the in-flight done_task and publish it.
+
+        :param cid: the CIDv1 string (multibase-encoded) to record on chain via
+            ``task_result``. Origin is either a real IPFS store response (on
+            the on-chain path) or a locally-computed CID (off-chain path).
+        """
+        # Shared finalization for both the IPFS-backed on-chain path (CID from
+        # a real IPFS store response) and the off-chain path (CID computed
+        # locally). Updates pricing, mech address, task_result, appends to
+        # done_tasks under the lock, and resets the executing-task state so the
+        # next task can be picked up. The CID is converted to the multihash hex
+        # shape the contract expects only after the done_task validity check
+        # passes — this matches the previous ordering so callers that pass a
+        # malformed CID alongside an invalid done_task still take the
+        # early-reset branch cleanly.
+        req_id = cast(Dict[str, Any], self._executing_task)["requestId"]
         self.set_last_executed_task(req_id)
         done_task = cast(Dict[str, Any], self._done_task)
         if done_task is None or not isinstance(done_task, Dict):
@@ -1295,7 +1328,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._async_result = None
             return
 
-        task_result = to_multihash(ipfs_hash)
+        task_result = to_multihash(cid)
         tool = str(done_task.get("tool"))
         dynamic_tool_cost = self._tools_to_pricing.get(tool)
         if dynamic_tool_cost is not None:

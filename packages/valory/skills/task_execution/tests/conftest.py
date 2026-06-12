@@ -143,6 +143,7 @@ def params_stub() -> SimpleNamespace:
         },
         use_mech_marketplace=True,
         mech_marketplace_address="0xMarketplace",
+        payment_type_to_asset_address={},
         max_block_window=10_000,
         task_deadline=15.0,
         timeout_limit=2,
