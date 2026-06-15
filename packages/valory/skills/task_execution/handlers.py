@@ -675,6 +675,20 @@ class MechHttpHandler(AbstractResponseHandler):
 
         available_amount = cast(int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value])
         if available_amount < request_delivery_rate:
+            try:
+                extra_headers = self._build_www_authenticate_header()
+                challenge_body = self._build_402_challenge(
+                    balance_check, error_msg="insufficient balance"
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                # The 402 / header builders raise on malformed internal state
+                # (missing balance-tracker address, mis-terminated header).
+                # Reply 500 rather than letting it escape with no HTTP response.
+                self.context.logger.exception(
+                    f"Failed to build 402 challenge for {request_id}."
+                )
+                self._send_internal_error(http_msg, http_dialogue, request_id)
+                return
             self._send_rejection_response(
                 http_msg,
                 http_dialogue,
@@ -682,10 +696,8 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason="insufficient balance",
                 status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
                 status_text="Payment required",
-                extra_headers=self._build_www_authenticate_header(),
-                body_extras=self._build_402_challenge(
-                    balance_check, error_msg="insufficient balance"
-                ),
+                extra_headers=extra_headers,
+                body_extras=challenge_body,
             )
             return
 
@@ -710,14 +722,24 @@ class MechHttpHandler(AbstractResponseHandler):
         )
 
         self.offchain_request_responses.pop(request_id, None)
-        self._send_ok_response(
-            http_msg=http_msg,
-            http_dialogue=http_dialogue,
-            data={RequestKey.REQUEST_ID.value: request_id},
-            extra_headers=self._build_payment_receipt_header(
+        try:
+            receipt_header = self._build_payment_receipt_header(
                 request_id, request_delivery_rate
-            ),
-        )
+            )
+            self._send_ok_response(
+                http_msg=http_msg,
+                http_dialogue=http_dialogue,
+                data={RequestKey.REQUEST_ID.value: request_id},
+                extra_headers=receipt_header,
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            # The receipt-header builder / OK sender raise only on malformed
+            # internal state. The task is already enqueued, so reply 500 rather
+            # than hanging the client; the mech still processes the request.
+            self.context.logger.exception(
+                f"Failed to send OK response for {request_id}."
+            )
+            self._send_internal_error(http_msg, http_dialogue, request_id)
 
     def _handle_offchain_request_info(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -869,6 +891,29 @@ class MechHttpHandler(AbstractResponseHandler):
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
 
+    def _send_internal_error(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, request_id: str
+    ) -> None:
+        """Send a 500 with no extra headers / body extras.
+
+        Used when a defensive guard in the 402 / header builders fires on the
+        request-handling path: a bare ``raise`` there would leave the client
+        with no HTTP reply (hung). This emits a definitive 500 instead; passing
+        no extra_headers keeps the senders' own newline guard from re-raising.
+
+        :param http_msg: the incoming HTTP request message.
+        :param http_dialogue: the HTTP dialogue used to reply.
+        :param request_id: the off-chain request id being rejected.
+        """
+        self._send_rejection_response(
+            http_msg,
+            http_dialogue,
+            request_id,
+            reason="internal error",
+            status_code=HttpCode.INTERNAL_SERVER_ERROR_CODE.value,
+            status_text="Internal server error",
+        )
+
     def _build_402_challenge(
         self,
         balance_check: Dict[str, Any],
@@ -895,11 +940,11 @@ class MechHttpHandler(AbstractResponseHandler):
         balance_tracker_address = cast(
             str, balance_check[ResponseKey.BALANCE_TRACKER_ADDRESS.value]
         )
-        # Normalize the lookup key — the map keys are lower-cased at load time
+        # Normalize the lookup key — `or ""` guards a present-but-None
+        # payment_type (a bare cast would be a runtime no-op and .lower() would
+        # then AttributeError); the map keys are lower-cased at load time
         # (models.Params) so a checksummed payment_type still resolves.
-        payment_type = cast(
-            str, balance_check.get(ResponseKey.PAYMENT_TYPE.value, "")
-        ).lower()
+        payment_type = (balance_check.get(ResponseKey.PAYMENT_TYPE.value) or "").lower()
         asset_address = self.params.payment_type_to_asset_address.get(
             payment_type, ZERO_ADDRESS
         )

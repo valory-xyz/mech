@@ -1908,3 +1908,112 @@ def test_signed_requests_accepts_zero_delivery_rate(
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.OK_CODE.value
     assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+# --- guard tests for the defensive paths added in the remediation -----------
+
+
+def _http_handler(handler_context: Any, monkeypatch: Any) -> MechHttpHandler:
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    return mh
+
+
+def test_build_402_challenge_raises_without_balance_tracker_address(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """The 402 builder refuses to emit zero-address deposit instructions."""
+    mh = _http_handler(handler_context, monkeypatch)
+    with pytest.raises(ValueError, match="balance_tracker_address"):
+        mh._build_402_challenge(
+            {hmod.ResponseKey.PAYMENT_TYPE.value: "0x01"},
+            error_msg="insufficient balance",
+        )
+
+
+def test_build_402_challenge_payment_type_case_insensitive(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A checksummed payment_type resolves against the lower-cased asset map."""
+    handler_context.params.payment_type_to_asset_address = {"0xabc": "0xAssetAddr"}
+    mh = _http_handler(handler_context, monkeypatch)
+    challenge = mh._build_402_challenge(
+        {
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: "0xABC",
+        },
+        error_msg="insufficient balance",
+    )
+    assert challenge["asset"] == "0xAssetAddr"
+
+
+def test_build_402_challenge_none_payment_type_is_safe(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A present-but-None payment_type must not AttributeError on .lower()."""
+    mh = _http_handler(handler_context, monkeypatch)
+    challenge = mh._build_402_challenge(
+        {
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: None,
+        },
+        error_msg="insufficient balance",
+    )
+    assert challenge["asset"] == hmod.ZERO_ADDRESS
+
+
+def test_send_ok_response_rejects_non_newline_extra_headers(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A non-newline-terminated header block is rejected (can't merge body)."""
+    mh = _http_handler(handler_context, monkeypatch)
+    http_msg: Any = make_http_msg({"request_id": "req-x"})
+    with pytest.raises(ValueError, match="newline-terminated"):
+        mh._send_ok_response(
+            http_msg=http_msg,
+            http_dialogue=http_dialogue,
+            data={"request_id": "req-x"},
+            extra_headers="X-No-Newline: y",
+        )
+
+
+def test_send_rejection_response_rejects_non_newline_extra_headers(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Same newline guard on the rejection sender."""
+    mh = _http_handler(handler_context, monkeypatch)
+    http_msg: Any = make_http_msg({"request_id": "req-x"})
+    with pytest.raises(ValueError, match="newline-terminated"):
+        mh._send_rejection_response(
+            http_msg,
+            http_dialogue,
+            "req-x",
+            reason="r",
+            status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
+            status_text="t",
+            extra_headers="X-No-Newline: y",
+        )
+
+
+def test_handler_replies_500_when_402_build_fails(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """If the 402 builder raises, the handler replies 500 instead of hanging."""
+    monkeypatch.setattr(
+        MechHttpHandler,
+        "_check_offchain_requester_balance",
+        lambda self, sender, delivery_rate: {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.AVAILABLE_AMOUNT.value: 0,
+            hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
+        },
+    )
+    mh = _http_handler(handler_context, monkeypatch)
+    http_msg: Any = make_http_msg(
+        _make_signed_request_body(delivery_rate="1", request_id="req-500")
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.INTERNAL_SERVER_ERROR_CODE.value

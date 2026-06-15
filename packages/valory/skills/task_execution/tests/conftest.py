@@ -53,6 +53,7 @@ def _make_logger(include_debug: bool = False) -> SimpleNamespace:
         info=lambda *a, **k: None,
         warning=lambda *a, **k: None,
         error=lambda *a, **k: None,
+        exception=lambda *a, **k: None,
     )
     if include_debug:
         ns.debug = lambda *a, **k: None  # type: ignore[attr-defined]

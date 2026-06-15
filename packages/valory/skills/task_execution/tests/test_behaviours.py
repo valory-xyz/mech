@@ -1687,7 +1687,7 @@ def _seed_executing_task(
     behaviour: Any,
     params_stub: Any,
     is_offchain: bool,
-    req_id: int = 7,
+    req_id: Any = 7,
 ) -> None:
     """Wire enough state on the behaviour for _handle_done_task to run end-to-end."""
     my_mech = params_stub.agent_mech_contract_address.lower()
@@ -1817,7 +1817,9 @@ def test_handle_done_task_offchain_oversized_records_failure_and_resets(
     monkeypatch: Any,
 ) -> None:
     """Oversized off-chain response fails cleanly and writes a rejection."""
-    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=13)
+    # String request_id — production keys these shared-state dicts by the str
+    # request_id parsed from the HTTP body, never an int.
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-13")
     monkeypatch.setattr(
         beh_mod,
         "compute_cidv1",
@@ -1834,7 +1836,7 @@ def test_handle_done_task_offchain_oversized_records_failure_and_resets(
     assert send_calls == []
     assert shared_state[beh_mod.DONE_TASKS] == []
     assert behaviour._executing_task is None
-    rejection = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES][13]
+    rejection = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-13"]
     assert rejection["status"] == "rejected"
 
 
@@ -1845,8 +1847,8 @@ def test_handle_done_task_offchain_clears_in_memory_request(
     monkeypatch: Any,
 ) -> None:
     """A successful off-chain delivery clears the buffered in_memory request."""
-    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=14)
-    shared_state[beh_mod.IN_MEMORY_REQUESTS] = {14: "buffered-ipfs-data"}
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-14")
+    shared_state[beh_mod.IN_MEMORY_REQUESTS] = {"req-14": "buffered-ipfs-data"}
     monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
     monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
     monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
@@ -1854,7 +1856,19 @@ def test_handle_done_task_offchain_clears_in_memory_request(
 
     behaviour._handle_done_task(task_result=None)
 
-    assert 14 not in shared_state[beh_mod.IN_MEMORY_REQUESTS]
+    assert "req-14" not in shared_state[beh_mod.IN_MEMORY_REQUESTS]
+    assert behaviour._executing_task is None
+
+
+def test_finalize_done_task_no_executing_task_is_safe(
+    behaviour: Any, monkeypatch: Any
+) -> None:
+    """_finalize_done_task guards a None executing task (logs, returns, no crash)."""
+    behaviour._executing_task = None
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+
+    behaviour._finalize_done_task("bafysomecid")  # must not raise
+
     assert behaviour._executing_task is None
 
 

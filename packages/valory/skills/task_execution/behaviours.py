@@ -910,15 +910,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # path's directory-wrapped CID (see utils/local_cid.py). The on-chain
             # commitment derivation (to_multihash, inside _finalize_done_task) is
             # otherwise identical.
-            response_bytes = json.dumps(response).encode("utf-8")
             try:
+                response_bytes = json.dumps(response).encode("utf-8")
                 local_cid = compute_cidv1(response_bytes)
-            except ValueError as exc:
-                # Response too large for a single block: we cannot produce a CID a
-                # real IPFS upload would match. Fail cleanly so the executing-task
-                # slot resets and the requester gets a definitive rejection,
-                # rather than crashing the agent (propagate policy) or stalling
-                # forever with a non-None _executing_task (just_log policy).
+            except (ValueError, TypeError) as exc:
+                # compute_cidv1 raises ValueError above the single-block bound;
+                # json.dumps raises TypeError (non-serializable) / ValueError
+                # (circular ref). Both must stay inside this guard, or the crash
+                # this fix targets still escapes through act(). Fail cleanly so
+                # the executing-task slot resets and the requester gets a
+                # definitive rejection, rather than crashing the agent
+                # (propagate policy) or stalling forever (just_log policy).
                 self.context.logger.error(
                     f"Off-chain CID computation failed for request {req_id}: {exc}"
                 )
