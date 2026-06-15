@@ -1810,6 +1810,54 @@ def test_handle_store_response_invalid_done_task_resets_state(
     assert behaviour._done_task is None
 
 
+def test_handle_done_task_offchain_oversized_records_failure_and_resets(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Oversized off-chain response fails cleanly and writes a rejection."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=13)
+    monkeypatch.setattr(
+        beh_mod,
+        "compute_cidv1",
+        MagicMock(side_effect=ValueError("exceeds single-block bound")),
+    )
+    send_calls: list = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: send_calls.append(a))
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    assert send_calls == []
+    assert shared_state[beh_mod.DONE_TASKS] == []
+    assert behaviour._executing_task is None
+    rejection = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES][13]
+    assert rejection["status"] == "rejected"
+
+
+def test_handle_done_task_offchain_clears_in_memory_request(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A successful off-chain delivery clears the buffered in_memory request."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=14)
+    shared_state[beh_mod.IN_MEMORY_REQUESTS] = {14: "buffered-ipfs-data"}
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    assert 14 not in shared_state[beh_mod.IN_MEMORY_REQUESTS]
+    assert behaviour._executing_task is None
+
+
 def test_handle_store_response_dynamic_pricing_recorded(
     behaviour: Any, params_stub: Any, shared_state: Dict[str, Any], monkeypatch: Any
 ) -> None:

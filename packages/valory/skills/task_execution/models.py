@@ -117,9 +117,18 @@ class Params(Model):
         self.gnosis_ledger_rpc: str = kwargs.get("gnosis_ledger_rpc", "")
         self.polygon_ledger_rpc: str = kwargs.get("polygon_ledger_rpc", "")
         self.base_ledger_rpc: str = kwargs.get("base_ledger_rpc", "")
-        self.payment_type_to_asset_address: Dict[str, str] = kwargs.get(
-            "payment_type_to_asset_address", {}
-        )
+        # Lower-case the payment_type keys at load so a checksummed-vs-lowercase
+        # hex mismatch at lookup time can't silently fall back to the zero
+        # address (which would signal a native-asset deposit for what is really
+        # an ERC-20 payment model).
+        self.payment_type_to_asset_address: Dict[str, str] = {
+            key.lower(): value
+            for key, value in kwargs.get("payment_type_to_asset_address", {}).items()
+        }
+        # Phase 1 ships dark: the offchain HTTP path is disabled by default and
+        # enabled per deployment in the Phase 2 rollout. False = today's
+        # on-chain + IPFS behaviour, unchanged.
+        self.use_offchain: bool = kwargs.get("use_offchain", False)
         self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing", {})
         if self.tools_to_pricing:
             self._ensure_same_keys(

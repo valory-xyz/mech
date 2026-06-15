@@ -465,6 +465,31 @@ def test_signed_requests_bad_request(
     assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
 
 
+def test_signed_requests_offchain_disabled_returns_503(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """use_offchain=False (the Phase 1 default) makes the off-chain endpoint 503."""
+    handler_context.params.use_offchain = False
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    http_msg: Any = make_http_msg(
+        {
+            "ipfs_hash": "0x" + "ab" * 32,
+            "sender": "0xSender",
+            "delivery_rate": "1",
+            "request_id": "req-disabled",
+            "ipfs_data": "{}",
+        }
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert mh.pending_tasks == []
+
+
 def test_fetch_offchain_request_info_returns_insufficient_balance_response(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:

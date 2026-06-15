@@ -31,7 +31,6 @@ import pytest
 
 from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
 
-
 # Tuples of (label, content, expected_cid_from_real_ipfs_add).
 _FIXTURES = [
     (
@@ -70,10 +69,21 @@ def test_compute_cidv1_matches_real_ipfs_output(
 
 
 def test_compute_cidv1_oversize_raises() -> None:
-    """Content beyond the single-block bound fails loudly rather than silently."""
-    oversized = b"a" * (1024 * 1024 + 1)
+    """Content one byte past the 256 KiB single-block bound fails loudly."""
+    oversized = b"a" * (256 * 1024 + 1)
     with pytest.raises(ValueError, match="exceeds single-block bound"):
         compute_cidv1(oversized)
+
+
+def test_compute_cidv1_accepts_exactly_one_block() -> None:
+    """Content of exactly 256 KiB is a single block and must be accepted."""
+    # No real-ipfs golden at this exact boundary (the test env has no ipfs
+    # binary); the parametrized fixtures pin go-ipfs parity for representative
+    # sizes, and this guards the off-by-one at the chunk boundary.
+    exactly_one_block = b"a" * (256 * 1024)
+    cid = compute_cidv1(exactly_one_block)
+    assert cid.startswith("bafy")
+    assert cid == compute_cidv1(exactly_one_block)
 
 
 def test_compute_cidv1_is_deterministic() -> None:

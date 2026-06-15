@@ -23,15 +23,26 @@ would for the same bytes. Intended for the offchain delivery path where we put t
 content commitment on chain without publishing the content to public IPFS.
 
 Single-block only: content must fit in one IPFS block. IPFS chunks at 256 KiB by
-default; payloads above that bound need a chunked / linked DAG and are not handled
-here. Hash sanity asserts the bound at runtime so a future oversized response fails
-loudly rather than silently producing a CID a real IPFS upload would not match.
+default, so the single-block bound is exactly 256 KiB; payloads above it need a
+chunked / linked DAG and are not handled here. ``compute_cidv1`` raises
+``ValueError`` (not ``assert``, which ``python -O`` would strip) above the bound,
+so a future oversized response fails loudly rather than silently producing a CID
+a real IPFS upload would not match.
+
+Shape note: this is a *bare* single-block file CID, matching ``ipfs add`` without
+``-w``. The mech's on-chain delivery path instead uploads via the IPFS connection
+with ``wrap_with_directory=True``, committing the *directory* CID. The two paths
+therefore commit structurally different CIDs for the same content — intentional:
+offchain content is never published, so its commitment is verified by re-hashing
+the raw bytes as a bare file, not by resolving ``ipfs://<cid>/<req_id>``.
 """
 
 import base64
 import hashlib
 
-_MAX_BLOCK_BYTES = 1024 * 1024  # IPFS default chunker is 256 KiB; one MiB is plenty.
+_MAX_BLOCK_BYTES = (
+    256 * 1024
+)  # IPFS default chunk size; above this needs a multi-block DAG.
 
 # Multicodec / multihash / multibase prefix bytes.
 _CIDV1_VERSION = 0x01

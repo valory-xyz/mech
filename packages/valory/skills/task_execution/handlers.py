@@ -554,12 +554,13 @@ class MechHttpHandler(AbstractResponseHandler):
 
     @property
     def in_memory_requests(self) -> Dict[str, str]:
-        """Get in-memory off-chain request metadata buffered by request id.
+        """Get in-memory off-chain request payloads buffered by request id.
 
-        :return: a dict keyed by request_id with the raw request JSON string.
+        :return: a dict keyed by request_id whose values are the request's
+            ``ipfs_data`` payload (not the full request envelope). Populated when
+            the off-chain path skips the IPFS upload; cleared when the task
+            finalizes.
         """
-        # Populated when the off-chain path skips the IPFS upload and keeps the
-        # request JSON locally instead.
         return self.context.shared_state[IN_MEMORY_REQUESTS]
 
     @property
@@ -596,6 +597,28 @@ class MechHttpHandler(AbstractResponseHandler):
         :param http_msg: the HttpMessage instance
         :param http_dialogue: the HttpDialogue instance
         """
+        # Phase 1 ships dark: the off-chain HTTP path is disabled by default and
+        # enabled per deployment in the Phase 2 rollout (use_offchain). When off,
+        # nothing about the on-chain + IPFS flow changes; off-chain requests are
+        # refused so none of the new off-chain code path runs.
+        if not self.params.use_offchain:
+            self.context.logger.info(
+                "Off-chain request received but the off-chain path is disabled "
+                "(use_offchain=false); refusing."
+            )
+            http_response = http_dialogue.reply(
+                performative=HttpMessage.Performative.RESPONSE,
+                target_message=http_msg,
+                version=http_msg.version,
+                status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
+                status_text="Service unavailable",
+                headers=f"{self.json_content_header}{http_msg.headers}",
+                body=json.dumps({"error": "offchain path disabled"}).encode(
+                    ENCODING_UTF8
+                ),
+            )
+            self.context.outbox.put_message(message=http_response)
+            return
 
         try:
             data = self._parse_http_body(http_msg)
@@ -778,6 +801,10 @@ class MechHttpHandler(AbstractResponseHandler):
             terminated by ``\n``) prepended to the response. Callers use this to
             add audit headers (e.g. ``Payment-Receipt``) without rewriting body.
         """
+        # Each header line must be newline-terminated, else it would silently
+        # merge with the Content-Type line that follows.
+        if extra_headers and not extra_headers.endswith("\n"):
+            raise ValueError("extra_headers must be empty or newline-terminated")
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
             target_message=http_msg,
@@ -814,6 +841,10 @@ class MechHttpHandler(AbstractResponseHandler):
         :param extra_headers: optional pre-formatted header block to prepend.
         :param body_extras: optional dict merged into the JSON response body.
         """
+        # Each header line must be newline-terminated, else it would silently
+        # merge with the Content-Type line that follows.
+        if extra_headers and not extra_headers.endswith("\n"):
+            raise ValueError("extra_headers must be empty or newline-terminated")
         # ``body_extras`` is merged into the JSON body alongside the canonical
         # ``{request_id, status, reason}`` keys, so legacy clients that only
         # read ``reason`` keep working while new clients can pick up structured
@@ -845,20 +876,30 @@ class MechHttpHandler(AbstractResponseHandler):
     ) -> Dict[str, Any]:
         """Build the structured 402 challenge body.
 
-        :param balance_check: the result dict from ``_check_offchain_requester_balance``.
+        :param balance_check: a successful result dict from
+            ``_check_offchain_requester_balance``; it must carry the
+            balance-tracker address. An error-shaped dict is rejected rather than
+            silently emitting zero-address deposit instructions.
         :param error_msg: a short human-readable error string echoed in the body.
         :return: the structured 402 challenge as a dict ready for JSON encoding.
+        :raises ValueError: if ``balance_check`` lacks the balance-tracker address.
         """
-        # Reads payTo, asset, chainId, currentBalance, required from the
-        # balance-check result and pairs them with deposit instructions the
-        # client can use to construct an on-chain top-up. Native-asset payment
-        # models surface the zero address for ``asset``; clients that see the
-        # zero address must skip the ERC20 approve step.
+        # Native-asset payment models surface the zero address for ``asset``;
+        # clients that see it must skip the ERC20 approve step.
+        if ResponseKey.BALANCE_TRACKER_ADDRESS.value not in balance_check:
+            raise ValueError(
+                "cannot build a 402 challenge from a balance check without a "
+                "balance_tracker_address; refusing to emit zero-address deposit "
+                "instructions"
+            )
         balance_tracker_address = cast(
-            str,
-            balance_check.get(ResponseKey.BALANCE_TRACKER_ADDRESS.value, ZERO_ADDRESS),
+            str, balance_check[ResponseKey.BALANCE_TRACKER_ADDRESS.value]
         )
-        payment_type = cast(str, balance_check.get(ResponseKey.PAYMENT_TYPE.value, ""))
+        # Normalize the lookup key — the map keys are lower-cased at load time
+        # (models.Params) so a checksummed payment_type still resolves.
+        payment_type = cast(
+            str, balance_check.get(ResponseKey.PAYMENT_TYPE.value, "")
+        ).lower()
         asset_address = self.params.payment_type_to_asset_address.get(
             payment_type, ZERO_ADDRESS
         )
