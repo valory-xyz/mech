@@ -932,6 +932,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Off-chain response for request {req_id} kept private; "
                 f"local CID {local_cid}."
             )
+            # Off-chain return channel: the response was not uploaded to IPFS, so
+            # persist it under offchain_request_responses for /fetch_offchain_info
+            # to serve. Without this the poll falls back to the done_task, which
+            # carries the CID/multihash but not the result/prompt/cost_dict — i.e.
+            # the requester would have no way to read the actual result.
+            self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
+                cast(str, req_id)
+            ] = {
+                **response,
+                "request_id": cast(str, req_id),
+                "status": "ok",
+                "content_cid": local_cid,
+            }
             self._finalize_done_task(local_cid)
             return
 

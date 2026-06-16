@@ -1742,6 +1742,16 @@ def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
     int(done["task_result"], 16)
     assert behaviour._executing_task is None
 
+    # Off-chain return channel: the result is persisted under
+    # offchain_request_responses so /fetch_offchain_info can serve it. The
+    # response never hit public IPFS, and the done_task fallback carries the
+    # CID but not the result/prompt/cost_dict.
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES][11]
+    assert stored["status"] == "ok"
+    assert stored["request_id"] == 11
+    assert "result" in stored
+    assert isinstance(stored["content_cid"], str) and stored["content_cid"]
+
 
 def test_handle_done_task_onchain_still_uploads_to_ipfs(
     behaviour: Any,
