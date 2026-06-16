@@ -11,7 +11,7 @@ fingerprint:
   __init__.py: bafybeiawbmkq67kmjckyhxow5yklqu6ekdhalapxyuhq3nobwqmlkk2yfm
   dialogues.py: bafybeiavv36yvk4kpogquql5tsjbnfnwodmsbq4hkphp7snpp3vo2g6d7i
   kv_store.proto: bafybeihxtflevnqu6mqx6z77mlkgkd3dqha5owc3djdr52hdtwvcz37h3i
-  kv_store_pb2.py: bafybeiap4sg5yujp73kzuhyzeiplk2dr7qxf6hp4zmbw5gkgxlibpj2pce
+  kv_store_pb2.py: bafybeieps5pxzvqkj7yomzdd4ydbymuxtncfknlmkf2bhwsvxx2663uxgi
   message.py: bafybeifzphkunlegyuiav7qpnhcbpnpw4wtcqbyi2irgutarhms5bwegfu
   serialization.py: bafybeiaywsv4lrj5qbguz57bokzsis2pfx7hrviiystkdthnywkphgpst4
 fingerprint_ignore_patterns: []
