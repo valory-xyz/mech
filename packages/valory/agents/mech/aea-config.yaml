@@ -11,6 +11,7 @@ connections:
 - valory/http_client:0.23.0:bafybeihel6sg2yayxu7lqygaswdgciaxpqrgsbl5rwx74c6znu5qz2edd4
 - valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
 - valory/ipfs:0.1.0:bafybeihxytzo7tunodztv424xsnnufewbowucdsxtdzdcik2rskcn7plta
+- valory/kv_store:0.1.0:bafybeigge3eczwkqzrxou7ftxquacvgskydbsaxvullh5jiwqybks5h3ba
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 - valory/websocket_client:0.1.0:bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea
@@ -33,6 +34,7 @@ protocols:
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 - valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
+- valory/kv_store:0.1.0:bafybeid4wq7y2umdjyd5l55mc7imuj54wudsfuk5foyfsk3jftm6bk3ozi
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 - valory/tendermint:0.1.0:bafybeihzb7e32f7jcrzvubilqaxzmyk7ea6ss3pg3tliatdlrr76qeknyq
 - valory/websocket_client:0.1.0:bafybeig6omutaqt5rbvidju4zc7pwwdi6tkagwu3dwiirosadyoo534v3q
@@ -272,4 +274,13 @@ config:
   host: ${str:0.0.0.0}
   target_skill_id: valory/mech_abci:0.1.0
   port: ${int:8000}
+is_abstract: false
+---
+public_id: valory/kv_store:0.1.0
+type: connection
+config:
+  # SQLite-backed durable store for the off-chain preimage buffer. Points at the
+  # agent's persistent volume so buffered (request, response) pairs survive
+  # restarts; the background sweeper prunes entries past the retention window.
+  store_path: ${str:/data/mech_preimages}
 is_abstract: false

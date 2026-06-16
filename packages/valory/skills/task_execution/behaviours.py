@@ -28,6 +28,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
+from aea.configurations.base import PublicId
 from aea.helpers.cid import to_v1
 from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
@@ -51,8 +52,10 @@ from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialo
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
+from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from packages.valory.skills.task_execution.utils.cost_calculation import (
@@ -93,6 +96,10 @@ MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
 PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
+# Routing target for kv_store messages (the preimage buffer). Built from the
+# public id string rather than imported from the connection package so the
+# skill (and its unit tests) don't pull in the connection's runtime deps.
+KV_STORE_CONNECTION_PUBLIC_ID = str(PublicId.from_str("valory/kv_store:0.1.0"))
 
 
 class RequestType(Enum):
@@ -244,6 +251,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_package_hash = self.params.tools_to_package_hash
         self._tools_to_pricing = self.params.tools_to_pricing
         self._keychain = KeyChain(self.params.api_keys)
+        # Initialise the off-chain preimage buffer's shared-state keys so the
+        # accept hook (handler side) and the sweeper (here) can read/write them.
+        preimage_buffer.init_shared_state(self.context.shared_state)
 
     def _ensure_payment_model(self) -> bool:
         """Set the mech's payment model."""
@@ -283,6 +293,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._check_for_new_marketplace_reqs()
         self._filter_out_incompatible_reqs()
         self._update_pending_tasks()
+        self._process_preimage_buffer()
 
     @property
     def payment_model(self) -> Optional[Any]:
@@ -932,6 +943,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Off-chain response for request {req_id} kept private; "
                 f"local CID {local_cid}."
             )
+            # Mirror the (request, response) preimage into the durable buffer
+            # before finalizing. The response stays private (not on IPFS), so
+            # this is the operator's only audit copy; the sweeper prunes it after
+            # the retention window. No-op unless preimage retention is enabled.
+            self._buffer_preimage_settlement(
+                cast(str, req_id),
+                response_bytes.decode("utf-8", errors="replace"),
+                local_cid,
+                preimage_buffer.STATUS_DELIVERED,
+            )
             self._finalize_done_task(local_cid)
             return
 
@@ -1411,8 +1432,129 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "status": "rejected",
             "reason": reason,
         }
+        # Capture the rejection in the durable preimage buffer (no-op unless
+        # off-chain preimage retention is enabled).
+        self._buffer_preimage_settlement(
+            req_id, reason, None, preimage_buffer.STATUS_REJECTED
+        )
         self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
         self._reset_executing_task()
+
+    # --- off-chain preimage buffer (kv_store) -----------------------------
+
+    def _buffer_preimage_settlement(
+        self,
+        req_id: str,
+        response_payload: str,
+        response_cid: Optional[str],
+        status: str,
+    ) -> None:
+        """Record an off-chain request's settled outcome in the preimage buffer.
+
+        No-op unless off-chain preimage retention is enabled. The actual
+        kv_store write is flushed asynchronously by ``_process_preimage_buffer``.
+
+        :param req_id: the off-chain request id.
+        :param response_payload: the delivered response, or the failure reason.
+        :param response_cid: the local CID of the response, when delivered.
+        :param status: one of the preimage STATUS_* terminal values.
+        """
+        if not self.params.preimage_retention_enabled:
+            return
+        preimage_buffer.record_settlement(
+            self.context.shared_state,
+            str(req_id),
+            response_payload,
+            response_cid,
+            status,
+            time.time(),
+        )
+
+    def _process_preimage_buffer(self) -> None:
+        """Flush buffered preimage writes/deletes and periodically sweep.
+
+        No-op unless off-chain preimage retention is enabled. At most one
+        kv_store request is in flight at a time (a flag separate from the task
+        executor's ``in_flight_req``), so this never blocks task execution.
+        Per tick it does the first of: run a due sweep (LIST by prefix), flush a
+        batch of expired deletes, or flush one queued write.
+        """
+        if not self.params.preimage_retention_enabled:
+            return
+        shared_state = self.context.shared_state
+        if shared_state.get(preimage_buffer.PREIMAGE_KV_IN_FLIGHT):
+            return
+
+        now = time.time()
+        last_sweep = shared_state.get(preimage_buffer.PREIMAGE_LAST_SWEEP, 0.0)
+        if now - last_sweep >= self.params.preimage_sweep_interval:
+            shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
+            self._send_kv_list()
+            return
+
+        delete_queue: List[str] = shared_state.get(
+            preimage_buffer.PREIMAGE_DELETE_QUEUE, []
+        )
+        if delete_queue:
+            keys = list(delete_queue)
+            delete_queue.clear()
+            self._send_kv_delete(keys)
+            return
+
+        write_queue: List[str] = shared_state.get(
+            preimage_buffer.PREIMAGE_WRITE_QUEUE, []
+        )
+        while write_queue:
+            request_id = write_queue.pop(0)
+            record = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).get(
+                request_id
+            )
+            if record is None:
+                # Already pruned (e.g. duplicate enqueue); skip to the next.
+                continue
+            self._send_kv_write(request_id, record)
+            return
+
+    def _send_kv_write(self, request_id: str, record: Dict[str, Any]) -> None:
+        """Upsert one preimage record into the kv_store.
+
+        :param request_id: the off-chain request id (used to build the key).
+        :param record: the preimage record to persist.
+        """
+        key = preimage_buffer.preimage_key(self.params.preimage_key_prefix, request_id)
+        msg, _ = self.context.kv_store_dialogues.create(
+            counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
+            performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            data={key: preimage_buffer.serialize(record)},
+        )
+        self.context.outbox.put_message(message=msg)
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = request_id
+        self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
+
+    def _send_kv_delete(self, keys: List[str]) -> None:
+        """Delete a batch of expired preimage keys from the kv_store.
+
+        :param keys: the fully-namespaced kv_store keys to delete.
+        """
+        msg, _ = self.context.kv_store_dialogues.create(
+            counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
+            performative=KvStoreMessage.Performative.DELETE_REQUEST,
+            keys=tuple(keys),
+        )
+        self.context.outbox.put_message(message=msg)
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+        self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
+
+    def _send_kv_list(self) -> None:
+        """List the preimage namespace so the handler can prune expired keys."""
+        msg, _ = self.context.kv_store_dialogues.create(
+            counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
+            performative=KvStoreMessage.Performative.LIST_REQUEST,
+            key_prefix=self.params.preimage_key_prefix,
+        )
+        self.context.outbox.put_message(message=msg)
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+        self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
 
     def _handle_ipfs_tasks_response(
         self, message: IpfsMessage, dialogue: Dialogue

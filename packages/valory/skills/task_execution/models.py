@@ -129,6 +129,27 @@ class Params(Model):
         # enabled per deployment in the Phase 2 rollout. False = today's
         # on-chain + IPFS behaviour, unchanged.
         self.use_offchain: bool = kwargs.get("use_offchain", False)
+        # Off-chain preimage retention. Ships dark like use_offchain: False keeps
+        # today's behaviour (no durable preimage buffer). When enabled, each
+        # off-chain (request, response) pair is mirrored into the kv_store and a
+        # background sweeper prunes entries older than the retention window. Only
+        # meaningful alongside use_offchain (on-chain deliveries are already
+        # public on IPFS).
+        self.preimage_retention_enabled: bool = kwargs.get(
+            "preimage_retention_enabled", False
+        )
+        # Retention window for buffered preimages, in seconds (default 24h).
+        self.preimage_retention_seconds: int = kwargs.get(
+            "preimage_retention_seconds", 86400
+        )
+        # How often the sweeper LISTs the namespace to prune expired entries.
+        self.preimage_sweep_interval: float = kwargs.get(
+            "preimage_sweep_interval", 3600.0
+        )
+        # kv_store key namespace for preimages; the sweeper LISTs by this prefix.
+        self.preimage_key_prefix: str = kwargs.get(
+            "preimage_key_prefix", "mech_preimage/"
+        )
         self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing", {})
         if self.tools_to_pricing:
             self._ensure_same_keys(

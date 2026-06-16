@@ -44,10 +44,12 @@ from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.protocols.ipfs import IpfsMessage
+from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
@@ -513,6 +515,68 @@ class LedgerHandler(BaseHandler):
         )
 
         self.params.in_flight_req = False
+        self.on_message_handled(message)
+
+
+class KvStoreHandler(BaseHandler):
+    """Handler for kv_store replies backing the off-chain preimage buffer."""
+
+    SUPPORTED_PROTOCOL = KvStoreMessage.protocol_id
+
+    def handle(self, message: Message) -> None:
+        """Process a kv_store reply (CREATE_OR_UPDATE / LIST / DELETE outcome).
+
+        Clears the single-in-flight flag so the behaviour can issue the next
+        preimage op. On LIST_RESPONSE it queues the keys past the retention
+        window for deletion; on ERROR it re-queues a failed write so the replay
+        survives a transient kv_store failure.
+
+        :param message: the incoming kv_store message.
+        """
+        kv_msg = cast(KvStoreMessage, message)
+        self.context.kv_store_dialogues.update(kv_msg)
+        shared_state = self.context.shared_state
+        performative = kv_msg.performative
+
+        if performative == KvStoreMessage.Performative.LIST_RESPONSE:
+            expired = preimage_buffer.expired_keys(
+                dict(kv_msg.data),
+                time.time(),
+                self.params.preimage_retention_seconds,
+            )
+            if expired:
+                shared_state.setdefault(
+                    preimage_buffer.PREIMAGE_DELETE_QUEUE, []
+                ).extend(expired)
+                self.context.logger.info(
+                    f"Preimage sweep: queued {len(expired)} expired entries "
+                    f"for deletion."
+                )
+        elif performative == KvStoreMessage.Performative.SUCCESS:
+            # A successful write of a terminal (delivered/rejected) record means
+            # the kv_store now owns it; drop the in-process copy. Non-terminal
+            # (processing) records are kept so the settle update can merge.
+            inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
+            if inflight is not None:
+                records = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {})
+                record = records.get(inflight)
+                if (
+                    record is not None
+                    and record.get("settlement_status")
+                    in preimage_buffer.TERMINAL_STATUSES
+                ):
+                    records.pop(inflight, None)
+        elif performative == KvStoreMessage.Performative.ERROR:
+            self.context.logger.warning(f"kv_store error: {kv_msg.message}")
+            inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
+            if inflight is not None:
+                # Re-queue the failed write so the preimage isn't lost.
+                shared_state.setdefault(
+                    preimage_buffer.PREIMAGE_WRITE_QUEUE, []
+                ).append(inflight)
+
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+        shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
         self.on_message_handled(message)
 
 
@@ -1060,6 +1124,16 @@ class MechHttpHandler(AbstractResponseHandler):
         except Exception:
             self._rollback_offchain_enqueue(request_id)
             raise
+        # Buffer the request half of the durable preimage (no-op unless off-chain
+        # preimage retention is enabled). The response half is added at
+        # settlement; the behaviour flushes both to the kv_store asynchronously.
+        if self.params.preimage_retention_enabled:
+            preimage_buffer.record_accept(
+                self.context.shared_state,
+                request_id,
+                data[RequestKey.IPFS_DATA.value],
+                time.time(),
+            )
         return req
 
     @staticmethod

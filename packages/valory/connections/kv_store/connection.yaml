@@ -1,0 +1,27 @@
+name: kv_store
+author: valory
+version: 0.1.0
+type: connection
+description: Connection for interacting with a key-value storage.
+license: Apache-2.0
+aea_version: '>=2.0.0, <3.0.0'
+fingerprint:
+  __init__.py: bafybeiewlgvwc2won6ndek34hea2s3hkdhqdnhut5deeyyz6wfenwy5ywq
+  connection.py: bafybeieb6oqbqv7xfagskloaxs55l3ljemp5lz2t6yufpligbmzlfc7m6q
+  readme.md: bafybeigyb5o5tymr2cl6mgdf2mcb74v66iuc4m4rwvxox5wtydsqxy7dmm
+  tests/__init__.py: bafybeiara3iv2u3j66h3cssvi6g5gws2zekkdzogqlypnojruersdms5au
+  tests/test_connection.py: bafybeigdgkbxr2bu53bi5iua2irfboee5dhhxlz7acp5xfknunwid24zuq
+fingerprint_ignore_patterns: []
+connections: []
+protocols:
+- valory/kv_store:0.1.0:bafybeid4wq7y2umdjyd5l55mc7imuj54wudsfuk5foyfsk3jftm6bk3ozi
+class_name: KvStoreConnection
+config:
+  store_path: null
+excluded_protocols: []
+restricted_to_protocols: []
+dependencies:
+  peewee:
+    version: ==3.17.5
+is_abstract: false
+cert_requests: []

@@ -39,9 +39,9 @@ from packages.valory.skills.task_execution.behaviours import (
     PENDING_TASKS,
     REQUEST_ID_TO_DELIVERY_RATE_INFO,
     TIMED_OUT_TASKS,
-    TaskExecutionBehaviour,
     UNPROCESSED_TIMED_OUT_TASKS,
     WAIT_FOR_TIMEOUT,
+    TaskExecutionBehaviour,
 )
 
 # ----------------------------- Shared stubs -----------------------------------
@@ -84,6 +84,25 @@ class _IpfsDLG(_DLG):
     def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
         """Return a (message, dialogue) pair with a stable reference."""
         msg = SimpleNamespace()
+        dlg = SimpleNamespace(
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+        )
+        return msg, dlg
+
+
+class _KvStoreDLG(_DLG):
+    """kv_store dialogue stub whose create() echoes performative + content."""
+
+    def update(self, _msg: Any) -> Any:
+        """Return an object with a stable dialogue reference."""
+        return SimpleNamespace(
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+        )
+
+    def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
+        """Return a (message, dialogue) pair echoing the create kwargs."""
+        fields = {key: k[key] for key in ("data", "keys", "key_prefix") if key in k}
+        msg = SimpleNamespace(performative=k.get("performative"), **fields)
         dlg = SimpleNamespace(
             dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
         )
@@ -148,6 +167,12 @@ def params_stub() -> SimpleNamespace:
         # Offchain path enabled for the tests that exercise it; the
         # default-off gate is covered by a dedicated test.
         use_offchain=True,
+        # Preimage buffer off by default here; the dedicated preimage tests flip
+        # it on, matching the ship-dark default.
+        preimage_retention_enabled=False,
+        preimage_retention_seconds=86400,
+        preimage_sweep_interval=3600.0,
+        preimage_key_prefix="mech_preimage/",
         max_block_window=10_000,
         task_deadline=15.0,
         timeout_limit=2,
@@ -203,6 +228,7 @@ def context_stub(
         contract_dialogues=_DLG(),
         ledger_dialogues=_DLG(),
         acn_data_share_dialogues=_DLG(),
+        kv_store_dialogues=_KvStoreDLG(),
     )
 
     ctx.handlers = SimpleNamespace(
@@ -307,6 +333,7 @@ def handler_context(
     ctx.ipfs_dialogues = _IpfsDLG()
     ctx.contract_dialogues = _DLG()
     ctx.ledger_dialogues = _DLG()
+    ctx.kv_store_dialogues = _KvStoreDLG()
     ctx.params.logger = ctx.logger
     return ctx
 
