@@ -31,19 +31,19 @@ fingerprint:
   utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
 fingerprint_ignore_patterns: []
 connections:
-- valory/ipfs:0.1.0:bafybeihxytzo7tunodztv424xsnnufewbowucdsxtdzdcik2rskcn7plta
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
+- valory/ipfs:0.1.0:bafybeihxytzo7tunodztv424xsnnufewbowucdsxtdzdcik2rskcn7plta
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 contracts:
-- valory/balance_tracker:0.1.0:bafybeibb7bzedhht262sn2t4vklcjcaa5fibermmcepnqi2wrcorkyz4qa
-- valory/mech_marketplace:0.1.0:bafybeifwx6owth25ud4pknu2s2vcxitt3w2eotjkavmwksdhmur2xd5qgy
 - valory/olas_mech:0.1.0:bafybeifvxzldiclpk7ztinivtjaf3y7yfrkw677y73tb2cukkywbagawc4
+- valory/mech_marketplace:0.1.0:bafybeifwx6owth25ud4pknu2s2vcxitt3w2eotjkavmwksdhmur2xd5qgy
+- valory/balance_tracker:0.1.0:bafybeibb7bzedhht262sn2t4vklcjcaa5fibermmcepnqi2wrcorkyz4qa
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
-- valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
-- valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
+- valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
+- valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 behaviours:
@@ -86,36 +86,35 @@ models:
     args:
       agent_index: 0
       api_keys: {}
-      base_ledger_rpc: http://localhost:8545
-      default_chain_id: gnosis
+      tools_to_package_hash: {}
       from_block_range: 50000
-      gnosis_ledger_rpc: http://localhost:8545
-      light_slash_unit_amount: 5000000000000000
-      max_block_window: 500
-      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
-      mech_to_config: {}
-      mech_to_max_delivery_rate: {}
       num_agents: 4
+      mech_to_config: {}
+      tools_to_pricing: {}
       polling_interval: 30.0
-      polygon_ledger_rpc: http://localhost:8545
-      serious_slash_unit_amount: 8000000000000000
+      step_in_list_size: 20
+      mech_to_max_delivery_rate: {}
+      task_deadline: 240.0
+      max_block_window: 500
+      use_slashing: false
+      timeout_limit: 3
       slash_cooldown_hours: 3
       slash_threshold_amount: 10000000000000000
-      step_in_list_size: 20
-      task_deadline: 240.0
-      timeout_limit: 3
-      tools_to_package_hash: {}
-      tools_to_pricing: {}
-      use_slashing: false
+      light_slash_unit_amount: 5000000000000000
+      serious_slash_unit_amount: 8000000000000000
+      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
+      default_chain_id: gnosis
+      gnosis_ledger_rpc: http://localhost:8545
+      polygon_ledger_rpc: http://localhost:8545
+      base_ledger_rpc: http://localhost:8545
     class_name: Params
 dependencies:
-  PyYAML:
-    version: ==6.0.1
   open-aea-ledger-ethereum:
     version: ==2.2.7
-  pebble:
-    version: ==5.1.3
+  PyYAML:
+    version: ==6.0.1
   prometheus_client:
     version: ==0.23.1
+  pebble:
+    version: ==5.1.3
 is_abstract: false
-customs: []
