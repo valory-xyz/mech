@@ -910,9 +910,31 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # path's directory-wrapped CID (see utils/local_cid.py). The on-chain
             # commitment derivation (to_multihash, inside _finalize_done_task) is
             # otherwise identical.
+            if self._invalid_request:
+                # The task ran but produced no valid result, so `response`
+                # carries an error string rather than an answer. Route it through
+                # the same terminal-failure channel as the CID / done-task
+                # failures below instead of serving it as a success: a paying
+                # requester keys refund / retry / dispute on `status`, so a "ran
+                # but failed" delivery must be distinguishable from a successful
+                # one — otherwise the client accepts and pays for a failure.
+                self._record_offchain_failure(
+                    cast(str, req_id),
+                    cast(str, response.get("result") or "task execution failed"),
+                )
+                return
             try:
-                response_bytes = json.dumps(response).encode("utf-8")
-                local_cid = compute_cidv1(response_bytes)
+                # content_bytes is exactly what the CID commits to. The serving
+                # payload below carries this same object verbatim under
+                # "response" (envelope fields hang outside it), so a client that
+                # re-derives compute_cidv1(json.dumps(stored["response"]))
+                # reproduces content_cid byte-for-byte and can verify the
+                # delivery against the on-chain commitment. json.dumps round-trips
+                # stably here (default separators, dict insertion order is
+                # preserved through JSON), matching the on-chain path which also
+                # content-addresses json.dumps(response).
+                content_bytes = json.dumps(response).encode("utf-8")
+                local_cid = compute_cidv1(content_bytes)
             except (ValueError, TypeError) as exc:
                 # compute_cidv1 raises ValueError above the single-block bound;
                 # json.dumps raises TypeError (non-serializable) / ValueError
@@ -934,16 +956,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             # Off-chain return channel: the response was not uploaded to IPFS, so
             # persist it under offchain_request_responses for /fetch_offchain_info
-            # to serve. Without this the poll falls back to the done_task, which
-            # carries the CID/multihash but not the result/prompt/cost_dict — i.e.
-            # the requester would have no way to read the actual result.
+            # to serve. The committed object is kept verbatim under "response"
+            # (the exact bytes hashed into content_cid); request_id / status /
+            # content_cid are envelope fields kept outside it so they don't
+            # perturb the hash. Without this the poll falls back to the done_task,
+            # which carries the CID/multihash but not the result/prompt/cost_dict.
             self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
                 cast(str, req_id)
             ] = {
-                **response,
                 "request_id": cast(str, req_id),
                 "status": "ok",
                 "content_cid": local_cid,
+                "response": response,
             }
             self._finalize_done_task(local_cid)
             return
