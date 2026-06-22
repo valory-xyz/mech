@@ -53,6 +53,7 @@ def _make_logger(include_debug: bool = False) -> SimpleNamespace:
         info=lambda *a, **k: None,
         warning=lambda *a, **k: None,
         error=lambda *a, **k: None,
+        exception=lambda *a, **k: None,
     )
     if include_debug:
         ns.debug = lambda *a, **k: None  # type: ignore[attr-defined]
@@ -143,6 +144,10 @@ def params_stub() -> SimpleNamespace:
         },
         use_mech_marketplace=True,
         mech_marketplace_address="0xMarketplace",
+        payment_type_to_asset_address={},
+        # Offchain path enabled for the tests that exercise it; the
+        # default-off gate is covered by a dedicated test.
+        use_offchain=True,
         max_block_window=10_000,
         task_deadline=15.0,
         timeout_limit=2,

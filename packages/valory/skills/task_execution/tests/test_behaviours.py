@@ -1678,6 +1678,161 @@ def test_get_executing_task_result_exception(behaviour: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
+# _handle_done_task: offchain skips IPFS and finalizes via local CID;
+# onchain path keeps uploading to IPFS.
+# ---------------------------------------------------------------------------
+
+
+def _seed_executing_task(
+    behaviour: Any,
+    params_stub: Any,
+    is_offchain: bool,
+    req_id: Any = 7,
+) -> None:
+    """Wire enough state on the behaviour for _handle_done_task to run end-to-end."""
+    my_mech = params_stub.agent_mech_contract_address.lower()
+    params_stub.mech_to_config = {
+        my_mech: SimpleNamespace(is_marketplace_mech=True, use_dynamic_pricing=False)
+    }
+    behaviour._executing_task = {
+        "requestId": req_id,
+        "tool": "mytool",
+        "is_offchain": is_offchain,
+        "contract_address": params_stub.agent_mech_contract_address,
+    }
+    behaviour._done_task = None  # _handle_done_task assigns it
+    behaviour._invalid_request = False  # default to the success shape
+    behaviour._ipfs_error_reason = None
+
+
+def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Off-chain path skips the IPFS store call and writes a locally-computed CID."""
+    # Catches a mutation that flipped the gating predicate: any future change
+    # that fires the IPFS upload on the off-chain branch makes this test fail
+    # because send_message would then be invoked.
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=11)
+
+    send_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda *a, **k: send_calls.append((a, k)),
+    )
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=_make_success_result())
+
+    # The IPFS store request must not have been sent.
+    assert send_calls == []
+
+    # The done_task is published with the locally-derived multihash.
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    done = done_tasks[0]
+    assert done["request_id"] == 11
+    assert isinstance(done["task_result"], str) and len(done["task_result"]) > 0
+    # Result string is hex (no 0x), matching the existing to_multihash output shape.
+    int(done["task_result"], 16)
+    assert behaviour._executing_task is None
+
+    # Off-chain return channel: the result is persisted under
+    # offchain_request_responses so /fetch_offchain_info can serve it. The
+    # response never hit public IPFS, and the done_task fallback carries the
+    # CID but not the result/prompt/cost_dict.
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES][11]
+    assert stored["status"] == "ok"
+    assert stored["request_id"] == 11
+    assert isinstance(stored["content_cid"], str) and stored["content_cid"]
+    # The committed object is served verbatim under "response" (envelope fields
+    # hang outside it), and it carries the real tool result.
+    assert stored["response"]["result"] == "prediction: yes"
+    # content_cid must be reproducible by re-hashing exactly the served
+    # "response" object — this is the verification contract every offchain
+    # consumer (mech-client, mech-interact, historical ETL) relies on.
+    recomputed = beh_mod.compute_cidv1(json.dumps(stored["response"]).encode("utf-8"))
+    assert recomputed == stored["content_cid"]
+
+
+def test_handle_done_task_offchain_invalid_request_recorded_as_failure(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A failed off-chain task is served as a rejection, never as status 'ok'."""
+    # A tool/execution failure (_invalid_request) must not land in the success
+    # bucket: a paying requester keys refund/retry on `status`, so "ran but
+    # failed" has to be distinguishable from "succeeded".
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-15")
+    behaviour._invalid_request = True
+    behaviour._ipfs_error_reason = "tool boom"
+
+    send_calls: list = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: send_calls.append(a))
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    # No IPFS upload, no on-chain delivery for a failed offchain task.
+    assert send_calls == []
+    assert shared_state[beh_mod.DONE_TASKS] == []
+    assert behaviour._executing_task is None
+
+    rejection = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-15"]
+    assert rejection["status"] == "rejected"
+    assert rejection["status"] != "ok"
+    # The failure reason surfaces to the requester rather than being masked.
+    assert rejection["reason"] == "tool boom"
+
+
+def test_handle_done_task_onchain_still_uploads_to_ipfs(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """On-chain path keeps the IPFS upload, locking in the off-chain gate."""
+    # If a future refactor accidentally pulled the on-chain path through the
+    # new local-CID branch, the IPFS upload would not fire and this test would
+    # notice.
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=12)
+
+    monkeypatch.setattr(
+        behaviour,
+        "_build_ipfs_store_file_req",
+        lambda files, **k: (object(), fake_dialogue),
+    )
+    send_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda msg, dlg, cb, **k: send_calls.append((msg, dlg, cb)),
+    )
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    assert len(send_calls) == 1
+    # IPFS callback is the existing store-response handler, not the local path.
+    # Bound methods compare unequal across access, so check by name.
+    assert send_calls[0][2].__func__ is behaviour._handle_store_response.__func__
+    # The IPFS path defers finalization to the callback; done_tasks empty for now.
+    assert shared_state[beh_mod.DONE_TASKS] == []
+
+
+# ---------------------------------------------------------------------------
 # _handle_store_response branches
 # ---------------------------------------------------------------------------
 
@@ -1704,6 +1859,68 @@ def test_handle_store_response_invalid_done_task_resets_state(
     behaviour._handle_store_response(msg, MagicMock())
     assert behaviour._executing_task is None
     assert behaviour._done_task is None
+
+
+def test_handle_done_task_offchain_oversized_records_failure_and_resets(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Oversized off-chain response fails cleanly and writes a rejection."""
+    # String request_id — production keys these shared-state dicts by the str
+    # request_id parsed from the HTTP body, never an int.
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-13")
+    monkeypatch.setattr(
+        beh_mod,
+        "compute_cidv1",
+        MagicMock(side_effect=ValueError("exceeds single-block bound")),
+    )
+    send_calls: list = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: send_calls.append(a))
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    assert send_calls == []
+    assert shared_state[beh_mod.DONE_TASKS] == []
+    assert behaviour._executing_task is None
+    rejection = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-13"]
+    assert rejection["status"] == "rejected"
+
+
+def test_handle_done_task_offchain_clears_in_memory_request(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A successful off-chain delivery clears the buffered in_memory request."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-14")
+    shared_state[beh_mod.IN_MEMORY_REQUESTS] = {"req-14": "buffered-ipfs-data"}
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=_make_success_result())
+
+    assert "req-14" not in shared_state[beh_mod.IN_MEMORY_REQUESTS]
+    assert behaviour._executing_task is None
+
+
+def test_finalize_done_task_no_executing_task_is_safe(
+    behaviour: Any, monkeypatch: Any
+) -> None:
+    """_finalize_done_task guards a None executing task (logs, returns, no crash)."""
+    behaviour._executing_task = None
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+
+    behaviour._finalize_done_task("bafysomecid")  # must not raise
+
+    assert behaviour._executing_task is None
 
 
 def test_handle_store_response_dynamic_pricing_recorded(

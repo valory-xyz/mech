@@ -63,6 +63,7 @@ from packages.valory.skills.task_execution.utils.ipfs import (
     get_ipfs_file_hash,
     to_multihash,
 )
+from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
 from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
@@ -78,6 +79,11 @@ LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
+# Shared-state keys owned by the MechHttpHandler (handlers.py); mirrored here
+# because the off-chain finalize path writes the rejection signal and clears the
+# buffered request metadata from the behaviour side.
+OFFCHAIN_REQUEST_RESPONSES = "offchain_request_responses"
+IN_MEMORY_REQUESTS = "in_memory_requests"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
@@ -897,6 +903,75 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 reason=response["result"],
             )
 
+        if is_offchain:
+            # Off-chain path: skip the IPFS upload so the response stays private
+            # and commit a locally-computed CIDv1 instead. This is a bare
+            # single-block file CID; it intentionally differs from the on-chain
+            # path's directory-wrapped CID (see utils/local_cid.py). The on-chain
+            # commitment derivation (to_multihash, inside _finalize_done_task) is
+            # otherwise identical.
+            if self._invalid_request:
+                # The task ran but produced no valid result, so `response`
+                # carries an error string rather than an answer. Route it through
+                # the same terminal-failure channel as the CID / done-task
+                # failures below instead of serving it as a success: a paying
+                # requester keys refund / retry / dispute on `status`, so a "ran
+                # but failed" delivery must be distinguishable from a successful
+                # one — otherwise the client accepts and pays for a failure.
+                self._record_offchain_failure(
+                    cast(str, req_id),
+                    cast(str, response.get("result") or "task execution failed"),
+                )
+                return
+            try:
+                # content_bytes is exactly what the CID commits to. The serving
+                # payload below carries this same object verbatim under
+                # "response" (envelope fields hang outside it), so a client that
+                # re-derives compute_cidv1(json.dumps(stored["response"]))
+                # reproduces content_cid byte-for-byte and can verify the
+                # delivery against the on-chain commitment. json.dumps round-trips
+                # stably here (default separators, dict insertion order is
+                # preserved through JSON), matching the on-chain path which also
+                # content-addresses json.dumps(response).
+                content_bytes = json.dumps(response).encode("utf-8")
+                local_cid = compute_cidv1(content_bytes)
+            except (ValueError, TypeError) as exc:
+                # compute_cidv1 raises ValueError above the single-block bound;
+                # json.dumps raises TypeError (non-serializable) / ValueError
+                # (circular ref). Both must stay inside this guard, or the crash
+                # this fix targets still escapes through act(). Fail cleanly so
+                # the executing-task slot resets and the requester gets a
+                # definitive rejection, rather than crashing the agent
+                # (propagate policy) or stalling forever (just_log policy).
+                self.context.logger.error(
+                    f"Off-chain CID computation failed for request {req_id}: {exc}"
+                )
+                self._record_offchain_failure(
+                    cast(str, req_id), f"cid computation failed: {exc}"
+                )
+                return
+            self.context.logger.info(
+                f"Off-chain response for request {req_id} kept private; "
+                f"local CID {local_cid}."
+            )
+            # Off-chain return channel: the response was not uploaded to IPFS, so
+            # persist it under offchain_request_responses for /fetch_offchain_info
+            # to serve. The committed object is kept verbatim under "response"
+            # (the exact bytes hashed into content_cid); request_id / status /
+            # content_cid are envelope fields kept outside it so they don't
+            # perturb the hash. Without this the poll falls back to the done_task,
+            # which carries the CID/multihash but not the result/prompt/cost_dict.
+            self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
+                cast(str, req_id)
+            ] = {
+                "request_id": cast(str, req_id),
+                "status": "ok",
+                "content_cid": local_cid,
+                "response": response,
+            }
+            self._finalize_done_task(local_cid)
+            return
+
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
         )
@@ -1269,33 +1344,52 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             return
 
-        executing_task = self._executing_task
-        # if sender is not present, use mech address
-        req_id = executing_task["requestId"]
         ipfs_hash = to_v1(message.ipfs_hash)
+        req_id = self._executing_task["requestId"]
         self.context.logger.info(
             f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
         )
+        self._finalize_done_task(ipfs_hash)
+
+    def _finalize_done_task(self, cid: str) -> None:
+        """Apply the CID to the in-flight done_task and publish it.
+
+        Shared by the on-chain path (CID from a real IPFS store response) and the
+        off-chain path (CID computed locally). Updates pricing / mech address /
+        task_result, appends to done_tasks under the lock, and resets the
+        executing-task slot. The CID is converted to the multihash shape only
+        after the done_task validity check passes, so an invalid done_task takes
+        the early-reset branch cleanly.
+
+        :param cid: the multibase-encoded CIDv1 to record on chain via
+            ``task_result``.
+        """
+        executing_task = self._executing_task
+        if executing_task is None:
+            # Two entry points call this now; if the slot was already cleared
+            # there is nothing to finalize. Guard turns a None-deref into a log.
+            self.context.logger.warning(
+                "_finalize_done_task called with no executing task; skipping."
+            )
+            return
+        req_id = cast(Dict[str, Any], executing_task)["requestId"]
+        is_offchain = bool(executing_task.get("is_offchain", False))
         self.set_last_executed_task(req_id)
         done_task = cast(Dict[str, Any], self._done_task)
         if done_task is None or not isinstance(done_task, Dict):
             self.context.logger.error(
                 f"Invalid done task format. Expected Dict. Actual: {done_task}"
             )
-            # Prometheus has no way to remove/clear metrics, so we set to default 0
-            self.mech_metrics.set_gauge(
-                self.mech_metrics.mech_tasks_inflight,
-                0,
-            )
-            self._executing_task = None
-            self._done_task = None
-            self._invalid_request = False
-            self._ipfs_error_reason = None
-            self._request_handling_deadline = None
-            self._async_result = None
+            if is_offchain:
+                # On-chain has other fallbacks; off-chain the polling client would
+                # otherwise never learn this failed, so emit a definitive
+                # rejection (which also resets the task slot).
+                self._record_offchain_failure(req_id, "invalid done task")
+                return
+            self._reset_executing_task()
             return
 
-        task_result = to_multihash(ipfs_hash)
+        task_result = to_multihash(cid)
         tool = str(done_task.get("tool"))
         dynamic_tool_cost = self._tools_to_pricing.get(tool)
         if dynamic_tool_cost is not None:
@@ -1320,20 +1414,42 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
         self.context.logger.info(f"Done task added to done tasks list: {done_task}.")
+        # Off-chain success: drop the buffered request metadata so it can't grow
+        # unbounded (on-chain tasks never populate it, so this is a no-op there).
+        # .get keeps this safe if the handler-owned key was never initialised.
+        self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
+        self._reset_executing_task()
 
-        # Prometheus has no way to remove/clear metrics, so we set to default 0
-        self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_tasks_inflight,
-            0,
-        )
-
-        # reset tasks
+    def _reset_executing_task(self) -> None:
+        """Reset the in-flight task slot so the next task can be picked up."""
+        # Prometheus has no clear; set the in-flight gauge back to 0.
+        self.mech_metrics.set_gauge(self.mech_metrics.mech_tasks_inflight, 0)
         self._executing_task = None
         self._done_task = None
         self._invalid_request = False
         self._ipfs_error_reason = None
         self._request_handling_deadline = None
         self._async_result = None
+
+    def _record_offchain_failure(self, req_id: str, reason: str) -> None:
+        """Record an off-chain request failure and reset the task slot.
+
+        Writes the same ``{request_id, status, reason}`` shape the HTTP handler's
+        rejection path uses, so a poll of ``GET /fetch_offchain_info`` returns a
+        definitive rejection instead of an empty "still processing" body forever.
+
+        :param req_id: the off-chain request id that failed.
+        :param reason: a short human-readable failure reason.
+        """
+        # setdefault / get keep this safe if the handler-owned shared-state keys
+        # were never initialised (e.g. on-chain-only deployments, unit tests).
+        self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[req_id] = {
+            "request_id": req_id,
+            "status": "rejected",
+            "reason": reason,
+        }
+        self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
+        self._reset_executing_task()
 
     def _handle_ipfs_tasks_response(
         self, message: IpfsMessage, dialogue: Dialogue

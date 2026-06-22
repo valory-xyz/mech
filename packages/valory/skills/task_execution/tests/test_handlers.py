@@ -408,6 +408,9 @@ def test_signed_requests_balance_scenarios(
                 if balance_status == "ok"
                 else "rpc unavailable"
             ),
+            "balance_tracker_address": "0xBalanceTracker",
+            "payment_type": "0xpaymenttype",
+            "chain_id": 100,
         },
     )
     mh.setup()
@@ -425,13 +428,17 @@ def test_signed_requests_balance_scenarios(
 
     pend = handler_context.shared_state["pending_tasks"]
     ipfsq = handler_context.shared_state["ipfs_tasks"]
+    in_mem = handler_context.shared_state["in_memory_requests"]
     if enqueued:
-        assert len(pend) == 1 and len(ipfsq) == 1
+        # Off-chain path: pending task is queued and the request metadata is
+        # buffered in memory. The IPFS task queue stays empty by design — the
+        # off-chain flow no longer publishes request metadata to IPFS.
+        assert len(pend) == 1 and ipfsq == [] and len(in_mem) == 1
         assert pend[0]["is_offchain"] is True
         assert pend[0]["requestId"] == request_id
-        assert ipfsq[0]["request_id"] == request_id
+        assert in_mem[request_id] == '{"foo":"bar"}'
     else:
-        assert pend == [] and ipfsq == []
+        assert pend == [] and ipfsq == [] and in_mem == {}
 
     assert handler_context.outbox.sent, "no HTTP response sent"
     resp: SimpleNamespace = handler_context.outbox.sent[-1]
@@ -458,6 +465,31 @@ def test_signed_requests_bad_request(
     assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
 
 
+def test_signed_requests_offchain_disabled_returns_503(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """use_offchain=False (the Phase 1 default) makes the off-chain endpoint 503."""
+    handler_context.params.use_offchain = False
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    http_msg: Any = make_http_msg(
+        {
+            "ipfs_hash": "0x" + "ab" * 32,
+            "sender": "0xSender",
+            "delivery_rate": "1",
+            "request_id": "req-disabled",
+            "ipfs_data": "{}",
+        }
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert mh.pending_tasks == []
+
+
 def test_fetch_offchain_request_info_returns_insufficient_balance_response(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
@@ -472,6 +504,9 @@ def test_fetch_offchain_request_info_returns_insufficient_balance_response(
             "required_amount": int(delivery_rate),
             "available_amount": int(delivery_rate) - 1,
             "reason": "balance check completed",
+            "balance_tracker_address": "0xBalanceTracker",
+            "payment_type": "0xpaymenttype",
+            "chain_id": 100,
         },
     )
     mh.setup()
@@ -503,6 +538,9 @@ def test_signed_requests_rollback_partial_enqueue(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
     """Rollback queue entries when enqueue fails after partial append."""
+    # Simulates a failure mid-enqueue (the buffered metadata write blows up
+    # after pending_tasks has already accepted the entry). The handler must
+    # roll the pending entry back and surface 400, not leave dangling state.
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     monkeypatch.setattr(
@@ -513,17 +551,20 @@ def test_signed_requests_rollback_partial_enqueue(
             "required_amount": int(delivery_rate),
             "available_amount": int(delivery_rate),
             "reason": "balance check completed",
+            "balance_tracker_address": "0xBalanceTracker",
+            "payment_type": "0xpaymenttype",
+            "chain_id": 100,
         },
     )
     mh.setup()
 
-    class FailingList(list):
-        """List that fails on append to simulate partial queue write."""
+    class FailingDict(dict):
+        """Dict that raises on assignment to simulate partial buffer write."""
 
-        def append(self, item: Any) -> None:
-            raise RuntimeError("simulated append failure")
+        def __setitem__(self, key: Any, value: Any) -> None:
+            raise RuntimeError("simulated buffer write failure")
 
-    handler_context.shared_state["ipfs_tasks"] = FailingList()
+    handler_context.shared_state["in_memory_requests"] = FailingDict()
 
     ipfs_hash: str = "0x" + "ab" * 32
     body: Dict[str, str] = {
@@ -537,10 +578,166 @@ def test_signed_requests_rollback_partial_enqueue(
     mh._handle_signed_requests(http_msg, http_dialogue)
 
     assert handler_context.shared_state["pending_tasks"] == []
-    assert handler_context.shared_state["ipfs_tasks"] == []
+    assert dict(handler_context.shared_state["in_memory_requests"]) == {}
 
     resp: SimpleNamespace = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+
+
+def _patched_handler_for_balance(
+    handler_context: Any,
+    monkeypatch: Any,
+    available_offset: int,
+    payment_type: str = "0xpaymenttype",
+    balance_tracker_address: str = "0xBalanceTracker",
+    chain_id: int = 100,
+) -> MechHttpHandler:
+    """Build a MechHttpHandler with the balance check patched to a fixed result."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: {
+            "status": "ok",
+            "required_amount": int(delivery_rate),
+            "available_amount": int(delivery_rate) + available_offset,
+            "reason": "balance check completed",
+            "balance_tracker_address": balance_tracker_address,
+            "payment_type": payment_type,
+            "chain_id": chain_id,
+        },
+    )
+    mh.setup()
+    return mh
+
+
+def _send_signed_request(
+    mh: MechHttpHandler, http_dialogue: Any, request_id: str
+) -> SimpleNamespace:
+    """Drive a signed offchain request and return the final HTTP response."""
+    http_msg: Any = make_http_msg(
+        {
+            "ipfs_hash": "0x" + "ab" * 32,
+            "request_id": request_id,
+            "ipfs_data": '{"foo":"bar"}',
+            "delivery_rate": "123",
+            "sender": "0x0000000000000000000000000000000000000001",
+        }
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    return mh.context.outbox.sent[-1]
+
+
+def test_402_body_includes_structured_challenge(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """402 body carries the structured challenge fields alongside the legacy keys."""
+    handler_context.params.payment_type_to_asset_address = {
+        "0xpaymenttype": "0xUSDCToken",
+    }
+    mh = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=-50
+    )
+
+    resp = _send_signed_request(mh, http_dialogue, request_id="req-402-schema")
+    assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+
+    payload = json.loads(resp.body.decode("utf-8"))
+    # Legacy keys still present so clients ignoring the new schema keep working.
+    assert payload["status"] == "rejected"
+    assert payload["reason"] == "insufficient balance"
+    # Structured challenge fields.
+    assert payload["scheme"] == "olas-prepay"
+    assert payload["payTo"] == "0xBalanceTracker"
+    assert payload["asset"] == "0xUSDCToken"
+    assert payload["chainId"] == 100
+    assert payload["currentBalance"] == "73"  # 123 + (-50) = 73
+    assert payload["required"] == "123"
+    assert payload["depositInstructions"] == {
+        "contract": "0xBalanceTracker",
+        "abi": "depositFor(address requester, uint256 amount)",
+    }
+    assert payload["error"] == "insufficient balance"
+
+
+def test_402_emits_www_authenticate_header(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """402 response carries the WWW-Authenticate header keyed by mech address."""
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=-1)
+    resp = _send_signed_request(mh, http_dialogue, request_id="req-402-header")
+
+    assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    assert (
+        'WWW-Authenticate: Payment scheme="olas-prepay" '
+        'realm="0xMechAddr"' in resp.headers
+    )
+
+
+def test_402_native_asset_when_payment_type_unmapped(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Unmapped payment types surface the zero address as the asset."""
+    # Clients seeing the zero address must skip the ERC20 approve step and
+    # treat the payment as a native-asset deposit.
+    handler_context.params.payment_type_to_asset_address = {}
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=-1)
+    resp = _send_signed_request(mh, http_dialogue, request_id="req-402-native")
+
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["asset"] == "0x0000000000000000000000000000000000000000"
+
+
+def test_200_emits_payment_receipt_header(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """200 response carries a Payment-Receipt header with valid base64-encoded JSON."""
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=10)
+    resp = _send_signed_request(mh, http_dialogue, request_id="req-200-receipt")
+
+    assert resp.status_code == HttpCode.OK_CODE.value
+    receipt_line = next(
+        line for line in resp.headers.split("\n") if line.startswith("Payment-Receipt:")
+    )
+    encoded = receipt_line.split(": ", 1)[1].strip()
+    import base64 as _b64
+
+    receipt = json.loads(_b64.b64decode(encoded).decode("utf-8"))
+    assert receipt["request_id"] == "req-200-receipt"
+    assert receipt["accepted_amount"] == "123"
+    assert receipt["settlement_status"] == "pending"
+    # ISO 8601 UTC with trailing Z. Loose check that it parses as a date.
+    from datetime import datetime as _dt
+
+    _dt.fromisoformat(receipt["accepted_at"].replace("Z", "+00:00"))
+
+
+def test_200_body_unchanged_for_legacy_clients(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """200 body shape is unchanged. Receipt only goes in the header."""
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=10)
+    resp = _send_signed_request(mh, http_dialogue, request_id="req-200-body")
+
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload == {"request_id": "req-200-body"}
+
+
+def test_offchain_request_buffered_in_memory_not_in_ipfs_tasks(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The offchain handler buffers metadata in-memory and skips ipfs_tasks."""
+    # Locks in Piece 1's behavioural contract: the legacy IPFS upload queue is
+    # no longer written from the offchain path. A future refactor that flipped
+    # the flag back without us noticing would fail this test.
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=10)
+    _send_signed_request(mh, http_dialogue, request_id="req-in-mem")
+
+    assert handler_context.shared_state["ipfs_tasks"] == []
+    assert handler_context.shared_state["in_memory_requests"] == {
+        "req-in-mem": '{"foo":"bar"}'
+    }
 
 
 def test_fetch_offchain_request_info_found(
@@ -1711,3 +1908,112 @@ def test_signed_requests_accepts_zero_delivery_rate(
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.OK_CODE.value
     assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+# --- guard tests for the defensive paths added in the remediation -----------
+
+
+def _http_handler(handler_context: Any, monkeypatch: Any) -> MechHttpHandler:
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    return mh
+
+
+def test_build_402_challenge_raises_without_balance_tracker_address(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """The 402 builder refuses to emit zero-address deposit instructions."""
+    mh = _http_handler(handler_context, monkeypatch)
+    with pytest.raises(ValueError, match="balance_tracker_address"):
+        mh._build_402_challenge(
+            {hmod.ResponseKey.PAYMENT_TYPE.value: "0x01"},
+            error_msg="insufficient balance",
+        )
+
+
+def test_build_402_challenge_payment_type_case_insensitive(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A checksummed payment_type resolves against the lower-cased asset map."""
+    handler_context.params.payment_type_to_asset_address = {"0xabc": "0xAssetAddr"}
+    mh = _http_handler(handler_context, monkeypatch)
+    challenge = mh._build_402_challenge(
+        {
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: "0xABC",
+        },
+        error_msg="insufficient balance",
+    )
+    assert challenge["asset"] == "0xAssetAddr"
+
+
+def test_build_402_challenge_none_payment_type_is_safe(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A present-but-None payment_type must not AttributeError on .lower()."""
+    mh = _http_handler(handler_context, monkeypatch)
+    challenge = mh._build_402_challenge(
+        {
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: None,
+        },
+        error_msg="insufficient balance",
+    )
+    assert challenge["asset"] == hmod.ZERO_ADDRESS
+
+
+def test_send_ok_response_rejects_non_newline_extra_headers(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A non-newline-terminated header block is rejected (can't merge body)."""
+    mh = _http_handler(handler_context, monkeypatch)
+    http_msg: Any = make_http_msg({"request_id": "req-x"})
+    with pytest.raises(ValueError, match="newline-terminated"):
+        mh._send_ok_response(
+            http_msg=http_msg,
+            http_dialogue=http_dialogue,
+            data={"request_id": "req-x"},
+            extra_headers="X-No-Newline: y",
+        )
+
+
+def test_send_rejection_response_rejects_non_newline_extra_headers(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Same newline guard on the rejection sender."""
+    mh = _http_handler(handler_context, monkeypatch)
+    http_msg: Any = make_http_msg({"request_id": "req-x"})
+    with pytest.raises(ValueError, match="newline-terminated"):
+        mh._send_rejection_response(
+            http_msg,
+            http_dialogue,
+            "req-x",
+            reason="r",
+            status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
+            status_text="t",
+            extra_headers="X-No-Newline: y",
+        )
+
+
+def test_handler_replies_500_when_402_build_fails(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """If the 402 builder raises, the handler replies 500 instead of hanging."""
+    monkeypatch.setattr(
+        MechHttpHandler,
+        "_check_offchain_requester_balance",
+        lambda self, sender, delivery_rate: {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.AVAILABLE_AMOUNT.value: 0,
+            hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
+        },
+    )
+    mh = _http_handler(handler_context, monkeypatch)
+    http_msg: Any = make_http_msg(
+        _make_signed_request_body(delivery_rate="1", request_id="req-500")
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.INTERNAL_SERVER_ERROR_CODE.value

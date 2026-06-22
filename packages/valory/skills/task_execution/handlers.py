@@ -19,11 +19,13 @@
 
 """This package contains a scaffold of a handler."""
 
+import base64
 import json
 import re
 import threading
 import time
 import urllib.parse
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Union, cast
 
@@ -63,6 +65,7 @@ PAYMENT_MODEL = "payment_model"
 PAYMENT_INFO = "payment_info"
 ROUTES_INFO = "routes_info"
 OFFCHAIN_REQUEST_RESPONSES = "offchain_request_responses"
+IN_MEMORY_REQUESTS = "in_memory_requests"
 JSON_CONTENT_HEADER = "Content-Type: application/json\n"
 ENCODING_UTF8 = "utf-8"
 
@@ -141,6 +144,15 @@ class ResponseKey(str, Enum):
     AVAILABLE_AMOUNT = "available_amount"
     RPC_ADDRESS = "rpc_address"
     CHAIN_ID = "chain_id"
+    BALANCE_TRACKER_ADDRESS = "balance_tracker_address"
+    PAYMENT_TYPE = "payment_type"
+
+
+# 402 challenge constants — surfaced so clients can branch on a stable label.
+PAYMENT_SCHEME = "olas-prepay"
+DEPOSIT_FN_ABI = "depositFor(address requester, uint256 amount)"
+SETTLEMENT_STATUS_PENDING = "pending"
+ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 
 class BaseHandler(Handler):
@@ -541,6 +553,17 @@ class MechHttpHandler(AbstractResponseHandler):
         return self.context.shared_state[OFFCHAIN_REQUEST_RESPONSES]
 
     @property
+    def in_memory_requests(self) -> Dict[str, str]:
+        """Get in-memory off-chain request payloads buffered by request id.
+
+        :return: a dict keyed by request_id whose values are the request's
+            ``ipfs_data`` payload (not the full request envelope). Populated when
+            the off-chain path skips the IPFS upload; cleared when the task
+            finalizes.
+        """
+        return self.context.shared_state[IN_MEMORY_REQUESTS]
+
+    @property
     def params(self) -> Params:
         """Get the parameters."""
         return cast(Params, self.context.params)
@@ -553,6 +576,7 @@ class MechHttpHandler(AbstractResponseHandler):
         }
         self.context.shared_state[IPFS_TASKS] = []
         self.context.shared_state[OFFCHAIN_REQUEST_RESPONSES] = {}
+        self.context.shared_state[IN_MEMORY_REQUESTS] = {}
         self.json_content_header = JSON_CONTENT_HEADER
         self.start_prometheus_server()
         super().setup()
@@ -573,6 +597,28 @@ class MechHttpHandler(AbstractResponseHandler):
         :param http_msg: the HttpMessage instance
         :param http_dialogue: the HttpDialogue instance
         """
+        # Phase 1 ships dark: the off-chain HTTP path is disabled by default and
+        # enabled per deployment in the Phase 2 rollout (use_offchain). When off,
+        # nothing about the on-chain + IPFS flow changes; off-chain requests are
+        # refused so none of the new off-chain code path runs.
+        if not self.params.use_offchain:
+            self.context.logger.info(
+                "Off-chain request received but the off-chain path is disabled "
+                "(use_offchain=false); refusing."
+            )
+            http_response = http_dialogue.reply(
+                performative=HttpMessage.Performative.RESPONSE,
+                target_message=http_msg,
+                version=http_msg.version,
+                status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
+                status_text="Service unavailable",
+                headers=f"{self.json_content_header}{http_msg.headers}",
+                body=json.dumps({"error": "offchain path disabled"}).encode(
+                    ENCODING_UTF8
+                ),
+            )
+            self.context.outbox.put_message(message=http_response)
+            return
 
         try:
             data = self._parse_http_body(http_msg)
@@ -629,6 +675,20 @@ class MechHttpHandler(AbstractResponseHandler):
 
         available_amount = cast(int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value])
         if available_amount < request_delivery_rate:
+            try:
+                extra_headers = self._build_www_authenticate_header()
+                challenge_body = self._build_402_challenge(
+                    balance_check, error_msg="insufficient balance"
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                # The 402 / header builders raise on malformed internal state
+                # (missing balance-tracker address, mis-terminated header).
+                # Reply 500 rather than letting it escape with no HTTP response.
+                self.context.logger.exception(
+                    f"Failed to build 402 challenge for {request_id}."
+                )
+                self._send_internal_error(http_msg, http_dialogue, request_id)
+                return
             self._send_rejection_response(
                 http_msg,
                 http_dialogue,
@@ -636,6 +696,8 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason="insufficient balance",
                 status_code=HttpCode.PAYMENT_REQUIRED_CODE.value,
                 status_text="Payment required",
+                extra_headers=extra_headers,
+                body_extras=challenge_body,
             )
             return
 
@@ -655,15 +717,29 @@ class MechHttpHandler(AbstractResponseHandler):
 
         self.context.logger.info(
             f"Offchain task added with data: {req}. "
-            f"pending_tasks={len(self.pending_tasks)} ipfs_tasks={len(self.ipfs_tasks)}."
+            f"pending_tasks={len(self.pending_tasks)} "
+            f"in_memory_requests={len(self.in_memory_requests)}."
         )
 
         self.offchain_request_responses.pop(request_id, None)
-        self._send_ok_response(
-            http_msg=http_msg,
-            http_dialogue=http_dialogue,
-            data={RequestKey.REQUEST_ID.value: request_id},
-        )
+        try:
+            receipt_header = self._build_payment_receipt_header(
+                request_id, request_delivery_rate
+            )
+            self._send_ok_response(
+                http_msg=http_msg,
+                http_dialogue=http_dialogue,
+                data={RequestKey.REQUEST_ID.value: request_id},
+                extra_headers=receipt_header,
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            # The receipt-header builder / OK sender raise only on malformed
+            # internal state. The task is already enqueued, so reply 500 rather
+            # than hanging the client; the mech still processes the request.
+            self.context.logger.exception(
+                f"Failed to send OK response for {request_id}."
+            )
+            self._send_internal_error(http_msg, http_dialogue, request_id)
 
     def _handle_offchain_request_info(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -736,15 +812,28 @@ class MechHttpHandler(AbstractResponseHandler):
         http_msg: HttpMessage,
         http_dialogue: HttpDialogue,
         data: Union[Dict, List],
+        extra_headers: str = "",
     ) -> None:
-        """Send an OK response with the provided data"""
+        r"""Send an OK response with the provided data.
+
+        :param http_msg: the incoming HTTP request message.
+        :param http_dialogue: the HTTP dialogue used to reply.
+        :param data: the response body payload, serialized as JSON.
+        :param extra_headers: optional pre-formatted header block (each header
+            terminated by ``\n``) prepended to the response. Callers use this to
+            add audit headers (e.g. ``Payment-Receipt``) without rewriting body.
+        """
+        # Each header line must be newline-terminated, else it would silently
+        # merge with the Content-Type line that follows.
+        if extra_headers and not extra_headers.endswith("\n"):
+            raise ValueError("extra_headers must be empty or newline-terminated")
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
             target_message=http_msg,
             version=http_msg.version,
             status_code=HttpCode.OK_CODE.value,
             status_text="Success",
-            headers=f"{self.json_content_header}{http_msg.headers}",
+            headers=f"{extra_headers}{self.json_content_header}{http_msg.headers}",
             body=json.dumps(data).encode(ENCODING_UTF8),
         )
 
@@ -760,13 +849,35 @@ class MechHttpHandler(AbstractResponseHandler):
         reason: str,
         status_code: int,
         status_text: str,
+        extra_headers: str = "",
+        body_extras: Optional[Dict[str, Any]] = None,
     ) -> None:
-        """Build a rejection payload, store it, and send the HTTP error response."""
-        response_payload = {
+        """Build a rejection payload, store it, and send the HTTP error response.
+
+        :param http_msg: the incoming HTTP request message.
+        :param http_dialogue: the HTTP dialogue used to reply.
+        :param request_id: the off-chain request id being rejected.
+        :param reason: a short human-readable rejection reason.
+        :param status_code: the HTTP status code to emit.
+        :param status_text: the HTTP status text to emit.
+        :param extra_headers: optional pre-formatted header block to prepend.
+        :param body_extras: optional dict merged into the JSON response body.
+        """
+        # Each header line must be newline-terminated, else it would silently
+        # merge with the Content-Type line that follows.
+        if extra_headers and not extra_headers.endswith("\n"):
+            raise ValueError("extra_headers must be empty or newline-terminated")
+        # ``body_extras`` is merged into the JSON body alongside the canonical
+        # ``{request_id, status, reason}`` keys, so legacy clients that only
+        # read ``reason`` keep working while new clients can pick up structured
+        # fields such as the 402 challenge.
+        response_payload: Dict[str, Any] = {
             RequestKey.REQUEST_ID.value: request_id,
             ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
             ResponseKey.REASON.value: reason,
         }
+        if body_extras:
+            response_payload.update(body_extras)
         self.offchain_request_responses[request_id] = response_payload
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
@@ -774,11 +885,121 @@ class MechHttpHandler(AbstractResponseHandler):
             version=http_msg.version,
             status_code=status_code,
             status_text=status_text,
-            headers=f"{self.json_content_header}{http_msg.headers}",
+            headers=f"{extra_headers}{self.json_content_header}{http_msg.headers}",
             body=json.dumps(response_payload).encode(ENCODING_UTF8),
         )
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
+
+    def _send_internal_error(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue, request_id: str
+    ) -> None:
+        """Send a 500 with no extra headers / body extras.
+
+        Used when a defensive guard in the 402 / header builders fires on the
+        request-handling path: a bare ``raise`` there would leave the client
+        with no HTTP reply (hung). This emits a definitive 500 instead; passing
+        no extra_headers keeps the senders' own newline guard from re-raising.
+
+        :param http_msg: the incoming HTTP request message.
+        :param http_dialogue: the HTTP dialogue used to reply.
+        :param request_id: the off-chain request id being rejected.
+        """
+        self._send_rejection_response(
+            http_msg,
+            http_dialogue,
+            request_id,
+            reason="internal error",
+            status_code=HttpCode.INTERNAL_SERVER_ERROR_CODE.value,
+            status_text="Internal server error",
+        )
+
+    def _build_402_challenge(
+        self,
+        balance_check: Dict[str, Any],
+        error_msg: str,
+    ) -> Dict[str, Any]:
+        """Build the structured 402 challenge body.
+
+        :param balance_check: a successful result dict from
+            ``_check_offchain_requester_balance``; it must carry the
+            balance-tracker address. An error-shaped dict is rejected rather than
+            silently emitting zero-address deposit instructions.
+        :param error_msg: a short human-readable error string echoed in the body.
+        :return: the structured 402 challenge as a dict ready for JSON encoding.
+        :raises ValueError: if ``balance_check`` lacks the balance-tracker address.
+        """
+        # Native-asset payment models surface the zero address for ``asset``;
+        # clients that see it must skip the ERC20 approve step.
+        if ResponseKey.BALANCE_TRACKER_ADDRESS.value not in balance_check:
+            raise ValueError(
+                "cannot build a 402 challenge from a balance check without a "
+                "balance_tracker_address; refusing to emit zero-address deposit "
+                "instructions"
+            )
+        balance_tracker_address = cast(
+            str, balance_check[ResponseKey.BALANCE_TRACKER_ADDRESS.value]
+        )
+        # Normalize the lookup key — `or ""` guards a present-but-None
+        # payment_type (a bare cast would be a runtime no-op and .lower() would
+        # then AttributeError); the map keys are lower-cased at load time
+        # (models.Params) so a checksummed payment_type still resolves.
+        payment_type = (balance_check.get(ResponseKey.PAYMENT_TYPE.value) or "").lower()
+        asset_address = self.params.payment_type_to_asset_address.get(
+            payment_type, ZERO_ADDRESS
+        )
+        return {
+            "scheme": PAYMENT_SCHEME,
+            "payTo": balance_tracker_address,
+            "asset": asset_address,
+            "chainId": int(balance_check.get(ResponseKey.CHAIN_ID.value, 0)),
+            "currentBalance": str(
+                balance_check.get(ResponseKey.AVAILABLE_AMOUNT.value, 0)
+            ),
+            "required": str(balance_check.get(ResponseKey.REQUIRED_AMOUNT.value, 0)),
+            "depositInstructions": {
+                "contract": balance_tracker_address,
+                "abi": DEPOSIT_FN_ABI,
+            },
+            "error": error_msg,
+        }
+
+    def _build_www_authenticate_header(self) -> str:
+        """Build the ``WWW-Authenticate`` header line for a 402 response.
+
+        :return: a single header line terminated with newline.
+        """
+        # The ``realm`` carries the mech address so clients with multiple mechs
+        # configured can route the deposit to the right balance tracker.
+        mech_address = self.params.agent_mech_contract_addresses[0]
+        return (
+            f'WWW-Authenticate: Payment scheme="{PAYMENT_SCHEME}" '
+            f'realm="{mech_address}"\n'
+        )
+
+    def _build_payment_receipt_header(
+        self, request_id: str, accepted_amount: int
+    ) -> str:
+        """Build the ``Payment-Receipt`` header line for a 200 response.
+
+        :param request_id: the off-chain request id being acknowledged.
+        :param accepted_amount: the requester-signed delivery rate being committed.
+        :return: a single header line terminated with newline.
+        """
+        # The base64-encoded JSON payload is intentionally a snapshot at HTTP
+        # accept time, NOT a settlement confirmation. ``settlement_status`` is
+        # always ``"pending"`` here; on-chain settlement happens later via the
+        # task_submission flow.
+        receipt = {
+            "request_id": request_id,
+            "accepted_at": datetime.now(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "accepted_amount": str(accepted_amount),
+            "settlement_status": SETTLEMENT_STATUS_PENDING,
+        }
+        encoded = base64.b64encode(json.dumps(receipt).encode(ENCODING_UTF8))
+        return f"Payment-Receipt: {encoded.decode('ascii')}\n"
 
     def _rollback_offchain_enqueue(self, request_id: str) -> None:
         """Rollback a partial off-chain enqueue in case of unexpected failure."""
@@ -787,14 +1008,11 @@ class MechHttpHandler(AbstractResponseHandler):
             for req in self.pending_tasks
             if req.get(RequestKey.REQUEST_ID_CAMEL.value) != request_id
         ]
-        self.context.shared_state[IPFS_TASKS] = [
-            req
-            for req in self.ipfs_tasks
-            if req.get(RequestKey.REQUEST_ID.value) != request_id
-        ]
+        self.in_memory_requests.pop(request_id, None)
         self.context.logger.error(
             f"Queue rollback applied for {request_id=}. "
-            f"pending_tasks={len(self.pending_tasks)} ipfs_tasks={len(self.ipfs_tasks)}"
+            f"pending_tasks={len(self.pending_tasks)} "
+            f"in_memory_requests={len(self.in_memory_requests)}"
         )
 
     def _parse_http_body(self, http_msg: HttpMessage) -> Dict[str, str]:
@@ -816,7 +1034,19 @@ class MechHttpHandler(AbstractResponseHandler):
         request_delivery_rate: int,
         data: Dict[str, str],
     ) -> Dict[str, Any]:
-        """Enqueue the off-chain task and its IPFS upload payload."""
+        """Enqueue the off-chain task and buffer its request metadata locally.
+
+        :param request_id: the off-chain request id.
+        :param ipfs_hash: the requester-supplied content hash (0x-prefixed hex).
+        :param request_delivery_rate: the requester-signed delivery rate.
+        :param data: the parsed HTTP body dict (signature, sender, ipfs_data, etc).
+        :return: the queued task dict.
+        :raises Exception: if either queue write fails; partial state is rolled back.
+        """
+        # The off-chain path skips the IPFS upload entirely and keeps the
+        # request JSON in process memory under ``in_memory_requests``. The
+        # content commitment on chain still comes from the locally-computed
+        # CID (response side), so the mech's on-chain receipt is unchanged.
         req = {
             RequestKey.REQUEST_ID_CAMEL.value: request_id,
             BodyKey.DATA.value: bytes.fromhex(ipfs_hash[2:]),
@@ -826,12 +1056,7 @@ class MechHttpHandler(AbstractResponseHandler):
         }
         try:
             self.pending_tasks.append(req)
-            self.ipfs_tasks.append(
-                {
-                    RequestKey.REQUEST_ID.value: request_id,
-                    RequestKey.IPFS_DATA.value: data[RequestKey.IPFS_DATA.value],
-                }
-            )
+            self.in_memory_requests[request_id] = data[RequestKey.IPFS_DATA.value]
         except Exception:
             self._rollback_offchain_enqueue(request_id)
             raise
@@ -918,6 +1143,9 @@ class MechHttpHandler(AbstractResponseHandler):
                 ResponseKey.REQUIRED_AMOUNT.value: required_amount,
                 ResponseKey.AVAILABLE_AMOUNT.value: int(available_amount),
                 ResponseKey.REASON.value: "balance check completed",
+                ResponseKey.BALANCE_TRACKER_ADDRESS.value: balance_tracker_address,
+                ResponseKey.PAYMENT_TYPE.value: payment_type,
+                ResponseKey.CHAIN_ID.value: chain_id,
             }
         except Exception as e:
             return self._make_unavailable_balance_response(
