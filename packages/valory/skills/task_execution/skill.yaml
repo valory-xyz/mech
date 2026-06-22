@@ -26,7 +26,7 @@ fingerprint:
   tests/utils/test_task.py: bafybeigdfi37m5taw6jecd7t2bg54ctcv4u3js5u3xd2lyckoazy4efpv4
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
   utils/apis.py: bafybeih75sdickbk25zvduf2jolikmsfmh6c2rmju5lrdkhyhipmg23u2y
-  utils/benchmarks.py: bafybeicbidcifpfgr7q7q2qihud4hdplsoijukagbtcsnw7qjy5vob7sni
+  utils/benchmarks.py: bafybeihqhdvpnp2jsmmab3fogpp7tpukdiwzmwuwq4qt6wk72hgpg6ypga
   utils/cost_calculation.py: bafybeic7siuvsglg7txjpzidskelw32r7lfphupzzrlnir6dbw3wng5v6u
   utils/ipfs.py: bafybeiagbhhgvyo7mjdqvs5wrxy27bpzydd4aim7ntspv2ebygt7ewitra
   utils/local_cid.py: bafybeiey64eaq533wjyrbyhjlswvvfwtsaa7wyatr5ylpdgtqfqsrr4hlq
