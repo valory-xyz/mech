@@ -26,14 +26,17 @@ import pytest
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB
 from packages.valory.skills.task_submission_abci.payloads import (
+    PostTxSettlementPayload,
     TaskPoolingPayload,
     TransactionPayload,
 )
 from packages.valory.skills.task_submission_abci.rounds import (
     Event,
+    FinishedPostTxSettlementRound,
     FinishedTaskExecutionWithErrorRound,
     FinishedTaskPoolingRound,
     FinishedWithoutTasksRound,
+    PostTxSettlementRound,
     SynchronizedData,
     TaskPoolingRound,
     TaskSubmissionAbciApp,
@@ -322,9 +325,15 @@ class TestTaskSubmissionAbciApp:
         """Initial round, states, timeouts, and cross-period keys are configured correctly."""
         assert TaskSubmissionAbciApp.initial_round_cls is TaskPoolingRound
         assert TaskPoolingRound in TaskSubmissionAbciApp.initial_states
+        # PostTxSettlementRound is reached from the composed FSM (settlement
+        # confirms in a different skill, then routes here), so it must be
+        # declared as an initial state even though the FSM never *starts*
+        # there. A missing entry crashes the composition validator.
+        assert PostTxSettlementRound in TaskSubmissionAbciApp.initial_states
         assert FinishedTaskPoolingRound in TaskSubmissionAbciApp.final_states
         assert FinishedWithoutTasksRound in TaskSubmissionAbciApp.final_states
         assert FinishedTaskExecutionWithErrorRound in TaskSubmissionAbciApp.final_states
+        assert FinishedPostTxSettlementRound in TaskSubmissionAbciApp.final_states
         assert (
             TaskSubmissionAbciApp.event_to_timeout[Event.TASK_EXECUTION_ROUND_TIMEOUT]
             == 60.0
@@ -344,6 +353,15 @@ class TestTaskSubmissionAbciApp:
         assert tx_prep[Event.DONE] is FinishedTaskPoolingRound
         assert tx_prep[Event.ERROR] is FinishedTaskExecutionWithErrorRound
         assert tx_prep[Event.NO_MAJORITY] is FinishedTaskExecutionWithErrorRound
+
+        # Post-settlement leg: DONE leaves the skill via the new degenerate
+        # final state, both NO_MAJORITY and ROUND_TIMEOUT loop back so a
+        # transient consensus dip doesn't crash the FSM (the wildcard write
+        # itself is idempotent, so re-entry is safe).
+        post_tx = TaskSubmissionAbciApp.transition_function[PostTxSettlementRound]
+        assert post_tx[Event.DONE] is FinishedPostTxSettlementRound
+        assert post_tx[Event.NO_MAJORITY] is PostTxSettlementRound
+        assert post_tx[Event.ROUND_TIMEOUT] is PostTxSettlementRound
 
 
 # ---------------------------------------------------------------------------
@@ -429,3 +447,63 @@ class TestTaskPoolingRoundDeduplication:
         sd = cast(SynchronizedData, result[0])
         assert len(sd.done_tasks) == 1
         assert sd.done_tasks[0]["result"] == "first"
+
+
+# ---------------------------------------------------------------------------
+# PostTxSettlementRound tests
+# ---------------------------------------------------------------------------
+
+
+def _post_tx_payload_for(address: str) -> PostTxSettlementPayload:
+    return PostTxSettlementPayload(sender=address, content="done")
+
+
+def _make_post_tx_round(payloads: dict, **db_extra: Any) -> PostTxSettlementRound:
+    sync_data = _make_sync_data(**db_extra)
+    ctx = MagicMock()
+    round_ = PostTxSettlementRound(synchronized_data=sync_data, context=ctx)
+    round_.collection = payloads
+    return round_
+
+
+class TestPostTxSettlementRound:
+    """The round is a CollectSameUntilThresholdRound: it only needs consensus
+    on participation (the wildcard POST itself is fire-and-forget,
+    idempotent server-side). DONE on threshold, NO_MAJORITY only when
+    consensus is impossible."""
+
+    def test_below_threshold_returns_none(self) -> None:
+        """One vote on a 3-of-3 board: end_block is still waiting."""
+        payloads = {"agent-0": _post_tx_payload_for("agent-0")}
+        round_ = _make_post_tx_round(payloads)
+        assert round_.end_block() is None
+
+    def test_threshold_reached_returns_done(self) -> None:
+        """All three agents voted ``"done"`` → DONE."""
+        payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
+        round_ = _make_post_tx_round(payloads)
+        result = round_.end_block()
+        assert result is not None
+        _, event = result
+        assert event == Event.DONE
+
+    def test_no_majority_when_impossible(self) -> None:
+        """If majority is impossible (every other agent voted a different
+        value on a CollectSame round, no shared payload can ever land
+        threshold), the round emits NO_MAJORITY and the composition routes
+        it back to PostTxSettlementRound for a clean retry."""
+
+        # Build payloads that all disagree: each agent sends a unique
+        # content string, so no value can ever reach the
+        # collect-same-until-threshold majority. The base round helper's
+        # ``is_majority_possible`` will return False once the disagreement
+        # is locked in.
+        payloads = {
+            p: PostTxSettlementPayload(sender=p, content=f"done-{p}")
+            for p in _PARTICIPANTS
+        }
+        round_ = _make_post_tx_round(payloads)
+        result = round_.end_block()
+        assert result is not None
+        _, event = result
+        assert event == Event.NO_MAJORITY

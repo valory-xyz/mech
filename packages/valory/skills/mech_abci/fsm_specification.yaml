@@ -30,6 +30,7 @@ states:
 - CheckTransactionHistoryRound
 - CollectSignatureRound
 - FinalizationRound
+- PostTxSettlementRound
 - RandomnessTransactionSubmissionRound
 - RegistrationRound
 - RegistrationStartupRound
@@ -46,13 +47,13 @@ states:
 transition_func:
     (CheckLateTxHashesRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckLateTxHashesRound, CHECK_TIMEOUT): CheckLateTxHashesRound
-    (CheckLateTxHashesRound, DONE): ResetAndPauseRound
+    (CheckLateTxHashesRound, DONE): PostTxSettlementRound
     (CheckLateTxHashesRound, NEGATIVE): ResetAndPauseRound
     (CheckLateTxHashesRound, NONE): ResetAndPauseRound
     (CheckLateTxHashesRound, NO_MAJORITY): ResetAndPauseRound
     (CheckTransactionHistoryRound, CHECK_LATE_ARRIVING_MESSAGE): SynchronizeLateMessagesRound
     (CheckTransactionHistoryRound, CHECK_TIMEOUT): CheckTransactionHistoryRound
-    (CheckTransactionHistoryRound, DONE): ResetAndPauseRound
+    (CheckTransactionHistoryRound, DONE): PostTxSettlementRound
     (CheckTransactionHistoryRound, NEGATIVE): SelectKeeperTransactionSubmissionBRound
     (CheckTransactionHistoryRound, NONE): ResetAndPauseRound
     (CheckTransactionHistoryRound, NO_MAJORITY): CheckTransactionHistoryRound
@@ -68,6 +69,9 @@ transition_func:
     (RandomnessTransactionSubmissionRound, DONE): SelectKeeperTransactionSubmissionARound
     (RandomnessTransactionSubmissionRound, NONE): RandomnessTransactionSubmissionRound
     (RandomnessTransactionSubmissionRound, NO_MAJORITY): RandomnessTransactionSubmissionRound
+    (PostTxSettlementRound, DONE): ResetAndPauseRound
+    (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
+    (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (RandomnessTransactionSubmissionRound, ROUND_TIMEOUT): RandomnessTransactionSubmissionRound
     (RegistrationRound, DONE): UpdateDeliveryRateRound
     (RegistrationRound, NO_MAJORITY): RegistrationRound
@@ -107,7 +111,7 @@ transition_func:
     (UpdateDeliveryRateRound, ERROR): UpdateDeliveryRateRound
     (UpdateDeliveryRateRound, NO_MAJORITY): UpdateDeliveryRateRound
     (UpdateDeliveryRateRound, NO_TX): TaskPoolingRound
-    (ValidateTransactionRound, DONE): ResetAndPauseRound
+    (ValidateTransactionRound, DONE): PostTxSettlementRound
     (ValidateTransactionRound, NEGATIVE): CheckTransactionHistoryRound
     (ValidateTransactionRound, NONE): SelectKeeperTransactionSubmissionBRound
     (ValidateTransactionRound, NO_MAJORITY): ValidateTransactionRound

@@ -58,13 +58,21 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
-from packages.valory.skills.task_submission_abci.payloads import TransactionPayload
+from packages.valory.skills.task_submission_abci.payloads import (
+    PostTxSettlementPayload,
+    TransactionPayload,
+)
 from packages.valory.skills.task_submission_abci.rounds import (
+    PostTxSettlementRound,
     SynchronizedData,
     TaskPoolingPayload,
     TaskPoolingRound,
     TaskSubmissionAbciApp,
     TransactionPreparationRound,
+)
+from packages.valory.skills.task_submission_abci.wildcard_write_client import (
+    build_typed_data,
+    compute_batch_hash,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -1805,6 +1813,203 @@ class TransactionPreparationBehaviour(
         return tx_list
 
 
+class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
+    """Runs once on-chain settlement of the round's tx confirms.
+
+    Reads ``synchronized_data.done_tasks`` for the just-settled cycle,
+    extracts every entry's pre-built ``wildcard_event`` payload (set on
+    the offchain path inside :py:meth:`task_execution.behaviours._build_wildcard_event`),
+    bundles them into one EIP-712-signed batch, and POSTs the batch to
+    the wildcard data lake at ``params.wildcard_events_url``. The wildcard
+    server is idempotent on ``request_id``, so multi-agent services don't
+    need a keeper pattern: each agent posts its own copy under its own
+    EOA signature; the per-EOA rate limiter on the server keeps the
+    co-owners in separate budgets.
+
+    The behaviour is fail-soft by construction. A wildcard outage / 5xx
+    / network drop does NOT stop the FSM — the settlement already landed
+    on-chain, the analytics row just arrives later. For Phase 1 dark
+    rollout, failures are logged and dropped; the replay buffer (kv_store
+    backed, scheduled drainer) stacks on top of the open mech#455 PR and
+    lands in a follow-up. ``mech_events_enabled=False`` short-circuits
+    the whole behaviour to a fixed "done" payload.
+    """
+
+    matching_round: Type[AbstractRound] = PostTxSettlementRound
+
+    def async_act(self) -> Generator:
+        """Build, sign, and POST the offchain-events batch, then advance."""
+        with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            yield from self._do_wildcard_write_best_effort()
+            payload = PostTxSettlementPayload(
+                sender=self.context.agent_address, content="done"
+            )
+
+        with self.context.benchmark_tool.measure(self.behaviour_id).consensus():
+            yield from self.send_a2a_transaction(payload)
+            yield from self.wait_until_round_end()
+            self.set_done()
+
+    def _do_wildcard_write_best_effort(self) -> Generator:
+        """Best-effort wildcard write. Never raises; logs failure paths.
+
+        Three short-circuit returns before any work:
+            1. The feature flag is off (the default during Phase 1).
+            2. The skill has no wildcard URL configured.
+            3. The round's done_tasks carry no offchain wildcard_event
+               entries (the on-chain path doesn't populate these).
+        """
+        if not getattr(self.params, "mech_events_enabled", False):
+            return
+        wildcard_url = getattr(self.params, "wildcard_events_url", "") or ""
+        if not wildcard_url:
+            self.context.logger.debug(
+                "mech_events_enabled set but wildcard_events_url empty; "
+                "skipping post-tx wildcard write."
+            )
+            return
+
+        events = self._extract_offchain_events()
+        if not events:
+            self.context.logger.debug(
+                "No offchain wildcard_event entries in done_tasks; "
+                "post-tx wildcard write is a no-op for this round."
+            )
+            return
+
+        # Pull the Safe + marketplace from synchronized_data / params; both
+        # are stable per deployment. The signer EOA is whatever the agent's
+        # crypto handle signs with (one of the Safe's owner EOAs), so the
+        # mech_service_multisig in the typed message names the Safe, not
+        # the EOA.
+        mech_service_multisig = (
+            self.synchronized_data.safe_contract_address
+            if hasattr(self.synchronized_data, "safe_contract_address")
+            else getattr(self.params, "safe_contract_address", "")
+        )
+        if not mech_service_multisig:
+            self.context.logger.warning(
+                "No mech_service_multisig available on synced data / params; "
+                "skipping wildcard write."
+            )
+            return
+
+        verifying_contract = (
+            getattr(self.params, "mech_marketplace_address", "") or ""
+        )
+        if not verifying_contract:
+            self.context.logger.warning(
+                "No mech_marketplace_address on params; skipping wildcard write."
+            )
+            return
+
+        chain_id = int(
+            getattr(self.params, "default_chain_id", None) or 0
+        )
+
+        batch_hash_hex = compute_batch_hash(events)
+        typed_data = build_typed_data(
+            mech_service_multisig=mech_service_multisig,
+            chain_id=chain_id,
+            verifying_contract=verifying_contract,
+            batch_hash_hex=batch_hash_hex,
+        )
+
+        # EIP-712 digest: encode + sign the raw 32-byte hash via the AEA
+        # signing protocol (is_deprecated_mode=True so the signer skips
+        # the EIP-191 personal-sign prefix and just hashes raw bytes).
+        try:
+            from eth_account.messages import encode_typed_data
+        except ImportError:
+            self.context.logger.error(
+                "eth_account not available; cannot sign wildcard EIP-712. "
+                "Skipping batch."
+            )
+            return
+        signable = encode_typed_data(full_message=typed_data)
+        digest = signable.body
+        try:
+            signature_hex = yield from self.get_signature(
+                digest, is_deprecated_mode=True
+            )
+        except Exception as exc:
+            self.context.logger.warning(
+                "Wildcard EIP-712 signing failed; dropping batch this round: %s",
+                exc,
+            )
+            return
+
+        body = json.dumps(
+            {
+                "typed_data": typed_data,
+                "signature": signature_hex,
+                "events": events,
+            }
+        ).encode("utf-8")
+
+        try:
+            response = yield from self.get_http_response(
+                method="POST",
+                url=wildcard_url,
+                content=body,
+                headers={"Content-Type": "application/json"},
+            )
+        except Exception as exc:
+            self.context.logger.warning(
+                "Wildcard POST raised; dropping batch this round "
+                "(follow-up PR adds kv_store replay buffer): %s",
+                exc,
+            )
+            return
+
+        status = getattr(response, "status_code", None)
+        if status is None or status >= 500 or status == 0:
+            self.context.logger.warning(
+                "Wildcard POST returned non-success (status=%s); dropping "
+                "batch this round (follow-up PR adds replay buffer). "
+                "batch_size=%d signer-eoa=%s",
+                status, len(events), self.context.agent_address,
+            )
+            return
+        if status >= 400:
+            # 4xx is terminal (bad payload, allowlist miss, signer-not-owner);
+            # retrying won't help. Log once and drop.
+            self.context.logger.error(
+                "Wildcard POST returned %s (terminal); inspect payload. "
+                "batch_size=%d body_preview=%s",
+                status, len(events),
+                response.body[:512] if hasattr(response, "body") else "?",
+            )
+            return
+
+        self.context.logger.info(
+            "Wildcard batch POST OK (status=%s batch_size=%d signer-eoa=%s)",
+            status, len(events), self.context.agent_address,
+        )
+
+    def _extract_offchain_events(self) -> List[Dict[str, Any]]:
+        """Return the ``wildcard_event`` payload from every offchain done_task.
+
+        Only tasks with ``is_offchain=True`` AND a non-empty
+        ``wildcard_event`` field are included: on-chain tasks (where the
+        old IPFS publication path still runs) do not need a separate
+        analytics write, and an offchain task without a wildcard_event
+        attached is a finalize-time bug that we'd rather skip than crash.
+        """
+        done_tasks = cast(
+            List[Dict[str, Any]], self.synchronized_data.done_tasks
+        )
+        events: List[Dict[str, Any]] = []
+        for task in done_tasks:
+            if not task.get("is_offchain"):
+                continue
+            event = task.get("wildcard_event")
+            if not isinstance(event, dict):
+                continue
+            events.append(event)
+        return events
+
+
 class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
     """TaskSubmissionRoundBehaviour"""
 
@@ -1813,4 +2018,5 @@ class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
     behaviours: Set[Type[BaseBehaviour]] = {
         TaskPoolingBehaviour,  # type: ignore
         TransactionPreparationBehaviour,  # type: ignore
+        PostTxSettlementBehaviour,  # type: ignore
     }

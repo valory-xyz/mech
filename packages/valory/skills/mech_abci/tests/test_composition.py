@@ -82,11 +82,23 @@ class TestAbciAppTransitionMapping:
             is ResetAndPauseAbci.ResetAndPauseRound
         )
 
-    def test_transaction_submission_finished_transitions_to_reset(self) -> None:
-        """Test transaction submission finished round transitions to reset."""
+    def test_transaction_submission_finished_routes_via_post_tx_settlement(
+        self,
+    ) -> None:
+        """Successful settlement now lands in PostTxSettlementRound first,
+        which fires the wildcard data-lake POST and then advances to
+        ResetAndPauseRound via its own FinishedPostTxSettlementRound exit.
+        The two-edge wiring keeps the settlement→reset path intact while
+        slotting in the analytics-write side effect."""
         assert (
             abci_app_transition_mapping[
                 TransactionSubmissionAbciApp.FinishedTransactionSubmissionRound
+            ]
+            is TaskSubmissionAbciApp.PostTxSettlementRound
+        )
+        assert (
+            abci_app_transition_mapping[
+                TaskSubmissionAbciApp.FinishedPostTxSettlementRound
             ]
             is ResetAndPauseAbci.ResetAndPauseRound
         )

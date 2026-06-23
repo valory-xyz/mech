@@ -8,13 +8,13 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeidg5te2okx5hdc6p5jlvjfhlhqtzrm2nhhhy2wmttq467p7tyq72e
+  behaviours.py: bafybeideenwohc456q7pslf6we6pnjmozmhwwabkjjxulp746dd3wkmoia
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
-  fsm_specification.yaml: bafybeidtmsmpunr3t77pshd3k2s6dd6hlvhze6inu3gj7xyvlg4wi3tnuu
+  fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
-  models.py: bafybeiedzzetxjjhbvn4bx3lpr3rrsuop3at6h2zv2sm5s74swfvj3viga
-  payloads.py: bafybeia2yorri2u5rwh6vukb6iwdrbn53ygsuuhthns2txptvjipyb6f4e
-  rounds.py: bafybeignyyeclernusma4n4cv2vytsfxxl32kth7xgjueyjikfk7kmuzie
+  models.py: bafybeibja5st6vnds4kdglu3jkrk7yh7hx54k6rfmct3pwqmlvlcrf42ma
+  payloads.py: bafybeiela63rduzbxsesw4qezms5m3ulddrnvqegyupcicodjtbuzydikq
+  rounds.py: bafybeibm5cl7q76c5yspj3urlwgos26gusgjb7jcdxikp7wtqyatoovv34
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeihxi2j5lkdlq3rwydag2bzrv67exegutggxmgku3mq5pmrdth3pjq
@@ -23,8 +23,10 @@ fingerprint:
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
-  tests/test_rounds.py: bafybeigw6yechjt4y6ey25hcrofoiq62p2s6rrmx37q3tbopd4owktt5gq
+  tests/test_rounds.py: bafybeih4xcimf5jgfeowekmuurgdg4efnouzxqvai3xfzn7cses2mxnahq
   tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
+  tests/test_wildcard_write_client.py: bafybeickbc2e6bu42sapapyqh2xlnyfhyc2zbanyevyhkslbbv4s2r4qda
+  wildcard_write_client.py: bafybeibdym5h37glsgkiv472wr5jo27hveo4rc6om3jt4w7nwcjijjt2uy
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -44,7 +46,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
-- valory/task_execution:0.1.0:bafybeig6kae7u2x3xwpufsptjxkxfbxs6pxh54unczgvjpzfbokfgltk3y
+- valory/task_execution:0.1.0:bafybeihhkgxotokrevm2e4i3hfcoklbjb5wjgv2vkodzr65x4aurszymve
 behaviours:
   main:
     args: {}
@@ -167,6 +169,8 @@ models:
       serious_slash_unit_amount: 8000000000000000
       service_endpoint_base: https://dummy_service.autonolas.tech/
       default_chain_id: gnosis
+      mech_events_enabled: false
+      wildcard_events_url: ''
     class_name: Params
   requests:
     args: {}

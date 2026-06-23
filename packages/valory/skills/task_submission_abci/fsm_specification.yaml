@@ -7,19 +7,26 @@ alphabet_in:
 - TASK_EXECUTION_ROUND_TIMEOUT
 default_start_state: TaskPoolingRound
 final_states:
+- FinishedPostTxSettlementRound
 - FinishedTaskExecutionWithErrorRound
 - FinishedTaskPoolingRound
 - FinishedWithoutTasksRound
 label: TaskSubmissionAbciApp
 start_states:
+- PostTxSettlementRound
 - TaskPoolingRound
 states:
+- FinishedPostTxSettlementRound
 - FinishedTaskExecutionWithErrorRound
 - FinishedTaskPoolingRound
 - FinishedWithoutTasksRound
+- PostTxSettlementRound
 - TaskPoolingRound
 - TransactionPreparationRound
 transition_func:
+    (PostTxSettlementRound, DONE): FinishedPostTxSettlementRound
+    (PostTxSettlementRound, NO_MAJORITY): PostTxSettlementRound
+    (PostTxSettlementRound, ROUND_TIMEOUT): PostTxSettlementRound
     (TaskPoolingRound, DONE): TransactionPreparationRound
     (TaskPoolingRound, NO_TASKS): FinishedWithoutTasksRound
     (TaskPoolingRound, ROUND_TIMEOUT): TaskPoolingRound

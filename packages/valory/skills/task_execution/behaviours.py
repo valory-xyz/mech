@@ -90,6 +90,40 @@ STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
+
+# The mech params carry a chain *alias* (``"gnosis"``, ``"base"``, ...) but
+# the wildcard data lake expects the EIP-155 integer chain id. This map
+# covers the deployments listed in the marketplace plan; any alias not in
+# the map falls back to ``0`` so the wildcard row is rejected at the
+# server's marketplace allowlist (the safest fail-closed shape — the row
+# is buffered for inspection rather than silently mis-tagged onto a real
+# chain).
+_CHAIN_ALIAS_TO_ID: Dict[str, int] = {
+    "ethereum": 1,
+    "gnosis": 100,
+    "polygon": 137,
+    "base": 8453,
+    "arbitrum_one": 42161,
+    "celo": 42220,
+}
+
+
+def _chain_alias_to_int(alias: Optional[str]) -> int:
+    """Resolve an AEA chain alias to its EIP-155 integer chain id.
+
+    Returns ``0`` on an unknown alias so the resulting wildcard row fails
+    the server's per-chain marketplace allowlist (defence in depth: a row
+    with a bogus chain id can never land in production analytics).
+    """
+    if not alias:
+        return 0
+    # The string might already be a stringified int (some deployments
+    # configure ``default_chain_id: "100"``); accept both shapes.
+    try:
+        return int(alias)
+    except (TypeError, ValueError):
+        pass
+    return _CHAIN_ALIAS_TO_ID.get(str(alias).lower(), 0)
 PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
@@ -1410,6 +1444,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # pop the data key value as it's bytes which causes issues
         # with json dumps and not required anywhere
         done_task.pop("data", None)
+        # Attach the offchain wildcard-event payload before the
+        # IN_MEMORY_REQUESTS pop below; the post-settlement behaviour in
+        # task_submission_abci reads it off ``synchronized_data.done_tasks``
+        # (i.e. after consensus replication) and posts it to the wildcard
+        # data lake, but the buffered request metadata it needs is local
+        # to this agent's shared_state and goes away at the pop. Empty /
+        # None on the on-chain path; the post-settlement behaviour skips
+        # entries where this is absent.
+        if is_offchain:
+            done_task["wildcard_event"] = self._build_wildcard_event(
+                done_task=done_task,
+                cid=cid,
+                executing_task=cast(Dict[str, Any], executing_task),
+            )
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
@@ -1419,6 +1467,198 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # .get keeps this safe if the handler-owned key was never initialised.
         self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
         self._reset_executing_task()
+
+    def _build_wildcard_event(
+        self,
+        *,
+        done_task: Dict[str, Any],
+        cid: str,
+        executing_task: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Build the structured wildcard-event payload (one ``MechSettlementEvent``)
+        from the data on hand at finalize.
+
+        The post-settlement behaviour batches every event from one FSM round
+        into a single signed POST to the wildcard data lake. Fields are
+        populated best-effort from the buffered request metadata
+        (``IN_MEMORY_REQUESTS``), the offchain response (``OFFCHAIN_REQUEST_RESPONSES``),
+        the in-flight ``executing_task``, and skill params. Optional fields
+        that aren't readily available are left ``None``; the wildcard server
+        accepts a NULL there. Required fields default to safe placeholders
+        rather than blocking the row: a malformed event surfaces as a 422
+        when the wildcard write fires (and lands in the local replay buffer
+        so it's recoverable), which is preferable to silently dropping
+        analytics data.
+
+        Datetimes are emitted as ISO 8601 strings with UTC offset so the
+        wildcard ``AwareDatetime`` parser accepts them; mech ints (Unix
+        seconds) are converted here so the structured event can ride the
+        FSM consensus channel without round-tripping through a custom
+        codec.
+        """
+        req_id = done_task["request_id"]
+        request_id_str = str(req_id)
+        request_data_raw = self.context.shared_state.get(
+            IN_MEMORY_REQUESTS, {}
+        ).get(req_id, {})
+        # IPFS_DATA can land as either a parsed dict (normal handler path)
+        # or a JSON-encoded string (some test fixtures and the historical
+        # backfill path); normalise to dict here so downstream ``.get``
+        # calls don't crash on a string.
+        if isinstance(request_data_raw, (bytes, bytearray)):
+            try:
+                request_data_raw = request_data_raw.decode("utf-8")
+            except UnicodeDecodeError:
+                request_data_raw = ""
+        if isinstance(request_data_raw, str):
+            try:
+                request_data = json.loads(request_data_raw) if request_data_raw else {}
+                if not isinstance(request_data, dict):
+                    request_data = {"raw": request_data_raw}
+            except (ValueError, TypeError):
+                request_data = {"raw": request_data_raw}
+        elif isinstance(request_data_raw, dict):
+            request_data = request_data_raw
+        else:
+            request_data = {}
+        response_data_raw = self.context.shared_state.get(
+            OFFCHAIN_REQUEST_RESPONSES, {}
+        ).get(req_id, {})
+        response_data = (
+            response_data_raw if isinstance(response_data_raw, dict) else {}
+        )
+        tool = str(done_task.get("tool") or "unknown")
+        delivery_mech = str(
+            done_task.get("mech_address")
+            or self.params.mech_marketplace_address
+            or ""
+        )
+
+        # `start_time` is a perf_counter() value (monotonic, not wall-clock),
+        # not suitable as a delivered_at timestamp. Use the current wall-clock
+        # at finalize as the best-effort delivered_at; the analytics ETL can
+        # cross-correlate against the on-chain block timestamp if needed.
+        now_iso = datetime.now(timezone.utc).isoformat()
+        executed_at_unix = response_data.get("executed_at")
+        executed_at_iso = (
+            datetime.fromtimestamp(executed_at_unix, tz=timezone.utc).isoformat()
+            if isinstance(executed_at_unix, (int, float))
+            else now_iso
+        )
+        # Requested_at: prefer the signed timestamp on the buffered request;
+        # the handler validates and stores it before enqueueing. Fall back to
+        # the executed_at on the response so the time-leading index entry is
+        # always populated for an offchain row.
+        requested_at_raw = request_data.get("datetime") or request_data.get(
+            "requested_at"
+        )
+        requested_at_iso = (
+            str(requested_at_raw) if requested_at_raw else executed_at_iso
+        )
+
+        delivery_rate_raw = (
+            executing_task.get("request_delivery_rate")
+            or executing_task.get("delivery_rate")
+        )
+        delivery_rate_str = (
+            str(delivery_rate_raw) if delivery_rate_raw is not None else None
+        )
+        nonce_raw = (
+            executing_task.get("request_id_nonce")
+            or executing_task.get("nonce")
+        )
+        try:
+            nonce_int = int(nonce_raw) if nonce_raw is not None else None
+        except (TypeError, ValueError):
+            nonce_int = None
+        # The wildcard server requires `prompt` and `tool` to be non-empty
+        # strings; placeholder them rather than dropping the row.
+        prompt = str(request_data.get("prompt") or "[offchain request]")
+        if len(prompt) > MAX_PROMPT_BYTES:
+            prompt = prompt[:MAX_PROMPT_BYTES]
+        invalid = bool(self._invalid_request)
+        result_text = (
+            response_data.get("result") if response_data else None
+        )
+        status = "failed" if invalid or result_text is None else "complete"
+        error_text = (
+            str(result_text) if invalid and result_text else None
+            if status == "complete"
+            else (str(result_text) if status == "failed" and result_text else None)
+        )
+        # Strip the result from the failed arm so the wildcard's
+        # status/error/result shape CHECK accepts the row.
+        result_value: Optional[str] = (
+            None if status == "failed" else (str(result_text) if result_text else "")
+        )
+        tool_hash = self._tools_to_package_hash.get(tool)
+        cost_dict = done_task.get("cost_dict") if isinstance(done_task.get("cost_dict"), dict) else None
+
+        return {
+            "request": {
+                "request_id": request_id_str,
+                "chain_id": _chain_alias_to_int(
+                    getattr(self.params, "default_chain_id", None)
+                ),
+                "marketplace_address": str(
+                    getattr(self.params, "mech_marketplace_address", "") or ""
+                ),
+                "requester": str(executing_task.get("sender") or ""),
+                "priority_mech": str(
+                    executing_task.get("priority_mech")
+                    or delivery_mech
+                ),
+                "delivery_mech": delivery_mech,
+                "payment_type": str(executing_task.get("payment_type") or "")
+                or None,
+                "delivery_rate": delivery_rate_str,
+                "nonce": nonce_int,
+                "content_cid": cid,
+                "prompt": prompt,
+                "tool": tool,
+                "model": (
+                    str(request_data.get("model"))
+                    if request_data.get("model")
+                    else None
+                ),
+                "tool_params": (
+                    request_data.get("params")
+                    if isinstance(request_data.get("params"), dict)
+                    else None
+                ),
+                "raw_content": (
+                    request_data
+                    if isinstance(request_data, dict)
+                    else {"prompt": prompt, "tool": tool}
+                ),
+                "requested_at": requested_at_iso,
+            },
+            "response": {
+                "request_id": request_id_str,
+                "delivery_mech": delivery_mech,
+                "schema_version": RESPONSE_SCHEMA_VERSION,
+                "result": result_value,
+                "status": status,
+                "error": error_text,
+                "executed_at": executed_at_iso,
+                "cost_dict": cost_dict,
+                "is_offchain": True,
+                "tool_hash": tool_hash,
+                "execution_latency_ms": None,
+                "params_used": (
+                    done_task.get("used_params")
+                    if isinstance(done_task.get("used_params"), dict)
+                    else None
+                ),
+                "raw_content": (
+                    response_data
+                    if isinstance(response_data, dict)
+                    else {"result": result_value or "", "status": status}
+                ),
+                "response_cid": None,
+                "delivered_at": now_iso,
+            },
+        }
 
     def _reset_executing_task(self) -> None:
         """Reset the in-flight task slot so the next task can be picked up."""
