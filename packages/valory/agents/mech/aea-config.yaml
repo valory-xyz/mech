@@ -42,12 +42,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/contract_subscription:0.1.0:bafybeicqlkmfpttw4hbbaakr6xos62rd6ytjwkyzlfli4xpvl5yqcycf6q
-- valory/mech_abci:0.1.0:bafybeibtnwxysqwb3avo7q5ysiudslzitbly6ranwjlpmr27fen2lr7jny
+- valory/mech_abci:0.1.0:bafybeiefkzwseilnjxc3orf4gtslj2mef7jfgk76zrdf7xcnyz3owril74
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/delivery_rate_abci:0.1.0:bafybeiaefr3eiajklnb6m4jtl7rpxr5t2lmrpizfy7gqkjem3qiewo7cz4
-- valory/task_execution:0.1.0:bafybeihfbafxwxfs63rb7svio3dif55bvvqtzl2fer6ssc5mda4n2jbwii
-- valory/task_submission_abci:0.1.0:bafybeigqtu7oaha2uzxgkzfosoljbf52p4nl2izxiykg4ba57uzhk7eluy
+- valory/task_execution:0.1.0:bafybeicdrq5dsmci3l7qtunlrktkinrzbua4mindiqw76za7esbrj3dtqm
+- valory/task_submission_abci:0.1.0:bafybeiejenjmpqsj44ptvxbloilnh2a4hhwbqebnm3a6lctk3h7ueaasmi
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
 - valory/websocket_client:0.1.0:bafybeid6oyycsrvk4duftffs5mrfgmcepibt3qe4om3kfzhwhilfq3ynay
@@ -279,8 +279,5 @@ is_abstract: false
 public_id: valory/kv_store:0.1.0
 type: connection
 config:
-  # SQLite-backed durable store for the off-chain preimage buffer. Points at the
-  # agent's persistent volume so buffered (request, response) pairs survive
-  # restarts; the background sweeper prunes entries past the retention window.
   store_path: ${str:/data/mech_preimages}
 is_abstract: false

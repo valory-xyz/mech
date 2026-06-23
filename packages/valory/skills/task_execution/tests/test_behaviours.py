@@ -1701,7 +1701,7 @@ def _seed_executing_task(
         "contract_address": params_stub.agent_mech_contract_address,
     }
     behaviour._done_task = None  # _handle_done_task assigns it
-    behaviour._invalid_request = True  # take the "Invalid response" failure shape
+    behaviour._invalid_request = False  # default to the success shape
     behaviour._ipfs_error_reason = None
 
 
@@ -1727,7 +1727,7 @@ def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
     monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
     monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
 
-    behaviour._handle_done_task(task_result=None)
+    behaviour._handle_done_task(task_result=_make_success_result())
 
     # The IPFS store request must not have been sent.
     assert send_calls == []
@@ -1741,6 +1741,57 @@ def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
     # Result string is hex (no 0x), matching the existing to_multihash output shape.
     int(done["task_result"], 16)
     assert behaviour._executing_task is None
+
+    # Off-chain return channel: the result is persisted under
+    # offchain_request_responses so /fetch_offchain_info can serve it. The
+    # response never hit public IPFS, and the done_task fallback carries the
+    # CID but not the result/prompt/cost_dict.
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES][11]
+    assert stored["status"] == "ok"
+    assert stored["request_id"] == 11
+    assert isinstance(stored["content_cid"], str) and stored["content_cid"]
+    # The committed object is served verbatim under "response" (envelope fields
+    # hang outside it), and it carries the real tool result.
+    assert stored["response"]["result"] == "prediction: yes"
+    # content_cid must be reproducible by re-hashing exactly the served
+    # "response" object — this is the verification contract every offchain
+    # consumer (mech-client, mech-interact, historical ETL) relies on.
+    recomputed = beh_mod.compute_cidv1(json.dumps(stored["response"]).encode("utf-8"))
+    assert recomputed == stored["content_cid"]
+
+
+def test_handle_done_task_offchain_invalid_request_recorded_as_failure(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A failed off-chain task is served as a rejection, never as status 'ok'."""
+    # A tool/execution failure (_invalid_request) must not land in the success
+    # bucket: a paying requester keys refund/retry on `status`, so "ran but
+    # failed" has to be distinguishable from "succeeded".
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-15")
+    behaviour._invalid_request = True
+    behaviour._ipfs_error_reason = "tool boom"
+
+    send_calls: list = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: send_calls.append(a))
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    # No IPFS upload, no on-chain delivery for a failed offchain task.
+    assert send_calls == []
+    assert shared_state[beh_mod.DONE_TASKS] == []
+    assert behaviour._executing_task is None
+
+    rejection = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-15"]
+    assert rejection["status"] == "rejected"
+    assert rejection["status"] != "ok"
+    # The failure reason surfaces to the requester rather than being masked.
+    assert rejection["reason"] == "tool boom"
 
 
 def test_handle_done_task_onchain_still_uploads_to_ipfs(
@@ -1854,7 +1905,7 @@ def test_handle_done_task_offchain_clears_in_memory_request(
     monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
     monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
 
-    behaviour._handle_done_task(task_result=None)
+    behaviour._handle_done_task(task_result=_make_success_result())
 
     assert "req-14" not in shared_state[beh_mod.IN_MEMORY_REQUESTS]
     assert behaviour._executing_task is None

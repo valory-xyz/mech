@@ -28,7 +28,6 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
-from aea.configurations.base import PublicId
 from aea.helpers.cid import to_v1
 from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
@@ -39,6 +38,9 @@ from prometheus_client import Counter, Gauge, Histogram
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
+from packages.valory.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID_OBJ,
+)
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
 )
@@ -99,7 +101,7 @@ LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 # Routing target for kv_store messages (the preimage buffer). Built from the
 # public id string rather than imported from the connection package so the
 # skill (and its unit tests) don't pull in the connection's runtime deps.
-KV_STORE_CONNECTION_PUBLIC_ID = str(PublicId.from_str("valory/kv_store:0.1.0"))
+KV_STORE_CONNECTION_PUBLIC_ID = str(KV_STORE_CONNECTION_PUBLIC_ID_OBJ)
 
 
 class RequestType(Enum):
@@ -921,9 +923,31 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # path's directory-wrapped CID (see utils/local_cid.py). The on-chain
             # commitment derivation (to_multihash, inside _finalize_done_task) is
             # otherwise identical.
+            if self._invalid_request:
+                # The task ran but produced no valid result, so `response`
+                # carries an error string rather than an answer. Route it through
+                # the same terminal-failure channel as the CID / done-task
+                # failures below instead of serving it as a success: a paying
+                # requester keys refund / retry / dispute on `status`, so a "ran
+                # but failed" delivery must be distinguishable from a successful
+                # one — otherwise the client accepts and pays for a failure.
+                self._record_offchain_failure(
+                    cast(str, req_id),
+                    cast(str, response.get("result") or "task execution failed"),
+                )
+                return
             try:
-                response_bytes = json.dumps(response).encode("utf-8")
-                local_cid = compute_cidv1(response_bytes)
+                # content_bytes is exactly what the CID commits to. The serving
+                # payload below carries this same object verbatim under
+                # "response" (envelope fields hang outside it), so a client that
+                # re-derives compute_cidv1(json.dumps(stored["response"]))
+                # reproduces content_cid byte-for-byte and can verify the
+                # delivery against the on-chain commitment. json.dumps round-trips
+                # stably here (default separators, dict insertion order is
+                # preserved through JSON), matching the on-chain path which also
+                # content-addresses json.dumps(response).
+                content_bytes = json.dumps(response).encode("utf-8")
+                local_cid = compute_cidv1(content_bytes)
             except (ValueError, TypeError) as exc:
                 # compute_cidv1 raises ValueError above the single-block bound;
                 # json.dumps raises TypeError (non-serializable) / ValueError
@@ -943,13 +967,30 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Off-chain response for request {req_id} kept private; "
                 f"local CID {local_cid}."
             )
+            # Off-chain return channel: the response was not uploaded to IPFS, so
+            # persist it under offchain_request_responses for /fetch_offchain_info
+            # to serve. The committed object is kept verbatim under "response"
+            # (the exact bytes hashed into content_cid); request_id / status /
+            # content_cid are envelope fields kept outside it so they don't
+            # perturb the hash. Without this the poll falls back to the done_task,
+            # which carries the CID/multihash but not the result/prompt/cost_dict.
+            self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
+                cast(str, req_id)
+            ] = {
+                "request_id": cast(str, req_id),
+                "status": "ok",
+                "content_cid": local_cid,
+                "response": response,
+            }
             # Mirror the (request, response) preimage into the durable buffer
-            # before finalizing. The response stays private (not on IPFS), so
-            # this is the operator's only audit copy; the sweeper prunes it after
-            # the retention window. No-op unless preimage retention is enabled.
+            # after the in-memory return channel is populated. The response
+            # stays private (not on IPFS), so this is the operator's only audit
+            # copy; the sweeper prunes it after the retention window. No-op
+            # unless preimage retention is enabled; failures are logged but
+            # don't block the in-memory return channel above.
             self._buffer_preimage_settlement(
                 cast(str, req_id),
-                response_bytes.decode("utf-8", errors="replace"),
+                content_bytes.decode("utf-8", errors="replace"),
                 local_cid,
                 preimage_buffer.STATUS_DELIVERED,
             )

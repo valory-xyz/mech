@@ -25,6 +25,7 @@ part most likely to drift independently of the AEA async plumbing.
 """
 
 import json
+from typing import Any
 
 from packages.valory.skills.task_execution.utils import preimage
 
@@ -36,7 +37,7 @@ def _new_state() -> dict:
     return state
 
 
-def test_init_shared_state_is_idempotent():
+def test_init_shared_state_is_idempotent() -> None:
     """init_shared_state sets defaults once and never clobbers existing data."""
     state = _new_state()
     state[preimage.PREIMAGE_RECORDS]["r1"] = {"x": 1}
@@ -47,12 +48,12 @@ def test_init_shared_state_is_idempotent():
     assert state[preimage.PREIMAGE_INFLIGHT_WRITE] is None
 
 
-def test_preimage_key():
+def test_preimage_key() -> None:
     """Keys are the prefix concatenated with the request id."""
     assert preimage.preimage_key("mech_preimage/", "abc") == "mech_preimage/abc"
 
 
-def test_record_accept_buffers_processing_record_and_queues_write():
+def test_record_accept_buffers_processing_record_and_queues_write() -> None:
     """A fresh accept stores a processing record and queues exactly one write."""
     state = _new_state()
     preimage.record_accept(state, "r1", "the-request", now=1000.0)
@@ -65,7 +66,7 @@ def test_record_accept_buffers_processing_record_and_queues_write():
     assert state[preimage.PREIMAGE_WRITE_QUEUE] == ["r1"]
 
 
-def test_write_queue_dedupes():
+def test_write_queue_dedupes() -> None:
     """Accept then settle for the same id enqueues the id only once."""
     state = _new_state()
     preimage.record_accept(state, "r1", "req", now=1.0)
@@ -75,7 +76,7 @@ def test_write_queue_dedupes():
     assert state[preimage.PREIMAGE_WRITE_QUEUE] == ["r1"]
 
 
-def test_record_settlement_merges_onto_accept():
+def test_record_settlement_merges_onto_accept() -> None:
     """Settling an accepted request keeps the request and adds the outcome."""
     state = _new_state()
     preimage.record_accept(state, "r1", "the-request", now=1000.0)
@@ -91,7 +92,7 @@ def test_record_settlement_merges_onto_accept():
     assert record["settlement_status"] == preimage.STATUS_DELIVERED
 
 
-def test_record_settlement_without_accept_creates_minimal_record():
+def test_record_settlement_without_accept_creates_minimal_record() -> None:
     """A settle with no prior accept (e.g. restart) still captures the response."""
     state = _new_state()
     preimage.record_settlement(
@@ -105,8 +106,8 @@ def test_record_settlement_without_accept_creates_minimal_record():
     assert record["settled_at"] == 42
 
 
-def test_serialize_round_trips():
-    """serialize produces a JSON string that parses back to the record."""
+def test_serialize_round_trips() -> None:
+    """The serialize helper produces a JSON string that parses back to the record."""
     state = _new_state()
     preimage.record_accept(state, "r1", "req", now=1.0)
     record = state[preimage.PREIMAGE_RECORDS]["r1"]
@@ -116,12 +117,12 @@ def test_serialize_round_trips():
 # --- sweeper expiry --------------------------------------------------------
 
 
-def _value(**kwargs) -> str:
+def _value(**kwargs: Any) -> str:
     """Build a serialized preimage value with the given fields."""
     return json.dumps(kwargs)
 
 
-def test_expired_keys_by_settled_at():
+def test_expired_keys_by_settled_at() -> None:
     """An entry older than the window measured from settled_at is expired."""
     now = 100_000.0
     data = {
@@ -133,7 +134,7 @@ def test_expired_keys_by_settled_at():
     ]
 
 
-def test_expired_keys_falls_back_to_accepted_at():
+def test_expired_keys_falls_back_to_accepted_at() -> None:
     """An in-flight (no settled_at) entry expires off accepted_at."""
     now = 100_000.0
     data = {"mech_preimage/stuck": _value(accepted_at=now - 500, settled_at=None)}
@@ -142,7 +143,7 @@ def test_expired_keys_falls_back_to_accepted_at():
     ]
 
 
-def test_expired_keys_skips_unparseable_and_timestampless():
+def test_expired_keys_skips_unparseable_and_timestampless() -> None:
     """Malformed or timestamp-free values are never selected for deletion."""
     now = 100_000.0
     data = {
@@ -155,6 +156,6 @@ def test_expired_keys_skips_unparseable_and_timestampless():
     ]
 
 
-def test_expired_keys_empty():
+def test_expired_keys_empty() -> None:
     """An empty LIST response yields nothing to delete."""
     assert preimage.expired_keys({}, 1.0, retention_seconds=100) == []

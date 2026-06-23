@@ -39,9 +39,9 @@ from packages.valory.skills.task_execution.behaviours import (
     PENDING_TASKS,
     REQUEST_ID_TO_DELIVERY_RATE_INFO,
     TIMED_OUT_TASKS,
+    TaskExecutionBehaviour,
     UNPROCESSED_TIMED_OUT_TASKS,
     WAIT_FOR_TIMEOUT,
-    TaskExecutionBehaviour,
 )
 
 # ----------------------------- Shared stubs -----------------------------------

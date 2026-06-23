@@ -44,6 +44,8 @@ def _clear_prometheus_registry() -> Generator[None, None, None]:
     The behaviour fixture builds a TaskExecutionBehaviour, which registers
     global metrics; without this the second instantiation in the session trips
     a duplicate-timeseries error (mirrors test_behaviours.py).
+
+    :yields: control back to the test, then sweeps the registry on return.
     """
     yield
     for collector in list(REGISTRY._names_to_collectors.values()):
@@ -68,7 +70,7 @@ class _CaptureOutbox:
 # --- behaviour: flush / sweep loop -----------------------------------------
 
 
-def test_process_buffer_noop_when_disabled(behaviour):
+def test_process_buffer_noop_when_disabled(behaviour: Any) -> None:
     """With retention off (the default), nothing is ever sent."""
     behaviour.context.params.preimage_retention_enabled = False
     out = _CaptureOutbox()
@@ -77,7 +79,7 @@ def test_process_buffer_noop_when_disabled(behaviour):
     assert out.sent == []
 
 
-def test_process_buffer_in_flight_blocks(behaviour):
+def test_process_buffer_in_flight_blocks(behaviour: Any) -> None:
     """A kv op already in flight prevents issuing another."""
     behaviour.context.params.preimage_retention_enabled = True
     behaviour.context.shared_state[preimage.PREIMAGE_KV_IN_FLIGHT] = True
@@ -87,7 +89,7 @@ def test_process_buffer_in_flight_blocks(behaviour):
     assert out.sent == []
 
 
-def test_first_tick_sweeps(behaviour):
+def test_first_tick_sweeps(behaviour: Any) -> None:
     """First tick issues a LIST_REQUEST (sweep due, last_sweep defaults to 0)."""
     behaviour.context.params.preimage_retention_enabled = True
     out = _CaptureOutbox()
@@ -99,7 +101,7 @@ def test_first_tick_sweeps(behaviour):
     assert behaviour.context.shared_state[preimage.PREIMAGE_KV_IN_FLIGHT] is True
 
 
-def test_flushes_queued_write_when_sweep_not_due(behaviour):
+def test_flushes_queued_write_when_sweep_not_due(behaviour: Any) -> None:
     """With the sweep not due, a queued preimage is upserted into the kv_store."""
     ss = behaviour.context.shared_state
     behaviour.context.params.preimage_retention_enabled = True
@@ -116,7 +118,7 @@ def test_flushes_queued_write_when_sweep_not_due(behaviour):
     assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is True
 
 
-def test_flushes_queued_deletes_before_writes(behaviour):
+def test_flushes_queued_deletes_before_writes(behaviour: Any) -> None:
     """Expired-key deletes drain (batched) ahead of pending writes."""
     ss = behaviour.context.shared_state
     behaviour.context.params.preimage_retention_enabled = True
@@ -142,7 +144,7 @@ def _handler(handler_context: Any) -> KvStoreHandler:
     return KvStoreHandler(name="kv_store", skill_context=handler_context)
 
 
-def test_handler_list_response_queues_expired(handler_context):
+def test_handler_list_response_queues_expired(handler_context: Any) -> None:
     """LIST_RESPONSE queues expired keys for deletion and clears in-flight."""
     handler_context.params.preimage_retention_seconds = 100
     handler = _handler(handler_context)
@@ -162,7 +164,7 @@ def test_handler_list_response_queues_expired(handler_context):
     assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is False
 
 
-def test_handler_success_pops_terminal_record(handler_context):
+def test_handler_success_pops_terminal_record(handler_context: Any) -> None:
     """A successful write of a settled record drops the in-process copy."""
     handler = _handler(handler_context)
     ss = handler_context.shared_state
@@ -179,7 +181,7 @@ def test_handler_success_pops_terminal_record(handler_context):
     assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is False
 
 
-def test_handler_success_keeps_processing_record(handler_context):
+def test_handler_success_keeps_processing_record(handler_context: Any) -> None:
     """A successful processing-write keeps the record for the settle merge."""
     handler = _handler(handler_context)
     ss = handler_context.shared_state
@@ -192,7 +194,7 @@ def test_handler_success_keeps_processing_record(handler_context):
     assert "r1" in ss[preimage.PREIMAGE_RECORDS]
 
 
-def test_handler_error_requeues_write(handler_context):
+def test_handler_error_requeues_write(handler_context: Any) -> None:
     """A write ERROR re-queues the request id so the preimage isn't lost."""
     handler = _handler(handler_context)
     ss = handler_context.shared_state

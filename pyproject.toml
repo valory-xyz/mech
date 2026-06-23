@@ -38,6 +38,10 @@ dependencies = [
     "openapi-spec-validator<0.8.0,>=0.7.0",
     "prometheus_client<0.24,>=0.23.1",
     "pebble<6,>=5.1",
+    # Used by the vendored valory/kv_store connection (SQLite ORM). The
+    # connection.yaml pins ==3.17.5; this range tracks the kv-store
+    # pyproject so check-dependencies' string-strict matcher accepts both.
+    "peewee>=3.17,<4",
     "pip>=24.0",
 ]
 
