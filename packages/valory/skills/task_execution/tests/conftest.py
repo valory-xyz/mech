@@ -179,6 +179,7 @@ def params_stub() -> SimpleNamespace:
         preimage_key_prefix="mech_preimage/",
         preimage_list_page_size=100,
         preimage_max_write_attempts=5,
+        preimage_max_list_attempts=5,
         max_block_window=10_000,
         task_deadline=15.0,
         timeout_limit=2,

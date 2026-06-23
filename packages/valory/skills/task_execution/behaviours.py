@@ -97,12 +97,14 @@ IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
 PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
 # Reset PREIMAGE_KV_IN_FLIGHT if no kv_store reply arrives within this many
-# seconds. Mirrors PAYMENT_MODEL_REQUEST_TIMEOUT: without this watchdog a lost
-# SUCCESS/ERROR (connection drop, dropped envelope, exception in the
-# connection's send path) wedges the flag True forever — the preimage loop
-# stops draining and PREIMAGE_RECORDS / PREIMAGE_WRITE_QUEUE grow unbounded
-# until restart, silently.
-PREIMAGE_KV_REQUEST_TIMEOUT = 60.0
+# seconds. Without this watchdog a lost SUCCESS/ERROR (connection drop, dropped
+# envelope, exception in the connection's send path) wedges the flag True
+# forever — the preimage loop stops draining and PREIMAGE_RECORDS /
+# PREIMAGE_WRITE_QUEUE grow unbounded until restart, silently. Sized for a
+# local SQLite kv_store (sub-ms replies in the healthy case); 5s is huge
+# headroom for a real reply and tight enough that a single lost reply only
+# stalls the preimage pipeline for one act() tick or two.
+PREIMAGE_KV_REQUEST_TIMEOUT = 5.0
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 # Routing target for kv_store messages (the preimage buffer). Built from the
@@ -1545,7 +1547,27 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # so this is safe even if a settle already re-enqueued it.
                 inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
                 if inflight is not None:
-                    preimage_buffer.enqueue_write(shared_state, inflight)
+                    # Mirror the ERROR-branch retry cap so a kv_store that
+                    # times out instead of replying ERROR can't bypass the
+                    # per-id cap and retry forever. enqueue_write dedupes,
+                    # so this is safe even if a settle already re-enqueued.
+                    attempts: Dict[str, int] = shared_state.setdefault(
+                        preimage_buffer.PREIMAGE_WRITE_ATTEMPTS, {}
+                    )
+                    attempts[inflight] = attempts.get(inflight, 0) + 1
+                    if attempts[inflight] >= self.params.preimage_max_write_attempts:
+                        self.context.logger.warning(
+                            "Preimage write for request_id=%s timed out "
+                            "%d times with no kv_store reply; dropping record.",
+                            inflight,
+                            attempts[inflight],
+                        )
+                        shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).pop(
+                            inflight, None
+                        )
+                        attempts.pop(inflight, None)
+                    else:
+                        preimage_buffer.enqueue_write(shared_state, inflight)
                 self.context.logger.warning(
                     "Preimage kv op has been in flight for "
                     f">{PREIMAGE_KV_REQUEST_TIMEOUT}s with no reply. "
@@ -1553,6 +1575,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 )
                 shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
                 shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+                shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = None
                 shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
             else:
                 return
@@ -1580,8 +1603,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             preimage_buffer.PREIMAGE_DELETE_QUEUE, []
         )
         if delete_queue:
-            keys = list(delete_queue)
-            delete_queue.clear()
+            # Chunk the DELETE to preimage_list_page_size per tick. A single
+            # bulk DELETE of every expired key would blow past SQLite's
+            # bound-parameter cap (`SQLITE_MAX_VARIABLE_NUMBER`, typically
+            # 999/32766) once the backlog is large — an agent down longer
+            # than the retention window comes back, every key expires at
+            # once, and an unbounded DELETE fails outright. Failed deletes
+            # aren't retried in this branch, so the next sweep would just
+            # rebuild the identical oversized batch and fail the same way:
+            # retention pruning would permanently stall and the db would
+            # grow without bound. Slicing matches the LIST page size so a
+            # full namespace walk drains a whole expired set within one
+            # sweep cycle.
+            page = self.params.preimage_list_page_size
+            keys = delete_queue[:page]
+            del delete_queue[:page]
             self._send_kv_delete(keys)
             return
 
@@ -1613,6 +1649,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self.context.outbox.put_message(message=msg)
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = request_id
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = (
+            preimage_buffer.OP_WRITE
+        )
         self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
             time.time()
@@ -1630,6 +1669,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self.context.outbox.put_message(message=msg)
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = (
+            preimage_buffer.OP_DELETE
+        )
         self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
             time.time()
@@ -1657,6 +1699,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self.context.outbox.put_message(message=msg)
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = (
+            preimage_buffer.OP_LIST
+        )
         self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
             time.time()

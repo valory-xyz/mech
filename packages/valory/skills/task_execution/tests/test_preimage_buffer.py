@@ -496,6 +496,135 @@ def test_handler_error_drops_record_after_max_attempts(
     assert "r1" not in ss[preimage.PREIMAGE_WRITE_ATTEMPTS]
 
 
+def test_watchdog_counts_toward_write_attempts_and_drops_at_cap(
+    behaviour: Any,
+) -> None:
+    """Watchdog timeouts increment PREIMAGE_WRITE_ATTEMPTS and drop at the cap."""
+    # Without this, a kv_store stuck in the no-reply failure mode would
+    # bypass the ERROR-branch retry cap (the watchdog re-enqueues but never
+    # increments) and retry the same write forever — exactly the unbounded
+    # hot-loop the cap was added to close, just via timeout instead of ERROR.
+    behaviour.context.params.preimage_retention_enabled = True
+    behaviour.context.params.preimage_max_write_attempts = 2
+    ss = behaviour.context.shared_state
+    preimage.record_settlement(
+        ss, "r1", "resp", "cid", preimage.STATUS_DELIVERED, now=1.0
+    )
+
+    # Tick 1: watchdog fires for the first time, attempts -> 1 (< cap=2),
+    # so the record is re-enqueued, fall-through re-sends it.
+    ss[preimage.PREIMAGE_WRITE_QUEUE].remove("r1")
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r1"
+    ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = time.time() - 999.0
+    ss[preimage.PREIMAGE_LAST_SWEEP] = time.time()
+
+    out = _CaptureOutbox()
+    behaviour.context.outbox = out
+    behaviour._process_preimage_buffer()
+    assert ss[preimage.PREIMAGE_WRITE_ATTEMPTS]["r1"] == 1
+    assert "r1" in ss[preimage.PREIMAGE_RECORDS]
+    assert len(out.sent) == 1
+
+    # Tick 2: watchdog fires again, attempts -> 2 (== cap), record + counter
+    # purged, no fresh send because the queue is empty.
+    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r1"
+    ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = time.time() - 999.0
+    ss[preimage.PREIMAGE_LAST_SWEEP] = time.time()
+    out2 = _CaptureOutbox()
+    behaviour.context.outbox = out2
+    behaviour._process_preimage_buffer()
+    assert "r1" not in ss[preimage.PREIMAGE_RECORDS]
+    assert "r1" not in ss[preimage.PREIMAGE_WRITE_ATTEMPTS]
+    assert out2.sent == []
+
+
+def test_handler_list_error_caps_consecutive_failures(handler_context: Any) -> None:
+    """N consecutive LIST ERRORs clear cursor + stamp LAST_SWEEP + reset counter."""
+    # Pre-cap: a persistently failing kv_store would re-LIST every act()
+    # tick (no in-flight write to retry, so the write-counter doesn't fire).
+    # At the cap the cursor is cleared and LAST_SWEEP is stamped so the
+    # next sweep_interval is the natural backoff. The counter must reset
+    # after the cap so future sweeps start fresh.
+    handler_context.params.preimage_max_list_attempts = 3
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_LIST_CURSOR] = "page-2-cursor"
+    ss[preimage.PREIMAGE_LAST_SWEEP] = 0.0
+
+    # First two LIST ERRORs only bump the counter — cursor and clock left alone
+    # so the next tick keeps trying.
+    for expected in (1, 2):
+        ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_LIST
+        ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+        handler.handle(
+            SimpleNamespace(
+                performative=KvStoreMessage.Performative.ERROR, message="boom"
+            )
+        )
+        assert ss[preimage.PREIMAGE_LIST_ATTEMPTS] == expected
+        assert ss[preimage.PREIMAGE_LIST_CURSOR] == "page-2-cursor"
+        assert ss[preimage.PREIMAGE_LAST_SWEEP] == 0.0
+
+    # Third LIST ERROR hits the cap: cursor cleared, clock advanced, counter
+    # reset so the next sweep window starts from a clean slate.
+    ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_LIST
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    handler.handle(
+        SimpleNamespace(performative=KvStoreMessage.Performative.ERROR, message="boom")
+    )
+    assert ss[preimage.PREIMAGE_LIST_CURSOR] is None
+    assert ss[preimage.PREIMAGE_LAST_SWEEP] > 0.0
+    assert ss[preimage.PREIMAGE_LIST_ATTEMPTS] == 0
+
+
+def test_handler_list_response_resets_attempt_counter(handler_context: Any) -> None:
+    """A successful LIST_RESPONSE resets PREIMAGE_LIST_ATTEMPTS to 0."""
+    # Counters must be consecutive, not cumulative — a transient failure
+    # early in a long-running deployment shouldn't push the sweeper one
+    # ERROR away from the cap forever after.
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_LIST_ATTEMPTS] = 4
+    handler.handle(
+        SimpleNamespace(
+            performative=KvStoreMessage.Performative.LIST_RESPONSE,
+            data={},
+            next_cursor="",
+            message="",
+        )
+    )
+    assert ss[preimage.PREIMAGE_LIST_ATTEMPTS] == 0
+
+
+def test_delete_queue_chunked_to_page_size_per_tick(behaviour: Any) -> None:
+    """A backlog larger than page_size drains in slices, not one giant DELETE."""
+    # An unbounded DELETE would exceed SQLite's bound-parameter cap
+    # (SQLITE_MAX_VARIABLE_NUMBER, typically 999/32766) once the backlog is
+    # large — an agent down longer than the retention window comes back,
+    # everything expires at once, and a single bulk DELETE fails outright.
+    # Failed deletes aren't retried, so the next sweep would rebuild the
+    # identical oversized batch: retention pruning would permanently stall
+    # and the db would grow without bound. Slicing prevents that.
+    behaviour.context.params.preimage_retention_enabled = True
+    behaviour.context.params.preimage_list_page_size = 3
+    ss = behaviour.context.shared_state
+    ss[preimage.PREIMAGE_LAST_SWEEP] = time.time()
+    backlog = [f"mech_preimage/k{i}" for i in range(7)]
+    ss[preimage.PREIMAGE_DELETE_QUEUE].extend(backlog)
+
+    out = _CaptureOutbox()
+    behaviour.context.outbox = out
+    behaviour._process_preimage_buffer()
+
+    assert len(out.sent) == 1
+    assert out.sent[0].performative == KvStoreMessage.Performative.DELETE_REQUEST
+    # First slice fires; remaining ids stay queued in original order for
+    # subsequent ticks to drain.
+    assert set(out.sent[0].keys) == set(backlog[:3])
+    assert ss[preimage.PREIMAGE_DELETE_QUEUE] == backlog[3:]
+
+
 def test_handler_success_clears_attempt_counter(handler_context: Any) -> None:
     """A successful terminal write clears the per-id retry counter."""
     # Without this, the counter persists past the record being popped —

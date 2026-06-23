@@ -60,6 +60,14 @@ PREIMAGE_DELETE_QUEUE = "preimage_delete_queue"  # List[str] kv keys to delete
 PREIMAGE_KV_IN_FLIGHT = "preimage_kv_in_flight"  # bool — one kv op at a time
 PREIMAGE_INFLIGHT_WRITE = "preimage_inflight_write"  # Optional[str] request_id
 PREIMAGE_INFLIGHT_SENT_AT = "preimage_inflight_sent_at"  # Optional[float] epoch
+# What kind of kv op is in flight: "list" / "delete" / "write" / None. Needed
+# so the handler can route ERROR replies to the right counter — DELETE and
+# LIST both have PREIMAGE_INFLIGHT_WRITE=None, so without this they're
+# indistinguishable when capping retries.
+PREIMAGE_INFLIGHT_OP = "preimage_inflight_op"  # Optional[str]
+OP_LIST = "list"
+OP_DELETE = "delete"
+OP_WRITE = "write"
 PREIMAGE_LAST_SWEEP = "preimage_last_sweep"  # float epoch seconds
 # Non-empty when a multi-page sweep is mid-flight; the next _send_kv_list
 # tick passes this back as the LIST cursor. Cleared when a LIST_RESPONSE
@@ -71,6 +79,11 @@ PREIMAGE_LIST_CURSOR = "preimage_list_cursor"  # Optional[str]
 # record is dropped + WARN'd so a persistently unhealthy kv_store can't
 # hot-loop the agent retrying the same record forever.
 PREIMAGE_WRITE_ATTEMPTS = "preimage_write_attempts"  # Dict[str, int]
+# Consecutive LIST ERROR counter (single int, no per-id slot — LIST has no id).
+# Each LIST ERROR increments; at the cap the cursor is cleared, LAST_SWEEP is
+# stamped, and a WARN is emitted so the next sweep_interval is the natural
+# backoff instead of a per-tick hot loop. Reset to 0 on any LIST_RESPONSE.
+PREIMAGE_LIST_ATTEMPTS = "preimage_list_attempts"  # int
 
 # settlement_status values.
 STATUS_PROCESSING = "processing"
@@ -94,6 +107,8 @@ def init_shared_state(shared_state: Dict[str, Any]) -> None:
     shared_state.setdefault(PREIMAGE_LAST_SWEEP, 0.0)
     shared_state.setdefault(PREIMAGE_LIST_CURSOR, None)
     shared_state.setdefault(PREIMAGE_WRITE_ATTEMPTS, {})
+    shared_state.setdefault(PREIMAGE_LIST_ATTEMPTS, 0)
+    shared_state.setdefault(PREIMAGE_INFLIGHT_OP, None)
 
 
 def preimage_key(prefix: str, request_id: str) -> str:

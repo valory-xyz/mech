@@ -161,6 +161,14 @@ class Params(Model):
         self.preimage_max_write_attempts: int = kwargs.get(
             "preimage_max_write_attempts", 5
         )
+        # Max consecutive LIST ERRORs before the sweep gives up the current
+        # walk: cursor cleared, LAST_SWEEP stamped, WARN emitted. The next
+        # sweep window (preimage_sweep_interval) is the natural backoff,
+        # bounding what would otherwise be a per-tick LIST hot-loop against
+        # a persistently failing kv_store.
+        self.preimage_max_list_attempts: int = kwargs.get(
+            "preimage_max_list_attempts", 5
+        )
         self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing", {})
         if self.tools_to_pricing:
             self._ensure_same_keys(

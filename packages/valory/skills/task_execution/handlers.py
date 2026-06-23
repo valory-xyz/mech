@@ -566,6 +566,9 @@ class KvStoreHandler(BaseHandler):
             else:
                 shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
                 shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
+            # Successful LIST reply — reset the consecutive-error counter so a
+            # transient failure earlier in the walk doesn't carry over.
+            shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = 0
         elif performative == KvStoreMessage.Performative.SUCCESS:
             # A successful write of a terminal (delivered/rejected) record means
             # the kv_store now owns it; drop the in-process copy. Non-terminal
@@ -600,6 +603,31 @@ class KvStoreHandler(BaseHandler):
                     )
         elif performative == KvStoreMessage.Performative.ERROR:
             self.context.logger.warning(f"kv_store error: {kv_msg.message}")
+            inflight_op = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_OP)
+            if inflight_op == preimage_buffer.OP_LIST:
+                # Bound the LIST hot-loop: a persistently failing kv_store
+                # would otherwise re-LIST every act() tick (initial-LIST and
+                # mid-walk page failures both qualify — neither has an
+                # in-flight write to retry, so the write-counter path above
+                # doesn't apply). At the cap we clear the cursor + stamp
+                # LAST_SWEEP + WARN so the next sweep_interval is the
+                # natural backoff. Counter resets on any successful
+                # LIST_RESPONSE.
+                list_attempts = (
+                    shared_state.get(preimage_buffer.PREIMAGE_LIST_ATTEMPTS, 0) + 1
+                )
+                shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = list_attempts
+                if list_attempts >= self.params.preimage_max_list_attempts:
+                    self.context.logger.warning(
+                        "Preimage sweep LIST failed %d times in a row; "
+                        "giving up the current walk. Next attempt in "
+                        "preimage_sweep_interval. Last kv_store error: %s",
+                        list_attempts,
+                        kv_msg.message,
+                    )
+                    shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
+                    shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = time.time()
+                    shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = 0
             inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
             if inflight is not None:
                 # Bound the retry loop: a persistently unhealthy kv_store
@@ -633,6 +661,7 @@ class KvStoreHandler(BaseHandler):
                     preimage_buffer.enqueue_write(shared_state, inflight)
 
         shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = None
         shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
         shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
         self.on_message_handled(message)
