@@ -1903,9 +1903,23 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
             )
             return
 
-        chain_id = int(
-            getattr(self.params, "default_chain_id", None) or 0
-        )
+        # The EIP-712 domain.chainId binds the signature to one chain. Every
+        # event in the batch was built by ``task_execution._build_wildcard_event``
+        # against the same ``mech_events_chain_id`` param, so we can read
+        # the int from the first event rather than duplicating the param
+        # across two skills (and the value-by-construction check below
+        # rejects a heterogeneous batch defensively).
+        chain_id = int(events[0].get("request", {}).get("chain_id", 0) or 0)
+        if any(
+            int(e.get("request", {}).get("chain_id", 0) or 0) != chain_id
+            for e in events
+        ):
+            self.context.logger.warning(
+                "Wildcard batch contains events from multiple chains; "
+                "skipping. A single Safe should only ever build events for "
+                "one chain — investigate task_execution."
+            )
+            return
 
         batch_hash_hex = compute_batch_hash(events)
         typed_data = build_typed_data(

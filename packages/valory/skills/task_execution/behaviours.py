@@ -90,40 +90,6 @@ STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
-
-# The mech params carry a chain *alias* (``"gnosis"``, ``"base"``, ...) but
-# the wildcard data lake expects the EIP-155 integer chain id. This map
-# covers the deployments listed in the marketplace plan; any alias not in
-# the map falls back to ``0`` so the wildcard row is rejected at the
-# server's marketplace allowlist (the safest fail-closed shape — the row
-# is buffered for inspection rather than silently mis-tagged onto a real
-# chain).
-_CHAIN_ALIAS_TO_ID: Dict[str, int] = {
-    "ethereum": 1,
-    "gnosis": 100,
-    "polygon": 137,
-    "base": 8453,
-    "arbitrum_one": 42161,
-    "celo": 42220,
-}
-
-
-def _chain_alias_to_int(alias: Optional[str]) -> int:
-    """Resolve an AEA chain alias to its EIP-155 integer chain id.
-
-    Returns ``0`` on an unknown alias so the resulting wildcard row fails
-    the server's per-chain marketplace allowlist (defence in depth: a row
-    with a bogus chain id can never land in production analytics).
-    """
-    if not alias:
-        return 0
-    # The string might already be a stringified int (some deployments
-    # configure ``default_chain_id: "100"``); accept both shapes.
-    try:
-        return int(alias)
-    except (TypeError, ValueError):
-        pass
-    return _CHAIN_ALIAS_TO_ID.get(str(alias).lower(), 0)
 PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
@@ -1597,8 +1563,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         return {
             "request": {
                 "request_id": request_id_str,
-                "chain_id": _chain_alias_to_int(
-                    getattr(self.params, "default_chain_id", None)
+                "chain_id": int(
+                    getattr(self.params, "mech_events_chain_id", 0) or 0
                 ),
                 "marketplace_address": str(
                     getattr(self.params, "mech_marketplace_address", "") or ""
