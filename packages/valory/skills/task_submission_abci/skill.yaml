@@ -13,7 +13,7 @@ fingerprint:
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
   models.py: bafybeibja5st6vnds4kdglu3jkrk7yh7hx54k6rfmct3pwqmlvlcrf42ma
-  payloads.py: bafybeiela63rduzbxsesw4qezms5m3ulddrnvqegyupcicodjtbuzydikq
+  payloads.py: bafybeif2gnz5k7eyb6of4iiisni426zscwanjfmtrr37f7ceu4cjqo2ob4
   rounds.py: bafybeibm5cl7q76c5yspj3urlwgos26gusgjb7jcdxikp7wtqyatoovv34
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
@@ -25,8 +25,8 @@ fingerprint:
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_rounds.py: bafybeih4xcimf5jgfeowekmuurgdg4efnouzxqvai3xfzn7cses2mxnahq
   tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
-  tests/test_wildcard_write_client.py: bafybeickbc2e6bu42sapapyqh2xlnyfhyc2zbanyevyhkslbbv4s2r4qda
-  wildcard_write_client.py: bafybeibdym5h37glsgkiv472wr5jo27hveo4rc6om3jt4w7nwcjijjt2uy
+  tests/test_wildcard_write_client.py: bafybeiafzmmwchv77ovew4oiy7cvddjg4zybgpwgn7ltrfovxzfquj4e3a
+  wildcard_write_client.py: bafybeiafcsjuluhou3do6ebhmmgslx2s7nmvi6l2w34jehrs6t2biiutly
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -185,6 +185,10 @@ models:
     args: {}
     class_name: TendermintDialogues
 dependencies:
+  eth-utils:
+    version: ==6.0.0
+  open-aea-ledger-ethereum:
+    version: ==2.2.7
   prometheus_client:
     version: ==0.23.1
 is_abstract: true

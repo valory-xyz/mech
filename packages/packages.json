@@ -8,12 +8,12 @@
         "connection/valory/websocket_client/0.1.0": "bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea",
         "skill/valory/contract_subscription/0.1.0": "bafybeicqlkmfpttw4hbbaakr6xos62rd6ytjwkyzlfli4xpvl5yqcycf6q",
         "skill/valory/delivery_rate_abci/0.1.0": "bafybeiaefr3eiajklnb6m4jtl7rpxr5t2lmrpizfy7gqkjem3qiewo7cz4",
-        "skill/valory/mech_abci/0.1.0": "bafybeidvligwsfat5vbpr4pz73urgjdewd52ux732tkc3qtws5tycsmlki",
+        "skill/valory/mech_abci/0.1.0": "bafybeiaqqrexojombsjqaz5evu5skwsyfj6q75exgyl7k5u6u6225u5ihq",
         "skill/valory/task_execution/0.1.0": "bafybeiaxq6evndnplmd4sdghtapizigpn4udaa4wlxz5kvrvzyjk3ddboa",
-        "skill/valory/task_submission_abci/0.1.0": "bafybeihunh7btr5m4s4437gtkp7qocc6hih4cvshua6fryg5fk6tnp7x2u",
+        "skill/valory/task_submission_abci/0.1.0": "bafybeifeze6p62jhzoa7ajk7uzguvbqdiwt5356cbjizj6god2fu5a4ryi",
         "skill/valory/websocket_client/0.1.0": "bafybeid6oyycsrvk4duftffs5mrfgmcepibt3qe4om3kfzhwhilfq3ynay",
-        "agent/valory/mech/0.1.0": "bafybeih5ntu3ip6qzztvo3lgpm7vua5weeqkvvhacmcujubux7k3zzro5a",
-        "service/valory/mech/0.1.0": "bafybeihycaa6etgnrjs5dykcfwc5ye45jkvbsngvqq3qrhpcloiu4m2bhe"
+        "agent/valory/mech/0.1.0": "bafybeihz2yvueizkusypbn2i6ou7gynvhshrzj5zthue6wddfvcfw2xm3u",
+        "service/valory/mech/0.1.0": "bafybeib4bkdyvvn2zfysgfw5ddoyhk2ejlqu6377imol5drsp2x5skmkny"
     },
     "third_party": {
         "protocol/open_aea/signing/1.0.0": "bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye",
