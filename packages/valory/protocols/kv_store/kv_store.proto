@@ -23,10 +23,13 @@ message KvStoreMessage{
 
   message List_Request_Performative{
     string key_prefix = 1;
+    uint32 limit = 2;
+    string cursor = 3;
   }
 
   message List_Response_Performative{
     map<string, string> data = 1;
+    string next_cursor = 2;
   }
 
   message Success_Performative{

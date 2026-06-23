@@ -39,7 +39,7 @@ connections:
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
 - valory/ipfs:0.1.0:bafybeihxytzo7tunodztv424xsnnufewbowucdsxtdzdcik2rskcn7plta
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
-- valory/kv_store:0.1.0:bafybeibbkpotdes3jfqmt5s7dnya2a3vvewdsc5p6evca5qopwfk7vkefe
+- valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
 contracts:
 - valory/olas_mech:0.1.0:bafybeifvxzldiclpk7ztinivtjaf3y7yfrkw677y73tb2cukkywbagawc4
 - valory/mech_marketplace:0.1.0:bafybeifwx6owth25ud4pknu2s2vcxitt3w2eotjkavmwksdhmur2xd5qgy
@@ -50,7 +50,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 - valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
-- valory/kv_store:0.1.0:bafybeiak5ezgopzmcjq75hz67aqhifzrvyjppdxrkl7cfjnsmojokzfrg4
+- valory/kv_store:0.1.0:bafybeidlfrgv5rc7m7kj3j6u6umogmpy5bgcdzqtnsy3v75wn3likvyt6m
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 behaviours:

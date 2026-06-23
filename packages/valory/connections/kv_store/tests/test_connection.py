@@ -138,23 +138,28 @@ def _build_delete_request(keys: Tuple[str, ...]) -> KvStoreMessage:
     )
 
 
-def _build_list_request(key_prefix: str) -> KvStoreMessage:
+def _build_list_request(
+    key_prefix: str, limit: int = 0, cursor: str = ""
+) -> KvStoreMessage:
     return KvStoreMessage(
         performative=KvStoreMessage.Performative.LIST_REQUEST,  # type: ignore[arg-type]
         dialogue_reference=(_next_ref(), ""),
         message_id=1,
         target=0,
         key_prefix=key_prefix,
+        limit=limit,
+        cursor=cursor,
     )
 
 
-def _build_list_response(data: Dict[str, str]) -> KvStoreMessage:
+def _build_list_response(data: Dict[str, str], next_cursor: str = "") -> KvStoreMessage:
     return KvStoreMessage(
         performative=KvStoreMessage.Performative.LIST_RESPONSE,  # type: ignore[arg-type]
         dialogue_reference=(_next_ref(), ""),
         message_id=1,
         target=0,
         data=data,
+        next_cursor=next_cursor,
     )
 
 
@@ -627,6 +632,15 @@ def test_concurrent_writes_do_not_deadlock(
         _build_delete_request(()),
         _build_list_request("preimage:"),
         _build_list_request(""),
+        # Non-default pagination values. Protobuf's scalar-default encoding
+        # means defaults (`limit=0`, `cursor=""`, `next_cursor=""`) are
+        # field-absent on the wire, so a serializer regression that
+        # *dropped* `limit` / `cursor` / `next_cursor` would produce
+        # identical bytes for the default cases above and silently pass.
+        # Pin the values explicitly here so encode-then-decode actually
+        # round-trips them, not just the structural shape.
+        _build_list_request("preimage:", limit=42, cursor="preimage:007"),
+        _build_list_response({"k": "v"}, next_cursor="preimage:9"),
         _build_list_response({"preimage:1": "v1", "preimage:2": "v2"}),
         _build_list_response({}),
     ],
@@ -635,6 +649,8 @@ def test_concurrent_writes_do_not_deadlock(
         "delete_empty",
         "list_req",
         "list_req_empty",
+        "list_req_paginated",
+        "list_resp_with_cursor",
         "list_resp",
         "list_resp_empty",
     ],
@@ -716,6 +732,230 @@ def test_list_request_prefix_is_case_sensitive(
 
     assert response is not None
     assert response.data == {"preimage:1": "v1"}
+
+
+# --- LIST_REQUEST pagination ------------------------------------------------
+
+
+def _seed_preimages(count: int) -> None:
+    """Insert ``count`` preimage:NNN rows with zero-padded keys for stable ordering."""
+    for i in range(count):
+        Store.create(key=f"preimage:{i:03d}", value=f"v{i}")
+
+
+def test_list_request_returns_first_page_with_next_cursor(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """First page returns ``limit`` rows and a non-empty cursor pointing at the last key."""
+    _seed_preimages(10)
+    message = _build_list_request("preimage:", limit=3)
+    dialogue = _open_dialogue(kv_connection.dialogues, message)
+
+    response = kv_connection.list_request(message, dialogue)
+
+    assert response is not None
+    assert response.performative == KvStoreMessage.Performative.LIST_RESPONSE
+    assert response.data == {
+        "preimage:000": "v0",
+        "preimage:001": "v1",
+        "preimage:002": "v2",
+    }
+    assert response.next_cursor == "preimage:002"
+
+
+def test_list_request_subsequent_pages_pick_up_after_cursor(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """Passing the prior page's ``next_cursor`` back returns the next slice."""
+    _seed_preimages(7)
+    message = _build_list_request("preimage:", limit=3, cursor="preimage:002")
+    dialogue = _open_dialogue(kv_connection.dialogues, message)
+
+    response = kv_connection.list_request(message, dialogue)
+
+    assert response is not None
+    assert response.data == {
+        "preimage:003": "v3",
+        "preimage:004": "v4",
+        "preimage:005": "v5",
+    }
+    assert response.next_cursor == "preimage:005"
+
+
+def test_list_request_last_page_returns_empty_next_cursor(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """Final page (no more rows after it) signals 'done' with an empty cursor."""
+    _seed_preimages(5)
+    message = _build_list_request("preimage:", limit=3, cursor="preimage:002")
+    dialogue = _open_dialogue(kv_connection.dialogues, message)
+
+    response = kv_connection.list_request(message, dialogue)
+
+    assert response is not None
+    assert response.data == {"preimage:003": "v3", "preimage:004": "v4"}
+    assert response.next_cursor == ""
+
+
+def test_list_request_total_is_exact_multiple_of_limit(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """A total that's an exact multiple of limit still terminates cleanly."""
+    # 9 rows at limit=3 = pages 3/3/3. The third page is FULL, but it must
+    # still return next_cursor="" because nothing follows it. This is
+    # precisely where a `>` vs `>=` regression on the `page_size + 1` probe
+    # would break: a buggy implementation would set has_more=True on the
+    # last page (one extra row not present), report a non-empty next_cursor,
+    # and the sweeper would loop forever asking for an empty fourth page.
+    _seed_preimages(9)
+
+    seen: Dict[str, str] = {}
+    cursor = ""
+    pages = 0
+    while True:
+        msg = _build_list_request("preimage:", limit=3, cursor=cursor)
+        dlg = _open_dialogue(kv_connection.dialogues, msg)
+        resp = kv_connection.list_request(msg, dlg)
+        assert resp is not None
+        seen.update(resp.data)
+        pages += 1
+        if not resp.next_cursor:
+            break
+        cursor = resp.next_cursor
+        assert pages < 5, "pagination did not terminate on exact-multiple boundary"
+
+    assert pages == 3
+    assert len(seen) == 9
+
+
+def test_list_request_full_walk_with_paging_visits_every_row(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """Repeated pages with cursor feedback eventually return the whole namespace."""
+    # This is the actual sweeper-style call pattern. If pagination is wired
+    # wrong (off-by-one on the cursor, wrong ORDER BY, etc.) we either miss
+    # rows or double-emit them — both visible from the final aggregate.
+    _seed_preimages(10)
+
+    seen: Dict[str, str] = {}
+    cursor = ""
+    pages = 0
+    while True:
+        msg = _build_list_request("preimage:", limit=3, cursor=cursor)
+        dlg = _open_dialogue(kv_connection.dialogues, msg)
+        resp = kv_connection.list_request(msg, dlg)
+        assert resp is not None
+        # Pages must not overlap; double-emit would surface here.
+        overlap = set(resp.data) & set(seen)
+        assert not overlap, f"page overlap on keys {overlap}"
+        seen.update(resp.data)
+        pages += 1
+        if not resp.next_cursor:
+            break
+        cursor = resp.next_cursor
+        assert pages < 20, "pagination did not terminate"
+
+    assert seen == {f"preimage:{i:03d}": f"v{i}" for i in range(10)}
+
+
+def test_list_request_default_page_size_when_limit_is_zero(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """limit=0 (protobuf scalar default) means 'use the server default'."""
+    # Server default is 100; seed comfortably above to verify the cap kicks in
+    # and we don't just get every row back by accident.
+    _seed_preimages(150)
+    message = _build_list_request("preimage:", limit=0)
+    dialogue = _open_dialogue(kv_connection.dialogues, message)
+
+    response = kv_connection.list_request(message, dialogue)
+
+    assert response is not None
+    assert len(response.data) == conn_mod._LIST_DEFAULT_PAGE_SIZE
+    assert response.next_cursor != ""
+
+
+def test_list_request_clamps_oversized_limit_to_server_max(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """A client asking for more than the server max gets the server max."""
+    _seed_preimages(conn_mod._LIST_MAX_PAGE_SIZE + 50)
+    message = _build_list_request("preimage:", limit=conn_mod._LIST_MAX_PAGE_SIZE * 10)
+    dialogue = _open_dialogue(kv_connection.dialogues, message)
+
+    response = kv_connection.list_request(message, dialogue)
+
+    assert response is not None
+    assert len(response.data) == conn_mod._LIST_MAX_PAGE_SIZE
+    assert response.next_cursor != ""
+
+
+def test_list_request_cursor_at_deleted_key_skips_to_next(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """A cursor that points at a now-deleted key resumes from the next-greater key."""
+    # Sweepers typically list-then-delete; a follow-up sweep may carry a cursor
+    # whose key no longer exists. The strict ``>`` semantics must still place
+    # the new page after the missing key, not skip a real row.
+    _seed_preimages(5)
+    Store.delete().where(Store.key == "preimage:002").execute()
+
+    message = _build_list_request("preimage:", limit=10, cursor="preimage:002")
+    dialogue = _open_dialogue(kv_connection.dialogues, message)
+    response = kv_connection.list_request(message, dialogue)
+
+    assert response is not None
+    assert response.data == {"preimage:003": "v3", "preimage:004": "v4"}
+    assert response.next_cursor == ""
+
+
+def test_list_request_empty_prefix_with_paging_walks_full_table(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """Empty prefix + paging walks the whole table without unbounded responses."""
+    # Mixed-namespace store; the empty-prefix sweep must page through every
+    # row regardless of which namespace they belong to.
+    Store.create(key="metric:1", value="m1")
+    Store.create(key="preimage:1", value="p1")
+    Store.create(key="zlock", value="zl")
+
+    seen: Dict[str, str] = {}
+    cursor = ""
+    for _ in range(5):
+        msg = _build_list_request("", limit=2, cursor=cursor)
+        dlg = _open_dialogue(kv_connection.dialogues, msg)
+        resp = kv_connection.list_request(msg, dlg)
+        assert resp is not None
+        # Pages must not overlap. A same-value duplicate-emit on a page
+        # boundary would aggregate to the correct final set below and stay
+        # invisible without this assertion (mirrors the sibling
+        # test_list_request_full_walk_with_paging_visits_every_row).
+        overlap = set(resp.data) & set(seen)
+        assert not overlap, f"page overlap on keys {overlap}"
+        seen.update(resp.data)
+        if not resp.next_cursor:
+            break
+        cursor = resp.next_cursor
+
+    assert seen == {"metric:1": "m1", "preimage:1": "p1", "zlock": "zl"}
+
+
+def test_list_request_negative_limit_is_rejected(
+    kv_connection: KvStoreConnection,
+) -> None:
+    """Constructing a LIST_REQUEST with a negative limit fails consistency."""
+    # protobuf wire format is uint32, so a real on-the-wire negative is
+    # impossible; this guards the in-process construction path.
+    bad = KvStoreMessage(
+        performative=KvStoreMessage.Performative.LIST_REQUEST,  # type: ignore[arg-type]
+        dialogue_reference=(_next_ref(), ""),
+        message_id=1,
+        target=0,
+        key_prefix="preimage:",
+        limit=-1,
+        cursor="",
+    )
+    assert bad._is_consistent() is False
 
 
 # --- dialogue rejects an invalid reply (VALID_REPLIES enforcement) -----------

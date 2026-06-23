@@ -7,7 +7,6 @@ from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
-
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
@@ -15,7 +14,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0ekv_store.proto\x12\x1a\x61\x65\x61.valory.kv_store.v0_1_0\"\x88\x0c\n\x0eKvStoreMessage\x12t\n\x18\x63reate_or_update_request\x18\x05 \x01(\x0b\x32P.aea.valory.kv_store.v0_1_0.KvStoreMessage.Create_Or_Update_Request_PerformativeH\x00\x12`\n\x0e\x64\x65lete_request\x18\n \x01(\x0b\x32\x46.aea.valory.kv_store.v0_1_0.KvStoreMessage.Delete_Request_PerformativeH\x00\x12N\n\x05\x65rror\x18\x06 \x01(\x0b\x32=.aea.valory.kv_store.v0_1_0.KvStoreMessage.Error_PerformativeH\x00\x12\\\n\x0clist_request\x18\x0b \x01(\x0b\x32\x44.aea.valory.kv_store.v0_1_0.KvStoreMessage.List_Request_PerformativeH\x00\x12^\n\rlist_response\x18\x0c \x01(\x0b\x32\x45.aea.valory.kv_store.v0_1_0.KvStoreMessage.List_Response_PerformativeH\x00\x12\\\n\x0cread_request\x18\x07 \x01(\x0b\x32\x44.aea.valory.kv_store.v0_1_0.KvStoreMessage.Read_Request_PerformativeH\x00\x12^\n\rread_response\x18\x08 \x01(\x0b\x32\x45.aea.valory.kv_store.v0_1_0.KvStoreMessage.Read_Response_PerformativeH\x00\x12R\n\x07success\x18\t \x01(\x0b\x32?.aea.valory.kv_store.v0_1_0.KvStoreMessage.Success_PerformativeH\x00\x1a)\n\x19Read_Request_Performative\x12\x0c\n\x04keys\x18\x01 \x03(\t\x1a\xa8\x01\n\x1aRead_Response_Performative\x12]\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32O.aea.valory.kv_store.v0_1_0.KvStoreMessage.Read_Response_Performative.DataEntry\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a\xbe\x01\n%Create_Or_Update_Request_Performative\x12h\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32Z.aea.valory.kv_store.v0_1_0.KvStoreMessage.Create_Or_Update_Request_Performative.DataEntry\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a+\n\x1b\x44\x65lete_Request_Performative\x12\x0c\n\x04keys\x18\x01 \x03(\t\x1a/\n\x19List_Request_Performative\x12\x12\n\nkey_prefix\x18\x01 \x01(\t\x1a\xa8\x01\n\x1aList_Response_Performative\x12]\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32O.aea.valory.kv_store.v0_1_0.KvStoreMessage.List_Response_Performative.DataEntry\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a\'\n\x14Success_Performative\x12\x0f\n\x07message\x18\x01 \x01(\t\x1a%\n\x12\x45rror_Performative\x12\x0f\n\x07message\x18\x01 \x01(\tB\x0e\n\x0cperformativeb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0ekv_store.proto\x12\x1a\x61\x65\x61.valory.kv_store.v0_1_0\"\xbc\x0c\n\x0eKvStoreMessage\x12t\n\x18\x63reate_or_update_request\x18\x05 \x01(\x0b\x32P.aea.valory.kv_store.v0_1_0.KvStoreMessage.Create_Or_Update_Request_PerformativeH\x00\x12`\n\x0e\x64\x65lete_request\x18\n \x01(\x0b\x32\x46.aea.valory.kv_store.v0_1_0.KvStoreMessage.Delete_Request_PerformativeH\x00\x12N\n\x05\x65rror\x18\x06 \x01(\x0b\x32=.aea.valory.kv_store.v0_1_0.KvStoreMessage.Error_PerformativeH\x00\x12\\\n\x0clist_request\x18\x0b \x01(\x0b\x32\x44.aea.valory.kv_store.v0_1_0.KvStoreMessage.List_Request_PerformativeH\x00\x12^\n\rlist_response\x18\x0c \x01(\x0b\x32\x45.aea.valory.kv_store.v0_1_0.KvStoreMessage.List_Response_PerformativeH\x00\x12\\\n\x0cread_request\x18\x07 \x01(\x0b\x32\x44.aea.valory.kv_store.v0_1_0.KvStoreMessage.Read_Request_PerformativeH\x00\x12^\n\rread_response\x18\x08 \x01(\x0b\x32\x45.aea.valory.kv_store.v0_1_0.KvStoreMessage.Read_Response_PerformativeH\x00\x12R\n\x07success\x18\t \x01(\x0b\x32?.aea.valory.kv_store.v0_1_0.KvStoreMessage.Success_PerformativeH\x00\x1a)\n\x19Read_Request_Performative\x12\x0c\n\x04keys\x18\x01 \x03(\t\x1a\xa8\x01\n\x1aRead_Response_Performative\x12]\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32O.aea.valory.kv_store.v0_1_0.KvStoreMessage.Read_Response_Performative.DataEntry\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a\xbe\x01\n%Create_Or_Update_Request_Performative\x12h\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32Z.aea.valory.kv_store.v0_1_0.KvStoreMessage.Create_Or_Update_Request_Performative.DataEntry\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a+\n\x1b\x44\x65lete_Request_Performative\x12\x0c\n\x04keys\x18\x01 \x03(\t\x1aN\n\x19List_Request_Performative\x12\x12\n\nkey_prefix\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\r\x12\x0e\n\x06\x63ursor\x18\x03 \x01(\t\x1a\xbd\x01\n\x1aList_Response_Performative\x12]\n\x04\x64\x61ta\x18\x01 \x03(\x0b\x32O.aea.valory.kv_store.v0_1_0.KvStoreMessage.List_Response_Performative.DataEntry\x12\x13\n\x0bnext_cursor\x18\x02 \x01(\t\x1a+\n\tDataEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\x1a\'\n\x14Success_Performative\x12\x0f\n\x07message\x18\x01 \x01(\t\x1a%\n\x12\x45rror_Performative\x12\x0f\n\x07message\x18\x01 \x01(\tB\x0e\n\x0cperformativeb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -29,7 +28,7 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_KVSTOREMESSAGE_LIST_RESPONSE_PERFORMATIVE_DATAENTRY']._loaded_options = None
   _globals['_KVSTOREMESSAGE_LIST_RESPONSE_PERFORMATIVE_DATAENTRY']._serialized_options = b'8\001'
   _globals['_KVSTOREMESSAGE']._serialized_start=47
-  _globals['_KVSTOREMESSAGE']._serialized_end=1591
+  _globals['_KVSTOREMESSAGE']._serialized_end=1643
   _globals['_KVSTOREMESSAGE_READ_REQUEST_PERFORMATIVE']._serialized_start=825
   _globals['_KVSTOREMESSAGE_READ_REQUEST_PERFORMATIVE']._serialized_end=866
   _globals['_KVSTOREMESSAGE_READ_RESPONSE_PERFORMATIVE']._serialized_start=869
@@ -43,13 +42,13 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_KVSTOREMESSAGE_DELETE_REQUEST_PERFORMATIVE']._serialized_start=1232
   _globals['_KVSTOREMESSAGE_DELETE_REQUEST_PERFORMATIVE']._serialized_end=1275
   _globals['_KVSTOREMESSAGE_LIST_REQUEST_PERFORMATIVE']._serialized_start=1277
-  _globals['_KVSTOREMESSAGE_LIST_REQUEST_PERFORMATIVE']._serialized_end=1324
-  _globals['_KVSTOREMESSAGE_LIST_RESPONSE_PERFORMATIVE']._serialized_start=1327
-  _globals['_KVSTOREMESSAGE_LIST_RESPONSE_PERFORMATIVE']._serialized_end=1495
+  _globals['_KVSTOREMESSAGE_LIST_REQUEST_PERFORMATIVE']._serialized_end=1355
+  _globals['_KVSTOREMESSAGE_LIST_RESPONSE_PERFORMATIVE']._serialized_start=1358
+  _globals['_KVSTOREMESSAGE_LIST_RESPONSE_PERFORMATIVE']._serialized_end=1547
   _globals['_KVSTOREMESSAGE_LIST_RESPONSE_PERFORMATIVE_DATAENTRY']._serialized_start=994
   _globals['_KVSTOREMESSAGE_LIST_RESPONSE_PERFORMATIVE_DATAENTRY']._serialized_end=1037
-  _globals['_KVSTOREMESSAGE_SUCCESS_PERFORMATIVE']._serialized_start=1497
-  _globals['_KVSTOREMESSAGE_SUCCESS_PERFORMATIVE']._serialized_end=1536
-  _globals['_KVSTOREMESSAGE_ERROR_PERFORMATIVE']._serialized_start=1538
-  _globals['_KVSTOREMESSAGE_ERROR_PERFORMATIVE']._serialized_end=1575
+  _globals['_KVSTOREMESSAGE_SUCCESS_PERFORMATIVE']._serialized_start=1549
+  _globals['_KVSTOREMESSAGE_SUCCESS_PERFORMATIVE']._serialized_end=1588
+  _globals['_KVSTOREMESSAGE_ERROR_PERFORMATIVE']._serialized_start=1590
+  _globals['_KVSTOREMESSAGE_ERROR_PERFORMATIVE']._serialized_end=1627
 # @@protoc_insertion_point(module_scope)

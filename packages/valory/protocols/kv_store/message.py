@@ -68,12 +68,15 @@ class KvStoreMessage(Message):
 
     class _SlotsCls:
         __slots__ = (
+            "cursor",
             "data",
             "dialogue_reference",
             "key_prefix",
             "keys",
+            "limit",
             "message",
             "message_id",
+            "next_cursor",
             "performative",
             "target",
         )
@@ -133,6 +136,12 @@ class KvStoreMessage(Message):
         return cast(int, self.get("target"))
 
     @property
+    def cursor(self) -> str:
+        """Get the 'cursor' content from the message."""
+        enforce(self.is_set("cursor"), "'cursor' content is not set.")
+        return cast(str, self.get("cursor"))
+
+    @property
     def data(self) -> Dict[str, str]:
         """Get the 'data' content from the message."""
         enforce(self.is_set("data"), "'data' content is not set.")
@@ -151,10 +160,22 @@ class KvStoreMessage(Message):
         return cast(Tuple[str, ...], self.get("keys"))
 
     @property
+    def limit(self) -> int:
+        """Get the 'limit' content from the message."""
+        enforce(self.is_set("limit"), "'limit' content is not set.")
+        return cast(int, self.get("limit"))
+
+    @property
     def message(self) -> str:
         """Get the 'message' content from the message."""
         enforce(self.is_set("message"), "'message' content is not set.")
         return cast(str, self.get("message"))
+
+    @property
+    def next_cursor(self) -> str:
+        """Get the 'next_cursor' content from the message."""
+        enforce(self.is_set("next_cursor"), "'next_cursor' content is not set.")
+        return cast(str, self.get("next_cursor"))
 
     def _is_consistent(self) -> bool:
         """Check that the message follows the kv_store protocol."""
@@ -272,19 +293,43 @@ class KvStoreMessage(Message):
                     "Invalid type for tuple elements in content 'keys'. Expected 'str'.",
                 )
             elif self.performative == KvStoreMessage.Performative.LIST_REQUEST:
-                expected_nb_of_contents = 1
+                expected_nb_of_contents = 3
                 enforce(
                     isinstance(self.key_prefix, str),
                     "Invalid type for content 'key_prefix'. Expected 'str'. Found '{}'.".format(
                         type(self.key_prefix)
                     ),
                 )
+                enforce(
+                    type(self.limit) is int,
+                    "Invalid type for content 'limit'. Expected 'int'. Found '{}'.".format(
+                        type(self.limit)
+                    ),
+                )
+                enforce(
+                    self.limit >= 0,
+                    "Invalid value for content 'limit'. Must be non-negative. Got: {}".format(
+                        self.limit
+                    ),
+                )
+                enforce(
+                    isinstance(self.cursor, str),
+                    "Invalid type for content 'cursor'. Expected 'str'. Found '{}'.".format(
+                        type(self.cursor)
+                    ),
+                )
             elif self.performative == KvStoreMessage.Performative.LIST_RESPONSE:
-                expected_nb_of_contents = 1
+                expected_nb_of_contents = 2
                 enforce(
                     isinstance(self.data, dict),
                     "Invalid type for content 'data'. Expected 'dict'. Found '{}'.".format(
                         type(self.data)
+                    ),
+                )
+                enforce(
+                    isinstance(self.next_cursor, str),
+                    "Invalid type for content 'next_cursor'. Expected 'str'. Found '{}'.".format(
+                        type(self.next_cursor)
                     ),
                 )
                 for key_of_data, value_of_data in self.data.items():

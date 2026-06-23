@@ -78,11 +78,17 @@ class KvStoreSerializer(Serializer):
             performative = kv_store_pb2.KvStoreMessage.List_Request_Performative()  # type: ignore
             key_prefix = msg.key_prefix
             performative.key_prefix = key_prefix
+            limit = msg.limit
+            performative.limit = limit
+            cursor = msg.cursor
+            performative.cursor = cursor
             kv_store_msg.list_request.CopyFrom(performative)
         elif performative_id == KvStoreMessage.Performative.LIST_RESPONSE:
             performative = kv_store_pb2.KvStoreMessage.List_Response_Performative()  # type: ignore
             data = msg.data
             performative.data.update(data)
+            next_cursor = msg.next_cursor
+            performative.next_cursor = next_cursor
             kv_store_msg.list_response.CopyFrom(performative)
         elif performative_id == KvStoreMessage.Performative.SUCCESS:
             performative = kv_store_pb2.KvStoreMessage.Success_Performative()  # type: ignore
@@ -144,10 +150,16 @@ class KvStoreSerializer(Serializer):
         elif performative_id == KvStoreMessage.Performative.LIST_REQUEST:
             key_prefix = kv_store_pb.list_request.key_prefix
             performative_content["key_prefix"] = key_prefix
+            limit = kv_store_pb.list_request.limit
+            performative_content["limit"] = limit
+            cursor = kv_store_pb.list_request.cursor
+            performative_content["cursor"] = cursor
         elif performative_id == KvStoreMessage.Performative.LIST_RESPONSE:
             data = kv_store_pb.list_response.data
             data_dict = dict(data)
             performative_content["data"] = data_dict
+            next_cursor = kv_store_pb.list_response.next_cursor
+            performative_content["next_cursor"] = next_cursor
         elif performative_id == KvStoreMessage.Performative.SUCCESS:
             message = kv_store_pb.success.message
             performative_content["message"] = message

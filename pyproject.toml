@@ -79,6 +79,13 @@ check_handlers_ignores = [
 # TODO: when tomte v0.7.0 hits PyPI, flip to `tomte_dep_pin = "==0.7.0"`
 # (no leading space) so the rendered string becomes `tomte[<extras>]==0.7.0`.
 tomte_dep_pin = " @ git+https://github.com/valory-xyz/tomte.git@v0.7.0"
+# Extra upstreams for aea-ci check-third-party-hashes. open-autonomy and
+# open-aea are auto-derived from [project].dependencies; kv-store has to
+# be declared explicitly because the vendored valory/kv_store protocol +
+# connection live in valory-xyz/kv-store, not in open-aea / open-autonomy.
+# 0.7.0-rc1 is the first kv-store release that ships the LIST/DELETE
+# performatives + pagination the mech preimage sweeper depends on.
+upstream_pins = ["valory-xyz/kv-store@0.7.0-rc1"]
 
 [tool.uv.build-backend]
 module-name = ["packages"]

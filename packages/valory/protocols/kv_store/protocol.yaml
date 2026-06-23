@@ -7,13 +7,13 @@ description: A protocol for simple key-value storage communications.
 license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
-  README.md: bafybeib3jo5cuxtns57hs3uuzllc6jaanasvlrjgq626abvlvapk3shjki
+  README.md: bafybeiecbx7ewqqm7m2myuuuimzt5vtdydtuewcnsizivbporsetl5ddma
   __init__.py: bafybeiawbmkq67kmjckyhxow5yklqu6ekdhalapxyuhq3nobwqmlkk2yfm
   dialogues.py: bafybeiavv36yvk4kpogquql5tsjbnfnwodmsbq4hkphp7snpp3vo2g6d7i
-  kv_store.proto: bafybeihxtflevnqu6mqx6z77mlkgkd3dqha5owc3djdr52hdtwvcz37h3i
-  kv_store_pb2.py: bafybeieps5pxzvqkj7yomzdd4ydbymuxtncfknlmkf2bhwsvxx2663uxgi
-  message.py: bafybeifzphkunlegyuiav7qpnhcbpnpw4wtcqbyi2irgutarhms5bwegfu
-  serialization.py: bafybeiaywsv4lrj5qbguz57bokzsis2pfx7hrviiystkdthnywkphgpst4
+  kv_store.proto: bafybeiddkftmahndrr5bfxeg5mxlqgbglnc5zftqmqhbuopm66ozdfwrj4
+  kv_store_pb2.py: bafybeidwm7fv6y6x4mtweivlx6ooytyoh2b2p3owezbysqlyyajf6gnikm
+  message.py: bafybeigjxstu3y52kysveby6pwm42revb373uxt5lghjwpww6utxdqghxq
+  serialization.py: bafybeih7hb5a75hz32us43m3mthtcqxupr4rls4zkkj3govb4arhke2jwi
 fingerprint_ignore_patterns: []
 dependencies:
   protobuf: {}

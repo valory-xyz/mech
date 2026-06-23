@@ -42,6 +42,15 @@ PUBLIC_ID = PublicId.from_str("valory/kv_store:0.1.0")
 
 _GENERIC_ERROR_MESSAGE = "Internal handler error"
 
+# LIST_REQUEST page-size policy. Clients that pass limit=0 (the protobuf
+# default, i.e. unset) get _LIST_DEFAULT_PAGE_SIZE. Any positive client value
+# is clamped to _LIST_MAX_PAGE_SIZE so a single LIST_REQUEST cannot force the
+# server to materialize an unbounded response. The default sits well below the
+# clamp so the common case stays predictable for sweepers without forcing
+# every caller to think about paging.
+_LIST_DEFAULT_PAGE_SIZE = 100
+_LIST_MAX_PAGE_SIZE = 1000
+
 
 db = SqliteDatabase(
     None,
@@ -309,16 +318,30 @@ class KvStoreConnection(BaseSyncConnection):
         message: KvStoreMessage,
         dialogue: KvStoreDialogue,
     ) -> Optional[KvStoreMessage]:
-        """List key-value pairs whose key starts with the given prefix.
+        """List key-value pairs whose key starts with the given prefix, paged.
 
         Prefix matching is case-sensitive (BINARY collation), so a sweeper that
         lists-then-deletes by prefix can't over-match a different-cased
-        namespace. An empty ``key_prefix`` matches every row; callers using an
-        empty prefix on a hot store are responsible for paginating in
-        application code (the protocol does not chunk the response).
+        namespace. An empty ``key_prefix`` matches every row.
+
+        Paging keeps the response size bounded regardless of namespace size:
+        the client passes ``limit`` (clamped to ``_LIST_MAX_PAGE_SIZE``, with
+        ``_LIST_DEFAULT_PAGE_SIZE`` used when ``limit == 0``) and an opaque
+        ``cursor`` returned by the prior page. The server orders rows by key
+        and starts each page strictly after ``cursor``, so concurrent writes
+        between pages don't shift the iteration. ``next_cursor`` is the last
+        returned key when there is more to read, or empty when the page is the
+        last one.
         """
         prefix = message.key_prefix
-        self.logger.info(f"DB list: prefix=({prefix!r}) len={len(prefix)}")
+        cursor = message.cursor
+        requested_limit = message.limit
+        page_size = self._resolve_page_size(requested_limit)
+        self.logger.info(
+            f"DB list: prefix=({prefix!r}) len={len(prefix)} "
+            f"limit={requested_limit} cursor=({cursor!r}) "
+            f"effective_page_size={page_size}"
+        )
 
         try:
             if prefix:
@@ -337,21 +360,54 @@ class KvStoreConnection(BaseSyncConnection):
                 # distinguish an intentional list-all from a sender that forgot
                 # to set key_prefix (the protobuf string default is "").
                 self.logger.warning(
-                    "DB list called with empty key_prefix; returning the full table."
+                    "DB list called with empty key_prefix; "
+                    "returning a page of the full table."
                 )
                 query = Store.select()
-            response_data = {entry.key: entry.value for entry in query}
+
+            if cursor:
+                # Strict > so the row whose key matched the previous page's
+                # next_cursor is not re-emitted. Cursor pointing at a now-deleted
+                # key is still well-defined: the next-greater key wins.
+                query = query.where(Store.key > cursor)
+
+            # Order by key and pull one extra row to know whether another page
+            # follows. This avoids a second COUNT query and keeps the cursor
+            # scheme stateless.
+            query = query.order_by(Store.key).limit(page_size + 1)
+
+            rows = list(query)
+            has_more = len(rows) > page_size
+            if has_more:
+                rows = rows[:page_size]
+            response_data = {row.key: row.value for row in rows}
+            # `has_more` is only True when len(rows) > page_size and page_size
+            # is always >= 1, so rows is guaranteed non-empty under has_more.
+            next_cursor = rows[-1].key if has_more else ""
             return cast(
                 KvStoreMessage,
                 dialogue.reply(
                     performative=KvStoreMessage.Performative.LIST_RESPONSE,
                     target_message=message,
                     data=response_data,
+                    next_cursor=next_cursor,
                 ),
             )
         except Exception:  # pylint: disable=broad-exception-caught
             self.logger.exception("DB list failed.")
             return self._error_reply(dialogue, message)
+
+    @staticmethod
+    def _resolve_page_size(requested_limit: int) -> int:
+        """Pick the effective page size, defaulting and clamping the client value.
+
+        ``requested_limit == 0`` means "let the server choose"; any positive
+        value is clamped to ``_LIST_MAX_PAGE_SIZE`` so a buggy or hostile caller
+        can't force the server to materialize an unbounded response.
+        """
+        if requested_limit <= 0:
+            return _LIST_DEFAULT_PAGE_SIZE
+        return min(requested_limit, _LIST_MAX_PAGE_SIZE)
 
     def on_connect(self) -> None:
         """Set up the connection"""

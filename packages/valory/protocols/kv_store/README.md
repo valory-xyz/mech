@@ -26,8 +26,15 @@ speech_acts:
     keys: pt:list[pt:str]
   list_request:
     key_prefix: pt:str
+    # limit is uint32 in the hand-written proto; `pt:int` is the closest AEA
+    # scalar (no unsigned-int primitive). The proto file is the wire-format
+    # source of truth — re-running the generator off this spec would emit
+    # `int32 limit` instead of `uint32 limit`. Keep them in sync manually.
+    limit: pt:int
+    cursor: pt:str
   list_response:
     data: pt:dict[pt:str, pt:str]
+    next_cursor: pt:str
   success:
     message: pt:str
   error:
