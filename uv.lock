@@ -1712,6 +1712,7 @@ dependencies = [
     { name = "openapi-core" },
     { name = "openapi-spec-validator" },
     { name = "pebble" },
+    { name = "peewee" },
     { name = "pip" },
     { name = "prometheus-client" },
     { name = "py-ecc" },
@@ -1748,6 +1749,7 @@ requires-dist = [
     { name = "openapi-core", specifier = ">=0.22,<0.23" },
     { name = "openapi-spec-validator", specifier = ">=0.7.0,<0.8.0" },
     { name = "pebble", specifier = ">=5.1,<6" },
+    { name = "peewee", specifier = ">=3.17,<4" },
     { name = "pip", specifier = ">=24.0" },
     { name = "prometheus-client", specifier = ">=0.23.1,<0.24" },
     { name = "py-ecc", specifier = ">=8,<10" },
@@ -2156,6 +2158,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/af/aa/730e2b815fed3680629bb9c6c84c3480952fb9067939b7549c789b77a6bc/pebble-5.1.3.tar.gz", hash = "sha256:9fdf00dde4abb09907817114ad8cf822836b6d6cc8f43a3f0ec741be276086e7", size = 39027, upload-time = "2025-07-30T21:16:34.87Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/42/42/218f3d1490af0c5f781f1e54fc1e4a2ca163643807d57890d2a246bd626d/Pebble-5.1.3-py3-none-any.whl", hash = "sha256:8b28b1ede25de4b0d9249516d5fd794c330f8f03b692debe374619317ed0bdd7", size = 36868, upload-time = "2025-07-30T21:16:33.133Z" },
+]
+
+[[package]]
+name = "peewee"
+version = "3.19.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/88/b0/79462b42e89764998756e0557f2b58a15610a5b4512fbbcccae58fba7237/peewee-3.19.0.tar.gz", hash = "sha256:f88292a6f0d7b906cb26bca9c8599b8f4d8920ebd36124400d0cbaaaf915511f", size = 974035, upload-time = "2026-01-07T17:24:59.597Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1a/41/19c65578ef9a54b3083253c68a607f099642747168fe00f3a2bceb7c3a34/peewee-3.19.0-py3-none-any.whl", hash = "sha256:de220b94766e6008c466e00ce4ba5299b9a832117d9eb36d45d0062f3cfd7417", size = 411885, upload-time = "2026-01-07T17:24:58.33Z" },
 ]
 
 [[package]]
