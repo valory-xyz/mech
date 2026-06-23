@@ -85,11 +85,13 @@ class TestAbciAppTransitionMapping:
     def test_transaction_submission_finished_routes_via_post_tx_settlement(
         self,
     ) -> None:
-        """Successful settlement now lands in PostTxSettlementRound first,
-        which fires the wildcard data-lake POST and then advances to
+        """Successful settlement now lands in PostTxSettlementRound first.
+
+        The round fires the wildcard data-lake POST and then advances to
         ResetAndPauseRound via its own FinishedPostTxSettlementRound exit.
         The two-edge wiring keeps the settlement→reset path intact while
-        slotting in the analytics-write side effect."""
+        slotting in the analytics-write side effect.
+        """
         assert (
             abci_app_transition_mapping[
                 TransactionSubmissionAbciApp.FinishedTransactionSubmissionRound

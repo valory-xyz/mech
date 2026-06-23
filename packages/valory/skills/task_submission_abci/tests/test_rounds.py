@@ -467,10 +467,13 @@ def _make_post_tx_round(payloads: dict, **db_extra: Any) -> PostTxSettlementRoun
 
 
 class TestPostTxSettlementRound:
-    """The round is a CollectSameUntilThresholdRound: it only needs consensus
+    """End-to-end behaviour pin for ``PostTxSettlementRound``.
+
+    The round is a CollectSameUntilThresholdRound: it only needs consensus
     on participation (the wildcard POST itself is fire-and-forget,
     idempotent server-side). DONE on threshold, NO_MAJORITY only when
-    consensus is impossible."""
+    consensus is impossible.
+    """
 
     def test_below_threshold_returns_none(self) -> None:
         """One vote on a 3-of-3 board: end_block is still waiting."""
@@ -488,10 +491,12 @@ class TestPostTxSettlementRound:
         assert event == Event.DONE
 
     def test_no_majority_when_impossible(self) -> None:
-        """If majority is impossible (every other agent voted a different
-        value on a CollectSame round, no shared payload can ever land
-        threshold), the round emits NO_MAJORITY and the composition routes
-        it back to PostTxSettlementRound for a clean retry."""
+        """Round emits NO_MAJORITY when consensus on participation is impossible.
+
+        If every agent votes a different value on a CollectSame round, no
+        shared payload can ever land threshold; the composition then routes
+        NO_MAJORITY back to PostTxSettlementRound for a clean retry.
+        """
 
         # Build payloads that all disagree: each agent sends a unique
         # content string, so no value can ever reach the

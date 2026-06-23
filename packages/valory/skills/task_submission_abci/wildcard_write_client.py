@@ -17,8 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""EIP-712 typed-data builder and batch-hash helper for the wildcard
-``POST /mech/events`` write client.
+r"""EIP-712 typed-data builder and batch-hash helper for the wildcard write client.
 
 The server side at ``wildcard/server/src/mech_sig.py`` (predict-api#162)
 recomputes the same ``batch_hash`` from the parsed events array and
@@ -28,7 +27,7 @@ canonical-JSON encoding bit-for-bit:
 * keys sorted at every level
 * compact separators (no spaces)
 * ``ensure_ascii`` off so non-ASCII text in prompts hashes as the bytes
-  the operator wrote rather than as ``\\uXXXX`` escapes
+  the operator wrote rather than as ``\uXXXX`` escapes
 
 Any drift between this module and the server's encoder breaks every
 batch. Keep the contract narrow.
@@ -37,8 +36,7 @@ batch. Keep the contract narrow.
 import json
 from typing import Any, Dict, List
 
-from eth_utils import keccak
-
+from eth_utils import keccak  # type: ignore[import-not-found]
 
 # The exact name/version pair that the server's allowlist binds via the
 # EIP-712 domain. Treat as a versioned constant; bumping the version
@@ -51,10 +49,13 @@ EVENTS_PRIMARY_TYPE = "MechEventBatch"
 def canonical_json_bytes(value: Any) -> bytes:
     """Encode ``value`` as a deterministic UTF-8 byte string.
 
-    The mirror of ``wildcard/server/src/mech_sig.py::canonical_json_bytes``;
+    Mirror of ``wildcard/server/src/mech_sig.py::canonical_json_bytes``;
     any divergence here breaks the batch-hash match on the server. Inputs
     must be JSON-native (no ``Decimal``, ``datetime``, etc.) — the caller
     is responsible for normalising before this function sees them.
+
+    :param value: a JSON-native Python value to encode.
+    :return: the canonical UTF-8 byte string for ``value``.
     """
     return json.dumps(
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
@@ -67,6 +68,9 @@ def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
     The result is what goes into the signed typed-data's
     ``message.batch_hash`` field. The server recomputes from the parsed
     wire payload and rejects on mismatch.
+
+    :param events: the ordered list of settled-delivery event dicts.
+    :return: the 0x-prefixed 32-byte hex digest of the canonical batch.
     """
     return "0x" + keccak(canonical_json_bytes(events)).hex()
 
@@ -89,6 +93,12 @@ def build_typed_data(
     verbatim; the AEA signing helper hashes it back into bytes via the
     existing ``packages.valory.contracts.gnosis_safe.encode.encode_typed_data``
     path.
+
+    :param mech_service_multisig: the mech's Safe address.
+    :param chain_id: the EIP-155 integer chain id the marketplace lives on.
+    :param verifying_contract: the marketplace contract address for that chain.
+    :param batch_hash_hex: keccak256 of the canonical-JSON events array.
+    :return: an EIP-712 typed-data dict ready for signing and POSTing.
     """
     return {
         "types": {

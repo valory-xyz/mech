@@ -1441,32 +1441,37 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         cid: str,
         executing_task: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Build the structured wildcard-event payload (one ``MechSettlementEvent``)
-        from the data on hand at finalize.
+        """Build the structured wildcard-event payload from on-hand data.
 
         The post-settlement behaviour batches every event from one FSM round
         into a single signed POST to the wildcard data lake. Fields are
         populated best-effort from the buffered request metadata
-        (``IN_MEMORY_REQUESTS``), the offchain response (``OFFCHAIN_REQUEST_RESPONSES``),
-        the in-flight ``executing_task``, and skill params. Optional fields
-        that aren't readily available are left ``None``; the wildcard server
-        accepts a NULL there. Required fields default to safe placeholders
-        rather than blocking the row: a malformed event surfaces as a 422
-        when the wildcard write fires (and lands in the local replay buffer
-        so it's recoverable), which is preferable to silently dropping
-        analytics data.
+        (``IN_MEMORY_REQUESTS``), the offchain response
+        (``OFFCHAIN_REQUEST_RESPONSES``), the in-flight ``executing_task``,
+        and skill params. Optional fields that aren't readily available are
+        left ``None``; the wildcard server accepts a NULL there. Required
+        fields default to safe placeholders rather than blocking the row: a
+        malformed event surfaces as a 422 when the wildcard write fires (and
+        lands in the local replay buffer so it's recoverable), which is
+        preferable to silently dropping analytics data.
 
         Datetimes are emitted as ISO 8601 strings with UTC offset so the
         wildcard ``AwareDatetime`` parser accepts them; mech ints (Unix
         seconds) are converted here so the structured event can ride the
         FSM consensus channel without round-tripping through a custom
         codec.
+
+        :param done_task: the done-task dict appended to ``done_tasks``.
+        :param cid: the locally-computed multibase CIDv1 for the response.
+        :param executing_task: the original request dict from the handler.
+        :return: a ``MechSettlementEvent``-shaped dict ready for FSM consensus
+            replication and downstream signing in the post-tx behaviour.
         """
         req_id = done_task["request_id"]
         request_id_str = str(req_id)
-        request_data_raw = self.context.shared_state.get(
-            IN_MEMORY_REQUESTS, {}
-        ).get(req_id, {})
+        request_data_raw = self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).get(
+            req_id, {}
+        )
         # IPFS_DATA can land as either a parsed dict (normal handler path)
         # or a JSON-encoded string (some test fixtures and the historical
         # backfill path); normalise to dict here so downstream ``.get``
@@ -1490,14 +1495,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         response_data_raw = self.context.shared_state.get(
             OFFCHAIN_REQUEST_RESPONSES, {}
         ).get(req_id, {})
-        response_data = (
-            response_data_raw if isinstance(response_data_raw, dict) else {}
-        )
+        response_data = response_data_raw if isinstance(response_data_raw, dict) else {}
         tool = str(done_task.get("tool") or "unknown")
         delivery_mech = str(
-            done_task.get("mech_address")
-            or self.params.mech_marketplace_address
-            or ""
+            done_task.get("mech_address") or self.params.mech_marketplace_address or ""
         )
 
         # `start_time` is a perf_counter() value (monotonic, not wall-clock),
@@ -1522,16 +1523,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             str(requested_at_raw) if requested_at_raw else executed_at_iso
         )
 
-        delivery_rate_raw = (
-            executing_task.get("request_delivery_rate")
-            or executing_task.get("delivery_rate")
-        )
+        delivery_rate_raw = executing_task.get(
+            "request_delivery_rate"
+        ) or executing_task.get("delivery_rate")
         delivery_rate_str = (
             str(delivery_rate_raw) if delivery_rate_raw is not None else None
         )
-        nonce_raw = (
-            executing_task.get("request_id_nonce")
-            or executing_task.get("nonce")
+        nonce_raw = executing_task.get("request_id_nonce") or executing_task.get(
+            "nonce"
         )
         try:
             nonce_int = int(nonce_raw) if nonce_raw is not None else None
@@ -1543,14 +1542,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if len(prompt) > MAX_PROMPT_BYTES:
             prompt = prompt[:MAX_PROMPT_BYTES]
         invalid = bool(self._invalid_request)
-        result_text = (
-            response_data.get("result") if response_data else None
-        )
+        result_text = response_data.get("result") if response_data else None
         status = "failed" if invalid or result_text is None else "complete"
         error_text = (
-            str(result_text) if invalid and result_text else None
-            if status == "complete"
-            else (str(result_text) if status == "failed" and result_text else None)
+            str(result_text)
+            if invalid and result_text
+            else (
+                None
+                if status == "complete"
+                else (str(result_text) if status == "failed" and result_text else None)
+            )
         )
         # Strip the result from the failed arm so the wildcard's
         # status/error/result shape CHECK accepts the row.
@@ -1558,25 +1559,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             None if status == "failed" else (str(result_text) if result_text else "")
         )
         tool_hash = self._tools_to_package_hash.get(tool)
-        cost_dict = done_task.get("cost_dict") if isinstance(done_task.get("cost_dict"), dict) else None
+        cost_dict = (
+            done_task.get("cost_dict")
+            if isinstance(done_task.get("cost_dict"), dict)
+            else None
+        )
 
         return {
             "request": {
                 "request_id": request_id_str,
-                "chain_id": int(
-                    getattr(self.params, "mech_events_chain_id", 0) or 0
-                ),
+                "chain_id": int(getattr(self.params, "mech_events_chain_id", 0) or 0),
                 "marketplace_address": str(
                     getattr(self.params, "mech_marketplace_address", "") or ""
                 ),
                 "requester": str(executing_task.get("sender") or ""),
                 "priority_mech": str(
-                    executing_task.get("priority_mech")
-                    or delivery_mech
+                    executing_task.get("priority_mech") or delivery_mech
                 ),
                 "delivery_mech": delivery_mech,
-                "payment_type": str(executing_task.get("payment_type") or "")
-                or None,
+                "payment_type": str(executing_task.get("payment_type") or "") or None,
                 "delivery_rate": delivery_rate_str,
                 "nonce": nonce_int,
                 "content_cid": cid,

@@ -16,7 +16,7 @@ fingerprint:
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
   tests/conftest.py: bafybeiaqouyzclh4wvnf36jgcmgzm7k4snfghnm3v4yowb4pomyn6qvezu
   tests/test_behaviours.py: bafybeibjw3tusfxxmr3byy6sdmu7gefotya4xvhd7ia43ll7fgyqggx7ye
-  tests/test_composition.py: bafybeibtzi6outzxnesib75a66hnigpgplw2cprualbpca4swyqnwhc2fi
+  tests/test_composition.py: bafybeifjx57plcn3zg2xb3nlnhxukcnxmnapv7ynxai2wiqbdmg46fgiye
   tests/test_dialogues.py: bafybeiaicu6h4d3rppxbjhkifwlrfpjmxd6y4sdqnlskdjqijkct2tvhci
   tests/test_handlers.py: bafybeicekjso4qfxaiqpaapgosxkvr4tbce6evnxguhzunug4subrikgci
   tests/test_models.py: bafybeif4iuuknrtx3tc72y2ii237dqtl6nlqgpdywy227sfqbvxkk6mugy
@@ -30,11 +30,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
-- valory/task_submission_abci:0.1.0:bafybeifeze6p62jhzoa7ajk7uzguvbqdiwt5356cbjizj6god2fu5a4ryi
+- valory/task_submission_abci:0.1.0:bafybeia57sb5zuftvb23neit6eebayut5rnpiuut436in7xh2bp5gflscq
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
 - valory/delivery_rate_abci:0.1.0:bafybeiaefr3eiajklnb6m4jtl7rpxr5t2lmrpizfy7gqkjem3qiewo7cz4
-- valory/task_execution:0.1.0:bafybeiaxq6evndnplmd4sdghtapizigpn4udaa4wlxz5kvrvzyjk3ddboa
+- valory/task_execution:0.1.0:bafybeiaommt42tftq4tbs6ngxuor5eervz7wty3drr2tr2ndl3nyzzdtdi
 behaviours:
   main:
     args: {}

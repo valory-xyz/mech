@@ -123,9 +123,7 @@ class Params(Model):
         # which fails the wildcard server's per-chain marketplace
         # allowlist on first POST — operator-friendly: the row is rejected
         # at a known boundary rather than silently mis-tagged.
-        self.mech_events_chain_id: int = int(
-            kwargs.get("mech_events_chain_id", 0) or 0
-        )
+        self.mech_events_chain_id: int = int(kwargs.get("mech_events_chain_id", 0) or 0)
         self.gnosis_ledger_rpc: str = kwargs.get("gnosis_ledger_rpc", "")
         self.polygon_ledger_rpc: str = kwargs.get("polygon_ledger_rpc", "")
         self.base_ledger_rpc: str = kwargs.get("base_ledger_rpc", "")

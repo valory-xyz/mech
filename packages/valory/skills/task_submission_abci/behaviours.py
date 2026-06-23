@@ -1854,10 +1854,15 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
         """Best-effort wildcard write. Never raises; logs failure paths.
 
         Three short-circuit returns before any work:
+
             1. The feature flag is off (the default during Phase 1).
             2. The skill has no wildcard URL configured.
             3. The round's done_tasks carry no offchain wildcard_event
                entries (the on-chain path doesn't populate these).
+
+        :yield: AEA protocol messages (signing dialogue, HTTP request) via
+            the underlying generator-based helpers; this method does not
+            ``return`` anything.
         """
         if not getattr(self.params, "mech_events_enabled", False):
             return
@@ -1894,9 +1899,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
             )
             return
 
-        verifying_contract = (
-            getattr(self.params, "mech_marketplace_address", "") or ""
-        )
+        verifying_contract = getattr(self.params, "mech_marketplace_address", "") or ""
         if not verifying_contract:
             self.context.logger.warning(
                 "No mech_marketplace_address on params; skipping wildcard write."
@@ -1933,7 +1936,9 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
         # signing protocol (is_deprecated_mode=True so the signer skips
         # the EIP-191 personal-sign prefix and just hashes raw bytes).
         try:
-            from eth_account.messages import encode_typed_data
+            from eth_account.messages import (  # type: ignore[import-not-found]
+                encode_typed_data,
+            )
         except ImportError:
             self.context.logger.error(
                 "eth_account not available; cannot sign wildcard EIP-712. "
@@ -1982,7 +1987,9 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
                 "Wildcard POST returned non-success (status=%s); dropping "
                 "batch this round (follow-up PR adds replay buffer). "
                 "batch_size=%d signer-eoa=%s",
-                status, len(events), self.context.agent_address,
+                status,
+                len(events),
+                self.context.agent_address,
             )
             return
         if status >= 400:
@@ -1991,14 +1998,17 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
             self.context.logger.error(
                 "Wildcard POST returned %s (terminal); inspect payload. "
                 "batch_size=%d body_preview=%s",
-                status, len(events),
+                status,
+                len(events),
                 response.body[:512] if hasattr(response, "body") else "?",
             )
             return
 
         self.context.logger.info(
             "Wildcard batch POST OK (status=%s batch_size=%d signer-eoa=%s)",
-            status, len(events), self.context.agent_address,
+            status,
+            len(events),
+            self.context.agent_address,
         )
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
@@ -2009,10 +2019,10 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
         old IPFS publication path still runs) do not need a separate
         analytics write, and an offchain task without a wildcard_event
         attached is a finalize-time bug that we'd rather skip than crash.
+
+        :return: an ordered list of ``MechSettlementEvent``-shaped dicts.
         """
-        done_tasks = cast(
-            List[Dict[str, Any]], self.synchronized_data.done_tasks
-        )
+        done_tasks = cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
         events: List[Dict[str, Any]] = []
         for task in done_tasks:
             if not task.get("is_offchain"):

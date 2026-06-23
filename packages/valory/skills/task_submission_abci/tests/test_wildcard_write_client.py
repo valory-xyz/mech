@@ -17,7 +17,7 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Unit tests for the wildcard write client helpers.
+r"""Unit tests for the wildcard write client helpers.
 
 The server-side mirror lives at ``wildcard/server/src/mech_sig.py`` in
 predict-api#162; both sides must agree on the canonical-JSON encoding
@@ -46,37 +46,39 @@ from packages.valory.skills.task_submission_abci.wildcard_write_client import (
     compute_batch_hash,
 )
 
-
 # ---------------------------------------------------------------------------
 # canonical_json_bytes
 # ---------------------------------------------------------------------------
 
 
 class TestCanonicalJsonBytes:
+    """Pin the canonical-JSON encoder contract shared with the server."""
+
     def test_keys_sorted_top_level(self) -> None:
-        """Same dict, different declaration order → same encoded bytes."""
+        """Same dict, different declaration order yields same encoded bytes."""
         a = canonical_json_bytes({"b": 1, "a": 2})
         b = canonical_json_bytes({"a": 2, "b": 1})
         assert a == b
         assert a == b'{"a":2,"b":1}'
 
     def test_keys_sorted_recursively(self) -> None:
-        """Nested dicts also sort; ``zzz`` inside an outer ``inner`` still
-        precedes ``aaa`` only by the inner-level alphabetical rule."""
+        """Nested dicts also sort by the inner-level alphabetical rule."""
         encoded = canonical_json_bytes({"inner": {"zzz": 1, "aaa": 2}})
         assert encoded == b'{"inner":{"aaa":2,"zzz":1}}'
 
     def test_compact_separators_no_whitespace(self) -> None:
-        """Defaults would inject spaces after commas and colons; the
-        canonical encoder strips them so the byte string is minimal."""
+        """The canonical encoder strips space after commas and colons."""
         encoded = canonical_json_bytes({"a": [1, 2, 3]})
         assert b" " not in encoded
         assert encoded == b'{"a":[1,2,3]}'
 
     def test_non_ascii_preserved_as_utf8(self) -> None:
-        """``ensure_ascii=False`` keeps the bytes the operator wrote rather
-        than escaping to ``\\uXXXX``. A prompt with non-ASCII characters
-        must hash to the same value on both sides."""
+        r"""``ensure_ascii=False`` keeps the bytes the operator wrote.
+
+        A prompt with non-ASCII characters hashes to the same value on
+        both sides because the encoder emits raw UTF-8 rather than
+        escaping to ``\uXXXX``.
+        """
         encoded = canonical_json_bytes({"prompt": "café ☃"})
         assert "café".encode("utf-8") in encoded
         # Reverse: confirm the explicit \u escape did NOT land in the
@@ -84,9 +86,7 @@ class TestCanonicalJsonBytes:
         assert b"\\u" not in encoded
 
     def test_round_trips_through_json(self) -> None:
-        """The canonical bytes are valid JSON; parsing them back yields
-        the same logical dict (modulo key ordering, which is what we
-        normalised)."""
+        """The canonical bytes parse back to the same logical dict."""
         original = {"b": 1, "a": {"x": "y", "n": 2}}
         encoded = canonical_json_bytes(original)
         decoded = json.loads(encoded.decode("utf-8"))
@@ -99,32 +99,40 @@ class TestCanonicalJsonBytes:
 
 
 class TestComputeBatchHash:
+    """Pin the batch-hash contract: stable across key order, tamper-sensitive."""
+
     def test_hash_is_0x_prefixed_32_byte_hex(self) -> None:
+        """Output is the standard 0x-prefixed 32-byte hex digest shape."""
         h = compute_batch_hash([{"a": 1}])
         assert h.startswith("0x")
         assert len(h) == 2 + 64  # 0x + 32 bytes hex
 
     def test_hash_stable_across_dict_key_order(self) -> None:
-        """The whole point of canonical encoding: identical content, different
-        declaration order → same hash. Without this, a serialization that
-        accidentally reordered keys would invalidate the signature on the
-        wildcard side."""
+        """Identical content with different declaration order yields same hash.
+
+        Without this property, a serialisation that accidentally reordered
+        keys would invalidate the signature on the wildcard side.
+        """
         h1 = compute_batch_hash([{"x": 1, "y": 2}])
         h2 = compute_batch_hash([{"y": 2, "x": 1}])
         assert h1 == h2
 
     def test_hash_changes_if_event_payload_changes(self) -> None:
-        """Single-character flip in the payload moves the hash entirely;
-        this is the property that makes the signed batch_hash a real
-        tamper detector on the wildcard side."""
+        """Single-character flip in the payload moves the hash entirely.
+
+        This is the property that makes the signed batch_hash a real
+        tamper detector on the wildcard side.
+        """
         h1 = compute_batch_hash([{"a": "real result"}])
         h2 = compute_batch_hash([{"a": "spoofed result"}])
         assert h1 != h2
 
     def test_hash_is_order_sensitive_across_events(self) -> None:
-        """Two events in different order → different hashes. The wildcard
-        server iterates left-to-right when inserting, so the mech can't
-        shuffle and still get a match."""
+        """Two events in different order yields different hashes.
+
+        The wildcard server iterates left-to-right when inserting, so the
+        mech can't shuffle and still get a match.
+        """
         events_a = [{"r": "first"}, {"r": "second"}]
         events_b = [{"r": "second"}, {"r": "first"}]
         assert compute_batch_hash(events_a) != compute_batch_hash(events_b)
@@ -136,10 +144,14 @@ class TestComputeBatchHash:
 
 
 class TestBuildTypedData:
+    """Pin the EIP-712 typed-data shape against the server schema."""
+
     def test_shape_matches_server_expectation(self) -> None:
-        """Mirror the ``SignedMechEventBatch`` Pydantic schema on the server:
-        primary type ``MechEventBatch``, domain with the four required
-        fields, message with ``mech_service_multisig`` + ``batch_hash``."""
+        """Mirror the ``SignedMechEventBatch`` Pydantic schema on the server.
+
+        Primary type ``MechEventBatch``, domain with the four required
+        fields, message with ``mech_service_multisig`` + ``batch_hash``.
+        """
         td = build_typed_data(
             mech_service_multisig="0x" + "ab" * 20,
             chain_id=100,

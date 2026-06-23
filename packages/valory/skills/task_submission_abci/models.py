@@ -127,16 +127,12 @@ class Params(BaseParams):
         # ships dark; deployments flip this on per-mech as the rollout
         # advances. False by default so an out-of-the-box mech does no
         # off-mech HTTP work at settlement time.
-        self.mech_events_enabled: bool = bool(
-            kwargs.get("mech_events_enabled", False)
-        )
+        self.mech_events_enabled: bool = bool(kwargs.get("mech_events_enabled", False))
         # Wildcard ``POST /mech/events`` endpoint. Empty string = no URL
         # configured; the PostTxSettlement behaviour short-circuits when
         # either this is empty or ``mech_events_enabled`` is False. No
         # API key here — the EOA signature is the credential.
-        self.wildcard_events_url: str = str(
-            kwargs.get("wildcard_events_url", "") or ""
-        )
+        self.wildcard_events_url: str = str(kwargs.get("wildcard_events_url", "") or "")
         super().__init__(*args, **kwargs)
 
     @classmethod
