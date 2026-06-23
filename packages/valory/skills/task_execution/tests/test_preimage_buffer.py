@@ -156,6 +156,7 @@ def test_handler_list_response_queues_expired(handler_context: Any) -> None:
             "mech_preimage/old": json.dumps({"settled_at": now - 9999}),
             "mech_preimage/new": json.dumps({"settled_at": now}),
         },
+        next_cursor="",
         message="",
     )
     handler.handle(msg)
@@ -304,7 +305,10 @@ def test_handler_list_response_advances_sweep_timestamp(
     ss[preimage.PREIMAGE_LAST_SWEEP] = 0.0
     handler.handle(
         SimpleNamespace(
-            performative=KvStoreMessage.Performative.LIST_RESPONSE, data={}, message=""
+            performative=KvStoreMessage.Performative.LIST_RESPONSE,
+            data={},
+            next_cursor="",
+            message="",
         )
     )
     assert ss[preimage.PREIMAGE_LAST_SWEEP] > 0.0
@@ -316,21 +320,67 @@ def test_handler_list_response_advances_sweep_timestamp(
     assert ss[preimage.PREIMAGE_LAST_SWEEP] == 1.0
 
 
-def test_process_buffer_resets_stuck_kv_in_flight(behaviour: Any) -> None:
-    """The watchdog clears PREIMAGE_KV_IN_FLIGHT after the timeout."""
+def test_process_buffer_resets_stuck_kv_in_flight_and_resends(
+    behaviour: Any,
+) -> None:
+    """Watchdog clears PREIMAGE_KV_IN_FLIGHT, re-enqueues the write, retries it."""
     # Without this, a lost SUCCESS/ERROR (connection drop, dropped envelope,
     # exception in the connection's send path) wedges the flag True forever
     # and the loop never drains again — PREIMAGE_RECORDS / PREIMAGE_WRITE_QUEUE
-    # grow unbounded until restart, silently.
+    # grow unbounded until restart, silently. AND a terminal in-flight write
+    # would be lost on reset (the double-settle guard blocks the only other
+    # re-enqueue path), so the watchdog must put it back in the queue. The
+    # observable post-reset state is: a fresh CREATE_OR_UPDATE for the same
+    # id was sent and the in-flight stamp is now recent (not 999s in the
+    # past).
+    behaviour.context.params.preimage_retention_enabled = True
+    ss = behaviour.context.shared_state
+    preimage.record_settlement(
+        ss, "r1", "resp", "cid", preimage.STATUS_DELIVERED, now=1.0
+    )
+    # Simulate "behaviour sent it, then nothing came back": the id is no
+    # longer in the queue and is sitting in the in-flight slot.
+    ss[preimage.PREIMAGE_WRITE_QUEUE].remove("r1")
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r1"
+    stale = time.time() - 999.0
+    ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = stale
+    # Pin the sweep clock to recent so the post-reset fall-through goes to
+    # the write queue (not into a fresh LIST that would mask the retry).
+    ss[preimage.PREIMAGE_LAST_SWEEP] = time.time()
+
+    out = _CaptureOutbox()
+    behaviour.context.outbox = out
+    behaviour._process_preimage_buffer()
+
+    # Fall-through after the watchdog reset picks the re-enqueued id off the
+    # queue and re-sends it. End state: fresh in-flight, new stamp, queue
+    # drained.
+    assert len(out.sent) == 1
+    assert out.sent[0].performative == (
+        KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST
+    )
+    assert "mech_preimage/r1" in out.sent[0].data
+    assert ss[preimage.PREIMAGE_INFLIGHT_WRITE] == "r1"
+    assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is True
+    assert ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] > stale
+    assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []
+    # And the record is still in memory — not lost.
+    assert "r1" in ss[preimage.PREIMAGE_RECORDS]
+
+
+def test_process_buffer_watchdog_resets_when_inflight_is_none(
+    behaviour: Any,
+) -> None:
+    """Watchdog also handles the LIST/DELETE case (no INFLIGHT_WRITE to re-queue)."""
+    # LIST/DELETE don't populate PREIMAGE_INFLIGHT_WRITE; a lost reply on
+    # those should still clear the gate but has nothing to re-queue. Check
+    # the path doesn't crash on the None branch.
     behaviour.context.params.preimage_retention_enabled = True
     ss = behaviour.context.shared_state
     ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
-    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r1"
-    # Stamp the in-flight time well in the past to trigger the watchdog.
+    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = None
     ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = time.time() - 999.0
-    # Pin the sweep clock to recent so the watchdog reset doesn't fall
-    # straight through into a fresh LIST (which would set in_flight=True
-    # again and mask the reset).
     ss[preimage.PREIMAGE_LAST_SWEEP] = time.time()
 
     out = _CaptureOutbox()
@@ -338,11 +388,134 @@ def test_process_buffer_resets_stuck_kv_in_flight(behaviour: Any) -> None:
     behaviour._process_preimage_buffer()
 
     assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is False
-    assert ss[preimage.PREIMAGE_INFLIGHT_WRITE] is None
     assert ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] is None
-    # And no kv op was sent — the loop returned after the reset because no
-    # work was queued.
+    assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []
     assert out.sent == []
+
+
+def test_process_buffer_keeps_paging_until_cursor_clears(behaviour: Any) -> None:
+    """A non-empty PREIMAGE_LIST_CURSOR forces _send_kv_list on the next tick."""
+    # If the loop only fired LIST on the sweep_interval timer, a namespace
+    # bigger than one page would only get the first page walked per sweep
+    # window — retention pruning would lag forever on a busy mech. The
+    # cursor short-circuit forces back-to-back LISTs until the namespace is
+    # fully walked.
+    behaviour.context.params.preimage_retention_enabled = True
+    ss = behaviour.context.shared_state
+    # Sweep ran very recently AND the cursor is set: the time gate would
+    # block, but the cursor must override.
+    ss[preimage.PREIMAGE_LAST_SWEEP] = time.time()
+    ss[preimage.PREIMAGE_LIST_CURSOR] = "page-2-cursor"
+
+    out = _CaptureOutbox()
+    behaviour.context.outbox = out
+    behaviour._process_preimage_buffer()
+
+    assert len(out.sent) == 1
+    assert out.sent[0].performative == KvStoreMessage.Performative.LIST_REQUEST
+    assert out.sent[0].cursor == "page-2-cursor"
+    assert out.sent[0].limit == behaviour.context.params.preimage_list_page_size
+
+
+def test_handler_list_response_mid_page_saves_cursor_only(
+    handler_context: Any,
+) -> None:
+    """A LIST_RESPONSE with non-empty next_cursor saves cursor, leaves clock alone."""
+    # Stamping LAST_SWEEP mid-walk would let the time gate elide later pages
+    # the very next tick after the cursor finally clears (since "now" is
+    # already > now+0); the sweep would also re-LIST page 1 immediately
+    # rather than continuing. Both paths break retention. Only the final
+    # page (next_cursor == "") advances the clock.
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_LAST_SWEEP] = 0.0
+
+    handler.handle(
+        SimpleNamespace(
+            performative=KvStoreMessage.Performative.LIST_RESPONSE,
+            data={},
+            next_cursor="page-2-cursor",
+            message="",
+        )
+    )
+
+    assert ss[preimage.PREIMAGE_LIST_CURSOR] == "page-2-cursor"
+    # Clock untouched: the sweep is still in progress.
+    assert ss[preimage.PREIMAGE_LAST_SWEEP] == 0.0
+
+    # Final page: cursor clears AND clock advances together.
+    handler.handle(
+        SimpleNamespace(
+            performative=KvStoreMessage.Performative.LIST_RESPONSE,
+            data={},
+            next_cursor="",
+            message="",
+        )
+    )
+    assert ss[preimage.PREIMAGE_LIST_CURSOR] is None
+    assert ss[preimage.PREIMAGE_LAST_SWEEP] > 0.0
+
+
+def test_handler_error_drops_record_after_max_attempts(
+    handler_context: Any,
+) -> None:
+    """A persistently failing kv_store write is dropped after the configured cap."""
+    # An unhealthy kv_store would otherwise hot-loop the agent retrying the
+    # same record forever, pinning the in-flight gate and starving sweeps +
+    # new writes. After preimage_max_write_attempts ERRORs we drop the
+    # record + WARN. The buffer is a best-effort audit copy, so a bounded
+    # loss beats an unbounded stall.
+    handler_context.params.preimage_max_write_attempts = 3
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    preimage.record_accept(ss, "r1", "req", now=1.0)
+
+    # First two ERRORs keep the record around and re-queue it.
+    for _ in range(2):
+        ss[preimage.PREIMAGE_WRITE_QUEUE].remove("r1")
+        ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r1"
+        ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+        handler.handle(
+            SimpleNamespace(
+                performative=KvStoreMessage.Performative.ERROR, message="boom"
+            )
+        )
+        assert "r1" in ss[preimage.PREIMAGE_RECORDS]
+        assert ss[preimage.PREIMAGE_WRITE_QUEUE] == ["r1"]
+
+    # Third ERROR hits the cap: record + attempts entry both purged, queue
+    # left empty (no re-queue this round).
+    ss[preimage.PREIMAGE_WRITE_QUEUE].remove("r1")
+    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r1"
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    handler.handle(
+        SimpleNamespace(performative=KvStoreMessage.Performative.ERROR, message="boom")
+    )
+    assert "r1" not in ss[preimage.PREIMAGE_RECORDS]
+    assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []
+    assert "r1" not in ss[preimage.PREIMAGE_WRITE_ATTEMPTS]
+
+
+def test_handler_success_clears_attempt_counter(handler_context: Any) -> None:
+    """A successful terminal write clears the per-id retry counter."""
+    # Without this, the counter persists past the record being popped —
+    # the next re-use of the same request_id would start with a stale
+    # count and could hit the cap on the very first ERROR. Keep counters
+    # bounded by the live record set, not by lifetime traffic.
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_WRITE_ATTEMPTS]["r1"] = 4
+
+    preimage.record_settlement(
+        ss, "r1", "resp", "cid", preimage.STATUS_DELIVERED, now=1.0
+    )
+    ss[preimage.PREIMAGE_WRITE_QUEUE].remove("r1")
+    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r1"
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    handler.handle(
+        SimpleNamespace(performative=KvStoreMessage.Performative.SUCCESS, message="ok")
+    )
+    assert "r1" not in ss[preimage.PREIMAGE_WRITE_ATTEMPTS]
 
 
 def test_process_buffer_skips_none_record_and_continues(behaviour: Any) -> None:

@@ -150,6 +150,17 @@ class Params(Model):
         self.preimage_key_prefix: str = kwargs.get(
             "preimage_key_prefix", "mech_preimage/"
         )
+        # Page size for the sweep LIST_REQUEST. Server clamps at 1000; the
+        # default matches the server's own default so unmodified deployments
+        # behave identically before/after the pagination wiring.
+        self.preimage_list_page_size: int = kwargs.get("preimage_list_page_size", 100)
+        # Max kv_store write attempts per request_id before the buffer drops
+        # the record + WARNs. Bounds a hot-loop retry against a persistently
+        # unhealthy kv_store. 5 is generous for transient glitches; >5 is
+        # almost certainly persistent and the record is best-effort audit.
+        self.preimage_max_write_attempts: int = kwargs.get(
+            "preimage_max_write_attempts", 5
+        )
         self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing", {})
         if self.tools_to_pricing:
             self._ensure_same_keys(

@@ -61,6 +61,16 @@ PREIMAGE_KV_IN_FLIGHT = "preimage_kv_in_flight"  # bool — one kv op at a time
 PREIMAGE_INFLIGHT_WRITE = "preimage_inflight_write"  # Optional[str] request_id
 PREIMAGE_INFLIGHT_SENT_AT = "preimage_inflight_sent_at"  # Optional[float] epoch
 PREIMAGE_LAST_SWEEP = "preimage_last_sweep"  # float epoch seconds
+# Non-empty when a multi-page sweep is mid-flight; the next _send_kv_list
+# tick passes this back as the LIST cursor. Cleared when a LIST_RESPONSE
+# returns an empty next_cursor (final page) — only then is PREIMAGE_LAST_SWEEP
+# stamped, so the next sweep_interval starts from a fully-walked namespace.
+PREIMAGE_LIST_CURSOR = "preimage_list_cursor"  # Optional[str]
+# Per-request_id retry counter for kv_store CREATE_OR_UPDATE failures. Each
+# ERROR increments; when the count reaches PREIMAGE_MAX_WRITE_ATTEMPTS the
+# record is dropped + WARN'd so a persistently unhealthy kv_store can't
+# hot-loop the agent retrying the same record forever.
+PREIMAGE_WRITE_ATTEMPTS = "preimage_write_attempts"  # Dict[str, int]
 
 # settlement_status values.
 STATUS_PROCESSING = "processing"
@@ -82,6 +92,8 @@ def init_shared_state(shared_state: Dict[str, Any]) -> None:
     shared_state.setdefault(PREIMAGE_INFLIGHT_WRITE, None)
     shared_state.setdefault(PREIMAGE_INFLIGHT_SENT_AT, None)
     shared_state.setdefault(PREIMAGE_LAST_SWEEP, 0.0)
+    shared_state.setdefault(PREIMAGE_LIST_CURSOR, None)
+    shared_state.setdefault(PREIMAGE_WRITE_ATTEMPTS, {})
 
 
 def preimage_key(prefix: str, request_id: str) -> str:

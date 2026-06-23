@@ -101,7 +101,11 @@ class _KvStoreDLG(_DLG):
 
     def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
         """Return a (message, dialogue) pair echoing the create kwargs."""
-        fields = {key: k[key] for key in ("data", "keys", "key_prefix") if key in k}
+        fields = {
+            key: k[key]
+            for key in ("data", "keys", "key_prefix", "limit", "cursor")
+            if key in k
+        }
         msg = SimpleNamespace(performative=k.get("performative"), **fields)
         dlg = SimpleNamespace(
             dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
@@ -173,6 +177,8 @@ def params_stub() -> SimpleNamespace:
         preimage_retention_seconds=86400,
         preimage_sweep_interval=3600.0,
         preimage_key_prefix="mech_preimage/",
+        preimage_list_page_size=100,
+        preimage_max_write_attempts=5,
         max_block_window=10_000,
         task_deadline=15.0,
         timeout_limit=2,

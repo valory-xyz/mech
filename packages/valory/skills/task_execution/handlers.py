@@ -540,11 +540,6 @@ class KvStoreHandler(BaseHandler):
 
         if performative == KvStoreMessage.Performative.LIST_RESPONSE:
             now = time.time()
-            # Stamp the sweep clock only after a successful LIST. If we stamped
-            # it on send (before the round-trip), a transient LIST ERROR would
-            # be indistinguishable from "nothing expired" and sweeping would
-            # stall for a full preimage_sweep_interval.
-            shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
             expired = preimage_buffer.expired_keys(
                 dict(kv_msg.data),
                 now,
@@ -558,6 +553,19 @@ class KvStoreHandler(BaseHandler):
                     f"Preimage sweep: queued {len(expired)} expired entries "
                     f"for deletion."
                 )
+            # The LIST response carries next_cursor when the kv_store has more
+            # pages past preimage_list_page_size; the behaviour loop reads
+            # this on the next tick to keep paging. Only when the page is
+            # final (next_cursor == "") do we consider the sweep complete and
+            # stamp PREIMAGE_LAST_SWEEP — otherwise a multi-page sweep
+            # would reset the clock mid-walk and the next interval would
+            # start over from page 0, never finishing.
+            next_cursor = kv_msg.next_cursor or ""
+            if next_cursor:
+                shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = next_cursor
+            else:
+                shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
+                shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
         elif performative == KvStoreMessage.Performative.SUCCESS:
             # A successful write of a terminal (delivered/rejected) record means
             # the kv_store now owns it; drop the in-process copy. Non-terminal
@@ -584,14 +592,45 @@ class KvStoreHandler(BaseHandler):
                     and inflight not in write_queue
                 ):
                     records.pop(inflight, None)
+                    # Clear the retry counter so a future re-use of the same
+                    # request_id starts fresh — keeps PREIMAGE_WRITE_ATTEMPTS
+                    # bounded by the live record set, not by lifetime traffic.
+                    shared_state.get(preimage_buffer.PREIMAGE_WRITE_ATTEMPTS, {}).pop(
+                        inflight, None
+                    )
         elif performative == KvStoreMessage.Performative.ERROR:
             self.context.logger.warning(f"kv_store error: {kv_msg.message}")
             inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
             if inflight is not None:
-                # Re-queue the failed write so the preimage isn't lost. Route
-                # through enqueue_write so the queue stays dedup'd (matches the
-                # discipline of every other enqueue in the buffer module).
-                preimage_buffer.enqueue_write(shared_state, inflight)
+                # Bound the retry loop: a persistently unhealthy kv_store
+                # would otherwise hot-loop forever on the same record,
+                # pinning PREIMAGE_KV_IN_FLIGHT and starving sweeps + new
+                # writes. After preimage_max_write_attempts ERRORs for the
+                # same id we drop the record + WARN — the buffer is a
+                # best-effort audit copy, not a transactional store, so a
+                # bounded loss beats an unbounded stall.
+                attempts: Dict[str, int] = shared_state.setdefault(
+                    preimage_buffer.PREIMAGE_WRITE_ATTEMPTS, {}
+                )
+                attempts[inflight] = attempts.get(inflight, 0) + 1
+                if attempts[inflight] >= self.params.preimage_max_write_attempts:
+                    self.context.logger.warning(
+                        "Preimage write for request_id=%s failed "
+                        "%d times; dropping record. Last kv_store error: %s",
+                        inflight,
+                        attempts[inflight],
+                        kv_msg.message,
+                    )
+                    shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).pop(
+                        inflight, None
+                    )
+                    attempts.pop(inflight, None)
+                else:
+                    # Re-queue the failed write so the preimage isn't lost.
+                    # Route through enqueue_write so the queue stays dedup'd
+                    # (matches the discipline of every other enqueue in the
+                    # buffer module).
+                    preimage_buffer.enqueue_write(shared_state, inflight)
 
         shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
         shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False

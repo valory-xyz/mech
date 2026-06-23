@@ -1535,9 +1535,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             sent_at = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT)
             if sent_at is not None and now - sent_at > PREIMAGE_KV_REQUEST_TIMEOUT:
                 # The reply for this kv op never came back (connection drop,
-                # dropped envelope, etc). Clear the gate so the loop can drain;
-                # any pending write stays in PREIMAGE_WRITE_QUEUE so the next
-                # tick retries it.
+                # dropped envelope, etc). Clear the gate so the loop can drain.
+                # An in-flight write has already been pop(0)'d off the write
+                # queue (see below), so it lives in neither the queue nor the
+                # in-flight slot — without an explicit re-enqueue here a
+                # terminal write (settle followed by a stuck CREATE_OR_UPDATE)
+                # would leak: the double-settle guard in record_settlement
+                # blocks the only other re-enqueue path. enqueue_write dedupes,
+                # so this is safe even if a settle already re-enqueued it.
+                inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
+                if inflight is not None:
+                    preimage_buffer.enqueue_write(shared_state, inflight)
                 self.context.logger.warning(
                     "Preimage kv op has been in flight for "
                     f">{PREIMAGE_KV_REQUEST_TIMEOUT}s with no reply. "
@@ -1549,11 +1557,22 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             else:
                 return
 
+        # A non-empty cursor means the previous LIST_RESPONSE returned
+        # ``next_cursor`` — i.e. the namespace has more pages. Keep paging on
+        # every tick (deletes/writes wait until the namespace is fully walked)
+        # so retention pruning isn't stuck on the first page when the namespace
+        # has more than preimage_list_page_size entries.
+        if shared_state.get(preimage_buffer.PREIMAGE_LIST_CURSOR):
+            self._send_kv_list()
+            return
+
         last_sweep = shared_state.get(preimage_buffer.PREIMAGE_LAST_SWEEP, 0.0)
         if now - last_sweep >= self.params.preimage_sweep_interval:
             # The sweep timestamp is stamped on a successful LIST_RESPONSE
-            # (in KvStoreHandler), not here, so a transient LIST ERROR
-            # doesn't stall sweeping for a full sweep interval.
+            # with an empty next_cursor (in KvStoreHandler), not here, so a
+            # transient LIST ERROR doesn't stall sweeping for a full sweep
+            # interval, and a multi-page sweep doesn't reset the clock
+            # mid-walk.
             self._send_kv_list()
             return
 
@@ -1617,11 +1636,24 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
 
     def _send_kv_list(self) -> None:
-        """List the preimage namespace so the handler can prune expired keys."""
+        """List a page of the preimage namespace.
+
+        The cursor carries across ticks so the sweep covers every entry past
+        ``preimage_list_page_size``. ``cursor=""`` (the protobuf default)
+        means "start from the beginning of the namespace"; the handler
+        records ``next_cursor`` for the next tick and only stamps
+        ``PREIMAGE_LAST_SWEEP`` when ``next_cursor`` comes back empty —
+        i.e. the namespace has been walked end to end.
+        """
+        cursor = (
+            self.context.shared_state.get(preimage_buffer.PREIMAGE_LIST_CURSOR) or ""
+        )
         msg, _ = self.context.kv_store_dialogues.create(
             counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
             performative=KvStoreMessage.Performative.LIST_REQUEST,
             key_prefix=self.params.preimage_key_prefix,
+            limit=self.params.preimage_list_page_size,
+            cursor=cursor,
         )
         self.context.outbox.put_message(message=msg)
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
