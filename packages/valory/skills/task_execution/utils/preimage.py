@@ -48,7 +48,10 @@ Stored value (a JSON string, under key ``f"{prefix}{request_id}"``)::
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any, Dict, List, Optional
+
+_logger = logging.getLogger(__name__)
 
 # shared_state keys (owned here; initialised by the behaviour's setup()).
 PREIMAGE_RECORDS = "preimage_records"  # Dict[str, Dict[str, Any]] desired state
@@ -56,6 +59,7 @@ PREIMAGE_WRITE_QUEUE = "preimage_write_queue"  # List[str] request_ids to flush
 PREIMAGE_DELETE_QUEUE = "preimage_delete_queue"  # List[str] kv keys to delete
 PREIMAGE_KV_IN_FLIGHT = "preimage_kv_in_flight"  # bool — one kv op at a time
 PREIMAGE_INFLIGHT_WRITE = "preimage_inflight_write"  # Optional[str] request_id
+PREIMAGE_INFLIGHT_SENT_AT = "preimage_inflight_sent_at"  # Optional[float] epoch
 PREIMAGE_LAST_SWEEP = "preimage_last_sweep"  # float epoch seconds
 
 # settlement_status values.
@@ -76,6 +80,7 @@ def init_shared_state(shared_state: Dict[str, Any]) -> None:
     shared_state.setdefault(PREIMAGE_DELETE_QUEUE, [])
     shared_state.setdefault(PREIMAGE_KV_IN_FLIGHT, False)
     shared_state.setdefault(PREIMAGE_INFLIGHT_WRITE, None)
+    shared_state.setdefault(PREIMAGE_INFLIGHT_SENT_AT, None)
     shared_state.setdefault(PREIMAGE_LAST_SWEEP, 0.0)
 
 
@@ -89,7 +94,7 @@ def preimage_key(prefix: str, request_id: str) -> str:
     return f"{prefix}{request_id}"
 
 
-def _enqueue_write(shared_state: Dict[str, Any], request_id: str) -> None:
+def enqueue_write(shared_state: Dict[str, Any], request_id: str) -> None:
     """Append a request id to the write queue, de-duplicating.
 
     :param shared_state: the skill's shared state dict.
@@ -120,7 +125,7 @@ def record_accept(
         "settled_at": None,
         "settlement_status": STATUS_PROCESSING,
     }
-    _enqueue_write(shared_state, request_id)
+    enqueue_write(shared_state, request_id)
 
 
 def record_settlement(
@@ -144,7 +149,21 @@ def record_settlement(
     :param now: the current epoch time in seconds.
     """
     records = shared_state.setdefault(PREIMAGE_RECORDS, {})
-    record = records.get(request_id) or {
+    existing = records.get(request_id)
+    if existing is not None and existing.get("settlement_status") in TERMINAL_STATUSES:
+        # A second settle for an id whose first settle was already flushed
+        # (and popped from PREIMAGE_RECORDS) would land in the fallback
+        # below with request=None, accepted_at=None, then re-queue itself
+        # — overwriting the full kv row with a stripped one. The id is
+        # already terminal in memory here, so this would do the same. Log
+        # it and bail; the first settlement stands.
+        _logger.warning(
+            "Double-settle ignored for request_id=%s (already %s).",
+            request_id,
+            existing.get("settlement_status"),
+        )
+        return
+    record = existing or {
         "request_id": request_id,
         "request": None,
         "accepted_at": None,
@@ -158,7 +177,7 @@ def record_settlement(
         }
     )
     records[request_id] = record
-    _enqueue_write(shared_state, request_id)
+    enqueue_write(shared_state, request_id)
 
 
 def expired_keys(
@@ -176,16 +195,33 @@ def expired_keys(
     :return: the list of keys to delete.
     """
     expired: List[str] = []
+    skipped: List[str] = []
     for key, raw in list_data.items():
         try:
             record = json.loads(raw)
             stamp = record.get("settled_at") or record.get("accepted_at")
         except (ValueError, TypeError, AttributeError):
+            skipped.append(key)
             continue
         if stamp is None:
+            skipped.append(key)
             continue
         if now - float(stamp) > retention_seconds:
             expired.append(key)
+    if skipped:
+        # Silently treating unparseable / timestamp-less rows as
+        # "leave alone" is the safe choice (don't delete what we don't
+        # understand), but it can mask a schema drift where every row
+        # starts skipping and retention pruning quietly stops. Surface
+        # the count + a sample key so a degraded namespace is visible
+        # in operator logs at near-zero cost when the count is zero.
+        _logger.warning(
+            "Preimage sweep: %d entr%s skipped (unparseable or "
+            "timestamp-less). First skipped key: %r",
+            len(skipped),
+            "y" if len(skipped) == 1 else "ies",
+            skipped[0],
+        )
     return expired
 
 

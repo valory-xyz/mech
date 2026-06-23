@@ -96,6 +96,13 @@ RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
 PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
+# Reset PREIMAGE_KV_IN_FLIGHT if no kv_store reply arrives within this many
+# seconds. Mirrors PAYMENT_MODEL_REQUEST_TIMEOUT: without this watchdog a lost
+# SUCCESS/ERROR (connection drop, dropped envelope, exception in the
+# connection's send path) wedges the flag True forever — the preimage loop
+# stops draining and PREIMAGE_RECORDS / PREIMAGE_WRITE_QUEUE grow unbounded
+# until restart, silently.
+PREIMAGE_KV_REQUEST_TIMEOUT = 60.0
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 # Routing target for kv_store messages (the preimage buffer). Built from the
@@ -1523,13 +1530,30 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if not self.params.preimage_retention_enabled:
             return
         shared_state = self.context.shared_state
-        if shared_state.get(preimage_buffer.PREIMAGE_KV_IN_FLIGHT):
-            return
-
         now = time.time()
+        if shared_state.get(preimage_buffer.PREIMAGE_KV_IN_FLIGHT):
+            sent_at = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT)
+            if sent_at is not None and now - sent_at > PREIMAGE_KV_REQUEST_TIMEOUT:
+                # The reply for this kv op never came back (connection drop,
+                # dropped envelope, etc). Clear the gate so the loop can drain;
+                # any pending write stays in PREIMAGE_WRITE_QUEUE so the next
+                # tick retries it.
+                self.context.logger.warning(
+                    "Preimage kv op has been in flight for "
+                    f">{PREIMAGE_KV_REQUEST_TIMEOUT}s with no reply. "
+                    "Resetting PREIMAGE_KV_IN_FLIGHT so the loop can retry."
+                )
+                shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
+                shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+                shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
+            else:
+                return
+
         last_sweep = shared_state.get(preimage_buffer.PREIMAGE_LAST_SWEEP, 0.0)
         if now - last_sweep >= self.params.preimage_sweep_interval:
-            shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
+            # The sweep timestamp is stamped on a successful LIST_RESPONSE
+            # (in KvStoreHandler), not here, so a transient LIST ERROR
+            # doesn't stall sweeping for a full sweep interval.
             self._send_kv_list()
             return
 
@@ -1571,6 +1595,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=msg)
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = request_id
         self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
+            time.time()
+        )
 
     def _send_kv_delete(self, keys: List[str]) -> None:
         """Delete a batch of expired preimage keys from the kv_store.
@@ -1585,6 +1612,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=msg)
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
         self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
+            time.time()
+        )
 
     def _send_kv_list(self) -> None:
         """List the preimage namespace so the handler can prune expired keys."""
@@ -1596,6 +1626,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.outbox.put_message(message=msg)
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
         self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
+            time.time()
+        )
 
     def _handle_ipfs_tasks_response(
         self, message: IpfsMessage, dialogue: Dialogue

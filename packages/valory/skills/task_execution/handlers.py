@@ -539,9 +539,15 @@ class KvStoreHandler(BaseHandler):
         performative = kv_msg.performative
 
         if performative == KvStoreMessage.Performative.LIST_RESPONSE:
+            now = time.time()
+            # Stamp the sweep clock only after a successful LIST. If we stamped
+            # it on send (before the round-trip), a transient LIST ERROR would
+            # be indistinguishable from "nothing expired" and sweeping would
+            # stall for a full preimage_sweep_interval.
+            shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
             expired = preimage_buffer.expired_keys(
                 dict(kv_msg.data),
-                time.time(),
+                now,
                 self.params.preimage_retention_seconds,
             )
             if expired:
@@ -556,27 +562,40 @@ class KvStoreHandler(BaseHandler):
             # A successful write of a terminal (delivered/rejected) record means
             # the kv_store now owns it; drop the in-process copy. Non-terminal
             # (processing) records are kept so the settle update can merge.
+            #
+            # Race guard: a settle can happen between when ``_send_kv_write``
+            # serialized the processing record and when this SUCCESS arrives.
+            # ``record_settlement`` mutates the record in place to terminal AND
+            # re-enqueues the request id. If we pop now, the kv only ever saw
+            # the processing snapshot — the terminal write the next tick tries
+            # to flush hits ``record is None`` and is silently skipped, losing
+            # the delivered/rejected preimage. ``inflight in write_queue`` is
+            # exactly the signal a re-enqueue happened: leave the record so
+            # the next flush persists the terminal state.
             inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
             if inflight is not None:
                 records = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {})
                 record = records.get(inflight)
+                write_queue = shared_state.get(preimage_buffer.PREIMAGE_WRITE_QUEUE, [])
                 if (
                     record is not None
                     and record.get("settlement_status")
                     in preimage_buffer.TERMINAL_STATUSES
+                    and inflight not in write_queue
                 ):
                     records.pop(inflight, None)
         elif performative == KvStoreMessage.Performative.ERROR:
             self.context.logger.warning(f"kv_store error: {kv_msg.message}")
             inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
             if inflight is not None:
-                # Re-queue the failed write so the preimage isn't lost.
-                shared_state.setdefault(
-                    preimage_buffer.PREIMAGE_WRITE_QUEUE, []
-                ).append(inflight)
+                # Re-queue the failed write so the preimage isn't lost. Route
+                # through enqueue_write so the queue stays dedup'd (matches the
+                # discipline of every other enqueue in the buffer module).
+                preimage_buffer.enqueue_write(shared_state, inflight)
 
         shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
         shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
         self.on_message_handled(message)
 
 
