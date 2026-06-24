@@ -40,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/contract_subscription:0.1.0:bafybeicqlkmfpttw4hbbaakr6xos62rd6ytjwkyzlfli4xpvl5yqcycf6q
-- valory/mech_abci:0.1.0:bafybeigmanxkx6szycnn6ypryzrv6okd7qyk7gwweyxk6hygjg2yien3ee
+- valory/mech_abci:0.1.0:bafybeics6ydhtc5waxipqdd3tga3ytffjnzqbfrjljhzafux4emndtfj4q
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/delivery_rate_abci:0.1.0:bafybeiaefr3eiajklnb6m4jtl7rpxr5t2lmrpizfy7gqkjem3qiewo7cz4
-- valory/task_execution:0.1.0:bafybeiavvkxam3gijfmnec7dmryjlyqu4vc6rp7r2d3gtgrz7gl2whtcua
-- valory/task_submission_abci:0.1.0:bafybeidosd4s6bkhd466bjfqfv4j3vcat3sxyp77kzq3kpel5ab65zog6e
+- valory/task_execution:0.1.0:bafybeicjom3vzro6gfdwcb4dtrnveoad3xr2wxzyiyvrw4otea556z2ktq
+- valory/task_submission_abci:0.1.0:bafybeiaz2k62mgexabuaa4wapbfs3gkb7vtrcwctnrxcii4qzkmss4ehnq
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
 - valory/websocket_client:0.1.0:bafybeid6oyycsrvk4duftffs5mrfgmcepibt3qe4om3kfzhwhilfq3ynay

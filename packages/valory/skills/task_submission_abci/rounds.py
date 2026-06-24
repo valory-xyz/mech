@@ -218,7 +218,20 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            return self.synchronized_data, Event.DONE
+            # Clear ``done_tasks`` on exit, matching the
+            # ``TransactionPreparationRound`` pattern. Without this the
+            # next entry to this round on NO_MAJORITY / ROUND_TIMEOUT
+            # (both self-loop) would re-read the same stale events and
+            # re-fire the wildcard POST; the events also survive across
+            # periods via ``cross_period_persisted_keys``, so the next
+            # cycle's behaviour would see last period's events too.
+            return (
+                self.synchronized_data.update(
+                    synchronized_data_class=SynchronizedData,
+                    **{get_name(SynchronizedData.done_tasks): []},
+                ),
+                Event.DONE,
+            )
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):

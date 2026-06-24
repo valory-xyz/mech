@@ -1519,7 +1519,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if isinstance(request_data_raw, (bytes, bytearray)):
             try:
                 request_data_raw = request_data_raw.decode("utf-8")
-            except UnicodeDecodeError:
+            except UnicodeDecodeError as exc:
+                self.context.logger.warning(
+                    "request_data for req_id=%s is non-UTF-8 bytes; "
+                    "using empty payload: %s",
+                    req_id,
+                    exc,
+                )
                 request_data_raw = ""
         if isinstance(request_data_raw, str):
             try:
@@ -1532,10 +1538,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_data = request_data_raw
         else:
             request_data = {}
-        response_data_raw = self.context.shared_state.get(
+        # OFFCHAIN_REQUEST_RESPONSES stores an envelope
+        # ``{"request_id":..., "status":"ok", "content_cid":..., "response":<inner>}``;
+        # the tool's actual ``result`` / ``executed_at`` live on the inner
+        # ``response`` dict, not on the envelope. Reading the envelope
+        # directly (the original code) returned ``None`` for both fields,
+        # forcing every completed task to be tagged ``status="failed"`` in
+        # the analytics row.
+        response_envelope_raw = self.context.shared_state.get(
             OFFCHAIN_REQUEST_RESPONSES, {}
         ).get(req_id, {})
-        response_data = response_data_raw if isinstance(response_data_raw, dict) else {}
+        response_envelope = (
+            response_envelope_raw if isinstance(response_envelope_raw, dict) else {}
+        )
+        inner_response = response_envelope.get("response", {})
+        response_data = inner_response if isinstance(inner_response, dict) else {}
         tool = str(done_task.get("tool") or "unknown")
         delivery_mech = str(
             done_task.get("mech_address") or self.params.mech_marketplace_address or ""
@@ -1555,44 +1572,61 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # Requested_at: prefer the signed timestamp on the buffered request;
         # the handler validates and stores it before enqueueing. Fall back to
         # the executed_at on the response so the time-leading index entry is
-        # always populated for an offchain row.
+        # always populated for an offchain row. The requester can store the
+        # value as a Unix int or as an ISO 8601 string — ``str(int)`` would
+        # produce ``"1700000000"`` which the wildcard's ``AwareDatetime``
+        # parser rejects with a 422, so coerce int / float explicitly.
         requested_at_raw = request_data.get("datetime") or request_data.get(
             "requested_at"
         )
-        requested_at_iso = (
-            str(requested_at_raw) if requested_at_raw else executed_at_iso
-        )
+        if isinstance(requested_at_raw, (int, float)):
+            requested_at_iso = datetime.fromtimestamp(
+                requested_at_raw, tz=timezone.utc
+            ).isoformat()
+        elif isinstance(requested_at_raw, str) and requested_at_raw:
+            requested_at_iso = requested_at_raw
+        else:
+            requested_at_iso = executed_at_iso
 
-        delivery_rate_raw = executing_task.get(
-            "request_delivery_rate"
-        ) or executing_task.get("delivery_rate")
+        # ``or``-chain would discard a legitimate ``0`` value (which is
+        # both falsy and a valid nonce / delivery rate); use an explicit
+        # ``in`` probe so a zero in the canonical key wins over a fallback
+        # ``None`` in the legacy key.
+        if "request_delivery_rate" in executing_task:
+            delivery_rate_raw = executing_task["request_delivery_rate"]
+        else:
+            delivery_rate_raw = executing_task.get("delivery_rate")
         delivery_rate_str = (
             str(delivery_rate_raw) if delivery_rate_raw is not None else None
         )
-        nonce_raw = executing_task.get("request_id_nonce") or executing_task.get(
-            "nonce"
-        )
+        if "request_id_nonce" in executing_task:
+            nonce_raw = executing_task["request_id_nonce"]
+        else:
+            nonce_raw = executing_task.get("nonce")
         try:
             nonce_int = int(nonce_raw) if nonce_raw is not None else None
         except (TypeError, ValueError):
             nonce_int = None
-        # The wildcard server requires `prompt` and `tool` to be non-empty
-        # strings; placeholder them rather than dropping the row.
+        # The wildcard server requires ``prompt`` to be a non-empty string;
+        # placeholder rather than dropping the row. Enforce the cap on the
+        # UTF-8 BYTE length, not on ``len()`` (code points) — a CJK prompt
+        # of 50k code points encodes to ~150 KB and would otherwise sail
+        # past the 100 KB cap; matches how ``IPFS_MAX_TASK_BYTES`` is
+        # enforced elsewhere in this file.
         prompt = str(request_data.get("prompt") or "[offchain request]")
-        if len(prompt) > MAX_PROMPT_BYTES:
-            prompt = prompt[:MAX_PROMPT_BYTES]
+        prompt_bytes = prompt.encode("utf-8")
+        if len(prompt_bytes) > MAX_PROMPT_BYTES:
+            prompt = prompt_bytes[:MAX_PROMPT_BYTES].decode("utf-8", errors="ignore")
         invalid = bool(self._invalid_request)
         result_text = response_data.get("result") if response_data else None
         status = "failed" if invalid or result_text is None else "complete"
-        error_text = (
-            str(result_text)
-            if invalid and result_text
-            else (
-                None
-                if status == "complete"
-                else (str(result_text) if status == "failed" and result_text else None)
-            )
-        )
+        # Failed-row ``error`` carries the available diagnostic, regardless
+        # of which branch put us on the failed arm. When ``invalid`` is set
+        # but no ``result_text`` is available (the tool produced no
+        # response object), the field is ``None``; the wildcard server's
+        # CHECK allows a ``failed`` row with empty error so the row still
+        # lands as a settled failure.
+        error_text = str(result_text) if status == "failed" and result_text else None
         # Strip the result from the failed arm so the wildcard's
         # status/error/result shape CHECK accepts the row.
         result_value: Optional[str] = (

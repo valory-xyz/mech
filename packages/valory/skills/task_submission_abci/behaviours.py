@@ -1814,7 +1814,7 @@ class TransactionPreparationBehaviour(
         return tx_list
 
 
-class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
+class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     """Runs once on-chain settlement of the round's tx confirms.
 
     Reads ``synchronized_data.done_tasks`` for the just-settled cycle,
@@ -1925,30 +1925,45 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
                 "one chain — investigate task_execution."
             )
             return
+        # Short-circuit before the signing round-trip when the chain id is
+        # unconfigured: chain_id=0 lands in no marketplace allowlist on the
+        # server, so the batch is guaranteed to be rejected. Bail with a
+        # clear log instead of spending a signing dialogue + HTTP POST.
+        if chain_id == 0:
+            self.context.logger.warning(
+                "mech_events_chain_id is 0 (unconfigured); " "skipping wildcard write."
+            )
+            return
 
-        batch_hash_hex = compute_batch_hash(events)
-        typed_data = build_typed_data(
-            mech_address=mech_address,
-            chain_id=chain_id,
-            verifying_contract=verifying_contract,
-            batch_hash_hex=batch_hash_hex,
-        )
-
-        # EIP-712 digest: build the standard 32-byte digest
-        # (``keccak(0x19 || 0x01 || domainSep || hashStruct)``) via the
-        # shared helper, then raw-sign it via ``is_deprecated_mode=True``
-        # so the AEA signer hashes the bytes without the EIP-191
-        # personal-sign prefix. Signing just ``signable.body`` (the
-        # message hashStruct alone) would omit the domain separator and
-        # produce a signature the server's standard ``ecrecover`` recovers
-        # to a different address; the helper exists to keep this exact
-        # bytes contract testable.
         try:
+            batch_hash_hex = compute_batch_hash(events)
+            typed_data = build_typed_data(
+                mech_address=mech_address,
+                chain_id=chain_id,
+                verifying_contract=verifying_contract,
+                batch_hash_hex=batch_hash_hex,
+            )
+            # EIP-712 digest: build the standard 32-byte digest
+            # (``keccak(0x19 || 0x01 || domainSep || hashStruct)``) via the
+            # shared helper, then raw-sign it via ``is_deprecated_mode=True``
+            # so the AEA signer hashes the bytes without the EIP-191
+            # personal-sign prefix. Signing just ``signable.body`` (the
+            # message hashStruct alone) would omit the domain separator and
+            # produce a signature the server's standard ``ecrecover``
+            # recovers to a different address; the helper exists to keep
+            # this exact bytes contract testable.
             digest = compute_eip712_digest(typed_data)
-        except ImportError:
-            self.context.logger.error(
-                "eth_account not available; cannot sign wildcard EIP-712. "
-                "Skipping batch."
+        except Exception as exc:
+            # Catch broadly: ``compute_batch_hash`` / ``build_typed_data`` /
+            # ``compute_eip712_digest`` all depend on event content that's
+            # ultimately requester-influenced (``raw_content``, ``params``,
+            # response body), and any of them can raise ``ValueError`` /
+            # ``KeyError`` / ``TypeError`` on a malformed payload. The
+            # round is designed fail-soft (settlement already confirmed),
+            # so any pre-signing crash drops the batch with a log.
+            self.context.logger.warning(
+                "Wildcard EIP-712 digest build failed; dropping batch: %s",
+                exc,
             )
             return
         try:
@@ -1962,13 +1977,23 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
             )
             return
 
-        body = json.dumps(
-            {
-                "typed_data": typed_data,
-                "signature": signature_hex,
-                "events": events,
-            }
-        ).encode("utf-8")
+        try:
+            body = json.dumps(
+                {
+                    "typed_data": typed_data,
+                    "signature": signature_hex,
+                    "events": events,
+                }
+            ).encode("utf-8")
+        except (TypeError, ValueError) as exc:
+            # ``events`` carries requester-influenced content; a non-JSON-
+            # serialisable value (leaked ``bytes``, ``float('inf')``, etc.)
+            # would otherwise escape ``async_act`` as a crash.
+            self.context.logger.warning(
+                "Wildcard batch JSON serialisation failed; dropping batch: %s",
+                exc,
+            )
+            return
 
         # Build the request with an explicit short timeout. ``get_http_response``
         # doesn't surface a timeout kwarg, so go one level lower: a slow or
@@ -2056,5 +2081,5 @@ class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):
     behaviours: Set[Type[BaseBehaviour]] = {
         TaskPoolingBehaviour,  # type: ignore
         TransactionPreparationBehaviour,  # type: ignore
-        PostTxSettlementBehaviour,  # type: ignore
+        PostTxSettlementBehaviour,
     }
