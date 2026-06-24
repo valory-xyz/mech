@@ -91,16 +91,28 @@ class _IpfsDLG(_DLG):
 
 
 class _KvStoreDLG(_DLG):
-    """kv_store dialogue stub whose create() echoes performative + content."""
+    """kv_store dialogue stub that mirrors open-aea's send/reply reference flow.
+
+    - ``create()`` returns ``(nonce, "")`` (empty responder slot, matches the
+      send-time state real open-aea produces).
+    - ``update()`` returns ``(nonce, responder_ref)`` (responder slot completed
+      by the connection, matches the on-reply state).
+
+    Returning the SAME ref from both — what the old stub did — silently hides
+    the late-reply guard regression where the handler compared full tuples
+    instead of just the initiator nonce.
+    """
 
     def update(self, _msg: Any) -> Any:
-        """Return an object with a stable dialogue reference."""
+        """Return a dialogue whose ref has the responder slot completed."""
         return SimpleNamespace(
-            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+            dialogue_label=SimpleNamespace(
+                dialogue_reference=("nonce-1", "responder-ref")
+            )
         )
 
     def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
-        """Return a (message, dialogue) pair echoing the create kwargs."""
+        """Return a (message, dialogue) pair with an empty responder slot."""
         fields = {
             key: k[key]
             for key in ("data", "keys", "key_prefix", "limit", "cursor")
@@ -108,7 +120,7 @@ class _KvStoreDLG(_DLG):
         }
         msg = SimpleNamespace(performative=k.get("performative"), **fields)
         dlg = SimpleNamespace(
-            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", "x"))
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", ""))
         )
         return msg, dlg
 

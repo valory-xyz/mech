@@ -372,15 +372,21 @@ def test_process_buffer_resets_stuck_kv_in_flight_and_resends(
 def test_process_buffer_watchdog_resets_when_inflight_is_none(
     behaviour: Any,
 ) -> None:
-    """Watchdog also handles the LIST/DELETE case (no INFLIGHT_WRITE to re-queue)."""
-    # LIST/DELETE don't populate PREIMAGE_INFLIGHT_WRITE; a lost reply on
-    # those should still clear the gate but has nothing to re-queue. Check
-    # the path doesn't crash on the None branch.
+    """Watchdog also handles the LIST/DELETE case (no INFLIGHT_WRITE to re-queue).
+
+    Also pins that PREIMAGE_INFLIGHT_DIALOGUE is NOT cleared by the
+    watchdog: a future cleanup that mirrors the other clears alongside
+    PREIMAGE_INFLIGHT_OP and PREIMAGE_INFLIGHT_SENT_AT would look
+    obviously correct, pass every other test, and silently hollow out
+    the late-reply guard for whatever op runs next (no stored ref ⇒
+    guard skips ⇒ any reply gets attributed to the new op).
+    """
     behaviour.context.params.preimage_retention_enabled = True
     ss = behaviour.context.shared_state
     ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
     ss[preimage.PREIMAGE_INFLIGHT_WRITE] = None
     ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = time.time() - 999.0
+    ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("stuck-op-nonce", "")
     ss[preimage.PREIMAGE_LAST_SWEEP] = time.time()
 
     out = _CaptureOutbox()
@@ -391,6 +397,10 @@ def test_process_buffer_watchdog_resets_when_inflight_is_none(
     assert ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] is None
     assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []
     assert out.sent == []
+    # Critical: the watchdog must preserve the dialogue ref so a slow
+    # arriving reply for the timed-out op is still rejected by the
+    # late-reply guard until the next _send_kv_* overwrites it.
+    assert ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] == ("stuck-op-nonce", "")
 
 
 def test_process_buffer_keeps_paging_until_cursor_clears(behaviour: Any) -> None:
@@ -713,6 +723,7 @@ def test_watchdog_caps_list_no_reply(behaviour: Any) -> None:
     ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
     ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_LIST
     ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = time.time() - 999.0
+    ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("stuck-list-nonce", "")
     ss[preimage.PREIMAGE_LAST_SWEEP] = 0.0
 
     out = _CaptureOutbox()
@@ -731,6 +742,7 @@ def test_watchdog_caps_list_no_reply(behaviour: Any) -> None:
     ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
     ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_LIST
     ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = time.time() - 999.0
+    ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("stuck-list-nonce-2", "")
     out2 = _CaptureOutbox()
     behaviour.context.outbox = out2
     behaviour._process_preimage_buffer()
@@ -738,6 +750,12 @@ def test_watchdog_caps_list_no_reply(behaviour: Any) -> None:
     assert ss[preimage.PREIMAGE_LAST_SWEEP] > 0.0
     assert ss[preimage.PREIMAGE_LIST_ATTEMPTS] == 0
     assert out2.sent == []
+    # The watchdog must NOT clear PREIMAGE_INFLIGHT_DIALOGUE — clearing
+    # it would let a slow-arriving reply for the timed-out op match the
+    # next op's guard (no stored ref ⇒ guard skips). Keeping the stale
+    # ref means the dialogue-mismatch check in KvStoreHandler still
+    # rejects late replies until the next _send_kv_* overwrites it.
+    assert ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] == ("stuck-list-nonce-2", "")
 
 
 def test_expired_keys_treats_non_numeric_stamp_as_skipped() -> None:
@@ -810,28 +828,89 @@ def test_record_settlement_rejects_non_terminal_status() -> None:
 def test_handler_ignores_reply_from_previously_timed_out_op(
     handler_context: Any,
 ) -> None:
-    """A late reply whose dialogue ref doesn't match the in-flight op is dropped."""
+    """A late reply whose initiator nonce doesn't match the in-flight op is dropped."""
     # Scenario the guard exists for: kv_store stalls past the watchdog,
     # the watchdog clears the gate and the next op starts; the OLD
     # reply finally lands. Without the guard, it'd be processed as if
     # for the new op — wrong counter incremented, gate cleared while
-    # the new op is still in flight. Mismatch → ignore the reply +
-    # leave all current op state untouched.
+    # the new op is still in flight. Mismatch on initiator nonce →
+    # ignore the reply + leave all current op state untouched.
     handler = _handler(handler_context)
     ss = handler_context.shared_state
-    ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("new-op-nonce", "x")
+    # The new in-flight op has initiator "new-op-nonce" (empty responder
+    # slot in the send-time stamp, as real open-aea produces).
+    ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("new-op-nonce", "")
     ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
     ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_WRITE
     ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r-new"
 
-    # The conftest _KvStoreDLG.update() returns dialogue_reference
-    # ("nonce-1", "x") regardless of input, so any reply we feed in
-    # carries a different reference than the stamped expected. The
-    # guard should reject and leave state untouched.
+    # The conftest _KvStoreDLG.update() returns ("nonce-1", "responder-ref"),
+    # initiator "nonce-1" — doesn't match "new-op-nonce", so the reply is
+    # for a previously-timed-out op and must be ignored.
     handler.handle(
         SimpleNamespace(performative=KvStoreMessage.Performative.SUCCESS, message="ok")
     )
-    assert ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] == ("new-op-nonce", "x")
+    assert ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] == ("new-op-nonce", "")
     assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is True
     assert ss[preimage.PREIMAGE_INFLIGHT_OP] == preimage.OP_WRITE
     assert ss[preimage.PREIMAGE_INFLIGHT_WRITE] == "r-new"
+
+
+def test_handler_accepts_reply_when_initiator_matches(handler_context: Any) -> None:
+    """A reply for the current in-flight op is processed normally.
+
+    This is the regression test for the bug where the guard compared
+    full dialogue tuples — the send-time stamp is ``(nonce, "")`` but
+    the incoming reply carries ``(nonce, responder_ref)`` once open-aea
+    completes the responder slot. A full-tuple comparison rejected
+    every real reply, hollowing out retention pruning entirely. The
+    guard must compare ONLY the initiator nonce.
+    """
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    preimage.record_settlement(
+        ss, "r1", "resp", "cid", preimage.STATUS_DELIVERED, now=1.0
+    )
+    ss[preimage.PREIMAGE_WRITE_QUEUE].remove("r1")
+    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r1"
+    ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_WRITE
+    # Send-time stamp: matches what _send_kv_* would stamp via
+    # ``dlg.dialogue_label.dialogue_reference`` from the create() stub
+    # (responder slot empty).
+    ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("nonce-1", "")
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+
+    handler.handle(
+        SimpleNamespace(performative=KvStoreMessage.Performative.SUCCESS, message="ok")
+    )
+    # The reply was accepted and processed: terminal record popped,
+    # in-flight gate cleared.
+    assert "r1" not in ss[preimage.PREIMAGE_RECORDS]
+    assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is False
+    assert ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] is None
+
+
+def test_handler_drops_unrecognised_message_without_touching_state(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A message whose dialogue can't be matched returns early, no cleanup.
+
+    Pinned because the alternative — letting cleanup run on a dropped
+    message — would zero PREIMAGE_INFLIGHT_DIALOGUE and hollow out the
+    late-reply guard for the next real op (no expected ref ⇒ guard
+    skips ⇒ any reply gets attributed to the current op).
+    """
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("real-nonce", "")
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+
+    # Force dialogues.update() to return None (open-aea's signal for
+    # "no matching dialogue"), the exact case the early-return guards.
+    monkeypatch.setattr(handler_context.kv_store_dialogues, "update", lambda _msg: None)
+
+    handler.handle(
+        SimpleNamespace(performative=KvStoreMessage.Performative.SUCCESS, message="ok")
+    )
+    assert ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] == ("real-nonce", "")
+    assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is True

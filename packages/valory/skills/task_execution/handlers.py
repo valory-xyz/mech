@@ -537,29 +537,39 @@ class KvStoreHandler(BaseHandler):
         dialogue = self.context.kv_store_dialogues.update(kv_msg)
         shared_state = self.context.shared_state
 
+        # Unrecognised message: open-aea returns None from .update() when
+        # the incoming envelope doesn't match any tracked dialogue. Drop
+        # it WITHOUT running the cleanup block at the end — that block
+        # would zero PREIMAGE_INFLIGHT_DIALOGUE, which is the very signal
+        # the late-reply guard below relies on to reject a stale reply
+        # against the next op. Standard AEA handler pattern.
+        if dialogue is None:
+            self.context.logger.warning(
+                "KvStoreHandler: received message with no matching dialogue; "
+                "dropping."
+            )
+            return
+
         # Late-reply guard: the watchdog (PREIMAGE_KV_REQUEST_TIMEOUT, 5s)
         # may have given up on a stuck reply and started the next kv op
         # already. If a reply for the OLD op finally arrives, applying it
-        # to the NEW op's bookkeeping would corrupt counters and clear the
-        # in-flight gate while another op is still in flight. Compare the
-        # incoming dialogue reference to the one stamped at send time —
-        # mismatch means "this reply is for a previously-timed-out op"
-        # and we ignore it. Healthy local SQLite never hits this; the
-        # guard exists for the genuinely stuck-connection case.
+        # to the NEW op's bookkeeping would corrupt counters and clear
+        # the in-flight gate while another op is still in flight. Compare
+        # the INITIATOR nonce only — open-aea's .update() completes the
+        # responder slot from "" to the connection's reference on the
+        # first reply, so the full tuple stamped at send time
+        # ``(nonce, "")`` would never equal the incoming
+        # ``(nonce, responder_ref)``. The initiator nonce is the part we
+        # generate and the part that uniquely identifies the op, so
+        # that's the right thing to compare.
         expected = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE)
-        actual = (
-            dialogue.dialogue_label.dialogue_reference if dialogue is not None else None
-        )
-        if (
-            expected is not None
-            and actual is not None
-            and tuple(actual) != tuple(expected)
-        ):
+        actual = dialogue.dialogue_label.dialogue_reference
+        if expected is not None and tuple(actual)[0] != tuple(expected)[0]:
             self.context.logger.warning(
                 "Ignoring kv_store reply for a previously-timed-out op "
-                "(expected dialogue=%s, got=%s); current op state untouched.",
-                expected,
-                actual,
+                "(expected initiator=%s, got=%s); current op state untouched.",
+                tuple(expected)[0],
+                tuple(actual)[0],
             )
             return
         performative = kv_msg.performative
