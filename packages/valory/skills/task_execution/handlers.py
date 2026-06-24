@@ -44,10 +44,12 @@ from packages.valory.protocols.acn_data_share import AcnDataShareMessage
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.http.message import HttpMessage
 from packages.valory.protocols.ipfs import IpfsMessage
+from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
@@ -513,6 +515,211 @@ class LedgerHandler(BaseHandler):
         )
 
         self.params.in_flight_req = False
+        self.on_message_handled(message)
+
+
+class KvStoreHandler(BaseHandler):
+    """Handler for kv_store replies backing the off-chain preimage buffer."""
+
+    SUPPORTED_PROTOCOL = KvStoreMessage.protocol_id
+
+    def handle(self, message: Message) -> None:
+        """Process a kv_store reply (CREATE_OR_UPDATE / LIST / DELETE outcome).
+
+        Clears the single-in-flight flag so the behaviour can issue the next
+        preimage op. On LIST_RESPONSE it queues the keys past the retention
+        window for deletion; on ERROR it re-queues a failed write so the replay
+        survives a transient kv_store failure.
+
+        :param message: the incoming kv_store message.
+        """
+        kv_msg = cast(KvStoreMessage, message)
+        dialogue = self.context.kv_store_dialogues.update(kv_msg)
+        shared_state = self.context.shared_state
+
+        # Unrecognised message: open-aea returns None from .update() when
+        # the incoming envelope doesn't match any tracked dialogue. Drop
+        # it WITHOUT running the cleanup block at the end — that block
+        # would zero PREIMAGE_INFLIGHT_DIALOGUE, which is the very signal
+        # the late-reply guard below relies on to reject a stale reply
+        # against the next op. Standard AEA handler pattern.
+        if dialogue is None:
+            self.context.logger.warning(
+                "KvStoreHandler: received message with no matching dialogue; "
+                "dropping."
+            )
+            return
+
+        # Late-reply guard: the watchdog (PREIMAGE_KV_REQUEST_TIMEOUT, 5s)
+        # may have given up on a stuck reply and started the next kv op
+        # already. If a reply for the OLD op finally arrives, applying it
+        # to the NEW op's bookkeeping would corrupt counters and clear
+        # the in-flight gate while another op is still in flight. Compare
+        # the INITIATOR nonce only — open-aea's .update() completes the
+        # responder slot from "" to the connection's reference on the
+        # first reply, so the full tuple stamped at send time
+        # ``(nonce, "")`` would never equal the incoming
+        # ``(nonce, responder_ref)``. The initiator nonce is the part we
+        # generate and the part that uniquely identifies the op, so
+        # that's the right thing to compare.
+        expected = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE)
+        actual = dialogue.dialogue_label.dialogue_reference
+        if expected is not None and tuple(actual)[0] != tuple(expected)[0]:
+            self.context.logger.warning(
+                "Ignoring kv_store reply for a previously-timed-out op "
+                "(expected initiator=%s, got=%s); current op state untouched.",
+                tuple(expected)[0],
+                tuple(actual)[0],
+            )
+            return
+        performative = kv_msg.performative
+
+        if performative == KvStoreMessage.Performative.LIST_RESPONSE:
+            now = time.time()
+            expired = preimage_buffer.expired_keys(
+                dict(kv_msg.data),
+                now,
+                self.params.preimage_retention_seconds,
+            )
+            if expired:
+                shared_state.setdefault(
+                    preimage_buffer.PREIMAGE_DELETE_QUEUE, []
+                ).extend(expired)
+                self.context.logger.info(
+                    f"Preimage sweep: queued {len(expired)} expired entries "
+                    f"for deletion."
+                )
+            # The LIST response carries next_cursor when the kv_store has more
+            # pages past preimage_list_page_size; the behaviour loop reads
+            # this on the next tick to keep paging. Only when the page is
+            # final (next_cursor == "") do we consider the sweep complete and
+            # stamp PREIMAGE_LAST_SWEEP — otherwise a multi-page sweep
+            # would reset the clock mid-walk and the next interval would
+            # start over from page 0, never finishing.
+            next_cursor = kv_msg.next_cursor or ""
+            if next_cursor:
+                shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = next_cursor
+            else:
+                shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
+                shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
+            # Successful LIST reply — reset the consecutive-error counter so a
+            # transient failure earlier in the walk doesn't carry over.
+            shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = 0
+        elif performative == KvStoreMessage.Performative.SUCCESS:
+            # A successful write of a terminal (delivered/rejected) record means
+            # the kv_store now owns it; drop the in-process copy. Non-terminal
+            # (processing) records are kept so the settle update can merge.
+            #
+            # Race guard: a settle can happen between when ``_send_kv_write``
+            # serialized the processing record and when this SUCCESS arrives.
+            # ``record_settlement`` mutates the record in place to terminal AND
+            # re-enqueues the request id. If we pop now, the kv only ever saw
+            # the processing snapshot — the terminal write the next tick tries
+            # to flush hits ``record is None`` and is silently skipped, losing
+            # the delivered/rejected preimage. ``inflight in write_queue`` is
+            # exactly the signal a re-enqueue happened: leave the record so
+            # the next flush persists the terminal state.
+            inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
+            if inflight is not None:
+                records = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {})
+                record = records.get(inflight)
+                write_queue = shared_state.get(preimage_buffer.PREIMAGE_WRITE_QUEUE, [])
+                if (
+                    record is not None
+                    and record.get("settlement_status")
+                    in preimage_buffer.TERMINAL_STATUSES
+                    and inflight not in write_queue
+                ):
+                    records.pop(inflight, None)
+                    # Clear the retry counter so a future re-use of the same
+                    # request_id starts fresh — keeps PREIMAGE_WRITE_ATTEMPTS
+                    # bounded by the live record set, not by lifetime traffic.
+                    shared_state.get(preimage_buffer.PREIMAGE_WRITE_ATTEMPTS, {}).pop(
+                        inflight, None
+                    )
+        elif performative == KvStoreMessage.Performative.ERROR:
+            self.context.logger.warning(f"kv_store error: {kv_msg.message}")
+            inflight_op = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_OP)
+            if inflight_op == preimage_buffer.OP_LIST:
+                # Bound the LIST hot-loop: a persistently failing kv_store
+                # would otherwise re-LIST every act() tick (initial-LIST and
+                # mid-walk page failures both qualify — neither has an
+                # in-flight write to retry, so the write-counter path above
+                # doesn't apply). At the cap we clear the cursor + stamp
+                # LAST_SWEEP + WARN so the next sweep_interval is the
+                # natural backoff. Counter resets on any successful
+                # LIST_RESPONSE.
+                list_attempts = (
+                    shared_state.get(preimage_buffer.PREIMAGE_LIST_ATTEMPTS, 0) + 1
+                )
+                shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = list_attempts
+                if list_attempts >= self.params.preimage_max_list_attempts:
+                    self.context.logger.warning(
+                        "Preimage sweep LIST failed %d times in a row; "
+                        "giving up the current walk. Next attempt in "
+                        "preimage_sweep_interval. Last kv_store error: %s",
+                        list_attempts,
+                        kv_msg.message,
+                    )
+                    shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
+                    shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = time.time()
+                    shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = 0
+            elif inflight_op == preimage_buffer.OP_DELETE:
+                # A failed DELETE drops its key batch — the keys were
+                # already sliced off PREIMAGE_DELETE_QUEUE in
+                # _process_preimage_buffer. The path self-heals because
+                # the next sweep re-LISTs and re-queues the same expired
+                # keys (they're still in kv), but the loss is otherwise
+                # unobservable beyond the generic WARN above. Surface it
+                # explicitly so a degraded kv_store is visible in operator
+                # logs even when LIST is still succeeding.
+                dropped = shared_state.get(
+                    preimage_buffer.PREIMAGE_INFLIGHT_DELETE_COUNT, 0
+                )
+                self.context.logger.warning(
+                    "Preimage sweep DELETE failed; %d expired key(s) will "
+                    "be retried on the next sweep. Last kv_store error: %s",
+                    dropped,
+                    kv_msg.message,
+                )
+            inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
+            if inflight is not None:
+                # Bound the retry loop: a persistently unhealthy kv_store
+                # would otherwise hot-loop forever on the same record,
+                # pinning PREIMAGE_KV_IN_FLIGHT and starving sweeps + new
+                # writes. After preimage_max_write_attempts ERRORs for the
+                # same id we drop the record + WARN — the buffer is a
+                # best-effort audit copy, not a transactional store, so a
+                # bounded loss beats an unbounded stall.
+                attempts: Dict[str, int] = shared_state.setdefault(
+                    preimage_buffer.PREIMAGE_WRITE_ATTEMPTS, {}
+                )
+                attempts[inflight] = attempts.get(inflight, 0) + 1
+                if attempts[inflight] >= self.params.preimage_max_write_attempts:
+                    self.context.logger.warning(
+                        "Preimage write for request_id=%s failed "
+                        "%d times; dropping record. Last kv_store error: %s",
+                        inflight,
+                        attempts[inflight],
+                        kv_msg.message,
+                    )
+                    shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).pop(
+                        inflight, None
+                    )
+                    attempts.pop(inflight, None)
+                else:
+                    # Re-queue the failed write so the preimage isn't lost.
+                    # Route through enqueue_write so the queue stays dedup'd
+                    # (matches the discipline of every other enqueue in the
+                    # buffer module).
+                    preimage_buffer.enqueue_write(shared_state, inflight)
+
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = None
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DELETE_COUNT] = 0
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE] = None
+        shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
         self.on_message_handled(message)
 
 
@@ -1060,6 +1267,16 @@ class MechHttpHandler(AbstractResponseHandler):
         except Exception:
             self._rollback_offchain_enqueue(request_id)
             raise
+        # Buffer the request half of the durable preimage (no-op unless off-chain
+        # preimage retention is enabled). The response half is added at
+        # settlement; the behaviour flushes both to the kv_store asynchronously.
+        if self.params.preimage_retention_enabled:
+            preimage_buffer.record_accept(
+                self.context.shared_state,
+                request_id,
+                data[RequestKey.IPFS_DATA.value],
+                time.time(),
+            )
         return req
 
     @staticmethod

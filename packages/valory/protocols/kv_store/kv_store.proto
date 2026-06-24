@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package aea.valory.kv_store.v0_1_0;
+
+message KvStoreMessage{
+
+  // Performatives and contents
+  message Read_Request_Performative{
+    repeated string keys = 1;
+  }
+
+  message Read_Response_Performative{
+    map<string, string> data = 1;
+  }
+
+  message Create_Or_Update_Request_Performative{
+    map<string, string> data = 1;
+  }
+
+  message Delete_Request_Performative{
+    repeated string keys = 1;
+  }
+
+  message List_Request_Performative{
+    string key_prefix = 1;
+    uint32 limit = 2;
+    string cursor = 3;
+  }
+
+  message List_Response_Performative{
+    map<string, string> data = 1;
+    string next_cursor = 2;
+  }
+
+  message Success_Performative{
+    string message = 1;
+  }
+
+  message Error_Performative{
+    string message = 1;
+  }
+
+
+  oneof performative{
+    Create_Or_Update_Request_Performative create_or_update_request = 5;
+    Delete_Request_Performative delete_request = 10;
+    Error_Performative error = 6;
+    List_Request_Performative list_request = 11;
+    List_Response_Performative list_response = 12;
+    Read_Request_Performative read_request = 7;
+    Read_Response_Performative read_response = 8;
+    Success_Performative success = 9;
+  }
+}

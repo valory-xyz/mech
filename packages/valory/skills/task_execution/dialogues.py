@@ -39,6 +39,12 @@ from packages.valory.protocols.contract_api.dialogues import (
 )
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue as BaseIpfsDialogue
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogues as BaseIpfsDialogues
+from packages.valory.protocols.kv_store.dialogues import (
+    KvStoreDialogue as BaseKvStoreDialogue,
+)
+from packages.valory.protocols.kv_store.dialogues import (
+    KvStoreDialogues as BaseKvStoreDialogues,
+)
 from packages.valory.protocols.ledger_api.dialogues import (
     LedgerApiDialogue as BaseLedgerApiDialogue,
 )
@@ -55,6 +61,7 @@ from packages.valory.skills.abstract_round_abci.dialogues import (
 ContractApiDialogue = BaseContractApiDialogue
 IpfsDialogue = BaseIpfsDialogue
 AcnDataShareDialogue = BaseAcnDataShareDialogue
+KvStoreDialogue = BaseKvStoreDialogue
 LedgerDialogue = BaseLedgerApiDialogue
 HttpDialogue = BaseHttpDialogue
 MechHttpDialogues = BaseHttpDialogues
@@ -166,5 +173,34 @@ class AcnDataShareDialogues(Model, BaseAcnDataShareDialogues):
         BaseAcnDataShareDialogues.__init__(
             self,
             self_address=str(self.context.agent_address),
+            role_from_first_message=role_from_first_message,
+        )
+
+
+class KvStoreDialogues(Model, BaseKvStoreDialogues):
+    """The dialogues class keeps track of all kv_store dialogues."""
+
+    def __init__(self, **kwargs: Any) -> None:
+        """
+        Initialize dialogues.
+
+        :param kwargs: keyword arguments
+        """
+        Model.__init__(self, **kwargs)
+
+        def role_from_first_message(  # pylint: disable=unused-argument
+            message: Message, receiver_address: Address
+        ) -> BaseDialogue.Role:
+            """Infer the role of the agent from an incoming/outgoing first message
+
+            :param message: an incoming/outgoing first message
+            :param receiver_address: the address of the receiving agent
+            :return: The role of the agent
+            """
+            return KvStoreDialogue.Role.SKILL
+
+        BaseKvStoreDialogues.__init__(
+            self,
+            self_address=str(self.skill_id),
             role_from_first_message=role_from_first_message,
         )
