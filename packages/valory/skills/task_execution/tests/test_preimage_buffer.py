@@ -698,3 +698,140 @@ def test_buffer_settlement_is_noop_when_retention_disabled() -> None:
         preimage.STATUS_DELIVERED,
     )
     assert state == {}
+
+
+def test_watchdog_caps_list_no_reply(behaviour: Any) -> None:
+    """A LIST that times out N times in a row clears cursor + stamps LAST_SWEEP."""
+    # Without this, a hung kv_store (replies stop coming back, doesn't
+    # error) would loop _send_kv_list every PREIMAGE_KV_REQUEST_TIMEOUT
+    # forever — the LIST ERROR cap closed the same hole for the ERROR
+    # path; this closes it for the no-reply path.
+    behaviour.context.params.preimage_retention_enabled = True
+    behaviour.context.params.preimage_max_list_attempts = 2
+    ss = behaviour.context.shared_state
+    ss[preimage.PREIMAGE_LIST_CURSOR] = "page-2-cursor"
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_LIST
+    ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = time.time() - 999.0
+    ss[preimage.PREIMAGE_LAST_SWEEP] = 0.0
+
+    out = _CaptureOutbox()
+    behaviour.context.outbox = out
+    behaviour._process_preimage_buffer()
+    # First timeout: counter bumps to 1 (< cap=2). Cursor still set,
+    # clock untouched, fall-through re-fires LIST.
+    assert ss[preimage.PREIMAGE_LIST_ATTEMPTS] == 1
+    assert ss[preimage.PREIMAGE_LIST_CURSOR] == "page-2-cursor"
+    assert ss[preimage.PREIMAGE_LAST_SWEEP] == 0.0
+    assert len(out.sent) == 1
+    assert out.sent[0].performative == KvStoreMessage.Performative.LIST_REQUEST
+
+    # Second timeout: counter hits cap → cursor cleared + LAST_SWEEP
+    # stamped → next tick falls through the time gate, no LIST fires.
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_LIST
+    ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = time.time() - 999.0
+    out2 = _CaptureOutbox()
+    behaviour.context.outbox = out2
+    behaviour._process_preimage_buffer()
+    assert ss[preimage.PREIMAGE_LIST_CURSOR] is None
+    assert ss[preimage.PREIMAGE_LAST_SWEEP] > 0.0
+    assert ss[preimage.PREIMAGE_LIST_ATTEMPTS] == 0
+    assert out2.sent == []
+
+
+def test_expired_keys_treats_non_numeric_stamp_as_skipped() -> None:
+    """A row with a non-numeric timestamp goes to skipped, not raised."""
+    # Without the try-wrapped float(), a poison-pill row with
+    # {"settled_at": "oops"} crashes the sweeper on every cycle —
+    # retention pruning permanently stalls and the agent throws on
+    # every act() tick. Defensive: not reachable from current writers,
+    # but the docstring promises rows we don't understand are left
+    # alone, and a future writer regression must not bypass that.
+    keys = preimage.expired_keys(
+        {
+            "mech_preimage/poison": '{"settled_at": "oops"}',
+            "mech_preimage/old": '{"settled_at": 0}',
+        },
+        now=999999.0,
+        retention_seconds=10,
+    )
+    assert keys == ["mech_preimage/old"]
+
+
+def test_handler_delete_error_logs_dropped_count_and_keeps_list_counter(
+    handler_context: Any,
+) -> None:
+    """A DELETE ERROR logs its batch size and doesn't borrow the LIST counter."""
+    # DELETE failures self-heal via the next sweep (keys are still in
+    # kv, will be re-LISTed and re-queued), but without the OP_DELETE
+    # arm the only signal is a generic "kv_store error" WARN — operators
+    # can't see DELETE failures distinctly from WRITE/LIST. Also pins
+    # that DELETE doesn't accidentally bump PREIMAGE_LIST_ATTEMPTS,
+    # which would let DELETE failures push the LIST sweeper toward its
+    # own cap and stall an otherwise-healthy LIST path.
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_DELETE
+    ss[preimage.PREIMAGE_INFLIGHT_DELETE_COUNT] = 7
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    pre_list_attempts = ss[preimage.PREIMAGE_LIST_ATTEMPTS]
+
+    warnings: List[str] = []
+    handler_context.logger.warning = lambda msg, *a, **k: warnings.append(msg % a)
+
+    handler.handle(
+        SimpleNamespace(performative=KvStoreMessage.Performative.ERROR, message="boom")
+    )
+    # LIST counter not bumped — DELETE has its own arm, not the LIST cap.
+    assert ss[preimage.PREIMAGE_LIST_ATTEMPTS] == pre_list_attempts
+    # Dropped-count is in the WARN somewhere.
+    assert any("7 expired key(s)" in w for w in warnings)
+    # In-flight cleared as usual.
+    assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is False
+    assert ss[preimage.PREIMAGE_INFLIGHT_DELETE_COUNT] == 0
+
+
+def test_record_settlement_rejects_non_terminal_status() -> None:
+    """Settling with STATUS_PROCESSING fails the assert (would leak in PREIMAGE_RECORDS)."""
+    # Without the assert, callers that accidentally pass
+    # STATUS_PROCESSING write a non-terminal record that the SUCCESS
+    # handler never pops (it only pops TERMINAL_STATUSES), leaking the
+    # id in memory until restart. Make that unrepresentable rather than
+    # a silent leak.
+    state: Dict[str, Any] = {}
+    preimage.init_shared_state(state)
+    with pytest.raises(AssertionError):
+        preimage.record_settlement(
+            state, "r1", "resp", "cid", preimage.STATUS_PROCESSING, now=1.0
+        )
+
+
+def test_handler_ignores_reply_from_previously_timed_out_op(
+    handler_context: Any,
+) -> None:
+    """A late reply whose dialogue ref doesn't match the in-flight op is dropped."""
+    # Scenario the guard exists for: kv_store stalls past the watchdog,
+    # the watchdog clears the gate and the next op starts; the OLD
+    # reply finally lands. Without the guard, it'd be processed as if
+    # for the new op — wrong counter incremented, gate cleared while
+    # the new op is still in flight. Mismatch → ignore the reply +
+    # leave all current op state untouched.
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("new-op-nonce", "x")
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_WRITE
+    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = "r-new"
+
+    # The conftest _KvStoreDLG.update() returns dialogue_reference
+    # ("nonce-1", "x") regardless of input, so any reply we feed in
+    # carries a different reference than the stamped expected. The
+    # guard should reject and leave state untouched.
+    handler.handle(
+        SimpleNamespace(performative=KvStoreMessage.Performative.SUCCESS, message="ok")
+    )
+    assert ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] == ("new-op-nonce", "x")
+    assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is True
+    assert ss[preimage.PREIMAGE_INFLIGHT_OP] == preimage.OP_WRITE
+    assert ss[preimage.PREIMAGE_INFLIGHT_WRITE] == "r-new"

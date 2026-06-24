@@ -139,6 +139,12 @@ class Params(Model):
             "preimage_retention_enabled", False
         )
         # Retention window for buffered preimages, in seconds (default 24h).
+        # NOTE: this is a storage bound, not a cryptographic-erasure
+        # guarantee. After expiry the sweeper DELETEs the row so it stops
+        # appearing in kv_store queries — the on-disk footprint plateaus
+        # rather than growing without bound. The plaintext bytes may
+        # remain recoverable from freed SQLite pages / WAL frames until
+        # those slots are reused. See preimage.py module docstring.
         self.preimage_retention_seconds: int = kwargs.get(
             "preimage_retention_seconds", 86400
         )

@@ -20,12 +20,26 @@
 """Durable preimage buffer for the off-chain delivery path.
 
 In off-chain mode the mech never publishes the request/response to IPFS (the
-response stays private behind a locally-computed CID), so there is no public
-record an operator can use to prove what was requested and what was delivered.
-This module keeps a short-lived, operator-private audit copy — the "preimage" —
-of each off-chain ``(request, response)`` pair in the persistent
+response stays out of the public IPFS layer behind a locally-computed CID), so
+there is no public record an operator can use to prove what was requested and
+what was delivered. This module keeps a short-lived audit copy — the
+"preimage" — of each off-chain ``(request, response)`` pair in the persistent
 ``valory/kv_store`` connection, keyed by ``request_id``, and prunes entries past
 an operator-configurable retention window via a background sweeper.
+
+**Retention is storage-bound, not cryptographic.** The sweeper's DELETE removes
+the row from kv_store queries, so the on-disk footprint plateaus at "peak
+retention-window worth of preimages" instead of growing without bound — that
+is the property this feature exists to provide. It does NOT zero the bytes
+on disk: SQLite's default delete marks pages as free-for-reuse without
+overwriting them, and WAL frames retain copies until checkpointed. An
+operator with file-level access to the .db / .db-wal files can recover
+"deleted" preimage contents until later writes happen to overwrite the
+freed pages. Treat retention as "stops appearing in queries after N
+seconds," not "wiped from disk after N seconds." For an actual privacy
+property, enable ``PRAGMA secure_delete=ON`` on the kv_store connection
+(separate concern — that's a kv-store package change) or rely on
+volume-level encryption at rest.
 
 The functions here are deliberately pure: they take the skill's ``shared_state``
 dict and a clock value, so the buffer/sweep bookkeeping is unit-testable without
@@ -61,13 +75,27 @@ PREIMAGE_KV_IN_FLIGHT = "preimage_kv_in_flight"  # bool — one kv op at a time
 PREIMAGE_INFLIGHT_WRITE = "preimage_inflight_write"  # Optional[str] request_id
 PREIMAGE_INFLIGHT_SENT_AT = "preimage_inflight_sent_at"  # Optional[float] epoch
 # What kind of kv op is in flight: "list" / "delete" / "write" / None. Needed
-# so the handler can route ERROR replies to the right counter — DELETE and
-# LIST both have PREIMAGE_INFLIGHT_WRITE=None, so without this they're
-# indistinguishable when capping retries.
+# so the handler can route ERROR replies to the right arm — DELETE and LIST
+# both have PREIMAGE_INFLIGHT_WRITE=None, so without this they're
+# indistinguishable. Note: LIST has a retry counter (PREIMAGE_LIST_ATTEMPTS),
+# WRITE has a per-id counter (PREIMAGE_WRITE_ATTEMPTS), DELETE has neither —
+# it only uses INFLIGHT_OP for observability (logging the dropped batch
+# size) since the path self-heals via the next sweep.
 PREIMAGE_INFLIGHT_OP = "preimage_inflight_op"  # Optional[str]
 OP_LIST = "list"
 OP_DELETE = "delete"
 OP_WRITE = "write"
+# Size of the in-flight DELETE batch. The handler's ERROR arm logs it when a
+# DELETE fails so a degraded kv_store is visible in operator logs even when
+# LIST is still succeeding.
+PREIMAGE_INFLIGHT_DELETE_COUNT = "preimage_inflight_delete_count"  # int
+# Dialogue reference (tuple-of-strs) of the in-flight kv op. The handler
+# compares incoming replies to this value and ignores any reply that doesn't
+# match the current in-flight dialogue — closes the late-reply
+# misattribution path where a slow reply arrives after the watchdog gave up
+# and started the next op (the late reply would otherwise clobber the new
+# op's counters and clear its in-flight gate).
+PREIMAGE_INFLIGHT_DIALOGUE = "preimage_inflight_dialogue"  # Optional[Tuple[str, str]]
 PREIMAGE_LAST_SWEEP = "preimage_last_sweep"  # float epoch seconds
 # Non-empty when a multi-page sweep is mid-flight; the next _send_kv_list
 # tick passes this back as the LIST cursor. Cleared when a LIST_RESPONSE
@@ -109,6 +137,8 @@ def init_shared_state(shared_state: Dict[str, Any]) -> None:
     shared_state.setdefault(PREIMAGE_WRITE_ATTEMPTS, {})
     shared_state.setdefault(PREIMAGE_LIST_ATTEMPTS, 0)
     shared_state.setdefault(PREIMAGE_INFLIGHT_OP, None)
+    shared_state.setdefault(PREIMAGE_INFLIGHT_DELETE_COUNT, 0)
+    shared_state.setdefault(PREIMAGE_INFLIGHT_DIALOGUE, None)
 
 
 def preimage_key(prefix: str, request_id: str) -> str:
@@ -175,15 +205,35 @@ def record_settlement(
     :param status: one of STATUS_DELIVERED / STATUS_REJECTED.
     :param now: the current epoch time in seconds.
     """
+    # Narrow the contract: settling with STATUS_PROCESSING would write a
+    # record the SUCCESS handler never pops (it only pops TERMINAL_STATUSES),
+    # leaking the id in PREIMAGE_RECORDS until restart. Both call sites pass
+    # a terminal status today; the assertion makes a future regression that
+    # forwards a non-terminal status unrepresentable rather than a silent
+    # leak.
+    assert status in TERMINAL_STATUSES, (
+        f"record_settlement called with non-terminal status {status!r}; "
+        f"expected one of {TERMINAL_STATUSES}"
+    )
     records = shared_state.setdefault(PREIMAGE_RECORDS, {})
     existing = records.get(request_id)
     if existing is not None and existing.get("settlement_status") in TERMINAL_STATUSES:
-        # A second settle for an id whose first settle was already flushed
-        # (and popped from PREIMAGE_RECORDS) would land in the fallback
-        # below with request=None, accepted_at=None, then re-queue itself
-        # — overwriting the full kv row with a stripped one. The id is
-        # already terminal in memory here, so this would do the same. Log
-        # it and bail; the first settlement stands.
+        # In-memory-only guard: catches a double-settle that happens BEFORE
+        # the terminal write is flushed and popped (the record is still in
+        # PREIMAGE_RECORDS with a terminal status). Without this we'd flow
+        # into the update block below, mutate the already-terminal record,
+        # and re-enqueue a redundant write of the same data.
+        #
+        # NOT covered: the post-pop case, where the terminal write already
+        # flushed and the SUCCESS handler popped the record. A second
+        # settle there sees existing=None, takes the fallback at line 203
+        # (request=None, accepted_at=None), and overwrites the good kv row
+        # with a stripped one. We leave that intentionally unguarded —
+        # tracking settled ids in a never-cleared set would leak memory,
+        # and there's no plausible code path that calls record_settlement
+        # twice for the same id after the first one was already persisted.
+        # The executor returns immediately after settling and the task slot
+        # is single-threaded.
         _logger.warning(
             "Double-settle ignored for request_id=%s (already %s).",
             request_id,
@@ -227,13 +277,21 @@ def expired_keys(
         try:
             record = json.loads(raw)
             stamp = record.get("settled_at") or record.get("accepted_at")
+            if stamp is None:
+                skipped.append(key)
+                continue
+            age = now - float(stamp)
         except (ValueError, TypeError, AttributeError):
+            # ValueError / TypeError from float() catch a row with a
+            # JSON-parseable but non-numeric timestamp ({"settled_at":
+            # "oops"}) — without this guard the exception escapes the
+            # sweeper and crashes the handler on every cycle (poison-pill
+            # row), permanently stalling retention pruning. Not reachable
+            # from current writers (they always store int(now)), but the
+            # docstring promises rows we don't understand are left alone.
             skipped.append(key)
             continue
-        if stamp is None:
-            skipped.append(key)
-            continue
-        if now - float(stamp) > retention_seconds:
+        if age > retention_seconds:
             expired.append(key)
     if skipped:
         # Silently treating unparseable / timestamp-less rows as

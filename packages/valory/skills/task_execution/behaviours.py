@@ -1545,6 +1545,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # would leak: the double-settle guard in record_settlement
                 # blocks the only other re-enqueue path. enqueue_write dedupes,
                 # so this is safe even if a settle already re-enqueued it.
+                # Read INFLIGHT_OP before the cleanup so we can route the
+                # timeout to the right counter — LIST timeouts mustn't be
+                # treated like writes (INFLIGHT_WRITE is None for LIST and
+                # DELETE), and DELETE timeouts have no counter at all.
+                inflight_op = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_OP)
                 inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
                 if inflight is not None:
                     # Mirror the ERROR-branch retry cap so a kv_store that
@@ -1568,6 +1573,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                         attempts.pop(inflight, None)
                     else:
                         preimage_buffer.enqueue_write(shared_state, inflight)
+                elif inflight_op == preimage_buffer.OP_LIST:
+                    # Mirror the LIST ERROR cap so a kv_store that hangs on
+                    # LIST (stops replying instead of erroring) can't re-LIST
+                    # every PREIMAGE_KV_REQUEST_TIMEOUT seconds forever and
+                    # starve the write/delete drain. Same cap as the ERROR
+                    # path (preimage_max_list_attempts): at the limit, clear
+                    # the cursor + stamp LAST_SWEEP so the next attempt is
+                    # gated by preimage_sweep_interval (the natural backoff).
+                    list_attempts = (
+                        shared_state.get(preimage_buffer.PREIMAGE_LIST_ATTEMPTS, 0) + 1
+                    )
+                    shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = list_attempts
+                    if list_attempts >= self.params.preimage_max_list_attempts:
+                        self.context.logger.warning(
+                            "Preimage sweep LIST timed out %d times in a row "
+                            "with no kv_store reply; giving up the current "
+                            "walk. Next attempt in preimage_sweep_interval.",
+                            list_attempts,
+                        )
+                        shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
+                        shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
+                        shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = 0
                 self.context.logger.warning(
                     "Preimage kv op has been in flight for "
                     f">{PREIMAGE_KV_REQUEST_TIMEOUT}s with no reply. "
@@ -1576,6 +1603,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
                 shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
                 shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = None
+                shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DELETE_COUNT] = 0
+                # NOTE: keep PREIMAGE_INFLIGHT_DIALOGUE around — clearing it
+                # here would silently let a slow reply for the timed-out op
+                # match against the next op (no expected ref → no guard).
+                # The next _send_kv_* overwrites it with the new dialogue ref,
+                # and any reply arriving in between sees a stale expected
+                # and is correctly rejected by the handler's mismatch check.
                 shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
             else:
                 return
@@ -1642,7 +1676,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         :param record: the preimage record to persist.
         """
         key = preimage_buffer.preimage_key(self.params.preimage_key_prefix, request_id)
-        msg, _ = self.context.kv_store_dialogues.create(
+        msg, dlg = self.context.kv_store_dialogues.create(
             counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
             performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
             data={key: preimage_buffer.serialize(record)},
@@ -1651,6 +1685,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = request_id
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = (
             preimage_buffer.OP_WRITE
+        )
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE] = (
+            dlg.dialogue_label.dialogue_reference
         )
         self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
@@ -1662,7 +1699,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         :param keys: the fully-namespaced kv_store keys to delete.
         """
-        msg, _ = self.context.kv_store_dialogues.create(
+        msg, dlg = self.context.kv_store_dialogues.create(
             counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
             performative=KvStoreMessage.Performative.DELETE_REQUEST,
             keys=tuple(keys),
@@ -1671,6 +1708,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = (
             preimage_buffer.OP_DELETE
+        )
+        # Surfaced to the handler so a failed DELETE can log "N keys dropped"
+        # — operators otherwise can't see DELETE failures distinctly from
+        # WRITE/LIST failures (all three return ERROR with the same shape).
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DELETE_COUNT] = len(
+            keys
+        )
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE] = (
+            dlg.dialogue_label.dialogue_reference
         )
         self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
@@ -1690,7 +1736,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         cursor = (
             self.context.shared_state.get(preimage_buffer.PREIMAGE_LIST_CURSOR) or ""
         )
-        msg, _ = self.context.kv_store_dialogues.create(
+        msg, dlg = self.context.kv_store_dialogues.create(
             counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
             performative=KvStoreMessage.Performative.LIST_REQUEST,
             key_prefix=self.params.preimage_key_prefix,
@@ -1701,6 +1747,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = (
             preimage_buffer.OP_LIST
+        )
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE] = (
+            dlg.dialogue_label.dialogue_reference
         )
         self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
         self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (

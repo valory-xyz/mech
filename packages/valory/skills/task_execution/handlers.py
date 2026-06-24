@@ -534,8 +534,34 @@ class KvStoreHandler(BaseHandler):
         :param message: the incoming kv_store message.
         """
         kv_msg = cast(KvStoreMessage, message)
-        self.context.kv_store_dialogues.update(kv_msg)
+        dialogue = self.context.kv_store_dialogues.update(kv_msg)
         shared_state = self.context.shared_state
+
+        # Late-reply guard: the watchdog (PREIMAGE_KV_REQUEST_TIMEOUT, 5s)
+        # may have given up on a stuck reply and started the next kv op
+        # already. If a reply for the OLD op finally arrives, applying it
+        # to the NEW op's bookkeeping would corrupt counters and clear the
+        # in-flight gate while another op is still in flight. Compare the
+        # incoming dialogue reference to the one stamped at send time —
+        # mismatch means "this reply is for a previously-timed-out op"
+        # and we ignore it. Healthy local SQLite never hits this; the
+        # guard exists for the genuinely stuck-connection case.
+        expected = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE)
+        actual = (
+            dialogue.dialogue_label.dialogue_reference if dialogue is not None else None
+        )
+        if (
+            expected is not None
+            and actual is not None
+            and tuple(actual) != tuple(expected)
+        ):
+            self.context.logger.warning(
+                "Ignoring kv_store reply for a previously-timed-out op "
+                "(expected dialogue=%s, got=%s); current op state untouched.",
+                expected,
+                actual,
+            )
+            return
         performative = kv_msg.performative
 
         if performative == KvStoreMessage.Performative.LIST_RESPONSE:
@@ -628,6 +654,24 @@ class KvStoreHandler(BaseHandler):
                     shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
                     shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = time.time()
                     shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = 0
+            elif inflight_op == preimage_buffer.OP_DELETE:
+                # A failed DELETE drops its key batch — the keys were
+                # already sliced off PREIMAGE_DELETE_QUEUE in
+                # _process_preimage_buffer. The path self-heals because
+                # the next sweep re-LISTs and re-queues the same expired
+                # keys (they're still in kv), but the loss is otherwise
+                # unobservable beyond the generic WARN above. Surface it
+                # explicitly so a degraded kv_store is visible in operator
+                # logs even when LIST is still succeeding.
+                dropped = shared_state.get(
+                    preimage_buffer.PREIMAGE_INFLIGHT_DELETE_COUNT, 0
+                )
+                self.context.logger.warning(
+                    "Preimage sweep DELETE failed; %d expired key(s) will "
+                    "be retried on the next sweep. Last kv_store error: %s",
+                    dropped,
+                    kv_msg.message,
+                )
             inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
             if inflight is not None:
                 # Bound the retry loop: a persistently unhealthy kv_store
@@ -662,6 +706,8 @@ class KvStoreHandler(BaseHandler):
 
         shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
         shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = None
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DELETE_COUNT] = 0
+        shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE] = None
         shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
         shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
         self.on_message_handled(message)
