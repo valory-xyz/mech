@@ -90,6 +90,41 @@ class _IpfsDLG(_DLG):
         return msg, dlg
 
 
+class _KvStoreDLG(_DLG):
+    """kv_store dialogue stub that mirrors open-aea's send/reply reference flow.
+
+    - ``create()`` returns ``(nonce, "")`` (empty responder slot, matches the
+      send-time state real open-aea produces).
+    - ``update()`` returns ``(nonce, responder_ref)`` (responder slot completed
+      by the connection, matches the on-reply state).
+
+    Returning the SAME ref from both — what the old stub did — silently hides
+    the late-reply guard regression where the handler compared full tuples
+    instead of just the initiator nonce.
+    """
+
+    def update(self, _msg: Any) -> Any:
+        """Return a dialogue whose ref has the responder slot completed."""
+        return SimpleNamespace(
+            dialogue_label=SimpleNamespace(
+                dialogue_reference=("nonce-1", "responder-ref")
+            )
+        )
+
+    def create(self, *a: Any, **k: Any) -> Tuple[SimpleNamespace, SimpleNamespace]:
+        """Return a (message, dialogue) pair with an empty responder slot."""
+        fields = {
+            key: k[key]
+            for key in ("data", "keys", "key_prefix", "limit", "cursor")
+            if key in k
+        }
+        msg = SimpleNamespace(performative=k.get("performative"), **fields)
+        dlg = SimpleNamespace(
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-1", ""))
+        )
+        return msg, dlg
+
+
 # ----------------------------- Shared state ----------------------------------
 
 
@@ -148,6 +183,15 @@ def params_stub() -> SimpleNamespace:
         # Offchain path enabled for the tests that exercise it; the
         # default-off gate is covered by a dedicated test.
         use_offchain=True,
+        # Preimage buffer off by default here; the dedicated preimage tests flip
+        # it on, matching the ship-dark default.
+        preimage_retention_enabled=False,
+        preimage_retention_seconds=86400,
+        preimage_sweep_interval=3600.0,
+        preimage_key_prefix="mech_preimage/",
+        preimage_list_page_size=100,
+        preimage_max_write_attempts=5,
+        preimage_max_list_attempts=5,
         max_block_window=10_000,
         task_deadline=15.0,
         timeout_limit=2,
@@ -203,6 +247,7 @@ def context_stub(
         contract_dialogues=_DLG(),
         ledger_dialogues=_DLG(),
         acn_data_share_dialogues=_DLG(),
+        kv_store_dialogues=_KvStoreDLG(),
     )
 
     ctx.handlers = SimpleNamespace(
@@ -307,6 +352,7 @@ def handler_context(
     ctx.ipfs_dialogues = _IpfsDLG()
     ctx.contract_dialogues = _DLG()
     ctx.ledger_dialogues = _DLG()
+    ctx.kv_store_dialogues = _KvStoreDLG()
     ctx.params.logger = ctx.logger
     return ctx
 

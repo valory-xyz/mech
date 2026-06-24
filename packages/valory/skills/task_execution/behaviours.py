@@ -38,6 +38,9 @@ from prometheus_client import Counter, Gauge, Histogram
 
 from packages.valory.connections.ipfs.connection import IpfsDialogues
 from packages.valory.connections.ipfs.connection import PUBLIC_ID as IPFS_CONNECTION_ID
+from packages.valory.connections.kv_store.connection import (
+    PUBLIC_ID as KV_STORE_CONNECTION_PUBLIC_ID_OBJ,
+)
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
 )
@@ -51,8 +54,10 @@ from packages.valory.protocols.acn_data_share.dialogues import AcnDataShareDialo
 from packages.valory.protocols.contract_api import ContractApiMessage
 from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
+from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
 from packages.valory.skills.task_execution.utils.cost_calculation import (
@@ -91,8 +96,21 @@ RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
 PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
+# Reset PREIMAGE_KV_IN_FLIGHT if no kv_store reply arrives within this many
+# seconds. Without this watchdog a lost SUCCESS/ERROR (connection drop, dropped
+# envelope, exception in the connection's send path) wedges the flag True
+# forever — the preimage loop stops draining and PREIMAGE_RECORDS /
+# PREIMAGE_WRITE_QUEUE grow unbounded until restart, silently. Sized for a
+# local SQLite kv_store (sub-ms replies in the healthy case); 5s is huge
+# headroom for a real reply and tight enough that a single lost reply only
+# stalls the preimage pipeline for one act() tick or two.
+PREIMAGE_KV_REQUEST_TIMEOUT = 5.0
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
+# Routing target for kv_store messages (the preimage buffer). Built from the
+# public id string rather than imported from the connection package so the
+# skill (and its unit tests) don't pull in the connection's runtime deps.
+KV_STORE_CONNECTION_PUBLIC_ID = str(KV_STORE_CONNECTION_PUBLIC_ID_OBJ)
 
 
 class RequestType(Enum):
@@ -244,6 +262,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_package_hash = self.params.tools_to_package_hash
         self._tools_to_pricing = self.params.tools_to_pricing
         self._keychain = KeyChain(self.params.api_keys)
+        # Initialise the off-chain preimage buffer's shared-state keys so the
+        # accept hook (handler side) and the sweeper (here) can read/write them.
+        preimage_buffer.init_shared_state(self.context.shared_state)
 
     def _ensure_payment_model(self) -> bool:
         """Set the mech's payment model."""
@@ -283,6 +304,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._check_for_new_marketplace_reqs()
         self._filter_out_incompatible_reqs()
         self._update_pending_tasks()
+        self._process_preimage_buffer()
 
     @property
     def payment_model(self) -> Optional[Any]:
@@ -969,6 +991,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "content_cid": local_cid,
                 "response": response,
             }
+            # Mirror the (request, response) preimage into the durable buffer
+            # after the in-memory return channel is populated. The response
+            # stays private (not on IPFS), so this is the operator's only audit
+            # copy; the sweeper prunes it after the retention window. No-op
+            # unless preimage retention is enabled; failures are logged but
+            # don't block the in-memory return channel above.
+            self._buffer_preimage_settlement(
+                cast(str, req_id),
+                content_bytes.decode("utf-8", errors="replace"),
+                local_cid,
+                preimage_buffer.STATUS_DELIVERED,
+            )
             self._finalize_done_task(local_cid)
             return
 
@@ -1448,8 +1482,279 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "status": "rejected",
             "reason": reason,
         }
+        # Capture the rejection in the durable preimage buffer (no-op unless
+        # off-chain preimage retention is enabled).
+        self._buffer_preimage_settlement(
+            req_id, reason, None, preimage_buffer.STATUS_REJECTED
+        )
         self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
         self._reset_executing_task()
+
+    # --- off-chain preimage buffer (kv_store) -----------------------------
+
+    def _buffer_preimage_settlement(
+        self,
+        req_id: str,
+        response_payload: str,
+        response_cid: Optional[str],
+        status: str,
+    ) -> None:
+        """Record an off-chain request's settled outcome in the preimage buffer.
+
+        No-op unless off-chain preimage retention is enabled. The actual
+        kv_store write is flushed asynchronously by ``_process_preimage_buffer``.
+
+        :param req_id: the off-chain request id.
+        :param response_payload: the delivered response, or the failure reason.
+        :param response_cid: the local CID of the response, when delivered.
+        :param status: one of the preimage STATUS_* terminal values.
+        """
+        if not self.params.preimage_retention_enabled:
+            return
+        preimage_buffer.record_settlement(
+            self.context.shared_state,
+            str(req_id),
+            response_payload,
+            response_cid,
+            status,
+            time.time(),
+        )
+
+    def _process_preimage_buffer(self) -> None:
+        """Flush buffered preimage writes/deletes and periodically sweep.
+
+        No-op unless off-chain preimage retention is enabled. At most one
+        kv_store request is in flight at a time (a flag separate from the task
+        executor's ``in_flight_req``), so this never blocks task execution.
+        Per tick it does the first of: run a due sweep (LIST by prefix), flush a
+        batch of expired deletes, or flush one queued write.
+        """
+        if not self.params.preimage_retention_enabled:
+            return
+        shared_state = self.context.shared_state
+        now = time.time()
+        if shared_state.get(preimage_buffer.PREIMAGE_KV_IN_FLIGHT):
+            sent_at = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT)
+            if sent_at is not None and now - sent_at > PREIMAGE_KV_REQUEST_TIMEOUT:
+                # The reply for this kv op never came back (connection drop,
+                # dropped envelope, etc). Clear the gate so the loop can drain.
+                # An in-flight write has already been pop(0)'d off the write
+                # queue (see below), so it lives in neither the queue nor the
+                # in-flight slot — without an explicit re-enqueue here a
+                # terminal write (settle followed by a stuck CREATE_OR_UPDATE)
+                # would leak: the double-settle guard in record_settlement
+                # blocks the only other re-enqueue path. enqueue_write dedupes,
+                # so this is safe even if a settle already re-enqueued it.
+                # Read INFLIGHT_OP before the cleanup so we can route the
+                # timeout to the right counter — LIST timeouts mustn't be
+                # treated like writes (INFLIGHT_WRITE is None for LIST and
+                # DELETE), and DELETE timeouts have no counter at all.
+                inflight_op = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_OP)
+                inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
+                if inflight is not None:
+                    # Mirror the ERROR-branch retry cap so a kv_store that
+                    # times out instead of replying ERROR can't bypass the
+                    # per-id cap and retry forever. enqueue_write dedupes,
+                    # so this is safe even if a settle already re-enqueued.
+                    attempts: Dict[str, int] = shared_state.setdefault(
+                        preimage_buffer.PREIMAGE_WRITE_ATTEMPTS, {}
+                    )
+                    attempts[inflight] = attempts.get(inflight, 0) + 1
+                    if attempts[inflight] >= self.params.preimage_max_write_attempts:
+                        self.context.logger.warning(
+                            "Preimage write for request_id=%s timed out "
+                            "%d times with no kv_store reply; dropping record.",
+                            inflight,
+                            attempts[inflight],
+                        )
+                        shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).pop(
+                            inflight, None
+                        )
+                        attempts.pop(inflight, None)
+                    else:
+                        preimage_buffer.enqueue_write(shared_state, inflight)
+                elif inflight_op == preimage_buffer.OP_LIST:
+                    # Mirror the LIST ERROR cap so a kv_store that hangs on
+                    # LIST (stops replying instead of erroring) can't re-LIST
+                    # every PREIMAGE_KV_REQUEST_TIMEOUT seconds forever and
+                    # starve the write/delete drain. Same cap as the ERROR
+                    # path (preimage_max_list_attempts): at the limit, clear
+                    # the cursor + stamp LAST_SWEEP so the next attempt is
+                    # gated by preimage_sweep_interval (the natural backoff).
+                    list_attempts = (
+                        shared_state.get(preimage_buffer.PREIMAGE_LIST_ATTEMPTS, 0) + 1
+                    )
+                    shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = list_attempts
+                    if list_attempts >= self.params.preimage_max_list_attempts:
+                        self.context.logger.warning(
+                            "Preimage sweep LIST timed out %d times in a row "
+                            "with no kv_store reply; giving up the current "
+                            "walk. Next attempt in preimage_sweep_interval.",
+                            list_attempts,
+                        )
+                        shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
+                        shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
+                        shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = 0
+                self.context.logger.warning(
+                    "Preimage kv op has been in flight for "
+                    f">{PREIMAGE_KV_REQUEST_TIMEOUT}s with no reply. "
+                    "Resetting PREIMAGE_KV_IN_FLIGHT so the loop can retry."
+                )
+                shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
+                shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+                shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = None
+                shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DELETE_COUNT] = 0
+                # NOTE: keep PREIMAGE_INFLIGHT_DIALOGUE around — clearing it
+                # here would silently let a slow reply for the timed-out op
+                # match against the next op (no expected ref → no guard).
+                # The next _send_kv_* overwrites it with the new dialogue ref,
+                # and any reply arriving in between sees a stale expected
+                # and is correctly rejected by the handler's mismatch check.
+                shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
+            else:
+                return
+
+        # A non-empty cursor means the previous LIST_RESPONSE returned
+        # ``next_cursor`` — i.e. the namespace has more pages. Keep paging on
+        # every tick (deletes/writes wait until the namespace is fully walked)
+        # so retention pruning isn't stuck on the first page when the namespace
+        # has more than preimage_list_page_size entries.
+        if shared_state.get(preimage_buffer.PREIMAGE_LIST_CURSOR):
+            self._send_kv_list()
+            return
+
+        last_sweep = shared_state.get(preimage_buffer.PREIMAGE_LAST_SWEEP, 0.0)
+        if now - last_sweep >= self.params.preimage_sweep_interval:
+            # The sweep timestamp is stamped on a successful LIST_RESPONSE
+            # with an empty next_cursor (in KvStoreHandler), not here, so a
+            # transient LIST ERROR doesn't stall sweeping for a full sweep
+            # interval, and a multi-page sweep doesn't reset the clock
+            # mid-walk.
+            self._send_kv_list()
+            return
+
+        delete_queue: List[str] = shared_state.get(
+            preimage_buffer.PREIMAGE_DELETE_QUEUE, []
+        )
+        if delete_queue:
+            # Chunk the DELETE to preimage_list_page_size per tick. A single
+            # bulk DELETE of every expired key would blow past SQLite's
+            # bound-parameter cap (`SQLITE_MAX_VARIABLE_NUMBER`, typically
+            # 999/32766) once the backlog is large — an agent down longer
+            # than the retention window comes back, every key expires at
+            # once, and an unbounded DELETE fails outright. Failed deletes
+            # aren't retried in this branch, so the next sweep would just
+            # rebuild the identical oversized batch and fail the same way:
+            # retention pruning would permanently stall and the db would
+            # grow without bound. Slicing matches the LIST page size so a
+            # full namespace walk drains a whole expired set within one
+            # sweep cycle.
+            page = self.params.preimage_list_page_size
+            keys = delete_queue[:page]
+            del delete_queue[:page]
+            self._send_kv_delete(keys)
+            return
+
+        write_queue: List[str] = shared_state.get(
+            preimage_buffer.PREIMAGE_WRITE_QUEUE, []
+        )
+        while write_queue:
+            request_id = write_queue.pop(0)
+            record = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).get(
+                request_id
+            )
+            if record is None:
+                # Already pruned (e.g. duplicate enqueue); skip to the next.
+                continue
+            self._send_kv_write(request_id, record)
+            return
+
+    def _send_kv_write(self, request_id: str, record: Dict[str, Any]) -> None:
+        """Upsert one preimage record into the kv_store.
+
+        :param request_id: the off-chain request id (used to build the key).
+        :param record: the preimage record to persist.
+        """
+        key = preimage_buffer.preimage_key(self.params.preimage_key_prefix, request_id)
+        msg, dlg = self.context.kv_store_dialogues.create(
+            counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
+            performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
+            data={key: preimage_buffer.serialize(record)},
+        )
+        self.context.outbox.put_message(message=msg)
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = request_id
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = (
+            preimage_buffer.OP_WRITE
+        )
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE] = (
+            dlg.dialogue_label.dialogue_reference
+        )
+        self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
+            time.time()
+        )
+
+    def _send_kv_delete(self, keys: List[str]) -> None:
+        """Delete a batch of expired preimage keys from the kv_store.
+
+        :param keys: the fully-namespaced kv_store keys to delete.
+        """
+        msg, dlg = self.context.kv_store_dialogues.create(
+            counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
+            performative=KvStoreMessage.Performative.DELETE_REQUEST,
+            keys=tuple(keys),
+        )
+        self.context.outbox.put_message(message=msg)
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = (
+            preimage_buffer.OP_DELETE
+        )
+        # Surfaced to the handler so a failed DELETE can log "N keys dropped"
+        # — operators otherwise can't see DELETE failures distinctly from
+        # WRITE/LIST failures (all three return ERROR with the same shape).
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DELETE_COUNT] = len(
+            keys
+        )
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE] = (
+            dlg.dialogue_label.dialogue_reference
+        )
+        self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
+            time.time()
+        )
+
+    def _send_kv_list(self) -> None:
+        """List a page of the preimage namespace.
+
+        The cursor carries across ticks so the sweep covers every entry past
+        ``preimage_list_page_size``. ``cursor=""`` (the protobuf default)
+        means "start from the beginning of the namespace"; the handler
+        records ``next_cursor`` for the next tick and only stamps
+        ``PREIMAGE_LAST_SWEEP`` when ``next_cursor`` comes back empty —
+        i.e. the namespace has been walked end to end.
+        """
+        cursor = (
+            self.context.shared_state.get(preimage_buffer.PREIMAGE_LIST_CURSOR) or ""
+        )
+        msg, dlg = self.context.kv_store_dialogues.create(
+            counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
+            performative=KvStoreMessage.Performative.LIST_REQUEST,
+            key_prefix=self.params.preimage_key_prefix,
+            limit=self.params.preimage_list_page_size,
+            cursor=cursor,
+        )
+        self.context.outbox.put_message(message=msg)
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = (
+            preimage_buffer.OP_LIST
+        )
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE] = (
+            dlg.dialogue_label.dialogue_reference
+        )
+        self.context.shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = True
+        self.context.shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = (
+            time.time()
+        )
 
     def _handle_ipfs_tasks_response(
         self, message: IpfsMessage, dialogue: Dialogue

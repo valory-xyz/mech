@@ -129,6 +129,52 @@ class Params(Model):
         # enabled per deployment in the Phase 2 rollout. False = today's
         # on-chain + IPFS behaviour, unchanged.
         self.use_offchain: bool = kwargs.get("use_offchain", False)
+        # Off-chain preimage retention. Ships dark like use_offchain: False keeps
+        # today's behaviour (no durable preimage buffer). When enabled, each
+        # off-chain (request, response) pair is mirrored into the kv_store and a
+        # background sweeper prunes entries older than the retention window. Only
+        # meaningful alongside use_offchain (on-chain deliveries are already
+        # public on IPFS).
+        self.preimage_retention_enabled: bool = kwargs.get(
+            "preimage_retention_enabled", False
+        )
+        # Retention window for buffered preimages, in seconds (default 24h).
+        # NOTE: this is a storage bound, not a cryptographic-erasure
+        # guarantee. After expiry the sweeper DELETEs the row so it stops
+        # appearing in kv_store queries — the on-disk footprint plateaus
+        # rather than growing without bound. The plaintext bytes may
+        # remain recoverable from freed SQLite pages / WAL frames until
+        # those slots are reused. See preimage.py module docstring.
+        self.preimage_retention_seconds: int = kwargs.get(
+            "preimage_retention_seconds", 86400
+        )
+        # How often the sweeper LISTs the namespace to prune expired entries.
+        self.preimage_sweep_interval: float = kwargs.get(
+            "preimage_sweep_interval", 3600.0
+        )
+        # kv_store key namespace for preimages; the sweeper LISTs by this prefix.
+        self.preimage_key_prefix: str = kwargs.get(
+            "preimage_key_prefix", "mech_preimage/"
+        )
+        # Page size for the sweep LIST_REQUEST. Server clamps at 1000; the
+        # default matches the server's own default so unmodified deployments
+        # behave identically before/after the pagination wiring.
+        self.preimage_list_page_size: int = kwargs.get("preimage_list_page_size", 100)
+        # Max kv_store write attempts per request_id before the buffer drops
+        # the record + WARNs. Bounds a hot-loop retry against a persistently
+        # unhealthy kv_store. 5 is generous for transient glitches; >5 is
+        # almost certainly persistent and the record is best-effort audit.
+        self.preimage_max_write_attempts: int = kwargs.get(
+            "preimage_max_write_attempts", 5
+        )
+        # Max consecutive LIST ERRORs before the sweep gives up the current
+        # walk: cursor cleared, LAST_SWEEP stamped, WARN emitted. The next
+        # sweep window (preimage_sweep_interval) is the natural backoff,
+        # bounding what would otherwise be a per-tick LIST hot-loop against
+        # a persistently failing kv_store.
+        self.preimage_max_list_attempts: int = kwargs.get(
+            "preimage_max_list_attempts", 5
+        )
         self.tools_to_pricing: Dict[str, int] = kwargs.get("tools_to_pricing", {})
         if self.tools_to_pricing:
             self._ensure_same_keys(
