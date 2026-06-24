@@ -123,6 +123,26 @@ class Params(BaseParams):
         self.mech_max_delivery_rate: int = int(
             next(iter(self.mech_to_max_delivery_rate.values()))
         )
+        # Feature flag for the wildcard analytics write path. Phase 1
+        # ships dark; deployments flip this on per-mech as the rollout
+        # advances. False by default so an out-of-the-box mech does no
+        # off-mech HTTP work at settlement time.
+        self.mech_events_enabled: bool = bool(kwargs.get("mech_events_enabled", False))
+        # Wildcard ``POST /mech/events`` endpoint. Empty string = no URL
+        # configured; the PostTxSettlement behaviour short-circuits when
+        # either this is empty or ``mech_events_enabled`` is False. No
+        # API key here — the EOA signature is the credential.
+        self.wildcard_events_url: str = str(kwargs.get("wildcard_events_url", "") or "")
+        # Explicit short timeout on the wildcard POST. The framework's
+        # default ``request_timeout`` would let a slow or hung endpoint
+        # pin this behaviour until ``ROUND_TIMEOUT`` fires; the analytics
+        # write is best-effort, so it must degrade quickly rather than
+        # holding the round open. 5s comfortably covers one POST to a
+        # healthy endpoint and surfaces a stuck endpoint as a dropped
+        # batch on the next FSM cycle.
+        self.wildcard_events_timeout_seconds: float = float(
+            kwargs.get("wildcard_events_timeout_seconds", 5.0) or 5.0
+        )
         super().__init__(*args, **kwargs)
 
     @classmethod

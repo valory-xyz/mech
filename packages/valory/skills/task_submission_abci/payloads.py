@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # ------------------------------------------------------------------------------
 #
-#   Copyright 2023 Valory AG
+#   Copyright 2023-2026 Valory AG
 #
 #   Licensed under the Apache License, Version 2.0 (the "License");
 #   you may not use this file except in compliance with the License.
@@ -34,5 +34,20 @@ class TaskPoolingPayload(BaseTxPayload):
 @dataclass(frozen=True)
 class TransactionPayload(BaseTxPayload):
     """Represent a transaction payload for the TransactionPreparationRound."""
+
+    content: str
+
+
+@dataclass(frozen=True)
+class PostTxSettlementPayload(BaseTxPayload):
+    """Payload of the round that runs after on-chain settlement confirms.
+
+    The payload carries a fixed sentinel so the round just needs
+    consensus on participation rather than on any value: the work each
+    agent performs in the behaviour (POSTing a signed batch to the
+    wildcard data lake) is idempotent on the server side and runs
+    independently per agent. The round transitions DONE once a
+    threshold of agents has voted.
+    """
 
     content: str

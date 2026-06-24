@@ -1,0 +1,162 @@
+# -*- coding: utf-8 -*-
+# ------------------------------------------------------------------------------
+#
+#   Copyright 2023-2026 Valory AG
+#
+#   Licensed under the Apache License, Version 2.0 (the "License");
+#   you may not use this file except in compliance with the License.
+#   You may obtain a copy of the License at
+#
+#       http://www.apache.org/licenses/LICENSE-2.0
+#
+#   Unless required by applicable law or agreed to in writing, software
+#   distributed under the License is distributed on an "AS IS" BASIS,
+#   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#   See the License for the specific language governing permissions and
+#   limitations under the License.
+#
+# ------------------------------------------------------------------------------
+
+r"""EIP-712 typed-data builder and batch-hash helper for the wildcard write client.
+
+The server side at ``wildcard/server/src/mech_sig.py`` (predict-api#162)
+recomputes the same ``batch_hash`` from the parsed events array and
+compares against the signed value. Both sides must agree on the
+canonical-JSON encoding bit-for-bit:
+
+* keys sorted at every level
+* compact separators (no spaces)
+* ``ensure_ascii`` off so non-ASCII text in prompts hashes as the bytes
+  the operator wrote rather than as ``\uXXXX`` escapes
+
+Any drift between this module and the server's encoder breaks every
+batch. Keep the contract narrow.
+"""
+
+import json
+from typing import Any, Dict, List
+
+from eth_utils import keccak  # type: ignore[import-not-found]
+
+# The exact name/version pair that the server's allowlist binds via the
+# EIP-712 domain. Treat as a versioned constant; bumping the version
+# requires a coordinated change on both sides.
+EVENTS_DOMAIN_NAME = "Olas Mech Events"
+EVENTS_DOMAIN_VERSION = "1"
+EVENTS_PRIMARY_TYPE = "MechEventBatch"
+
+
+def canonical_json_bytes(value: Any) -> bytes:
+    """Encode ``value`` as a deterministic UTF-8 byte string.
+
+    Mirror of ``wildcard/server/src/mech_sig.py::canonical_json_bytes``;
+    any divergence here breaks the batch-hash match on the server. Inputs
+    must be JSON-native (no ``Decimal``, ``datetime``, etc.) — the caller
+    is responsible for normalising before this function sees them.
+
+    :param value: a JSON-native Python value to encode.
+    :return: the canonical UTF-8 byte string for ``value``.
+    """
+    return json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+    ).encode("utf-8")
+
+
+def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
+    """Return ``"0x" + keccak256(canonical_json(events)).hex()``.
+
+    The result is what goes into the signed typed-data's
+    ``message.batch_hash`` field. The server recomputes from the parsed
+    wire payload and rejects on mismatch.
+
+    :param events: the ordered list of settled-delivery event dicts.
+    :return: the 0x-prefixed 32-byte hex digest of the canonical batch.
+    """
+    return "0x" + keccak(canonical_json_bytes(events)).hex()
+
+
+def compute_eip712_digest(typed_data: Dict[str, Any]) -> bytes:
+    """Return the standard EIP-712 32-byte digest for ``typed_data``.
+
+    ``eth_account.messages.encode_typed_data(full_message=...)`` returns a
+    ``SignableMessage`` whose ``body`` holds only the ``hashStruct(message)``
+    and whose ``header`` holds the ``hashStruct(domain)``. The actual
+    EIP-712 digest the server's ``ecrecover`` reconstructs is::
+
+        keccak256(0x19 || version || domainSeparator || hashStruct)
+
+    Signing ``body`` alone (the original draft did) produces a signature
+    over the message struct that omits the domain separator, so the server
+    recovers a different address and rejects the batch; it also leaves the
+    signature replayable across chains and contracts. This helper builds
+    the correct digest so the signing path is portable and testable.
+
+    :param typed_data: an EIP-712 typed-data dict (the shape
+        :func:`build_typed_data` returns).
+    :return: the 32-byte EIP-712 digest to sign with the agent's EOA.
+    """
+    # Imported lazily so a deployment without ``eth_account`` available
+    # surfaces the failure at call time rather than at module import.
+    from eth_account.messages import (  # type: ignore[import-not-found]
+        encode_typed_data,
+    )
+
+    signable = encode_typed_data(full_message=typed_data)
+    return keccak(b"\x19" + signable.version + signable.header + signable.body)
+
+
+def build_typed_data(
+    *,
+    mech_address: str,
+    chain_id: int,
+    verifying_contract: str,
+    batch_hash_hex: str,
+) -> Dict[str, Any]:
+    """Build the EIP-712 typed-data dict for one settled batch.
+
+    The shape mirrors the server's :class:`SignedMechEventBatch` expectation:
+    a domain pinned to (Olas Mech Events / 1 / chainId / verifyingContract)
+    and a single ``MechEventBatch`` primary type carrying the Safe address
+    and the batch hash.
+
+    Returned as a plain dict so callers can stamp it into the POST body
+    verbatim; the AEA signing helper hashes it back into bytes via the
+    existing ``packages.valory.contracts.gnosis_safe.encode.encode_typed_data``
+    path.
+
+    :param mech_address: the on-chain mech CONTRACT address (the
+        ``OlasMech`` deployed via ``MechFactory`` and known to
+        ``MechMarketplace.checkMech``), NOT the Safe / operator multisig.
+        The server resolves the multisig via ``checkMech(mech_address)``
+        and uses it for the ``Safe.getOwners`` lookup; signing the Safe
+        would cause the server-side ``checkMech`` to revert.
+    :param chain_id: the EIP-155 integer chain id the marketplace lives on.
+    :param verifying_contract: the marketplace contract address for that chain.
+    :param batch_hash_hex: keccak256 of the canonical-JSON events array.
+    :return: an EIP-712 typed-data dict ready for signing and POSTing.
+    """
+    return {
+        "types": {
+            "EIP712Domain": [
+                {"name": "name", "type": "string"},
+                {"name": "version", "type": "string"},
+                {"name": "chainId", "type": "uint256"},
+                {"name": "verifyingContract", "type": "address"},
+            ],
+            EVENTS_PRIMARY_TYPE: [
+                {"name": "mech_address", "type": "address"},
+                {"name": "batch_hash", "type": "bytes32"},
+            ],
+        },
+        "primaryType": EVENTS_PRIMARY_TYPE,
+        "domain": {
+            "name": EVENTS_DOMAIN_NAME,
+            "version": EVENTS_DOMAIN_VERSION,
+            "chainId": chain_id,
+            "verifyingContract": verifying_contract,
+        },
+        "message": {
+            "mech_address": mech_address,
+            "batch_hash": batch_hash_hex,
+        },
+    }

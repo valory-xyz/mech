@@ -35,6 +35,7 @@ from packages.valory.skills.abstract_round_abci.base import (
     get_name,
 )
 from packages.valory.skills.task_submission_abci.payloads import (
+    PostTxSettlementPayload,
     TaskPoolingPayload,
     TransactionPayload,
 )
@@ -189,12 +190,65 @@ class FinishedWithoutTasksRound(DegenerateRound):
     """FinishedWithoutTasksRound"""
 
 
+class PostTxSettlementRound(CollectSameUntilThresholdRound):
+    """Runs once on-chain settlement confirms.
+
+    Mirrors the optimus pattern at
+    ``liquidity_trader_abci/states/post_tx_settlement.py``: each agent
+    runs the matching behaviour, which fires the offchain wildcard-data-lake
+    POST for the round's settled offchain deliveries, then sends back a
+    fixed payload so the round can advance on consensus participation.
+    The wildcard write is idempotent server-side (PK on ``request_id``),
+    so multi-agent services do not need a keeper-elects-one pattern; each
+    agent posting its own copy is safe and the per-EOA rate limiter on
+    the server scales naturally across agents.
+
+    The round always transitions DONE on threshold: a failed wildcard
+    write does NOT block the FSM (the settlement already landed on-chain,
+    the analytics row just arrives later via the replay buffer). The
+    NO_MAJORITY arm only fires if the agents can't agree on having reached
+    this round at all, which is the same shape as every consensus round.
+    """
+
+    payload_class = PostTxSettlementPayload
+    payload_attribute = "content"
+    synchronized_data_class = SynchronizedData
+    extended_requirements = ()
+
+    def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
+        """Process the end of the block."""
+        if self.threshold_reached:
+            # Clear ``done_tasks`` on exit, matching the
+            # ``TransactionPreparationRound`` pattern. Without this the
+            # next entry to this round on NO_MAJORITY / ROUND_TIMEOUT
+            # (both self-loop) would re-read the same stale events and
+            # re-fire the wildcard POST; the events also survive across
+            # periods via ``cross_period_persisted_keys``, so the next
+            # cycle's behaviour would see last period's events too.
+            return (
+                self.synchronized_data.update(
+                    synchronized_data_class=SynchronizedData,
+                    **{get_name(SynchronizedData.done_tasks): []},
+                ),
+                Event.DONE,
+            )
+        if not self.is_majority_possible(
+            self.collection, self.synchronized_data.nb_participants
+        ):
+            return self.synchronized_data, Event.NO_MAJORITY
+        return None
+
+
+class FinishedPostTxSettlementRound(DegenerateRound):
+    """FinishedPostTxSettlementRound"""
+
+
 class TaskSubmissionAbciApp(AbciApp[Event]):
     """TaskSubmissionAbciApp
 
     Initial round: TaskPoolingRound
 
-    Initial states: {TaskPoolingRound}
+    Initial states: {PostTxSettlementRound, TaskPoolingRound}
 
     Transition states:
         0. TaskPoolingRound
@@ -209,8 +263,13 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         2. FinishedTaskPoolingRound
         3. FinishedTaskExecutionWithErrorRound
         4. FinishedWithoutTasksRound
+        5. PostTxSettlementRound
+            - done: 6.
+            - no majority: 5.
+            - round timeout: 5.
+        6. FinishedPostTxSettlementRound
 
-    Final states: {FinishedTaskExecutionWithErrorRound, FinishedTaskPoolingRound, FinishedWithoutTasksRound}
+    Final states: {FinishedPostTxSettlementRound, FinishedTaskExecutionWithErrorRound, FinishedTaskPoolingRound, FinishedWithoutTasksRound}
 
     Timeouts:
         task execution round timeout: 60.0
@@ -218,7 +277,13 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     """
 
     initial_round_cls: AppState = TaskPoolingRound
-    initial_states: Set[AppState] = {TaskPoolingRound}
+    # ``PostTxSettlementRound`` is reachable from outside the skill via the
+    # composition wire (TxSettlementAbci.FinishedTransactionSubmissionRound
+    # routes here), so it must be declared as an initial state even though
+    # the FSM never *starts* there. Matches the optimus LiquidityTraderAbci
+    # pattern where the post-settlement round is one of several initial
+    # entry points.
+    initial_states: Set[AppState] = {TaskPoolingRound, PostTxSettlementRound}
     transition_function: AbciAppTransitionFunction = {
         TaskPoolingRound: {
             Event.DONE: TransactionPreparationRound,
@@ -234,11 +299,21 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         FinishedTaskPoolingRound: {},
         FinishedTaskExecutionWithErrorRound: {},
         FinishedWithoutTasksRound: {},
+        PostTxSettlementRound: {
+            Event.DONE: FinishedPostTxSettlementRound,
+            # Tendermint can't reach majority on participation: route back
+            # to the post-tx round so a brief disagreement doesn't crash
+            # the FSM. The wildcard write is idempotent, so re-entry is safe.
+            Event.NO_MAJORITY: PostTxSettlementRound,
+            Event.ROUND_TIMEOUT: PostTxSettlementRound,
+        },
+        FinishedPostTxSettlementRound: {},
     }
     final_states: Set[AppState] = {
         FinishedTaskPoolingRound,
         FinishedWithoutTasksRound,
         FinishedTaskExecutionWithErrorRound,
+        FinishedPostTxSettlementRound,
     }
     event_to_timeout: EventToTimeout = {
         Event.TASK_EXECUTION_ROUND_TIMEOUT: 60.0,
@@ -252,9 +327,15 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskPoolingRound: set(),
+        # Entered from composition after settlement; relies on done_tasks
+        # being on synchronized_data from the prior TaskPoolingRound cycle
+        # (cross_period_persisted_keys above keeps it alive). No additional
+        # pre-condition fields beyond what the FSM already carries.
+        PostTxSettlementRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {
         FinishedTaskPoolingRound: {"most_voted_tx_hash"},
         FinishedTaskExecutionWithErrorRound: set(),
         FinishedWithoutTasksRound: set(),
+        FinishedPostTxSettlementRound: set(),
     }

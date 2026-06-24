@@ -114,6 +114,23 @@ class Params(Model):
         )
         self.offchain_tx_list: List = list()
         self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
+        # EIP-155 integer chain id for the wildcard data-lake write and the
+        # EIP-712 domain. Separate from ``default_chain_id`` (the AEA alias
+        # ``"gnosis"``) because the wildcard schema and the EIP-712 domain
+        # bind to the integer, and converting at the boundary via a
+        # hardcoded alias→int table couples task_execution to a chain
+        # registry it has no other reason to know about. Defaults to 0,
+        # which fails the wildcard server's per-chain marketplace
+        # allowlist on first POST — operator-friendly: the row is rejected
+        # at a known boundary rather than silently mis-tagged.
+        self.mech_events_chain_id: int = int(kwargs.get("mech_events_chain_id", 0) or 0)
+        # Feature flag for the wildcard analytics write path, mirrored from
+        # task_submission_abci so the build cost at finalize is also gated:
+        # when False (Phase 1 default) ``_finalize_done_task`` skips the
+        # ``_build_wildcard_event`` call entirely so nothing rides Tendermint
+        # consensus replication. Must agree with the task_submission_abci
+        # value across the deployment.
+        self.mech_events_enabled: bool = bool(kwargs.get("mech_events_enabled", False))
         self.gnosis_ledger_rpc: str = kwargs.get("gnosis_ledger_rpc", "")
         self.polygon_ledger_rpc: str = kwargs.get("polygon_ledger_rpc", "")
         self.base_ledger_rpc: str = kwargs.get("base_ledger_rpc", "")
