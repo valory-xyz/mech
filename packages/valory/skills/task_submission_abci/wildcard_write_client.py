@@ -107,7 +107,7 @@ def compute_eip712_digest(typed_data: Dict[str, Any]) -> bytes:
 
 def build_typed_data(
     *,
-    mech_service_multisig: str,
+    mech_address: str,
     chain_id: int,
     verifying_contract: str,
     batch_hash_hex: str,
@@ -124,7 +124,12 @@ def build_typed_data(
     existing ``packages.valory.contracts.gnosis_safe.encode.encode_typed_data``
     path.
 
-    :param mech_service_multisig: the mech's Safe address.
+    :param mech_address: the on-chain mech CONTRACT address (the
+        ``OlasMech`` deployed via ``MechFactory`` and known to
+        ``MechMarketplace.checkMech``), NOT the Safe / operator multisig.
+        The server resolves the multisig via ``checkMech(mech_address)``
+        and uses it for the ``Safe.getOwners`` lookup; signing the Safe
+        would cause the server-side ``checkMech`` to revert.
     :param chain_id: the EIP-155 integer chain id the marketplace lives on.
     :param verifying_contract: the marketplace contract address for that chain.
     :param batch_hash_hex: keccak256 of the canonical-JSON events array.
@@ -139,7 +144,7 @@ def build_typed_data(
                 {"name": "verifyingContract", "type": "address"},
             ],
             EVENTS_PRIMARY_TYPE: [
-                {"name": "mech_service_multisig", "type": "address"},
+                {"name": "mech_address", "type": "address"},
                 {"name": "batch_hash", "type": "bytes32"},
             ],
         },
@@ -151,7 +156,7 @@ def build_typed_data(
             "verifyingContract": verifying_contract,
         },
         "message": {
-            "mech_service_multisig": mech_service_multisig,
+            "mech_address": mech_address,
             "batch_hash": batch_hash_hex,
         },
     }

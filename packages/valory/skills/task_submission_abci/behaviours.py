@@ -1883,20 +1883,21 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
             )
             return
 
-        # Pull the Safe + marketplace from synchronized_data / params; both
-        # are stable per deployment. The signer EOA is whatever the agent's
-        # crypto handle signs with (one of the Safe's owner EOAs), so the
-        # mech_service_multisig in the typed message names the Safe, not
-        # the EOA.
-        mech_service_multisig = (
-            self.synchronized_data.safe_contract_address
-            if hasattr(self.synchronized_data, "safe_contract_address")
-            else getattr(self.params, "safe_contract_address", "")
-        )
-        if not mech_service_multisig:
+        # The signed typed-data carries the on-chain MECH CONTRACT address
+        # (the ``OlasMech`` deployed via ``MechFactory`` and known to
+        # ``MechMarketplace.checkMech``), not the Safe / operator multisig.
+        # The server resolves the multisig via ``checkMech(mech_address)``
+        # and uses it for the ``Safe.getOwners`` lookup. Signing the Safe
+        # would make the server-side ``checkMech`` revert (its lookup
+        # keys on the mech contract).
+        #
+        # Read from ``params.agent_mech_contract_address`` which is the
+        # default mech contract this service operates against — same
+        # field used elsewhere in the skill for on-chain interactions.
+        mech_address = getattr(self.params, "agent_mech_contract_address", "") or ""
+        if not mech_address:
             self.context.logger.warning(
-                "No mech_service_multisig available on synced data / params; "
-                "skipping wildcard write."
+                "No agent_mech_contract_address available; " "skipping wildcard write."
             )
             return
 
@@ -1927,7 +1928,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
 
         batch_hash_hex = compute_batch_hash(events)
         typed_data = build_typed_data(
-            mech_service_multisig=mech_service_multisig,
+            mech_address=mech_address,
             chain_id=chain_id,
             verifying_contract=verifying_contract,
             batch_hash_hex=batch_hash_hex,

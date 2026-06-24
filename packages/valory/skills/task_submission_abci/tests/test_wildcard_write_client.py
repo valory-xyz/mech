@@ -165,7 +165,7 @@ class TestComputeEip712Digest:
         from eth_utils import keccak  # type: ignore[import-not-found]
 
         td = build_typed_data(
-            mech_service_multisig="0x" + "ab" * 20,
+            mech_address="0x" + "ab" * 20,
             chain_id=100,
             verifying_contract="0x" + "cd" * 20,
             batch_hash_hex="0x" + "ef" * 32,
@@ -196,7 +196,7 @@ class TestComputeEip712Digest:
         signer = Account.from_key(privkey).address.lower()
 
         td = build_typed_data(
-            mech_service_multisig="0x" + "ab" * 20,
+            mech_address="0x" + "ab" * 20,
             chain_id=100,
             verifying_contract="0x" + "cd" * 20,
             batch_hash_hex=compute_batch_hash([{"request_id": "req_1"}]),
@@ -219,10 +219,10 @@ class TestBuildTypedData:
         """Mirror the ``SignedMechEventBatch`` Pydantic schema on the server.
 
         Primary type ``MechEventBatch``, domain with the four required
-        fields, message with ``mech_service_multisig`` + ``batch_hash``.
+        fields, message with ``mech_address`` + ``batch_hash``.
         """
         td = build_typed_data(
-            mech_service_multisig="0x" + "ab" * 20,
+            mech_address="0x" + "ab" * 20,
             chain_id=100,
             verifying_contract="0x" + "cd" * 20,
             batch_hash_hex="0x" + "ef" * 32,
@@ -235,7 +235,7 @@ class TestBuildTypedData:
             "verifyingContract": "0x" + "cd" * 20,
         }
         assert td["message"] == {
-            "mech_service_multisig": "0x" + "ab" * 20,
+            "mech_address": "0x" + "ab" * 20,
             "batch_hash": "0x" + "ef" * 32,
         }
         # The MechEventBatch type schema must list exactly these two fields
@@ -243,6 +243,6 @@ class TestBuildTypedData:
         # against the same schema and any mismatch yields a different
         # recovered address.
         assert td["types"][EVENTS_PRIMARY_TYPE] == [
-            {"name": "mech_service_multisig", "type": "address"},
+            {"name": "mech_address", "type": "address"},
             {"name": "batch_hash", "type": "bytes32"},
         ]
