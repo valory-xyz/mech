@@ -248,7 +248,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
 
     Initial round: TaskPoolingRound
 
-    Initial states: {TaskPoolingRound}
+    Initial states: {PostTxSettlementRound, TaskPoolingRound}
 
     Transition states:
         0. TaskPoolingRound
@@ -263,8 +263,13 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
         2. FinishedTaskPoolingRound
         3. FinishedTaskExecutionWithErrorRound
         4. FinishedWithoutTasksRound
+        5. PostTxSettlementRound
+            - done: 6.
+            - no majority: 5.
+            - round timeout: 5.
+        6. FinishedPostTxSettlementRound
 
-    Final states: {FinishedTaskExecutionWithErrorRound, FinishedTaskPoolingRound, FinishedWithoutTasksRound}
+    Final states: {FinishedPostTxSettlementRound, FinishedTaskExecutionWithErrorRound, FinishedTaskPoolingRound, FinishedWithoutTasksRound}
 
     Timeouts:
         task execution round timeout: 60.0
