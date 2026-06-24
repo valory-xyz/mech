@@ -276,7 +276,14 @@ def expired_keys(
     for key, raw in list_data.items():
         try:
             record = json.loads(raw)
-            stamp = record.get("settled_at") or record.get("accepted_at")
+            # Explicit None checks rather than ``settled_at or accepted_at``:
+            # a numeric 0 (epoch 0, 1970) is falsy, so the ``or`` form would
+            # fall through to ``accepted_at`` and then trip the "stamp is
+            # None" branch. Absurd in practice but technically a valid
+            # timestamp, and easy to write a fuzz test that hits it.
+            stamp = record.get("settled_at")
+            if stamp is None:
+                stamp = record.get("accepted_at")
             if stamp is None:
                 skipped.append(key)
                 continue
