@@ -372,15 +372,15 @@ def test_process_buffer_resets_stuck_kv_in_flight_and_resends(
 def test_process_buffer_watchdog_resets_when_inflight_is_none(
     behaviour: Any,
 ) -> None:
-    """Watchdog also handles the LIST/DELETE case (no INFLIGHT_WRITE to re-queue).
-
-    Also pins that PREIMAGE_INFLIGHT_DIALOGUE is NOT cleared by the
-    watchdog: a future cleanup that mirrors the other clears alongside
-    PREIMAGE_INFLIGHT_OP and PREIMAGE_INFLIGHT_SENT_AT would look
-    obviously correct, pass every other test, and silently hollow out
-    the late-reply guard for whatever op runs next (no stored ref ⇒
-    guard skips ⇒ any reply gets attributed to the new op).
-    """
+    """Watchdog handles the LIST/DELETE case + preserves PREIMAGE_INFLIGHT_DIALOGUE."""
+    # LIST/DELETE don't populate PREIMAGE_INFLIGHT_WRITE; a lost reply
+    # on those should still clear the gate but has nothing to re-queue.
+    # Also pins that PREIMAGE_INFLIGHT_DIALOGUE is NOT cleared by the
+    # watchdog: a future cleanup that mirrors the other clears alongside
+    # PREIMAGE_INFLIGHT_OP and PREIMAGE_INFLIGHT_SENT_AT would look
+    # obviously correct, pass every other test, and silently hollow out
+    # the late-reply guard for whatever op runs next (no stored ref ⇒
+    # guard skips ⇒ any reply gets attributed to the new op).
     behaviour.context.params.preimage_retention_enabled = True
     ss = behaviour.context.shared_state
     ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
@@ -857,15 +857,13 @@ def test_handler_ignores_reply_from_previously_timed_out_op(
 
 
 def test_handler_accepts_reply_when_initiator_matches(handler_context: Any) -> None:
-    """A reply for the current in-flight op is processed normally.
-
-    This is the regression test for the bug where the guard compared
-    full dialogue tuples — the send-time stamp is ``(nonce, "")`` but
-    the incoming reply carries ``(nonce, responder_ref)`` once open-aea
-    completes the responder slot. A full-tuple comparison rejected
-    every real reply, hollowing out retention pruning entirely. The
-    guard must compare ONLY the initiator nonce.
-    """
+    """A reply for the current in-flight op is processed normally."""
+    # Regression test for the bug where the guard compared full
+    # dialogue tuples — the send-time stamp is ``(nonce, "")`` but the
+    # incoming reply carries ``(nonce, responder_ref)`` once open-aea
+    # completes the responder slot. A full-tuple comparison rejected
+    # every real reply, hollowing out retention pruning entirely. The
+    # guard must compare ONLY the initiator nonce.
     handler = _handler(handler_context)
     ss = handler_context.shared_state
     preimage.record_settlement(
@@ -893,13 +891,11 @@ def test_handler_accepts_reply_when_initiator_matches(handler_context: Any) -> N
 def test_handler_drops_unrecognised_message_without_touching_state(
     handler_context: Any, monkeypatch: Any
 ) -> None:
-    """A message whose dialogue can't be matched returns early, no cleanup.
-
-    Pinned because the alternative — letting cleanup run on a dropped
-    message — would zero PREIMAGE_INFLIGHT_DIALOGUE and hollow out the
-    late-reply guard for the next real op (no expected ref ⇒ guard
-    skips ⇒ any reply gets attributed to the current op).
-    """
+    """A message whose dialogue can't be matched returns early, no cleanup."""
+    # Pinned because the alternative — letting cleanup run on a dropped
+    # message — would zero PREIMAGE_INFLIGHT_DIALOGUE and hollow out
+    # the late-reply guard for the next real op (no expected ref ⇒
+    # guard skips ⇒ any reply gets attributed to the current op).
     handler = _handler(handler_context)
     ss = handler_context.shared_state
     ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("real-nonce", "")
