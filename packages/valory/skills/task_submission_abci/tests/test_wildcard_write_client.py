@@ -44,6 +44,7 @@ from packages.valory.skills.task_submission_abci.wildcard_write_client import (
     build_typed_data,
     canonical_json_bytes,
     compute_batch_hash,
+    compute_eip712_digest,
 )
 
 # ---------------------------------------------------------------------------
@@ -141,6 +142,74 @@ class TestComputeBatchHash:
 # ---------------------------------------------------------------------------
 # build_typed_data
 # ---------------------------------------------------------------------------
+
+
+class TestComputeEip712Digest:
+    """Pin the EIP-712 digest formula against the server's recovery path.
+
+    The blocking bug found in the first review was that the original draft
+    signed ``signable.body`` (the message ``hashStruct`` alone) rather than
+    the full EIP-712 digest. The server's standard ``ecrecover`` rebuilds
+    the digest as ``keccak(0x19 || version || domainSep || hashStruct)``,
+    so signing only ``body`` recovered to the wrong address and the server
+    would have rejected every batch. These tests pin the correct formula
+    and round-trip a signature through ``Account.recover_message`` so a
+    future drift surfaces in CI.
+    """
+
+    def test_digest_matches_standard_eip712_formula(self) -> None:
+        """Digest equals ``keccak(0x19 || version || header || body)``."""
+        from eth_account.messages import (  # type: ignore[import-not-found]
+            encode_typed_data,
+        )
+        from eth_utils import keccak  # type: ignore[import-not-found]
+
+        td = build_typed_data(
+            mech_service_multisig="0x" + "ab" * 20,
+            chain_id=100,
+            verifying_contract="0x" + "cd" * 20,
+            batch_hash_hex="0x" + "ef" * 32,
+        )
+        digest = compute_eip712_digest(td)
+        signable = encode_typed_data(full_message=td)
+        expected = keccak(b"\x19" + signable.version + signable.header + signable.body)
+        assert digest == expected
+        # Negative control: signing only ``body`` (the original bug) yields
+        # a different value, so a regression that re-introduces the bug
+        # cannot pass this test by accident.
+        assert digest != signable.body
+
+    def test_sign_and_recover_round_trip(self) -> None:
+        """A signature over the digest recovers back to the signer EOA.
+
+        Mirrors what the server does on receive: parse ``typed_data``,
+        compute the standard digest via ``encode_typed_data``, recover the
+        EOA via ``Account.recover_message``. If the mech signs the wrong
+        bytes, the recovered address won't match the signer.
+        """
+        from eth_account import Account  # type: ignore[import-not-found]
+        from eth_account.messages import (  # type: ignore[import-not-found]
+            encode_typed_data,
+        )
+
+        privkey = "0x" + "11" * 32
+        signer = Account.from_key(privkey).address.lower()
+
+        td = build_typed_data(
+            mech_service_multisig="0x" + "ab" * 20,
+            chain_id=100,
+            verifying_contract="0x" + "cd" * 20,
+            batch_hash_hex=compute_batch_hash([{"request_id": "req_1"}]),
+        )
+        digest = compute_eip712_digest(td)
+        signed = Account._sign_hash(digest, privkey)
+
+        # The server's recovery path uses Account.recover_message on the
+        # SignableMessage built from the same typed_data; the recovered
+        # address must equal the signer.
+        signable = encode_typed_data(full_message=td)
+        recovered = Account.recover_message(signable, signature=signed.signature)
+        assert recovered.lower() == signer
 
 
 class TestBuildTypedData:

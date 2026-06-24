@@ -75,6 +75,36 @@ def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
     return "0x" + keccak(canonical_json_bytes(events)).hex()
 
 
+def compute_eip712_digest(typed_data: Dict[str, Any]) -> bytes:
+    """Return the standard EIP-712 32-byte digest for ``typed_data``.
+
+    ``eth_account.messages.encode_typed_data(full_message=...)`` returns a
+    ``SignableMessage`` whose ``body`` holds only the ``hashStruct(message)``
+    and whose ``header`` holds the ``hashStruct(domain)``. The actual
+    EIP-712 digest the server's ``ecrecover`` reconstructs is::
+
+        keccak256(0x19 || version || domainSeparator || hashStruct)
+
+    Signing ``body`` alone (the original draft did) produces a signature
+    over the message struct that omits the domain separator, so the server
+    recovers a different address and rejects the batch; it also leaves the
+    signature replayable across chains and contracts. This helper builds
+    the correct digest so the signing path is portable and testable.
+
+    :param typed_data: an EIP-712 typed-data dict (the shape
+        :func:`build_typed_data` returns).
+    :return: the 32-byte EIP-712 digest to sign with the agent's EOA.
+    """
+    # Imported lazily so a deployment without ``eth_account`` available
+    # surfaces the failure at call time rather than at module import.
+    from eth_account.messages import (  # type: ignore[import-not-found]
+        encode_typed_data,
+    )
+
+    signable = encode_typed_data(full_message=typed_data)
+    return keccak(b"\x19" + signable.version + signable.header + signable.body)
+
+
 def build_typed_data(
     *,
     mech_service_multisig: str,

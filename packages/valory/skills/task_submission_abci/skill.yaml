@@ -8,11 +8,11 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeifymqyrp67cvqwmudkrwijhzgmmdqfyaarcz26uqmmniz7svsfvli
+  behaviours.py: bafybeia762jdyfxaf3qqnxqwlyygapg2t4rajlswwgfeavixmsfv74ujkq
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
-  models.py: bafybeich7h3txvw36sh6qwccaxsdokdpq6ny6v5luvadgrzhqsbvu6ymoq
+  models.py: bafybeicj3ztx52k2sukkfqkjetyj3rz2zcggmy4xjqgx5avdxoccxap4bm
   payloads.py: bafybeif2gnz5k7eyb6of4iiisni426zscwanjfmtrr37f7ceu4cjqo2ob4
   rounds.py: bafybeibm5cl7q76c5yspj3urlwgos26gusgjb7jcdxikp7wtqyatoovv34
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
@@ -25,8 +25,8 @@ fingerprint:
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_rounds.py: bafybeiewxotnlbq2qckyat2flyewq56n6kh6ejyllbjgebx2xiw3rbhptq
   tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
-  tests/test_wildcard_write_client.py: bafybeiczgnt3ut3godb5ulj5fhkwqkl2xcmneq5r6peunuuwbmdro6nowy
-  wildcard_write_client.py: bafybeig62wylypfahurw3zeeif2mau75zc33r23xufuwnrubugektjmk3m
+  tests/test_wildcard_write_client.py: bafybeihwpvkovznt7s3wdmk6237wmaeym43q7o24enp3tmdkqt2ylte5fu
+  wildcard_write_client.py: bafybeia5w7rhifm5buywlysutewiz6mycqbpc4zdzwuo247ucsiafytiuq
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -46,7 +46,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
-- valory/task_execution:0.1.0:bafybeiaommt42tftq4tbs6ngxuor5eervz7wty3drr2tr2ndl3nyzzdtdi
+- valory/task_execution:0.1.0:bafybeiavvkxam3gijfmnec7dmryjlyqu4vc6rp7r2d3gtgrz7gl2whtcua
 behaviours:
   main:
     args: {}
@@ -171,6 +171,7 @@ models:
       default_chain_id: gnosis
       mech_events_enabled: false
       wildcard_events_url: ''
+      wildcard_events_timeout_seconds: 5.0
     class_name: Params
   requests:
     args: {}

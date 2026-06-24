@@ -7,10 +7,10 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiddgrfcoxgz6syq5kyhf2k4dor4ewhr3xiyqrpro4c5idhfqjifsu
-  behaviours.py: bafybeieqlfpxiucs5t7hxj3gvw6sdprprzoqoghyto4v7w7cew7ne36inu
+  behaviours.py: bafybeiee3ptapwhhdt5dymd4niltqhi2fhn5gbbvuopw3l6cz2iyzh43ie
   dialogues.py: bafybeiha73ja2fz3edxe3nld2yjxz3dvftdyi4j3we7hwyw4urvvzdrlmy
   handlers.py: bafybeic2dcptbz6gw7ior47m7bxsmjti6mmq4y4sija45qwwyedfeq7s3q
-  models.py: bafybeiatcfeh74klnivl5qkwzirx7pu5t6lgkxuh2awgfvld4ibhroai5m
+  models.py: bafybeif7okekenxazaxgptc6aabgellaap2bnlyhcjmbwtkg7a5xegpbhm
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeidhdwsz2upnmd23jcksenfay7rioekg54xv6e5l7x7aryq6p2d24q
   tests/test_behaviours.py: bafybeifo25uodji5alqwldgv2wf2g5warrh4dqwww5mm6vgshdi7l452gm
@@ -109,6 +109,7 @@ models:
       use_offchain: false
       default_chain_id: gnosis
       mech_events_chain_id: 0
+      mech_events_enabled: false
       gnosis_ledger_rpc: http://localhost:8545
       polygon_ledger_rpc: http://localhost:8545
       base_ledger_rpc: http://localhost:8545

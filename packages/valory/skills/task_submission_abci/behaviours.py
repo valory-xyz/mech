@@ -73,6 +73,7 @@ from packages.valory.skills.task_submission_abci.rounds import (
 from packages.valory.skills.task_submission_abci.wildcard_write_client import (
     build_typed_data,
     compute_batch_hash,
+    compute_eip712_digest,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -1932,21 +1933,23 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
             batch_hash_hex=batch_hash_hex,
         )
 
-        # EIP-712 digest: encode + sign the raw 32-byte hash via the AEA
-        # signing protocol (is_deprecated_mode=True so the signer skips
-        # the EIP-191 personal-sign prefix and just hashes raw bytes).
+        # EIP-712 digest: build the standard 32-byte digest
+        # (``keccak(0x19 || 0x01 || domainSep || hashStruct)``) via the
+        # shared helper, then raw-sign it via ``is_deprecated_mode=True``
+        # so the AEA signer hashes the bytes without the EIP-191
+        # personal-sign prefix. Signing just ``signable.body`` (the
+        # message hashStruct alone) would omit the domain separator and
+        # produce a signature the server's standard ``ecrecover`` recovers
+        # to a different address; the helper exists to keep this exact
+        # bytes contract testable.
         try:
-            from eth_account.messages import (  # type: ignore[import-not-found]
-                encode_typed_data,
-            )
+            digest = compute_eip712_digest(typed_data)
         except ImportError:
             self.context.logger.error(
                 "eth_account not available; cannot sign wildcard EIP-712. "
                 "Skipping batch."
             )
             return
-        signable = encode_typed_data(full_message=typed_data)
-        digest = signable.body
         try:
             signature_hex = yield from self.get_signature(
                 digest, is_deprecated_mode=True
@@ -1966,12 +1969,24 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
             }
         ).encode("utf-8")
 
+        # Build the request with an explicit short timeout. ``get_http_response``
+        # doesn't surface a timeout kwarg, so go one level lower: a slow or
+        # hung wildcard endpoint must not pin this behaviour until the
+        # round timeout fires; the analytics write is best-effort and a
+        # missed batch is recoverable, but a stuck round is not.
+        http_message, http_dialogue = self._build_http_request_message(
+            method="POST",
+            url=wildcard_url,
+            content=body,
+            headers={"Content-Type": "application/json"},
+        )
         try:
-            response = yield from self.get_http_response(
-                method="POST",
-                url=wildcard_url,
-                content=body,
-                headers={"Content-Type": "application/json"},
+            response = yield from self._do_request(
+                http_message,
+                http_dialogue,
+                timeout=float(
+                    getattr(self.params, "wildcard_events_timeout_seconds", 5.0)
+                ),
             )
         except Exception as exc:
             self.context.logger.warning(
@@ -1982,24 +1997,22 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour, ABC):
             return
 
         status = getattr(response, "status_code", None)
-        if status is None or status >= 500 or status == 0:
+        # Treat anything outside the 2xx success range as non-success. A 3xx
+        # redirect on a POST is never the right outcome here: the server
+        # never redirects ``/mech/events``, so a 3xx means a misconfigured
+        # proxy and we should not log it as ``POST OK``.
+        if status is None or status < 200 or status >= 300:
+            # 4xx is terminal (bad payload, allowlist miss, signer-not-owner);
+            # 5xx + network are retryable on the next FSM cycle once the
+            # replay buffer lands (mech#455 follow-up). 3xx redirects on a
+            # POST are a misconfigured proxy, treated the same as 4xx here.
             self.context.logger.warning(
                 "Wildcard POST returned non-success (status=%s); dropping "
                 "batch this round (follow-up PR adds replay buffer). "
-                "batch_size=%d signer-eoa=%s",
+                "batch_size=%d signer-eoa=%s body_preview=%s",
                 status,
                 len(events),
                 self.context.agent_address,
-            )
-            return
-        if status >= 400:
-            # 4xx is terminal (bad payload, allowlist miss, signer-not-owner);
-            # retrying won't help. Log once and drop.
-            self.context.logger.error(
-                "Wildcard POST returned %s (terminal); inspect payload. "
-                "batch_size=%d body_preview=%s",
-                status,
-                len(events),
                 response.body[:512] if hasattr(response, "body") else "?",
             )
             return

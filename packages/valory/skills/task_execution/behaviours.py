@@ -90,6 +90,42 @@ STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
+
+# Cap on the JSON-serialised size of each ``raw_content`` blob attached to
+# a wildcard event. The blob rides Tendermint consensus replication into
+# ``synchronized_data`` on every agent and the field is requester-influenced
+# (``params``, ``model``, response body), so an uncapped large payload would
+# inflate per-node state. 256 KiB matches the wildcard server's ``_MAX_TEXT``
+# cap on individual TEXT columns; the analytics ETL drops the row to a
+# truncated sentinel when the cap is hit so the rest of the event still
+# lands.
+MAX_RAW_CONTENT_BYTES = 262_144  # 256 KiB
+
+
+def _cap_raw_content(blob: Dict[str, Any]) -> Dict[str, Any]:
+    """Bound the JSON-serialised size of a ``raw_content`` blob.
+
+    The full request/response payload rides Tendermint consensus
+    replication via ``synchronized_data.done_tasks`` to every agent, and
+    its contents (``params``, ``model``, response body) are
+    requester-influenced. An uncapped large payload would inflate
+    per-node state on every offchain delivery. When the serialised size
+    exceeds :data:`MAX_RAW_CONTENT_BYTES`, return a sentinel dict noting
+    the truncation and the size so the analytics ETL can flag the row
+    rather than silently store half of it.
+
+    :param blob: the raw request- or response-side payload dict.
+    :return: ``blob`` itself when under the cap, or a truncated sentinel.
+    """
+    try:
+        size = len(json.dumps(blob).encode("utf-8"))
+    except (TypeError, ValueError):
+        return {"truncated": True, "reason": "non_json_serialisable"}
+    if size <= MAX_RAW_CONTENT_BYTES:
+        return blob
+    return {"truncated": True, "size_bytes": size, "cap_bytes": MAX_RAW_CONTENT_BYTES}
+
+
 PAYMENT_MODEL_REQUEST_TIMEOUT = 60.0  # reset stuck payment-model in_flight_req
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
@@ -1415,10 +1451,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # task_submission_abci reads it off ``synchronized_data.done_tasks``
         # (i.e. after consensus replication) and posts it to the wildcard
         # data lake, but the buffered request metadata it needs is local
-        # to this agent's shared_state and goes away at the pop. Empty /
-        # None on the on-chain path; the post-settlement behaviour skips
-        # entries where this is absent.
-        if is_offchain:
+        # to this agent's shared_state and goes away at the pop.
+        #
+        # Gated on BOTH ``is_offchain`` AND the ``mech_events_enabled`` flag
+        # so Phase 1 is genuinely dark: when the flag is off, no payload is
+        # built and nothing rides Tendermint consensus replication. The flag
+        # check lives here as well as in the post-settlement behaviour so
+        # the consensus-state cost is gated, not just the HTTP write.
+        if is_offchain and getattr(self.params, "mech_events_enabled", False):
             done_task["wildcard_event"] = self._build_wildcard_event(
                 done_task=done_task,
                 cid=cid,
@@ -1593,7 +1633,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     if isinstance(request_data.get("params"), dict)
                     else None
                 ),
-                "raw_content": (
+                "raw_content": _cap_raw_content(
                     request_data
                     if isinstance(request_data, dict)
                     else {"prompt": prompt, "tool": tool}
@@ -1617,7 +1657,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     if isinstance(done_task.get("used_params"), dict)
                     else None
                 ),
-                "raw_content": (
+                "raw_content": _cap_raw_content(
                     response_data
                     if isinstance(response_data, dict)
                     else {"result": result_value or "", "status": status}
