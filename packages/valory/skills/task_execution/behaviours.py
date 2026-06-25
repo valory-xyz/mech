@@ -26,6 +26,7 @@ from asyncio import Future
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 from aea.helpers.cid import to_v1
@@ -733,6 +734,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
         self._request_handling_deadline = None
+
+        # Off-chain path: prompt JSON is already inline in ``task_data["ipfs_data"]``
+        # (set by the handler in ``_enqueue_offchain_request`` and mirrored to
+        # ``in_memory_requests``). Skip the IPFS GET round-trip entirely and feed
+        # a synthetic message straight to ``_handle_get_task`` so the rest of the
+        # pipeline (validation + pebble dispatch) is unchanged. Matches the design
+        # intent of #457 ("off-chain path skips the IPFS upload"); the GET half
+        # was left in place by oversight.
+        if task_data.get("is_offchain"):
+            inline_payload = task_data.get("ipfs_data")
+            if not isinstance(inline_payload, str):
+                self.context.logger.warning(
+                    f"Off-chain request {request_id} missing inline ipfs_data; "
+                    f"skipping."
+                )
+                self._invalid_request = True
+                return
+            self._handle_get_task(
+                cast(Any, SimpleNamespace(files={"metadata.json": inline_payload})),
+                cast(Any, None),
+            )
+            return
+
         try:
             ipfs_hash = get_ipfs_file_hash(task_data["data"])
         except Exception as e:  # pylint: disable=W0718
@@ -1596,10 +1620,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # not suitable as a delivered_at timestamp. Use the current wall-clock
         # at finalize as the best-effort delivered_at; the analytics ETL can
         # cross-correlate against the on-chain block timestamp if needed.
-        now_iso = datetime.now(timezone.utc).isoformat()
+        # Emit UTC instants with the ``Z`` suffix to match the canonical
+        # form Pydantic's ``AwareDatetime`` round-trips through
+        # ``model_dump(mode="json")`` on the wildcard server side. A
+        # ``+00:00`` suffix represents the same moment but hashes to a
+        # different canonical-JSON byte string, breaking ``batch_hash``
+        # equality on the recompute step.
+        now_iso = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
         executed_at_unix = response_data.get("executed_at")
         executed_at_iso = (
-            datetime.fromtimestamp(executed_at_unix, tz=timezone.utc).isoformat()
+            datetime.fromtimestamp(executed_at_unix, tz=timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z")
             if isinstance(executed_at_unix, (int, float))
             else now_iso
         )
@@ -1614,11 +1646,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "requested_at"
         )
         if isinstance(requested_at_raw, (int, float)):
-            requested_at_iso = datetime.fromtimestamp(
-                requested_at_raw, tz=timezone.utc
-            ).isoformat()
+            requested_at_iso = (
+                datetime.fromtimestamp(requested_at_raw, tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
         elif isinstance(requested_at_raw, str) and requested_at_raw:
-            requested_at_iso = requested_at_raw
+            # Normalise an explicit ``+00:00`` to ``Z`` so a requester-
+            # provided ISO 8601 string canonicalises the same way the
+            # server's Pydantic round-trip emits it.
+            requested_at_iso = requested_at_raw.replace("+00:00", "Z")
         else:
             requested_at_iso = executed_at_iso
 
