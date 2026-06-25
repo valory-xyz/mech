@@ -122,10 +122,9 @@ def _iso_z(dt: datetime) -> str:
     :raises ValueError: if ``dt.tzinfo`` is None (naive datetime).
     """
     if dt.tzinfo is None:
-        raise ValueError(
-            "_iso_z requires a timezone-aware datetime; got a naive value"
-        )
+        raise ValueError("_iso_z requires a timezone-aware datetime; got a naive value")
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 # Cap on the JSON-serialised size of each ``raw_content`` blob attached to
 # a wildcard event. The blob rides Tendermint consensus replication into
@@ -1682,9 +1681,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # canonicalisation is meant to close. Malformed strings fall
             # through to ``now_iso`` rather than crashing the FSM round.
             try:
-                requested_at_iso = _iso_z(
-                    datetime.fromisoformat(requested_at_raw)
-                )
+                requested_at_iso = _iso_z(datetime.fromisoformat(requested_at_raw))
             except ValueError:
                 self.context.logger.warning(
                     "requested_at=%r for req_id=%s is not parsable ISO 8601; "
