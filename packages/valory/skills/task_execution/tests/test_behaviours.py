@@ -3017,3 +3017,299 @@ def test_ensure_payment_model_does_not_reset_inflight_from_other_flow(
 
     assert result is False
     assert params_stub.in_flight_req is True
+
+
+# ---------------------------------------------------------------------------
+# _iso_z + _build_wildcard_event timestamp normalisation
+# ---------------------------------------------------------------------------
+
+
+def test_iso_z_emits_z_suffix_on_utc_datetime() -> None:
+    """``_iso_z`` renders a UTC instant with the ``Z`` suffix.
+
+    Pinning the canonical form because the server's Pydantic
+    ``AwareDatetime`` round-trip emits exactly this shape; a drift back to
+    ``+00:00`` (the Python default for ``isoformat``) reintroduces the
+    ``batch_hash`` mismatch that dropped every offchain delivery before
+    this fix landed.
+    """
+    from datetime import datetime, timezone
+
+    dt = datetime(2026, 6, 25, 13, 19, 6, 651013, tzinfo=timezone.utc)
+    assert beh_mod._iso_z(dt) == "2026-06-25T13:19:06.651013Z"
+
+
+def test_iso_z_converts_non_utc_offset_to_utc_z() -> None:
+    """A non-UTC offset is rotated to UTC, then emitted with ``Z``.
+
+    Plain ``.replace("+00:00", "Z")`` would leave ``+05:30`` untouched and
+    the canonical-JSON bytes wouldn't match the server's UTC-normalised
+    re-emit. ``_iso_z`` goes through ``astimezone(utc)`` to close that gap.
+    """
+    from datetime import datetime, timezone, timedelta
+
+    ist = timezone(timedelta(hours=5, minutes=30))
+    dt = datetime(2026, 6, 25, 18, 49, 6, 651013, tzinfo=ist)
+    # Same wall-clock instant in UTC: 18:49 IST == 13:19 UTC.
+    assert beh_mod._iso_z(dt) == "2026-06-25T13:19:06.651013Z"
+
+
+def test_iso_z_naive_datetime_raises() -> None:
+    """A naive datetime is a programming bug; surface it loudly.
+
+    ``astimezone`` on a naive value raises ``ValueError`` in modern Python.
+    The helper is documented as taking a tz-aware value; verifying the
+    raise here pins the contract so a future refactor that swaps the
+    helper out doesn't silently coerce naive values to local time.
+    """
+    from datetime import datetime
+
+    with pytest.raises((ValueError, OSError)):
+        beh_mod._iso_z(datetime(2026, 6, 25, 13, 19, 6))
+
+
+def _wildcard_event_setup(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    request_data: Dict[str, Any],
+    response_data: Optional[Dict[str, Any]] = None,
+    req_id: str = "req-z",
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Wire ``shared_state`` so ``_build_wildcard_event`` sees the inputs.
+
+    Returns the ``done_task`` and ``executing_task`` shaped for the call
+    so each test can vary fields without re-deriving the dict shape.
+    """
+    if response_data is None:
+        response_data = {
+            "result": "p_yes=0.7",
+            "schema_version": "2.0",
+            "executed_at": "2026-06-25T13:19:06.953661Z",
+        }
+    shared_state[beh_mod.IN_MEMORY_REQUESTS] = {req_id: json.dumps(request_data)}
+    shared_state.setdefault(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})[
+        req_id
+    ] = {"response": response_data}
+    done_task = {
+        "request_id": req_id,
+        "is_offchain": True,
+        "tool": request_data.get("tool", "prediction-offline"),
+    }
+    executing_task = {
+        "requestId": req_id,
+        "request_delivery_rate": 10**16,
+        "is_offchain": True,
+        "sender": "0xrequester",
+    }
+    return done_task, executing_task
+
+
+def test_build_wildcard_event_emits_z_on_all_timestamps(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """All three timestamps end in ``Z`` (not ``+00:00``) on the happy path.
+
+    Regression guard for the production-silent ``BATCH_HASH_MISMATCH`` bug:
+    the mech hashed events with ``+00:00``, the server's Pydantic
+    re-emit normalised to ``Z``, and every offchain delivery was rejected
+    at the last auth-chain step.
+    """
+    request_data = {
+        "prompt": "Will BTC reach $100k?",
+        "tool": "prediction-offline",
+        "nonce": "uuid-1",
+        "requested_at": "2026-06-25T13:19:06.651013+00:00",
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+    assert event["request"]["requested_at"].endswith("Z")
+    assert "+00:00" not in event["request"]["requested_at"]
+    assert event["response"]["executed_at"].endswith("Z")
+    assert "+00:00" not in event["response"]["executed_at"]
+    assert event["response"]["delivered_at"].endswith("Z")
+    assert "+00:00" not in event["response"]["delivered_at"]
+
+
+def test_build_wildcard_event_normalises_non_utc_requested_at(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """A requester-supplied non-UTC offset rotates to UTC, then emits ``Z``.
+
+    The advisory case OjusWiZard flagged: ``.replace("+00:00", "Z")`` only
+    handles UTC; a ``+05:30`` offset would have passed through unchanged
+    and the canonical-JSON bytes wouldn't have matched the server's UTC
+    re-emit. The fix is ``datetime.fromisoformat(...).astimezone(utc)``.
+    """
+    request_data = {
+        "prompt": "noon in Mumbai",
+        "tool": "prediction-offline",
+        # 18:49:06 IST == 13:19:06 UTC.
+        "requested_at": "2026-06-25T18:49:06.651013+05:30",
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+    assert event["request"]["requested_at"] == "2026-06-25T13:19:06.651013Z"
+
+
+def test_build_wildcard_event_unix_requested_at_is_z(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """A Unix-int ``requested_at`` round-trips through UTC + ``Z``."""
+    request_data = {
+        "prompt": "via integer",
+        "tool": "prediction-offline",
+        # 2026-06-25T13:19:06Z
+        "requested_at": 1782393546,
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+    assert event["request"]["requested_at"] == "2026-06-25T13:19:06Z"
+
+
+def test_build_wildcard_event_malformed_requested_at_falls_back(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """A non-ISO ``requested_at`` falls back to ``executed_at`` without crashing.
+
+    Catches a malformed requester payload (manual curl, a stale client) so
+    the FSM round doesn't die on a ``ValueError`` from ``fromisoformat``.
+    The fallback ends in ``Z`` because ``executed_at`` does.
+    """
+    request_data = {
+        "prompt": "garbled",
+        "tool": "prediction-offline",
+        "requested_at": "not-a-timestamp",
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+    assert event["request"]["requested_at"].endswith("Z")
+
+
+# ---------------------------------------------------------------------------
+# _execute_task offchain-skip branch
+# ---------------------------------------------------------------------------
+
+
+def test_execute_task_offchain_dispatches_via_handle_get_task_no_ipfs_get(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Off-chain pending task → ``_handle_get_task`` called inline, no IPFS GET.
+
+    The handler short-circuits the IPFS upload but #457 left the symmetric
+    short-circuit on the get-side missing. This patch feeds a synthetic
+    ``IpfsMessage`` (the inline ``ipfs_data`` wrapped in
+    ``SimpleNamespace(files={"metadata.json": ...})``) straight into
+    ``_handle_get_task`` instead. Asserting both halves: the synthetic
+    message reaches ``_handle_get_task``, and ``send_message`` is never
+    called (which would be the IPFS GET).
+    """
+    params_stub.in_flight_req = False
+    behaviour._executing_task = None
+    behaviour._invalid_request = False
+    inline_payload = json.dumps(
+        {"prompt": "What is 2+2?", "tool": "prediction-offline", "nonce": "u-1"}
+    )
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": "req-off-1",
+            "request_delivery_rate": 10**16,
+            "is_offchain": True,
+            "data": b"\x00" * 32,
+            "ipfs_data": inline_payload,
+            "sender": "0xrequester",
+        }
+    )
+    handle_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "_handle_get_task",
+        lambda msg, dlg: handle_calls.append((msg, dlg)),
+    )
+    send_calls: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda *a, **k: send_calls.append((a, k)),
+    )
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+
+    behaviour._execute_task()
+
+    assert len(handle_calls) == 1, "offchain branch must call _handle_get_task once"
+    msg, _ = handle_calls[0]
+    # Synthetic SimpleNamespace carries the inline payload under
+    # metadata.json so _handle_get_task's downstream parse runs unchanged.
+    assert msg.files == {"metadata.json": inline_payload}
+    assert send_calls == [], "offchain branch must NOT issue an IPFS GET"
+
+
+def test_execute_task_offchain_missing_ipfs_data_sets_invalid_request(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Off-chain task with no inline payload → invalid request, no dispatch.
+
+    Defensive guard: a buffered off-chain task without ``ipfs_data`` is a
+    handler bug; the patch sets ``_invalid_request=True`` so the FSM
+    cleans up rather than dispatching ``_handle_get_task(SimpleNamespace(
+    files={"metadata.json": None}))`` which would crash deeper in the
+    pipeline.
+    """
+    params_stub.in_flight_req = False
+    behaviour._executing_task = None
+    behaviour._invalid_request = False
+    shared_state[beh_mod.PENDING_TASKS].append(
+        {
+            "requestId": "req-off-bad",
+            "request_delivery_rate": 10**16,
+            "is_offchain": True,
+            "data": b"\x00" * 32,
+            # No ``ipfs_data`` field at all — the off-chain handler should
+            # never produce this, but defend against it anyway.
+            "sender": "0xrequester",
+        }
+    )
+    handle_calls: list = []
+    monkeypatch.setattr(
+        behaviour, "_handle_get_task", lambda msg, dlg: handle_calls.append(1)
+    )
+    send_calls: list = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: send_calls.append(1))
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+
+    behaviour._execute_task()
+
+    assert behaviour._invalid_request is True
+    assert handle_calls == []
+    assert send_calls == []
