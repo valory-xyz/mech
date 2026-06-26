@@ -134,6 +134,7 @@ class Params(Model):
         self.gnosis_ledger_rpc: str = kwargs.get("gnosis_ledger_rpc", "")
         self.polygon_ledger_rpc: str = kwargs.get("polygon_ledger_rpc", "")
         self.base_ledger_rpc: str = kwargs.get("base_ledger_rpc", "")
+        self.optimism_ledger_rpc: str = kwargs.get("optimism_ledger_rpc", "")
         # Lower-case the payment_type keys at load so a checksummed-vs-lowercase
         # hex mismatch at lookup time can't silently fall back to the zero
         # address (which would signal a native-asset deposit for what is really

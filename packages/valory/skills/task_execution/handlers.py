@@ -109,6 +109,7 @@ class ChainId(int, Enum):
     GNOSIS = 100
     POLYGON = 137
     BASE = 8453
+    OPTIMISM = 10
 
 
 class BodyKey(str, Enum):

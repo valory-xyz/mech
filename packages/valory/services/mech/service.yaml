@@ -7,7 +7,7 @@ license: Apache-2.0
 fingerprint:
   README.md: bafybeihppqns2lwn5vehtqh2wu4tjyf76dbzxc26nlfws4sc5hcbjbalma
 fingerprint_ignore_patterns: []
-agent: valory/mech:0.1.0:bafybeidu2vxm6xuybrk6gfspzg4al2ntokwcxulvoqitlyy3knieo46rua
+agent: valory/mech:0.1.0:bafybeiet4mcpr36cm6wuprswfrxgibr5ob5rii277ynx65gl7a27qpekcm
 number_of_agents: 4
 deployment:
   agent:
@@ -211,6 +211,7 @@ type: skill
         gnosis_ledger_rpc: ${GNOSIS_LEDGER_RPC_0:str:http://host.docker.internal:8545}
         polygon_ledger_rpc: ${POLYGON_LEDGER_RPC_0:str:http://host.docker.internal:8545}
         base_ledger_rpc: ${BASE_LEDGER_RPC_0:str:http://host.docker.internal:8545}
+        optimism_ledger_rpc: ${OPTIMISM_LEDGER_RPC_0:str:http://host.docker.internal:8545}
 1:
   models:
     params:
@@ -233,6 +234,7 @@ type: skill
         gnosis_ledger_rpc: ${GNOSIS_LEDGER_RPC_1:str:http://host.docker.internal:8545}
         polygon_ledger_rpc: ${POLYGON_LEDGER_RPC_1:str:http://host.docker.internal:8545}
         base_ledger_rpc: ${BASE_LEDGER_RPC_1:str:http://host.docker.internal:8545}
+        optimism_ledger_rpc: ${OPTIMISM_LEDGER_RPC_1:str:http://host.docker.internal:8545}
 2:
   models:
     params:
@@ -255,6 +257,7 @@ type: skill
         gnosis_ledger_rpc: ${GNOSIS_LEDGER_RPC_2:str:http://host.docker.internal:8545}
         polygon_ledger_rpc: ${POLYGON_LEDGER_RPC_2:str:http://host.docker.internal:8545}
         base_ledger_rpc: ${BASE_LEDGER_RPC_2:str:http://host.docker.internal:8545}
+        optimism_ledger_rpc: ${OPTIMISM_LEDGER_RPC_2:str:http://host.docker.internal:8545}
 3:
   models:
     params:
@@ -277,6 +280,7 @@ type: skill
         gnosis_ledger_rpc: ${GNOSIS_LEDGER_RPC_3:str:http://host.docker.internal:8545}
         polygon_ledger_rpc: ${POLYGON_LEDGER_RPC_3:str:http://host.docker.internal:8545}
         base_ledger_rpc: ${BASE_LEDGER_RPC_3:str:http://host.docker.internal:8545}
+        optimism_ledger_rpc: ${OPTIMISM_LEDGER_RPC_3:str:http://host.docker.internal:8545}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
@@ -298,6 +302,11 @@ type: connection
         chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:137}
         poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:true}
         default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
+      optimism:
+        address: ${OPTIMISM_LEDGER_RPC_0:str:http://host.docker.internal:8545}
+        chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:10}
+        poa_chain: ${OPTIMISM_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${OPTIMISM_LEDGER_PRICING:str:eip1559}
 1:
   config:
     ledger_apis:
@@ -316,6 +325,11 @@ type: connection
         chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:137}
         poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:true}
         default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
+      optimism:
+        address: ${OPTIMISM_LEDGER_RPC_1:str:http://host.docker.internal:8545}
+        chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:10}
+        poa_chain: ${OPTIMISM_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${OPTIMISM_LEDGER_PRICING:str:eip1559}
 2:
   config:
     ledger_apis:
@@ -334,6 +348,11 @@ type: connection
         chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:137}
         poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:true}
         default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
+      optimism:
+        address: ${OPTIMISM_LEDGER_RPC_2:str:http://host.docker.internal:8545}
+        chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:10}
+        poa_chain: ${OPTIMISM_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${OPTIMISM_LEDGER_PRICING:str:eip1559}
 3:
   config:
     ledger_apis:
@@ -352,6 +371,11 @@ type: connection
         chain_id: ${POLYGON_LEDGER_CHAIN_ID:int:137}
         poa_chain: ${POLYGON_LEDGER_IS_POA_CHAIN:bool:true}
         default_gas_price_strategy: ${POLYGON_LEDGER_PRICING:str:eip1559_polygon}
+      optimism:
+        address: ${OPTIMISM_LEDGER_RPC_3:str:http://host.docker.internal:8545}
+        chain_id: ${OPTIMISM_LEDGER_CHAIN_ID:int:10}
+        poa_chain: ${OPTIMISM_LEDGER_IS_POA_CHAIN:bool:false}
+        default_gas_price_strategy: ${OPTIMISM_LEDGER_PRICING:str:eip1559}
 ---
 public_id: valory/p2p_libp2p_client:0.1.0
 type: connection
