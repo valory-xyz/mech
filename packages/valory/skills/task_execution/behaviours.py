@@ -1680,8 +1680,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # untouched and reintroduce the ``batch_hash`` mismatch the
             # canonicalisation is meant to close. Malformed strings fall
             # through to ``now_iso`` rather than crashing the FSM round.
+            #
+            # The trailing-``Z`` rewrite is needed because
+            # ``datetime.fromisoformat`` rejects ``…Z`` on Python 3.10;
+            # the canonical-``Z`` form is what the server emits and what
+            # JavaScript's ``Date.prototype.toISOString()`` produces, so
+            # a requester re-using the server's own timestamp shape
+            # would otherwise silently fall back to ``executed_at`` and
+            # lose the real request time.
             try:
-                requested_at_iso = _iso_z(datetime.fromisoformat(requested_at_raw))
+                requested_at_iso = _iso_z(
+                    datetime.fromisoformat(requested_at_raw.replace("Z", "+00:00"))
+                )
             except ValueError:
                 self.context.logger.warning(
                     "requested_at=%r for req_id=%s is not parsable ISO 8601; "

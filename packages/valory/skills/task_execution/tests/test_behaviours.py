@@ -3178,6 +3178,31 @@ def test_build_wildcard_event_unix_requested_at_is_z(
     assert event["request"]["requested_at"] == "2026-06-25T13:19:06Z"
 
 
+def test_build_wildcard_event_z_suffix_requested_at_is_parsed(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """A ``…Z`` requested_at parses on Python 3.10 (the version-dependent case)."""
+    # datetime.fromisoformat rejects a trailing Z until Python 3.11; the
+    # canonical Z form is what the server emits and what JS toISOString()
+    # produces, so a requester re-using the server's timestamp shape would
+    # otherwise silently fall back to executed_at and lose the real
+    # request time. The .replace("Z", "+00:00") guards that.
+    request_data = {
+        "prompt": "trailing Z",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+    assert event["request"]["requested_at"] == "2026-06-25T13:19:06.651013Z"
+
+
 def test_build_wildcard_event_malformed_requested_at_falls_back(
     behaviour: Any,
     params_stub: Any,
