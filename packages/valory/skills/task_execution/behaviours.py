@@ -1652,12 +1652,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # All three timestamps go through ``_iso_z`` so the canonical-JSON
         # bytes match the server's Pydantic round-trip (see helper docstring).
         now_iso = _iso_z(datetime.now(timezone.utc))
+        # ``datetime.fromtimestamp`` raises ``OverflowError`` (and on some
+        # libcs ``OSError``) for values past the platform's representable
+        # range, plus ``ValueError`` for NaN. The ``executed_at`` field
+        # comes from tool plumbing on the mech itself, but it still rides
+        # the FSM consensus channel and a buggy tool returning a wild
+        # value would otherwise crash the round; fall back to ``now_iso``.
         executed_at_unix = response_data.get("executed_at")
-        executed_at_iso = (
-            _iso_z(datetime.fromtimestamp(executed_at_unix, tz=timezone.utc))
-            if isinstance(executed_at_unix, (int, float))
-            else now_iso
-        )
+        if isinstance(executed_at_unix, (int, float)):
+            try:
+                executed_at_iso = _iso_z(
+                    datetime.fromtimestamp(executed_at_unix, tz=timezone.utc)
+                )
+            except (ValueError, OverflowError, OSError):
+                self.context.logger.warning(
+                    "executed_at=%r for req_id=%s is out of range; "
+                    "falling back to now_iso.",
+                    executed_at_unix,
+                    req_id,
+                )
+                executed_at_iso = now_iso
+        else:
+            executed_at_iso = now_iso
         # Requested_at: prefer the signed timestamp on the buffered request;
         # the handler validates and stores it before enqueueing. Fall back to
         # the executed_at on the response so the time-leading index entry is
@@ -1669,9 +1685,24 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "requested_at"
         )
         if isinstance(requested_at_raw, (int, float)):
-            requested_at_iso = _iso_z(
-                datetime.fromtimestamp(requested_at_raw, tz=timezone.utc)
-            )
+            # ``datetime.fromtimestamp`` raises ``OverflowError`` /
+            # ``OSError`` for values past the platform's representable
+            # range and ``ValueError`` for NaN. ``requested_at`` comes
+            # from a requester-controlled field, so the fallback closes
+            # the round-crash path on a malformed integer the same way
+            # the string branch handles a malformed ISO 8601 string.
+            try:
+                requested_at_iso = _iso_z(
+                    datetime.fromtimestamp(requested_at_raw, tz=timezone.utc)
+                )
+            except (ValueError, OverflowError, OSError):
+                self.context.logger.warning(
+                    "requested_at=%r for req_id=%s is out of range; "
+                    "falling back to executed_at.",
+                    requested_at_raw,
+                    req_id,
+                )
+                requested_at_iso = executed_at_iso
         elif isinstance(requested_at_raw, str) and requested_at_raw:
             # Parse the requester-provided ISO 8601 string and re-emit via
             # ``_iso_z`` so a non-UTC offset (``…+05:30``, ``…-08:00``) gets

@@ -3203,6 +3203,61 @@ def test_build_wildcard_event_z_suffix_requested_at_is_parsed(
     assert event["request"]["requested_at"] == "2026-06-25T13:19:06.651013Z"
 
 
+def test_build_wildcard_event_unix_requested_at_out_of_range_falls_back(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """An out-of-range Unix requested_at falls back to executed_at."""
+    # ``datetime.fromtimestamp`` raises ``OverflowError`` (or ``OSError``
+    # on some libcs) for values past the platform's representable range.
+    # The Unix branch catches it the same way the string branch catches
+    # malformed ISO 8601, so a malformed integer can't drop the delivery.
+    request_data = {
+        "prompt": "wild number",
+        "tool": "prediction-offline",
+        # 99,999,999,999,999 seconds since epoch ≈ year 5138 — past the
+        # range Python's datetime can represent on a 64-bit platform.
+        "requested_at": 99_999_999_999_999,
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+    # Fallback ends in Z because executed_at does.
+    assert event["request"]["requested_at"].endswith("Z")
+
+
+def test_build_wildcard_event_unix_executed_at_out_of_range_falls_back(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """An out-of-range Unix executed_at falls back to now_iso."""
+    # Same defensive shape on the response side. ``executed_at`` comes
+    # from tool plumbing, but it still rides FSM consensus so a buggy
+    # tool returning a wild value can't take the round down with it.
+    request_data = {
+        "prompt": "wild executed",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06Z",
+    }
+    response_data = {
+        "result": "p_yes=0.7",
+        "schema_version": "2.0",
+        "executed_at": 99_999_999_999_999,  # past representable range
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data, response_data=response_data
+    )
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+    assert event["response"]["executed_at"].endswith("Z")
+
+
 def test_build_wildcard_event_malformed_requested_at_falls_back(
     behaviour: Any,
     params_stub: Any,
