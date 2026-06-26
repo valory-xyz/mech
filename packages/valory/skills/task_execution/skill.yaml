@@ -10,7 +10,7 @@ fingerprint:
   behaviours.py: bafybeicl5ga3mhv7co3qzllk7l4cmnz2enqlctwy4z2zv72oafmkh4peda
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
   handlers.py: bafybeigtaswgs7z47gncb7qysqhccgwbnfe4u37qr5s6zcwgkzapyewe7u
-  models.py: bafybeigsjfnridhcwbon3tlbvpdzm6wi7kgleioze3cor5e4wnvdsl7hf4
+  models.py: bafybeieuhchssbazb4f3nnvjex6trifp4kxse4lh6ihenmeemq36zhws7i
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeickrspufxtr47ndp5vbrkejmwutlv4swub6ai7ngyh6ejlsulxgom
   tests/test_behaviours.py: bafybeica2lyinv26al2fekg6i2n4qowp3qbroandxdwnzpdwn53oivrgnq
@@ -118,6 +118,7 @@ models:
       gnosis_ledger_rpc: http://localhost:8545
       polygon_ledger_rpc: http://localhost:8545
       base_ledger_rpc: http://localhost:8545
+      optimism_ledger_rpc: http://localhost:8545
     class_name: Params
 dependencies:
   open-aea-ledger-ethereum:
