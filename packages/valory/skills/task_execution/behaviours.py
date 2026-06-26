@@ -26,6 +26,7 @@ from asyncio import Future
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
+from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
 
 from aea.helpers.cid import to_v1
@@ -95,6 +96,35 @@ STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
+
+
+def _iso_z(dt: datetime) -> str:
+    """Render a timezone-aware datetime as ISO 8601 with the ``Z`` suffix.
+
+    Normalises through ``astimezone(timezone.utc)`` so a datetime with any
+    UTC offset (``+00:00``, ``+05:30``, ``-08:00``) emits the same canonical
+    string for the same wall-clock instant. The wildcard server's Pydantic
+    ``AwareDatetime`` round-trips through ``model_dump(mode="json")`` which
+    emits ``...Z`` for UTC; the mech's ``batch_hash`` recompute on the
+    server side compares byte-for-byte against ours, so leaving the offset
+    unconverted breaks the equality at the canonical-JSON layer (this was
+    the original ``+00:00`` → ``Z`` mismatch that dropped every offchain
+    delivery with ``400 BATCH_HASH_MISMATCH``).
+
+    Naive datetimes are rejected. Python 3.6+'s ``astimezone`` silently
+    coerces a naive value to the system's local timezone, which would
+    swap the canonical byte string between dev machines and CI without a
+    clear failure signal. The caller must attach a tz explicitly (always
+    ``timezone.utc`` in this module).
+
+    :param dt: a timezone-aware ``datetime``.
+    :return: ISO 8601 string of the same instant in UTC, suffixed with ``Z``.
+    :raises ValueError: if ``dt.tzinfo`` is None (naive datetime).
+    """
+    if dt.tzinfo is None:
+        raise ValueError("_iso_z requires a timezone-aware datetime; got a naive value")
+    return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
+
 
 # Cap on the JSON-serialised size of each ``raw_content`` blob attached to
 # a wildcard event. The blob rides Tendermint consensus replication into
@@ -733,6 +763,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.request_id_to_delivery_rate_info[request_id] = delivery_rate
         self._executing_task = task_data
         self._request_handling_deadline = None
+
+        # Off-chain path: prompt JSON is already inline in ``task_data["ipfs_data"]``
+        # (set by the handler in ``_enqueue_offchain_request`` and mirrored to
+        # ``in_memory_requests``). Skip the IPFS GET round-trip entirely and feed
+        # a synthetic message straight to ``_handle_get_task`` so the rest of the
+        # pipeline (validation + pebble dispatch) is unchanged. Matches the design
+        # intent of #457 ("off-chain path skips the IPFS upload"); the GET half
+        # was left in place by oversight.
+        if task_data.get("is_offchain"):
+            inline_payload = task_data.get("ipfs_data")
+            if not isinstance(inline_payload, str):
+                self.context.logger.warning(
+                    f"Off-chain request {request_id} missing inline ipfs_data; "
+                    f"skipping."
+                )
+                self._invalid_request = True
+                return
+            self._handle_get_task(
+                cast(Any, SimpleNamespace(files={"metadata.json": inline_payload})),
+                cast(Any, None),
+            )
+            return
+
         try:
             ipfs_hash = get_ipfs_file_hash(task_data["data"])
         except Exception as e:  # pylint: disable=W0718
@@ -852,7 +905,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _handle_done_task(self, task_result: Any) -> None:
         """Handle done tasks"""
-        executed_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        executed_at = _iso_z(datetime.now(timezone.utc))
         executing_task = cast(Dict[str, Any], self._executing_task)
         self.context.logger.info(f"Handling done task {executing_task}.")
         req_id = executing_task.get("requestId", None)
@@ -1596,13 +1649,31 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # not suitable as a delivered_at timestamp. Use the current wall-clock
         # at finalize as the best-effort delivered_at; the analytics ETL can
         # cross-correlate against the on-chain block timestamp if needed.
-        now_iso = datetime.now(timezone.utc).isoformat()
+        # All three timestamps go through ``_iso_z`` so the canonical-JSON
+        # bytes match the server's Pydantic round-trip (see helper docstring).
+        now_iso = _iso_z(datetime.now(timezone.utc))
+        # ``datetime.fromtimestamp`` raises ``OverflowError`` (and on some
+        # libcs ``OSError``) for values past the platform's representable
+        # range, plus ``ValueError`` for NaN. The ``executed_at`` field
+        # comes from tool plumbing on the mech itself, but it still rides
+        # the FSM consensus channel and a buggy tool returning a wild
+        # value would otherwise crash the round; fall back to ``now_iso``.
         executed_at_unix = response_data.get("executed_at")
-        executed_at_iso = (
-            datetime.fromtimestamp(executed_at_unix, tz=timezone.utc).isoformat()
-            if isinstance(executed_at_unix, (int, float))
-            else now_iso
-        )
+        if isinstance(executed_at_unix, (int, float)):
+            try:
+                executed_at_iso = _iso_z(
+                    datetime.fromtimestamp(executed_at_unix, tz=timezone.utc)
+                )
+            except (ValueError, OverflowError, OSError):
+                self.context.logger.warning(
+                    "executed_at=%r for req_id=%s is out of range; "
+                    "falling back to now_iso.",
+                    executed_at_unix,
+                    req_id,
+                )
+                executed_at_iso = now_iso
+        else:
+            executed_at_iso = now_iso
         # Requested_at: prefer the signed timestamp on the buffered request;
         # the handler validates and stores it before enqueueing. Fall back to
         # the executed_at on the response so the time-leading index entry is
@@ -1614,11 +1685,52 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "requested_at"
         )
         if isinstance(requested_at_raw, (int, float)):
-            requested_at_iso = datetime.fromtimestamp(
-                requested_at_raw, tz=timezone.utc
-            ).isoformat()
+            # ``datetime.fromtimestamp`` raises ``OverflowError`` /
+            # ``OSError`` for values past the platform's representable
+            # range and ``ValueError`` for NaN. ``requested_at`` comes
+            # from a requester-controlled field, so the fallback closes
+            # the round-crash path on a malformed integer the same way
+            # the string branch handles a malformed ISO 8601 string.
+            try:
+                requested_at_iso = _iso_z(
+                    datetime.fromtimestamp(requested_at_raw, tz=timezone.utc)
+                )
+            except (ValueError, OverflowError, OSError):
+                self.context.logger.warning(
+                    "requested_at=%r for req_id=%s is out of range; "
+                    "falling back to executed_at.",
+                    requested_at_raw,
+                    req_id,
+                )
+                requested_at_iso = executed_at_iso
         elif isinstance(requested_at_raw, str) and requested_at_raw:
-            requested_at_iso = requested_at_raw
+            # Parse the requester-provided ISO 8601 string and re-emit via
+            # ``_iso_z`` so a non-UTC offset (``…+05:30``, ``…-08:00``) gets
+            # converted to the canonical UTC ``Z`` form. A plain
+            # ``.replace("+00:00", "Z")`` would leave non-UTC offsets
+            # untouched and reintroduce the ``batch_hash`` mismatch the
+            # canonicalisation is meant to close. Malformed strings fall
+            # through to ``now_iso`` rather than crashing the FSM round.
+            #
+            # The trailing-``Z`` rewrite is needed because
+            # ``datetime.fromisoformat`` rejects ``…Z`` on Python 3.10;
+            # the canonical-``Z`` form is what the server emits and what
+            # JavaScript's ``Date.prototype.toISOString()`` produces, so
+            # a requester re-using the server's own timestamp shape
+            # would otherwise silently fall back to ``executed_at`` and
+            # lose the real request time.
+            try:
+                requested_at_iso = _iso_z(
+                    datetime.fromisoformat(requested_at_raw.replace("Z", "+00:00"))
+                )
+            except ValueError:
+                self.context.logger.warning(
+                    "requested_at=%r for req_id=%s is not parsable ISO 8601; "
+                    "falling back to executed_at.",
+                    requested_at_raw,
+                    req_id,
+                )
+                requested_at_iso = executed_at_iso
         else:
             requested_at_iso = executed_at_iso
 
