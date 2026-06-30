@@ -143,6 +143,29 @@ class Params(BaseParams):
         self.wildcard_events_timeout_seconds: float = float(
             kwargs.get("wildcard_events_timeout_seconds", 5.0) or 5.0
         )
+        # On-chain undelivered-request sweep. The PostTxSettlement
+        # behaviour walks ``shared_state[PENDING_TASKS]`` for tasks
+        # whose local enqueue stamp is older than
+        # ``mech_events_sweep_max_age_seconds`` and emits a request-only
+        # event for each (``MechEvent.response is None``,
+        # ``source='mech_onchain'``). Gated separately from
+        # ``mech_events_enabled`` so the delivered-event write can roll
+        # out before the sweep; default off until v1 lands and is
+        # validated against a live deployment. See
+        # ``autonolas-marketplace/docs/onchain_write_path_scope.md`` §3.2.
+        self.mech_events_sweep_pending_enabled: bool = bool(
+            kwargs.get("mech_events_sweep_pending_enabled", False)
+        )
+        # Max age in seconds before a pending task is treated as
+        # undelivered. The contract's ``RequestInfo.responseTimeout`` is
+        # the authoritative value but reading it per pending task at
+        # sweep time would cost one RPC per sweep — explicitly avoided
+        # per the design (see §3.2). Default 3600 (1 hour) is a
+        # conservative upper bound covering typical mech timeouts; tune
+        # per deployment if responseTimeout values differ.
+        self.mech_events_sweep_max_age_seconds: float = float(
+            kwargs.get("mech_events_sweep_max_age_seconds", 3600.0) or 3600.0
+        )
         super().__init__(*args, **kwargs)
 
     @classmethod

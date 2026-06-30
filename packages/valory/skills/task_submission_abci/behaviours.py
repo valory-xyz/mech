@@ -25,6 +25,7 @@ import time
 from abc import ABC
 from collections import defaultdict
 from copy import deepcopy
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
 
@@ -113,6 +114,12 @@ SENDER = "sender"
 REQUESTER_KEY = "requester"
 MECH_ADDRESS = "mech_address"
 LAST_TX = "last_tx"
+
+# Shared-state key under which task_execution.handlers stores the
+# mech's on-chain pending-task queue. Imported by reference rather than
+# from task_execution to keep the dependency direction one-way (the
+# post-tx behaviour reads, never writes).
+PENDING_TASKS = "pending_tasks"
 PAYMENT_MODEL = "payment_model"
 
 
@@ -1876,10 +1883,18 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             return
 
         events = self._extract_offchain_events()
+        # On-chain pending-task sweep: request-only events for tasks that
+        # have sat in the queue past the operator's max age. Appended to
+        # the same batch as delivered events so the signing round-trip
+        # costs one signature per settlement, not one per event class.
+        request_only_events = self._sweep_pending_undelivered()
+        if request_only_events:
+            events = events + request_only_events
         if not events:
             self.context.logger.debug(
-                "No offchain wildcard_event entries in done_tasks; "
-                "post-tx wildcard write is a no-op for this round."
+                "No wildcard_event entries in done_tasks and no swept "
+                "pending tasks; post-tx wildcard write is a no-op for "
+                "this round."
             )
             return
 
@@ -2051,26 +2066,239 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         )
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
-        """Return the ``wildcard_event`` payload from every offchain done_task.
+        """Return the ``wildcard_event`` payload from every done_task that
+        carries one.
 
-        Only tasks with ``is_offchain=True`` AND a non-empty
-        ``wildcard_event`` field are included: on-chain tasks (where the
-        old IPFS publication path still runs) do not need a separate
-        analytics write, and an offchain task without a wildcard_event
-        attached is a finalize-time bug that we'd rather skip than crash.
+        Both off-chain HTTP deliveries (``source = 'mech_offchain'``) and
+        on-chain marketplace deliveries (``source = 'mech_onchain'``) now
+        ride the same wildcard write path; the per-event ``source`` field
+        set inside :py:meth:`task_execution.behaviours._build_wildcard_event`
+        is what disambiguates the two on the wildcard side. The filter
+        here keys on the presence of a ``wildcard_event`` field — built
+        only when both ``mech_events_enabled`` is set AND the task is a
+        marketplace task — so on-chain non-marketplace tasks (legacy
+        mech contract) stay out of the lake by construction.
 
-        :return: an ordered list of ``MechSettlementEvent``-shaped dicts.
+        :return: an ordered list of ``MechEvent``-shaped dicts.
         """
         done_tasks = cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
         events: List[Dict[str, Any]] = []
         for task in done_tasks:
-            if not task.get("is_offchain"):
-                continue
             event = task.get("wildcard_event")
             if not isinstance(event, dict):
                 continue
             events.append(event)
         return events
+
+    def _sweep_pending_undelivered(self) -> List[Dict[str, Any]]:
+        """Walk the on-chain pending-tasks queue, emit request-only
+        events for any task that has sat in the queue past the
+        operator-configured sweep window, and remove those tasks from
+        the queue.
+
+        The sweep is the mech side of the on-chain write path's
+        undelivered-request capture. Local-clock comparison only: the
+        contract's ``mapRequestIdInfos.responseTimeout`` is the
+        authoritative timeout, but reading it per task is one RPC per
+        sweep that we explicitly want to avoid (see
+        ``autonolas-marketplace/docs/onchain_write_path_scope.md`` §3.2).
+        Instead, ``filter_requests`` in task_execution.handlers stamps
+        ``enqueued_at_local`` at enqueue time, and the sweep here treats
+        any pending task older than ``mech_events_sweep_max_age_seconds``
+        as undelivered. The DB's race-safe ``ON CONFLICT (request_id)
+        DO UPDATE ... WHERE delivery_mech IS NULL`` clause (predict-api
+        side) reconciles the lake to the right row if step-in delivers
+        the request after the sweep — see §3.4.
+
+        Gated on ``mech_events_sweep_pending_enabled`` so operators can
+        roll this out independently from the delivered-event write
+        (which is what ``mech_events_enabled`` already gates). A
+        request-only event always carries ``source='mech_onchain'``;
+        the off-chain path doesn't produce them by construction.
+
+        :return: an ordered list of request-only event dicts ready to
+            append to the batch.
+        """
+        if not getattr(self.params, "mech_events_enabled", False):
+            return []
+        if not getattr(self.params, "mech_events_sweep_pending_enabled", False):
+            return []
+        max_age = float(
+            getattr(self.params, "mech_events_sweep_max_age_seconds", 3600.0)
+        )
+        if max_age <= 0:
+            return []
+        pending = self.context.shared_state.get(PENDING_TASKS)
+        if not isinstance(pending, list) or not pending:
+            return []
+
+        now_ts = time.time()
+        kept: List[Dict[str, Any]] = []
+        request_only_events: List[Dict[str, Any]] = []
+        for task in pending:
+            if not isinstance(task, dict):
+                # Anything that isn't a dict shouldn't be in
+                # pending_tasks. Keep it as-is rather than dropping —
+                # whatever bug put it there is not this sweep's
+                # problem.
+                kept.append(task)
+                continue
+            enqueued_at = task.get("enqueued_at_local")
+            if not isinstance(enqueued_at, (int, float)):
+                # Older entries (pre-sweep deployment) won't carry the
+                # stamp. Leave them alone; they'll be picked up on the
+                # next enqueue or when the handler stamps fresh.
+                kept.append(task)
+                continue
+            if now_ts - float(enqueued_at) < max_age:
+                kept.append(task)
+                continue
+            event = self._build_request_only_event(task, now_ts)
+            if event is None:
+                # If we can't build a valid event from a stale task,
+                # keep it on the queue rather than silently dropping —
+                # better a re-attempted sweep than a lost write.
+                kept.append(task)
+                continue
+            request_only_events.append(event)
+            self.context.logger.info(
+                "Wildcard sweep: emitting request-only event for "
+                "timed-out task request_id=%s, age=%.0fs",
+                event["request"].get("request_id"),
+                now_ts - float(enqueued_at),
+            )
+
+        # Mutate the shared list in place: other consumers (the task
+        # picker in task_execution) hold the same reference and would
+        # not see a rebinding.
+        pending[:] = kept
+        return request_only_events
+
+    def _build_request_only_event(
+        self, task: Dict[str, Any], now_ts: float
+    ) -> Optional[Dict[str, Any]]:
+        """Build a request-only ``MechEvent``-shaped dict for a timed-out
+        pending task.
+
+        The pending-task dict carries the on-chain bits the marketplace
+        knows (request_id, requester, priority_mech, delivery_rate,
+        content_cid) but not the IPFS-resolved fields (prompt, tool,
+        model). Those would require an IPFS fetch at sweep time, which
+        we explicitly do not do; placeholders keep the wildcard schema
+        happy. The lake's analytics-side undelivered signal — the
+        absence of a ``mech_responses`` row — does not depend on those
+        fields, so the placeholder values do not corrupt downstream
+        analytics. If a richer fill-in becomes load-bearing later, the
+        sweep can lazily resolve IPFS at sweep time; v1 trades fidelity
+        for predictability.
+
+        :param task: one entry from ``shared_state[PENDING_TASKS]``.
+        :param now_ts: ``time.time()`` value captured by the caller so
+            every event in the sweep shares the same ``requested_at``
+            fallback if the task carries no local timestamp.
+        :return: a dict with the same shape as the off-chain
+            ``_build_wildcard_event`` return, but with ``response: None``
+            and ``source: 'mech_onchain'``; or ``None`` if the task
+            doesn't have the minimum fields the wildcard server
+            requires.
+        """
+        request_id = task.get("requestId")
+        if not request_id:
+            self.context.logger.warning(
+                "Pending sweep: skipping task with no requestId: %s", task
+            )
+            return None
+        request_id_str = str(request_id)
+        priority_mech = str(task.get("priorityMech") or "")
+        requester = str(task.get("requester") or "")
+        if not priority_mech or not requester:
+            self.context.logger.warning(
+                "Pending sweep: skipping task with missing priority_mech "
+                "or requester: %s",
+                request_id_str,
+            )
+            return None
+        # ``data`` on the pending-task dict is the IPFS CID for the
+        # request body (raw bytes from the contract event). Surface it
+        # as ``content_cid`` for the lake; downstream consumers can
+        # resolve later if they need the body, but the lake row itself
+        # doesn't need it.
+        content_cid_raw = task.get("data")
+        if isinstance(content_cid_raw, (bytes, bytearray)):
+            content_cid = "0x" + content_cid_raw.hex()
+        elif isinstance(content_cid_raw, str):
+            content_cid = content_cid_raw
+        else:
+            content_cid = None
+
+        # ``enqueued_at_local`` is monotonic-ish ``time.time()`` from
+        # the handler; the wildcard ``requested_at`` is the requester's
+        # signed-header timestamp on the off-chain path. The on-chain
+        # path's request timestamp is the block.timestamp, which we
+        # don't have here without a contract read; use the local stamp
+        # as a stand-in. Skew is bounded by the gap between request
+        # submission and the mech seeing the event (typically seconds).
+        enqueued_at_raw = task.get("enqueued_at_local") or now_ts
+        try:
+            requested_at_iso = (
+                datetime.fromtimestamp(float(enqueued_at_raw), tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+        except (TypeError, ValueError, OverflowError, OSError):
+            requested_at_iso = (
+                datetime.fromtimestamp(now_ts, tz=timezone.utc)
+                .isoformat()
+                .replace("+00:00", "Z")
+            )
+
+        delivery_rate_raw = task.get("request_delivery_rate")
+        delivery_rate_str = (
+            str(delivery_rate_raw) if delivery_rate_raw is not None else None
+        )
+
+        # The wildcard server requires ``prompt`` to be a non-empty
+        # string and ``tool`` to be a non-empty string. Placeholders
+        # match the off-chain build's pattern ("[offchain request]")
+        # so a reader can spot a sweep-emitted row from the value.
+        prompt = "[onchain undelivered]"
+        tool = "unknown"
+        chain_id = int(
+            getattr(self.params, "mech_events_chain_id", 0) or 0
+        )
+        marketplace_address = str(
+            getattr(self.params, "mech_marketplace_address", "") or ""
+        )
+
+        return {
+            "request": {
+                "request_id": request_id_str,
+                "chain_id": chain_id,
+                "marketplace_address": marketplace_address,
+                "requester": requester,
+                "priority_mech": priority_mech,
+                # Request-only events carry no delivery_mech: no one
+                # delivered. The lake column stays NULL until a stepper
+                # writes the delivered event, at which point the
+                # ON CONFLICT DO UPDATE fills it in.
+                "delivery_mech": None,
+                "payment_type": None,
+                "delivery_rate": delivery_rate_str,
+                "nonce": None,
+                "content_cid": content_cid,
+                "prompt": prompt,
+                "tool": tool,
+                "model": None,
+                "tool_params": None,
+                "raw_content": {
+                    "note": "request-only event; IPFS body not resolved",
+                    "request_id": request_id_str,
+                },
+                "requested_at": requested_at_iso,
+            },
+            "response": None,
+            "source": "mech_onchain",
+        }
 
 
 class TaskSubmissionRoundBehaviour(AbstractRoundBehaviour):

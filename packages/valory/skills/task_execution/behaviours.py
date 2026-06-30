@@ -1545,7 +1545,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # built and nothing rides Tendermint consensus replication. The flag
         # check lives here as well as in the post-settlement behaviour so
         # the consensus-state cost is gated, not just the HTTP write.
-        if is_offchain and getattr(self.params, "mech_events_enabled", False):
+        # Build the wildcard event for both off-chain HTTP deliveries
+        # (is_offchain=True) and on-chain marketplace deliveries
+        # (is_offchain=False AND is_marketplace_mech). The ``source`` field
+        # on the event (set by ``_build_wildcard_event``) is what
+        # disambiguates the two paths on the wildcard side: ``mech_offchain``
+        # for the paid HTTP path, ``mech_onchain`` for the on-chain rails.
+        # See ``autonolas-marketplace/docs/onchain_write_path_scope.md`` for
+        # the agreed shape.
+        wildcard_mode_enabled = getattr(self.params, "mech_events_enabled", False)
+        is_marketplace_delivery = bool(done_task.get("is_marketplace_mech"))
+        if wildcard_mode_enabled and (is_offchain or is_marketplace_delivery):
             done_task["wildcard_event"] = self._build_wildcard_event(
                 done_task=done_task,
                 cid=cid,
@@ -1643,6 +1653,17 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         tool = str(done_task.get("tool") or "unknown")
         delivery_mech = str(
             done_task.get("mech_address") or self.params.mech_marketplace_address or ""
+        )
+        # Wildcard ``source`` derives from the per-task ``is_offchain``
+        # flag: True → ``mech_offchain`` (paid HTTP path); False →
+        # ``mech_onchain`` (the on-chain marketplace rails). This is the
+        # only field that disambiguates the two paths on the wildcard
+        # side; the per-row ``is_offchain`` boolean stays on the
+        # response payload as well (the lake keeps both because the
+        # ipfs_historical backfill describes either path).
+        is_offchain_task = bool(executing_task.get("is_offchain", False))
+        wildcard_source = (
+            "mech_offchain" if is_offchain_task else "mech_onchain"
         )
 
         # `start_time` is a perf_counter() value (monotonic, not wall-clock),
@@ -1829,7 +1850,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "error": error_text,
                 "executed_at": executed_at_iso,
                 "cost_dict": cost_dict,
-                "is_offchain": True,
+                "is_offchain": is_offchain_task,
                 "tool_hash": tool_hash,
                 "execution_latency_ms": None,
                 "params_used": (
@@ -1845,6 +1866,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "response_cid": None,
                 "delivered_at": now_iso,
             },
+            "source": wildcard_source,
         }
 
     def _reset_executing_task(self) -> None:

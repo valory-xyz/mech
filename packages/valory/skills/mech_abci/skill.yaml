@@ -30,11 +30,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
-- valory/task_submission_abci:0.1.0:bafybeidzqkqghem72wyluktwe3qhtdruphrksx4qayoengjmprnkrh4dk4
+- valory/task_submission_abci:0.1.0:bafybeidqxjjxxf6ixvpjs2x45qtslcmzcrrhsixli4o7dtd7wcy6xi6qku
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
 - valory/delivery_rate_abci:0.1.0:bafybeiaefr3eiajklnb6m4jtl7rpxr5t2lmrpizfy7gqkjem3qiewo7cz4
-- valory/task_execution:0.1.0:bafybeifc56wu5xwjpjhfstgm6wbf6yptshhfbpqji7dsrtrdukkumiwwpq
+- valory/task_execution:0.1.0:bafybeiaarodwftwxwt2lortpnhj6zk3nfffz4trc3ph654xex7scxtqqu4
 behaviours:
   main:
     args: {}
@@ -174,6 +174,8 @@ models:
       mech_events_enabled: false
       wildcard_events_url: ''
       wildcard_events_timeout_seconds: 5.0
+      mech_events_sweep_pending_enabled: false
+      mech_events_sweep_max_age_seconds: 3600.0
     class_name: Params
   randomness_api:
     args:
