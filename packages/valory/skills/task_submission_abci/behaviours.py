@@ -1866,7 +1866,8 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             1. The feature flag is off (the default during Phase 1).
             2. The skill has no wildcard URL configured.
             3. The round's done_tasks carry no offchain wildcard_event
-               entries (the on-chain path doesn't populate these).
+               entries and the pending-task sweep produced no
+               request-only events (a truly quiet round).
 
         :yield: AEA protocol messages (signing dialogue, HTTP request) via
             the underlying generator-based helpers; this method does not
@@ -1887,7 +1888,12 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # have sat in the queue past the operator's max age. Appended to
         # the same batch as delivered events so the signing round-trip
         # costs one signature per settlement, not one per event class.
-        request_only_events = self._sweep_pending_undelivered()
+        # ``_sweep_pending_undelivered`` returns the swept ``request_id``s
+        # alongside the events but does NOT mutate the pending queue: any
+        # guard-skip or POST failure below would otherwise drop the tasks
+        # with no re-queue and no written row. The queue is only mutated
+        # once the wildcard POST has confirmed a 2xx below.
+        request_only_events, swept_request_ids = self._sweep_pending_undelivered()
         if request_only_events:
             events = events + request_only_events
         if not events:
@@ -2064,6 +2070,15 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             len(events),
             self.context.agent_address,
         )
+        # Wildcard confirmed the batch; drop the swept undelivered tasks
+        # from the pending queue now. Deferring to this point (rather than
+        # inside ``_sweep_pending_undelivered``) ensures that any early
+        # return above — missing mech address, missing marketplace, mixed
+        # chains, unconfigured chain_id, digest build, signing, JSON
+        # serialisation, POST timeout, or non-2xx status — leaves the
+        # sweep at-least-once: the tasks stay on the queue and the next
+        # FSM cycle re-attempts the write.
+        self._drop_swept_from_pending(swept_request_ids)
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
         """Return the ``wildcard_event`` payload from every done_task that
@@ -2090,11 +2105,26 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             events.append(event)
         return events
 
-    def _sweep_pending_undelivered(self) -> List[Dict[str, Any]]:
-        """Walk the on-chain pending-tasks queue, emit request-only
+    def _sweep_pending_undelivered(
+        self,
+    ) -> Tuple[List[Dict[str, Any]], List[str]]:
+        """Walk the on-chain pending-tasks queue and return request-only
         events for any task that has sat in the queue past the
-        operator-configured sweep window, and remove those tasks from
-        the queue.
+        operator-configured sweep window, alongside the ``request_id``s
+        of the swept tasks so the caller can remove them from the queue
+        AFTER the wildcard POST confirms success.
+
+        The sweep does NOT mutate ``PENDING_TASKS``. Dropping tasks here
+        (as an earlier revision of this PR did) would lose the
+        undelivered signal on any of the six early-return paths below
+        the caller — missing mech address, missing marketplace, mixed
+        chains, unconfigured chain id, digest-build failure, or the POST
+        itself failing — because ``PENDING_TASKS`` is the only record
+        the mech has for a task that never got delivered (unlike a
+        delivered event, which is anchored on-chain). Deferring the
+        queue mutation to a confirmed 2xx keeps the sweep at-least-once
+        rather than at-most-once and lets a transient POST failure
+        recover on the next FSM cycle.
 
         The sweep is the mech side of the on-chain write path's
         undelivered-request capture. Local-clock comparison only: the
@@ -2116,63 +2146,83 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         request-only event always carries ``source='mech_onchain'``;
         the off-chain path doesn't produce them by construction.
 
-        :return: an ordered list of request-only event dicts ready to
-            append to the batch.
+        :return: a ``(events, swept_request_ids)`` tuple. ``events`` is
+            an ordered list of request-only event dicts ready to append
+            to the batch; ``swept_request_ids`` is the ordered list of
+            ``request_id`` strings the caller should drop from
+            ``PENDING_TASKS`` if the wildcard POST returns 2xx. Empty
+            lists on any short-circuit or when nothing timed out.
         """
         if not getattr(self.params, "mech_events_enabled", False):
-            return []
+            return [], []
         if not getattr(self.params, "mech_events_sweep_pending_enabled", False):
-            return []
+            return [], []
         max_age = float(
             getattr(self.params, "mech_events_sweep_max_age_seconds", 3600.0)
         )
         if max_age <= 0:
-            return []
+            return [], []
         pending = self.context.shared_state.get(PENDING_TASKS)
         if not isinstance(pending, list) or not pending:
-            return []
+            return [], []
 
         now_ts = time.time()
-        kept: List[Dict[str, Any]] = []
         request_only_events: List[Dict[str, Any]] = []
+        swept_request_ids: List[str] = []
         for task in pending:
             if not isinstance(task, dict):
                 # Anything that isn't a dict shouldn't be in
-                # pending_tasks. Keep it as-is rather than dropping —
-                # whatever bug put it there is not this sweep's
-                # problem.
-                kept.append(task)
+                # pending_tasks. Leave it alone — whatever bug put it
+                # there is not this sweep's problem.
                 continue
             enqueued_at = task.get("enqueued_at_local")
             if not isinstance(enqueued_at, (int, float)):
                 # Older entries (pre-sweep deployment) won't carry the
                 # stamp. Leave them alone; they'll be picked up on the
                 # next enqueue or when the handler stamps fresh.
-                kept.append(task)
                 continue
             if now_ts - float(enqueued_at) < max_age:
-                kept.append(task)
                 continue
             event = self._build_request_only_event(task, now_ts)
             if event is None:
                 # If we can't build a valid event from a stale task,
-                # keep it on the queue rather than silently dropping —
+                # leave it on the queue rather than silently dropping —
                 # better a re-attempted sweep than a lost write.
-                kept.append(task)
                 continue
             request_only_events.append(event)
+            swept_request_ids.append(str(event["request"].get("request_id")))
             self.context.logger.info(
-                "Wildcard sweep: emitting request-only event for "
-                "timed-out task request_id=%s, age=%.0fs",
+                "Wildcard sweep: staging request-only event for "
+                "timed-out task request_id=%s, age=%.0fs "
+                "(queue not mutated until POST succeeds)",
                 event["request"].get("request_id"),
                 now_ts - float(enqueued_at),
             )
 
-        # Mutate the shared list in place: other consumers (the task
-        # picker in task_execution) hold the same reference and would
-        # not see a rebinding.
-        pending[:] = kept
-        return request_only_events
+        return request_only_events, swept_request_ids
+
+    def _drop_swept_from_pending(self, swept_request_ids: List[str]) -> None:
+        """Remove the swept tasks from ``PENDING_TASKS`` after a
+        confirmed wildcard write.
+
+        Mutates the shared list in place: other consumers (the task
+        picker in task_execution) hold the same reference and would not
+        see a rebinding.
+        """
+        if not swept_request_ids:
+            return
+        pending = self.context.shared_state.get(PENDING_TASKS)
+        if not isinstance(pending, list) or not pending:
+            return
+        drop_set = set(swept_request_ids)
+        pending[:] = [
+            task
+            for task in pending
+            if not (
+                isinstance(task, dict)
+                and str(task.get("requestId") or "") in drop_set
+            )
+        ]
 
     def _build_request_only_event(
         self, task: Dict[str, Any], now_ts: float

@@ -1813,7 +1813,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "marketplace_address": str(
                     getattr(self.params, "mech_marketplace_address", "") or ""
                 ),
-                "requester": str(executing_task.get("sender") or ""),
+                # ``sender`` is the off-chain HTTP path's requester key
+                # (set from the signed request body in
+                # ``task_execution.handlers._enqueue_offchain_request``).
+                # Marketplace pending tasks come from
+                # ``MechMarketplaceContract.get_marketplace_undelivered_reqs``
+                # which keys the requester as ``requester`` and carries no
+                # ``sender`` field. This block now runs for on-chain
+                # marketplace deliveries too, so falling back to
+                # ``requester`` keeps the wildcard row correctly populated
+                # instead of writing an empty ``requester``.
+                "requester": str(
+                    executing_task.get("sender")
+                    or executing_task.get("requester")
+                    or ""
+                ),
                 "priority_mech": str(
                     executing_task.get("priority_mech") or delivery_mech
                 ),

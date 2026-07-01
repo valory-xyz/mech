@@ -166,6 +166,19 @@ class Params(BaseParams):
         self.mech_events_sweep_max_age_seconds: float = float(
             kwargs.get("mech_events_sweep_max_age_seconds", 3600.0) or 3600.0
         )
+        # Chain id used to build request-only sweep events and to derive
+        # the EIP-712 domain when a pure-sweep round emits no delivered
+        # events. task_execution.models.Params carries the same param
+        # for delivered events; a pure-sweep round has no delivered
+        # events to read the chain id from, so this skill's Params must
+        # carry the field independently. Without it, ``mech_events_chain_id``
+        # falls back to 0, the batch-level chain-id guard fires, and the
+        # whole batch (including any delivered events on a mixed round)
+        # is silently dropped after the queue has already been mutated.
+        # Same semantics and default as task_execution.
+        self.mech_events_chain_id: int = int(
+            kwargs.get("mech_events_chain_id", 0) or 0
+        )
         super().__init__(*args, **kwargs)
 
     @classmethod

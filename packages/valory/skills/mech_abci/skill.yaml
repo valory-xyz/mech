@@ -176,6 +176,7 @@ models:
       wildcard_events_timeout_seconds: 5.0
       mech_events_sweep_pending_enabled: false
       mech_events_sweep_max_age_seconds: 3600.0
+      mech_events_chain_id: 0
     class_name: Params
   randomness_api:
     args:

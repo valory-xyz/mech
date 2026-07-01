@@ -20,12 +20,18 @@
 """Tests for the on-chain write path additions in
 :py:class:`PostTxSettlementBehaviour`.
 
-Two pieces:
+Three pieces:
 
-  - ``_sweep_pending_undelivered`` walks ``shared_state[PENDING_TASKS]``,
-    emits request-only events for tasks past the local sweep age, and
-    removes those tasks from the queue. All gated on
+  - ``_sweep_pending_undelivered`` walks ``shared_state[PENDING_TASKS]``
+    and RETURNS ``(events, swept_request_ids)`` for tasks past the local
+    sweep age, without mutating the queue. All gated on
     ``mech_events_enabled`` AND ``mech_events_sweep_pending_enabled``.
+  - ``_drop_swept_from_pending`` mutates ``PENDING_TASKS`` in place to
+    drop the swept tasks. The caller only fires this after a confirmed
+    wildcard POST 2xx, so any of the six early-return paths in
+    ``_do_wildcard_write_best_effort`` (missing mech address, missing
+    marketplace, mixed chains, unconfigured chain id, digest failure,
+    POST failure) leaves the tasks on the queue for a retry.
   - ``_build_request_only_event`` shapes one entry into the wildcard
     event payload (``request`` half, ``response: None``,
     ``source: 'mech_onchain'``).
@@ -141,8 +147,9 @@ def test_sweep_returns_empty_when_mech_events_disabled() -> None:
         pending=[_make_pending_task("r-disabled", age_seconds=9999)],
         enabled=False,
     )
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     assert events == []
+    assert swept == []
     # Pending list untouched.
     assert len(self_.context.shared_state[PENDING_TASKS]) == 1
 
@@ -156,8 +163,9 @@ def test_sweep_returns_empty_when_sweep_flag_disabled() -> None:
         enabled=True,
         sweep_enabled=False,
     )
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     assert events == []
+    assert swept == []
     assert len(self_.context.shared_state[PENDING_TASKS]) == 1
 
 
@@ -168,22 +176,25 @@ def test_sweep_returns_empty_when_max_age_zero() -> None:
         pending=[_make_pending_task("r-zero", age_seconds=9999)],
         max_age=0.0,
     )
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     assert events == []
+    assert swept == []
 
 
 def test_sweep_returns_empty_when_pending_missing() -> None:
     """No ``PENDING_TASKS`` in shared_state → no-op, no crash. The mech
     boots before the handler stamps the key on some agent configs."""
     self_ = _make_self(pending=None)
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     assert events == []
+    assert swept == []
 
 
 def test_sweep_returns_empty_when_pending_empty() -> None:
     self_ = _make_self(pending=[])
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     assert events == []
+    assert swept == []
 
 
 # Age-driven selection -----------------------------------------------------
@@ -198,53 +209,60 @@ def test_sweep_skips_recent_tasks() -> None:
         ],
         max_age=60.0,
     )
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     assert events == []
+    assert swept == []
     assert [t["requestId"] for t in self_.context.shared_state[PENDING_TASKS]] == [
         "r-fresh-a",
         "r-fresh-b",
     ]
 
 
-def test_sweep_emits_for_stale_task_and_removes_it() -> None:
-    """A task older than max-age becomes a request-only event and leaves
-    the queue. The DB's ON CONFLICT (predict-api side) handles concurrent
-    step-in, so the mech doesn't need to consult the contract to decide."""
+def test_sweep_emits_for_stale_task_and_leaves_queue_untouched() -> None:
+    """A task older than max-age becomes a request-only event and its
+    ``request_id`` is returned to the caller. The sweep itself does NOT
+    mutate the queue — the caller drops the swept tasks only after a
+    confirmed wildcard POST 2xx (via ``_drop_swept_from_pending``). The
+    DB's ON CONFLICT (predict-api side) handles concurrent step-in, so
+    the mech doesn't need to consult the contract to decide."""
     self_ = _make_self(
         pending=[_make_pending_task("r-stale", age_seconds=120)],
         max_age=60.0,
     )
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     assert len(events) == 1
     event = events[0]
     assert event["request"]["request_id"] == "r-stale"
     assert event["response"] is None
     assert event["source"] == "mech_onchain"
-    # Task removed from the queue.
-    assert self_.context.shared_state[PENDING_TASKS] == []
+    assert swept == ["r-stale"]
+    # Sweep leaves the queue as-is until _drop_swept_from_pending fires.
+    assert [
+        t["requestId"] for t in self_.context.shared_state[PENDING_TASKS]
+    ] == ["r-stale"]
 
 
-def test_sweep_mixed_queue_keeps_recent_emits_stale() -> None:
-    """Mixed queue: only the stale entries become events; recent stay put.
-
-    Confirms the sweep mutates the queue in-place rather than rebinding —
-    other consumers (the task picker in task_execution) hold the same
-    list reference.
-    """
+def test_sweep_mixed_queue_returns_stale_and_leaves_all_pending() -> None:
+    """Mixed queue: only the stale entries become events; the returned
+    ``swept_request_ids`` mirrors that selection. The sweep does not
+    drop anything from the queue — that happens post-write."""
     pending = [
         _make_pending_task("r-stale-1", age_seconds=120),
         _make_pending_task("r-fresh-1", age_seconds=10),
         _make_pending_task("r-stale-2", age_seconds=200),
         _make_pending_task("r-fresh-2", age_seconds=30),
     ]
-    pending_ref = pending  # capture identity for the in-place check
+    pending_ref = pending  # capture identity to confirm no rebinding
     self_ = _make_self(pending=pending, max_age=60.0)
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     emitted = {e["request"]["request_id"] for e in events}
     assert emitted == {"r-stale-1", "r-stale-2"}
-    remaining = [t["requestId"] for t in self_.context.shared_state[PENDING_TASKS]]
-    assert remaining == ["r-fresh-1", "r-fresh-2"]
-    # Same list object (in-place mutation), not a fresh assignment.
+    assert set(swept) == {"r-stale-1", "r-stale-2"}
+    # The queue is still all four entries — deferred mutation.
+    assert [
+        t["requestId"] for t in self_.context.shared_state[PENDING_TASKS]
+    ] == ["r-stale-1", "r-fresh-1", "r-stale-2", "r-fresh-2"]
+    # Same list object (no rebinding), so other consumers see the queue.
     assert self_.context.shared_state[PENDING_TASKS] is pending_ref
 
 
@@ -260,10 +278,13 @@ def test_sweep_leaves_tasks_without_enqueued_stamp() -> None:
         ],
         max_age=60.0,
     )
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     assert [e["request"]["request_id"] for e in events] == ["r-stale"]
-    remaining = [t["requestId"] for t in self_.context.shared_state[PENDING_TASKS]]
-    assert remaining == ["r-pre-sweep"]
+    assert swept == ["r-stale"]
+    # Queue still holds both entries until the post-write drop.
+    assert [
+        t["requestId"] for t in self_.context.shared_state[PENDING_TASKS]
+    ] == ["r-pre-sweep", "r-stale"]
 
 
 def test_sweep_leaves_non_dict_entries_alone() -> None:
@@ -276,10 +297,52 @@ def test_sweep_leaves_non_dict_entries_alone() -> None:
         ],
         max_age=60.0,
     )
-    events = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
     assert [e["request"]["request_id"] for e in events] == ["r-stale"]
-    # The garbage entry survives.
+    assert swept == ["r-stale"]
+    # The garbage entry survives, and so does the stale task pre-drop.
     assert "garbage" in self_.context.shared_state[PENDING_TASKS]
+
+
+# Deferred queue mutation --------------------------------------------------
+
+
+def test_drop_swept_from_pending_removes_only_swept_ids() -> None:
+    """``_drop_swept_from_pending`` is the only path that mutates the
+    pending queue for a swept task. It removes only the request_ids in
+    ``swept_request_ids`` and leaves everything else in place."""
+    pending = [
+        _make_pending_task("r-a"),
+        _make_pending_task("r-b"),
+        _make_pending_task("r-c"),
+    ]
+    self_ = _make_self(pending=pending)
+    PostTxSettlementBehaviour._drop_swept_from_pending(self_, ["r-a", "r-c"])
+    assert [
+        t["requestId"] for t in self_.context.shared_state[PENDING_TASKS]
+    ] == ["r-b"]
+    # In-place mutation, not a rebind.
+    assert self_.context.shared_state[PENDING_TASKS] is pending
+
+
+def test_drop_swept_from_pending_noop_on_empty_swept() -> None:
+    """An empty ``swept_request_ids`` (no request-only events staged
+    this round) leaves the queue untouched."""
+    pending = [_make_pending_task("r-only")]
+    self_ = _make_self(pending=pending)
+    PostTxSettlementBehaviour._drop_swept_from_pending(self_, [])
+    assert [
+        t["requestId"] for t in self_.context.shared_state[PENDING_TASKS]
+    ] == ["r-only"]
+
+
+def test_drop_swept_from_pending_noop_when_pending_missing() -> None:
+    """``_drop_swept_from_pending`` is safe to call when
+    ``shared_state[PENDING_TASKS]`` was never populated."""
+    self_ = _make_self(pending=None)
+    # Should not raise, should not add the key.
+    PostTxSettlementBehaviour._drop_swept_from_pending(self_, ["r-x"])
+    assert PENDING_TASKS not in self_.context.shared_state
 
 
 # Request-only event shape --------------------------------------------------
