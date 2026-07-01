@@ -8,11 +8,11 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeifiek52rdzejdjur2yvou22ugxwkgbyneutmwdtaj6yzbbjff4ope
+  behaviours.py: bafybeiakztao6lbyjpk6hvs6ib4tz6br2yr7x7kxa2x6rso5t5cqqqeosi
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
-  models.py: bafybeicbsdo5aliovq6q7xrscpimklp7p7osoywg6amixpaepr7zembika
+  models.py: bafybeihnoessohxco55ikhem7mdzze2edscnptdfvwx66yyh4otuh4ogry
   payloads.py: bafybeif2gnz5k7eyb6of4iiisni426zscwanjfmtrr37f7ceu4cjqo2ob4
   rounds.py: bafybeiagfyc4lz5sda5gwux4jcld7io26n5d77tdmewcwcs6l63sobfvt4
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
@@ -22,7 +22,7 @@ fingerprint:
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry
-  tests/test_onchain_write_path.py: bafybeih6nrses6qmtgifzesm4vo42bqehqtds4ajaxwcjosaztfqszlqyi
+  tests/test_onchain_write_path.py: bafybeibmo2soytu62c3cpdxvdcydujrx3ruvsdmt6jbp6hbaxoop36h6li
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_rounds.py: bafybeiewxotnlbq2qckyat2flyewq56n6kh6ejyllbjgebx2xiw3rbhptq
   tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
@@ -47,7 +47,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
-- valory/task_execution:0.1.0:bafybeiaarodwftwxwt2lortpnhj6zk3nfffz4trc3ph654xex7scxtqqu4
+- valory/task_execution:0.1.0:bafybeieroj6hzyyz7qclfp3zmz4ynobhnm2btzs45efuzrjfvotov2sx64
 behaviours:
   main:
     args: {}
