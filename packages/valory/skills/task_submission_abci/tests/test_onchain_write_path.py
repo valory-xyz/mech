@@ -48,7 +48,7 @@ from __future__ import annotations
 
 import time
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 
 import pytest
 
@@ -71,23 +71,36 @@ def _make_logger() -> SimpleNamespace:
 
 def _make_self(
     *,
-    pending: List[Dict[str, Any]] | None = None,
+    pending: List[Any] | None = None,
     enabled: bool = True,
     sweep_enabled: bool = True,
     max_age: float = 60.0,
     chain_id: int = 100,
     marketplace_address: str = "0xMARKET",
-) -> SimpleNamespace:
+) -> PostTxSettlementBehaviour:
     """Build the minimum 'self' a sweep / build call expects.
 
     The behaviour's :py:meth:`_sweep_pending_undelivered` and
     :py:meth:`_build_request_only_event` only touch ``self.context``,
     ``self.params``, and (indirectly) ``self.context.logger``, so a flat
-    SimpleNamespace is enough. ``_sweep_pending_undelivered`` calls
+    :class:`SimpleNamespace` context is enough at runtime.
+    ``_sweep_pending_undelivered`` calls
     ``self._build_request_only_event`` on the same self_, so we wire
     that method onto the namespace as well so the unbound-method
     invocation pattern works (calling
     ``PostTxSettlementBehaviour._sweep_pending_undelivered(self_)``).
+
+    The return is annotated as :class:`PostTxSettlementBehaviour` via
+    :func:`typing.cast` so the many unbound-method callsites in the
+    tests below type-check under the stricter mypy config the CI runs
+    (``--disallow-untyped-defs``). At runtime this is still a
+    :class:`SimpleNamespace`; the cast is a mypy annotation, not a
+    conversion.
+
+    ``pending`` accepts ``List[Any]`` (not ``List[Dict[str, Any]]``) so
+    the "non-dict entry" defensive test can pass a mixed
+    ``["garbage", {...}]`` without a ``[list-item]`` mypy error; the
+    sweep code path skips non-dict entries at runtime.
     """
     shared_state: Dict[str, Any] = {}
     if pending is not None:
@@ -107,12 +120,14 @@ def _make_self(
     )
     # Bind ``_build_request_only_event`` to the namespace so the sweep's
     # internal ``self._build_request_only_event(...)`` call resolves.
+    # Cast the inner ``self_`` for the same mypy reason as the outer cast
+    # on this function's return.
     self_._build_request_only_event = (
         lambda task, now_ts: PostTxSettlementBehaviour._build_request_only_event(
-            self_, task, now_ts
+            cast(PostTxSettlementBehaviour, self_), task, now_ts
         )
     )
-    return self_
+    return cast(PostTxSettlementBehaviour, self_)
 
 
 def _make_pending_task(
@@ -449,15 +464,18 @@ def test_extract_offchain_events_includes_onchain_when_wildcard_event_present() 
     included in the batch."""
     # Build a self_ that exposes synchronized_data.done_tasks; the
     # extract method is a property-only function.
-    self_ = SimpleNamespace(
-        synchronized_data=SimpleNamespace(
-            done_tasks=[
-                {"is_offchain": True, "wildcard_event": {"src": "off"}},
-                {"is_offchain": False, "wildcard_event": {"src": "on"}},
-                {"is_offchain": False, "wildcard_event": None},  # skipped
-                {"is_offchain": True, "wildcard_event": "not-a-dict"},  # skipped
-            ]
-        )
+    self_ = cast(
+        PostTxSettlementBehaviour,
+        SimpleNamespace(
+            synchronized_data=SimpleNamespace(
+                done_tasks=[
+                    {"is_offchain": True, "wildcard_event": {"src": "off"}},
+                    {"is_offchain": False, "wildcard_event": {"src": "on"}},
+                    {"is_offchain": False, "wildcard_event": None},  # skipped
+                    {"is_offchain": True, "wildcard_event": "not-a-dict"},  # skipped
+                ]
+            )
+        ),
     )
     events = PostTxSettlementBehaviour._extract_offchain_events(self_)
     assert events == [{"src": "off"}, {"src": "on"}]
@@ -466,13 +484,16 @@ def test_extract_offchain_events_includes_onchain_when_wildcard_event_present() 
 def test_extract_offchain_events_skips_tasks_without_wildcard_event() -> None:
     """Done tasks without ``wildcard_event`` (e.g. on-chain non-marketplace
     legacy mech tasks) stay out of the batch."""
-    self_ = SimpleNamespace(
-        synchronized_data=SimpleNamespace(
-            done_tasks=[
-                {"is_offchain": True},  # no wildcard_event at all
-                {"is_offchain": False},
-            ]
-        )
+    self_ = cast(
+        PostTxSettlementBehaviour,
+        SimpleNamespace(
+            synchronized_data=SimpleNamespace(
+                done_tasks=[
+                    {"is_offchain": True},  # no wildcard_event at all
+                    {"is_offchain": False},
+                ]
+            )
+        ),
     )
     events = PostTxSettlementBehaviour._extract_offchain_events(self_)
     assert events == []
