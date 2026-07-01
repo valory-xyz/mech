@@ -1845,9 +1845,15 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
 
     matching_round: Type[AbstractRound] = PostTxSettlementRound
 
+    # Set to True after we've logged the mech_events_chain_id divergence
+    # once, so ``_check_mech_events_chain_id_consistency`` doesn't spam
+    # the same warning every settlement round on a persistent config drift.
+    _chain_id_divergence_logged: bool = False
+
     def async_act(self) -> Generator:
         """Build, sign, and POST the offchain-events batch, then advance."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            self._check_mech_events_chain_id_consistency()
             yield from self._do_wildcard_write_best_effort()
             payload = PostTxSettlementPayload(
                 sender=self.context.agent_address, content="done"
@@ -1857,6 +1863,61 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
+
+    def _check_mech_events_chain_id_consistency(self) -> None:
+        """Warn once if task_execution and task_submission_abci disagree on chain id.
+
+        ``mech_events_chain_id`` now lives on both
+        :class:`task_execution.models.Params` and
+        :class:`task_submission_abci.models.Params` because a pure-sweep
+        round has no delivered event to fall back to for the EIP-712
+        ``domain.chainId`` and the two skills each own their own event
+        builder. That gives operators two knobs where they had one, and
+        forgetting the newer knob silently split the batch chain-id
+        across delivered and sweep events.
+
+        The split-batch design in :py:meth:`_post_wildcard_batch` already
+        limits the blast radius (the two batches are independent, so a
+        misconfigured sweep chain id short-circuits the sweep batch
+        without touching delivered), but a drift is still a config bug
+        worth surfacing.
+
+        Rather than crash at startup on a mismatch (this behaviour is
+        fail-soft by design and a config check that hard-blocks the FSM
+        would be worse than the drift it protects against), we log a
+        single WARNING the first time we notice, and rely on operators
+        picking it up in the logs. The flag is instance-scoped so it
+        also self-resets on a mech restart.
+        """
+        if self._chain_id_divergence_logged:
+            return
+        submission_chain_id = int(getattr(self.params, "mech_events_chain_id", 0) or 0)
+        # ``task_execution.Params`` is the same object graph — the
+        # PostTxSettlement behaviour extends TaskExecutionBaseBehaviour
+        # which composes both skills' params under ``self.params``. Pull
+        # the task_execution copy directly from the skill context so the
+        # comparison isn't tautological.
+        task_exec_params = getattr(
+            self.context.skills.task_execution.models, "params", None
+        )
+        task_exec_chain_id = int(
+            getattr(task_exec_params, "mech_events_chain_id", 0) or 0
+        )
+        if submission_chain_id != task_exec_chain_id:
+            self.context.logger.warning(
+                "mech_events_chain_id drift detected: task_execution has "
+                "%s but task_submission_abci has %s. A pure-sweep round "
+                "will use the task_submission value; a delivered-only "
+                "round will use the task_execution value. Under the "
+                "split-batch flow the sweep batch may short-circuit at "
+                "the chain_id=0 guard while the delivered batch still "
+                "lands, so operators can miss this silently — check the "
+                "``mech_events_chain_id`` field on both skill.yaml / "
+                "aea-config overrides.",
+                task_exec_chain_id,
+                submission_chain_id,
+            )
+            self._chain_id_divergence_logged = True
 
     def _do_wildcard_write_best_effort(self) -> Generator:
         """Best-effort wildcard write. Never raises; logs failure paths.
@@ -1883,20 +1944,17 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             )
             return
 
-        events = self._extract_offchain_events()
+        delivered_events = self._extract_offchain_events()
         # On-chain pending-task sweep: request-only events for tasks that
-        # have sat in the queue past the operator's max age. Appended to
-        # the same batch as delivered events so the signing round-trip
-        # costs one signature per settlement, not one per event class.
+        # have sat in the queue past the operator's max age.
         # ``_sweep_pending_undelivered`` returns the swept ``request_id``s
         # alongside the events but does NOT mutate the pending queue: any
         # guard-skip or POST failure below would otherwise drop the tasks
         # with no re-queue and no written row. The queue is only mutated
-        # once the wildcard POST has confirmed a 2xx below.
+        # once the wildcard POST has confirmed a 2xx (or a terminal 4xx —
+        # see ``_post_wildcard_batch`` for the poison-drop rationale).
         request_only_events, swept_request_ids = self._sweep_pending_undelivered()
-        if request_only_events:
-            events = events + request_only_events
-        if not events:
+        if not delivered_events and not request_only_events:
             self.context.logger.debug(
                 "No wildcard_event entries in done_tasks and no swept "
                 "pending tasks; post-tx wildcard write is a no-op for "
@@ -1918,7 +1976,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         mech_address = getattr(self.params, "agent_mech_contract_address", "") or ""
         if not mech_address:
             self.context.logger.warning(
-                "No agent_mech_contract_address available; " "skipping wildcard write."
+                "No agent_mech_contract_address available; skipping wildcard write."
             )
             return
 
@@ -1929,30 +1987,121 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             )
             return
 
-        # The EIP-712 domain.chainId binds the signature to one chain. Every
-        # event in the batch was built by ``task_execution._build_wildcard_event``
-        # against the same ``mech_events_chain_id`` param, so we can read
-        # the int from the first event rather than duplicating the param
-        # across two skills (and the value-by-construction check below
-        # rejects a heterogeneous batch defensively).
+        # Delivered and sweep events are posted as TWO INDEPENDENT batches
+        # rather than merged into one. A permanently-rejected sweep event
+        # would otherwise kill the whole atomic batch (server 4xx or a
+        # digest/JSON-build failure on requester-influenced content) and
+        # take real delivered events down with it. Because delivered
+        # events are NOT retried across rounds (they come from this
+        # round's ``synchronized_data.done_tasks``), those already-settled
+        # deliveries would be silently and permanently lost, and every
+        # round the same poison sweep task would repeat the drain. Two
+        # batches isolate the failure modes: a bad sweep can never cost
+        # us a real delivered row.
+        if delivered_events:
+            yield from self._post_wildcard_batch(
+                events=delivered_events,
+                mech_address=mech_address,
+                verifying_contract=verifying_contract,
+                wildcard_url=wildcard_url,
+                batch_label="delivered",
+                swept_request_ids=None,  # delivered has no queue-side state
+            )
+        if request_only_events:
+            yield from self._post_wildcard_batch(
+                events=request_only_events,
+                mech_address=mech_address,
+                verifying_contract=verifying_contract,
+                wildcard_url=wildcard_url,
+                batch_label="sweep",
+                swept_request_ids=swept_request_ids,
+            )
+
+    def _post_wildcard_batch(  # noqa: C901
+        self,
+        events: List[Dict[str, Any]],
+        mech_address: str,
+        verifying_contract: str,
+        wildcard_url: str,
+        batch_label: str,
+        swept_request_ids: Optional[List[str]],
+    ) -> Generator:
+        """Hash, sign, and POST one wildcard batch. Post-write side effects vary by outcome.
+
+        Called separately for the delivered-events batch and the
+        sweep-events batch so a poison sweep event can't take real
+        delivered rows down with it.
+
+        Post-batch side effects, when ``swept_request_ids`` is not None
+        (i.e. this is a sweep batch):
+
+          * On 2xx — the server accepted the batch and wrote every row;
+            drop the swept tasks from ``PENDING_TASKS``.
+          * On terminal 4xx (or a 3xx / signer-not-owner / allowlist miss)
+            — the server will keep rejecting these events on every retry.
+            Drop the swept tasks anyway to avoid a livelock where the
+            same poison event is re-swept + re-POSTed every settlement
+            round, spamming warnings and growing ``PENDING_TASKS``
+            unbounded. The undelivered signal is lost, but that beats a
+            self-reinforcing drain.
+          * On retryable 5xx / network / pre-sign failure — leave the
+            swept tasks on the queue so the next FSM cycle re-attempts.
+
+        For the delivered batch (``swept_request_ids is None``): the events
+        come from this round's ``synchronized_data.done_tasks`` and there is
+        no queue-side state to reconcile. We log the outcome and return.
+
+        :param events: the ordered event dicts for THIS batch (delivered
+            only, or sweep only — never mixed).
+        :param mech_address: on-chain mech contract for the signed typed-data.
+        :param verifying_contract: marketplace contract for the EIP-712 domain.
+        :param wildcard_url: server endpoint (``POST /mech/events``).
+        :param batch_label: ``"delivered"`` or ``"sweep"``, used in log lines.
+        :param swept_request_ids: request-ids to drop from ``PENDING_TASKS``
+            on outcome-appropriate paths. ``None`` for the delivered batch.
+        :yield: AEA protocol messages (signing dialogue, HTTP request).
+        """
+        # The EIP-712 domain.chainId binds the signature to one chain. Read
+        # it from the first event's ``request.chain_id`` — every event in
+        # the batch was built by either ``task_execution._build_wildcard_event``
+        # (delivered) or ``self._build_request_only_event`` (sweep) against
+        # the corresponding skill's ``mech_events_chain_id`` param. The
+        # value-by-construction check below rejects a heterogeneous batch
+        # defensively; the ``mech_events_chain_id`` param NOW lives on
+        # BOTH task_execution.Params and task_submission_abci.Params, so
+        # an operator that sets one but forgets the other would produce
+        # a chain-id split between the two batches (delivered would carry
+        # the real chain id, sweep would carry 0 and short-circuit at
+        # the ``chain_id == 0`` guard below with a clear log). See
+        # ``_check_mech_events_chain_id_consistency`` for the paired
+        # startup check.
         chain_id = int(events[0].get("request", {}).get("chain_id", 0) or 0)
         if any(
             int(e.get("request", {}).get("chain_id", 0) or 0) != chain_id
             for e in events
         ):
             self.context.logger.warning(
-                "Wildcard batch contains events from multiple chains; "
+                "Wildcard %s batch contains events from multiple chains; "
                 "skipping. A single Safe should only ever build events for "
-                "one chain — investigate task_execution."
+                "one chain — check the mech_events_chain_id param on both "
+                "task_execution and task_submission_abci.",
+                batch_label,
             )
             return
         # Short-circuit before the signing round-trip when the chain id is
         # unconfigured: chain_id=0 lands in no marketplace allowlist on the
         # server, so the batch is guaranteed to be rejected. Bail with a
         # clear log instead of spending a signing dialogue + HTTP POST.
+        # This is a config-driven fail; sweep tasks stay on the queue so
+        # a subsequent config fix picks them up.
         if chain_id == 0:
             self.context.logger.warning(
-                "mech_events_chain_id is 0 (unconfigured); " "skipping wildcard write."
+                "mech_events_chain_id is 0 (unconfigured) for the %s "
+                "batch; skipping wildcard write. If this is the sweep "
+                "batch, the task_submission_abci copy of the param is the "
+                "usual culprit — task_execution's copy fills the delivered "
+                "batch's chain id independently.",
+                batch_label,
             )
             return
 
@@ -1981,9 +2130,12 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             # response body), and any of them can raise ``ValueError`` /
             # ``KeyError`` / ``TypeError`` on a malformed payload. The
             # round is designed fail-soft (settlement already confirmed),
-            # so any pre-signing crash drops the batch with a log.
+            # so any pre-signing crash drops the batch with a log. Sweep
+            # tasks stay on the queue (retryable — a subsequent FSM cycle
+            # may see clean content).
             self.context.logger.warning(
-                "Wildcard EIP-712 digest build failed; dropping batch: %s",
+                "Wildcard %s EIP-712 digest build failed; dropping batch: %s",
+                batch_label,
                 exc,
             )
             return
@@ -1993,7 +2145,8 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             )
         except Exception as exc:
             self.context.logger.warning(
-                "Wildcard EIP-712 signing failed; dropping batch this round: %s",
+                "Wildcard %s EIP-712 signing failed; dropping batch this round: %s",
+                batch_label,
                 exc,
             )
             return
@@ -2009,11 +2162,18 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         except (TypeError, ValueError) as exc:
             # ``events`` carries requester-influenced content; a non-JSON-
             # serialisable value (leaked ``bytes``, ``float('inf')``, etc.)
-            # would otherwise escape ``async_act`` as a crash.
+            # would otherwise escape ``async_act`` as a crash. For a sweep
+            # batch this is effectively terminal (the same content would
+            # fail every subsequent round). Drop the swept tasks so a
+            # single poison event cannot livelock.
             self.context.logger.warning(
-                "Wildcard batch JSON serialisation failed; dropping batch: %s",
+                "Wildcard %s batch JSON serialisation failed; treating as "
+                "terminal (poison payload) and dropping: %s",
+                batch_label,
                 exc,
             )
+            if swept_request_ids:
+                self._drop_swept_from_pending(swept_request_ids)
             return
 
         # Build the request with an explicit short timeout. ``get_http_response``
@@ -2036,49 +2196,85 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 ),
             )
         except Exception as exc:
+            # Network-level failures are retryable — the server may come
+            # back, so leave sweep tasks on the queue for the next cycle.
             self.context.logger.warning(
-                "Wildcard POST raised; dropping batch this round "
+                "Wildcard %s POST raised; dropping batch this round "
                 "(follow-up PR adds kv_store replay buffer): %s",
+                batch_label,
                 exc,
             )
             return
 
         status = getattr(response, "status_code", None)
-        # Treat anything outside the 2xx success range as non-success. A 3xx
-        # redirect on a POST is never the right outcome here: the server
-        # never redirects ``/mech/events``, so a 3xx means a misconfigured
-        # proxy and we should not log it as ``POST OK``.
-        if status is None or status < 200 or status >= 300:
-            # 4xx is terminal (bad payload, allowlist miss, signer-not-owner);
-            # 5xx + network are retryable on the next FSM cycle once the
-            # replay buffer lands (mech#455 follow-up). 3xx redirects on a
-            # POST are a misconfigured proxy, treated the same as 4xx here.
-            self.context.logger.warning(
-                "Wildcard POST returned non-success (status=%s); dropping "
-                "batch this round (follow-up PR adds replay buffer). "
-                "batch_size=%d signer-eoa=%s body_preview=%s",
+        if status is not None and 200 <= status < 300:
+            self.context.logger.info(
+                "Wildcard %s batch POST OK (status=%s batch_size=%d signer-eoa=%s)",
+                batch_label,
+                status,
+                len(events),
+                self.context.agent_address,
+            )
+            if swept_request_ids:
+                # Server confirmed the batch; drop the swept undelivered
+                # tasks from the pending queue now. Deferring to a
+                # confirmed 2xx (rather than mutating inside
+                # ``_sweep_pending_undelivered``) ensures every early-
+                # return path above leaves the sweep at-least-once.
+                #
+                # Advisory: this drops the WHOLE swept set on any 2xx.
+                # If the server ever adopts a partial-upsert semantic
+                # (returns 200 but rejects a subset), we would need to
+                # parse a per-event ack out of ``response.body`` and only
+                # drop confirmed ids. Today the server writes all-or-
+                # nothing per batch, so this is exact.
+                self._drop_swept_from_pending(swept_request_ids)
+            return
+
+        # Non-2xx: distinguish terminal (4xx, 3xx) from retryable
+        # (5xx / undefined status / network-classified elsewhere).
+        # ``None`` here is a defensive undefined-status case, which the
+        # framework rarely surfaces; treat it as retryable so we don't
+        # silently poison-drop a healthy sweep on a bookkeeping edge.
+        is_terminal = status is not None and (
+            400 <= status < 500 or 300 <= status < 400
+        )
+        if is_terminal:
+            # 4xx = bad payload / allowlist miss / signer-not-owner /
+            # BATCH_HASH_MISMATCH. All are terminal: retrying the same
+            # bytes with the same signer keeps failing. If this is a
+            # sweep batch, dropping the swept tasks avoids the livelock
+            # bennyjo + OjusWiZard flagged (task re-sweeps + re-POSTs
+            # forever, ``PENDING_TASKS`` grows unbounded, warnings spam).
+            # The undelivered signal is lost but that beats a
+            # self-reinforcing drain.
+            self.context.logger.error(
+                "Wildcard %s POST returned terminal non-success "
+                "(status=%s); dropping batch AND swept tasks from queue "
+                "to avoid livelock. batch_size=%d signer-eoa=%s "
+                "body_preview=%s",
+                batch_label,
                 status,
                 len(events),
                 self.context.agent_address,
                 response.body[:512] if hasattr(response, "body") else "?",
             )
+            if swept_request_ids:
+                self._drop_swept_from_pending(swept_request_ids)
             return
 
-        self.context.logger.info(
-            "Wildcard batch POST OK (status=%s batch_size=%d signer-eoa=%s)",
+        # Retryable (5xx / undefined): the server may recover on the next
+        # cycle. Leave sweep tasks on the queue.
+        self.context.logger.warning(
+            "Wildcard %s POST returned retryable non-success (status=%s); "
+            "dropping batch this round (follow-up PR adds replay buffer). "
+            "batch_size=%d signer-eoa=%s body_preview=%s",
+            batch_label,
             status,
             len(events),
             self.context.agent_address,
+            response.body[:512] if hasattr(response, "body") else "?",
         )
-        # Wildcard confirmed the batch; drop the swept undelivered tasks
-        # from the pending queue now. Deferring to this point (rather than
-        # inside ``_sweep_pending_undelivered``) ensures that any early
-        # return above — missing mech address, missing marketplace, mixed
-        # chains, unconfigured chain_id, digest build, signing, JSON
-        # serialisation, POST timeout, or non-2xx status — leaves the
-        # sweep at-least-once: the tasks stay on the queue and the next
-        # FSM cycle re-attempts the write.
-        self._drop_swept_from_pending(swept_request_ids)
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
         """Return the ``wildcard_event`` payload from every done_task that carries one.

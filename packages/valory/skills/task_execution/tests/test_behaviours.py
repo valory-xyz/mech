@@ -3454,3 +3454,49 @@ def test_build_wildcard_event_onchain_task_carries_mech_onchain_source(
     )
     assert event["source"] == "mech_onchain"
     assert event["response"]["is_offchain"] is False
+
+
+def test_build_wildcard_event_marketplace_task_falls_back_to_requester_key(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """Marketplace-delivered tasks carry `requester` (not `sender`); requester still populates.
+
+    Pending marketplace tasks come from
+    ``MechMarketplaceContract.get_marketplace_undelivered_reqs``, which
+    keys the requester as ``requester`` and carries no ``sender`` field.
+    The delivered wildcard row must still populate ``request.requester``
+    or the analytics-side join breaks.
+
+    The shared ``_wildcard_event_setup`` fixture always stamps
+    ``sender`` on ``executing_task`` (that's the off-chain HTTP shape).
+    This test deletes it and injects ``requester`` alone, exercising the
+    ``sender or requester`` fallback added in ``_build_wildcard_event``.
+
+    :param behaviour: task_execution behaviour under test.
+    :param params_stub: params fixture — consumed by
+        ``_wildcard_event_setup`` to populate ``self.params`` bits.
+    :param shared_state: shared_state fixture used by
+        ``_wildcard_event_setup`` for ``IN_MEMORY_REQUESTS`` /
+        ``OFFCHAIN_REQUEST_RESPONSES`` seeding.
+    """
+    request_data = {
+        "prompt": "on-chain marketplace delivery",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    # Marketplace shape: only ``requester``, no ``sender``. Also flip the
+    # per-row provenance so this is the on-chain path.
+    del executing_task["sender"]
+    executing_task["requester"] = "0xMARKETPLACE_REQUESTER"
+    executing_task["is_offchain"] = False
+    done_task["is_offchain"] = False
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["request"]["requester"] == "0xMARKETPLACE_REQUESTER"
+    assert event["source"] == "mech_onchain"

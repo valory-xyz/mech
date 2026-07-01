@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeifo47f3ueldju6j5zve3yfzu3q4usxk2av364zwyeu52ydvowxita
+  behaviours.py: bafybeiacply3zgdqran4p3lcpfmbjn5li6uw7hcxukjcpgpltq2n6bcyse
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
@@ -27,7 +27,7 @@ fingerprint:
   tests/test_rounds.py: bafybeiewxotnlbq2qckyat2flyewq56n6kh6ejyllbjgebx2xiw3rbhptq
   tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
   tests/test_wildcard_write_client.py: bafybeifqvm3fek6sex6yum47tvzvph3ntufmmwyc7ctpuoepjhm2jykhlu
-  wildcard_write_client.py: bafybeiflaa5noxki56ebie6tbcp5zbqf4vqg55llle4dxkmafgvvqk6buy
+  wildcard_write_client.py: bafybeia5mum3wwjnkyzhwcm4bsq2alqmczxttcuhzy532fsgjur6v4nc3e
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -47,7 +47,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
-- valory/task_execution:0.1.0:bafybeicng37eruy5aitgqekyo6jk3n6ieu6m5g6dqvnfq6pj2t7sc2kemi
+- valory/task_execution:0.1.0:bafybeiedozhs2h3jwfbcr2e43hkyde3mqtxy236ztvtf73vlhyqumdey2i
 behaviours:
   main:
     args: {}
