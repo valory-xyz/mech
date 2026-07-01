@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeiacply3zgdqran4p3lcpfmbjn5li6uw7hcxukjcpgpltq2n6bcyse
+  behaviours.py: bafybeibgtcqa7ur4qm643bhtochlz3ivdp5kqic4lqz7wxrtrmjumrw4nq
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
@@ -22,11 +22,11 @@ fingerprint:
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry
-  tests/test_onchain_write_path.py: bafybeictmxo46yefqbajhiugybopo6biapv7wsytgngk4yqb36mcstgl4i
+  tests/test_onchain_write_path.py: bafybeielblv3y7tuas4r2d2mpbw2hlfcjcfrrlod5amigplevluk3u4f4e
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_rounds.py: bafybeiewxotnlbq2qckyat2flyewq56n6kh6ejyllbjgebx2xiw3rbhptq
   tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
-  tests/test_wildcard_write_client.py: bafybeifqvm3fek6sex6yum47tvzvph3ntufmmwyc7ctpuoepjhm2jykhlu
+  tests/test_wildcard_write_client.py: bafybeibhjqhm62jcisp4p2qcpvwdzityfy2hlimwaihkjrffmp7j3w5jzi
   wildcard_write_client.py: bafybeia5mum3wwjnkyzhwcm4bsq2alqmczxttcuhzy532fsgjur6v4nc3e
 fingerprint_ignore_patterns: []
 connections: []

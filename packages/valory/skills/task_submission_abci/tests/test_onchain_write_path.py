@@ -429,6 +429,32 @@ def test_request_only_event_handles_bytes_cid() -> None:
     assert event["request"]["content_cid"] == "0x" + "ab" * 32
 
 
+def test_request_only_event_coerces_bytes_request_id_to_decimal_string() -> None:
+    r"""Undelivered marketplace tasks hold ``requestId`` as raw bytes.
+
+    ``get_marketplace_undelivered_reqs`` populates ``requestId`` with the
+    contract-event byte payload; the int conversion only happens later,
+    once the task actually runs in task_execution. If the sweep did a
+    plain ``str(bytes)`` it would emit ``"b'\x12\x34...'"`` — completely
+    different from the decimal string the delivered event carries via
+    the same request_id, so predict-api's ON CONFLICT reconciliation
+    would never fire and a request that later gets delivered would stay
+    marked undelivered forever.
+
+    Regression guard: assert the built event's ``request.request_id`` is
+    the decimal string form of the bytes, matching the delivered shape.
+    """
+    self_ = _make_self()
+    # 42 as big-endian bytes → same integer the delivered path would emit.
+    task = _make_pending_task("placeholder")
+    task["requestId"] = (42).to_bytes(4, "big")
+    event = PostTxSettlementBehaviour._build_request_only_event(
+        self_, task, time.time()
+    )
+    assert event is not None
+    assert event["request"]["request_id"] == "42"
+
+
 def test_request_only_event_skipped_for_missing_request_id() -> None:
     """Malformed pending entries (missing requestId / priorityMech /
 
