@@ -2081,8 +2081,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         self._drop_swept_from_pending(swept_request_ids)
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
-        """Return the ``wildcard_event`` payload from every done_task that
-        carries one.
+        """Return the ``wildcard_event`` payload from every done_task that carries one.
 
         Both off-chain HTTP deliveries (``source = 'mech_offchain'``) and
         on-chain marketplace deliveries (``source = 'mech_onchain'``) now
@@ -2108,11 +2107,12 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     def _sweep_pending_undelivered(
         self,
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
-        """Walk the on-chain pending-tasks queue and return request-only
-        events for any task that has sat in the queue past the
-        operator-configured sweep window, alongside the ``request_id``s
-        of the swept tasks so the caller can remove them from the queue
-        AFTER the wildcard POST confirms success.
+        """Walk the on-chain pending-tasks queue and stage request-only events for stale tasks.
+
+        Returns request-only events for any task that has sat in the
+        queue past the operator-configured sweep window, alongside the
+        ``request_id``s of the swept tasks so the caller can remove them
+        from the queue AFTER the wildcard POST confirms success.
 
         The sweep does NOT mutate ``PENDING_TASKS``. Dropping tasks here
         (as an earlier revision of this PR did) would lose the
@@ -2202,12 +2202,15 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         return request_only_events, swept_request_ids
 
     def _drop_swept_from_pending(self, swept_request_ids: List[str]) -> None:
-        """Remove the swept tasks from ``PENDING_TASKS`` after a
-        confirmed wildcard write.
+        """Remove the swept tasks from ``PENDING_TASKS`` after a confirmed wildcard write.
 
         Mutates the shared list in place: other consumers (the task
         picker in task_execution) hold the same reference and would not
         see a rebinding.
+
+        :param swept_request_ids: ``request_id`` strings returned by
+            :py:meth:`_sweep_pending_undelivered` alongside the
+            request-only events; empty list = no-op.
         """
         if not swept_request_ids:
             return
@@ -2219,16 +2222,14 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             task
             for task in pending
             if not (
-                isinstance(task, dict)
-                and str(task.get("requestId") or "") in drop_set
+                isinstance(task, dict) and str(task.get("requestId") or "") in drop_set
             )
         ]
 
     def _build_request_only_event(
         self, task: Dict[str, Any], now_ts: float
     ) -> Optional[Dict[str, Any]]:
-        """Build a request-only ``MechEvent``-shaped dict for a timed-out
-        pending task.
+        """Build a request-only ``MechEvent``-shaped dict for a timed-out pending task.
 
         The pending-task dict carries the on-chain bits the marketplace
         knows (request_id, requester, priority_mech, delivery_rate,
@@ -2313,9 +2314,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # so a reader can spot a sweep-emitted row from the value.
         prompt = "[onchain undelivered]"
         tool = "unknown"
-        chain_id = int(
-            getattr(self.params, "mech_events_chain_id", 0) or 0
-        )
+        chain_id = int(getattr(self.params, "mech_events_chain_id", 0) or 0)
         marketplace_address = str(
             getattr(self.params, "mech_marketplace_address", "") or ""
         )

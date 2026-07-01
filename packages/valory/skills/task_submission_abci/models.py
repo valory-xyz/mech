@@ -176,9 +176,7 @@ class Params(BaseParams):
         # whole batch (including any delivered events on a mixed round)
         # is silently dropped after the queue has already been mutated.
         # Same semantics and default as task_execution.
-        self.mech_events_chain_id: int = int(
-            kwargs.get("mech_events_chain_id", 0) or 0
-        )
+        self.mech_events_chain_id: int = int(kwargs.get("mech_events_chain_id", 0) or 0)
         super().__init__(*args, **kwargs)
 
     @classmethod

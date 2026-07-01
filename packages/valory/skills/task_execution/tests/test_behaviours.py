@@ -3430,6 +3430,12 @@ def test_build_wildcard_event_onchain_task_carries_mech_onchain_source(
     on-chain request via ``deliverMarketplaceWithSignatures``. The
     per-row response.is_offchain flag also flips false to keep the
     analytics lake's two signals (which path + which source) consistent.
+
+    :param behaviour: the wired ``task_execution`` behaviour under test.
+    :param params_stub: params fixture — indirectly consumed by
+        ``_wildcard_event_setup`` to populate ``self.params`` bits.
+    :param shared_state: shared_state fixture used by
+        ``_wildcard_event_setup`` to build ``done_task`` / ``executing_task``.
     """
     request_data = {
         "prompt": "p",

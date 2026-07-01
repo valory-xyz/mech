@@ -1662,9 +1662,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # response payload as well (the lake keeps both because the
         # ipfs_historical backfill describes either path).
         is_offchain_task = bool(executing_task.get("is_offchain", False))
-        wildcard_source = (
-            "mech_offchain" if is_offchain_task else "mech_onchain"
-        )
+        wildcard_source = "mech_offchain" if is_offchain_task else "mech_onchain"
 
         # `start_time` is a perf_counter() value (monotonic, not wall-clock),
         # not suitable as a delivered_at timestamp. Use the current wall-clock
