@@ -3380,3 +3380,123 @@ def test_execute_task_offchain_missing_ipfs_data_sets_invalid_request(
     assert behaviour._invalid_request is True
     assert handle_calls == []
     assert send_calls == []
+
+
+# ---------------------------------------------------------------------------
+# On-chain write path: source field on _build_wildcard_event
+# ---------------------------------------------------------------------------
+#
+# After the on-chain write path lands, _build_wildcard_event sets a
+# top-level ``source`` field on the returned event dict based on the
+# task's ``is_offchain`` flag:
+#   - is_offchain=True  → source="mech_offchain" (the paid HTTP path).
+#   - is_offchain=False → source="mech_onchain"  (the on-chain rails).
+# The wildcard server uses this field to tag both mech_requests and
+# mech_responses rows for the analytics ETL. See
+# ``autonolas-marketplace/docs/onchain_write_path_scope.md`` §3.
+
+
+def test_build_wildcard_event_offchain_task_carries_mech_offchain_source(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """A task with ``is_offchain=True`` produces ``source='mech_offchain'``."""
+    request_data = {
+        "prompt": "p",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["source"] == "mech_offchain"
+    # Response payload's is_offchain field still reflects the underlying
+    # delivery path (kept in lock-step with the source for clarity).
+    assert event["response"]["is_offchain"] is True
+
+
+def test_build_wildcard_event_onchain_task_carries_mech_onchain_source(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """A task with ``is_offchain=False`` produces ``source='mech_onchain'``.
+
+    The on-chain marketplace path lands here when the mech delivers an
+    on-chain request via ``deliverMarketplaceWithSignatures``. The
+    per-row response.is_offchain flag also flips false to keep the
+    analytics lake's two signals (which path + which source) consistent.
+
+    :param behaviour: the wired ``task_execution`` behaviour under test.
+    :param params_stub: params fixture — indirectly consumed by
+        ``_wildcard_event_setup`` to populate ``self.params`` bits.
+    :param shared_state: shared_state fixture used by
+        ``_wildcard_event_setup`` to build ``done_task`` / ``executing_task``.
+    """
+    request_data = {
+        "prompt": "p",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    # Flip the flags on both halves: the source decision keys on the
+    # executing_task; the response payload's is_offchain mirrors it.
+    executing_task["is_offchain"] = False
+    done_task["is_offchain"] = False
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["source"] == "mech_onchain"
+    assert event["response"]["is_offchain"] is False
+
+
+def test_build_wildcard_event_marketplace_task_falls_back_to_requester_key(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """Marketplace-delivered tasks carry `requester` (not `sender`); requester still populates.
+
+    Pending marketplace tasks come from
+    ``MechMarketplaceContract.get_marketplace_undelivered_reqs``, which
+    keys the requester as ``requester`` and carries no ``sender`` field.
+    The delivered wildcard row must still populate ``request.requester``
+    or the analytics-side join breaks.
+
+    The shared ``_wildcard_event_setup`` fixture always stamps
+    ``sender`` on ``executing_task`` (that's the off-chain HTTP shape).
+    This test deletes it and injects ``requester`` alone, exercising the
+    ``sender or requester`` fallback added in ``_build_wildcard_event``.
+
+    :param behaviour: task_execution behaviour under test.
+    :param params_stub: params fixture — consumed by
+        ``_wildcard_event_setup`` to populate ``self.params`` bits.
+    :param shared_state: shared_state fixture used by
+        ``_wildcard_event_setup`` for ``IN_MEMORY_REQUESTS`` /
+        ``OFFCHAIN_REQUEST_RESPONSES`` seeding.
+    """
+    request_data = {
+        "prompt": "on-chain marketplace delivery",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _wildcard_event_setup(
+        behaviour, shared_state, request_data
+    )
+    # Marketplace shape: only ``requester``, no ``sender``. Also flip the
+    # per-row provenance so this is the on-chain path.
+    del executing_task["sender"]
+    executing_task["requester"] = "0xMARKETPLACE_REQUESTER"
+    executing_task["is_offchain"] = False
+    done_task["is_offchain"] = False
+    event = behaviour._build_wildcard_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["request"]["requester"] == "0xMARKETPLACE_REQUESTER"
+    assert event["source"] == "mech_onchain"
