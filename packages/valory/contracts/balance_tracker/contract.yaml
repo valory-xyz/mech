@@ -7,7 +7,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigim3df7lcxmr4gjugo73fyrwfkkpll7jykgjp7nij6ugbkc7igyy
-  build/BalanceTracker.json: bafybeide7fhlz2x56wiroancnk4n5grgl2wginv52ybhg5bsgubcokw3yu
+  build/BalanceTracker.json: bafybeibwsoudjr7yajts3vkrmzox7wvd5ccyjhqmq6ng7arl4lgti7e7ue
   contract.py: bafybeiffqbk4qv7k6uonxwwznfedx6jo63lcyqyp5qgbcbv2zvos24yz7u
 fingerprint_ignore_patterns: []
 class_name: BalanceTrackerContract
