@@ -56,12 +56,11 @@ class BalanceTrackerFixedPriceNativeContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
         account: str,
-        amount: int,
     ) -> JSONLike:
-        """Encode depositFor(account) calldata; amount is returned as tx value."""
+        """Encode depositFor(account) calldata; caller must set tx.value to the deposit amount (depositFor is payable)."""
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi(
             abi_element_identifier="depositFor",
             args=[account],
         )
-        return {"data": bytes.fromhex(data[2:]), "value": amount}  # type: ignore
+        return {"data": bytes.fromhex(data[2:])}  # type: ignore

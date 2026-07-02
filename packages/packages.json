@@ -2,7 +2,7 @@
     "dev": {
         "protocol/valory/websocket_client/0.1.0": "bafybeig6omutaqt5rbvidju4zc7pwwdi6tkagwu3dwiirosadyoo534v3q",
         "contract/valory/balance_tracker/0.1.0": "bafybeigyauaww6q5wjrdekajmd5g2akmcgnoco2wdbmtrqi2g36hvwplqi",
-        "contract/valory/balance_tracker_fixed_price_native/0.1.0": "bafybeidfwbhw6v4frj5faofhgln2n4aqvmzm3sxwrrqy5tnrci554eyz6a",
+        "contract/valory/balance_tracker_fixed_price_native/0.1.0": "bafybeidi6pbrftz7bfutwjnorgpsbssg7iashlswyp4shf2p2kxtfi3qni",
         "contract/valory/complementary_service_metadata/0.1.0": "bafybeihukaditdbnvhkxnt2bfqtclfnniw6l2dwks4dx3hhzlvt46ilduq",
         "contract/valory/hash_checkpoint/0.1.0": "bafybeicvml7stv45k5ix44kc2c3xowxvl6m6pzosrkwbxq3ymnnju5g7oe",
         "contract/valory/olas_mech/0.1.0": "bafybeifvxzldiclpk7ztinivtjaf3y7yfrkw677y73tb2cukkywbagawc4",
