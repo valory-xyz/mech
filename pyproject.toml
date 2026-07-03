@@ -63,6 +63,8 @@ prerelease = "allow"
 # delivery_rate_abci tests are flaky / incomplete; drop this field once
 # those land so tomte's default discovery picks up everything.
 pytest_targets = [
+    "packages/valory/contracts/balance_tracker/tests",
+    "packages/valory/contracts/balance_tracker_fixed_price_native/tests",
     "packages/valory/skills/mech_abci/tests",
     "packages/valory/skills/task_submission_abci/tests",
     "packages/valory/skills/task_execution/tests",
