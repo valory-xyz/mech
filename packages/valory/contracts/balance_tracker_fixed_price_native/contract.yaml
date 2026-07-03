@@ -9,7 +9,9 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeib22mllwpf735xeuyo53qcc6i56p3u3cpv5kqkopkpfoxspmzvpd4
   build/BalanceTrackerFixedPriceNative.json: bafybeiapfus4ith6atrc2bgznpltf5zzpjitiwdivlxesw2epjqqdbherm
-  contract.py: bafybeieducpemkrrrakjulyzk7iafivcqefj4fufyrfdo4jzphxmqxu7z4
+  contract.py: bafybeigxdxgerffkfmrvkxhunm7iy2hmel4ozul7n543s55s3ui5hclkja
+  tests/__init__.py: bafybeihy4am4zfaoledb7sswlxlemg6pzems24pqkr6pw7ovfmgdws5pj4
+  tests/test_contract.py: bafybeighpkfzwsghivrw3kjawenv6nd232ks7n4yagipr22yaxbmcdlkjm
 fingerprint_ignore_patterns: []
 class_name: BalanceTrackerFixedPriceNativeContract
 contract_interface_paths:

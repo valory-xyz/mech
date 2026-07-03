@@ -9,6 +9,8 @@ fingerprint:
   __init__.py: bafybeigim3df7lcxmr4gjugo73fyrwfkkpll7jykgjp7nij6ugbkc7igyy
   build/BalanceTracker.json: bafybeig2ywevvapgqoprxnnkid3atvq6qg7aqfhyd2uvqokdnydcfp2is4
   contract.py: bafybeiffqbk4qv7k6uonxwwznfedx6jo63lcyqyp5qgbcbv2zvos24yz7u
+  tests/__init__.py: bafybeicrl6tanguy6dyh7lu7lptym5nclaqyhf3j3i32ykfsz7vvrz2snm
+  tests/test_contract.py: bafybeihjlnu6iazwxnd4ojapr3t5ygztaeqjmuk4lyacgi4gzkqg3oly2y
 fingerprint_ignore_patterns: []
 class_name: BalanceTrackerContract
 contract_interface_paths:

@@ -23,7 +23,7 @@ contracts:
 - valory/multisend:0.1.0:bafybeidl74hh6g34kgxay3fzapz26dhfmc6s2kjnt6edmaxgrklhge3omy
 - valory/service_registry:0.1.0:bafybeihktixbuw7dz3oa2xzfvpuchbnid7eob224n3spm77xx2yj2wixcm
 - valory/mech_marketplace:0.1.0:bafybeifwx6owth25ud4pknu2s2vcxitt3w2eotjkavmwksdhmur2xd5qgy
-- valory/balance_tracker:0.1.0:bafybeigyauaww6q5wjrdekajmd5g2akmcgnoco2wdbmtrqi2g36hvwplqi
+- valory/balance_tracker:0.1.0:bafybeie7xvhpyztpixha7kjx6z6deyvvsk5er4xpdkpgqc65q552xpvi6e
 - valory/erc20:0.1.0:bafybeig4tin5v5ahiiz4fysocl7gjhpjtgzko3w6cr2iz3q5a4bxutwewu
 protocols:
 - open_aea/signing:1.0.0:bafybeifsjmldwyki3beqyvdt5lzenrg6wyrqaar5plc5rpnvtc4zlentye
@@ -40,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeicioxhbhnsoqyqvkeevd7df7r2vubbiglyf7ucps2el73objazjsq
 - valory/contract_subscription:0.1.0:bafybeicqlkmfpttw4hbbaakr6xos62rd6ytjwkyzlfli4xpvl5yqcycf6q
-- valory/mech_abci:0.1.0:bafybeibnbx4hytroqgujk63jkhvzrthi7hu64osg4tp5kxispwpppjy52u
+- valory/mech_abci:0.1.0:bafybeihfryiq2qw7slsu23f2rfedclorkujgkbrnib24iaidw3tq5yst3a
 - valory/registration_abci:0.1.0:bafybeihjhbn5seffyu5cwugvm26fkamp3svhggmtzh577daijgl2ksxs3e
 - valory/reset_pause_abci:0.1.0:bafybeihc4ruh25s7wuunfy2b3k2n4eypyhvtry3usgom44wsymagbcr3ki
 - valory/delivery_rate_abci:0.1.0:bafybeiaefr3eiajklnb6m4jtl7rpxr5t2lmrpizfy7gqkjem3qiewo7cz4
-- valory/task_execution:0.1.0:bafybeifq533htbyxfaumezuzw2pxyekghhureqgvxa7jm5g4oaofl2sxse
-- valory/task_submission_abci:0.1.0:bafybeicsbvhnhn63hhoqfdtxiclnu33ukqnsm3637qyowzjfegszsvdw4i
+- valory/task_execution:0.1.0:bafybeihyow3x63r7lhgnslstgdbzurbkmwkpzviiegbhzvvzplbwjz5kra
+- valory/task_submission_abci:0.1.0:bafybeiaekaqygb5xbkghju5u6ha3mwkgc5gdrhtj7l2r4hx5pn4gh4na6u
 - valory/termination_abci:0.1.0:bafybeibnnzry5kknci3z46gcjgutv4jid3ir6xn6a5adq3tx6v2e25augq
 - valory/transaction_settlement_abci:0.1.0:bafybeibv3tycpdhphlblu62zpcbjsj7hnwkutexxqagorkelhjlt4t4fii
 - valory/websocket_client:0.1.0:bafybeid6oyycsrvk4duftffs5mrfgmcepibt3qe4om3kfzhwhilfq3ynay

@@ -56,11 +56,18 @@ class BalanceTrackerFixedPriceNativeContract(Contract):
         ledger_api: EthereumApi,
         contract_address: str,
         account: str,
+        amount: int,
     ) -> JSONLike:
-        """Encode depositFor(account) calldata; caller must set tx.value to the deposit amount (depositFor is payable)."""
+        """Encode depositFor(account) calldata plus the tx value the caller must attach."""
+        if amount <= 0:
+            raise ValueError(
+                f"build_deposit_for_data requires amount > 0 (got {amount}); "
+                "the on-chain depositFor(address) is payable with no zero-value "
+                "guard, so a value-less call silently credits zero."
+            )
         contract_instance = cls.get_instance(ledger_api, contract_address)
         data = contract_instance.encode_abi(
             abi_element_identifier="depositFor",
             args=[account],
         )
-        return {"data": bytes.fromhex(data[2:])}  # type: ignore
+        return {"data": bytes.fromhex(data[2:]), "value": amount}  # type: ignore
