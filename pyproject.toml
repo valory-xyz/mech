@@ -58,6 +58,10 @@ dev = [
 [tool.uv]
 default-groups = "all"
 prerelease = "allow"
+# cffi 2.1.0 (transitive via cryptography << open-aea-ledger-solana)
+# reports its license as MIT-0, which tomte's PARANOID liccheck rejects.
+# Constrain to the previous minor until the tomte allowlist covers MIT-0.
+override-dependencies = ["cffi<2.1"]
 
 [tool.tomte]
 # delivery_rate_abci tests are flaky / incomplete; drop this field once
