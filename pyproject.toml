@@ -11,12 +11,12 @@ readme = "README.md"
 license = "Apache-2.0"
 dependencies = [
     # Framework contract — strict.
-    "open-autonomy==0.21.23",
-    "open-aea-ledger-ethereum==2.2.7",
-    "open-aea-ledger-cosmos==2.2.7",
-    "open-aea-test-autonomy==0.21.23",
-    "open-aea-cli-ipfs==2.2.7",
-    "open-aea-helpers==0.21.23",
+    "open-autonomy==0.21.26",
+    "open-aea-ledger-ethereum==2.2.9",
+    "open-aea-ledger-cosmos==2.2.9",
+    "open-aea-test-autonomy==0.21.26",
+    "open-aea-cli-ipfs==2.2.9",
+    "open-aea-helpers==0.21.26",
     # Mech is a framework (mech-predict / similar are the apps),
     # so non-OA deps use ranges aligned with the package YAMLs.
     "requests>=2.32.5",
@@ -58,11 +58,17 @@ dev = [
 [tool.uv]
 default-groups = "all"
 prerelease = "allow"
+# cffi 2.1.0 (transitive via cryptography << open-aea-ledger-solana)
+# reports its license as MIT-0, which tomte's PARANOID liccheck rejects.
+# Constrain to the previous minor until the tomte allowlist covers MIT-0.
+override-dependencies = ["cffi<2.1"]
 
 [tool.tomte]
 # delivery_rate_abci tests are flaky / incomplete; drop this field once
 # those land so tomte's default discovery picks up everything.
 pytest_targets = [
+    "packages/valory/contracts/balance_tracker/tests",
+    "packages/valory/contracts/balance_tracker_fixed_price_native/tests",
     "packages/valory/skills/mech_abci/tests",
     "packages/valory/skills/task_submission_abci/tests",
     "packages/valory/skills/task_execution/tests",

@@ -461,6 +461,18 @@ class ContractHandler(BaseHandler):
                 priority_mech.lower() == self.mech_address.lower()
                 and status != DELIVERED_STATUS
             ):
+                # Stamp the local enqueue time so PostTxSettlement's
+                # undelivered-sweep (see task_submission_abci.behaviours
+                # ``_sweep_pending_undelivered``) can detect tasks that
+                # have sat in the pending queue past the operator-configured
+                # sweep window without paying a per-task RPC at sweep time.
+                # The contract's RequestInfo.responseTimeout is the
+                # authoritative timeout; this local stamp is the proxy the
+                # mech uses to decide when to emit a request-only event
+                # to the wildcard data lake. See
+                # ``autonolas-marketplace/docs/onchain_write_path_scope.md``
+                # §3.2 for the design.
+                req.setdefault("enqueued_at_local", time.time())
                 self.context.logger.info(
                     f"Adding request with id {rid} to pending_tasks."
                 )

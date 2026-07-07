@@ -138,6 +138,45 @@ class TestComputeBatchHash:
         events_b = [{"r": "second"}, {"r": "first"}]
         assert compute_batch_hash(events_a) != compute_batch_hash(events_b)
 
+    def test_hash_excludes_source_field(self) -> None:
+        """The ``source`` top-level field is stripped from the hash surface.
+
+        ``compute_batch_hash`` mirrors the server-side
+        ``model_dump(exclude={"source"})`` in predict-api's
+        ``routes/mech.py``. Regression guard for the ``BATCH_HASH_MISMATCH``
+        rollout risk: without this exclusion, an older off-chain mech
+        that never sent ``source`` would hash ``{request, response}``
+        while the server would hash ``{request, response, source:
+        "mech_offchain"}`` (Pydantic's default injects the field on
+        parse), and every write from a not-yet-upgraded mech would be
+        rejected during the ordered rollout window.
+
+        Three payload shapes must all produce identical hashes:
+
+          * ``{"a": 1, "source": "mech_onchain"}``
+          * ``{"a": 1, "source": "mech_offchain"}``
+          * ``{"a": 1}``  (old mech, no source key)
+        """
+        h_onchain = compute_batch_hash([{"a": 1, "source": "mech_onchain"}])
+        h_offchain = compute_batch_hash([{"a": 1, "source": "mech_offchain"}])
+        h_missing = compute_batch_hash([{"a": 1}])
+        assert h_onchain == h_offchain == h_missing
+
+    def test_hash_still_changes_on_non_source_fields(self) -> None:
+        """The source-exclusion is targeted; every other field still counts.
+
+        A regression that widened the strip to also exclude another
+        real field would hide tamper. Confirm ``request`` still tips
+        the hash even when a ``source`` key sits alongside it.
+        """
+        h1 = compute_batch_hash(
+            [{"request": {"prompt": "a"}, "source": "mech_onchain"}]
+        )
+        h2 = compute_batch_hash(
+            [{"request": {"prompt": "b"}, "source": "mech_onchain"}]
+        )
+        assert h1 != h2
+
 
 # ---------------------------------------------------------------------------
 # build_typed_data

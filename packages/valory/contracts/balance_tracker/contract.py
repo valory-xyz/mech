@@ -134,3 +134,19 @@ class BalanceTrackerContract(Contract):
             ledger_api, contract_address, sender_address, tx_data
         ).pop("data")
         return {"data": bytes.fromhex(tx_data[2:]), "simulation_ok": simulation_ok}  # type: ignore
+
+    @classmethod
+    def build_deposit_for_data(
+        cls,
+        ledger_api: EthereumApi,
+        contract_address: str,
+        account: str,
+        amount: int,
+    ) -> JSONLike:
+        """Encode depositFor(account, amount) for a Safe multisend batch."""
+        contract_instance = cls.get_instance(ledger_api, contract_address)
+        data = contract_instance.encode_abi(
+            abi_element_identifier="depositFor",
+            args=[account, amount],
+        )
+        return {"data": bytes.fromhex(data[2:])}  # type: ignore

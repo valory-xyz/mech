@@ -7,13 +7,15 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigim3df7lcxmr4gjugo73fyrwfkkpll7jykgjp7nij6ugbkc7igyy
-  build/BalanceTracker.json: bafybeide7fhlz2x56wiroancnk4n5grgl2wginv52ybhg5bsgubcokw3yu
-  contract.py: bafybeigmh3gtqsixhrfa735gtuzrem77hluq76ekbxa2mxwfv6cfmo5yvm
+  build/BalanceTracker.json: bafybeig2ywevvapgqoprxnnkid3atvq6qg7aqfhyd2uvqokdnydcfp2is4
+  contract.py: bafybeiffqbk4qv7k6uonxwwznfedx6jo63lcyqyp5qgbcbv2zvos24yz7u
+  tests/__init__.py: bafybeicrl6tanguy6dyh7lu7lptym5nclaqyhf3j3i32ykfsz7vvrz2snm
+  tests/test_contract.py: bafybeihjlnu6iazwxnd4ojapr3t5ygztaeqjmuk4lyacgi4gzkqg3oly2y
 fingerprint_ignore_patterns: []
 class_name: BalanceTrackerContract
 contract_interface_paths:
   ethereum: build/BalanceTracker.json
 dependencies:
   open-aea-ledger-ethereum:
-    version: ==2.2.7
+    version: ==2.2.9
 contracts: []

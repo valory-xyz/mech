@@ -63,16 +63,36 @@ def canonical_json_bytes(value: Any) -> bytes:
 
 
 def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
-    """Return ``"0x" + keccak256(canonical_json(events)).hex()``.
+    """Return ``"0x" + keccak256(canonical_json(events_without_source)).hex()``.
 
     The result is what goes into the signed typed-data's
     ``message.batch_hash`` field. The server recomputes from the parsed
     wire payload and rejects on mismatch.
 
+    ``source`` is stripped from a shallow copy of each event before
+    hashing, in symmetry with the server's own
+    ``model_dump(exclude={"source"})`` in ``routes/mech.py``. Without
+    this exclusion an older off-chain mech that never sent ``source``
+    would hash ``{request, response}`` while the server would hash
+    ``{request, response, source: "mech_offchain"}`` (Pydantic's default
+    injects the field on parse), so every write from a not-yet-upgraded
+    mech would surface as ``BATCH_HASH_MISMATCH`` during the ordered
+    rollout window. Excluding source on both sides keeps the "predict-api
+    first, then mech" rollout honest.
+
+    Trade-off: an in-flight flip of ``source`` (``mech_offchain`` ↔
+    ``mech_onchain``) between mech and server would not invalidate the
+    signature. Low impact because source is a provenance tag on rows
+    the mech's own EOA already signed for; the mech owner is trusted
+    for the origin of their own rows.
+
     :param events: the ordered list of settled-delivery event dicts.
+        ``source`` may or may not be present on each dict; the hash
+        excludes it either way.
     :return: the 0x-prefixed 32-byte hex digest of the canonical batch.
     """
-    return "0x" + keccak(canonical_json_bytes(events)).hex()
+    hash_input = [{k: v for k, v in event.items() if k != "source"} for event in events]
+    return "0x" + keccak(canonical_json_bytes(hash_input)).hex()
 
 
 def compute_eip712_digest(typed_data: Dict[str, Any]) -> bytes:
