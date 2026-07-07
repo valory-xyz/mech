@@ -208,6 +208,19 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     the analytics row just arrives later via the replay buffer). The
     NO_MAJORITY arm only fires if the agents can't agree on having reached
     this round at all, which is the same shape as every consensus round.
+
+    ``done_tasks`` MUST survive this round untouched. It is in
+    ``cross_period_persisted_keys`` because
+    ``TaskPoolingBehaviour.handle_submitted_tasks`` reads it at the START
+    of the next cycle to know which ``request_id``s to prune from
+    ``shared_state[DONE_TASKS]``. Clearing here on DONE strands the
+    delivered tasks in shared state, so every subsequent cycle re-pools
+    and re-delivers the same batch — the Safe tx succeeds each time but
+    the inner ``mech.deliverMulti`` reverts on the already-delivered
+    ids, burning gas without emitting new Deliver events. Any re-fire
+    concern on the NO_MAJORITY / ROUND_TIMEOUT self-loop must be handled
+    inside the behaviour (idempotence flag) rather than by mutating a
+    field the next behaviour depends on.
     """
 
     payload_class = PostTxSettlementPayload
@@ -218,20 +231,7 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            # Clear ``done_tasks`` on exit, matching the
-            # ``TransactionPreparationRound`` pattern. Without this the
-            # next entry to this round on NO_MAJORITY / ROUND_TIMEOUT
-            # (both self-loop) would re-read the same stale events and
-            # re-fire the wildcard POST; the events also survive across
-            # periods via ``cross_period_persisted_keys``, so the next
-            # cycle's behaviour would see last period's events too.
-            return (
-                self.synchronized_data.update(
-                    synchronized_data_class=SynchronizedData,
-                    **{get_name(SynchronizedData.done_tasks): []},
-                ),
-                Event.DONE,
-            )
+            return self.synchronized_data, Event.DONE
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):

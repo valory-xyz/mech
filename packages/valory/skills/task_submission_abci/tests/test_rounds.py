@@ -512,3 +512,26 @@ class TestPostTxSettlementRound:
         assert result is not None
         _, event = result
         assert event == Event.NO_MAJORITY
+
+    def test_done_tasks_preserved_on_done(self) -> None:
+        """Regression pin: ``done_tasks`` MUST survive DONE untouched.
+
+        ``TaskPoolingBehaviour.handle_submitted_tasks`` reads
+        ``synchronized_data.done_tasks`` at the START of the next cycle to
+        know which ``request_id``s to prune from
+        ``shared_state[DONE_TASKS]``. If this round clears the field on
+        DONE, the next cycle sees an empty list, ``remove_tasks`` is a
+        no-op, and the same batch is re-delivered on every settlement
+        cycle — the Safe tx succeeds but ``mech.deliverMulti`` reverts on
+        the already-delivered ids, burning gas without emitting new
+        Deliver events. Any wildcard re-fire concern on self-loop must be
+        guarded inside the behaviour, not by mutating this field.
+        """
+        tasks = [_make_task("req-1"), _make_task("req-2")]
+        payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
+        round_ = _make_post_tx_round(payloads, done_tasks=tasks)
+        result = round_.end_block()
+        assert result is not None
+        new_sync_data, event = result
+        assert event == Event.DONE
+        assert cast(SynchronizedData, new_sync_data).done_tasks == tasks
