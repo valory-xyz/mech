@@ -3531,7 +3531,7 @@ def _finalize_gate_setup(
     lets it. ``to_multihash`` is monkeypatched to a cheap prefix so
     ``_finalize_done_task`` doesn't try to run the real multihash logic.
 
-    :param behaviour: FetchDataBehaviour fixture.
+    :param behaviour: TaskExecutionBehaviour fixture.
     :param shared_state: shared_state fixture.
     :param params_stub: params fixture.
     :param monkeypatch: pytest monkeypatch fixture used to swap
@@ -3591,7 +3591,7 @@ def test_finalize_done_task_attaches_predict_api_event_when_use_offchain_on(
     behaviour then reads off ``synchronized_data.done_tasks`` after
     consensus replication.
 
-    :param behaviour: FetchDataBehaviour fixture.
+    :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture with ``use_offchain=True``.
     :param shared_state: shared_state fixture.
     :param monkeypatch: pytest monkeypatch fixture.
@@ -3625,7 +3625,7 @@ def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
     ``source='mech_onchain'``. Regression against a docstring drift
     that was suggesting the condition was marketplace-only.
 
-    :param behaviour: FetchDataBehaviour fixture.
+    :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture with ``use_offchain=True``.
     :param shared_state: shared_state fixture.
     :param monkeypatch: pytest monkeypatch fixture.
@@ -3658,7 +3658,7 @@ def test_finalize_done_task_omits_predict_api_event_when_use_offchain_off(
     when the flag is off. Pairs with the egress-side gate test in
     ``task_submission_abci/tests/test_onchain_write_path.py``.
 
-    :param behaviour: FetchDataBehaviour fixture.
+    :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture, flipped to ``use_offchain=False`` here.
     :param shared_state: shared_state fixture.
     :param monkeypatch: pytest monkeypatch fixture.

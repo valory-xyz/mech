@@ -30,11 +30,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_submission_abci:0.1.0:bafybeiblfzy23r3bgcfdceeoilz2fiqscdyrer3b2xewctq77tlnkja5fa
+- valory/task_submission_abci:0.1.0:bafybeibdegmyw2pq54byeac7izj7vcm6egzhj6d72di7s3xdt3pfmai22i
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/delivery_rate_abci:0.1.0:bafybeiathwdfpcfqbipqbkslv6j22q5cvov4n3czmehzij3czrhdnlg42e
-- valory/task_execution:0.1.0:bafybeided62jostve2n5b4c7fsccxf4wce4ld3rbvalfdbqp77euon5rtq
+- valory/task_execution:0.1.0:bafybeies2iytb73xae2t7k53ap4nzfdfvyqrglofjzdduv5ck4ptanxsjy
 behaviours:
   main:
     args: {}
