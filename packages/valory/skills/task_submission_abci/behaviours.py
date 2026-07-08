@@ -1907,7 +1907,28 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             the underlying generator-based helpers; this method does not
             ``return`` anything.
         """
-        if not getattr(self.params, "use_offchain", False):
+        if not self.params.use_offchain:
+            # Divergence safety net. ``use_offchain`` is a duplicated
+            # param (declared on both this skill and ``task_execution``);
+            # if an operator flips ``task_execution.use_offchain=true`` but
+            # forgets this one, the ingress side builds
+            # ``predict_api_event`` entries and rides Tendermint
+            # consensus replication for them — and then the egress side
+            # here silently drops the entire batch. Warn loudly when we
+            # can see that has happened so the divergence is alertable
+            # rather than invisible.
+            if any(
+                isinstance(t, dict) and t.get("predict_api_event")
+                for t in cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
+            ):
+                self.context.logger.warning(
+                    "predict_api_event entries present in done_tasks but "
+                    "task_submission_abci.use_offchain is False — the "
+                    "ingress-side (task_execution) and egress-side "
+                    "(task_submission_abci) use_offchain flags are "
+                    "diverging. Dropping the batch. Align both skill "
+                    "configs to eliminate the ingress work."
+                )
             return
         predict_api_url = getattr(self.params, "predict_api_events_url", "") or ""
         if not predict_api_url:
@@ -2271,10 +2292,13 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         ride the same predict-api write path; the per-event ``source`` field
         set inside :py:meth:`task_execution.behaviours._build_predict_api_event`
         is what disambiguates the two on the predict-api side. The filter
-        here keys on the presence of a ``predict_api_event`` field — built
-        only when both ``use_offchain`` is set AND the task is a
-        marketplace task — so on-chain non-marketplace tasks (legacy
-        mech contract) stay out of the lake by construction.
+        here keys on the presence of a ``predict_api_event`` field, which
+        :py:meth:`task_execution.behaviours._finalize_done_task` sets only
+        when ``use_offchain`` is on AND the task is either an off-chain
+        HTTP delivery (``is_offchain=True``) or an on-chain marketplace
+        delivery (``is_marketplace_delivery=True``). On-chain
+        non-marketplace tasks on a legacy mech contract stay out of the
+        lake by construction.
 
         :return: an ordered list of ``MechEvent``-shaped dicts.
         """
@@ -2336,7 +2360,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             ``PENDING_TASKS`` if the predict-api POST returns 2xx. Empty
             lists on any short-circuit or when nothing timed out.
         """
-        if not getattr(self.params, "use_offchain", False):
+        if not self.params.use_offchain:
             return [], []
         if not getattr(self.params, "mech_events_sweep_pending_enabled", False):
             return [], []

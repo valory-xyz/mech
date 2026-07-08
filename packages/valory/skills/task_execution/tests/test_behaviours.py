@@ -3500,3 +3500,179 @@ def test_build_predict_api_event_marketplace_task_falls_back_to_requester_key(
     )
     assert event["request"]["requester"] == "0xMARKETPLACE_REQUESTER"
     assert event["source"] == "mech_onchain"
+
+
+# ---------------------------------------------------------------------------
+# _finalize_done_task ingress gate: use_offchain drives predict_api_event
+# attach vs skip. Direct-call tests on _build_predict_api_event above pass
+# the builder inputs by hand and never traverse the gate, so a flag flip
+# would go uncaught. These pair the gate on/off with an offchain and a
+# marketplace-onchain shape to pin the exact condition
+# (use_offchain AND (is_offchain OR is_marketplace_delivery)).
+# ---------------------------------------------------------------------------
+
+
+def _finalize_gate_setup(
+    behaviour: Any,
+    shared_state: Dict[str, Any],
+    params_stub: Any,
+    monkeypatch: Any,
+    *,
+    is_offchain: bool,
+    is_marketplace_mech: bool,
+    req_id: str = "req-gate",
+) -> None:
+    """Wire the minimum ``behaviour`` state for a ``_finalize_done_task`` call.
+
+    Seeds ``_executing_task`` / ``_done_task`` in the same shape the
+    happy-path ``_handle_store_response`` test does, plus
+    ``IN_MEMORY_REQUESTS`` / ``OFFCHAIN_REQUEST_RESPONSES`` so
+    ``_build_predict_api_event`` can produce a real event when the gate
+    lets it. ``to_multihash`` is monkeypatched to a cheap prefix so
+    ``_finalize_done_task`` doesn't try to run the real multihash logic.
+
+    :param behaviour: FetchDataBehaviour fixture.
+    :param shared_state: shared_state fixture.
+    :param params_stub: params fixture.
+    :param monkeypatch: pytest monkeypatch fixture used to swap
+        ``to_multihash`` and ``set_gauge``.
+    :param is_offchain: value stamped on both the executing_task and
+        the done_task; drives the ``is_offchain`` branch of the gate.
+    :param is_marketplace_mech: value on the ``mech_to_config`` entry;
+        drives the ``is_marketplace_delivery`` branch of the gate.
+    :param req_id: request id used across the seeded structures.
+    """
+    request_data = {
+        "prompt": "gate-check",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    response_data = {
+        "result": "p_yes=0.7",
+        "schema_version": "2.0",
+        "executed_at": "2026-06-25T13:19:06.953661Z",
+    }
+    shared_state[beh_mod.IN_MEMORY_REQUESTS] = {req_id: json.dumps(request_data)}
+    shared_state.setdefault(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})[req_id] = {
+        "response": response_data
+    }
+    my_mech = params_stub.agent_mech_contract_address.lower()
+    params_stub.mech_to_config = {
+        my_mech: SimpleNamespace(
+            is_marketplace_mech=is_marketplace_mech,
+            use_dynamic_pricing=False,
+        )
+    }
+    behaviour._executing_task = {
+        "requestId": req_id,
+        "request_delivery_rate": 10**16,
+        "is_offchain": is_offchain,
+        "sender": "0xrequester",
+    }
+    behaviour._done_task = {
+        "request_id": req_id,
+        "is_offchain": is_offchain,
+        "tool": "prediction-offline",
+        "mech_address": my_mech,
+    }
+    monkeypatch.setattr(beh_mod, "to_multihash", lambda x: f"mh:{x}")
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+
+
+def test_finalize_done_task_attaches_predict_api_event_when_use_offchain_on(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """``use_offchain=True`` + off-chain HTTP delivery: event attached to done_task.
+
+    Pins the ingress-side gate on. This is the shape the post-settlement
+    behaviour then reads off ``synchronized_data.done_tasks`` after
+    consensus replication.
+
+    :param behaviour: FetchDataBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task("bafycid")
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert isinstance(done_tasks[0].get("predict_api_event"), dict)
+    assert done_tasks[0]["predict_api_event"].get("source") == "mech_offchain"
+
+
+def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """``use_offchain=True`` + on-chain marketplace delivery: event still attached.
+
+    The gate accepts ``is_marketplace_delivery`` too, so on-chain
+    marketplace tasks flow into the same predict-api write path with
+    ``source='mech_onchain'``. Regression against a docstring drift
+    that was suggesting the condition was marketplace-only.
+
+    :param behaviour: FetchDataBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=False,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task("bafycid")
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert isinstance(done_tasks[0].get("predict_api_event"), dict)
+    assert done_tasks[0]["predict_api_event"].get("source") == "mech_onchain"
+
+
+def test_finalize_done_task_omits_predict_api_event_when_use_offchain_off(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """``use_offchain=False``: no ``predict_api_event`` on the done_task even for an off-chain HTTP delivery.
+
+    The Phase-1 dark ship promise: nothing rides consensus replication
+    when the flag is off. Pairs with the egress-side gate test in
+    ``task_submission_abci/tests/test_onchain_write_path.py``.
+
+    :param behaviour: FetchDataBehaviour fixture.
+    :param params_stub: params fixture, flipped to ``use_offchain=False`` here.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = False
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task("bafycid")
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert "predict_api_event" not in done_tasks[0]

@@ -543,3 +543,179 @@ def test_extract_offchain_events_skips_tasks_without_predict_api_event() -> None
     )
     events = PostTxSettlementBehaviour._extract_offchain_events(self_)
     assert events == []
+
+
+# ---------------------------------------------------------------------------
+# _do_predict_api_write_best_effort egress gate: use_offchain drives whether
+# the external HTTP POST is even attempted, plus a divergence-warning
+# regression when the two flag copies drift out of sync.
+# ---------------------------------------------------------------------------
+
+
+def _make_egress_self(
+    *,
+    use_offchain: bool,
+    predict_api_events_url: str = "https://mpp.autonolas.tech/mech/events",
+    done_tasks: List[Dict[str, Any]] | None = None,
+    warnings_sink: List[str] | None = None,
+    debug_sink: List[str] | None = None,
+) -> PostTxSettlementBehaviour:
+    """Build a minimum ``self`` for a ``_do_predict_api_write_best_effort`` call.
+
+    The behaviour's egress path only touches ``self.params``,
+    ``self.synchronized_data.done_tasks``, ``self.context.logger``, and
+    the two internal helpers ``_extract_offchain_events`` /
+    ``_sweep_pending_undelivered`` / ``_build_http_request_message``.
+    We stub the latter three so this test proves the *gate* rather than
+    the batch construction (already covered by
+    ``_extract_offchain_events`` and ``_build_request_only_event`` tests
+    above).
+
+    :param use_offchain: value of ``params.use_offchain``.
+    :param predict_api_events_url: value of ``params.predict_api_events_url``.
+    :param done_tasks: ``synchronized_data.done_tasks`` list; used only
+        by the divergence-warning check.
+    :param warnings_sink: list to capture WARNING-level log lines.
+    :param debug_sink: list to capture DEBUG-level log lines.
+    :return: a fixture typed as :class:`PostTxSettlementBehaviour` for
+        the unbound-method call pattern used by every test in this
+        module.
+    """
+    warnings_sink = warnings_sink if warnings_sink is not None else []
+    debug_sink = debug_sink if debug_sink is not None else []
+    build_calls: List[Any] = []
+
+    logger = SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda msg, *a, **k: warnings_sink.append(msg),
+        error=lambda *a, **k: None,
+        debug=lambda msg, *a, **k: debug_sink.append(msg),
+    )
+    self_ = SimpleNamespace(
+        context=SimpleNamespace(shared_state={}, logger=logger),
+        params=SimpleNamespace(
+            use_offchain=use_offchain,
+            predict_api_events_url=predict_api_events_url,
+            mech_events_sweep_pending_enabled=False,
+            mech_events_sweep_max_age_seconds=60.0,
+            mech_events_chain_id=100,
+            mech_marketplace_address="0xMARKET",
+            agent_mech_contract_address="0xMECHCONTRACT",
+        ),
+        synchronized_data=SimpleNamespace(done_tasks=done_tasks or []),
+        # If the gate lets us through, ``_do_predict_api_write_best_effort``
+        # calls ``_build_http_request_message`` to construct the POST.
+        # Track the calls so the "gate off => no POST" invariant is
+        # observable without wiring the full HTTP dialogue.
+        _build_http_request_message=lambda *a, **k: build_calls.append((a, k)),
+        # Called by the egress helper when there are no offchain events
+        # in done_tasks; return an empty batch so the "no events" short-
+        # circuit fires cleanly.
+        _extract_offchain_events=lambda: [],
+        _sweep_pending_undelivered=lambda: ([], []),
+    )
+    # Expose the tracker on the fixture so tests can assert against it.
+    self_._egress_build_calls = build_calls  # type: ignore[attr-defined]
+    return cast(PostTxSettlementBehaviour, self_)
+
+
+def _drive_generator_once(gen: Any) -> None:
+    """Advance a short-circuited generator to completion.
+
+    ``_do_predict_api_write_best_effort`` is a Python generator. Every
+    egress-gate path under test returns before the first ``yield``, so
+    ``next(gen)`` either raises ``StopIteration`` cleanly (the ``return``
+    completed) or would suspend on a real dialogue — which is exactly
+    the surface these gate tests must not reach.
+
+    :param gen: the generator returned by
+        ``_do_predict_api_write_best_effort``.
+    """
+    try:
+        next(gen)
+    except StopIteration:
+        pass
+
+
+def test_egress_gate_off_short_circuits_without_http_call() -> None:
+    """``use_offchain=False`` and no divergence: no HTTP build, no warning.
+
+    The Phase-1 dark ship promise on the egress side. Sibling to the
+    ingress-side test in
+    ``task_execution/tests/test_behaviours.py::test_finalize_done_task_omits_predict_api_event_when_use_offchain_off``.
+    """
+    self_ = _make_egress_self(use_offchain=False)
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    assert self_._egress_build_calls == []  # type: ignore[attr-defined]
+
+
+def test_egress_gate_off_with_diverged_ingress_emits_divergence_warning() -> None:
+    """``use_offchain=False`` but ``done_tasks`` carries predict_api_events: WARN and drop.
+
+    The two ``use_offchain`` copies (on ``task_execution`` and
+    ``task_submission_abci``) are independent env-overridable params —
+    an operator can flip one but forget the other. If the ingress side
+    is on but this side is off, ``done_tasks`` will already carry
+    ``predict_api_event`` entries at consensus-replication cost, and
+    dropping them silently (as the pre-fix shape did) is invisible to
+    alerting. The safety net here fires a WARNING so the misconfig
+    surfaces in ops logs.
+    """
+    warnings_sink: List[str] = []
+    self_ = _make_egress_self(
+        use_offchain=False,
+        done_tasks=[
+            {"is_offchain": True, "predict_api_event": {"src": "off"}},
+            {"is_offchain": False},
+        ],
+        warnings_sink=warnings_sink,
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    assert self_._egress_build_calls == []  # type: ignore[attr-defined]
+    assert any(
+        "diverging" in w and "task_execution" in w and "task_submission_abci" in w
+        for w in warnings_sink
+    ), warnings_sink
+
+
+def test_egress_gate_off_with_no_events_stays_silent() -> None:
+    """``use_offchain=False`` and empty ``done_tasks``: no warning fires.
+
+    Guards against the divergence warning becoming its own boot-noise
+    source on production mechs that ship dark by default (both flags
+    off, no ingress work happened, nothing to warn about).
+    """
+    warnings_sink: List[str] = []
+    self_ = _make_egress_self(
+        use_offchain=False, done_tasks=[], warnings_sink=warnings_sink
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    assert self_._egress_build_calls == []  # type: ignore[attr-defined]
+    assert warnings_sink == []
+
+
+def test_egress_gate_on_with_empty_url_short_circuits_at_debug_level() -> None:
+    """``use_offchain=True`` but empty ``predict_api_events_url``: DEBUG log, no HTTP call.
+
+    Same shape as the flag-off short-circuit but on the URL-missing
+    branch: an operator opted in to the pipeline but hasn't wired the
+    endpoint yet, so we degrade quietly (DEBUG, not WARNING) rather
+    than every settlement round shouting into ops logs.
+    """
+    debug_sink: List[str] = []
+    self_ = _make_egress_self(
+        use_offchain=True,
+        predict_api_events_url="",
+        debug_sink=debug_sink,
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    assert self_._egress_build_calls == []  # type: ignore[attr-defined]
+    assert any("predict_api_events_url empty" in msg for msg in debug_sink), debug_sink

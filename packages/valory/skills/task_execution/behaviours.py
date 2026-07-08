@@ -1553,7 +1553,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # for the paid HTTP path, ``mech_onchain`` for the on-chain rails.
         # See ``autonolas-marketplace/docs/onchain_write_path_scope.md`` for
         # the agreed shape.
-        predict_api_mode_enabled = getattr(self.params, "use_offchain", False)
+        predict_api_mode_enabled = self.params.use_offchain
         is_marketplace_delivery = bool(done_task.get("is_marketplace_mech"))
         if predict_api_mode_enabled and (is_offchain or is_marketplace_delivery):
             done_task["predict_api_event"] = self._build_predict_api_event(

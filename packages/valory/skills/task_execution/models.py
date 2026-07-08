@@ -143,7 +143,7 @@ class Params(Model):
         # there's no coherent state where ingress and egress diverge.
         # Default False = on-chain + IPFS only, no analytics writes,
         # unchanged for legacy deployments. Set True to enrol the mech.
-        self.use_offchain: bool = kwargs.get("use_offchain", False)
+        self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
         # Off-chain preimage retention. Ships dark like use_offchain: False keeps
         # today's behaviour (no durable preimage buffer). When enabled, each
         # off-chain (request, response) pair is mirrored into the kv_store and a

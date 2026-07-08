@@ -40,7 +40,12 @@ from eth_utils import keccak  # type: ignore[import-not-found]
 
 # The exact name/version pair that the server's allowlist binds via the
 # EIP-712 domain. Treat as a versioned constant; bumping the version
-# requires a coordinated change on both sides.
+# requires a coordinated change on both sides. Deliberately NOT renamed
+# in the wildcard→predict_api sweep — the server's EIP-712 domain
+# allowlist binds to these exact strings, and a rename here silently
+# breaks every server-side signature verification with no test
+# failure. If a future rename is genuinely wanted, ship the string
+# change alongside a coordinated server-side allowlist bump.
 EVENTS_DOMAIN_NAME = "Olas Mech Events"
 EVENTS_DOMAIN_VERSION = "1"
 EVENTS_PRIMARY_TYPE = "MechEventBatch"
