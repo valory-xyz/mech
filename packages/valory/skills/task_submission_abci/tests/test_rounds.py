@@ -356,7 +356,7 @@ class TestTaskSubmissionAbciApp:
 
         # Post-settlement leg: DONE leaves the skill via the new degenerate
         # final state, both NO_MAJORITY and ROUND_TIMEOUT loop back so a
-        # transient consensus dip doesn't crash the FSM (the wildcard write
+        # transient consensus dip doesn't crash the FSM (the predict-api write
         # itself is idempotent, so re-entry is safe).
         post_tx = TaskSubmissionAbciApp.transition_function[PostTxSettlementRound]
         assert post_tx[Event.DONE] is FinishedPostTxSettlementRound
@@ -470,7 +470,7 @@ class TestPostTxSettlementRound:
     """End-to-end behaviour pin for ``PostTxSettlementRound``.
 
     The round is a CollectSameUntilThresholdRound: it only needs consensus
-    on participation (the wildcard POST itself is fire-and-forget,
+    on participation (the predict-api POST itself is fire-and-forget,
     idempotent server-side). DONE on threshold, NO_MAJORITY only when
     consensus is impossible.
     """
@@ -524,7 +524,7 @@ class TestPostTxSettlementRound:
         no-op, and the same batch is re-delivered on every settlement
         cycle — the Safe tx succeeds but ``mech.deliverMulti`` reverts on
         the already-delivered ids, burning gas without emitting new
-        Deliver events. Any wildcard re-fire concern on self-loop must be
+        Deliver events. Any predict-api re-fire concern on self-loop must be
         guarded inside the behaviour, not by mutating this field.
         """
         tasks = [_make_task("req-1"), _make_task("req-2")]

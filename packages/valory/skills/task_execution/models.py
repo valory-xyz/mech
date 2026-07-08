@@ -114,23 +114,16 @@ class Params(Model):
         )
         self.offchain_tx_list: List = list()
         self.default_chain_id: str = self._ensure_get("default_chain_id", kwargs, str)
-        # EIP-155 integer chain id for the wildcard data-lake write and the
+        # EIP-155 integer chain id for the predict-api data lake write and the
         # EIP-712 domain. Separate from ``default_chain_id`` (the AEA alias
-        # ``"gnosis"``) because the wildcard schema and the EIP-712 domain
+        # ``"gnosis"``) because the predict-api schema and the EIP-712 domain
         # bind to the integer, and converting at the boundary via a
         # hardcoded alias→int table couples task_execution to a chain
         # registry it has no other reason to know about. Defaults to 0,
-        # which fails the wildcard server's per-chain marketplace
+        # which fails the predict-api server's per-chain marketplace
         # allowlist on first POST — operator-friendly: the row is rejected
         # at a known boundary rather than silently mis-tagged.
         self.mech_events_chain_id: int = int(kwargs.get("mech_events_chain_id", 0) or 0)
-        # Feature flag for the wildcard analytics write path, mirrored from
-        # task_submission_abci so the build cost at finalize is also gated:
-        # when False (Phase 1 default) ``_finalize_done_task`` skips the
-        # ``_build_wildcard_event`` call entirely so nothing rides Tendermint
-        # consensus replication. Must agree with the task_submission_abci
-        # value across the deployment.
-        self.mech_events_enabled: bool = bool(kwargs.get("mech_events_enabled", False))
         self.gnosis_ledger_rpc: str = kwargs.get("gnosis_ledger_rpc", "")
         self.polygon_ledger_rpc: str = kwargs.get("polygon_ledger_rpc", "")
         self.base_ledger_rpc: str = kwargs.get("base_ledger_rpc", "")
@@ -143,9 +136,13 @@ class Params(Model):
             key.lower(): value
             for key, value in kwargs.get("payment_type_to_asset_address", {}).items()
         }
-        # Phase 1 ships dark: the offchain HTTP path is disabled by default and
-        # enabled per deployment in the Phase 2 rollout. False = today's
-        # on-chain + IPFS behaviour, unchanged.
+        # Dual-purpose gate: controls BOTH offchain-request ingress AND
+        # egress to the predict-api events endpoint (settlement writes for
+        # both offchain-settled AND on-chain-settled requests). A mech is
+        # either part of the predict-api analytics pipeline or it isn't;
+        # there's no coherent state where ingress and egress diverge.
+        # Default False = on-chain + IPFS only, no analytics writes,
+        # unchanged for legacy deployments. Set True to enrol the mech.
         self.use_offchain: bool = kwargs.get("use_offchain", False)
         # Off-chain preimage retention. Ships dark like use_offchain: False keeps
         # today's behaviour (no durable preimage buffer). When enabled, each

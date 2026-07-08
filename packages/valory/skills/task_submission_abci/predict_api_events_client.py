@@ -17,9 +17,9 @@
 #
 # ------------------------------------------------------------------------------
 
-r"""EIP-712 typed-data builder and batch-hash helper for the wildcard write client.
+r"""EIP-712 typed-data builder and batch-hash helper for the predict-api events client.
 
-The server side at ``wildcard/server/src/mech_sig.py`` (predict-api#162)
+The server side at ``server/src/mech_sig.py`` (predict-api#162)
 recomputes the same ``batch_hash`` from the parsed events array and
 compares against the signed value. Both sides must agree on the
 canonical-JSON encoding bit-for-bit:
@@ -49,7 +49,7 @@ EVENTS_PRIMARY_TYPE = "MechEventBatch"
 def canonical_json_bytes(value: Any) -> bytes:
     """Encode ``value`` as a deterministic UTF-8 byte string.
 
-    Mirror of ``wildcard/server/src/mech_sig.py::canonical_json_bytes``;
+    Mirror of ``server/src/mech_sig.py::canonical_json_bytes``;
     any divergence here breaks the batch-hash match on the server. Inputs
     must be JSON-native (no ``Decimal``, ``datetime``, etc.) — the caller
     is responsible for normalising before this function sees them.

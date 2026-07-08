@@ -8,7 +8,7 @@ aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeigawvaywwgbr4fhxir2fpwze3wp7pctvwtp5gpkjritknqoecxfz4
   behaviours.py: bafybeibnqxq3le55hn3s3wdlf7wwyzn5y3df4ta5d3ikdb53ypfbl5myjq
-  composition.py: bafybeiaag6c436uiprfmn7lm3f3ukmpezd47yqpd5b74dsu4w3wcmqhcrm
+  composition.py: bafybeibc73befd2eiwf2hvzct7ayse6dqutru6vddnzuk5swpi2ncjdrpe
   dialogues.py: bafybeigph4dbt75rpfjoxp5zzplb4m5izwblbpt6qssnrvvl2joj6o5cke
   fsm_specification.yaml: bafybeih2b72kr7avbrmduezvbjfpo32h6w3mcucy44ri2aox5m6q6iae6q
   handlers.py: bafybeihnzh6rkrsn6xvmio4c3borzothkj5u62qcbjnzr5gt6hcy6iudsu
@@ -16,7 +16,7 @@ fingerprint:
   tests/__init__.py: bafybeicswkogdqefhafjpbl2afcwtruegtmkumlk5mbapauys2od7rt7di
   tests/conftest.py: bafybeiaqouyzclh4wvnf36jgcmgzm7k4snfghnm3v4yowb4pomyn6qvezu
   tests/test_behaviours.py: bafybeibjw3tusfxxmr3byy6sdmu7gefotya4xvhd7ia43ll7fgyqggx7ye
-  tests/test_composition.py: bafybeifjx57plcn3zg2xb3nlnhxukcnxmnapv7ynxai2wiqbdmg46fgiye
+  tests/test_composition.py: bafybeihrzdjr7w4dght6bhstcni4zswp4rzgzkgx5bpx4lcesh46h6noqm
   tests/test_dialogues.py: bafybeiaicu6h4d3rppxbjhkifwlrfpjmxd6y4sdqnlskdjqijkct2tvhci
   tests/test_handlers.py: bafybeicekjso4qfxaiqpaapgosxkvr4tbce6evnxguhzunug4subrikgci
   tests/test_models.py: bafybeif4iuuknrtx3tc72y2ii237dqtl6nlqgpdywy227sfqbvxkk6mugy
@@ -30,11 +30,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_submission_abci:0.1.0:bafybeie4gnqfzbizxqgpn56qgqkw76z23cj3kuued2dsysoampe7s4y5ou
+- valory/task_submission_abci:0.1.0:bafybeicpoimeoh7onez3vcjounzov63zjz4sm6ppzysdowhf5beyhqcodi
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/delivery_rate_abci:0.1.0:bafybeiathwdfpcfqbipqbkslv6j22q5cvov4n3czmehzij3czrhdnlg42e
-- valory/task_execution:0.1.0:bafybeib4ca677b4fbvtcf2zpfxjr7aob55qeuo7hhqjeenvhfs7ob7cujq
+- valory/task_execution:0.1.0:bafybeia5fbhjp4bgujz7ynxsgvbhcqi7dfls7ms3fczdj62xsgnvjkilja
 behaviours:
   main:
     args: {}
@@ -171,9 +171,9 @@ models:
       tools_to_pricing: {}
       service_endpoint_base: https://dummy_service.autonolas.tech/
       default_chain_id: gnosis
-      mech_events_enabled: false
-      wildcard_events_url: ''
-      wildcard_events_timeout_seconds: 5.0
+      use_offchain: false
+      predict_api_events_url: https://mpp.autonolas.tech/mech/events
+      predict_api_events_timeout_seconds: 5.0
       mech_events_sweep_pending_enabled: false
       mech_events_sweep_max_age_seconds: 3600.0
       mech_events_chain_id: 0

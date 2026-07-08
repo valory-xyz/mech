@@ -17,9 +17,9 @@
 #
 # ------------------------------------------------------------------------------
 
-r"""Unit tests for the wildcard write client helpers.
+r"""Unit tests for the predict-api events client helpers.
 
-The server-side mirror lives at ``wildcard/server/src/mech_sig.py`` in
+The server-side mirror lives at ``server/src/mech_sig.py`` in
 predict-api#162; both sides must agree on the canonical-JSON encoding
 bit-for-bit. These tests pin the contract:
 
@@ -27,7 +27,7 @@ bit-for-bit. These tests pin the contract:
   separators, and keeps non-ASCII text as raw UTF-8 (so a prompt with
   emoji or accented characters hashes the same on both sides).
 * ``compute_batch_hash`` is order-sensitive: rearranging events in the
-  array yields a different hash (the wildcard server iterates left-to-
+  array yields a different hash (the predict-api server iterates left-to-
   right, so the mech can't shuffle the order after signing).
 * ``build_typed_data`` produces the exact shape the server expects:
   primary type ``MechEventBatch``, domain pinned to
@@ -37,7 +37,7 @@ bit-for-bit. These tests pin the contract:
 
 import json
 
-from packages.valory.skills.task_submission_abci.wildcard_write_client import (
+from packages.valory.skills.task_submission_abci.predict_api_events_client import (
     EVENTS_DOMAIN_NAME,
     EVENTS_DOMAIN_VERSION,
     EVENTS_PRIMARY_TYPE,
@@ -112,7 +112,7 @@ class TestComputeBatchHash:
         """Identical content with different declaration order yields same hash.
 
         Without this property, a serialisation that accidentally reordered
-        keys would invalidate the signature on the wildcard side.
+        keys would invalidate the signature on the predict-api side.
         """
         h1 = compute_batch_hash([{"x": 1, "y": 2}])
         h2 = compute_batch_hash([{"y": 2, "x": 1}])
@@ -122,7 +122,7 @@ class TestComputeBatchHash:
         """Single-character flip in the payload moves the hash entirely.
 
         This is the property that makes the signed batch_hash a real
-        tamper detector on the wildcard side.
+        tamper detector on the predict-api side.
         """
         h1 = compute_batch_hash([{"a": "real result"}])
         h2 = compute_batch_hash([{"a": "spoofed result"}])
@@ -131,7 +131,7 @@ class TestComputeBatchHash:
     def test_hash_is_order_sensitive_across_events(self) -> None:
         """Two events in different order yields different hashes.
 
-        The wildcard server iterates left-to-right when inserting, so the
+        The predict-api server iterates left-to-right when inserting, so the
         mech can't shuffle and still get a match.
         """
         events_a = [{"r": "first"}, {"r": "second"}]

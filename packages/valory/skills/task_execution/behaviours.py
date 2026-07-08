@@ -103,7 +103,7 @@ def _iso_z(dt: datetime) -> str:
 
     Normalises through ``astimezone(timezone.utc)`` so a datetime with any
     UTC offset (``+00:00``, ``+05:30``, ``-08:00``) emits the same canonical
-    string for the same wall-clock instant. The wildcard server's Pydantic
+    string for the same wall-clock instant. The predict-api server's Pydantic
     ``AwareDatetime`` round-trips through ``model_dump(mode="json")`` which
     emits ``...Z`` for UTC; the mech's ``batch_hash`` recompute on the
     server side compares byte-for-byte against ours, so leaving the offset
@@ -127,10 +127,10 @@ def _iso_z(dt: datetime) -> str:
 
 
 # Cap on the JSON-serialised size of each ``raw_content`` blob attached to
-# a wildcard event. The blob rides Tendermint consensus replication into
+# a predict-api event. The blob rides Tendermint consensus replication into
 # ``synchronized_data`` on every agent and the field is requester-influenced
 # (``params``, ``model``, response body), so an uncapped large payload would
-# inflate per-node state. 256 KiB matches the wildcard server's ``_MAX_TEXT``
+# inflate per-node state. 256 KiB matches the predict-api server's ``_MAX_TEXT``
 # cap on individual TEXT columns; the analytics ETL drops the row to a
 # truncated sentinel when the cap is hit so the rest of the event still
 # lands.
@@ -1533,30 +1533,30 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # pop the data key value as it's bytes which causes issues
         # with json dumps and not required anywhere
         done_task.pop("data", None)
-        # Attach the offchain wildcard-event payload before the
+        # Attach the offchain predict-api event payload before the
         # IN_MEMORY_REQUESTS pop below; the post-settlement behaviour in
         # task_submission_abci reads it off ``synchronized_data.done_tasks``
-        # (i.e. after consensus replication) and posts it to the wildcard
+        # (i.e. after consensus replication) and posts it to the predict-api
         # data lake, but the buffered request metadata it needs is local
         # to this agent's shared_state and goes away at the pop.
         #
-        # Gated on BOTH ``is_offchain`` AND the ``mech_events_enabled`` flag
+        # Gated on BOTH ``is_offchain`` AND the ``use_offchain`` flag
         # so Phase 1 is genuinely dark: when the flag is off, no payload is
         # built and nothing rides Tendermint consensus replication. The flag
         # check lives here as well as in the post-settlement behaviour so
         # the consensus-state cost is gated, not just the HTTP write.
-        # Build the wildcard event for both off-chain HTTP deliveries
+        # Build the predict-api event for both off-chain HTTP deliveries
         # (is_offchain=True) and on-chain marketplace deliveries
         # (is_offchain=False AND is_marketplace_mech). The ``source`` field
-        # on the event (set by ``_build_wildcard_event``) is what
-        # disambiguates the two paths on the wildcard side: ``mech_offchain``
+        # on the event (set by ``_build_predict_api_event``) is what
+        # disambiguates the two paths on the predict-api side: ``mech_offchain``
         # for the paid HTTP path, ``mech_onchain`` for the on-chain rails.
         # See ``autonolas-marketplace/docs/onchain_write_path_scope.md`` for
         # the agreed shape.
-        wildcard_mode_enabled = getattr(self.params, "mech_events_enabled", False)
+        predict_api_mode_enabled = getattr(self.params, "use_offchain", False)
         is_marketplace_delivery = bool(done_task.get("is_marketplace_mech"))
-        if wildcard_mode_enabled and (is_offchain or is_marketplace_delivery):
-            done_task["wildcard_event"] = self._build_wildcard_event(
+        if predict_api_mode_enabled and (is_offchain or is_marketplace_delivery):
+            done_task["predict_api_event"] = self._build_predict_api_event(
                 done_task=done_task,
                 cid=cid,
                 executing_task=cast(Dict[str, Any], executing_task),
@@ -1571,29 +1571,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
         self._reset_executing_task()
 
-    def _build_wildcard_event(
+    def _build_predict_api_event(
         self,
         *,
         done_task: Dict[str, Any],
         cid: str,
         executing_task: Dict[str, Any],
     ) -> Dict[str, Any]:
-        """Build the structured wildcard-event payload from on-hand data.
+        """Build the structured predict-api event payload from on-hand data.
 
         The post-settlement behaviour batches every event from one FSM round
-        into a single signed POST to the wildcard data lake. Fields are
+        into a single signed POST to the predict-api data lake. Fields are
         populated best-effort from the buffered request metadata
         (``IN_MEMORY_REQUESTS``), the offchain response
         (``OFFCHAIN_REQUEST_RESPONSES``), the in-flight ``executing_task``,
         and skill params. Optional fields that aren't readily available are
-        left ``None``; the wildcard server accepts a NULL there. Required
+        left ``None``; the predict-api server accepts a NULL there. Required
         fields default to safe placeholders rather than blocking the row: a
-        malformed event surfaces as a 422 when the wildcard write fires (and
+        malformed event surfaces as a 422 when the predict-api write fires (and
         lands in the local replay buffer so it's recoverable), which is
         preferable to silently dropping analytics data.
 
         Datetimes are emitted as ISO 8601 strings with UTC offset so the
-        wildcard ``AwareDatetime`` parser accepts them; mech ints (Unix
+        predict-api ``AwareDatetime`` parser accepts them; mech ints (Unix
         seconds) are converted here so the structured event can ride the
         FSM consensus channel without round-tripping through a custom
         codec.
@@ -1654,15 +1654,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         delivery_mech = str(
             done_task.get("mech_address") or self.params.mech_marketplace_address or ""
         )
-        # Wildcard ``source`` derives from the per-task ``is_offchain``
+        # The predict-api ``source`` derives from the per-task ``is_offchain``
         # flag: True → ``mech_offchain`` (paid HTTP path); False →
         # ``mech_onchain`` (the on-chain marketplace rails). This is the
-        # only field that disambiguates the two paths on the wildcard
+        # only field that disambiguates the two paths on the predict-api
         # side; the per-row ``is_offchain`` boolean stays on the
         # response payload as well (the lake keeps both because the
         # ipfs_historical backfill describes either path).
         is_offchain_task = bool(executing_task.get("is_offchain", False))
-        wildcard_source = "mech_offchain" if is_offchain_task else "mech_onchain"
+        predict_api_source = "mech_offchain" if is_offchain_task else "mech_onchain"
 
         # `start_time` is a perf_counter() value (monotonic, not wall-clock),
         # not suitable as a delivered_at timestamp. Use the current wall-clock
@@ -1698,7 +1698,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # the executed_at on the response so the time-leading index entry is
         # always populated for an offchain row. The requester can store the
         # value as a Unix int or as an ISO 8601 string — ``str(int)`` would
-        # produce ``"1700000000"`` which the wildcard's ``AwareDatetime``
+        # produce ``"1700000000"`` which the predict-api's ``AwareDatetime``
         # parser rejects with a 422, so coerce int / float explicitly.
         requested_at_raw = request_data.get("datetime") or request_data.get(
             "requested_at"
@@ -1772,7 +1772,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             nonce_int = int(nonce_raw) if nonce_raw is not None else None
         except (TypeError, ValueError):
             nonce_int = None
-        # The wildcard server requires ``prompt`` to be a non-empty string;
+        # The predict-api server requires ``prompt`` to be a non-empty string;
         # placeholder rather than dropping the row. Enforce the cap on the
         # UTF-8 BYTE length, not on ``len()`` (code points) — a CJK prompt
         # of 50k code points encodes to ~150 KB and would otherwise sail
@@ -1788,11 +1788,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # Failed-row ``error`` carries the available diagnostic, regardless
         # of which branch put us on the failed arm. When ``invalid`` is set
         # but no ``result_text`` is available (the tool produced no
-        # response object), the field is ``None``; the wildcard server's
+        # response object), the field is ``None``; the predict-api server's
         # CHECK allows a ``failed`` row with empty error so the row still
         # lands as a settled failure.
         error_text = str(result_text) if status == "failed" and result_text else None
-        # Strip the result from the failed arm so the wildcard's
+        # Strip the result from the failed arm so the predict-api's
         # status/error/result shape CHECK accepts the row.
         result_value: Optional[str] = (
             None if status == "failed" else (str(result_text) if result_text else "")
@@ -1819,7 +1819,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # which keys the requester as ``requester`` and carries no
                 # ``sender`` field. This block now runs for on-chain
                 # marketplace deliveries too, so falling back to
-                # ``requester`` keeps the wildcard row correctly populated
+                # ``requester`` keeps the predict-api row correctly populated
                 # instead of writing an empty ``requester``.
                 "requester": str(
                     executing_task.get("sender")
@@ -1878,7 +1878,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "response_cid": None,
                 "delivered_at": now_iso,
             },
-            "source": wildcard_source,
+            "source": predict_api_source,
         }
 
     def _reset_executing_task(self) -> None:

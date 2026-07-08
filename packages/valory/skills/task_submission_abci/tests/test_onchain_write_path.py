@@ -24,14 +24,14 @@ Three pieces:
   - ``_sweep_pending_undelivered`` walks ``shared_state[PENDING_TASKS]``
     and RETURNS ``(events, swept_request_ids)`` for tasks past the local
     sweep age, without mutating the queue. All gated on
-    ``mech_events_enabled`` AND ``mech_events_sweep_pending_enabled``.
+    ``use_offchain`` AND ``mech_events_sweep_pending_enabled``.
   - ``_drop_swept_from_pending`` mutates ``PENDING_TASKS`` in place to
     drop the swept tasks. The caller only fires this after a confirmed
-    wildcard POST 2xx, so any of the six early-return paths in
-    ``_do_wildcard_write_best_effort`` (missing mech address, missing
+    predict-api POST 2xx, so any of the six early-return paths in
+    ``_do_predict_api_write_best_effort`` (missing mech address, missing
     marketplace, mixed chains, unconfigured chain id, digest failure,
     POST failure) leaves the tasks on the queue for a retry.
-  - ``_build_request_only_event`` shapes one entry into the wildcard
+  - ``_build_request_only_event`` shapes one entry into the predict-api
     event payload (``request`` half, ``response: None``,
     ``source: 'mech_onchain'``).
 
@@ -101,7 +101,7 @@ def _make_self(
 
     :param pending: value to stash under ``shared_state[PENDING_TASKS]``,
         or ``None`` to leave the key unset (simulates a fresh mech boot).
-    :param enabled: value for ``params.mech_events_enabled``.
+    :param enabled: value for ``params.use_offchain``.
     :param sweep_enabled: value for ``params.mech_events_sweep_pending_enabled``.
     :param max_age: value for ``params.mech_events_sweep_max_age_seconds``.
     :param chain_id: value for ``params.mech_events_chain_id``.
@@ -119,7 +119,7 @@ def _make_self(
             logger=_make_logger(),
         ),
         params=SimpleNamespace(
-            mech_events_enabled=enabled,
+            use_offchain=enabled,
             mech_events_sweep_pending_enabled=sweep_enabled,
             mech_events_sweep_max_age_seconds=max_age,
             mech_events_chain_id=chain_id,
@@ -165,7 +165,7 @@ def _make_pending_task(
 
 
 def test_sweep_returns_empty_when_mech_events_disabled() -> None:
-    """``mech_events_enabled=False`` short-circuits before any sweep."""
+    """``use_offchain=False`` short-circuits before any sweep."""
     self_ = _make_self(
         pending=[_make_pending_task("r-disabled", age_seconds=9999)],
         enabled=False,
@@ -246,7 +246,7 @@ def test_sweep_emits_for_stale_task_and_leaves_queue_untouched() -> None:
     """A stale task becomes a request-only event and its ``request_id`` is returned.
 
     The sweep itself does NOT mutate the queue — the caller drops the
-    swept tasks only after a confirmed wildcard POST 2xx (via
+    swept tasks only after a confirmed predict-api POST 2xx (via
     ``_drop_swept_from_pending``). The DB's ON CONFLICT (predict-api
     side) handles concurrent step-in, so the mech doesn't need to
     consult the contract to decide.
@@ -383,7 +383,7 @@ def test_drop_swept_from_pending_noop_when_pending_missing() -> None:
 def test_request_only_event_carries_expected_fields() -> None:
     """Event carries ``request.delivery_mech=None``, ``source='mech_onchain'``, ``response=None``.
 
-    Mirrors the shape the wildcard server's MechEvent model expects.
+    Mirrors the shape the predict-api server's MechEvent model expects.
     Mirrors the server-side validator in ``server/src/models/mech.py``:
     a request-only event with ``source='mech_offchain'`` would be
     rejected (an off-chain HTTP path doesn't produce undelivered events
@@ -412,7 +412,7 @@ def test_request_only_event_carries_expected_fields() -> None:
     assert req["requested_at"].endswith("Z")
     # delivery_rate stays a string (matches off-chain encoder).
     assert req["delivery_rate"] == str(10**16)
-    # Placeholder prompt/tool — wildcard requires them non-empty; the lake's
+    # Placeholder prompt/tool — predict-api requires them non-empty; the lake's
     # undelivered signal is the absent mech_responses row, not these fields.
     assert req["prompt"] == "[onchain undelivered]"
     assert req["tool"] == "unknown"
@@ -459,7 +459,7 @@ def test_request_only_event_skipped_for_missing_request_id() -> None:
     """Malformed pending entries (missing requestId / priorityMech /
 
     requester) return ``None`` so the sweep keeps the task on the queue
-    rather than emitting a wildcard 422-bait row.
+    rather than emitting a predict-api 422-bait row.
     """
     self_ = _make_self()
     bad = _make_pending_task("r-missing")
@@ -500,10 +500,10 @@ def test_request_only_event_falls_back_to_now_on_bad_timestamp() -> None:
 # Extract -----------------------------------------------------------------
 
 
-def test_extract_offchain_events_includes_onchain_when_wildcard_event_present() -> None:
-    """The extractor keys on the presence of ``wildcard_event``, not on ``is_offchain``.
+def test_extract_offchain_events_includes_onchain_when_predict_api_event_present() -> None:
+    """The extractor keys on the presence of ``predict_api_event``, not on ``is_offchain``.
 
-    An on-chain marketplace task that carried a ``wildcard_event``
+    An on-chain marketplace task that carried a ``predict_api_event``
     (built by the task_execution finalize step) gets included in the
     batch.
     """
@@ -514,10 +514,10 @@ def test_extract_offchain_events_includes_onchain_when_wildcard_event_present() 
         SimpleNamespace(
             synchronized_data=SimpleNamespace(
                 done_tasks=[
-                    {"is_offchain": True, "wildcard_event": {"src": "off"}},
-                    {"is_offchain": False, "wildcard_event": {"src": "on"}},
-                    {"is_offchain": False, "wildcard_event": None},  # skipped
-                    {"is_offchain": True, "wildcard_event": "not-a-dict"},  # skipped
+                    {"is_offchain": True, "predict_api_event": {"src": "off"}},
+                    {"is_offchain": False, "predict_api_event": {"src": "on"}},
+                    {"is_offchain": False, "predict_api_event": None},  # skipped
+                    {"is_offchain": True, "predict_api_event": "not-a-dict"},  # skipped
                 ]
             )
         ),
@@ -526,14 +526,14 @@ def test_extract_offchain_events_includes_onchain_when_wildcard_event_present() 
     assert events == [{"src": "off"}, {"src": "on"}]
 
 
-def test_extract_offchain_events_skips_tasks_without_wildcard_event() -> None:
-    """Done tasks without ``wildcard_event`` (e.g. on-chain non-marketplace legacy mech tasks) stay out of the batch."""
+def test_extract_offchain_events_skips_tasks_without_predict_api_event() -> None:
+    """Done tasks without ``predict_api_event`` (e.g. on-chain non-marketplace legacy mech tasks) stay out of the batch."""
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
             synchronized_data=SimpleNamespace(
                 done_tasks=[
-                    {"is_offchain": True},  # no wildcard_event at all
+                    {"is_offchain": True},  # no predict_api_event at all
                     {"is_offchain": False},
                 ]
             )

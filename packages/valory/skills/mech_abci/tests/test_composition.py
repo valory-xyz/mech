@@ -87,7 +87,7 @@ class TestAbciAppTransitionMapping:
     ) -> None:
         """Successful settlement now lands in PostTxSettlementRound first.
 
-        The round fires the wildcard data-lake POST and then advances to
+        The round fires the predict-api data lake POST and then advances to
         ResetAndPauseRound via its own FinishedPostTxSettlementRound exit.
         The two-edge wiring keeps the settlement→reset path intact while
         slotting in the analytics-write side effect.

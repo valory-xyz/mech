@@ -3020,7 +3020,7 @@ def test_ensure_payment_model_does_not_reset_inflight_from_other_flow(
 
 
 # ---------------------------------------------------------------------------
-# _iso_z + _build_wildcard_event timestamp normalisation
+# _iso_z + _build_predict_api_event timestamp normalisation
 # ---------------------------------------------------------------------------
 
 
@@ -3068,7 +3068,7 @@ def test_iso_z_naive_datetime_raises() -> None:
         beh_mod._iso_z(datetime(2026, 6, 25, 13, 19, 6))
 
 
-def _wildcard_event_setup(
+def _predict_api_event_setup(
     behaviour: Any,
     shared_state: Dict[str, Any],
     request_data: Dict[str, Any],
@@ -3078,7 +3078,7 @@ def _wildcard_event_setup(
     """Wire shared_state and return the done_task and executing_task dicts."""
     # Each test varies the request/response fields without re-deriving
     # the dict shape; this helper centralises the IN_MEMORY_REQUESTS +
-    # OFFCHAIN_REQUEST_RESPONSES seeding that _build_wildcard_event reads.
+    # OFFCHAIN_REQUEST_RESPONSES seeding that _build_predict_api_event reads.
     if response_data is None:
         response_data = {
             "result": "p_yes=0.7",
@@ -3103,7 +3103,7 @@ def _wildcard_event_setup(
     return done_task, executing_task
 
 
-def test_build_wildcard_event_emits_z_on_all_timestamps(
+def test_build_predict_api_event_emits_z_on_all_timestamps(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3119,10 +3119,10 @@ def test_build_wildcard_event_emits_z_on_all_timestamps(
         "nonce": "uuid-1",
         "requested_at": "2026-06-25T13:19:06.651013+00:00",
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data
     )
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy-cid", executing_task=executing_task
     )
     assert event["request"]["requested_at"].endswith("Z")
@@ -3133,7 +3133,7 @@ def test_build_wildcard_event_emits_z_on_all_timestamps(
     assert "+00:00" not in event["response"]["delivered_at"]
 
 
-def test_build_wildcard_event_normalises_non_utc_requested_at(
+def test_build_predict_api_event_normalises_non_utc_requested_at(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3148,16 +3148,16 @@ def test_build_wildcard_event_normalises_non_utc_requested_at(
         # 18:49:06 IST == 13:19:06 UTC.
         "requested_at": "2026-06-25T18:49:06.651013+05:30",
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data
     )
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy-cid", executing_task=executing_task
     )
     assert event["request"]["requested_at"] == "2026-06-25T13:19:06.651013Z"
 
 
-def test_build_wildcard_event_unix_requested_at_is_z(
+def test_build_predict_api_event_unix_requested_at_is_z(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3169,16 +3169,16 @@ def test_build_wildcard_event_unix_requested_at_is_z(
         # 2026-06-25T13:19:06Z
         "requested_at": 1782393546,
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data
     )
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy-cid", executing_task=executing_task
     )
     assert event["request"]["requested_at"] == "2026-06-25T13:19:06Z"
 
 
-def test_build_wildcard_event_z_suffix_requested_at_is_parsed(
+def test_build_predict_api_event_z_suffix_requested_at_is_parsed(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3194,16 +3194,16 @@ def test_build_wildcard_event_z_suffix_requested_at_is_parsed(
         "tool": "prediction-offline",
         "requested_at": "2026-06-25T13:19:06.651013Z",
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data
     )
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy-cid", executing_task=executing_task
     )
     assert event["request"]["requested_at"] == "2026-06-25T13:19:06.651013Z"
 
 
-def test_build_wildcard_event_unix_requested_at_out_of_range_falls_back(
+def test_build_predict_api_event_unix_requested_at_out_of_range_falls_back(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3220,17 +3220,17 @@ def test_build_wildcard_event_unix_requested_at_out_of_range_falls_back(
         # range Python's datetime can represent on a 64-bit platform.
         "requested_at": 99_999_999_999_999,
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data
     )
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy-cid", executing_task=executing_task
     )
     # Fallback ends in Z because executed_at does.
     assert event["request"]["requested_at"].endswith("Z")
 
 
-def test_build_wildcard_event_unix_executed_at_out_of_range_falls_back(
+def test_build_predict_api_event_unix_executed_at_out_of_range_falls_back(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3249,16 +3249,16 @@ def test_build_wildcard_event_unix_executed_at_out_of_range_falls_back(
         "schema_version": "2.0",
         "executed_at": 99_999_999_999_999,  # past representable range
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data, response_data=response_data
     )
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy-cid", executing_task=executing_task
     )
     assert event["response"]["executed_at"].endswith("Z")
 
 
-def test_build_wildcard_event_malformed_requested_at_falls_back(
+def test_build_predict_api_event_malformed_requested_at_falls_back(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3272,10 +3272,10 @@ def test_build_wildcard_event_malformed_requested_at_falls_back(
         "tool": "prediction-offline",
         "requested_at": "not-a-timestamp",
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data
     )
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy-cid", executing_task=executing_task
     )
     assert event["request"]["requested_at"].endswith("Z")
@@ -3383,20 +3383,20 @@ def test_execute_task_offchain_missing_ipfs_data_sets_invalid_request(
 
 
 # ---------------------------------------------------------------------------
-# On-chain write path: source field on _build_wildcard_event
+# On-chain write path: source field on _build_predict_api_event
 # ---------------------------------------------------------------------------
 #
-# After the on-chain write path lands, _build_wildcard_event sets a
+# After the on-chain write path lands, _build_predict_api_event sets a
 # top-level ``source`` field on the returned event dict based on the
 # task's ``is_offchain`` flag:
 #   - is_offchain=True  → source="mech_offchain" (the paid HTTP path).
 #   - is_offchain=False → source="mech_onchain"  (the on-chain rails).
-# The wildcard server uses this field to tag both mech_requests and
+# The predict-api server uses this field to tag both mech_requests and
 # mech_responses rows for the analytics ETL. See
 # ``autonolas-marketplace/docs/onchain_write_path_scope.md`` §3.
 
 
-def test_build_wildcard_event_offchain_task_carries_mech_offchain_source(
+def test_build_predict_api_event_offchain_task_carries_mech_offchain_source(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3407,10 +3407,10 @@ def test_build_wildcard_event_offchain_task_carries_mech_offchain_source(
         "tool": "prediction-offline",
         "requested_at": "2026-06-25T13:19:06.651013Z",
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data
     )
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy", executing_task=executing_task
     )
     assert event["source"] == "mech_offchain"
@@ -3419,7 +3419,7 @@ def test_build_wildcard_event_offchain_task_carries_mech_offchain_source(
     assert event["response"]["is_offchain"] is True
 
 
-def test_build_wildcard_event_onchain_task_carries_mech_onchain_source(
+def test_build_predict_api_event_onchain_task_carries_mech_onchain_source(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3433,30 +3433,30 @@ def test_build_wildcard_event_onchain_task_carries_mech_onchain_source(
 
     :param behaviour: the wired ``task_execution`` behaviour under test.
     :param params_stub: params fixture — indirectly consumed by
-        ``_wildcard_event_setup`` to populate ``self.params`` bits.
+        ``_predict_api_event_setup`` to populate ``self.params`` bits.
     :param shared_state: shared_state fixture used by
-        ``_wildcard_event_setup`` to build ``done_task`` / ``executing_task``.
+        ``_predict_api_event_setup`` to build ``done_task`` / ``executing_task``.
     """
     request_data = {
         "prompt": "p",
         "tool": "prediction-offline",
         "requested_at": "2026-06-25T13:19:06.651013Z",
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data
     )
     # Flip the flags on both halves: the source decision keys on the
     # executing_task; the response payload's is_offchain mirrors it.
     executing_task["is_offchain"] = False
     done_task["is_offchain"] = False
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy", executing_task=executing_task
     )
     assert event["source"] == "mech_onchain"
     assert event["response"]["is_offchain"] is False
 
 
-def test_build_wildcard_event_marketplace_task_falls_back_to_requester_key(
+def test_build_predict_api_event_marketplace_task_falls_back_to_requester_key(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
@@ -3466,19 +3466,19 @@ def test_build_wildcard_event_marketplace_task_falls_back_to_requester_key(
     Pending marketplace tasks come from
     ``MechMarketplaceContract.get_marketplace_undelivered_reqs``, which
     keys the requester as ``requester`` and carries no ``sender`` field.
-    The delivered wildcard row must still populate ``request.requester``
+    The delivered predict-api row must still populate ``request.requester``
     or the analytics-side join breaks.
 
-    The shared ``_wildcard_event_setup`` fixture always stamps
+    The shared ``_predict_api_event_setup`` fixture always stamps
     ``sender`` on ``executing_task`` (that's the off-chain HTTP shape).
     This test deletes it and injects ``requester`` alone, exercising the
-    ``sender or requester`` fallback added in ``_build_wildcard_event``.
+    ``sender or requester`` fallback added in ``_build_predict_api_event``.
 
     :param behaviour: task_execution behaviour under test.
     :param params_stub: params fixture — consumed by
-        ``_wildcard_event_setup`` to populate ``self.params`` bits.
+        ``_predict_api_event_setup`` to populate ``self.params`` bits.
     :param shared_state: shared_state fixture used by
-        ``_wildcard_event_setup`` for ``IN_MEMORY_REQUESTS`` /
+        ``_predict_api_event_setup`` for ``IN_MEMORY_REQUESTS`` /
         ``OFFCHAIN_REQUEST_RESPONSES`` seeding.
     """
     request_data = {
@@ -3486,7 +3486,7 @@ def test_build_wildcard_event_marketplace_task_falls_back_to_requester_key(
         "tool": "prediction-offline",
         "requested_at": "2026-06-25T13:19:06.651013Z",
     }
-    done_task, executing_task = _wildcard_event_setup(
+    done_task, executing_task = _predict_api_event_setup(
         behaviour, shared_state, request_data
     )
     # Marketplace shape: only ``requester``, no ``sender``. Also flip the
@@ -3495,7 +3495,7 @@ def test_build_wildcard_event_marketplace_task_falls_back_to_requester_key(
     executing_task["requester"] = "0xMARKETPLACE_REQUESTER"
     executing_task["is_offchain"] = False
     done_task["is_offchain"] = False
-    event = behaviour._build_wildcard_event(
+    event = behaviour._build_predict_api_event(
         done_task=done_task, cid="bafy", executing_task=executing_task
     )
     assert event["request"]["requester"] == "0xMARKETPLACE_REQUESTER"
