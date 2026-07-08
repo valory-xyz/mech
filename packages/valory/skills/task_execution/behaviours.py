@@ -1540,18 +1540,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # data lake, but the buffered request metadata it needs is local
         # to this agent's shared_state and goes away at the pop.
         #
-        # Gated on BOTH ``is_offchain`` AND the ``use_offchain`` flag
-        # so Phase 1 is genuinely dark: when the flag is off, no payload is
-        # built and nothing rides Tendermint consensus replication. The flag
-        # check lives here as well as in the post-settlement behaviour so
-        # the consensus-state cost is gated, not just the HTTP write.
-        # Build the predict-api event for both off-chain HTTP deliveries
-        # (is_offchain=True) and on-chain marketplace deliveries
-        # (is_offchain=False AND is_marketplace_mech). The ``source`` field
-        # on the event (set by ``_build_predict_api_event``) is what
-        # disambiguates the two paths on the predict-api side: ``mech_offchain``
-        # for the paid HTTP path, ``mech_onchain`` for the on-chain rails.
-        # See ``autonolas-marketplace/docs/onchain_write_path_scope.md`` for
+        # Gate the whole event build on ``use_offchain``. When the flag
+        # is off, no payload is built and nothing rides Tendermint
+        # consensus replication — so the ingress-side consensus cost
+        # matches the egress-side HTTP write cost (nothing on either
+        # side). The paired gate in
+        # :py:meth:`task_submission_abci.behaviours.PostTxSettlementBehaviour._do_predict_api_write_best_effort`
+        # additionally warns if it receives events under a locally-off
+        # flag, so a config drift between the two skill copies of
+        # ``use_offchain`` is alertable rather than silent.
+        # Build the event for both off-chain HTTP deliveries
+        # (``is_offchain=True``) and on-chain marketplace deliveries
+        # (``is_offchain=False`` AND ``is_marketplace_delivery=True``).
+        # The ``source`` field on the event (set by
+        # ``_build_predict_api_event``) disambiguates the two paths on
+        # the predict-api side: ``mech_offchain`` for the paid HTTP path,
+        # ``mech_onchain`` for the on-chain rails. See
+        # ``autonolas-marketplace/docs/onchain_write_path_scope.md`` for
         # the agreed shape.
         predict_api_mode_enabled = self.params.use_offchain
         is_marketplace_delivery = bool(done_task.get("is_marketplace_mech"))

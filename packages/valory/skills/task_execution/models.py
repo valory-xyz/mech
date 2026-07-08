@@ -140,7 +140,14 @@ class Params(Model):
         # egress to the predict-api events endpoint (settlement writes for
         # both offchain-settled AND on-chain-settled requests). A mech is
         # either part of the predict-api analytics pipeline or it isn't;
-        # there's no coherent state where ingress and egress diverge.
+        # the coupling is deliberate. On-chain-only mechs that want
+        # analytics writes (``mech_onchain`` source) still flip this on
+        # and accept that their offchain HTTP handler is also live — the
+        # handler is inert if no client's ``MECH_OFFCHAIN_URL`` points
+        # at it, so the cost is a wire nothing rides rather than a
+        # traffic-shape change. If an operator genuinely wants analytics
+        # without ingress, that's a re-split of this flag and needs its
+        # own review round, not an env override on the current shape.
         # Default False = on-chain + IPFS only, no analytics writes,
         # unchanged for legacy deployments. Set True to enrol the mech.
         self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
