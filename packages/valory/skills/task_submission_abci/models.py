@@ -131,8 +131,8 @@ class Params(BaseParams):
         # the coupling is deliberate. On-chain-only mechs that want
         # analytics writes (``mech_onchain`` source) still flip this on
         # and accept that their offchain HTTP handler is also live — the
-        # handler is inert if no client's ``MECH_OFFCHAIN_URL`` points
-        # at it, so the cost is a wire nothing rides rather than a
+        # handler is inert unless a client actually sends offchain requests
+        # to it, so the cost is a wire nothing rides rather than a
         # traffic-shape change. The value is a duplicate of the flag
         # of the same name on ``task_execution``; if the two copies
         # drift (env override on one skill and not the other),

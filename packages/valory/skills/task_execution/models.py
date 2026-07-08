@@ -143,8 +143,8 @@ class Params(Model):
         # the coupling is deliberate. On-chain-only mechs that want
         # analytics writes (``mech_onchain`` source) still flip this on
         # and accept that their offchain HTTP handler is also live — the
-        # handler is inert if no client's ``MECH_OFFCHAIN_URL`` points
-        # at it, so the cost is a wire nothing rides rather than a
+        # handler is inert unless a client actually sends offchain requests
+        # to it, so the cost is a wire nothing rides rather than a
         # traffic-shape change. If an operator genuinely wants analytics
         # without ingress, that's a re-split of this flag and needs its
         # own review round, not an env override on the current shape.
