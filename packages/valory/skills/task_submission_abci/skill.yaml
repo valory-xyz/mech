@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeidrqmdvmei6c5kxla4qebntilvxgwcc5s7zlivnpuiuv7unklhsqi
+  behaviours.py: bafybeihe5i2uh7rlyxgdf24vijxzngc55k3yi7vxq7rb2v6z3aqzxbyuui
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
@@ -23,7 +23,7 @@ fingerprint:
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry
-  tests/test_onchain_write_path.py: bafybeiae55amwgzynnxldcjbv5nq5maztofwibwq5buhxhhy2vkyhxgwlq
+  tests/test_onchain_write_path.py: bafybeigr6wajuqvgk6lxjzan4qy3kmana6zhce75d3pecgtkysl5ca7ome
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_predict_api_events_client.py: bafybeigbynlhltn6s5b7i4td5x66sno26jxpainsp3kkvl5faq5rkeqbni
   tests/test_rounds.py: bafybeibervh4zm6a2fmfwcxsi4jl6vfc7owfl3474nhobiijf73fswul3e
@@ -47,7 +47,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
-- valory/task_execution:0.1.0:bafybeibe244e52b42fyckqdh5h74otpi2yg3iup4lsvf7chi67okf6ptvm
+- valory/task_execution:0.1.0:bafybeigwx6sal6isamlx4lgrz7i6l6lk5iwz4jn3u66h46l2dc2quwekhq
 behaviours:
   main:
     args: {}
