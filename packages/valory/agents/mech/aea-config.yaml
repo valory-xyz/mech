@@ -40,12 +40,12 @@ skills:
 - valory/abstract_abci:0.1.0:bafybeie5et43th2nta76cd3kpm3fmurd7oyzk3qxim76octvt56m6r2poi
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeicqlkmfpttw4hbbaakr6xos62rd6ytjwkyzlfli4xpvl5yqcycf6q
-- valory/mech_abci:0.1.0:bafybeiazxfadofj5ztzhw4d5i2tpf2cmqvhnys3ohpie5vqug4ze25p77a
+- valory/mech_abci:0.1.0:bafybeifgqseomidt5l2u5s5lsjm6piuadx7ohlkpmvabudg6nxbilqptzy
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/delivery_rate_abci:0.1.0:bafybeiathwdfpcfqbipqbkslv6j22q5cvov4n3czmehzij3czrhdnlg42e
 - valory/task_execution:0.1.0:bafybeia5fbhjp4bgujz7ynxsgvbhcqi7dfls7ms3fczdj62xsgnvjkilja
-- valory/task_submission_abci:0.1.0:bafybeiehicmh2mg77ysphvo3ox7yc2g34lx3cstj2tbsjrqjwt7otcapm4
+- valory/task_submission_abci:0.1.0:bafybeicjnwilfpsg4oolysfdc2klexzegx4czg5d5hpwebl5hq7zieduma
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeid6oyycsrvk4duftffs5mrfgmcepibt3qe4om3kfzhwhilfq3ynay

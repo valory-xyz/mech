@@ -500,7 +500,9 @@ def test_request_only_event_falls_back_to_now_on_bad_timestamp() -> None:
 # Extract -----------------------------------------------------------------
 
 
-def test_extract_offchain_events_includes_onchain_when_predict_api_event_present() -> None:
+def test_extract_offchain_events_includes_onchain_when_predict_api_event_present() -> (
+    None
+):
     """The extractor keys on the presence of ``predict_api_event``, not on ``is_offchain``.
 
     An on-chain marketplace task that carried a ``predict_api_event``

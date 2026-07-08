@@ -137,7 +137,9 @@ class Params(BaseParams):
         # URL configured; the PostTxSettlement behaviour short-circuits
         # when either this is empty or ``use_offchain`` is False. No
         # API key here — the EOA signature is the credential.
-        self.predict_api_events_url: str = str(kwargs.get("predict_api_events_url", "") or "")
+        self.predict_api_events_url: str = str(
+            kwargs.get("predict_api_events_url", "") or ""
+        )
         # Explicit short timeout on the predict-api POST. The framework's
         # default ``request_timeout`` would let a slow or hung endpoint
         # pin this behaviour until ``ROUND_TIMEOUT`` fires; the analytics
