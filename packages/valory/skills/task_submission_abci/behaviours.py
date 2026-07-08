@@ -63,6 +63,11 @@ from packages.valory.skills.task_submission_abci.payloads import (
     PostTxSettlementPayload,
     TransactionPayload,
 )
+from packages.valory.skills.task_submission_abci.predict_api_events_client import (
+    build_typed_data,
+    compute_batch_hash,
+    compute_eip712_digest,
+)
 from packages.valory.skills.task_submission_abci.rounds import (
     PostTxSettlementRound,
     SynchronizedData,
@@ -70,11 +75,6 @@ from packages.valory.skills.task_submission_abci.rounds import (
     TaskPoolingRound,
     TaskSubmissionAbciApp,
     TransactionPreparationRound,
-)
-from packages.valory.skills.task_submission_abci.predict_api_events_client import (
-    build_typed_data,
-    compute_batch_hash,
-    compute_eip712_digest,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
