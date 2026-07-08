@@ -123,25 +123,42 @@ class Params(BaseParams):
         self.mech_max_delivery_rate: int = int(
             next(iter(self.mech_to_max_delivery_rate.values()))
         )
-        # Feature flag for the wildcard analytics write path. Phase 1
-        # ships dark; deployments flip this on per-mech as the rollout
-        # advances. False by default so an out-of-the-box mech does no
-        # off-mech HTTP work at settlement time.
-        self.mech_events_enabled: bool = bool(kwargs.get("mech_events_enabled", False))
-        # Wildcard ``POST /mech/events`` endpoint. Empty string = no URL
-        # configured; the PostTxSettlement behaviour short-circuits when
-        # either this is empty or ``mech_events_enabled`` is False. No
+        # Dual-purpose gate: controls BOTH offchain-request ingress
+        # (handled in task_execution) AND egress to the predict-api events
+        # endpoint from PostTxSettlement (settlement writes for both
+        # offchain-settled AND on-chain-settled requests). A mech is
+        # either part of the predict-api analytics pipeline or it isn't;
+        # the coupling is deliberate. On-chain-only mechs that want
+        # analytics writes (``mech_onchain`` source) still flip this on
+        # and accept that their offchain HTTP handler is also live — the
+        # handler is inert unless a client actually sends offchain requests
+        # to it, so the cost is a wire nothing rides rather than a
+        # traffic-shape change. The value is a duplicate of the flag
+        # of the same name on ``task_execution``; if the two copies
+        # drift (env override on one skill and not the other),
+        # :py:meth:`PostTxSettlementBehaviour._do_predict_api_write_best_effort`
+        # emits a WARNING when it sees ``predict_api_event`` entries
+        # under a locally-off flag, so the misconfiguration is
+        # alertable rather than silent. False by default so an
+        # out-of-the-box mech does no off-mech HTTP work at settlement
+        # time and does not accept offchain requests.
+        self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
+        # predict-api ``POST /mech/events`` endpoint. Empty string = no
+        # URL configured; the PostTxSettlement behaviour short-circuits
+        # when either this is empty or ``use_offchain`` is False. No
         # API key here — the EOA signature is the credential.
-        self.wildcard_events_url: str = str(kwargs.get("wildcard_events_url", "") or "")
-        # Explicit short timeout on the wildcard POST. The framework's
+        self.predict_api_events_url: str = str(
+            kwargs.get("predict_api_events_url", "") or ""
+        )
+        # Explicit short timeout on the predict-api POST. The framework's
         # default ``request_timeout`` would let a slow or hung endpoint
         # pin this behaviour until ``ROUND_TIMEOUT`` fires; the analytics
         # write is best-effort, so it must degrade quickly rather than
         # holding the round open. 5s comfortably covers one POST to a
         # healthy endpoint and surfaces a stuck endpoint as a dropped
         # batch on the next FSM cycle.
-        self.wildcard_events_timeout_seconds: float = float(
-            kwargs.get("wildcard_events_timeout_seconds", 5.0) or 5.0
+        self.predict_api_events_timeout_seconds: float = float(
+            kwargs.get("predict_api_events_timeout_seconds", 5.0) or 5.0
         )
         # On-chain undelivered-request sweep. The PostTxSettlement
         # behaviour walks ``shared_state[PENDING_TASKS]`` for tasks
@@ -149,7 +166,7 @@ class Params(BaseParams):
         # ``mech_events_sweep_max_age_seconds`` and emits a request-only
         # event for each (``MechEvent.response is None``,
         # ``source='mech_onchain'``). Gated separately from
-        # ``mech_events_enabled`` so the delivered-event write can roll
+        # ``use_offchain`` so the delivered-event write can roll
         # out before the sweep; default off until v1 lands and is
         # validated against a live deployment. See
         # ``autonolas-marketplace/docs/onchain_write_path_scope.md`` §3.2.

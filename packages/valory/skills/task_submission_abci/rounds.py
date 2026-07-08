@@ -195,15 +195,15 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
 
     Mirrors the optimus pattern at
     ``liquidity_trader_abci/states/post_tx_settlement.py``: each agent
-    runs the matching behaviour, which fires the offchain wildcard-data-lake
+    runs the matching behaviour, which fires the offchain predict-api data lake
     POST for the round's settled offchain deliveries, then sends back a
     fixed payload so the round can advance on consensus participation.
-    The wildcard write is idempotent server-side (PK on ``request_id``),
+    The predict-api write is idempotent server-side (PK on ``request_id``),
     so multi-agent services do not need a keeper-elects-one pattern; each
     agent posting its own copy is safe and the per-EOA rate limiter on
     the server scales naturally across agents.
 
-    The round always transitions DONE on threshold: a failed wildcard
+    The round always transitions DONE on threshold: a failed predict-api
     write does NOT block the FSM (the settlement already landed on-chain,
     the analytics row just arrives later via the replay buffer). The
     NO_MAJORITY arm only fires if the agents can't agree on having reached
@@ -303,7 +303,7 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
             Event.DONE: FinishedPostTxSettlementRound,
             # Tendermint can't reach majority on participation: route back
             # to the post-tx round so a brief disagreement doesn't crash
-            # the FSM. The wildcard write is idempotent, so re-entry is safe.
+            # the FSM. The predict-api write is idempotent, so re-entry is safe.
             Event.NO_MAJORITY: PostTxSettlementRound,
             Event.ROUND_TIMEOUT: PostTxSettlementRound,
         },

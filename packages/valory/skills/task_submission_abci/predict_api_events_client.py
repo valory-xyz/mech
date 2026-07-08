@@ -17,9 +17,9 @@
 #
 # ------------------------------------------------------------------------------
 
-r"""EIP-712 typed-data builder and batch-hash helper for the wildcard write client.
+r"""EIP-712 typed-data builder and batch-hash helper for the predict-api events client.
 
-The server side at ``wildcard/server/src/mech_sig.py`` (predict-api#162)
+The server side at ``server/src/mech_sig.py`` (predict-api#162)
 recomputes the same ``batch_hash`` from the parsed events array and
 compares against the signed value. Both sides must agree on the
 canonical-JSON encoding bit-for-bit:
@@ -40,7 +40,12 @@ from eth_utils import keccak  # type: ignore[import-not-found]
 
 # The exact name/version pair that the server's allowlist binds via the
 # EIP-712 domain. Treat as a versioned constant; bumping the version
-# requires a coordinated change on both sides.
+# requires a coordinated change on both sides. Deliberately NOT renamed
+# in the wildcard→predict_api sweep — the server's EIP-712 domain
+# allowlist binds to these exact strings, and a rename here silently
+# breaks every server-side signature verification with no test
+# failure. If a future rename is genuinely wanted, ship the string
+# change alongside a coordinated server-side allowlist bump.
 EVENTS_DOMAIN_NAME = "Olas Mech Events"
 EVENTS_DOMAIN_VERSION = "1"
 EVENTS_PRIMARY_TYPE = "MechEventBatch"
@@ -49,7 +54,7 @@ EVENTS_PRIMARY_TYPE = "MechEventBatch"
 def canonical_json_bytes(value: Any) -> bytes:
     """Encode ``value`` as a deterministic UTF-8 byte string.
 
-    Mirror of ``wildcard/server/src/mech_sig.py::canonical_json_bytes``;
+    Mirror of ``server/src/mech_sig.py::canonical_json_bytes``;
     any divergence here breaks the batch-hash match on the server. Inputs
     must be JSON-native (no ``Decimal``, ``datetime``, etc.) — the caller
     is responsible for normalising before this function sees them.

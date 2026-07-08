@@ -63,6 +63,11 @@ from packages.valory.skills.task_submission_abci.payloads import (
     PostTxSettlementPayload,
     TransactionPayload,
 )
+from packages.valory.skills.task_submission_abci.predict_api_events_client import (
+    build_typed_data,
+    compute_batch_hash,
+    compute_eip712_digest,
+)
 from packages.valory.skills.task_submission_abci.rounds import (
     PostTxSettlementRound,
     SynchronizedData,
@@ -70,11 +75,6 @@ from packages.valory.skills.task_submission_abci.rounds import (
     TaskPoolingRound,
     TaskSubmissionAbciApp,
     TransactionPreparationRound,
-)
-from packages.valory.skills.task_submission_abci.wildcard_write_client import (
-    build_typed_data,
-    compute_batch_hash,
-    compute_eip712_digest,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -113,7 +113,7 @@ NONCE = "nonce"
 SENDER = "sender"
 REQUESTER_KEY = "requester"
 
-# Wildcard analytics-write outcome counter. Labels:
+# predict-api analytics-write outcome counter. Labels:
 #
 # * ``batch_label``: ``"delivered"`` (this round's on-chain settled
 #   events, sourced from ``synchronized_data.done_tasks``) or ``"sweep"``
@@ -125,14 +125,14 @@ REQUESTER_KEY = "requester"
 #
 # Delivered events have no queue-side parking spot (they come from this
 # round's ``synchronized_data.done_tasks`` and are not re-queued across
-# rounds), so a transient wildcard failure silently discards the row —
+# rounds), so a transient predict-api failure silently discards the row —
 # the replay buffer that would recover it is a future PR. This counter
 # gives operators a signal before the buffer lands: sustained non-``ok``
 # on ``batch_label="delivered"`` means the analytics lake is missing
 # rows for that window.
-mech_wildcard_events_total = Counter(
-    "mech_wildcard_events_total",
-    "Wildcard analytics-write batch outcomes",
+mech_predict_api_events_total = Counter(
+    "mech_predict_api_events_total",
+    "predict-api analytics-write batch outcomes",
     labelnames=["batch_label", "outcome"],
 )
 MECH_ADDRESS = "mech_address"
@@ -1848,21 +1848,21 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     """Runs once on-chain settlement of the round's tx confirms.
 
     Reads ``synchronized_data.done_tasks`` for the just-settled cycle,
-    extracts every entry's pre-built ``wildcard_event`` payload (set on
-    the offchain path inside :py:meth:`task_execution.behaviours._build_wildcard_event`),
+    extracts every entry's pre-built ``predict_api_event`` payload (set on
+    the offchain path inside :py:meth:`task_execution.behaviours._build_predict_api_event`),
     bundles them into one EIP-712-signed batch, and POSTs the batch to
-    the wildcard data lake at ``params.wildcard_events_url``. The wildcard
+    the predict-api data lake at ``params.predict_api_events_url``. The predict-api
     server is idempotent on ``request_id``, so multi-agent services don't
     need a keeper pattern: each agent posts its own copy under its own
     EOA signature; the per-EOA rate limiter on the server keeps the
     co-owners in separate budgets.
 
-    The behaviour is fail-soft by construction. A wildcard outage / 5xx
+    The behaviour is fail-soft by construction. A predict-api outage / 5xx
     / network drop does NOT stop the FSM — the settlement already landed
     on-chain, the analytics row just arrives later. For Phase 1 dark
     rollout, failures are logged and dropped; the replay buffer (kv_store
     backed, scheduled drainer) stacks on top of the open mech#455 PR and
-    lands in a follow-up. ``mech_events_enabled=False`` short-circuits
+    lands in a follow-up. ``use_offchain=False`` short-circuits
     the whole behaviour to a fixed "done" payload.
     """
 
@@ -1871,7 +1871,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     def async_act(self) -> Generator:
         """Build, sign, and POST the offchain-events batch, then advance."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
-            yield from self._do_wildcard_write_best_effort()
+            yield from self._do_predict_api_write_best_effort()
             payload = PostTxSettlementPayload(
                 sender=self.context.agent_address, content="done"
             )
@@ -1884,7 +1884,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     # Note on the two ``mech_events_chain_id`` params: task_execution's
     # copy powers delivered events; task_submission_abci's copy powers
     # sweep events. A drift is visible in the sweep batch's chain_id=0
-    # short-circuit (WARNING log inside ``_post_wildcard_batch``) and
+    # short-circuit (WARNING log inside ``_post_predict_api_batch``) and
     # does not affect delivered under the split-batch design. An earlier
     # revision of this file also tried a cross-skill consistency check
     # here via ``self.context.skills.task_execution.models.params``, but
@@ -1892,14 +1892,14 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     # check crashed PostTxSettlement on every round. Dropped in favour
     # of the per-batch short-circuit log.
 
-    def _do_wildcard_write_best_effort(self) -> Generator:
-        """Best-effort wildcard write. Never raises; logs failure paths.
+    def _do_predict_api_write_best_effort(self) -> Generator:
+        """Best-effort predict-api write. Never raises; logs failure paths.
 
         Three short-circuit returns before any work:
 
             1. The feature flag is off (the default during Phase 1).
-            2. The skill has no wildcard URL configured.
-            3. The round's done_tasks carry no offchain wildcard_event
+            2. The skill has no predict-api URL configured.
+            3. The round's done_tasks carry no offchain predict_api_event
                entries and the pending-task sweep produced no
                request-only events (a truly quiet round).
 
@@ -1907,13 +1907,34 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             the underlying generator-based helpers; this method does not
             ``return`` anything.
         """
-        if not getattr(self.params, "mech_events_enabled", False):
+        if not self.params.use_offchain:
+            # Divergence safety net. ``use_offchain`` is a duplicated
+            # param (declared on both this skill and ``task_execution``);
+            # if an operator flips ``task_execution.use_offchain=true`` but
+            # forgets this one, the ingress side builds
+            # ``predict_api_event`` entries and rides Tendermint
+            # consensus replication for them — and then the egress side
+            # here silently drops the entire batch. Warn loudly when we
+            # can see that has happened so the divergence is alertable
+            # rather than invisible.
+            if any(
+                isinstance(t, dict) and t.get("predict_api_event")
+                for t in cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
+            ):
+                self.context.logger.warning(
+                    "predict_api_event entries present in done_tasks but "
+                    "task_submission_abci.use_offchain is False — the "
+                    "ingress-side (task_execution) and egress-side "
+                    "(task_submission_abci) use_offchain flags are "
+                    "diverging. Dropping the batch. Align both skill "
+                    "configs to eliminate the ingress work."
+                )
             return
-        wildcard_url = getattr(self.params, "wildcard_events_url", "") or ""
-        if not wildcard_url:
+        predict_api_url = getattr(self.params, "predict_api_events_url", "") or ""
+        if not predict_api_url:
             self.context.logger.debug(
-                "mech_events_enabled set but wildcard_events_url empty; "
-                "skipping post-tx wildcard write."
+                "use_offchain set but predict_api_events_url empty; "
+                "skipping post-tx predict-api write."
             )
             return
 
@@ -1924,13 +1945,13 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # alongside the events but does NOT mutate the pending queue: any
         # guard-skip or POST failure below would otherwise drop the tasks
         # with no re-queue and no written row. The queue is only mutated
-        # once the wildcard POST has confirmed a 2xx (or a terminal 4xx —
-        # see ``_post_wildcard_batch`` for the poison-drop rationale).
+        # once the predict-api POST has confirmed a 2xx (or a terminal 4xx —
+        # see ``_post_predict_api_batch`` for the poison-drop rationale).
         request_only_events, swept_request_ids = self._sweep_pending_undelivered()
         if not delivered_events and not request_only_events:
             self.context.logger.debug(
-                "No wildcard_event entries in done_tasks and no swept "
-                "pending tasks; post-tx wildcard write is a no-op for "
+                "No predict_api_event entries in done_tasks and no swept "
+                "pending tasks; post-tx predict-api write is a no-op for "
                 "this round."
             )
             return
@@ -1949,14 +1970,14 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         mech_address = getattr(self.params, "agent_mech_contract_address", "") or ""
         if not mech_address:
             self.context.logger.warning(
-                "No agent_mech_contract_address available; skipping wildcard write."
+                "No agent_mech_contract_address available; skipping predict-api write."
             )
             return
 
         verifying_contract = getattr(self.params, "mech_marketplace_address", "") or ""
         if not verifying_contract:
             self.context.logger.warning(
-                "No mech_marketplace_address on params; skipping wildcard write."
+                "No mech_marketplace_address on params; skipping predict-api write."
             )
             return
 
@@ -1972,34 +1993,34 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # batches isolate the failure modes: a bad sweep can never cost
         # us a real delivered row.
         if delivered_events:
-            yield from self._post_wildcard_batch(
+            yield from self._post_predict_api_batch(
                 events=delivered_events,
                 mech_address=mech_address,
                 verifying_contract=verifying_contract,
-                wildcard_url=wildcard_url,
+                predict_api_url=predict_api_url,
                 batch_label="delivered",
                 swept_request_ids=None,  # delivered has no queue-side state
             )
         if request_only_events:
-            yield from self._post_wildcard_batch(
+            yield from self._post_predict_api_batch(
                 events=request_only_events,
                 mech_address=mech_address,
                 verifying_contract=verifying_contract,
-                wildcard_url=wildcard_url,
+                predict_api_url=predict_api_url,
                 batch_label="sweep",
                 swept_request_ids=swept_request_ids,
             )
 
-    def _post_wildcard_batch(  # noqa: C901
+    def _post_predict_api_batch(  # noqa: C901
         self,
         events: List[Dict[str, Any]],
         mech_address: str,
         verifying_contract: str,
-        wildcard_url: str,
+        predict_api_url: str,
         batch_label: str,
         swept_request_ids: Optional[List[str]],
     ) -> Generator:
-        """Hash, sign, and POST one wildcard batch. Post-write side effects vary by outcome.
+        """Hash, sign, and POST one predict-api batch. Post-write side effects vary by outcome.
 
         Called separately for the delivered-events batch and the
         sweep-events batch so a poison sweep event can't take real
@@ -2028,7 +2049,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             only, or sweep only — never mixed).
         :param mech_address: on-chain mech contract for the signed typed-data.
         :param verifying_contract: marketplace contract for the EIP-712 domain.
-        :param wildcard_url: server endpoint (``POST /mech/events``).
+        :param predict_api_url: server endpoint (``POST /mech/events``).
         :param batch_label: ``"delivered"`` or ``"sweep"``, used in log lines.
         :param swept_request_ids: request-ids to drop from ``PENDING_TASKS``
             on outcome-appropriate paths. ``None`` for the delivered batch.
@@ -2036,7 +2057,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         """
         # The EIP-712 domain.chainId binds the signature to one chain. Read
         # it from the first event's ``request.chain_id`` — every event in
-        # the batch was built by either ``task_execution._build_wildcard_event``
+        # the batch was built by either ``task_execution._build_predict_api_event``
         # (delivered) or ``self._build_request_only_event`` (sweep) against
         # the corresponding skill's ``mech_events_chain_id`` param. The
         # value-by-construction check below rejects a heterogeneous batch
@@ -2053,7 +2074,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             for e in events
         ):
             self.context.logger.warning(
-                "Wildcard %s batch contains events from multiple chains; "
+                "predict-api %s batch contains events from multiple chains; "
                 "skipping. A single Safe should only ever build events for "
                 "one chain — check the mech_events_chain_id param on both "
                 "task_execution and task_submission_abci.",
@@ -2069,7 +2090,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         if chain_id == 0:
             self.context.logger.warning(
                 "mech_events_chain_id is 0 (unconfigured) for the %s "
-                "batch; skipping wildcard write. If this is the sweep "
+                "batch; skipping predict-api write. If this is the sweep "
                 "batch, the task_submission_abci copy of the param is the "
                 "usual culprit — task_execution's copy fills the delivered "
                 "batch's chain id independently.",
@@ -2106,11 +2127,11 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             # tasks stay on the queue (retryable — a subsequent FSM cycle
             # may see clean content).
             self.context.logger.warning(
-                "Wildcard %s EIP-712 digest build failed; dropping batch: %s",
+                "predict-api %s EIP-712 digest build failed; dropping batch: %s",
                 batch_label,
                 exc,
             )
-            mech_wildcard_events_total.labels(
+            mech_predict_api_events_total.labels(
                 batch_label=batch_label, outcome="pre_flight_failed"
             ).inc()
             return
@@ -2120,11 +2141,11 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             )
         except Exception as exc:
             self.context.logger.warning(
-                "Wildcard %s EIP-712 signing failed; dropping batch this round: %s",
+                "predict-api %s EIP-712 signing failed; dropping batch this round: %s",
                 batch_label,
                 exc,
             )
-            mech_wildcard_events_total.labels(
+            mech_predict_api_events_total.labels(
                 batch_label=batch_label, outcome="pre_flight_failed"
             ).inc()
             return
@@ -2149,24 +2170,24 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             # analytics-side ergonomics should not delete rows that
             # still need to run.
             self.context.logger.warning(
-                "Wildcard %s batch JSON serialisation failed; dropping this "
+                "predict-api %s batch JSON serialisation failed; dropping this "
                 "round (sweep tasks stay on the queue for retry): %s",
                 batch_label,
                 exc,
             )
-            mech_wildcard_events_total.labels(
+            mech_predict_api_events_total.labels(
                 batch_label=batch_label, outcome="pre_flight_failed"
             ).inc()
             return
 
         # Build the request with an explicit short timeout. ``get_http_response``
         # doesn't surface a timeout kwarg, so go one level lower: a slow or
-        # hung wildcard endpoint must not pin this behaviour until the
+        # hung predict-api endpoint must not pin this behaviour until the
         # round timeout fires; the analytics write is best-effort and a
         # missed batch is recoverable, but a stuck round is not.
         http_message, http_dialogue = self._build_http_request_message(
             method="POST",
-            url=wildcard_url,
+            url=predict_api_url,
             content=body,
             headers={"Content-Type": "application/json"},
         )
@@ -2175,19 +2196,19 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 http_message,
                 http_dialogue,
                 timeout=float(
-                    getattr(self.params, "wildcard_events_timeout_seconds", 5.0)
+                    getattr(self.params, "predict_api_events_timeout_seconds", 5.0)
                 ),
             )
         except Exception as exc:
             # Network-level failures are retryable — the server may come
             # back, so leave sweep tasks on the queue for the next cycle.
             self.context.logger.warning(
-                "Wildcard %s POST raised; dropping batch this round "
+                "predict-api %s POST raised; dropping batch this round "
                 "(follow-up PR adds kv_store replay buffer): %s",
                 batch_label,
                 exc,
             )
-            mech_wildcard_events_total.labels(
+            mech_predict_api_events_total.labels(
                 batch_label=batch_label, outcome="network_error"
             ).inc()
             return
@@ -2195,13 +2216,13 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         status = getattr(response, "status_code", None)
         if status is not None and 200 <= status < 300:
             self.context.logger.info(
-                "Wildcard %s batch POST OK (status=%s batch_size=%d signer-eoa=%s)",
+                "predict-api %s batch POST OK (status=%s batch_size=%d signer-eoa=%s)",
                 batch_label,
                 status,
                 len(events),
                 self.context.agent_address,
             )
-            mech_wildcard_events_total.labels(
+            mech_predict_api_events_total.labels(
                 batch_label=batch_label, outcome="ok"
             ).inc()
             if swept_request_ids:
@@ -2250,7 +2271,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # per-event terminal rejection (e.g. server 422 on a subset) is
         # left as future work (needs a per-event ack from the server).
         self.context.logger.warning(
-            "Wildcard %s POST returned non-success (status=%s); dropping "
+            "predict-api %s POST returned non-success (status=%s); dropping "
             "this round, sweep tasks stay on the queue for retry. "
             "batch_size=%d signer-eoa=%s body_preview=%s",
             batch_label,
@@ -2259,29 +2280,32 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             self.context.agent_address,
             response.body[:512] if hasattr(response, "body") else "?",
         )
-        mech_wildcard_events_total.labels(
+        mech_predict_api_events_total.labels(
             batch_label=batch_label, outcome="http_error"
         ).inc()
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
-        """Return the ``wildcard_event`` payload from every done_task that carries one.
+        """Return the ``predict_api_event`` payload from every done_task that carries one.
 
         Both off-chain HTTP deliveries (``source = 'mech_offchain'``) and
         on-chain marketplace deliveries (``source = 'mech_onchain'``) now
-        ride the same wildcard write path; the per-event ``source`` field
-        set inside :py:meth:`task_execution.behaviours._build_wildcard_event`
-        is what disambiguates the two on the wildcard side. The filter
-        here keys on the presence of a ``wildcard_event`` field — built
-        only when both ``mech_events_enabled`` is set AND the task is a
-        marketplace task — so on-chain non-marketplace tasks (legacy
-        mech contract) stay out of the lake by construction.
+        ride the same predict-api write path; the per-event ``source`` field
+        set inside :py:meth:`task_execution.behaviours._build_predict_api_event`
+        is what disambiguates the two on the predict-api side. The filter
+        here keys on the presence of a ``predict_api_event`` field, which
+        :py:meth:`task_execution.behaviours._finalize_done_task` sets only
+        when ``use_offchain`` is on AND the task is either an off-chain
+        HTTP delivery (``is_offchain=True``) or an on-chain marketplace
+        delivery (``is_marketplace_delivery=True``). On-chain
+        non-marketplace tasks on a legacy mech contract stay out of the
+        lake by construction.
 
         :return: an ordered list of ``MechEvent``-shaped dicts.
         """
         done_tasks = cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
         events: List[Dict[str, Any]] = []
         for task in done_tasks:
-            event = task.get("wildcard_event")
+            event = task.get("predict_api_event")
             if not isinstance(event, dict):
                 continue
             events.append(event)
@@ -2295,7 +2319,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         Returns request-only events for any task that has sat in the
         queue past the operator-configured sweep window, alongside the
         ``request_id``s of the swept tasks so the caller can remove them
-        from the queue AFTER the wildcard POST confirms success.
+        from the queue AFTER the predict-api POST confirms success.
 
         The sweep does NOT mutate ``PENDING_TASKS``. Dropping tasks here
         (as an earlier revision of this PR did) would lose the
@@ -2325,7 +2349,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
 
         Gated on ``mech_events_sweep_pending_enabled`` so operators can
         roll this out independently from the delivered-event write
-        (which is what ``mech_events_enabled`` already gates). A
+        (which is what ``use_offchain`` already gates). A
         request-only event always carries ``source='mech_onchain'``;
         the off-chain path doesn't produce them by construction.
 
@@ -2333,10 +2357,10 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             an ordered list of request-only event dicts ready to append
             to the batch; ``swept_request_ids`` is the ordered list of
             ``request_id`` strings the caller should drop from
-            ``PENDING_TASKS`` if the wildcard POST returns 2xx. Empty
+            ``PENDING_TASKS`` if the predict-api POST returns 2xx. Empty
             lists on any short-circuit or when nothing timed out.
         """
-        if not getattr(self.params, "mech_events_enabled", False):
+        if not self.params.use_offchain:
             return [], []
         if not getattr(self.params, "mech_events_sweep_pending_enabled", False):
             return [], []
@@ -2375,7 +2399,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             request_only_events.append(event)
             swept_request_ids.append(str(event["request"].get("request_id")))
             self.context.logger.info(
-                "Wildcard sweep: staging request-only event for "
+                "predict-api sweep: staging request-only event for "
                 "timed-out task request_id=%s, age=%.0fs "
                 "(queue not mutated until POST succeeds)",
                 event["request"].get("request_id"),
@@ -2385,7 +2409,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         return request_only_events, swept_request_ids
 
     def _drop_swept_from_pending(self, swept_request_ids: List[str]) -> None:
-        """Remove the swept tasks from ``PENDING_TASKS`` after a confirmed wildcard write.
+        """Remove the swept tasks from ``PENDING_TASKS`` after a confirmed predict-api write.
 
         Mutates the shared list in place: other consumers (the task
         picker in task_execution) hold the same reference and would not
@@ -2418,7 +2442,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         knows (request_id, requester, priority_mech, delivery_rate,
         content_cid) but not the IPFS-resolved fields (prompt, tool,
         model). Those would require an IPFS fetch at sweep time, which
-        we explicitly do not do; placeholders keep the wildcard schema
+        we explicitly do not do; placeholders keep the predict-api schema
         happy. The lake's analytics-side undelivered signal — the
         absence of a ``mech_responses`` row — does not depend on those
         fields, so the placeholder values do not corrupt downstream
@@ -2431,9 +2455,9 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             every event in the sweep shares the same ``requested_at``
             fallback if the task carries no local timestamp.
         :return: a dict with the same shape as the off-chain
-            ``_build_wildcard_event`` return, but with ``response: None``
+            ``_build_predict_api_event`` return, but with ``response: None``
             and ``source: 'mech_onchain'``; or ``None`` if the task
-            doesn't have the minimum fields the wildcard server
+            doesn't have the minimum fields the predict-api server
             requires.
         """
         request_id = task.get("requestId")
@@ -2477,7 +2501,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             content_cid = None
 
         # ``enqueued_at_local`` is monotonic-ish ``time.time()`` from
-        # the handler; the wildcard ``requested_at`` is the requester's
+        # the handler; the predict-api ``requested_at`` is the requester's
         # signed-header timestamp on the off-chain path. The on-chain
         # path's request timestamp is the block.timestamp, which we
         # don't have here without a contract read; use the local stamp
@@ -2502,7 +2526,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             str(delivery_rate_raw) if delivery_rate_raw is not None else None
         )
 
-        # The wildcard server requires ``prompt`` to be a non-empty
+        # The predict-api server requires ``prompt`` to be a non-empty
         # string and ``tool`` to be a non-empty string. Placeholders
         # match the off-chain build's pattern ("[offchain request]")
         # so a reader can spot a sweep-emitted row from the value.

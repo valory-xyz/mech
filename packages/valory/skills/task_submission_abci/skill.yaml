@@ -8,13 +8,14 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeibgtcqa7ur4qm643bhtochlz3ivdp5kqic4lqz7wxrtrmjumrw4nq
+  behaviours.py: bafybeihe5i2uh7rlyxgdf24vijxzngc55k3yi7vxq7rb2v6z3aqzxbyuui
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
-  models.py: bafybeih7end4mjslb3ebdqg77ljt3cphrgrd5eqyvklaf33e2mebws7afi
-  payloads.py: bafybeif2gnz5k7eyb6of4iiisni426zscwanjfmtrr37f7ceu4cjqo2ob4
-  rounds.py: bafybeig3tdavbjyn7gf2qhz3fo2nn2lyhu7zvrncdlmjed2mskriw2k4eu
+  models.py: bafybeihi4udsewau7p73t4vqnasywm5kicydrrggxcdz4skxoulfykvl5i
+  payloads.py: bafybeiaaelmpfuv6pvuesj7iy2nnxvgxjketigrppurto2pbsoaqjum2ba
+  predict_api_events_client.py: bafybeiaipvkrwitftwprsbrnj4rd6ac4n74qzvq22lscbb5li4efc2qnve
+  rounds.py: bafybeifyjanb7hbqolgxsudzhr27otlaozgttjwufmqit6w5rgb2xc53yu
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeihxi2j5lkdlq3rwydag2bzrv67exegutggxmgku3mq5pmrdth3pjq
@@ -22,12 +23,11 @@ fingerprint:
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry
-  tests/test_onchain_write_path.py: bafybeielblv3y7tuas4r2d2mpbw2hlfcjcfrrlod5amigplevluk3u4f4e
+  tests/test_onchain_write_path.py: bafybeigr6wajuqvgk6lxjzan4qy3kmana6zhce75d3pecgtkysl5ca7ome
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
-  tests/test_rounds.py: bafybeiaqdpzmf5t4l3rldukzynj7akiz5wpbbcrtzqd3gkjqs5jybtqyhe
+  tests/test_predict_api_events_client.py: bafybeigbynlhltn6s5b7i4td5x66sno26jxpainsp3kkvl5faq5rkeqbni
+  tests/test_rounds.py: bafybeibervh4zm6a2fmfwcxsi4jl6vfc7owfl3474nhobiijf73fswul3e
   tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
-  tests/test_wildcard_write_client.py: bafybeibhjqhm62jcisp4p2qcpvwdzityfy2hlimwaihkjrffmp7j3w5jzi
-  wildcard_write_client.py: bafybeia5mum3wwjnkyzhwcm4bsq2alqmczxttcuhzy532fsgjur6v4nc3e
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
@@ -47,7 +47,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
-- valory/task_execution:0.1.0:bafybeib4ca677b4fbvtcf2zpfxjr7aob55qeuo7hhqjeenvhfs7ob7cujq
+- valory/task_execution:0.1.0:bafybeiba6ar75dz6ih36u6vwt3ksnvcibgxvxrq2ktedcp2b6rmvew563y
 behaviours:
   main:
     args: {}
@@ -170,9 +170,9 @@ models:
       serious_slash_unit_amount: 8000000000000000
       service_endpoint_base: https://dummy_service.autonolas.tech/
       default_chain_id: gnosis
-      mech_events_enabled: false
-      wildcard_events_url: ''
-      wildcard_events_timeout_seconds: 5.0
+      use_offchain: false
+      predict_api_events_url: https://mpp.autonolas.tech/mech/events
+      predict_api_events_timeout_seconds: 5.0
       mech_events_sweep_pending_enabled: false
       mech_events_sweep_max_age_seconds: 3600.0
       mech_events_chain_id: 0

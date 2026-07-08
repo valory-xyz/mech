@@ -469,7 +469,7 @@ class ContractHandler(BaseHandler):
                 # The contract's RequestInfo.responseTimeout is the
                 # authoritative timeout; this local stamp is the proxy the
                 # mech uses to decide when to emit a request-only event
-                # to the wildcard data lake. See
+                # to the predict-api data lake. See
                 # ``autonolas-marketplace/docs/onchain_write_path_scope.md``
                 # §3.2 for the design.
                 req.setdefault("enqueued_at_local", time.time())

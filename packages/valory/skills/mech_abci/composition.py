@@ -45,9 +45,9 @@ abci_app_transition_mapping: AbciAppTransitionMapping = {
     TaskSubmissionAbciApp.FinishedTaskExecutionWithErrorRound: ResetAndPauseAbci.ResetAndPauseRound,
     TaskSubmissionAbciApp.FinishedWithoutTasksRound: ResetAndPauseAbci.ResetAndPauseRound,
     # Settlement-confirmed path runs through the new PostTxSettlement
-    # round so the wildcard data-lake POST fires once per settled FSM
+    # round so the predict-api data lake POST fires once per settled FSM
     # round; the round itself is fail-soft (always advances on DONE)
-    # so a wildcard outage does not stall the loop.
+    # so a predict-api outage does not stall the loop.
     TransactionSubmissionAbciApp.FinishedTransactionSubmissionRound: TaskSubmissionAbciApp.PostTxSettlementRound,  # pylint: disable=C0301
     TaskSubmissionAbciApp.FinishedPostTxSettlementRound: ResetAndPauseAbci.ResetAndPauseRound,
     TransactionSubmissionAbciApp.FailedRound: ResetAndPauseAbci.ResetAndPauseRound,
