@@ -29,6 +29,24 @@ AI Mechs run on the [Gnosis chain](https://www.gnosis.io/), and enables you to p
 
 **AI Mechs is a project born at [ETHGlobal Lisbon](https://ethglobal.com/showcase/ai-mechs-dt36e).**
 
+## :open_file_folder: Table of Contents
+
+- [:gear: Current AI Agent Hash](#gear-current-ai-agent-hash)
+- [AI Mechs components](#ai-mechs-components)
+- [Requirements](#requirements)
+- [Developing, running and deploying Mechs and Mech tools](#developing-running-and-deploying-mechs-and-mech-tools)
+- [Set up your environment](#set-up-your-environment)
+- [Run the demo](#run-the-demo)
+- [Integrating mechs into your application](#integrating-mechs-into-your-application)
+- [Build your own](#build-your-own)
+- [Included tools](#included-tools)
+- [More on tools](#more-on-tools)
+- [How key files look](#how-key-files-look)
+- [Examples of deployed Mechs](#examples-of-deployed-mechs)
+- [Contributing](#contributing)
+- [License](#license)
+- [Support](#support)
+
 ## :gear: Current AI Agent Hash:
 `bafybeiatwwblrphl6qmxfqzu7ose37drqlbkboqbisldwks772yif3buky`
 
@@ -266,3 +284,21 @@ You can use different nodes like so :
 -${TM_P2P_ENDPOINT_NODE_2
 -${TM_P2P_ENDPOINT_NODE_3
 ```
+
+## Contributing
+
+Contributions are welcome! Please read the [CONTRIBUTING.md](./CONTRIBUTING.md) for:
+- How to create a pull request and branch naming conventions
+- Code style, docstring requirements, and linting (`make code-checks`)
+- Testing requirements and CI checks
+- The `make generators` workflow for `packages/` changes
+
+## License
+
+This project is licensed under the Apache License 2.0 — see the [LICENSE](./LICENSE) file for the full text.
+
+## Support
+
+- **Discord**: Join the [Autonolas Discord](https://discord.com/invite/z2PT65jKqQ) for community questions and discussions.
+- **Issues**: [GitHub Issues](https://github.com/valory-xyz/mech/issues) for bug reports and feature requests.
+- **Documentation**: [Olas Stack docs](https://stack.olas.network/open-autonomy/) for the underlying agent framework.
