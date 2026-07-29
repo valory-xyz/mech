@@ -16,40 +16,16 @@
 #   limitations under the License.
 #
 # ------------------------------------------------------------------------------
-"""Benchmarking for tools.
-
-.. note::
-    ``TokenCounterCallback`` is **deprecated**. The hardcoded ``TOKEN_PRICES``
-    table is unsustainable as new models are released and conflicts with the
-    mech's role as a thin intermediary between clients and tools. Tool authors
-    should report their own pricing in the tool package instead. This module
-    remains importable for backwards compatibility and will emit
-    ``DeprecationWarning`` on instantiation; it will be removed in a future
-    release.
-"""
+"""Benchmarking for tools."""
 
 import logging
-import warnings
 from typing import Any, Callable, Dict, Optional, Union
 
 PRICE_NUM_TOKENS = 1000
 
-_DEPRECATION_MSG = (
-    "TokenCounterCallback is deprecated and the hardcoded TOKEN_PRICES table "
-    "will be removed. Tool packages should report their own pricing rather "
-    "than relying on this central registry. See issue #319 for context."
-)
-
 
 class TokenCounterCallback:
-    """Callback to count the number of tokens used in a generation.
-
-    .. deprecated::
-        Use the tool package's own pricing metadata instead. This callback and
-        its ``TOKEN_PRICES`` table are no longer the right place for model
-        pricing — they go stale as new models ship and grow unboundedly. See
-        issue #319 for the rationale and the planned replacement.
-    """
+    """Callback to count the number of tokens used in a generation."""
 
     TOKEN_PRICES = {
         "gpt-3.5-turbo": {"input": 0.0005, "output": 0.0015},
@@ -84,7 +60,6 @@ class TokenCounterCallback:
 
     def __init__(self) -> None:
         """Initialize the callback."""
-        warnings.warn(_DEPRECATION_MSG, DeprecationWarning, stacklevel=2)
         self.actual_model: Optional[str] = None
         self.cost_dict: Dict[str, Union[int, float]] = {
             "input_tokens": 0,
