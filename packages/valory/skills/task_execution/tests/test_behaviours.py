@@ -1746,9 +1746,11 @@ def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
     # offchain_request_responses so /fetch_offchain_info can serve it. The
     # response never hit public IPFS, and the done_task fallback carries the
     # CID but not the result/prompt/cost_dict.
-    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES][11]
+    # Post-fix, the writer stores under ``str(req_id)`` so the /fetch_offchain_info
+    # str-typed wire ``request_id`` resolves against the same key type.
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["11"]
     assert stored["status"] == "ok"
-    assert stored["request_id"] == 11
+    assert stored["request_id"] == "11"
     assert isinstance(stored["content_cid"], str) and stored["content_cid"]
     # The committed object is served verbatim under "response" (envelope fields
     # hang outside it), and it carries the real tool result.
