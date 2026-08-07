@@ -66,7 +66,11 @@ def _make_sync_data(**extra: Any) -> SynchronizedData:
     return SynchronizedData(_make_db(**extra))
 
 
-def _make_task(request_id: str) -> dict:
+def _make_task(request_id: Any) -> dict:
+    # ``Any`` so tests can pass both ``str`` (off-chain wire format) and
+    # ``int`` (on-chain bytes32 → int conversion) to exercise the mixed-
+    # type sort path — see
+    # ``test_mixed_int_and_str_request_ids_do_not_crash``.
     return {"request_id": request_id, "result": "ok"}
 
 
@@ -214,6 +218,45 @@ class TestTaskPoolingRound:
         sd = cast(SynchronizedData, data)
         request_ids = [t["request_id"] for t in sd.done_tasks]
         assert request_ids == sorted(request_ids)
+
+    def test_mixed_int_and_str_request_ids_do_not_crash(self) -> None:
+        """A batch with both ``int`` and ``str`` request_ids sorts cleanly.
+
+        Regression guard for the crash observed in prod when an off-chain
+        (``str`` request_id from the HTTP body) and an on-chain (``int``
+        request_id from ``bytes32.from_bytes``) done_task landed in the
+        same pooling batch. Pre-fix, ``sorted(..., key=lambda x:
+        x["request_id"])`` raised ``TypeError: '<' not supported between
+        instances of 'int' and 'str'`` and restarted the aea container.
+
+        The ingress fix in :mod:`task_execution.handlers` coerces
+        off-chain request_ids to ``int`` so this shape never happens in
+        new writes, but a mech resuming with a pre-fix mixed
+        ``done_tasks`` in shared state at redeploy time would still hit
+        the crash on the first pooling round without the ``str`` cast on
+        the sort key. This test locks in that safety net.
+        """
+        tasks_agent0 = [_make_task(42), _make_task("100")]
+        tasks_agent1 = [_make_task(7)]
+        tasks_agent2 = [_make_task("500")]
+        payloads = {
+            "agent-0": _payload_for("agent-0", tasks_agent0),
+            "agent-1": _payload_for("agent-1", tasks_agent1),
+            "agent-2": _payload_for("agent-2", tasks_agent2),
+        }
+        round_ = _make_pooling_round(payloads)
+        # Must not raise TypeError.
+        result = round_.end_block()
+        assert result is not None
+        data, event = result
+        assert event == Event.DONE
+        sd = cast(SynchronizedData, data)
+        # Sort is by str(request_id); assert the order matches str-sorting
+        # of the mix so any future re-implementation stays observable.
+        request_ids = [t["request_id"] for t in sd.done_tasks]
+        assert [str(r) for r in request_ids] == sorted(
+            str(r) for r in request_ids
+        ), request_ids
 
     def test_collection_threshold_reached_property_true(self) -> None:
         """Test collection_threshold_reached is True when threshold is met."""

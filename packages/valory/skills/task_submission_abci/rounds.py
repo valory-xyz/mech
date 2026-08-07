@@ -112,8 +112,18 @@ class TaskPoolingRound(CollectionRound):
                     unique_ids.add(request_id)
                     unique_objects.append(obj)
 
+            # Stringify the sort key so a mixed-type list (e.g. an on-chain
+            # ``request_id`` stored as ``int`` next to an off-chain one
+            # stored as ``str``) doesn't raise ``TypeError: '<' not
+            # supported between instances of 'int' and 'str'`` in Python 3.
+            # The ingress path in :mod:`task_execution.handlers` now
+            # coerces off-chain ``requestId`` to ``int`` so this normally
+            # never happens, but a mech that carried mixed-type
+            # ``done_tasks`` across an old-code → new-code restart would
+            # still hit the crash on the first pooling round without this
+            # cast. The sort result is unchanged when types already agree.
             unique_done_tasks = sorted(
-                unique_objects, key=lambda x: x.get("request_id", "")
+                unique_objects, key=lambda x: str(x.get("request_id", ""))
             )
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,

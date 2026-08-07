@@ -927,14 +927,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "executed_at": executed_at,
         }
         task_executor = self.context.agent_address
+        # ``**executing_task`` is spread first so the explicit keys below
+        # override any duplicates that were previously spread from the
+        # off-chain HTTP body (in particular ``request_id`` — the body
+        # carries the raw wire-format decimal string, and downstream sort
+        # / equality in :mod:`task_submission_abci` requires the same
+        # ``int`` type the on-chain path uses so ``done_tasks`` stays
+        # sortable and matchable across a mixed-source batch — see the
+        # ingress coercion comment in
+        # :meth:`task_execution.handlers._enqueue_offchain_request`).
+        # Every explicit value below matches what the previous
+        # spread-wins ordering would have picked for on-chain tasks
+        # (the on-chain pending task carries none of these keys, so the
+        # explicit values always applied), so this reorder is a no-op
+        # for on-chain flows.
         self._done_task = {
+            **executing_task,
             "request_id": req_id,
             "mech_address": mech_address,
             "task_executor_address": task_executor,
             "tool": tool,
             "request_id_nonce": request_id_nonce,
             "is_offchain": is_offchain,
-            **executing_task,
         }
 
         # compute tool execution duration before building metadata

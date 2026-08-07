@@ -1223,10 +1223,17 @@ class MechHttpHandler(AbstractResponseHandler):
 
     def _rollback_offchain_enqueue(self, request_id: str) -> None:
         """Rollback a partial off-chain enqueue in case of unexpected failure."""
+        # The pending task's ``requestId`` is stored as ``int`` after the
+        # ingress coercion in :meth:`_enqueue_offchain_request`; the local
+        # ``request_id`` here is still the wire-format ``str`` used as the
+        # in-memory dict key. Compare on ``int`` so the filter actually
+        # matches — a mixed ``str`` vs ``int`` comparison would silently
+        # leave the partial entry in the queue and defeat the rollback.
+        target_id_int = int(request_id)
         self.context.shared_state[PENDING_TASKS] = [
             req
             for req in self.pending_tasks
-            if req.get(RequestKey.REQUEST_ID_CAMEL.value) != request_id
+            if req.get(RequestKey.REQUEST_ID_CAMEL.value) != target_id_int
         ]
         self.in_memory_requests.pop(request_id, None)
         self.context.logger.error(
@@ -1267,8 +1274,37 @@ class MechHttpHandler(AbstractResponseHandler):
         # request JSON in process memory under ``in_memory_requests``. The
         # content commitment on chain still comes from the locally-computed
         # CID (response side), so the mech's on-chain receipt is unchanged.
+        #
+        # ``requestId`` is normalized to ``int`` at ingress so that off-chain
+        # and on-chain tasks agree on the type once they land in
+        # ``shared_state[DONE_TASKS]``. The on-chain side already stores
+        # ``requestId`` as ``int`` (via ``int.from_bytes(bytes32, "big")``
+        # in :mod:`task_execution.behaviours`); before this normalization,
+        # off-chain tasks stored the wire-format decimal string. A mixed-
+        # type list then crashed :meth:`task_submission_abci.rounds.
+        # TaskPoolingRound.end_block` at its ``sorted(..., key=lambda x:
+        # x["request_id"])`` call — Python 3 refuses to compare ``int`` and
+        # ``str`` and raises ``TypeError``. It also silently broke the
+        # ``submitted["request_id"] == done["request_id"]`` equality check
+        # in :meth:`FundsSplittingBehaviour.remove_tasks`, which would
+        # leave delivered tasks in ``done_tasks`` and re-emit them next
+        # cycle. Coercing here fixes both call sites without touching
+        # either downstream module.
+        #
+        # The local ``request_id`` variable stays ``str`` — it is used as
+        # a dict key in ``in_memory_requests`` and
+        # ``offchain_request_responses`` (both typed ``Dict[str, ...]``)
+        # and matched against the caller-visible response body. Only the
+        # value that flows into the pending-task dict (and from there
+        # into ``done_tasks``) is coerced. The str ``request_id`` from
+        # the HTTP body (added via ``**data`` below) is also present in
+        # the pending task, but the on-chain-shaped merge into
+        # ``_done_task`` in :meth:`task_execution.behaviours.
+        # _handle_done_task` puts the explicit ``request_id`` line after
+        # the ``**executing_task`` spread so the trailing int override
+        # wins.
         req = {
-            RequestKey.REQUEST_ID_CAMEL.value: request_id,
+            RequestKey.REQUEST_ID_CAMEL.value: int(request_id),
             BodyKey.DATA.value: bytes.fromhex(ipfs_hash[2:]),
             RequestKey.IS_OFFCHAIN.value: True,
             RequestKey.REQUEST_DELIVERY_RATE.value: request_delivery_rate,

@@ -352,7 +352,12 @@ def make_http_msg(body_dict: Dict[str, str], headers: str = "") -> SimpleNamespa
         pytest.param(
             "ok",
             1,
-            "req-1",
+            # Numeric decimal string — matches the wire format mech-client
+            # sends (``getRequestId`` returns a uint256; mech-client
+            # form-encodes it to decimal). Post the ingress coercion in
+            # ``_enqueue_offchain_request`` non-numeric placeholders like
+            # ``"req-1"`` no longer round-trip: ``int("req-1")`` raises.
+            "1",
             HttpCode.OK_CODE.value,
             True,
             None,
@@ -362,7 +367,7 @@ def make_http_msg(body_dict: Dict[str, str], headers: str = "") -> SimpleNamespa
         pytest.param(
             "ok",
             -1,
-            "req-insufficient",
+            "2",
             HttpCode.PAYMENT_REQUIRED_CODE.value,
             False,
             "rejected",
@@ -372,7 +377,7 @@ def make_http_msg(body_dict: Dict[str, str], headers: str = "") -> SimpleNamespa
         pytest.param(
             "unavailable",
             -123,
-            "req-unavailable",
+            "3",
             HttpCode.SERVICE_UNAVAILABLE_CODE.value,
             False,
             "rejected",
@@ -435,7 +440,11 @@ def test_signed_requests_balance_scenarios(
         # off-chain flow no longer publishes request metadata to IPFS.
         assert len(pend) == 1 and ipfsq == [] and len(in_mem) == 1
         assert pend[0]["is_offchain"] is True
-        assert pend[0]["requestId"] == request_id
+        # ``requestId`` is stored as ``int`` post the ingress coercion
+        # in ``_enqueue_offchain_request``; the ``in_memory_requests``
+        # dict is still str-keyed since the local ``request_id`` variable
+        # in the handler stays str for the HTTP-state lookups.
+        assert pend[0]["requestId"] == int(request_id)
         assert in_mem[request_id] == '{"foo":"bar"}'
     else:
         assert pend == [] and ipfsq == [] and in_mem == {}
@@ -569,7 +578,9 @@ def test_signed_requests_rollback_partial_enqueue(
     ipfs_hash: str = "0x" + "ab" * 32
     body: Dict[str, str] = {
         "ipfs_hash": ipfs_hash,
-        "request_id": "req-rollback",
+        # Numeric — the ingress coercion in ``_enqueue_offchain_request``
+        # runs before the buffer-write attempt this test simulates.
+        "request_id": "6",
         "ipfs_data": '{"foo":"bar"}',
         "delivery_rate": "123",
         "sender": "0x0000000000000000000000000000000000000001",
@@ -694,7 +705,7 @@ def test_200_emits_payment_receipt_header(
 ) -> None:
     """200 response carries a Payment-Receipt header with valid base64-encoded JSON."""
     mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=10)
-    resp = _send_signed_request(mh, http_dialogue, request_id="req-200-receipt")
+    resp = _send_signed_request(mh, http_dialogue, request_id="200")
 
     assert resp.status_code == HttpCode.OK_CODE.value
     receipt_line = next(
@@ -704,7 +715,10 @@ def test_200_emits_payment_receipt_header(
     import base64 as _b64
 
     receipt = json.loads(_b64.b64decode(encoded).decode("utf-8"))
-    assert receipt["request_id"] == "req-200-receipt"
+    # ``receipt["request_id"]`` is written from the local ``request_id``
+    # variable in the handler, which stays ``str`` (the ingress coercion
+    # only touches the value that flows into the pending task).
+    assert receipt["request_id"] == "200"
     assert receipt["accepted_amount"] == "123"
     assert receipt["settlement_status"] == "pending"
     # ISO 8601 UTC with trailing Z. Loose check that it parses as a date.
@@ -718,10 +732,10 @@ def test_200_body_unchanged_for_legacy_clients(
 ) -> None:
     """200 body shape is unchanged. Receipt only goes in the header."""
     mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=10)
-    resp = _send_signed_request(mh, http_dialogue, request_id="req-200-body")
+    resp = _send_signed_request(mh, http_dialogue, request_id="201")
 
     payload = json.loads(resp.body.decode("utf-8"))
-    assert payload == {"request_id": "req-200-body"}
+    assert payload == {"request_id": "201"}
 
 
 def test_offchain_request_buffered_in_memory_not_in_ipfs_tasks(
@@ -732,11 +746,13 @@ def test_offchain_request_buffered_in_memory_not_in_ipfs_tasks(
     # no longer written from the offchain path. A future refactor that flipped
     # the flag back without us noticing would fail this test.
     mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=10)
-    _send_signed_request(mh, http_dialogue, request_id="req-in-mem")
+    _send_signed_request(mh, http_dialogue, request_id="5")
 
     assert handler_context.shared_state["ipfs_tasks"] == []
     assert handler_context.shared_state["in_memory_requests"] == {
-        "req-in-mem": '{"foo":"bar"}'
+        # ``in_memory_requests`` stays str-keyed (the ingress coercion
+        # only touches the pending-task value, not the local dict keys).
+        "5": '{"foo":"bar"}'
     }
 
 
@@ -1901,7 +1917,7 @@ def test_signed_requests_accepts_zero_delivery_rate(
     _install_balance_ok(mh, monkeypatch)
     mh.setup()
 
-    body = _make_signed_request_body(delivery_rate="0", request_id="req-zero-rate")
+    body = _make_signed_request_body(delivery_rate="0", request_id="7")
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
 
