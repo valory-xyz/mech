@@ -101,27 +101,38 @@ class TaskPoolingRound(CollectionRound):
                 done_tasks = json.loads(done_tasks_str)
                 all_done_tasks.extend(done_tasks)
 
-            # Set to store unique request_ids
-            unique_ids = set()
+            # Deduplicate and sort by the same ``str``-normalized key so
+            # a mixed-type ``done_tasks`` list (an on-chain ``int``
+            # ``request_id`` next to an off-chain ``str`` — happens on
+            # the old-code → new-code restart transition where an agent
+            # resumes with pre-ingress-fix state in shared memory)
+            # produces one canonical row per logical request and doesn't
+            # raise ``TypeError: '<' not supported between instances of
+            # 'int' and 'str'`` on the sort. Post ingress coercion in
+            # :mod:`task_execution.handlers` all new writes are ``int``
+            # and the cast is a no-op, but leaving the two sites
+            # un-normalized would let the same request slip through
+            # dedup as both ``42`` and ``"42"`` and get submitted twice
+            # in the same multisend — a costlier failure than the crash
+            # itself. The dedup key and the sort key MUST use the same
+            # normalization, otherwise the two disagree on which entries
+            # collide.
+            unique_ids: set = set()
             unique_objects = []
-
-            # filter out the tasks that have duplicate ids
             for obj in all_done_tasks:
-                request_id = obj.get("request_id")
-                if request_id not in unique_ids:
-                    unique_ids.add(request_id)
+                request_id_key = str(obj.get("request_id", ""))
+                if request_id_key not in unique_ids:
+                    unique_ids.add(request_id_key)
                     unique_objects.append(obj)
 
-            # Stringify the sort key so a mixed-type list (e.g. an on-chain
-            # ``request_id`` stored as ``int`` next to an off-chain one
-            # stored as ``str``) doesn't raise ``TypeError: '<' not
-            # supported between instances of 'int' and 'str'`` in Python 3.
-            # The ingress path in :mod:`task_execution.handlers` now
-            # coerces off-chain ``requestId`` to ``int`` so this normally
-            # never happens, but a mech that carried mixed-type
-            # ``done_tasks`` across an old-code → new-code restart would
-            # still hit the crash on the first pooling round without this
-            # cast. The sort result is unchanged when types already agree.
+            # Note on ordering: the ``str`` sort key means int
+            # ``request_id``s land in lexicographic order (``[9, 10]``
+            # sorts as ``[10, 9]``). This is stable and deterministic —
+            # every agent applies the same rule — so consensus is not at
+            # risk. The order changes vs. the numeric sort that would
+            # apply if all ids were guaranteed ``int``, but consumers
+            # downstream do not depend on the specific order (they iterate
+            # or index-by-id, not by position).
             unique_done_tasks = sorted(
                 unique_objects, key=lambda x: str(x.get("request_id", ""))
             )

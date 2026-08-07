@@ -927,28 +927,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "executed_at": executed_at,
         }
         task_executor = self.context.agent_address
-        # ``**executing_task`` is spread first so the explicit keys below
-        # override any duplicates that were previously spread from the
-        # off-chain HTTP body (in particular ``request_id`` — the body
-        # carries the raw wire-format decimal string, and downstream sort
-        # / equality in :mod:`task_submission_abci` requires the same
-        # ``int`` type the on-chain path uses so ``done_tasks`` stays
-        # sortable and matchable across a mixed-source batch — see the
-        # ingress coercion comment in
-        # :meth:`task_execution.handlers._enqueue_offchain_request`).
-        # Every explicit value below matches what the previous
-        # spread-wins ordering would have picked for on-chain tasks
-        # (the on-chain pending task carries none of these keys, so the
-        # explicit values always applied), so this reorder is a no-op
-        # for on-chain flows.
         self._done_task = {
-            **executing_task,
             "request_id": req_id,
             "mech_address": mech_address,
             "task_executor_address": task_executor,
             "tool": tool,
             "request_id_nonce": request_id_nonce,
             "is_offchain": is_offchain,
+            **executing_task,
         }
 
         # compute tool execution duration before building metadata
@@ -1044,7 +1030,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # but failed" delivery must be distinguishable from a successful
                 # one — otherwise the client accepts and pays for a failure.
                 self._record_offchain_failure(
-                    cast(str, req_id),
+                    str(req_id),
                     cast(str, response.get("result") or "task execution failed"),
                 )
                 return
@@ -1072,7 +1058,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     f"Off-chain CID computation failed for request {req_id}: {exc}"
                 )
                 self._record_offchain_failure(
-                    cast(str, req_id), f"cid computation failed: {exc}"
+                    str(req_id), f"cid computation failed: {exc}"
                 )
                 return
             self.context.logger.info(
@@ -1086,10 +1072,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # content_cid are envelope fields kept outside it so they don't
             # perturb the hash. Without this the poll falls back to the done_task,
             # which carries the CID/multihash but not the result/prompt/cost_dict.
+            # ``req_id`` is now an ``int`` for off-chain tasks (see the
+            # ingress-coercion comment in
+            # :mod:`task_execution.handlers._enqueue_offchain_request`),
+            # so the previous ``cast(str, req_id)`` was a runtime no-op
+            # that let an ``int`` land as the key of a ``str``-typed
+            # dict — ``/fetch_offchain_info`` then couldn't find the
+            # response and the requester polled ``{}`` forever while
+            # ``deliverWithSignatures`` still charged them on chain.
+            # ``str(req_id)`` performs the real conversion.
+            request_id_str = str(req_id)
             self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
-                cast(str, req_id)
+                request_id_str
             ] = {
-                "request_id": cast(str, req_id),
+                "request_id": request_id_str,
                 "status": "ok",
                 "content_cid": local_cid,
                 "response": response,
@@ -1101,7 +1097,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # unless preimage retention is enabled; failures are logged but
             # don't block the in-memory return channel above.
             self._buffer_preimage_settlement(
-                cast(str, req_id),
+                request_id_str,
                 content_bytes.decode("utf-8", errors="replace"),
                 local_cid,
                 preimage_buffer.STATUS_DELIVERED,
@@ -1521,7 +1517,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # On-chain has other fallbacks; off-chain the polling client would
                 # otherwise never learn this failed, so emit a definitive
                 # rejection (which also resets the task slot).
-                self._record_offchain_failure(req_id, "invalid done task")
+                self._record_offchain_failure(str(req_id), "invalid done task")
                 return
             self._reset_executing_task()
             return
@@ -1587,7 +1583,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # Off-chain success: drop the buffered request metadata so it can't grow
         # unbounded (on-chain tasks never populate it, so this is a no-op there).
         # .get keeps this safe if the handler-owned key was never initialised.
-        self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
+        # ``req_id`` is ``int`` post ingress coercion; the buffer is
+        # ``str``-keyed by the handler (``Dict[str, str]`` at
+        # ``handlers.py:776``), so the pop needs the ``str`` form or it
+        # silently misses and leaks the full request JSON.
+        self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(str(req_id), None)
         self._reset_executing_task()
 
     def _build_predict_api_event(
@@ -1625,8 +1625,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         """
         req_id = done_task["request_id"]
         request_id_str = str(req_id)
+        # ``IN_MEMORY_REQUESTS`` is ``str``-keyed by the handler; ``req_id``
+        # is ``int`` for off-chain tasks (see ingress coercion in
+        # ``task_execution.handlers._enqueue_offchain_request``). Use the
+        # ``str`` key or the get returns ``{}`` and the analytics row loses
+        # the prompt / tool params / requested_at, falling back to safe
+        # placeholders.
         request_data_raw = self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).get(
-            req_id, {}
+            request_id_str, {}
         )
         # IPFS_DATA can land as either a parsed dict (normal handler path)
         # or a JSON-encoded string (some test fixtures and the historical

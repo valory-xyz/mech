@@ -854,6 +854,24 @@ class MechHttpHandler(AbstractResponseHandler):
             self._handle_bad_request(http_msg, http_dialogue)
             return
 
+        # ``request_id`` on the wire is the decimal encoding of the uint256
+        # marketplace ``getRequestId`` return, so it must be an unsigned
+        # decimal integer. Validate here alongside the other body-shape
+        # checks so a non-numeric id is rejected with a specific log line
+        # rather than surfacing later as an opaque ``ValueError`` inside
+        # :meth:`_enqueue_offchain_request`'s ``int(request_id)`` coercion.
+        # The coercion still lives at the enqueue site because that's
+        # where the invariant matters — this validation just gives the
+        # operator a distinguishable rejection cause in the log.
+        if not request_id or not request_id.isdigit():
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id!r}: "
+                f"request_id must be a non-empty decimal string "
+                f"(len={len(request_id) if request_id else 0})."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+
         if not IPFS_HASH_RE.match(ipfs_hash):
             self.context.logger.error(
                 f"Rejecting offchain request {request_id}: invalid ipfs_hash "
@@ -981,7 +999,14 @@ class MechHttpHandler(AbstractResponseHandler):
 
         self.context.logger.info(f"Fetching offchain info for {request_id=}.")
 
-        stored_response = self.offchain_request_responses.get(request_id)
+        # ``OFFCHAIN_REQUEST_RESPONSES`` is ``str``-keyed on the writer
+        # side (see :mod:`task_execution.behaviours._handle_done_task`
+        # and ``_record_offchain_failure`` — both convert the coerced
+        # ``int`` ``req_id`` back to ``str`` before writing). ``request_id``
+        # from the GET body is already ``str``, but wrap in ``str(...)``
+        # so a future writer regression that lands an ``int`` key is
+        # still findable by the requester.
+        stored_response = self.offchain_request_responses.get(str(request_id))
         if stored_response is not None:
             self._send_ok_response(
                 http_msg,
@@ -992,10 +1017,14 @@ class MechHttpHandler(AbstractResponseHandler):
 
         done_tasks_list = self.done_tasks
 
+        # Same reason as above: ``done_task["request_id"]`` is ``int`` for
+        # off-chain tasks post the ingress coercion, but ``request_id``
+        # from the GET body is ``str``. Normalize both sides so the
+        # fallback scan doesn't silently miss.
         requested_done_tasks_list = [
             item
             for item in done_tasks_list
-            if item.get(RequestKey.REQUEST_ID.value) == request_id
+            if str(item.get(RequestKey.REQUEST_ID.value)) == str(request_id)
         ]
 
         self._send_ok_response(
@@ -1275,40 +1304,48 @@ class MechHttpHandler(AbstractResponseHandler):
         # content commitment on chain still comes from the locally-computed
         # CID (response side), so the mech's on-chain receipt is unchanged.
         #
-        # ``requestId`` is normalized to ``int`` at ingress so that off-chain
-        # and on-chain tasks agree on the type once they land in
-        # ``shared_state[DONE_TASKS]``. The on-chain side already stores
-        # ``requestId`` as ``int`` (via ``int.from_bytes(bytes32, "big")``
-        # in :mod:`task_execution.behaviours`); before this normalization,
-        # off-chain tasks stored the wire-format decimal string. A mixed-
-        # type list then crashed :meth:`task_submission_abci.rounds.
-        # TaskPoolingRound.end_block` at its ``sorted(..., key=lambda x:
-        # x["request_id"])`` call — Python 3 refuses to compare ``int`` and
-        # ``str`` and raises ``TypeError``. It also silently broke the
-        # ``submitted["request_id"] == done["request_id"]`` equality check
-        # in :meth:`FundsSplittingBehaviour.remove_tasks`, which would
-        # leave delivered tasks in ``done_tasks`` and re-emit them next
-        # cycle. Coercing here fixes both call sites without touching
-        # either downstream module.
+        # ``requestId`` is normalized to ``int`` so on-chain tasks (already
+        # ``int`` via ``int.from_bytes(bytes32, "big")`` in
+        # :mod:`task_execution.behaviours`) and off-chain tasks agree on
+        # the type once they land in ``shared_state[DONE_TASKS]``. Without
+        # this, ``TaskPoolingRound.end_block`` crashed on
+        # ``sorted(..., key=lambda x: x["request_id"])`` and
+        # ``TaskExecutionBaseBehaviour.remove_tasks`` silently failed its
+        # equality check on a mixed-type batch.
+        #
+        # The client-supplied body (``data``) is stripped of any key we
+        # own before merge, so a request carrying ``request_id=...``,
+        # ``is_offchain=...``, ``data=...``, or ``request_delivery_rate=...``
+        # can't override the trusted values above. This closes two
+        # separate problems: (a) a body-supplied ``request_id`` would
+        # re-plant the wire-format ``str`` and defeat the coercion, and
+        # (b) a body-supplied ``request_delivery_rate`` would land in
+        # ``request_id_to_delivery_rate_info`` and bypass the tool-
+        # minimum-price gate in
+        # :meth:`task_execution.behaviours.check_offchain_task_can_pay`.
+        # The signature verifies the request-id and delivery-rate at the
+        # marketplace on chain, not here, so pre-settlement trust in
+        # ``data`` values other than these four must be nil.
         #
         # The local ``request_id`` variable stays ``str`` — it is used as
         # a dict key in ``in_memory_requests`` and
         # ``offchain_request_responses`` (both typed ``Dict[str, ...]``)
         # and matched against the caller-visible response body. Only the
         # value that flows into the pending-task dict (and from there
-        # into ``done_tasks``) is coerced. The str ``request_id`` from
-        # the HTTP body (added via ``**data`` below) is also present in
-        # the pending task, but the on-chain-shaped merge into
-        # ``_done_task`` in :meth:`task_execution.behaviours.
-        # _handle_done_task` puts the explicit ``request_id`` line after
-        # the ``**executing_task`` spread so the trailing int override
-        # wins.
+        # into ``done_tasks``) is coerced.
+        reserved_keys = {
+            RequestKey.REQUEST_ID.value,
+            RequestKey.REQUEST_ID_CAMEL.value,
+            RequestKey.IS_OFFCHAIN.value,
+            BodyKey.DATA.value,
+            RequestKey.REQUEST_DELIVERY_RATE.value,
+        }
         req = {
             RequestKey.REQUEST_ID_CAMEL.value: int(request_id),
             BodyKey.DATA.value: bytes.fromhex(ipfs_hash[2:]),
             RequestKey.IS_OFFCHAIN.value: True,
             RequestKey.REQUEST_DELIVERY_RATE.value: request_delivery_rate,
-            **data,
+            **{k: v for k, v in data.items() if k not in reserved_keys},
         }
         try:
             self.pending_tasks.append(req)

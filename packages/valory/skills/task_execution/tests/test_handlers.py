@@ -474,6 +474,42 @@ def test_signed_requests_bad_request(
     assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
 
 
+@pytest.mark.parametrize(
+    "bad_request_id",
+    ["req-1", "", "0x123", "42abc", "42.0", " 42"],
+    ids=["alpha", "empty", "hex", "trailing_alpha", "dotted", "whitespace"],
+)
+def test_signed_requests_rejects_non_numeric_request_id(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any, bad_request_id: str
+) -> None:
+    """Non-decimal ``request_id`` is rejected with 400 before any state mutation.
+
+    The ingress coercion in ``_enqueue_offchain_request`` requires a
+    valid ``int()`` input; the upfront ``request_id.isdigit()`` check in
+    ``_handle_signed_requests`` gives the operator a distinguishable log
+    line ("request_id must be a non-empty decimal string") rather than
+    letting the ``ValueError`` from the coercion surface as an opaque
+    "Error enqueuing offchain request ...: invalid literal for int()".
+    ``int()`` is also lenient about whitespace, ``0x`` prefixes, and
+    underscore separators; ``str.isdigit()`` rejects all of them, so
+    the decimal-uint256 contract on the wire is enforced strictly.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(request_id=bad_request_id)
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    # No partial state mutation.
+    assert handler_context.shared_state["pending_tasks"] == []
+    assert handler_context.shared_state["in_memory_requests"] == {}
+
+
 def test_signed_requests_offchain_disabled_returns_503(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
@@ -520,7 +556,7 @@ def test_fetch_offchain_request_info_returns_insufficient_balance_response(
     )
     mh.setup()
 
-    request_id = "req-insufficient-fetch"
+    request_id = "1003"
     ipfs_hash: str = "0x" + "ab" * 32
     send_msg: Any = make_http_msg(
         {
@@ -651,7 +687,7 @@ def test_402_body_includes_structured_challenge(
         handler_context, monkeypatch, available_offset=-50
     )
 
-    resp = _send_signed_request(mh, http_dialogue, request_id="req-402-schema")
+    resp = _send_signed_request(mh, http_dialogue, request_id="402")
     assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
 
     payload = json.loads(resp.body.decode("utf-8"))
@@ -677,7 +713,7 @@ def test_402_emits_www_authenticate_header(
 ) -> None:
     """402 response carries the WWW-Authenticate header keyed by mech address."""
     mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=-1)
-    resp = _send_signed_request(mh, http_dialogue, request_id="req-402-header")
+    resp = _send_signed_request(mh, http_dialogue, request_id="4021")
 
     assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
     assert (
@@ -694,7 +730,7 @@ def test_402_native_asset_when_payment_type_unmapped(
     # treat the payment as a native-asset deposit.
     handler_context.params.payment_type_to_asset_address = {}
     mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=-1)
-    resp = _send_signed_request(mh, http_dialogue, request_id="req-402-native")
+    resp = _send_signed_request(mh, http_dialogue, request_id="4022")
 
     payload = json.loads(resp.body.decode("utf-8"))
     assert payload["asset"] == "0x0000000000000000000000000000000000000000"
@@ -775,6 +811,81 @@ def test_fetch_offchain_request_info_found(
     resp: SimpleNamespace = handler_context.outbox.sent[-1]
     payload: Dict[str, Any] = json.loads(resp.body.decode("utf-8"))
     assert payload["request_id"] == "abc" and payload["value"] == 7
+
+
+def test_fetch_offchain_request_info_str_key_matches_wire_id(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The primary lookup path resolves the wire ``str`` against the writer's ``str`` key.
+
+    ``task_execution.behaviours._handle_done_task`` computes the key as
+    ``str(req_id)`` where ``req_id`` is the ``int`` from the ingress
+    coercion, so a wire-format ``request_id="42"`` posted by the
+    requester must resolve to the ``"42"`` key the writer produces.
+    Pre-fix (``cast(str, req_id)`` — a runtime no-op), the writer wrote
+    an ``int`` key and this lookup returned ``{}``; the requester paid
+    on chain via ``deliverWithSignatures`` and polled empty forever.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    stored = {
+        "request_id": "42",
+        "status": "ok",
+        "content_cid": "bafyexamplecid",
+        "response": {"result": "computed"},
+    }
+    # Match what the writer produces: str-keyed under the same value.
+    handler_context.shared_state.setdefault(hmod.OFFCHAIN_REQUEST_RESPONSES, {})[
+        "42"
+    ] = stored
+
+    http_msg: Any = make_http_msg({"request_id": "42"})
+    mh._handle_offchain_request_info(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    payload: Dict[str, Any] = json.loads(resp.body.decode("utf-8"))
+    assert payload == stored
+
+
+def test_fetch_offchain_request_info_fallback_scan_normalizes_types(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The fallback ``done_tasks`` scan normalizes ``str`` vs ``int`` types.
+
+    The response cache miss path scans ``shared_state[DONE_TASKS]``.
+    Off-chain ``done_tasks`` carry ``request_id`` as ``int`` post the
+    ingress coercion; the GET body has the wire-format ``str``. Without
+    the ``str()`` normalization added to the equality check the scan
+    silently misses on the very same batch that just delivered the
+    task, and the requester never gets a definitive answer.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    # ``OFFCHAIN_REQUEST_RESPONSES`` intentionally empty so we go through
+    # the fallback path.
+    handler_context.shared_state[hmod.OFFCHAIN_REQUEST_RESPONSES] = {}
+    done_task = {
+        "request_id": 42,  # int, as the ingress coercion produces
+        "is_offchain": True,
+        "tool": "prediction-offline-v1",
+    }
+    handler_context.shared_state[hmod.DONE_TASKS] = [done_task]
+
+    http_msg: Any = make_http_msg({"request_id": "42"})
+    mh._handle_offchain_request_info(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    # ``_handle_offchain_request_info`` returns the first matching
+    # done_task dict verbatim (or ``{}`` when no match).
+    assert payload == done_task, payload
+    assert payload != {}, "fallback scan missed — str/int mismatch regressed"
 
 
 def test_fetch_offchain_request_info_not_found(
@@ -2027,7 +2138,7 @@ def test_handler_replies_500_when_402_build_fails(
     )
     mh = _http_handler(handler_context, monkeypatch)
     http_msg: Any = make_http_msg(
-        _make_signed_request_body(delivery_rate="1", request_id="req-500")
+        _make_signed_request_body(delivery_rate="1", request_id="500")
     )
     mh._handle_signed_requests(http_msg, http_dialogue)
 
