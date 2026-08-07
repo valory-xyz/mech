@@ -26,7 +26,7 @@ fingerprint:
   tests/test_onchain_write_path.py: bafybeigr6wajuqvgk6lxjzan4qy3kmana6zhce75d3pecgtkysl5ca7ome
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_predict_api_events_client.py: bafybeigbynlhltn6s5b7i4td5x66sno26jxpainsp3kkvl5faq5rkeqbni
-  tests/test_rounds.py: bafybeigugqbdo7hfezfycyceipwzi3p3uei7xyygqm7qqoz5fzulu3xygi
+  tests/test_rounds.py: bafybeickm2ymbxtd6swtdt2p3ttbmrdkgkmqwgjjk3rqm6fdbqc5fjzsfm
   tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
 fingerprint_ignore_patterns: []
 connections: []
