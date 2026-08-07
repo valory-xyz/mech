@@ -493,6 +493,11 @@ def test_signed_requests_rejects_non_numeric_request_id(
     ``int()`` is also lenient about whitespace, ``0x`` prefixes, and
     underscore separators; ``str.isdigit()`` rejects all of them, so
     the decimal-uint256 contract on the wire is enforced strictly.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param bad_request_id: parametrized invalid ``request_id`` string.
     """
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
@@ -825,6 +830,10 @@ def test_fetch_offchain_request_info_str_key_matches_wire_id(
     Pre-fix (``cast(str, req_id)`` — a runtime no-op), the writer wrote
     an ``int`` key and this lookup returned ``{}``; the requester paid
     on chain via ``deliverWithSignatures`` and polled empty forever.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
     """
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
@@ -861,6 +870,10 @@ def test_fetch_offchain_request_info_fallback_scan_normalizes_types(
     the ``str()`` normalization added to the equality check the scan
     silently misses on the very same batch that just delivered the
     task, and the requester never gets a definitive answer.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
     """
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
