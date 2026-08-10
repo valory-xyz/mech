@@ -150,12 +150,23 @@ class TaskPoolingRound(CollectionRound):
 
             # Note on ordering: the ``str`` sort key means int
             # ``request_id``s land in lexicographic order (``[9, 10]``
-            # sorts as ``[10, 9]``). This is stable and deterministic —
-            # every agent applies the same rule — so consensus is not at
-            # risk. The order changes vs. the numeric sort that would
-            # apply if all ids were guaranteed ``int``, but consumers
-            # downstream do not depend on the specific order (they iterate
-            # or index-by-id, not by position).
+            # sorts as ``[10, 9]``). This is stable and deterministic
+            # *within a uniform fleet* — every agent applies the same
+            # rule — so consensus holds. It does NOT hold across a mixed
+            # old-code / new-code fleet mid-upgrade: pre-fix agents dedup
+            # ``42`` and ``"42"`` as distinct and sort numerically, so an
+            # old and new agent computing ``done_tasks`` off the same
+            # collected payloads produce different content, different
+            # row count, and different order.
+            # ``TransactionPreparationRound`` is a
+            # ``CollectSameUntilThresholdRound`` keyed on
+            # ``most_voted_payload`` and requires 2/3+ byte-identical
+            # payloads, so a mixed fleet ``NO_MAJORITY``-stalls until
+            # versions converge. This is why the service hash bump has
+            # to be atomic across all agents in a service (not rolling)
+            # — see the PR's rollout notes. Consumers downstream of the
+            # sort do not depend on the specific order (they iterate or
+            # index-by-id, not by position).
             unique_done_tasks = sorted(
                 unique_objects, key=lambda x: str(x.get("request_id", ""))
             )

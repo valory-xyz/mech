@@ -897,12 +897,21 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             self._handle_bad_request(http_msg, http_dialogue)
             return
-        # Regex constrains the alphabet; the uint256 upper bound has to be
-        # checked separately. The 78-digit cap on ``MAX_REQUEST_ID`` keeps
-        # the ``int()`` itself safe (well under the 4300-digit CPython
-        # cap), and rejecting a >uint256 id here matches the range check
+        # Regex constrains the alphabet; the magnitude has to be checked
+        # separately. The length branch MUST short-circuit before the
+        # ``int()`` call: on CPython 3.11+, ``int()`` on a string longer
+        # than ``sys.get_int_max_str_digits()`` (4300 by default) raises
+        # ``ValueError`` — a 5000-digit canonical decimal would pass
+        # ``fullmatch`` but blow up here, outside any ``try/except``, and
+        # bypass this handler's own 400 return. ``len(str(MAX_REQUEST_ID))``
+        # is 78, well under the CPython cap, so the length branch is the
+        # cheap guard that makes the value branch safe. Rejecting a
+        # >uint256 id here matches the range check
         # ``request_delivery_rate`` already gets below.
-        if int(request_id) > MAX_REQUEST_ID:
+        if (
+            len(request_id) > len(str(MAX_REQUEST_ID))
+            or int(request_id) > MAX_REQUEST_ID
+        ):
             self.context.logger.error(
                 f"Rejecting offchain request {request_id!r}: "
                 f"request_id exceeds uint256 upper bound "

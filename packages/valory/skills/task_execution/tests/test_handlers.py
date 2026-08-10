@@ -504,6 +504,13 @@ def test_signed_requests_bad_request(
         # promise: the ingress guard means ``int(request_id)`` cannot raise
         # deep in the enqueue helper). ``2**256`` is one over the bound.
         str(2**256),
+        # CPython 3.11+ raises ``ValueError`` on ``int()`` for a decimal
+        # string longer than ``sys.get_int_max_str_digits()`` (4300
+        # default). The length check on ``MAX_REQUEST_ID`` MUST
+        # short-circuit before ``int()`` runs, otherwise a 5000-digit
+        # canonical decimal blows up outside the handler's ``try/except``
+        # and skips the 400 path entirely. This case pins that.
+        "9" * 5000,
     ],
     ids=[
         "alpha",
@@ -520,6 +527,7 @@ def test_signed_requests_bad_request(
         "trailing_newline",
         "leading_newline",
         "above_uint256",
+        "above_cpython_int_str_digits_limit",
     ],
 )
 def test_signed_requests_rejects_non_numeric_request_id(
