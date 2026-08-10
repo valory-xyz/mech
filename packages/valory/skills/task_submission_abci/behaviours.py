@@ -234,10 +234,20 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         with self.done_tasks_lock():
             done_tasks = self.done_tasks
             not_submitted = []
+            # Normalize both sides to ``str`` before comparing so a mix of
+            # ``int`` (on-chain requestId) and ``str`` (pre-ingress-fix
+            # off-chain requestId) doesn't silently fail equality and leave
+            # a delivered task stuck in ``done_tasks`` for the next round to
+            # re-emit. Post the :mod:`task_execution.handlers` ingress fix
+            # both sides are ``int`` and the ``str`` cast is a no-op; the
+            # cast is retained for the same restart-transition reason
+            # called out in :meth:`task_submission_abci.rounds.
+            # TaskPoolingRound.end_block`.
             for done_task in done_tasks:
+                done_key = str(done_task["request_id"])
                 is_submitted = False
                 for submitted_task in submitted_tasks:
-                    if submitted_task["request_id"] == done_task["request_id"]:
+                    if str(submitted_task["request_id"]) == done_key:
                         is_submitted = True
                         break
                 if not is_submitted:

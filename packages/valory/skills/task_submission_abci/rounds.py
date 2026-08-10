@@ -101,19 +101,74 @@ class TaskPoolingRound(CollectionRound):
                 done_tasks = json.loads(done_tasks_str)
                 all_done_tasks.extend(done_tasks)
 
-            # Set to store unique request_ids
-            unique_ids = set()
+            # Deduplicate and sort by the same ``str``-normalized key so
+            # a mixed-type ``done_tasks`` list (an on-chain ``int``
+            # ``request_id`` next to an off-chain ``str`` — happens on
+            # the old-code → new-code restart transition where an agent
+            # resumes with pre-ingress-fix state in shared memory)
+            # produces one canonical row per logical request and doesn't
+            # raise ``TypeError: '<' not supported between instances of
+            # 'int' and 'str'`` on the sort. Post ingress coercion in
+            # :mod:`task_execution.handlers` all new writes are ``int``
+            # and the cast is a no-op, but leaving the two sites
+            # un-normalized would let the same request slip through
+            # dedup as both ``42`` and ``"42"`` and get submitted twice
+            # in the same multisend — a costlier failure than the crash
+            # itself. The dedup key and the sort key MUST use the same
+            # normalization, otherwise the two disagree on which entries
+            # collide.
+            # A falsy ``request_id`` (missing, ``None``, ``""``) would
+            # otherwise dedup all such rows to the same ``""`` / ``"None"``
+            # bucket and silently drop legitimate rows from other agents —
+            # ``all_done_tasks`` is a bag of every participant's payloads
+            # with no schema validation, so a single misbehaving or
+            # out-of-version agent can introduce one. Skip and warn: this
+            # agent's own pipeline should never produce a falsy id (both
+            # writers set it explicitly), so hitting this branch is a real
+            # protocol violation worth surfacing.
+            unique_ids: set = set()
             unique_objects = []
-
-            # filter out the tasks that have duplicate ids
             for obj in all_done_tasks:
-                request_id = obj.get("request_id")
-                if request_id not in unique_ids:
-                    unique_ids.add(request_id)
+                raw_request_id = obj.get("request_id")
+                # Skip "genuinely absent" (missing key, None, empty string)
+                # without the boolean/float overlap ``not x`` gives:
+                # ``not False`` and ``not 0.0`` are both True in Python, so
+                # ``if not raw_request_id`` would drop a JSON ``false`` or
+                # ``0.0`` id — both malformed but distinguishable from
+                # missing. Legit ``0`` (int) is deliberately kept.
+                if raw_request_id is None or raw_request_id == "":
+                    self.context.logger.warning(
+                        "Skipping done_task with missing/empty request_id "
+                        "in TaskPoolingRound dedup: %r",
+                        obj,
+                    )
+                    continue
+                request_id_key = str(raw_request_id)
+                if request_id_key not in unique_ids:
+                    unique_ids.add(request_id_key)
                     unique_objects.append(obj)
 
+            # Note on ordering: the ``str`` sort key means int
+            # ``request_id``s land in lexicographic order (``[9, 10]``
+            # sorts as ``[10, 9]``). This is stable and deterministic
+            # *within a uniform fleet* — every agent applies the same
+            # rule — so consensus holds. It does NOT hold across a mixed
+            # old-code / new-code fleet mid-upgrade: pre-fix agents dedup
+            # ``42`` and ``"42"`` as distinct and sort numerically, so an
+            # old and new agent computing ``done_tasks`` off the same
+            # collected payloads produce different content, different
+            # row count, and different order.
+            # ``TransactionPreparationRound`` is a
+            # ``CollectSameUntilThresholdRound`` keyed on
+            # ``most_voted_payload`` and requires 2/3+ byte-identical
+            # payloads, so a mixed fleet ``NO_MAJORITY``-stalls until
+            # versions converge. This is why the service hash bump has
+            # to be atomic across all agents in a service (not rolling)
+            # — see the PR's rollout notes. Consumers downstream of the
+            # sort do not depend on the specific order (they iterate or
+            # index-by-id, not by position).
             unique_done_tasks = sorted(
-                unique_objects, key=lambda x: x.get("request_id", "")
+                unique_objects, key=lambda x: str(x.get("request_id", ""))
             )
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,

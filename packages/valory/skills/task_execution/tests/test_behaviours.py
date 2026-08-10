@@ -1746,9 +1746,11 @@ def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
     # offchain_request_responses so /fetch_offchain_info can serve it. The
     # response never hit public IPFS, and the done_task fallback carries the
     # CID but not the result/prompt/cost_dict.
-    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES][11]
+    # Post-fix, the writer stores under ``str(req_id)`` so the /fetch_offchain_info
+    # str-typed wire ``request_id`` resolves against the same key type.
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["11"]
     assert stored["status"] == "ok"
-    assert stored["request_id"] == 11
+    assert stored["request_id"] == "11"
     assert isinstance(stored["content_cid"], str) and stored["content_cid"]
     # The committed object is served verbatim under "response" (envelope fields
     # hang outside it), and it carries the real tool result.
@@ -1758,6 +1760,18 @@ def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
     # consumer (mech-client, mech-interact, historical ETL) relies on.
     recomputed = beh_mod.compute_cidv1(json.dumps(stored["response"]).encode("utf-8"))
     assert recomputed == stored["content_cid"]
+
+    # The predict-api analytics event must be tagged ``complete`` and carry
+    # the real tool result. Pre-fix, ``_build_predict_api_event`` looked
+    # up ``OFFCHAIN_REQUEST_RESPONSES`` with the coerced ``int`` req_id but
+    # the writer stores under ``str(req_id)``, so every successful off-chain
+    # delivery landed in the lake as ``status="failed"``, ``result=None``.
+    # Silent failure: the poller still saw the right answer.
+    done_event = done.get("predict_api_event")
+    assert isinstance(done_event, dict), done
+    inner = done_event.get("response", {})
+    assert inner.get("status") == "complete", done_event
+    assert inner.get("result") == "prediction: yes", done_event
 
 
 def test_handle_done_task_offchain_invalid_request_recorded_as_failure(
@@ -1908,6 +1922,42 @@ def test_handle_done_task_offchain_clears_in_memory_request(
     behaviour._handle_done_task(task_result=_make_success_result())
 
     assert "req-14" not in shared_state[beh_mod.IN_MEMORY_REQUESTS]
+    assert behaviour._executing_task is None
+
+
+def test_handle_done_task_offchain_clears_str_keyed_in_memory_request_with_int_req_id(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Post-ingress coercion: the pop must ``str(req_id)`` or the buffer leaks.
+
+    The HTTP handler writes ``in_memory_requests[str(request_id)]``
+    (``handlers.py`` — ``Dict[str, str]``), while ``_executing_task``
+    now carries ``requestId`` as ``int`` for off-chain tasks (ingress
+    coercion at ``handlers._enqueue_offchain_request``). The pop in
+    ``_finalize_done_task`` therefore has to ``str(req_id)`` — a bare
+    ``req_id`` (``int``) silently misses on a ``str``-keyed dict and
+    every off-chain request leaks its full request JSON into shared
+    state for the process lifetime.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=1400)
+    # Handler-side shape: str key, ipfs_data value.
+    shared_state[beh_mod.IN_MEMORY_REQUESTS] = {"1400": "buffered-ipfs-data"}
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=_make_success_result())
+
+    assert shared_state[beh_mod.IN_MEMORY_REQUESTS] == {}
     assert behaviour._executing_task is None
 
 

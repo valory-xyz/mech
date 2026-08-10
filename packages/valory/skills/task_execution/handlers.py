@@ -84,6 +84,30 @@ MIN_DELIVERY_RATE = 0  # 0 allowed for free tasks; rejects only negatives
 MAX_DELIVERY_RATE = 2**256 - 1  # uint256 upper bound
 # 0x + 32-byte (64 hex) or 34-byte multihash (68 hex) payload
 IPFS_HASH_RE = re.compile(r"^0x([0-9a-fA-F]{64}|[0-9a-fA-F]{68})$")
+# Canonical ASCII decimal for uint256 ``request_id``: single ``0`` OR a
+# non-zero leading digit followed by ASCII decimals. ``str.isdigit()``
+# alone admits non-canonical decimals (Unicode superscripts, Arabic-Indic
+# digits, Thai digits, etc.) that ``int()`` may accept and re-stringify
+# to something entirely different — reopening the very silent-money-loss
+# path this file's coercion sweep is meant to close. Leading zeros are
+# rejected so ``str(int(x)) == x`` holds for every accepted value; this
+# keeps the wire ``request_id`` collision-free with the writer's
+# ``str(int(request_id))`` key.
+#
+# The end anchor is ``\Z``, NOT ``$``: Python's ``$`` matches immediately
+# before a trailing ``\n``, so ``re.match(r"^...$", "42\n")`` would pass
+# while ``int("42\n") == 42`` — the same roundtrip divergence the guard
+# exists to close. The call site also uses ``.fullmatch()``, both to
+# make full consumption explicit and as a defense against a future
+# accidental ``.match()``.
+REQUEST_ID_RE = re.compile(r"\A(0|[1-9][0-9]*)\Z")
+# uint256 upper bound on ``request_id``. ``REQUEST_ID_RE`` bounds the
+# alphabet but not the magnitude: on CPython 3.11+ ``int()`` raises
+# ``ValueError`` for a decimal string longer than 4300 digits, which
+# would fire deep inside ``_enqueue_offchain_request`` and reintroduce
+# the "opaque ``ValueError`` at the coercion site" outcome the upfront
+# guard exists to close. Mirrors ``MAX_DELIVERY_RATE``.
+MAX_REQUEST_ID = 2**256 - 1
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -854,6 +878,48 @@ class MechHttpHandler(AbstractResponseHandler):
             self._handle_bad_request(http_msg, http_dialogue)
             return
 
+        # ``request_id`` on the wire is the decimal encoding of the uint256
+        # marketplace ``getRequestId`` return, so it must be canonical ASCII
+        # decimal (see ``REQUEST_ID_RE``) AND fit in uint256. Validate here
+        # alongside the other body-shape checks so a non-canonical id is
+        # rejected with a specific log line rather than surfacing later as
+        # an opaque ``ValueError`` inside :meth:`_enqueue_offchain_request`'s
+        # ``int(request_id)`` coercion, or — worse — passing coercion via
+        # ``int('๔๒')`` and desynchronising the writer's
+        # ``str(int(request_id))`` key from the wire ``request_id``.
+        # ``fullmatch`` (vs ``match``) rejects a trailing ``\n`` that ``$``
+        # would let through — see ``REQUEST_ID_RE`` docstring.
+        if not REQUEST_ID_RE.fullmatch(request_id or ""):
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id!r}: "
+                f"request_id must be a canonical ASCII decimal "
+                f"(len={len(request_id) if request_id else 0})."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+        # Regex constrains the alphabet; the magnitude has to be checked
+        # separately. The length branch MUST short-circuit before the
+        # ``int()`` call: on CPython 3.11+, ``int()`` on a string longer
+        # than ``sys.get_int_max_str_digits()`` (4300 by default) raises
+        # ``ValueError`` — a 5000-digit canonical decimal would pass
+        # ``fullmatch`` but blow up here, outside any ``try/except``, and
+        # bypass this handler's own 400 return. ``len(str(MAX_REQUEST_ID))``
+        # is 78, well under the CPython cap, so the length branch is the
+        # cheap guard that makes the value branch safe. Rejecting a
+        # >uint256 id here matches the range check
+        # ``request_delivery_rate`` already gets below.
+        if (
+            len(request_id) > len(str(MAX_REQUEST_ID))
+            or int(request_id) > MAX_REQUEST_ID
+        ):
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id!r}: "
+                f"request_id exceeds uint256 upper bound "
+                f"(MAX_REQUEST_ID={MAX_REQUEST_ID})."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+
         if not IPFS_HASH_RE.match(ipfs_hash):
             self.context.logger.error(
                 f"Rejecting offchain request {request_id}: invalid ipfs_hash "
@@ -981,7 +1047,14 @@ class MechHttpHandler(AbstractResponseHandler):
 
         self.context.logger.info(f"Fetching offchain info for {request_id=}.")
 
-        stored_response = self.offchain_request_responses.get(request_id)
+        # ``OFFCHAIN_REQUEST_RESPONSES`` is ``str``-keyed on the writer
+        # side (see :mod:`task_execution.behaviours._handle_done_task`
+        # and ``_record_offchain_failure`` — both convert the coerced
+        # ``int`` ``req_id`` back to ``str`` before writing). ``request_id``
+        # from the GET body is already ``str``, but wrap in ``str(...)``
+        # so a future writer regression that lands an ``int`` key is
+        # still findable by the requester.
+        stored_response = self.offchain_request_responses.get(str(request_id))
         if stored_response is not None:
             self._send_ok_response(
                 http_msg,
@@ -992,10 +1065,14 @@ class MechHttpHandler(AbstractResponseHandler):
 
         done_tasks_list = self.done_tasks
 
+        # Same reason as above: ``done_task["request_id"]`` is ``int`` for
+        # off-chain tasks post the ingress coercion, but ``request_id``
+        # from the GET body is ``str``. Normalize both sides so the
+        # fallback scan doesn't silently miss.
         requested_done_tasks_list = [
             item
             for item in done_tasks_list
-            if item.get(RequestKey.REQUEST_ID.value) == request_id
+            if str(item.get(RequestKey.REQUEST_ID.value)) == str(request_id)
         ]
 
         self._send_ok_response(
@@ -1223,10 +1300,17 @@ class MechHttpHandler(AbstractResponseHandler):
 
     def _rollback_offchain_enqueue(self, request_id: str) -> None:
         """Rollback a partial off-chain enqueue in case of unexpected failure."""
+        # The pending task's ``requestId`` is stored as ``int`` after the
+        # ingress coercion in :meth:`_enqueue_offchain_request`; the local
+        # ``request_id`` here is still the wire-format ``str`` used as the
+        # in-memory dict key. Compare on ``int`` so the filter actually
+        # matches — a mixed ``str`` vs ``int`` comparison would silently
+        # leave the partial entry in the queue and defeat the rollback.
+        target_id_int = int(request_id)
         self.context.shared_state[PENDING_TASKS] = [
             req
             for req in self.pending_tasks
-            if req.get(RequestKey.REQUEST_ID_CAMEL.value) != request_id
+            if req.get(RequestKey.REQUEST_ID_CAMEL.value) != target_id_int
         ]
         self.in_memory_requests.pop(request_id, None)
         self.context.logger.error(
@@ -1267,12 +1351,85 @@ class MechHttpHandler(AbstractResponseHandler):
         # request JSON in process memory under ``in_memory_requests``. The
         # content commitment on chain still comes from the locally-computed
         # CID (response side), so the mech's on-chain receipt is unchanged.
+        #
+        # ``requestId`` is normalized to ``int`` so on-chain tasks (already
+        # ``int`` via ``int.from_bytes(bytes32, "big")`` in
+        # :mod:`task_execution.behaviours`) and off-chain tasks agree on
+        # the type once they land in ``shared_state[DONE_TASKS]``. Without
+        # this, ``TaskPoolingRound.end_block`` crashed on
+        # ``sorted(..., key=lambda x: x["request_id"])`` and
+        # ``TaskExecutionBaseBehaviour.remove_tasks`` silently failed its
+        # equality check on a mixed-type batch.
+        #
+        # The client-supplied body (``data``) is stripped of any key we
+        # own before merge, so a request carrying ``request_id=...``,
+        # ``is_offchain=...``, ``data=...``, or ``request_delivery_rate=...``
+        # can't override the trusted values above. This closes two
+        # separate problems: (a) a body-supplied ``request_id`` would
+        # re-plant the wire-format ``str`` and defeat the coercion, and
+        # (b) a body-supplied ``request_delivery_rate`` would land in
+        # ``request_id_to_delivery_rate_info`` and bypass the tool-
+        # minimum-price gate in
+        # :meth:`task_execution.behaviours.TaskExecutionBehaviour._handle_get_task`
+        # (see the ``req_id_delivery_rate < tool_pricing`` check).
+        # The signature verifies the request-id and delivery-rate at the
+        # marketplace on chain, not here, so pre-settlement trust in
+        # ``data`` values other than these four must be nil.
+        #
+        # The local ``request_id`` variable stays ``str`` — it is used as
+        # a dict key in ``in_memory_requests`` and
+        # ``offchain_request_responses`` (both typed ``Dict[str, ...]``)
+        # and matched against the caller-visible response body. Only the
+        # value that flows into the pending-task dict (and from there
+        # into ``done_tasks``) is coerced.
+        # ``reserved_keys`` also covers three keys the behaviour later reads
+        # off ``_executing_task`` (``mech_address``, ``task_executor_address``,
+        # ``request_id_nonce``) and the ``tool`` used for pricing / metrics.
+        # The behaviour re-spreads ``**executing_task`` when it builds
+        # ``done_task`` in ``_handle_done_task``, so any of these leaking in
+        # from a client body would ride all the way to consensus and either
+        # (a) reroute the on-chain delivery (``mech_address``), (b)
+        # misattribute the executor for karma accounting
+        # (``task_executor_address``), (c) desync the on-chain signature
+        # (``request_id_nonce``, read as ``requestIdWithNonce`` upstream), or
+        # (d) point the tool-price gate at the wrong tool.
+        reserved_keys = {
+            RequestKey.REQUEST_ID.value,
+            RequestKey.REQUEST_ID_CAMEL.value,
+            RequestKey.IS_OFFCHAIN.value,
+            BodyKey.DATA.value,
+            RequestKey.REQUEST_DELIVERY_RATE.value,
+            "mech_address",
+            "task_executor_address",
+            "request_id_nonce",
+            "requestIdWithNonce",
+            "tool",
+        }
+        # ``RequestKey.REQUEST_ID.value`` is mandatory on the body (read at
+        # ``_handle_signed_requests`` and 400 on missing), so it is present
+        # on every accepted request; excluding it here keeps the log
+        # a real anomaly signal instead of firing on 100% of requests.
+        dropped_keys = [
+            k
+            for k in data.keys()
+            if k in reserved_keys and k != RequestKey.REQUEST_ID.value
+        ]
+        if dropped_keys:
+            # Log at info: dropping is the safe outcome, but an integration
+            # sending one of these needs a way to notice their field was
+            # ignored rather than silently accepted.
+            self.context.logger.info(
+                "Dropping client-supplied reserved keys from offchain "
+                "request %r: %s",
+                request_id,
+                sorted(dropped_keys),
+            )
         req = {
-            RequestKey.REQUEST_ID_CAMEL.value: request_id,
+            RequestKey.REQUEST_ID_CAMEL.value: int(request_id),
             BodyKey.DATA.value: bytes.fromhex(ipfs_hash[2:]),
             RequestKey.IS_OFFCHAIN.value: True,
             RequestKey.REQUEST_DELIVERY_RATE.value: request_delivery_rate,
-            **data,
+            **{k: v for k, v in data.items() if k not in reserved_keys},
         }
         try:
             self.pending_tasks.append(req)

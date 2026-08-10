@@ -22,7 +22,7 @@ import contextlib
 import json
 import time
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, Generator, Optional, Tuple, Type
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Type
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -215,6 +215,36 @@ class TestRemoveTasks:
         ctx = _make_ctx(done_tasks=tasks)
         b = _DummyBase(name="b", skill_context=ctx)
         b.remove_tasks(tasks)
+        assert ctx.shared_state[DONE_TASKS] == []
+
+    def test_remove_submitted_task_mixed_types(self) -> None:
+        """``remove_tasks`` matches across the ``str`` / ``int`` split.
+
+        Post the ingress coercion in :mod:`task_execution.handlers`,
+        off-chain ``done_tasks`` carry ``request_id`` as ``int``. But a
+        mech resuming with pre-fix off-chain rows in shared state at
+        redeploy time would have ``str`` there, while the newly-emitted
+        ``submitted_tasks`` for the same round carry ``int``. Without
+        the ``str()`` normalization added to the equality check in
+        :meth:`TaskExecutionBaseBehaviour.remove_tasks`, the pre-fix
+        ``str`` row would silently escape removal and be re-emitted next
+        round — the same class of silent-double-delivery bug the dedup
+        normalization in :mod:`task_submission_abci.rounds` prevents.
+        """
+        # Pre-fix ``str`` row survives from an old boot; new
+        # ``submitted_tasks`` for the same request_id comes back as
+        # ``int``.
+        done_tasks_str: List[Dict[str, Any]] = [{"request_id": "5"}]
+        ctx = _make_ctx(done_tasks=done_tasks_str)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks([{"request_id": 5}])
+        assert ctx.shared_state[DONE_TASKS] == []
+
+        # Same, other direction.
+        done_tasks_int: List[Dict[str, Any]] = [{"request_id": 5}]
+        ctx = _make_ctx(done_tasks=done_tasks_int)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks([{"request_id": "5"}])
         assert ctx.shared_state[DONE_TASKS] == []
 
 
