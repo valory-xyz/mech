@@ -476,28 +476,62 @@ def test_signed_requests_bad_request(
 
 @pytest.mark.parametrize(
     "bad_request_id",
-    ["req-1", "", "0x123", "42abc", "42.0", " 42"],
-    ids=["alpha", "empty", "hex", "trailing_alpha", "dotted", "whitespace"],
+    [
+        "req-1",
+        "",
+        "0x123",
+        "42abc",
+        "42.0",
+        " 42",
+        # Non-canonical decimals ``str.isdigit()`` would accept but the
+        # coercion + writer contract would silently break: Unicode digits
+        # (Thai, Arabic-Indic, superscript) that ``int()`` may re-stringify
+        # to something else, and leading zeros that would desynchronise
+        # the wire ``request_id`` from the writer's ``str(int(...))`` key.
+        "๔๒",
+        "٤٢",
+        "²²",
+        "042",
+        "01",
+    ],
+    ids=[
+        "alpha",
+        "empty",
+        "hex",
+        "trailing_alpha",
+        "dotted",
+        "whitespace",
+        "thai_digits",
+        "arabic_indic_digits",
+        "superscript_digits",
+        "leading_zero_padded",
+        "leading_zero_two_char",
+    ],
 )
 def test_signed_requests_rejects_non_numeric_request_id(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any, bad_request_id: str
 ) -> None:
-    """Non-decimal ``request_id`` is rejected with 400 before any state mutation.
+    """Non-canonical ``request_id`` is rejected with 400 before any state mutation.
 
-    The ingress coercion in ``_enqueue_offchain_request`` requires a
-    valid ``int()`` input; the upfront ``request_id.isdigit()`` check in
-    ``_handle_signed_requests`` gives the operator a distinguishable log
-    line ("request_id must be a non-empty decimal string") rather than
-    letting the ``ValueError`` from the coercion surface as an opaque
-    "Error enqueuing offchain request ...: invalid literal for int()".
-    ``int()`` is also lenient about whitespace, ``0x`` prefixes, and
-    underscore separators; ``str.isdigit()`` rejects all of them, so
-    the decimal-uint256 contract on the wire is enforced strictly.
+    The ingress coercion in ``_enqueue_offchain_request`` requires
+    ``int(request_id)`` to parse AND ``str(int(request_id)) == request_id``
+    to hold — the writer keys ``OFFCHAIN_REQUEST_RESPONSES`` /
+    ``in_memory_requests`` / preimage buffer by ``str(int(request_id))``,
+    so any input where the round trip diverges silently splits
+    ``/fetch_offchain_info`` from the writer and reopens the
+    poll-forever-while-charged path.
+
+    ``REQUEST_ID_RE`` (``^(0|[1-9][0-9]*)$``) enforces canonical ASCII
+    decimal, which is stricter than both ``int()`` (accepts whitespace,
+    ``0x`` prefix, underscores, non-ASCII Unicode digits) and
+    ``str.isdigit()`` (accepts Thai / Arabic-Indic / superscript
+    digits). This test pins that stricter contract with cases from
+    all three failure modes.
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param http_dialogue: pytest fixture, HTTP dialogue stub.
     :param monkeypatch: pytest fixture, per-test monkeypatch helper.
-    :param bad_request_id: parametrized invalid ``request_id`` string.
+    :param bad_request_id: parametrized non-canonical ``request_id`` string.
     """
     mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
@@ -1970,13 +2004,20 @@ def test_signed_requests_rejects_oversized_http_body(
 
 
 @pytest.mark.parametrize(
-    "bad_hash,case_id",
+    "bad_hash",
     [
-        ("0xabc", "too_short"),
-        ("0x" + "ab" * 33, "wrong_length_66_byte_hex"),
-        ("0x" + "ab" * 64, "far_too_long"),
-        ("ab" * 32, "missing_0x_prefix"),
-        ("0x" + "z" * 64, "non_hex_chars"),
+        "0xabc",
+        "0x" + "ab" * 33,
+        "0x" + "ab" * 64,
+        "ab" * 32,
+        "0x" + "z" * 64,
+    ],
+    ids=[
+        "too_short",
+        "wrong_length_66_byte_hex",
+        "far_too_long",
+        "missing_0x_prefix",
+        "non_hex_chars",
     ],
 )
 def test_signed_requests_rejects_invalid_ipfs_hash(
@@ -1984,7 +2025,6 @@ def test_signed_requests_rejects_invalid_ipfs_hash(
     http_dialogue: Any,
     monkeypatch: Any,
     bad_hash: str,
-    case_id: str,
 ) -> None:
     """Malformed ipfs_hash strings are rejected with 400, nothing enqueued."""
     mh = MechHttpHandler(name="http", skill_context=handler_context)
@@ -1992,7 +2032,11 @@ def test_signed_requests_rejects_invalid_ipfs_hash(
     _install_balance_ok(mh, monkeypatch)
     mh.setup()
 
-    body = _make_signed_request_body(ipfs_hash=bad_hash, request_id=f"req-{case_id}")
+    # Numeric request_id keeps this test aimed at the ipfs_hash validator.
+    # A non-numeric one would short-circuit on the new upfront REQUEST_ID_RE
+    # guard at :meth:`_handle_signed_requests` and the ipfs_hash branch
+    # would never run — 400 for the wrong reason.
+    body = _make_signed_request_body(ipfs_hash=bad_hash, request_id="1")
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
 
@@ -2002,18 +2046,18 @@ def test_signed_requests_rejects_invalid_ipfs_hash(
 
 
 @pytest.mark.parametrize(
-    "delivery_rate_str,case_id",
+    "delivery_rate_str",
     [
-        ("-1", "negative"),
-        (str(hmod.MAX_DELIVERY_RATE + 1), "above_uint256"),
+        "-1",
+        str(hmod.MAX_DELIVERY_RATE + 1),
     ],
+    ids=["negative", "above_uint256"],
 )
 def test_signed_requests_rejects_out_of_range_delivery_rate(
     handler_context: Any,
     http_dialogue: Any,
     monkeypatch: Any,
     delivery_rate_str: str,
-    case_id: str,
 ) -> None:
     """Delivery rate outside [MIN_DELIVERY_RATE, MAX_DELIVERY_RATE] is rejected."""
     mh = MechHttpHandler(name="http", skill_context=handler_context)
@@ -2021,9 +2065,9 @@ def test_signed_requests_rejects_out_of_range_delivery_rate(
     _install_balance_ok(mh, monkeypatch)
     mh.setup()
 
-    body = _make_signed_request_body(
-        delivery_rate=delivery_rate_str, request_id=f"req-{case_id}"
-    )
+    # Numeric request_id keeps this aimed at the delivery-rate range check;
+    # a non-numeric one would short-circuit at the REQUEST_ID_RE guard.
+    body = _make_signed_request_body(delivery_rate=delivery_rate_str, request_id="1")
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
 
@@ -2048,6 +2092,62 @@ def test_signed_requests_accepts_zero_delivery_rate(
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.OK_CODE.value
     assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Client-supplied body keys can not override trusted enqueue-time fields.
+
+    ``_enqueue_offchain_request`` merges the parsed HTTP body via ``**data``
+    into the pending task dict. Without the ``reserved_keys`` filter, a
+    request carrying an extra ``requestId`` / ``request_id`` /
+    ``is_offchain`` / ``data`` / ``request_delivery_rate`` key would
+    silently overwrite the trusted values the handler just set. That
+    would (a) re-plant the wire-format ``str`` ``request_id`` and defeat
+    the ``int(request_id)`` coercion at ingress, (b) let the client route
+    an off-chain task down the on-chain IPFS-GET branch by flipping
+    ``is_offchain`` to False, (c) replace the trusted content-hash bytes
+    with attacker-controlled payload bytes, and (d) plant a
+    ``request_delivery_rate`` that bypasses the tool-minimum-price gate
+    while the on-chain-signed rate the requester is actually charged
+    stays untouched.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(delivery_rate="123", request_id="42")
+    # Every reserved-keys entry, poisoned with a value that would break the
+    # invariant if it landed on the pending task.
+    body["requestId"] = "999999"
+    body["is_offchain"] = "false"
+    body["data"] = "0x" + "de" * 32
+    body["request_delivery_rate"] = "0"
+    # Plus a benign key that must survive the filter untouched, so the
+    # test also pins that non-reserved keys still flow through.
+    body["signature"] = "0xdead"
+
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    pending = handler_context.shared_state["pending_tasks"]
+    assert len(pending) == 1
+    task = pending[0]
+    # Trusted values won on every reserved key.
+    assert task[hmod.RequestKey.REQUEST_ID_CAMEL.value] == 42
+    assert task[hmod.RequestKey.IS_OFFCHAIN.value] is True
+    assert task[hmod.BodyKey.DATA.value] == bytes.fromhex("ab" * 32)
+    assert task[hmod.RequestKey.REQUEST_DELIVERY_RATE.value] == 123
+    # Non-reserved key still flows through.
+    assert task["signature"] == "0xdead"
 
 
 # --- guard tests for the defensive paths added in the remediation -----------

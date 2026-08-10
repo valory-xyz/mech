@@ -451,8 +451,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         return self.last_status_check_time
 
     @property
-    def request_id_to_delivery_rate_info(self) -> Dict[str, int]:
-        """Get request_id_to_delivery_rate_info."""
+    def request_id_to_delivery_rate_info(self) -> Dict[int, int]:
+        """Get request_id_to_delivery_rate_info.
+
+        Both writer (``_prepare_task``) and reader (tool-price gate in
+        ``check_offchain_task_can_pay``) key by ``executing_task["requestId"]``
+        which is ``int`` for both on-chain (``int.from_bytes(bytes32, "big")``)
+        and off-chain (``int(request_id)`` from the ingress coercion in
+        ``task_execution.handlers._enqueue_offchain_request``) tasks. The
+        annotation used to be ``Dict[str, int]`` — self-consistent at
+        runtime but wrong on paper.
+
+        :return: the shared-state dict mapping ``requestId`` (``int``) to
+            the requester-signed ``delivery_rate`` (``int``).
+        """
         return self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO]
 
     def _should_poll(self, req_type: str) -> bool:
@@ -1667,9 +1679,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # directly (the original code) returned ``None`` for both fields,
         # forcing every completed task to be tagged ``status="failed"`` in
         # the analytics row.
+        # ``OFFCHAIN_REQUEST_RESPONSES`` is written under ``str(req_id)`` by
+        # ``_handle_done_task`` and ``_record_offchain_failure``; ``req_id``
+        # is ``int`` for off-chain tasks post-ingress coercion. Read with the
+        # ``str`` key too or the analytics row is tagged ``status="failed"``
+        # for every successful off-chain delivery, silently, because the
+        # poller sees the right answer but the lake row does not.
         response_envelope_raw = self.context.shared_state.get(
             OFFCHAIN_REQUEST_RESPONSES, {}
-        ).get(req_id, {})
+        ).get(request_id_str, {})
         response_envelope = (
             response_envelope_raw if isinstance(response_envelope_raw, dict) else {}
         )

@@ -84,6 +84,16 @@ MIN_DELIVERY_RATE = 0  # 0 allowed for free tasks; rejects only negatives
 MAX_DELIVERY_RATE = 2**256 - 1  # uint256 upper bound
 # 0x + 32-byte (64 hex) or 34-byte multihash (68 hex) payload
 IPFS_HASH_RE = re.compile(r"^0x([0-9a-fA-F]{64}|[0-9a-fA-F]{68})$")
+# Canonical ASCII decimal for uint256 ``request_id``: single ``0`` OR a
+# non-zero leading digit followed by ASCII decimals. ``str.isdigit()``
+# alone admits non-canonical decimals (Unicode superscripts, Arabic-Indic
+# digits, Thai digits, etc.) that ``int()`` may accept and re-stringify
+# to something entirely different — reopening the very silent-money-loss
+# path this file's coercion sweep is meant to close. Leading zeros are
+# rejected so ``str(int(x)) == x`` holds for every accepted value; this
+# keeps the wire ``request_id`` collision-free with the writer's
+# ``str(int(request_id))`` key.
+REQUEST_ID_RE = re.compile(r"^(0|[1-9][0-9]*)$")
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -855,18 +865,18 @@ class MechHttpHandler(AbstractResponseHandler):
             return
 
         # ``request_id`` on the wire is the decimal encoding of the uint256
-        # marketplace ``getRequestId`` return, so it must be an unsigned
-        # decimal integer. Validate here alongside the other body-shape
-        # checks so a non-numeric id is rejected with a specific log line
-        # rather than surfacing later as an opaque ``ValueError`` inside
-        # :meth:`_enqueue_offchain_request`'s ``int(request_id)`` coercion.
-        # The coercion still lives at the enqueue site because that's
-        # where the invariant matters — this validation just gives the
-        # operator a distinguishable rejection cause in the log.
-        if not request_id or not request_id.isdigit():
+        # marketplace ``getRequestId`` return, so it must be canonical ASCII
+        # decimal (see ``REQUEST_ID_RE``). Validate here alongside the other
+        # body-shape checks so a non-canonical id is rejected with a
+        # specific log line rather than surfacing later as an opaque
+        # ``ValueError`` inside :meth:`_enqueue_offchain_request`'s
+        # ``int(request_id)`` coercion, or — worse — passing coercion via
+        # ``int('๔๒')`` and desynchronising the writer's
+        # ``str(int(request_id))`` key from the wire ``request_id``.
+        if not REQUEST_ID_RE.match(request_id or ""):
             self.context.logger.error(
                 f"Rejecting offchain request {request_id!r}: "
-                f"request_id must be a non-empty decimal string "
+                f"request_id must be a canonical ASCII decimal "
                 f"(len={len(request_id) if request_id else 0})."
             )
             self._handle_bad_request(http_msg, http_dialogue)
