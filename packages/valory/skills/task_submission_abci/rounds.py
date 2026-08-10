@@ -117,10 +117,27 @@ class TaskPoolingRound(CollectionRound):
             # itself. The dedup key and the sort key MUST use the same
             # normalization, otherwise the two disagree on which entries
             # collide.
+            # A falsy ``request_id`` (missing, ``None``, ``""``) would
+            # otherwise dedup all such rows to the same ``""`` / ``"None"``
+            # bucket and silently drop legitimate rows from other agents —
+            # ``all_done_tasks`` is a bag of every participant's payloads
+            # with no schema validation, so a single misbehaving or
+            # out-of-version agent can introduce one. Skip and warn: this
+            # agent's own pipeline should never produce a falsy id (both
+            # writers set it explicitly), so hitting this branch is a real
+            # protocol violation worth surfacing.
             unique_ids: set = set()
             unique_objects = []
             for obj in all_done_tasks:
-                request_id_key = str(obj.get("request_id", ""))
+                raw_request_id = obj.get("request_id")
+                if not raw_request_id and raw_request_id != 0:
+                    self.context.logger.warning(
+                        "Skipping done_task with falsy request_id in "
+                        "TaskPoolingRound dedup: %r",
+                        obj,
+                    )
+                    continue
+                request_id_key = str(raw_request_id)
                 if request_id_key not in unique_ids:
                     unique_ids.add(request_id_key)
                     unique_objects.append(obj)

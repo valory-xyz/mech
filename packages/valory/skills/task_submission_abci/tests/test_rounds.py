@@ -274,6 +274,60 @@ class TestTaskPoolingRound:
         request_ids = [t["request_id"] for t in sd.done_tasks]
         assert request_ids == ["100", 42, "500", 7], request_ids
 
+    def test_falsy_request_id_is_skipped_and_does_not_collide_with_none(self) -> None:
+        """Falsy ``request_id`` rows are dropped, not folded into a shared bucket.
+
+        ``all_done_tasks`` is a bag of every participant's payloads with
+        no schema validation, so a misbehaving or out-of-version agent
+        could inject a row with a missing / ``None`` / ``""`` ``request_id``.
+        Pre-fix, ``str(obj.get("request_id", ""))`` mapped missing to
+        ``""`` and explicit ``None`` to ``"None"`` — two entries in either
+        bucket would silently drop the second row from ``unique_objects``,
+        including a legitimate row from another agent that happened to
+        stringify to the same key. Post-fix the falsy rows are dropped
+        with a warning and cannot collide.
+        """
+        agent0 = [{"request_id": 42, "task_result": "cid42"}]  # legit
+        # Two agents inject junk; three participants total so consensus can form.
+        agent1 = [
+            {"task_result": "no-id"},  # missing key
+            {"request_id": None, "task_result": "none-id"},  # explicit None
+            {"request_id": "", "task_result": "empty-str"},  # explicit empty
+        ]
+        agent2 = [{"request_id": 100, "task_result": "cid100"}]  # legit
+        payloads = {
+            "agent-0": _payload_for("agent-0", agent0),
+            "agent-1": _payload_for("agent-1", agent1),
+            "agent-2": _payload_for("agent-2", agent2),
+        }
+        round_ = _make_pooling_round(payloads)
+        result = round_.end_block()
+        assert result is not None
+        data, event = result
+        assert event == Event.DONE
+        sd = cast(SynchronizedData, data)
+        # The two legit rows survive; the three falsy rows are dropped.
+        request_ids = [t["request_id"] for t in sd.done_tasks]
+        assert request_ids == [100, 42], request_ids
+
+    def test_request_id_zero_int_is_kept(self) -> None:
+        """``request_id=0`` (a legitimate int) is not treated as falsy."""
+        payloads = {
+            "agent-0": _payload_for("agent-0", [_make_task(0)]),
+            "agent-1": _payload_for("agent-1", [_make_task(1)]),
+            "agent-2": _payload_for("agent-2", []),
+        }
+        round_ = _make_pooling_round(payloads)
+        result = round_.end_block()
+        assert result is not None
+        data, event = result
+        assert event == Event.DONE
+        sd = cast(SynchronizedData, data)
+        request_ids = [t["request_id"] for t in sd.done_tasks]
+        # Both survive dedup — 0 is a valid uint256 id and must not be
+        # swept into the falsy-skip branch.
+        assert sorted(str(r) for r in request_ids) == ["0", "1"]
+
     def test_collection_threshold_reached_property_true(self) -> None:
         """Test collection_threshold_reached is True when threshold is met."""
         payloads = {
@@ -445,8 +499,14 @@ class TestTaskPoolingRoundDeduplication:
         ids = [t["request_id"] for t in sd.done_tasks]
         assert ids == ["r1", "r2", "r3"]
 
-    def test_task_missing_request_id_still_sorted(self) -> None:
-        """Task without 'request_id' key uses .get() fallback (empty string)."""
+    def test_task_missing_request_id_is_skipped(self) -> None:
+        """Task without ``request_id`` is skipped rather than folded into the ``""`` bucket.
+
+        Round-3: falsy ``request_id`` rows are dropped with a warning so
+        that two malformed rows can't collide on the shared ``""`` /
+        ``"None"`` key and silently drop a legitimate row from another
+        agent. Previously they were sorted with an empty-string fallback.
+        """
         task_no_id = {"result": "ok"}
         payloads = {
             "agent-0": _payload_for("agent-0", [_make_task("b"), task_no_id]),
@@ -457,9 +517,9 @@ class TestTaskPoolingRoundDeduplication:
         result = round_.end_block()
         assert result is not None
         sd = cast(SynchronizedData, result[0])
-        # None-id task sorts first (empty string < "a"), then "a", then "b"
+        # Falsy-id row dropped; the two legit rows sort alphabetically.
         ids = [t.get("request_id") for t in sd.done_tasks]
-        assert ids == [None, "a", "b"]
+        assert ids == ["a", "b"]
 
     def test_single_agent_all_unique(self) -> None:
         """One agent submits all tasks; others submit nothing → no dedup needed."""

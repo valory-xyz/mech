@@ -1343,13 +1343,40 @@ class MechHttpHandler(AbstractResponseHandler):
         # and matched against the caller-visible response body. Only the
         # value that flows into the pending-task dict (and from there
         # into ``done_tasks``) is coerced.
+        # ``reserved_keys`` also covers three keys the behaviour later reads
+        # off ``_executing_task`` (``mech_address``, ``task_executor_address``,
+        # ``request_id_nonce``) and the ``tool`` used for pricing / metrics.
+        # The behaviour re-spreads ``**executing_task`` when it builds
+        # ``done_task`` in ``_handle_done_task``, so any of these leaking in
+        # from a client body would ride all the way to consensus and either
+        # (a) reroute the on-chain delivery (``mech_address``), (b)
+        # misattribute the executor for karma accounting
+        # (``task_executor_address``), (c) desync the on-chain signature
+        # (``request_id_nonce``, read as ``requestIdWithNonce`` upstream), or
+        # (d) point the tool-price gate at the wrong tool.
         reserved_keys = {
             RequestKey.REQUEST_ID.value,
             RequestKey.REQUEST_ID_CAMEL.value,
             RequestKey.IS_OFFCHAIN.value,
             BodyKey.DATA.value,
             RequestKey.REQUEST_DELIVERY_RATE.value,
+            "mech_address",
+            "task_executor_address",
+            "request_id_nonce",
+            "requestIdWithNonce",
+            "tool",
         }
+        dropped_keys = [k for k in data.keys() if k in reserved_keys]
+        if dropped_keys:
+            # Log at info: dropping is the safe outcome, but an integration
+            # sending one of these needs a way to notice their field was
+            # ignored rather than silently accepted.
+            self.context.logger.info(
+                "Dropping client-supplied reserved keys from offchain "
+                "request %r: %s",
+                request_id,
+                sorted(dropped_keys),
+            )
         req = {
             RequestKey.REQUEST_ID_CAMEL.value: int(request_id),
             BodyKey.DATA.value: bytes.fromhex(ipfs_hash[2:]),

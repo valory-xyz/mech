@@ -2123,12 +2123,26 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     mh.setup()
 
     body = _make_signed_request_body(delivery_rate="123", request_id="42")
-    # Every reserved-keys entry, poisoned with a value that would break the
-    # invariant if it landed on the pending task.
+    # ``body["request_id"]`` (snake) IS the source of truth read by
+    # ``_handle_signed_requests`` — the reserved_keys filter's job is to
+    # stop it from ALSO surviving as a snake-case dupe on the pending
+    # task alongside the trusted ``requestId`` (camel) int. So the
+    # source-of-truth ``"42"`` stays; camel + everything else is poisoned.
     body["requestId"] = "999999"
     body["is_offchain"] = "false"
     body["data"] = "0x" + "de" * 32
     body["request_delivery_rate"] = "0"
+    # Round-3 additions: reserved_keys was extended to cover the four keys
+    # ``_handle_done_task`` re-spreads via ``**executing_task`` and the
+    # ``tool`` used for pricing / metrics. A body value here would
+    # otherwise ride through executing_task → done_task → consensus and
+    # reroute delivery, misattribute the executor, desync the on-chain
+    # signature, or point the tool-price gate at the wrong tool.
+    body["mech_address"] = "0xATTACKERMECH"
+    body["task_executor_address"] = "0xATTACKEREXECUTOR"
+    body["request_id_nonce"] = "999"
+    body["requestIdWithNonce"] = "999"
+    body["tool"] = "attacker-tool"
     # Plus a benign key that must survive the filter untouched, so the
     # test also pins that non-reserved keys still flow through.
     body["signature"] = "0xdead"
@@ -2146,6 +2160,21 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     assert task[hmod.RequestKey.IS_OFFCHAIN.value] is True
     assert task[hmod.BodyKey.DATA.value] == bytes.fromhex("ab" * 32)
     assert task[hmod.RequestKey.REQUEST_DELIVERY_RATE.value] == 123
+    # Snake-case ``request_id`` must never appear on the pending task:
+    # ``_handle_done_task`` spreads ``**executing_task`` into ``done_task``
+    # and this key would silently overwrite the canonical int, resurrecting
+    # the mixed-type ``sorted()`` crash + str/int keying divergence the
+    # PR chain closes.
+    assert hmod.RequestKey.REQUEST_ID.value not in task
+    # Round-3 keys must not leak into the pending task either.
+    for reserved in (
+        "mech_address",
+        "task_executor_address",
+        "request_id_nonce",
+        "requestIdWithNonce",
+        "tool",
+    ):
+        assert reserved not in task, f"reserved key {reserved!r} leaked from body"
     # Non-reserved key still flows through.
     assert task["signature"] == "0xdead"
 
