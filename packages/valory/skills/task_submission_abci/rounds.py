@@ -130,10 +130,16 @@ class TaskPoolingRound(CollectionRound):
             unique_objects = []
             for obj in all_done_tasks:
                 raw_request_id = obj.get("request_id")
-                if not raw_request_id and raw_request_id != 0:
+                # Skip "genuinely absent" (missing key, None, empty string)
+                # without the boolean/float overlap ``not x`` gives:
+                # ``not False`` and ``not 0.0`` are both True in Python, so
+                # ``if not raw_request_id`` would drop a JSON ``false`` or
+                # ``0.0`` id — both malformed but distinguishable from
+                # missing. Legit ``0`` (int) is deliberately kept.
+                if raw_request_id is None or raw_request_id == "":
                     self.context.logger.warning(
-                        "Skipping done_task with falsy request_id in "
-                        "TaskPoolingRound dedup: %r",
+                        "Skipping done_task with missing/empty request_id "
+                        "in TaskPoolingRound dedup: %r",
                         obj,
                     )
                     continue

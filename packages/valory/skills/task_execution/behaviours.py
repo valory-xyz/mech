@@ -454,10 +454,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def request_id_to_delivery_rate_info(self) -> Dict[int, int]:
         """Get request_id_to_delivery_rate_info.
 
-        Both writer (``_prepare_task``) and reader (tool-price gate in
-        ``check_offchain_task_can_pay``) key by ``executing_task["requestId"]``
-        which is ``int`` for both on-chain (``int.from_bytes(bytes32, "big")``)
-        and off-chain (``int(request_id)`` from the ingress coercion in
+        Both writer (``_prepare_task``) and reader (tool-price gate
+        inside ``_handle_get_task``, the
+        ``req_id_delivery_rate < tool_pricing`` check) key by
+        ``executing_task["requestId"]`` which is ``int`` for both
+        on-chain (``int.from_bytes(bytes32, "big")``) and off-chain
+        (``int(request_id)`` from the ingress coercion in
         ``task_execution.handlers._enqueue_offchain_request``) tasks. The
         annotation used to be ``Dict[str, int]`` — self-consistent at
         runtime but wrong on paper.

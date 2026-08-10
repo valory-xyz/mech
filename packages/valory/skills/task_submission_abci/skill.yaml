@@ -15,7 +15,7 @@ fingerprint:
   models.py: bafybeihi4udsewau7p73t4vqnasywm5kicydrrggxcdz4skxoulfykvl5i
   payloads.py: bafybeiaaelmpfuv6pvuesj7iy2nnxvgxjketigrppurto2pbsoaqjum2ba
   predict_api_events_client.py: bafybeiaipvkrwitftwprsbrnj4rd6ac4n74qzvq22lscbb5li4efc2qnve
-  rounds.py: bafybeiam7xceouyqewqmlkbfkityzziz7kv42eo3wx3a6fzcey65v5qviq
+  rounds.py: bafybeia23igp6apuspfoj5dspbrswyyq6t2lu45nvvcrd7pon44i36t6la
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeihxi2j5lkdlq3rwydag2bzrv67exegutggxmgku3mq5pmrdth3pjq
@@ -47,7 +47,7 @@ protocols:
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
-- valory/task_execution:0.1.0:bafybeihig3ha4yt4kwivctnsimvnftt6hybij4fgt3z2kg6ii5guzxrwzy
+- valory/task_execution:0.1.0:bafybeihvofdooot5qq75bl5wedkzomrzjs3ovrvz4ugm3qxsz745dlfoay
 behaviours:
   main:
     args: {}

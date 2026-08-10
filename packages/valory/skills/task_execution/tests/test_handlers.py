@@ -493,6 +493,17 @@ def test_signed_requests_bad_request(
         "²²",
         "042",
         "01",
+        # Python's ``$`` matches immediately before a trailing ``\n``, so
+        # ``re.match(r"...$", "42\n")`` would pass while ``int("42\n") == 42``
+        # — the same roundtrip divergence that lets ``in_memory_requests``
+        # and ``preimage_buffer`` accept records leak on a paid delivery.
+        # ``fullmatch`` (or the ``\Z`` end-anchor on the pattern) closes it.
+        "42\n",
+        "\n42",
+        # A magnitude above uint256 must also 400 up front (documented
+        # promise: the ingress guard means ``int(request_id)`` cannot raise
+        # deep in the enqueue helper). ``2**256`` is one over the bound.
+        str(2**256),
     ],
     ids=[
         "alpha",
@@ -506,6 +517,9 @@ def test_signed_requests_bad_request(
         "superscript_digits",
         "leading_zero_padded",
         "leading_zero_two_char",
+        "trailing_newline",
+        "leading_newline",
+        "above_uint256",
     ],
 )
 def test_signed_requests_rejects_non_numeric_request_id(

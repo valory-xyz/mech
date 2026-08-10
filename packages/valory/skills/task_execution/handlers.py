@@ -93,7 +93,21 @@ IPFS_HASH_RE = re.compile(r"^0x([0-9a-fA-F]{64}|[0-9a-fA-F]{68})$")
 # rejected so ``str(int(x)) == x`` holds for every accepted value; this
 # keeps the wire ``request_id`` collision-free with the writer's
 # ``str(int(request_id))`` key.
-REQUEST_ID_RE = re.compile(r"^(0|[1-9][0-9]*)$")
+#
+# The end anchor is ``\Z``, NOT ``$``: Python's ``$`` matches immediately
+# before a trailing ``\n``, so ``re.match(r"^...$", "42\n")`` would pass
+# while ``int("42\n") == 42`` — the same roundtrip divergence the guard
+# exists to close. The call site also uses ``.fullmatch()``, both to
+# make full consumption explicit and as a defense against a future
+# accidental ``.match()``.
+REQUEST_ID_RE = re.compile(r"\A(0|[1-9][0-9]*)\Z")
+# uint256 upper bound on ``request_id``. ``REQUEST_ID_RE`` bounds the
+# alphabet but not the magnitude: on CPython 3.11+ ``int()`` raises
+# ``ValueError`` for a decimal string longer than 4300 digits, which
+# would fire deep inside ``_enqueue_offchain_request`` and reintroduce
+# the "opaque ``ValueError`` at the coercion site" outcome the upfront
+# guard exists to close. Mirrors ``MAX_DELIVERY_RATE``.
+MAX_REQUEST_ID = 2**256 - 1
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -866,18 +880,33 @@ class MechHttpHandler(AbstractResponseHandler):
 
         # ``request_id`` on the wire is the decimal encoding of the uint256
         # marketplace ``getRequestId`` return, so it must be canonical ASCII
-        # decimal (see ``REQUEST_ID_RE``). Validate here alongside the other
-        # body-shape checks so a non-canonical id is rejected with a
-        # specific log line rather than surfacing later as an opaque
-        # ``ValueError`` inside :meth:`_enqueue_offchain_request`'s
+        # decimal (see ``REQUEST_ID_RE``) AND fit in uint256. Validate here
+        # alongside the other body-shape checks so a non-canonical id is
+        # rejected with a specific log line rather than surfacing later as
+        # an opaque ``ValueError`` inside :meth:`_enqueue_offchain_request`'s
         # ``int(request_id)`` coercion, or — worse — passing coercion via
         # ``int('๔๒')`` and desynchronising the writer's
         # ``str(int(request_id))`` key from the wire ``request_id``.
-        if not REQUEST_ID_RE.match(request_id or ""):
+        # ``fullmatch`` (vs ``match``) rejects a trailing ``\n`` that ``$``
+        # would let through — see ``REQUEST_ID_RE`` docstring.
+        if not REQUEST_ID_RE.fullmatch(request_id or ""):
             self.context.logger.error(
                 f"Rejecting offchain request {request_id!r}: "
                 f"request_id must be a canonical ASCII decimal "
                 f"(len={len(request_id) if request_id else 0})."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+        # Regex constrains the alphabet; the uint256 upper bound has to be
+        # checked separately. The 78-digit cap on ``MAX_REQUEST_ID`` keeps
+        # the ``int()`` itself safe (well under the 4300-digit CPython
+        # cap), and rejecting a >uint256 id here matches the range check
+        # ``request_delivery_rate`` already gets below.
+        if int(request_id) > MAX_REQUEST_ID:
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id!r}: "
+                f"request_id exceeds uint256 upper bound "
+                f"(MAX_REQUEST_ID={MAX_REQUEST_ID})."
             )
             self._handle_bad_request(http_msg, http_dialogue)
             return
@@ -1332,7 +1361,8 @@ class MechHttpHandler(AbstractResponseHandler):
         # (b) a body-supplied ``request_delivery_rate`` would land in
         # ``request_id_to_delivery_rate_info`` and bypass the tool-
         # minimum-price gate in
-        # :meth:`task_execution.behaviours.check_offchain_task_can_pay`.
+        # :meth:`task_execution.behaviours.TaskExecutionBehaviour._handle_get_task`
+        # (see the ``req_id_delivery_rate < tool_pricing`` check).
         # The signature verifies the request-id and delivery-rate at the
         # marketplace on chain, not here, so pre-settlement trust in
         # ``data`` values other than these four must be nil.
@@ -1366,7 +1396,15 @@ class MechHttpHandler(AbstractResponseHandler):
             "requestIdWithNonce",
             "tool",
         }
-        dropped_keys = [k for k in data.keys() if k in reserved_keys]
+        # ``RequestKey.REQUEST_ID.value`` is mandatory on the body (read at
+        # ``_handle_signed_requests`` and 400 on missing), so it is present
+        # on every accepted request; excluding it here keeps the log
+        # a real anomaly signal instead of firing on 100% of requests.
+        dropped_keys = [
+            k
+            for k in data.keys()
+            if k in reserved_keys and k != RequestKey.REQUEST_ID.value
+        ]
         if dropped_keys:
             # Log at info: dropping is the safe outcome, but an integration
             # sending one of these needs a way to notice their field was
