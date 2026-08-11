@@ -2553,11 +2553,10 @@ def test_verify_offchain_signature_safe_eip1271_true_accepts(
     _seed_verification_constants(mh, handler_context.params, monkeypatch)
 
     balance_calls: List[Any] = []
-    monkeypatch.setattr(
-        mh,
-        "_check_offchain_requester_balance",
-        lambda sender, delivery_rate: balance_calls.append(sender)
-        or {
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {
             hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
             hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
             hmod.ResponseKey.AVAILABLE_AMOUNT.value: int(delivery_rate) + 1,
@@ -2565,7 +2564,10 @@ def test_verify_offchain_signature_safe_eip1271_true_accepts(
             hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
             hmod.ResponseKey.PAYMENT_TYPE.value: "0xpaymenttype",
             hmod.ResponseKey.CHAIN_ID.value: 100,
-        },
+        }
+
+    monkeypatch.setattr(
+        mh, "_check_offchain_requester_balance", _spy_balance_check
     )
 
     # Sender is a Safe (contract) — sign with an arbitrary key that does not
@@ -2625,11 +2627,13 @@ def test_verify_offchain_signature_safe_eip1271_false_rejects_before_balance_che
     _seed_verification_constants(mh, handler_context.params, monkeypatch)
 
     balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
     monkeypatch.setattr(
-        mh,
-        "_check_offchain_requester_balance",
-        lambda sender, delivery_rate: balance_calls.append(sender)
-        or {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value},
+        mh, "_check_offchain_requester_balance", _spy_balance_check
     )
 
     safe_sender = _to_checksum("0x" + "aa" * 20)
@@ -2688,11 +2692,13 @@ def test_verify_offchain_signature_missing_field_returns_400(
     mh = _http_handler(handler_context, monkeypatch)
     _install_verify_ok(mh, monkeypatch)
     balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
     monkeypatch.setattr(
-        mh,
-        "_check_offchain_requester_balance",
-        lambda sender, delivery_rate: balance_calls.append(sender)
-        or {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value},
+        mh, "_check_offchain_requester_balance", _spy_balance_check
     )
 
     body = _make_signed_request_body(request_id="1")
@@ -2716,11 +2722,13 @@ def test_verify_offchain_signature_rejects_when_wire_request_id_mismatches_deriv
     _seed_verification_constants(mh, handler_context.params, monkeypatch)
 
     balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
     monkeypatch.setattr(
-        mh,
-        "_check_offchain_requester_balance",
-        lambda sender, delivery_rate: balance_calls.append(sender)
-        or {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value},
+        mh, "_check_offchain_requester_balance", _spy_balance_check
     )
     monkeypatch.setattr(
         hmod,
@@ -2760,11 +2768,13 @@ def test_verify_offchain_signature_rejects_when_constants_unloaded(
     mh._payment_type = None
 
     balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
     monkeypatch.setattr(
-        mh,
-        "_check_offchain_requester_balance",
-        lambda sender, delivery_rate: balance_calls.append(sender)
-        or {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value},
+        mh, "_check_offchain_requester_balance", _spy_balance_check
     )
 
     body = _make_signed_request_body(request_id="1")
