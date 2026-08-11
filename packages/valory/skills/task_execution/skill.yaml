@@ -130,6 +130,8 @@ dependencies:
     version: ==6.0.0b1
   eth-account:
     version: ==0.13.7
+  eth-keys:
+    version: ==0.8.0b1
   eth-utils:
     version: ==6.0.0
   open-aea-ledger-ethereum:
