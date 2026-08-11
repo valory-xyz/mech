@@ -50,6 +50,11 @@ from packages.valory.skills.abstract_round_abci.handlers import AbstractResponse
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
+from packages.valory.skills.task_execution.utils.signature_verifier import (
+    SafeOwnerCache,
+    VerifyResult,
+    verify_signature,
+)
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
@@ -156,6 +161,8 @@ class RequestKey(str, Enum):
     IPFS_HASH = "ipfs_hash"
     IPFS_DATA = "ipfs_data"
     SENDER = "sender"
+    SIGNATURE = "signature"
+    NONCE = "nonce"
     DELIVERY_RATE = "delivery_rate"
     REQUEST_DELIVERY_RATE = "request_delivery_rate"
     IS_OFFCHAIN = "is_offchain"
@@ -766,6 +773,7 @@ class HttpCode(Enum):
     OK_CODE = 200
     NOT_FOUND_CODE = 404
     BAD_REQUEST_CODE = 400
+    UNAUTHORIZED_CODE = 401
     PAYMENT_REQUIRED_CODE = 402
     SERVICE_UNAVAILABLE_CODE = 503
     INTERNAL_SERVER_ERROR_CODE = 500
@@ -822,6 +830,16 @@ class MechHttpHandler(AbstractResponseHandler):
         self.context.shared_state[OFFCHAIN_REQUEST_RESPONSES] = {}
         self.context.shared_state[IN_MEMORY_REQUESTS] = {}
         self.json_content_header = JSON_CONTENT_HEADER
+        # Per-process caches for signature-verification hot path. Bounded LRU
+        # so a hostile client cannot balloon memory with unique senders; TTL so
+        # owner rotations propagate without a restart. The payment_type cache
+        # is a small dict keyed by mech address (there is one mech per process
+        # in practice, but the map keeps behaviour correct if a deployment
+        # ever configures multiple).
+        self._safe_owner_cache: SafeOwnerCache = SafeOwnerCache(
+            max_entries=1000, ttl_seconds=3600.0
+        )
+        self._payment_type_cache: Dict[str, bytes] = {}
         self.start_prometheus_server()
         super().setup()
 
@@ -943,6 +961,35 @@ class MechHttpHandler(AbstractResponseHandler):
         self.context.logger.info(
             f"Received signed offchain request with {request_id=} and {request_delivery_rate=}."
         )
+
+        # Accept-time signature verification. Bad signatures are rejected here,
+        # before the balance-check RPC and before enqueuing the task, so a
+        # malformed / spoofed trader cannot consume compute + API budget by
+        # posting requests that would revert with GS026 at settlement time.
+        # Verification is local ecrecover on a cached owner set; the cold-miss
+        # cost is a single RPC to fetch code/owners/threshold for a new sender.
+        sig_result = self._verify_offchain_signature(
+            sender=sender,
+            signature=data.get(RequestKey.SIGNATURE.value, ""),
+            ipfs_hash=ipfs_hash,
+            request_delivery_rate=request_delivery_rate,
+            nonce_str=data.get(RequestKey.NONCE.value, ""),
+            request_id=request_id,
+        )
+        if not sig_result.ok:
+            self.context.logger.info(
+                f"offchain_signature_check request_id={request_id} sender={sender} "
+                f"decision=rejected reason={sig_result.reason}"
+            )
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason=f"signature verification failed: {sig_result.reason}",
+                status_code=HttpCode.UNAUTHORIZED_CODE.value,
+                status_text="Unauthorized",
+            )
+            return
 
         balance_check = self._check_offchain_requester_balance(
             sender=sender,
@@ -1596,3 +1643,220 @@ class MechHttpHandler(AbstractResponseHandler):
             ResponseKey.RPC_ADDRESS.value: rpc_address,
             ResponseKey.CHAIN_ID.value: chain_id,
         }
+
+    # ------------------------------------------------------------------ #
+    # Accept-time signature verification                                  #
+    # ------------------------------------------------------------------ #
+
+    # Minimal Safe ABI covering just the reads we need at the HTTP boundary.
+    # Bundled locally to keep this hot path free of any dynamic contract
+    # loader that would import ABIs at call time.
+    _SAFE_MIN_ABI: List[Dict[str, Any]] = [
+        {
+            "inputs": [],
+            "name": "getOwners",
+            "outputs": [{"internalType": "address[]", "name": "", "type": "address[]"}],
+            "stateMutability": "view",
+            "type": "function",
+        },
+        {
+            "inputs": [],
+            "name": "getThreshold",
+            "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
+            "stateMutability": "view",
+            "type": "function",
+        },
+        {
+            "inputs": [
+                {"internalType": "bytes32", "name": "_dataHash", "type": "bytes32"},
+                {"internalType": "bytes", "name": "_signature", "type": "bytes"},
+            ],
+            # The Safe fallback handler exposes ``isValidSignature(bytes32,bytes)``
+            # (EIP-1271 magic-value form). Older Safe versions also expose
+            # ``isValidSignature(bytes,bytes)``; the marketplace uses the
+            # bytes32 variant so we mirror that.
+            "name": "isValidSignature",
+            "outputs": [{"internalType": "bytes4", "name": "", "type": "bytes4"}],
+            "stateMutability": "view",
+            "type": "function",
+        },
+    ]
+
+    # EIP-1271 magic value that ``isValidSignature`` returns for a valid sig
+    # (first 4 bytes of ``keccak256("isValidSignature(bytes32,bytes)")``).
+    _EIP1271_MAGIC_VALUE: bytes = bytes.fromhex("1626ba7e")
+
+    def _resolve_mech_payment_type(
+        self, ledger_api: EthereumApi, mech_address: str
+    ) -> Optional[bytes]:
+        """Fetch and cache the mech's 32-byte payment_type.
+
+        The mech's payment_type is a constant of the mech contract (the
+        BalanceTracker family is chosen at deploy time), so caching it in-
+        process is safe and eliminates the second RPC per request that the
+        balance-check path would otherwise incur for signature verification.
+
+        :param ledger_api: Ledger API instance to call through.
+        :param mech_address: Checksummed mech contract address.
+        :return: The 32-byte payment_type, or ``None`` on RPC failure.
+        """
+        cache_key = mech_address.lower()
+        cached = self._payment_type_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        payment_type_bytes = cast(
+            Optional[bytes],
+            OlasMechContract.get_mech_type(ledger_api, mech_address).get(
+                BodyKey.MECH_TYPE.value
+            ),
+        )
+        if payment_type_bytes is None or len(payment_type_bytes) != 32:
+            return None
+        self._payment_type_cache[cache_key] = payment_type_bytes
+        return payment_type_bytes
+
+    def _fetch_sender_code(self, ledger_api: EthereumApi, sender: str) -> bytes:
+        """Return the on-chain code at ``sender`` (empty bytes for an EOA)."""
+        code = ledger_api.api.eth.get_code(sender)
+        # web3 returns HexBytes; normalise to raw bytes for the cache path.
+        return bytes(code)
+
+    def _fetch_safe_meta(
+        self, ledger_api: EthereumApi, safe_address: str
+    ) -> Dict[str, Any]:
+        """Return ``{owners, threshold}`` for a Safe contract at ``safe_address``."""
+        contract = ledger_api.api.eth.contract(
+            address=safe_address, abi=self._SAFE_MIN_ABI
+        )
+        owners = contract.functions.getOwners().call()
+        threshold = contract.functions.getThreshold().call()
+        return {"owners": list(owners), "threshold": int(threshold)}
+
+    def _safe_is_valid_signature(
+        self,
+        ledger_api: EthereumApi,
+        safe_address: str,
+        request_id_bytes: bytes,
+        signature_hex: str,
+    ) -> bool:
+        """Fall back to on-chain ``isValidSignature`` for multi-owner Safes.
+
+        The fallback handler returns the EIP-1271 magic value for a valid sig
+        and either reverts or returns a non-magic value otherwise. Both revert
+        and non-magic are treated as invalid; only an exact magic match passes.
+        """
+        contract = ledger_api.api.eth.contract(
+            address=safe_address, abi=self._SAFE_MIN_ABI
+        )
+        sig_bytes = bytes.fromhex(
+            signature_hex[2:] if signature_hex.startswith("0x") else signature_hex
+        )
+        try:
+            result = contract.functions.isValidSignature(
+                request_id_bytes, sig_bytes
+            ).call()
+        except Exception:  # pylint: disable=broad-exception-caught
+            return False
+        return bytes(result) == self._EIP1271_MAGIC_VALUE
+
+    def _verify_offchain_signature(
+        self,
+        sender: str,
+        signature: str,
+        ipfs_hash: str,
+        request_delivery_rate: int,
+        nonce_str: str,
+        request_id: str,
+    ) -> VerifyResult:
+        """Run accept-time signature verification for one off-chain request.
+
+        Wraps the pure-Python helpers in ``signature_verifier`` with the
+        RPC-backed adapters this handler owns (``eth_getCode``, ``getOwners``,
+        ``getThreshold``, ``isValidSignature``) and the in-process caches. Any
+        failure resolving RPC settings, the mech's payment_type, or the
+        sender's on-chain metadata is treated as a verification failure so the
+        handler short-circuits to 401 before touching the balance tracker.
+
+        :return: A ``VerifyResult`` the caller can inspect for ``ok`` and
+            ``reason`` to build the HTTP rejection body.
+        """
+        if not signature:
+            return VerifyResult(ok=False, reason="missing signature")
+        try:
+            nonce = int(nonce_str)
+        except (TypeError, ValueError):
+            return VerifyResult(ok=False, reason=f"invalid nonce: {nonce_str!r}")
+
+        ledger_settings = self._get_ledger_settings()
+        if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+            return VerifyResult(
+                ok=False,
+                reason=cast(
+                    str,
+                    ledger_settings.get(
+                        ResponseKey.REASON.value, "ledger settings unavailable"
+                    ),
+                ),
+            )
+
+        try:
+            rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
+            chain_id = cast(int, ledger_settings[ResponseKey.CHAIN_ID.value])
+            ledger_api = EthereumApi(address=rpc_address, chain_id=chain_id)
+            mech_address = ledger_api.api.to_checksum_address(
+                self.params.agent_mech_contract_addresses[0]
+            )
+            marketplace_address = ledger_api.api.to_checksum_address(
+                self.params.mech_marketplace_address
+            )
+            payment_type = self._resolve_mech_payment_type(ledger_api, mech_address)
+            if payment_type is None:
+                return VerifyResult(
+                    ok=False, reason="unable to fetch mech payment type"
+                )
+            ipfs_hash_bytes = bytes.fromhex(ipfs_hash[2:])
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            return VerifyResult(
+                ok=False, reason=f"verification prep failed: {exc}"
+            )
+
+        # Bind the ledger_api into the RPC adapters so the pure helper stays
+        # test-friendly (callers can monkeypatch these three attributes).
+        def _code_fetcher(addr: str) -> bytes:
+            return self._fetch_sender_code(ledger_api, addr)
+
+        def _safe_meta_fetcher(addr: str) -> Dict[str, Any]:
+            return self._fetch_safe_meta(ledger_api, addr)
+
+        def _isvs_fetcher(addr: str, digest: bytes, sig_hex: str) -> bool:
+            return self._safe_is_valid_signature(ledger_api, addr, digest, sig_hex)
+
+        result = verify_signature(
+            sender=sender,
+            signature=signature,
+            ipfs_hash_bytes=ipfs_hash_bytes,
+            delivery_rate=request_delivery_rate,
+            nonce=nonce,
+            marketplace_address=marketplace_address,
+            mech_address=mech_address,
+            payment_type=payment_type,
+            chain_id=chain_id,
+            cache=self._safe_owner_cache,
+            code_fetcher=_code_fetcher,
+            safe_meta_fetcher=_safe_meta_fetcher,
+            is_valid_signature_fetcher=_isvs_fetcher,
+        )
+
+        # If the trader posted a request_id that disagrees with the locally
+        # derived one, the sig might still verify on our derived hash but the
+        # marketplace will reject the delivery. Flag the mismatch as a warning
+        # so operators can see driver-vs-server drift; do not fail the request
+        # on that ground alone — the sig math is the authoritative check.
+        if result.ok and result.request_id_bytes is not None:
+            derived_int_str = str(int.from_bytes(result.request_id_bytes, "big"))
+            if request_id and request_id != derived_int_str:
+                self.context.logger.warning(
+                    f"offchain_signature_check request_id={request_id} "
+                    f"derived={derived_int_str} posted!=derived (sig still valid)"
+                )
+        return result

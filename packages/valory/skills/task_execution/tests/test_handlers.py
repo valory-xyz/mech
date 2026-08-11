@@ -40,6 +40,24 @@ from packages.valory.skills.task_execution.handlers import (
     LedgerHandler,
     MechHttpHandler,
 )
+from packages.valory.skills.task_execution.utils.signature_verifier import (
+    VerifyResult,
+)
+
+
+def _install_verify_ok(mh: Any, monkeypatch: Any) -> None:
+    """Stub accept-time signature verification to accept every request.
+
+    The signature-verification gate runs before the balance check, so every
+    existing test that drives ``_handle_signed_requests`` needs the verify
+    step short-circuited to keep the pre-verifier behaviour intact. Tests
+    that specifically exercise the verifier install their own stub instead.
+    """
+    monkeypatch.setattr(
+        mh,
+        "_verify_offchain_signature",
+        lambda **_kwargs: VerifyResult(ok=True, request_id_bytes=b"\x00" * 32),
+    )
 
 
 @pytest.mark.parametrize(
@@ -419,6 +437,7 @@ def test_signed_requests_balance_scenarios(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
 
     ipfs_hash: str = "0x" + "ab" * 32
     body: Dict[str, str] = {
@@ -616,6 +635,7 @@ def test_fetch_offchain_request_info_returns_insufficient_balance_response(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
 
     request_id = "1003"
     ipfs_hash: str = "0x" + "ab" * 32
@@ -663,6 +683,7 @@ def test_signed_requests_rollback_partial_enqueue(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
 
     class FailingDict(dict):
         """Dict that raises on assignment to simulate partial buffer write."""
@@ -717,6 +738,7 @@ def _patched_handler_for_balance(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
     return mh
 
 
@@ -1981,6 +2003,7 @@ def _make_signed_request_body(
 
 def _install_balance_ok(mh: Any, monkeypatch: Any) -> None:
     """Make _check_offchain_requester_balance return an OK, sufficient response."""
+    _install_verify_ok(mh, monkeypatch)
     monkeypatch.setattr(
         mh,
         "_check_offchain_requester_balance",
@@ -2301,6 +2324,7 @@ def test_handler_replies_500_when_402_build_fails(
         },
     )
     mh = _http_handler(handler_context, monkeypatch)
+    _install_verify_ok(mh, monkeypatch)
     http_msg: Any = make_http_msg(
         _make_signed_request_body(delivery_rate="1", request_id="500")
     )
