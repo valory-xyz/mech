@@ -419,6 +419,7 @@ def test_signed_requests_balance_scenarios(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
 
     ipfs_hash: str = "0x" + "ab" * 32
     body: Dict[str, str] = {
@@ -427,6 +428,8 @@ def test_signed_requests_balance_scenarios(
         "ipfs_data": '{"foo":"bar"}',
         "delivery_rate": "123",
         "sender": "0x0000000000000000000000000000000000000001",
+        "signature": "0x" + "00" * 65,
+        "nonce": "0",
     }
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
@@ -616,6 +619,7 @@ def test_fetch_offchain_request_info_returns_insufficient_balance_response(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
 
     request_id = "1003"
     ipfs_hash: str = "0x" + "ab" * 32
@@ -626,6 +630,8 @@ def test_fetch_offchain_request_info_returns_insufficient_balance_response(
             "ipfs_data": '{"foo":"bar"}',
             "delivery_rate": "123",
             "sender": "0x0000000000000000000000000000000000000001",
+            "signature": "0x" + "00" * 65,
+            "nonce": "0",
         }
     )
     mh._handle_signed_requests(send_msg, http_dialogue)
@@ -663,6 +669,7 @@ def test_signed_requests_rollback_partial_enqueue(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
 
     class FailingDict(dict):
         """Dict that raises on assignment to simulate partial buffer write."""
@@ -681,6 +688,8 @@ def test_signed_requests_rollback_partial_enqueue(
         "ipfs_data": '{"foo":"bar"}',
         "delivery_rate": "123",
         "sender": "0x0000000000000000000000000000000000000001",
+        "signature": "0x" + "00" * 65,
+        "nonce": "0",
     }
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
@@ -717,6 +726,7 @@ def _patched_handler_for_balance(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
     return mh
 
 
@@ -731,6 +741,8 @@ def _send_signed_request(
             "ipfs_data": '{"foo":"bar"}',
             "delivery_rate": "123",
             "sender": "0x0000000000000000000000000000000000000001",
+            "signature": "0x" + "00" * 65,
+            "nonce": "0",
         }
     )
     mh._handle_signed_requests(http_msg, http_dialogue)
@@ -1969,18 +1981,47 @@ def _make_signed_request_body(
     delivery_rate: str = "123",
     request_id: str = "req-hardening",
 ) -> Dict[str, str]:
-    """Build a valid signed-request body used by hardening tests."""
+    """Build a valid signed-request body used by hardening tests.
+
+    ``signature`` and ``nonce`` are populated with syntactically-valid
+    placeholders so the ingress parse succeeds; tests that exercise real
+    accept paths install a stub verifier via ``_install_verify_ok`` and
+    tests that exercise sig-verify itself override these fields.
+    """
     return {
         "ipfs_hash": ipfs_hash,
         "request_id": request_id,
         "ipfs_data": '{"foo":"bar"}',
         "delivery_rate": delivery_rate,
         "sender": "0x0000000000000000000000000000000000000001",
+        "signature": "0x" + "00" * 65,
+        "nonce": "0",
     }
 
 
+def _install_verify_ok(mh: Any, monkeypatch: Any) -> None:
+    """Make _verify_offchain_request_signature accept every request.
+
+    Boundary-level stub for tests that focus on downstream behaviour
+    (balance check, 402 flow, receipt header). The sig-verify method
+    itself is exercised by dedicated tests that feed real signatures
+    through the real code path.
+    """
+    monkeypatch.setattr(
+        mh,
+        "_verify_offchain_request_signature",
+        lambda **_kwargs: True,
+    )
+
+
 def _install_balance_ok(mh: Any, monkeypatch: Any) -> None:
-    """Make _check_offchain_requester_balance return an OK, sufficient response."""
+    """Make _check_offchain_requester_balance return an OK, sufficient response.
+
+    Also installs the passing sig-verify stub so downstream tests that
+    only care about the balance path don't 401 at the new accept-time
+    signature gate.
+    """
+    _install_verify_ok(mh, monkeypatch)
     monkeypatch.setattr(
         mh,
         "_check_offchain_requester_balance",
@@ -2301,6 +2342,7 @@ def test_handler_replies_500_when_402_build_fails(
         },
     )
     mh = _http_handler(handler_context, monkeypatch)
+    _install_verify_ok(mh, monkeypatch)
     http_msg: Any = make_http_msg(
         _make_signed_request_body(delivery_rate="1", request_id="500")
     )
@@ -2308,3 +2350,427 @@ def test_handler_replies_500_when_402_build_fails(
 
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.INTERNAL_SERVER_ERROR_CODE.value
+
+
+# ---------------------------------------------------------------------------
+# Offchain signature verification
+# ---------------------------------------------------------------------------
+
+
+from eth_account import Account as _Account  # noqa: E402
+from eth_utils import to_checksum_address as _to_checksum  # noqa: E402
+
+from packages.valory.skills.task_execution.utils.request_id import (  # noqa: E402
+    compute_request_id as _compute_request_id,
+)
+
+_SIGVERIFY_MARKETPLACE = "0xdEaDbeefdEaDbeefdEadbEefdeADBeEfDeAdBeEf"
+_SIGVERIFY_MECH = "0xCAFECAFECAFECAFECAFECAFECAFECAFECAFECAFE"
+_SIGVERIFY_DOMAIN_SEPARATOR = b"\xab" * 32
+_SIGVERIFY_PAYMENT_TYPE = b"\xcd" * 32
+_SIGVERIFY_PRIVATE_KEY = "0x" + "42" * 32
+
+
+def _seed_verification_constants(
+    mh: MechHttpHandler, params: SimpleNamespace, monkeypatch: Any
+) -> None:
+    """Seed the marketplace / mech addresses and boot-time constants used by verify.
+
+    The constants would normally be fetched from chain in ``setup()``; this
+    helper stamps them directly so the sig-verify path can run end-to-end
+    without an RPC. ``_get_ledger_settings`` is also patched to return a
+    non-error value so the ``EthereumApi`` construction path succeeds; the
+    ``ledger_api`` returned is discarded because the verify path only uses
+    its checksum helper.
+    """
+    params.mech_marketplace_address = _SIGVERIFY_MARKETPLACE
+    params.agent_mech_contract_addresses = [_SIGVERIFY_MECH]
+    mh._domain_separator = _SIGVERIFY_DOMAIN_SEPARATOR
+    mh._payment_type = _SIGVERIFY_PAYMENT_TYPE
+    # Bypass the RPC that _verify_offchain_request_signature would otherwise
+    # try to open. Both the balance and verify paths would call this — the
+    # verify path only needs the address prep to succeed. Returning ``ok``
+    # with an unroutable RPC is fine because the tests never let the code
+    # actually make a network call.
+    monkeypatch.setattr(
+        mh,
+        "_get_ledger_settings",
+        lambda: {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.RPC_ADDRESS.value: "http://127.0.0.1:1",
+            hmod.ResponseKey.CHAIN_ID.value: 100,
+        },
+    )
+
+
+def _sig_body(
+    request_id: str,
+    delivery_rate: int,
+    nonce: int,
+    sender: str,
+    signature_hex: str,
+    ipfs_hash: str = "0x" + "ab" * 32,
+) -> Dict[str, str]:
+    """Build a signed-request body populated for a sig-verify scenario."""
+    return {
+        "ipfs_hash": ipfs_hash,
+        "request_id": request_id,
+        "ipfs_data": '{"foo":"bar"}',
+        "delivery_rate": str(delivery_rate),
+        "sender": sender,
+        "signature": signature_hex,
+        "nonce": str(nonce),
+    }
+
+
+def _make_eoa_scenario(delivery_rate: int = 123, nonce: int = 7) -> Dict[str, Any]:
+    """Sign a request_id derived from the marketplace formula with a fixed EOA key."""
+    account = _Account.from_key(_SIGVERIFY_PRIVATE_KEY)
+    sender = _to_checksum(account.address)
+    ipfs_hash = "0x" + "ab" * 32
+    request_data = bytes.fromhex(ipfs_hash[2:])
+    request_id_bytes = _compute_request_id(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=sender,
+        request_data=request_data,
+        delivery_rate=delivery_rate,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=nonce,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    signature = account.unsafe_sign_hash(request_id_bytes).signature
+    return {
+        "sender": sender,
+        "request_id": str(int.from_bytes(request_id_bytes, "big")),
+        "ipfs_hash": ipfs_hash,
+        "delivery_rate": delivery_rate,
+        "nonce": nonce,
+        "signature_hex": "0x" + signature.hex(),
+    }
+
+
+def test_verify_offchain_signature_eoa_valid_accepts_and_enqueues(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A well-formed EOA-signed request is accepted (200) and enqueued."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Dict[str, Any]] = []
+
+    def fake_balance(sender: str, delivery_rate: int) -> Dict[str, Any]:
+        balance_calls.append({"sender": sender, "delivery_rate": delivery_rate})
+        return {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
+            hmod.ResponseKey.AVAILABLE_AMOUNT.value: int(delivery_rate) + 1,
+            hmod.ResponseKey.REASON.value: "ok",
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: "0xpaymenttype",
+            hmod.ResponseKey.CHAIN_ID.value: 100,
+        }
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", fake_balance)
+
+    scenario = _make_eoa_scenario()
+    http_msg: Any = make_http_msg(
+        _sig_body(
+            request_id=scenario["request_id"],
+            delivery_rate=scenario["delivery_rate"],
+            nonce=scenario["nonce"],
+            sender=scenario["sender"],
+            signature_hex=scenario["signature_hex"],
+            ipfs_hash=scenario["ipfs_hash"],
+        )
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(balance_calls) == 1, "balance check must run after a valid signature"
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_verify_offchain_signature_eoa_invalid_rejects_401_before_balance_check(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A bad EOA signature is rejected 401 before the balance-check RPC runs."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Dict[str, Any]] = []
+
+    def fake_balance(sender: str, delivery_rate: int) -> Dict[str, Any]:
+        balance_calls.append({"sender": sender, "delivery_rate": delivery_rate})
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", fake_balance)
+
+    scenario = _make_eoa_scenario()
+    # Corrupt the signature by flipping the s component; recovery will
+    # succeed to a different address than the declared sender, and the
+    # EIP-1271 fallback will fail (sender has no code).
+    bad_sig = "0x" + "00" * 32 + scenario["signature_hex"][2 + 64 :]
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=bad_sig,
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    # Make the EIP-1271 fallback return False so the outcome is deterministic
+    # (the real fallback would depend on whether the "sender" address has
+    # code on the fake RPC — it doesn't, but we don't want the test to hang
+    # on a network attempt either).
+    monkeypatch.setattr(
+        hmod,
+        "check_eip1271_signature",
+        lambda **_kw: False,
+    )
+
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert balance_calls == [], "balance check must not run when signature fails"
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_safe_eip1271_true_accepts(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A Safe sender whose isValidSignature returns the magic value is accepted."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Any] = []
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: balance_calls.append(sender)
+        or {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
+            hmod.ResponseKey.AVAILABLE_AMOUNT.value: int(delivery_rate) + 1,
+            hmod.ResponseKey.REASON.value: "ok",
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: "0xpaymenttype",
+            hmod.ResponseKey.CHAIN_ID.value: 100,
+        },
+    )
+
+    # Sender is a Safe (contract) — sign with an arbitrary key that does not
+    # recover to the sender, so the ecrecover branch misses and the code
+    # falls through to the EIP-1271 wrapper.
+    safe_sender = _to_checksum("0x" + "99" * 20)
+    ipfs_hash = "0x" + "ab" * 32
+    request_data = bytes.fromhex(ipfs_hash[2:])
+    delivery_rate = 42
+    nonce = 3
+    request_id_bytes = _compute_request_id(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=safe_sender,
+        request_data=request_data,
+        delivery_rate=delivery_rate,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=nonce,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    # An arbitrary EOA signs the hash; recovery will succeed to that EOA's
+    # address, which is NOT ``safe_sender``, forcing the EIP-1271 fallback.
+    arbitrary_sig = (
+        _Account.from_key("0x" + "77" * 32).unsafe_sign_hash(request_id_bytes).signature
+    )
+
+    monkeypatch.setattr(
+        hmod,
+        "check_eip1271_signature",
+        lambda **_kw: True,
+    )
+
+    body = _sig_body(
+        request_id=str(int.from_bytes(request_id_bytes, "big")),
+        delivery_rate=delivery_rate,
+        nonce=nonce,
+        sender=safe_sender,
+        signature_hex="0x" + arbitrary_sig.hex(),
+        ipfs_hash=ipfs_hash,
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert balance_calls == [safe_sender]
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_verify_offchain_signature_safe_eip1271_false_rejects_before_balance_check(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A Safe whose isValidSignature returns False is rejected 401 before balance check."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Any] = []
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: balance_calls.append(sender)
+        or {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value},
+    )
+
+    safe_sender = _to_checksum("0x" + "aa" * 20)
+    ipfs_hash = "0x" + "ab" * 32
+    request_data = bytes.fromhex(ipfs_hash[2:])
+    delivery_rate = 42
+    nonce = 3
+    request_id_bytes = _compute_request_id(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=safe_sender,
+        request_data=request_data,
+        delivery_rate=delivery_rate,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=nonce,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    arbitrary_sig = (
+        _Account.from_key("0x" + "77" * 32).unsafe_sign_hash(request_id_bytes).signature
+    )
+
+    monkeypatch.setattr(
+        hmod,
+        "check_eip1271_signature",
+        lambda **_kw: False,
+    )
+
+    body = _sig_body(
+        request_id=str(int.from_bytes(request_id_bytes, "big")),
+        delivery_rate=delivery_rate,
+        nonce=nonce,
+        sender=safe_sender,
+        signature_hex="0x" + arbitrary_sig.hex(),
+        ipfs_hash=ipfs_hash,
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert balance_calls == [], "balance check must not run when signature fails"
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    ["signature", "nonce"],
+)
+def test_verify_offchain_signature_missing_field_returns_400(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    missing_field: str,
+) -> None:
+    """Missing signature or nonce field is rejected 400 at ingress parsing."""
+    mh = _http_handler(handler_context, monkeypatch)
+    _install_verify_ok(mh, monkeypatch)
+    balance_calls: List[Any] = []
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: balance_calls.append(sender)
+        or {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value},
+    )
+
+    body = _make_signed_request_body(request_id="1")
+    body.pop(missing_field)
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert balance_calls == []
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_rejects_when_wire_request_id_mismatches_derivation(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A wire request_id that does not match the local derivation fails verification."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Any] = []
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: balance_calls.append(sender)
+        or {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value},
+    )
+    monkeypatch.setattr(
+        hmod,
+        "check_eip1271_signature",
+        lambda **_kw: False,
+    )
+
+    scenario = _make_eoa_scenario()
+    # Substitute a numerically-valid but wrong request_id; the signature was
+    # produced over the correct one, so the derivation-mismatch branch fires.
+    wrong_request_id = str((int(scenario["request_id"]) + 1) % (2**256))
+    body = _sig_body(
+        request_id=wrong_request_id,
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert balance_calls == []
+
+
+def test_verify_offchain_signature_rejects_when_constants_unloaded(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """If setup could not load the deployment constants, requests are refused."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    # Force the unloaded state that a failed setup would leave behind.
+    mh._domain_separator = None
+    mh._payment_type = None
+
+    balance_calls: List[Any] = []
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: balance_calls.append(sender)
+        or {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value},
+    )
+
+    body = _make_signed_request_body(request_id="1")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert balance_calls == []

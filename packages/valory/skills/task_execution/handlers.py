@@ -50,6 +50,15 @@ from packages.valory.skills.abstract_round_abci.handlers import AbstractResponse
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
+from packages.valory.skills.task_execution.utils.eip1271 import (
+    check_eip1271_signature,
+    get_marketplace_domain_separator,
+    get_mech_payment_type,
+)
+from packages.valory.skills.task_execution.utils.request_id import (
+    compute_request_id,
+    recover_eoa_signer,
+)
 
 PENDING_TASKS = "pending_tasks"
 DONE_TASKS = "ready_tasks"
@@ -159,6 +168,8 @@ class RequestKey(str, Enum):
     DELIVERY_RATE = "delivery_rate"
     REQUEST_DELIVERY_RATE = "request_delivery_rate"
     IS_OFFCHAIN = "is_offchain"
+    SIGNATURE = "signature"
+    NONCE = "nonce"
 
 
 class ResponseKey(str, Enum):
@@ -766,6 +777,7 @@ class HttpCode(Enum):
     OK_CODE = 200
     NOT_FOUND_CODE = 404
     BAD_REQUEST_CODE = 400
+    UNAUTHORIZED_CODE = 401
     PAYMENT_REQUIRED_CODE = 402
     SERVICE_UNAVAILABLE_CODE = 503
     INTERNAL_SERVER_ERROR_CODE = 500
@@ -822,8 +834,57 @@ class MechHttpHandler(AbstractResponseHandler):
         self.context.shared_state[OFFCHAIN_REQUEST_RESPONSES] = {}
         self.context.shared_state[IN_MEMORY_REQUESTS] = {}
         self.json_content_header = JSON_CONTENT_HEADER
+        # Deployment-scoped constants used by the offchain request-id
+        # derivation: the marketplace EIP-712 ``domainSeparator`` and the
+        # mech's ``paymentType``. Both are set once at contract deployment
+        # and read on-chain here at handler init; the request-handling path
+        # references the cached bytes so a normal accept never triggers an
+        # extra RPC for these values.
+        self._domain_separator: Optional[bytes] = None
+        self._payment_type: Optional[bytes] = None
+        if self.params.use_offchain:
+            self._initialise_offchain_verification_constants()
         self.start_prometheus_server()
         super().setup()
+
+    def _initialise_offchain_verification_constants(self) -> None:
+        """Read the marketplace ``domainSeparator`` and mech ``paymentType``.
+
+        Any read failure logs a warning and leaves the constants unset; the
+        request-handling path treats an unset value as an internal error and
+        replies 401 so the client sees a clear rejection instead of a
+        mis-derived request_id.
+        """
+        ledger_settings = self._get_ledger_settings()
+        if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+            self.context.logger.warning(
+                "Offchain verification constants unavailable: %s",
+                ledger_settings.get(ResponseKey.REASON.value, "unknown"),
+            )
+            return
+        try:
+            rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
+            chain_id = cast(int, ledger_settings[ResponseKey.CHAIN_ID.value])
+            ledger_api = EthereumApi(address=rpc_address, chain_id=chain_id)
+            self._domain_separator = get_marketplace_domain_separator(
+                ledger_api=ledger_api,
+                marketplace_address=self.params.mech_marketplace_address,
+            )
+            self._payment_type = get_mech_payment_type(
+                ledger_api=ledger_api,
+                mech_address=self.params.agent_mech_contract_addresses[0],
+            )
+            self.context.logger.info(
+                "Offchain verification constants loaded: "
+                "domain_separator=0x%s payment_type=0x%s",
+                self._domain_separator.hex(),
+                self._payment_type.hex(),
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            self.context.logger.exception(
+                "Failed to load offchain verification constants; "
+                "offchain requests will be refused until the next restart."
+            )
 
     def start_prometheus_server(self) -> None:
         """Starts the prometheus server"""
@@ -870,6 +931,8 @@ class MechHttpHandler(AbstractResponseHandler):
             ipfs_hash = data[RequestKey.IPFS_HASH.value]
             sender = data[RequestKey.SENDER.value]
             request_delivery_rate = int(data[RequestKey.DELIVERY_RATE.value])
+            signature_hex = data[RequestKey.SIGNATURE.value]
+            request_nonce = int(data[RequestKey.NONCE.value])
         except Exception as e:
             self.context.logger.error(
                 f"Error processing signed request. body_len={len(http_msg.body)} "
@@ -943,6 +1006,28 @@ class MechHttpHandler(AbstractResponseHandler):
         self.context.logger.info(
             f"Received signed offchain request with {request_id=} and {request_delivery_rate=}."
         )
+
+        # Verify the request signature before charging the requester's balance.
+        # EIP-1271 for Safe senders, plain ecrecover for EOAs. Sequential by
+        # design: a failure here 401s before the balance-check RPC runs.
+        sig_ok = self._verify_offchain_request_signature(
+            sender=sender,
+            ipfs_hash=ipfs_hash,
+            delivery_rate=request_delivery_rate,
+            nonce=request_nonce,
+            wire_request_id=request_id,
+            signature_hex=signature_hex,
+        )
+        if not sig_ok:
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason="signature verification failed",
+                status_code=HttpCode.UNAUTHORIZED_CODE.value,
+                status_text="Unauthorized",
+            )
+            return
 
         balance_check = self._check_offchain_requester_balance(
             sender=sender,
@@ -1570,6 +1655,132 @@ class MechHttpHandler(AbstractResponseHandler):
             requester=requester,
         )
         return cast(int, requester_balance_res.get(BodyKey.REQUESTER_BALANCE.value, 0))
+
+    def _verify_offchain_request_signature(
+        self,
+        sender: str,
+        ipfs_hash: str,
+        delivery_rate: int,
+        nonce: int,
+        wire_request_id: str,
+        signature_hex: str,
+    ) -> bool:
+        """Verify the caller signed the marketplace-derived request_id.
+
+        Sequential path:
+
+        1. Reject if the deployment-scoped constants (marketplace
+           ``domainSeparator``, mech ``paymentType``) are missing.
+        2. Compute the request_id locally from
+           ``(marketplace, mech, sender, ipfs_hash, delivery_rate,
+           payment_type, nonce, domain_separator)`` and require it to
+           match the value on the wire.
+        3. Try local ``ecrecover`` against ``sender``. Match wins with
+           zero RPC.
+        4. Fall back to the sender's EIP-1271 ``isValidSignature`` view.
+
+        :param sender: the requester address, EOA or Safe.
+        :param ipfs_hash: 0x-prefixed hex string used as the on-chain
+            ``requestData`` blob.
+        :param delivery_rate: requester-signed delivery rate.
+        :param nonce: requester nonce as tracked by
+            ``MechMarketplace.mapNonces[sender]`` at signing time.
+        :param wire_request_id: the ASCII decimal request_id supplied on
+            the wire; must equal the locally-derived value.
+        :param signature_hex: hex-encoded signature bytes, with or without
+            a leading ``0x``.
+        :return: True on a valid EOA or Safe signature; False otherwise.
+        """
+        if self._domain_separator is None or self._payment_type is None:
+            self.context.logger.error(
+                "Cannot verify offchain signature: marketplace constants "
+                "unavailable; rejecting request %s.",
+                wire_request_id,
+            )
+            return False
+
+        try:
+            request_data = bytes.fromhex(ipfs_hash[2:])
+            signature_bytes = bytes.fromhex(
+                signature_hex[2:] if signature_hex.startswith("0x") else signature_hex
+            )
+        except ValueError:
+            self.context.logger.error(
+                "Malformed hex in signature or ipfs_hash for request %s.",
+                wire_request_id,
+            )
+            return False
+
+        ledger_settings = self._get_ledger_settings()
+        if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+            self.context.logger.error(
+                "Cannot verify offchain signature: ledger settings unavailable "
+                "(%s); rejecting request %s.",
+                ledger_settings.get(ResponseKey.REASON.value, "unknown"),
+                wire_request_id,
+            )
+            return False
+
+        try:
+            rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
+            chain_id = cast(int, ledger_settings[ResponseKey.CHAIN_ID.value])
+            ledger_api = EthereumApi(address=rpc_address, chain_id=chain_id)
+            sender_checksum = ledger_api.api.to_checksum_address(sender)
+            marketplace_address = ledger_api.api.to_checksum_address(
+                self.params.mech_marketplace_address
+            )
+            mech_address = ledger_api.api.to_checksum_address(
+                self.params.agent_mech_contract_addresses[0]
+            )
+        except Exception as e:  # pylint: disable=broad-exception-caught
+            self.context.logger.error(
+                "Address preparation failed for request %s: %s.",
+                wire_request_id,
+                e,
+            )
+            return False
+
+        try:
+            derived = compute_request_id(
+                marketplace=marketplace_address,
+                mech=mech_address,
+                requester=sender_checksum,
+                request_data=request_data,
+                delivery_rate=delivery_rate,
+                payment_type=self._payment_type,
+                nonce=nonce,
+                domain_separator=self._domain_separator,
+            )
+        except ValueError as e:
+            self.context.logger.error(
+                "Request-id derivation failed for %s: %s.", wire_request_id, e
+            )
+            return False
+
+        # ``wire_request_id`` has already passed the canonical ASCII decimal
+        # + uint256 guards above, so ``int(...)`` is safe.
+        if int.from_bytes(derived, "big") != int(wire_request_id):
+            self.context.logger.warning(
+                "Wire request_id %s does not match locally-derived value "
+                "0x%s for sender %s.",
+                wire_request_id,
+                derived.hex(),
+                sender_checksum,
+            )
+            return False
+
+        recovered = recover_eoa_signer(derived, signature_bytes)
+        if recovered is not None and recovered == sender_checksum:
+            return True
+
+        # Sender is either a Safe or an EOA that produced an unrecognised
+        # signature. Defer to the sender's EIP-1271 view for the final call.
+        return check_eip1271_signature(
+            ledger_api=ledger_api,
+            contract_address=sender_checksum,
+            message_hash=derived,
+            signature=signature_bytes,
+        )
 
     def _get_ledger_settings(self) -> Dict[str, Union[str, int]]:
         """Read ledger RPC settings from skill params using default_chain_id."""
