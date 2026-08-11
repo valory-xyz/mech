@@ -47,10 +47,14 @@ from packages.valory.skills.task_execution.utils.eip1271 import (
 _CONTRACT_ADDRESS = "0x1111111111111111111111111111111111111111"
 _MESSAGE_HASH = b"\x22" * 32
 _SIGNATURE = b"\x33" * 65
+_TEST_GAS_CAP = 500_000
 
 
 def _make_ledger_api(fn_name: str, call_return: Any) -> SimpleNamespace:
-    """Fake EthereumApi whose named function's ``call`` returns / raises as configured."""
+    """Fake EthereumApi whose named function's ``call`` returns / raises as configured."""  # noqa: E501
+    # The returned ``call`` is a real ``MagicMock`` so tests that need
+    # to assert on the transaction kwargs (``gas`` cap) can inspect
+    # ``call_args`` after the exchange.
     call_mock = MagicMock()
     if isinstance(call_return, BaseException):
         call_mock.side_effect = call_return
@@ -65,7 +69,11 @@ def _make_ledger_api(fn_name: str, call_return: Any) -> SimpleNamespace:
 
     inner_eth = SimpleNamespace(contract=MagicMock(return_value=contract_ns))
     api_ns = SimpleNamespace(eth=inner_eth, to_checksum_address=lambda a: a)
-    return SimpleNamespace(api=api_ns)
+    ledger_api = SimpleNamespace(api=api_ns)
+    # Expose the call mock so tests can assert on the kwargs the caller
+    # actually threaded through to ``.call(...)``.
+    ledger_api.call_mock = call_mock  # type: ignore[attr-defined]
+    return ledger_api
 
 
 # --- check_eip1271_signature -------------------------------------------------
@@ -80,6 +88,7 @@ def test_check_eip1271_signature_returns_true_on_magic_value() -> None:
         contract_address=_CONTRACT_ADDRESS,
         message_hash=_MESSAGE_HASH,
         signature=_SIGNATURE,
+        gas=_TEST_GAS_CAP,
     )
     assert result is True
 
@@ -103,6 +112,7 @@ def test_check_eip1271_signature_returns_false_on_non_magic_value(
         contract_address=_CONTRACT_ADDRESS,
         message_hash=_MESSAGE_HASH,
         signature=_SIGNATURE,
+        gas=_TEST_GAS_CAP,
     )
     assert result is False
 
@@ -121,23 +131,24 @@ def test_check_eip1271_signature_returns_false_on_non_magic_value(
         pytest.param(
             requests.exceptions.ConnectionError("boom"), id="connection_error"
         ),
-        pytest.param(requests.exceptions.ReadTimeout("slow"), id="read_timeout"),
         pytest.param(requests.exceptions.HTTPError("bad status"), id="http_error"),
     ],
 )
 def test_check_eip1271_signature_returns_false_on_boundary_exception(
     raised: BaseException,
 ) -> None:
-    """Any recognised failure at the ledger boundary maps to False.
+    """Any recognised non-timeout failure at the ledger boundary maps to False.
 
     Web3 raises ``BadFunctionCallOutput`` when ``eth_call`` targets a
     codeless address (the common case for a Safe pointed at the wrong
     proxy) and ``Web3RPCError`` on JSON-RPC failures; ``requests``
-    transport failures (connection error, read timeout, HTTP error)
-    surface as siblings under ``RequestException``. All must map to
-    False so the accept path's fallback treats the outcome as a
+    transport failures other than a timeout (connection error, HTTP
+    error) surface as siblings under ``RequestException``. All must
+    map to False so the accept path's fallback treats the outcome as a
     signature rejection instead of crashing the framework's default
-    ``propagate`` handler and stopping the agent.
+    ``propagate`` handler and stopping the agent. Timeouts are
+    covered separately below because the caller distinguishes them
+    from a plain signature rejection.
 
     :param raised: the boundary exception injected by the parametrise.
     """
@@ -148,8 +159,62 @@ def test_check_eip1271_signature_returns_false_on_boundary_exception(
         contract_address=_CONTRACT_ADDRESS,
         message_hash=_MESSAGE_HASH,
         signature=_SIGNATURE,
+        gas=_TEST_GAS_CAP,
     )
     assert result is False
+
+
+@pytest.mark.parametrize(
+    "raised",
+    [
+        pytest.param(requests.exceptions.ReadTimeout("slow"), id="read_timeout"),
+        pytest.param(
+            requests.exceptions.ConnectTimeout("no route"), id="connect_timeout"
+        ),
+    ],
+)
+def test_check_eip1271_signature_raises_timeout_error_on_transport_timeout(
+    raised: BaseException,
+) -> None:
+    """A read/connect timeout propagates as ``TimeoutError`` instead of False.
+
+    The caller distinguishes a slow / hostile ``isValidSignature`` view
+    from a plain signature rejection so operators can surface the
+    former as a dedicated rejection reason.
+
+    :param raised: the timeout exception injected by the parametrise.
+    """
+    ledger_api = _make_ledger_api("isValidSignature", raised)
+
+    with pytest.raises(TimeoutError):
+        check_eip1271_signature(
+            ledger_api=ledger_api,
+            contract_address=_CONTRACT_ADDRESS,
+            message_hash=_MESSAGE_HASH,
+            signature=_SIGNATURE,
+            gas=_TEST_GAS_CAP,
+        )
+
+
+def test_check_eip1271_signature_passes_gas_cap_to_eth_call() -> None:
+    """The provided ``gas`` cap is threaded to the underlying ``.call(...)``.
+
+    Assert on the exact transaction kwargs the wrapper forwards to the
+    web3 contract call so a future refactor that drops or mistypes the
+    kwarg surfaces in the test rather than silently letting a caller's
+    ``isValidSignature`` run to the block gas limit.
+    """
+    ledger_api = _make_ledger_api("isValidSignature", EIP1271_MAGIC_VALUE)
+
+    check_eip1271_signature(
+        ledger_api=ledger_api,
+        contract_address=_CONTRACT_ADDRESS,
+        message_hash=_MESSAGE_HASH,
+        signature=_SIGNATURE,
+        gas=123_456,
+    )
+
+    ledger_api.call_mock.assert_called_once_with({"gas": 123_456})
 
 
 # --- get_marketplace_domain_separator ---------------------------------------

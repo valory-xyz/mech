@@ -27,7 +27,7 @@ import time
 import urllib.parse
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, NamedTuple, Optional, Union, cast
+from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
@@ -132,6 +132,52 @@ MAX_REQUEST_ID = 2**256 - 1
 # ``mapNonces`` array consume would fail the whole batch.
 NONCE_RE = re.compile(r"\A(0|[1-9][0-9]*)\Z")
 MAX_NONCE = 2**256 - 1
+
+# Maximum gap between the wire ``nonce`` and the on-chain
+# ``MechMarketplace.mapNonces[sender]`` value that the accept path
+# tolerates before rejecting. The settlement path groups a per-sender
+# batch by ``nonce`` and consumes the on-chain counter strictly in
+# order; a sender that queues too many in-flight requests ahead of the
+# on-chain cursor starves its own settlement. Sixteen leaves headroom
+# for legitimate batching (mech-client posts small bursts) while
+# keeping the wire ``nonce`` numerically close to what settlement will
+# actually see, so the derived ``request_id`` still matches when the
+# on-chain call recomputes it. A wire ``nonce`` below the on-chain
+# value can never settle at all — the counter only moves upward — so
+# the accept path refuses it as well.
+MAX_OUTSTANDING_NONCE_WINDOW = 16
+
+# Rejection reasons carried on ``SignatureVerdict`` for the nonce-bind
+# outcomes. Kept as module-level constants so tests and log-search
+# tooling can pin the exact string rather than fishing it out of the
+# enum by index.
+NONCE_BELOW_CHAIN = "wire nonce below on-chain mapNonces"
+NONCE_ABOVE_WINDOW = "wire nonce above allowed outstanding window"
+NONCE_READ_FAILED = "on-chain mapNonces read failed"
+
+# Timeout applied to the sender's ``isValidSignature`` view via the
+# provider-level HTTP timeout on the dedicated ``EthereumApi`` used for
+# EIP-1271 verification. Kept short so a slow or hostile Safe
+# ``isValidSignature`` cannot pin the AEA main thread past the
+# ``http_server`` reply budget (default ``RESPONSE_TIMEOUT=5s``). The
+# balance-check path continues to use a separately-cached
+# ``EthereumApi`` with the ledger default so a longer-running balance
+# read is not truncated at three seconds.
+_EIP1271_CALL_TIMEOUT_SECONDS = 3.0
+
+# ``gas`` cap applied to the ``isValidSignature`` ``eth_call``. Bounds
+# the amount of work a sender contract can force the RPC node to do
+# per verify. A well-behaved Safe returns in a few thousand gas; a
+# contract whose view loops to the block gas limit reverts here with
+# out-of-gas and the caller flattens the outcome to a rejected
+# signature — no accept, no runaway node work.
+_EIP1271_CALL_GAS_CAP = 500_000
+
+# Rejection reason for a Safe whose ``isValidSignature`` view exceeded
+# the provider-level HTTP timeout. Distinct from the generic
+# "signature verification failed" reason so operators can tell an
+# unresponsive Safe apart from an actively-declined signature.
+EIP1271_CALL_TIMEOUT = "eip1271 isValidSignature call timed out"
 
 # ``signature`` on the wire is the hex encoding of the packed signature
 # bytes with a mandatory ``0x`` prefix. The settlement path
@@ -952,10 +998,60 @@ class MechHttpHandler(AbstractResponseHandler):
         self._marketplace_mech_address: Optional[str] = (
             self._resolve_marketplace_mech_address()
         )
+        # Cache ``EthereumApi`` instances keyed by
+        # ``(rpc_address, chain_id, timeout_seconds)``. Every construction
+        # of ``EthereumApi`` builds a fresh ``RotatingHTTPProvider`` and
+        # connection pool; caching keeps one instance per (rpc, chain,
+        # timeout) tuple for the process lifetime so the sig-verify and
+        # balance-check paths reuse pooled connections instead of opening
+        # a new pool per accept. Keyed on ``timeout_seconds`` as well as
+        # ``(rpc, chain_id)`` so the short-timeout instance used for the
+        # EIP-1271 view coexists with the ledger-default instance used
+        # for the balance-check reads without either overwriting the
+        # other's provider timeout.
+        self._ledger_api_cache: Dict[Tuple[str, int, float], EthereumApi] = {}
         if self.params.use_offchain:
             self._initialise_offchain_verification_constants()
         self.start_prometheus_server()
         super().setup()
+
+    def _get_ledger_api(
+        self,
+        rpc_address: str,
+        chain_id: int,
+        timeout_seconds: Optional[float] = None,
+    ) -> EthereumApi:
+        """Return a cached ``EthereumApi`` for ``(rpc_address, chain_id, timeout)``.
+
+        A missing entry constructs a new ``EthereumApi`` (which builds a
+        ``RotatingHTTPProvider`` + connection pool) and stores it. Subsequent
+        calls for the same key return the same instance. When
+        ``timeout_seconds`` is ``None`` the ledger default HTTP timeout is
+        used and the cache key stores that as ``0.0``; a positive value
+        pins the provider-level HTTP timeout for calls made through the
+        returned instance.
+
+        :param rpc_address: the RPC endpoint URL (or comma-separated list
+            consumed by ``RotatingHTTPProvider``).
+        :param chain_id: the ledger chain id.
+        :param timeout_seconds: optional provider-level HTTP timeout in
+            seconds. ``None`` uses the ledger default (30s).
+        :return: the cached (or freshly-constructed) ``EthereumApi``.
+        """
+        cache_key: Tuple[str, int, float] = (
+            rpc_address,
+            chain_id,
+            0.0 if timeout_seconds is None else float(timeout_seconds),
+        )
+        cached = self._ledger_api_cache.get(cache_key)
+        if cached is not None:
+            return cached
+        kwargs: Dict[str, Any] = {"address": rpc_address, "chain_id": chain_id}
+        if timeout_seconds is not None:
+            kwargs["timeout"] = float(timeout_seconds)
+        ledger_api = EthereumApi(**kwargs)
+        self._ledger_api_cache[cache_key] = ledger_api
+        return ledger_api
 
     def _resolve_marketplace_mech_address(self) -> Optional[str]:
         """Return the mech address flagged ``is_marketplace_mech`` in config.
@@ -1009,7 +1105,7 @@ class MechHttpHandler(AbstractResponseHandler):
         try:
             rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
             chain_id = cast(int, ledger_settings[ResponseKey.CHAIN_ID.value])
-            ledger_api = EthereumApi(address=rpc_address, chain_id=chain_id)
+            ledger_api = self._get_ledger_api(rpc_address, chain_id)
             self._domain_separator = get_marketplace_domain_separator(
                 ledger_api=ledger_api,
                 marketplace_address=self.params.mech_marketplace_address,
@@ -2130,7 +2226,7 @@ class MechHttpHandler(AbstractResponseHandler):
         try:
             rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
             chain_id = cast(int, ledger_settings[ResponseKey.CHAIN_ID.value])
-            ledger_api = EthereumApi(address=rpc_address, chain_id=chain_id)
+            ledger_api = self._get_ledger_api(rpc_address, chain_id)
 
             requester = ledger_api.api.to_checksum_address(sender)
             mech_address = ledger_api.api.to_checksum_address(
@@ -2243,8 +2339,18 @@ class MechHttpHandler(AbstractResponseHandler):
            request_id disagrees with the locally-derived value. The
            caller replies 401.
         3. Try local ``ecrecover`` against ``sender``. Match wins with
-           zero RPC.
-        4. Fall back to the sender's EIP-1271 ``isValidSignature`` view.
+           zero RPC for the sig-recover step.
+        4. Fall back to the sender's EIP-1271 ``isValidSignature`` view
+           via a cached short-timeout ``EthereumApi``; a transport
+           timeout on the view surfaces as a 401 with a dedicated
+           reason.
+        5. Bind the wire ``nonce`` to the sender's on-chain
+           ``MechMarketplace.mapNonces[sender]`` value. A wire value
+           below the on-chain counter, or more than
+           ``MAX_OUTSTANDING_NONCE_WINDOW`` above it, rejects 401. A
+           transport-level failure on the ``mapNonces`` read fails
+           closed as 503 rather than accepting under an unknown
+           counter.
 
         :param sender: the requester address, EOA or Safe.
         :param ipfs_hash: 0x-prefixed hex string used as the on-chain
@@ -2257,11 +2363,14 @@ class MechHttpHandler(AbstractResponseHandler):
         :param signature_hex: hex-encoded signature bytes, with or without
             a leading ``0x``.
         :return: a :class:`SignatureVerdict`. ``ok=True`` on a valid
-            signature; ``ok=False`` with ``is_infra=True`` on
+            signature whose wire nonce sits inside the accepted
+            on-chain window; ``ok=False`` with ``is_infra=True`` on
             server-side prerequisites (constants unset, ledger config
-            missing, address preparation failure) or ``is_infra=False``
-            on a bad-caller outcome (malformed hex, derivation
-            mismatch, sig recovery failure).
+            missing, address preparation failure, ``mapNonces`` read
+            failure) or ``is_infra=False`` on a bad-caller outcome
+            (malformed hex, derivation mismatch, sig recovery failure,
+            EIP-1271 view timeout, wire nonce below the on-chain
+            counter or above the accepted window).
         """
         if self._domain_separator is None or self._payment_type is None:
             self.context.logger.error(
@@ -2308,7 +2417,7 @@ class MechHttpHandler(AbstractResponseHandler):
         try:
             rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
             chain_id = cast(int, ledger_settings[ResponseKey.CHAIN_ID.value])
-            ledger_api = EthereumApi(address=rpc_address, chain_id=chain_id)
+            ledger_api = self._get_ledger_api(rpc_address, chain_id)
             sender_checksum = ledger_api.api.to_checksum_address(sender)
             marketplace_address = ledger_api.api.to_checksum_address(
                 self.params.mech_marketplace_address
@@ -2373,23 +2482,140 @@ class MechHttpHandler(AbstractResponseHandler):
 
         recovered = recover_eoa_signer(derived, signature_bytes)
         if recovered is not None and recovered == sender_checksum:
-            return SignatureVerdict(ok=True, reason="", is_infra=False)
+            return self._bind_wire_nonce_to_chain(
+                ledger_api=ledger_api,
+                sender_checksum=sender_checksum,
+                wire_nonce=nonce,
+                wire_request_id=wire_request_id,
+            )
 
         # Sender is either a Safe or an EOA that produced an unrecognised
         # signature. Defer to the sender's EIP-1271 view for the final call.
-        eip1271_ok = check_eip1271_signature(
-            ledger_api=ledger_api,
-            contract_address=sender_checksum,
-            message_hash=derived,
-            signature=signature_bytes,
+        # Use a separately-cached ``EthereumApi`` with a short provider
+        # HTTP timeout so a slow ``isValidSignature`` view cannot pin the
+        # AEA main thread past the ``http_server`` reply budget; the
+        # balance-check path continues to run against the ledger-default
+        # ``EthereumApi`` cached above.
+        eip1271_ledger_api = self._get_ledger_api(
+            rpc_address, chain_id, timeout_seconds=_EIP1271_CALL_TIMEOUT_SECONDS
         )
+        try:
+            eip1271_ok = check_eip1271_signature(
+                ledger_api=eip1271_ledger_api,
+                contract_address=sender_checksum,
+                message_hash=derived,
+                signature=signature_bytes,
+                gas=_EIP1271_CALL_GAS_CAP,
+            )
+        except TimeoutError as exc:
+            self.context.logger.warning(
+                "EIP-1271 isValidSignature timed out for sender %s on "
+                "request %s: %s.",
+                sender_checksum,
+                wire_request_id,
+                exc,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=EIP1271_CALL_TIMEOUT,
+                is_infra=False,
+            )
         if eip1271_ok:
-            return SignatureVerdict(ok=True, reason="", is_infra=False)
+            return self._bind_wire_nonce_to_chain(
+                ledger_api=ledger_api,
+                sender_checksum=sender_checksum,
+                wire_nonce=nonce,
+                wire_request_id=wire_request_id,
+            )
         return SignatureVerdict(
             ok=False,
             reason="signature verification failed",
             is_infra=False,
         )
+
+    def _bind_wire_nonce_to_chain(
+        self,
+        ledger_api: EthereumApi,
+        sender_checksum: str,
+        wire_nonce: int,
+        wire_request_id: str,
+    ) -> SignatureVerdict:
+        """Bind the wire ``nonce`` to ``MechMarketplace.mapNonces[sender]``.
+
+        Reads the sender's current ``mapNonces`` counter from the
+        marketplace and compares against the wire value. A wire value
+        below the on-chain counter can never settle (the counter only
+        moves upward), and a wire value too far above the counter will
+        starve the sender's own settlement queue before it can drain
+        because settlement consumes ``mapNonces`` strictly in order.
+        Both outcomes reject with 401. A transport-level failure on
+        the read returns an infra verdict (503) rather than accepting
+        under an unknown nonce.
+
+        :param ledger_api: cached ``EthereumApi`` used for the read.
+        :param sender_checksum: the sender address in checksum form.
+        :param wire_nonce: the ``nonce`` supplied on the wire (already
+            coerced to ``int`` and range-checked at ingress).
+        :param wire_request_id: the wire request_id, for logging only.
+        :return: a :class:`SignatureVerdict`. ``ok=True`` when the wire
+            nonce sits in ``[on_chain, on_chain + MAX_OUTSTANDING_NONCE_WINDOW]``;
+            ``ok=False`` (401) on out-of-window; ``ok=False`` with
+            ``is_infra=True`` (503) on read failure.
+        """
+        try:
+            on_chain_result = MechMarketplaceContract.get_nonce(
+                ledger_api=ledger_api,
+                contract_address=self.params.mech_marketplace_address,
+                sender_address=sender_checksum,
+            )
+            on_chain_nonce = int(cast(int, on_chain_result.get(BodyKey.DATA.value, 0)))
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            # Transport, decode, or RPC error on the ``mapNonces`` read.
+            # Fail closed with an infra verdict so the caller returns
+            # 503 and a well-behaved client retries; accepting under an
+            # unknown nonce would let a wire value that settlement will
+            # later reject enqueue a task the operator pays to run.
+            self.context.logger.warning(
+                "mapNonces read failed for sender %s on request %s: %s.",
+                sender_checksum,
+                wire_request_id,
+                exc,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=NONCE_READ_FAILED,
+                is_infra=True,
+            )
+        if wire_nonce < on_chain_nonce:
+            self.context.logger.warning(
+                "Wire nonce %d below on-chain mapNonces %d for sender %s "
+                "on request %s.",
+                wire_nonce,
+                on_chain_nonce,
+                sender_checksum,
+                wire_request_id,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=NONCE_BELOW_CHAIN,
+                is_infra=False,
+            )
+        if wire_nonce > on_chain_nonce + MAX_OUTSTANDING_NONCE_WINDOW:
+            self.context.logger.warning(
+                "Wire nonce %d exceeds on-chain mapNonces %d by more than "
+                "the allowed window %d for sender %s on request %s.",
+                wire_nonce,
+                on_chain_nonce,
+                MAX_OUTSTANDING_NONCE_WINDOW,
+                sender_checksum,
+                wire_request_id,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=NONCE_ABOVE_WINDOW,
+                is_infra=False,
+            )
+        return SignatureVerdict(ok=True, reason="", is_infra=False)
 
     def _get_ledger_settings(self) -> Dict[str, Union[str, int]]:
         """Read ledger RPC settings from skill params using default_chain_id."""

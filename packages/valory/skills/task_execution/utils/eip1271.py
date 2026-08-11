@@ -38,7 +38,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from aea_ledger_ethereum import EthereumApi
-from requests.exceptions import RequestException
+from requests.exceptions import RequestException, Timeout
 from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3RPCError
 
 # bytes4 of ``keccak256("isValidSignature(bytes32,bytes)")``. A contract
@@ -97,6 +97,7 @@ def check_eip1271_signature(
     contract_address: str,
     message_hash: bytes,
     signature: bytes,
+    gas: int,
 ) -> bool:
     """Return True iff the contract at ``contract_address`` accepts the signature.
 
@@ -105,11 +106,28 @@ def check_eip1271_signature(
     an ABI-decode failure — is flattened to False so the caller can treat the
     outcome as a simple boolean.
 
+    The call carries an explicit ``gas`` cap in the ``eth_call`` transaction
+    payload so a sender contract whose ``isValidSignature`` view loops
+    to the block gas limit is capped at a bounded amount of node work per
+    request; an out-of-gas revert then surfaces as ``ContractLogicError``
+    and flattens to ``False`` like any other revert.
+
+    Transport-level read timeouts propagate as ``TimeoutError`` so the caller
+    can distinguish a slow / hostile ``isValidSignature`` from a plain
+    signature rejection.
+
     :param ledger_api: the ledger API object.
     :param contract_address: the contract sender to query.
     :param message_hash: the 32-byte message hash the caller signed.
     :param signature: the packed signature bytes.
-    :return: True on magic-value match; False otherwise (including on revert).
+    :param gas: the ``gas`` cap applied to the ``eth_call``. Bounds the
+        amount of work a sender's ``isValidSignature`` view can force
+        the RPC node to do per request.
+    :return: True on magic-value match; False otherwise (including on
+        revert or out-of-gas).
+    :raises TimeoutError: when the underlying HTTP read times out (the
+        provider-level ``timeout`` on the ``EthereumApi`` fires). The
+        caller distinguishes this from a signature rejection.
     """
     contract_instance = ledger_api.api.eth.contract(
         address=ledger_api.api.to_checksum_address(contract_address),
@@ -118,7 +136,16 @@ def check_eip1271_signature(
     try:
         returned = contract_instance.functions.isValidSignature(
             bytes(message_hash), bytes(signature)
-        ).call()
+        ).call({"gas": gas})
+    except Timeout as exc:
+        # Read/connect timeouts surface here when the sender's
+        # ``isValidSignature`` view is slow enough that the provider's
+        # transport timeout fires. Re-raise as the built-in
+        # ``TimeoutError`` so the caller can return a distinct verdict
+        # (401 with the timeout reason) instead of the generic
+        # signature-rejected outcome that a revert or bad output would
+        # produce.
+        raise TimeoutError(str(exc)) from exc
     except (
         ContractLogicError,
         BadFunctionCallOutput,
@@ -128,11 +155,13 @@ def check_eip1271_signature(
     ):
         # Web3 raises ``BadFunctionCallOutput`` when the target address
         # holds no code and ``Web3RPCError`` when the node returns a
-        # JSON-RPC error; ``requests`` transport failures (connection
-        # error, read timeout — HTTPError is one subclass) surface as
+        # JSON-RPC error; ``requests`` transport failures other than a
+        # timeout (connection error, HTTP error) surface as
         # ``RequestException``. Any of them means the contract did not
         # unambiguously return the magic value, so the signature is
-        # not accepted.
+        # not accepted. An out-of-gas revert triggered by the ``gas``
+        # cap above lands here as ``ContractLogicError`` and returns
+        # ``False`` the same way any other revert does.
         return False
     return bytes(returned) == EIP1271_MAGIC_VALUE
 
