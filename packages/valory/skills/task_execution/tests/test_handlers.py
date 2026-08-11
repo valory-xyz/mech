@@ -40,6 +40,30 @@ from packages.valory.skills.task_execution.handlers import (
     LedgerHandler,
     MechHttpHandler,
 )
+from packages.valory.skills.task_execution.utils.ipfs import (
+    to_multihash as _to_multihash,
+)
+from packages.valory.skills.task_execution.utils.local_cid import (
+    compute_cidv1 as _compute_cidv1,
+)
+
+
+def _ipfs_hash_for(ipfs_data: str) -> str:
+    """Compute the 32-byte-form wire ``ipfs_hash`` for an ``ipfs_data`` payload.
+
+    :param ipfs_data: the raw JSON string carried inline in the signed body.
+    :return: the 0x-prefixed 64-hex-char SHA-256 digest form of the
+        computed CID, matched by the handler's accept-time CID-binding
+        check. The 34-byte multihash form is exercised separately.
+    """
+    return "0x" + _to_multihash(_compute_cidv1(ipfs_data.encode("utf-8")))
+
+
+# The canonical test-payload / hash pair used by every downstream test
+# whose focus is NOT the CID-binding check itself. Precomputed once at
+# module import so the fixtures can reference it as a plain constant.
+_DEFAULT_IPFS_DATA = '{"foo":"bar"}'
+_DEFAULT_IPFS_HASH = _ipfs_hash_for(_DEFAULT_IPFS_DATA)
 
 
 @pytest.mark.parametrize(
@@ -421,11 +445,12 @@ def test_signed_requests_balance_scenarios(
     mh.setup()
     _install_verify_ok(mh, monkeypatch)
 
-    ipfs_hash: str = "0x" + "ab" * 32
+    ipfs_data: str = _DEFAULT_IPFS_DATA
+    ipfs_hash: str = _DEFAULT_IPFS_HASH
     body: Dict[str, str] = {
         "ipfs_hash": ipfs_hash,
         "request_id": request_id,
-        "ipfs_data": '{"foo":"bar"}',
+        "ipfs_data": ipfs_data,
         "delivery_rate": "123",
         "sender": "0x0000000000000000000000000000000000000001",
         "signature": "0x" + "00" * 65,
@@ -448,7 +473,7 @@ def test_signed_requests_balance_scenarios(
         # dict is still str-keyed since the local ``request_id`` variable
         # in the handler stays str for the HTTP-state lookups.
         assert pend[0]["requestId"] == int(request_id)
-        assert in_mem[request_id] == '{"foo":"bar"}'
+        assert in_mem[request_id] == ipfs_data
     else:
         assert pend == [] and ipfsq == [] and in_mem == {}
 
@@ -622,12 +647,13 @@ def test_fetch_offchain_request_info_returns_insufficient_balance_response(
     _install_verify_ok(mh, monkeypatch)
 
     request_id = "1003"
-    ipfs_hash: str = "0x" + "ab" * 32
+    ipfs_data: str = _DEFAULT_IPFS_DATA
+    ipfs_hash: str = _DEFAULT_IPFS_HASH
     send_msg: Any = make_http_msg(
         {
             "ipfs_hash": ipfs_hash,
             "request_id": request_id,
-            "ipfs_data": '{"foo":"bar"}',
+            "ipfs_data": ipfs_data,
             "delivery_rate": "123",
             "sender": "0x0000000000000000000000000000000000000001",
             "signature": "0x" + "00" * 65,
@@ -679,13 +705,14 @@ def test_signed_requests_rollback_partial_enqueue(
 
     handler_context.shared_state["in_memory_requests"] = FailingDict()
 
-    ipfs_hash: str = "0x" + "ab" * 32
+    ipfs_data: str = _DEFAULT_IPFS_DATA
+    ipfs_hash: str = _DEFAULT_IPFS_HASH
     body: Dict[str, str] = {
         "ipfs_hash": ipfs_hash,
         # Numeric — the ingress coercion in ``_enqueue_offchain_request``
         # runs before the buffer-write attempt this test simulates.
         "request_id": "6",
-        "ipfs_data": '{"foo":"bar"}',
+        "ipfs_data": ipfs_data,
         "delivery_rate": "123",
         "sender": "0x0000000000000000000000000000000000000001",
         "signature": "0x" + "00" * 65,
@@ -736,9 +763,9 @@ def _send_signed_request(
     """Drive a signed offchain request and return the final HTTP response."""
     http_msg: Any = make_http_msg(
         {
-            "ipfs_hash": "0x" + "ab" * 32,
+            "ipfs_hash": _DEFAULT_IPFS_HASH,
             "request_id": request_id,
-            "ipfs_data": '{"foo":"bar"}',
+            "ipfs_data": _DEFAULT_IPFS_DATA,
             "delivery_rate": "123",
             "sender": "0x0000000000000000000000000000000000000001",
             "signature": "0x" + "00" * 65,
@@ -789,9 +816,13 @@ def test_402_emits_www_authenticate_header(
     resp = _send_signed_request(mh, http_dialogue, request_id="4021")
 
     assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    # The realm is the marketplace-mech address resolved from
+    # ``mech_to_config``. ``models.Params`` lowercases every key at load
+    # so the resolved address is always the lowercase form; the
+    # ``params_stub`` fixture pins the lowercase form too.
     assert (
         'WWW-Authenticate: Payment scheme="olas-prepay" '
-        'realm="0xMechAddr"' in resp.headers
+        'realm="0xmechaddr"' in resp.headers
     )
 
 
@@ -1977,9 +2008,11 @@ def test_filter_requests_empty_list(
 
 
 def _make_signed_request_body(
-    ipfs_hash: str = "0x" + "ab" * 32,
+    ipfs_hash: str = _DEFAULT_IPFS_HASH,
     delivery_rate: str = "123",
     request_id: str = "req-hardening",
+    ipfs_data: str = _DEFAULT_IPFS_DATA,
+    nonce: str = "0",
 ) -> Dict[str, str]:
     """Build a valid signed-request body used by hardening tests.
 
@@ -1988,19 +2021,27 @@ def _make_signed_request_body(
     accept paths install a stub verifier via ``_install_verify_ok`` and
     tests that exercise sig-verify itself override these fields.
 
+    The default ``ipfs_hash`` is the multihash-stripped CID of
+    ``_DEFAULT_IPFS_DATA`` so the CID-binding check at the top of the
+    accept path passes without the individual test having to derive
+    the hash itself. Tests that want to exercise the mismatch branch
+    override either ``ipfs_hash`` or ``ipfs_data`` (or both) directly.
+
     :param ipfs_hash: 0x-prefixed hex ipfs hash value for the body.
     :param delivery_rate: decimal delivery rate string for the body.
     :param request_id: request_id string for the body.
+    :param ipfs_data: raw JSON string for the body.
+    :param nonce: decimal nonce string for the body.
     :return: a request-body dict with all required fields populated.
     """
     return {
         "ipfs_hash": ipfs_hash,
         "request_id": request_id,
-        "ipfs_data": '{"foo":"bar"}',
+        "ipfs_data": ipfs_data,
         "delivery_rate": delivery_rate,
         "sender": "0x0000000000000000000000000000000000000001",
         "signature": "0x" + "00" * 65,
-        "nonce": "0",
+        "nonce": nonce,
     }
 
 
@@ -2232,7 +2273,11 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     # Trusted values won on every reserved key.
     assert task[hmod.RequestKey.REQUEST_ID_CAMEL.value] == 42
     assert task[hmod.RequestKey.IS_OFFCHAIN.value] is True
-    assert task[hmod.BodyKey.DATA.value] == bytes.fromhex("ab" * 32)
+    # ``BodyKey.DATA`` is derived from the wire ``ipfs_hash`` — which
+    # ``_make_signed_request_body`` sets to the CID of
+    # ``_DEFAULT_IPFS_DATA`` so the accept-time CID-binding check
+    # passes. Assert against the same derivation.
+    assert task[hmod.BodyKey.DATA.value] == bytes.fromhex(_DEFAULT_IPFS_HASH[2:])
     assert task[hmod.RequestKey.REQUEST_DELIVERY_RATE.value] == 123
     # Snake-case ``request_id`` must never appear on the pending task:
     # ``_handle_done_task`` spreads ``**executing_task`` into ``done_task``
@@ -2400,8 +2445,20 @@ def _seed_verification_constants(
     """
     params.mech_marketplace_address = _SIGVERIFY_MARKETPLACE
     params.agent_mech_contract_addresses = [_SIGVERIFY_MECH]
+    # Post the round-6 refactor, the handler resolves the mech address
+    # via ``mech_to_config`` scanning for ``is_marketplace_mech``; stamp
+    # a matching entry so ``_resolve_marketplace_mech_address`` returns
+    # ``_SIGVERIFY_MECH`` and the sig-verify path uses the same address
+    # the test's ``_compute_request_id`` was called with.
+    params.mech_to_config = {
+        _SIGVERIFY_MECH.lower(): SimpleNamespace(
+            is_marketplace_mech=True,
+            use_dynamic_pricing=False,
+        )
+    }
     mh._domain_separator = _SIGVERIFY_DOMAIN_SEPARATOR
     mh._payment_type = _SIGVERIFY_PAYMENT_TYPE
+    mh._marketplace_mech_address = _SIGVERIFY_MECH
     # Bypass the RPC that _verify_offchain_request_signature would otherwise
     # try to open. Both the balance and verify paths would call this — the
     # verify path only needs the address prep to succeed. Returning ``ok``
@@ -2424,13 +2481,28 @@ def _sig_body(
     nonce: int,
     sender: str,
     signature_hex: str,
-    ipfs_hash: str = "0x" + "ab" * 32,
+    ipfs_hash: str = _DEFAULT_IPFS_HASH,
+    ipfs_data: str = _DEFAULT_IPFS_DATA,
 ) -> Dict[str, str]:
-    """Build a signed-request body populated for a sig-verify scenario."""
+    """Build a signed-request body populated for a sig-verify scenario.
+
+    The default ``ipfs_hash`` matches the CID of ``ipfs_data`` so the
+    accept path's binding check passes; tests that exercise a mismatch
+    override either field directly.
+
+    :param request_id: decimal request_id string for the body.
+    :param delivery_rate: requester-signed delivery rate.
+    :param nonce: requester nonce.
+    :param sender: requester address.
+    :param signature_hex: hex-encoded signature bytes.
+    :param ipfs_hash: 0x-prefixed hex ipfs hash value for the body.
+    :param ipfs_data: raw JSON string carried inline in the body.
+    :return: a signed-request body dict.
+    """
     return {
         "ipfs_hash": ipfs_hash,
         "request_id": request_id,
-        "ipfs_data": '{"foo":"bar"}',
+        "ipfs_data": ipfs_data,
         "delivery_rate": str(delivery_rate),
         "sender": sender,
         "signature": signature_hex,
@@ -2442,7 +2514,13 @@ def _make_eoa_scenario(delivery_rate: int = 123, nonce: int = 7) -> Dict[str, An
     """Sign a request_id derived from the marketplace formula with a fixed EOA key."""
     account = _Account.from_key(_SIGVERIFY_PRIVATE_KEY)
     sender = _to_checksum(account.address)
-    ipfs_hash = "0x" + "ab" * 32
+    # The signature commits to ``keccak(ipfs_hash)``; the CID-binding
+    # check in the accept path then requires ``ipfs_hash`` to be the CID
+    # of the ``ipfs_data`` bytes the mech will run. ``_sig_body`` uses
+    # ``_DEFAULT_IPFS_DATA`` for the body; the ``ipfs_hash`` computed
+    # from that same payload is what the returned scenario carries so
+    # the accept path sees a matched pair.
+    ipfs_hash = _DEFAULT_IPFS_HASH
     request_data = bytes.fromhex(ipfs_hash[2:])
     request_id_bytes = _compute_request_id(
         marketplace=_SIGVERIFY_MARKETPLACE,
@@ -2587,7 +2665,7 @@ def test_verify_offchain_signature_safe_eip1271_true_accepts(
     # recover to the sender, so the ecrecover branch misses and the code
     # falls through to the EIP-1271 wrapper.
     safe_sender = _to_checksum("0x" + "99" * 20)
-    ipfs_hash = "0x" + "ab" * 32
+    ipfs_hash = _DEFAULT_IPFS_HASH
     request_data = bytes.fromhex(ipfs_hash[2:])
     delivery_rate = 42
     nonce = 3
@@ -2789,3 +2867,556 @@ def test_verify_offchain_signature_rejects_when_constants_unloaded(
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
     assert balance_calls == []
+
+
+# ---------------------------------------------------------------------------
+# CID-binding check on the accept path (ipfs_hash must equal CID of ipfs_data)
+# ---------------------------------------------------------------------------
+
+
+def test_signed_requests_accepts_body_whose_cid_matches_posted_ipfs_hash(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A body whose CID matches the wire ``ipfs_hash`` is accepted and enqueued.
+
+    The 34-byte multihash form (``0x1220 || sha256``) is accepted as
+    equivalent to the 32-byte bare-digest form; both reduce to the same
+    32-byte digest for the compare.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    # Build the wire ipfs_hash in the 34-byte multihash form: strip the
+    # ``0x`` prefix, prepend the SHA-256 multihash prefix ``1220``, add
+    # ``0x`` back. The handler's binding check must accept both encodings.
+    multihash_form_ipfs_hash = "0x1220" + _DEFAULT_IPFS_HASH[2:]
+    body = _make_signed_request_body(
+        request_id="7001",
+        ipfs_data=_DEFAULT_IPFS_DATA,
+        ipfs_hash=multihash_form_ipfs_hash,
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_signed_requests_rejects_when_ipfs_hash_does_not_match_body(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A body whose CID does NOT match the wire ipfs_hash is rejected 400.
+
+    The signature authorises work described by ``keccak(ipfs_hash)``; a
+    body that hashes to a different content commitment would enqueue
+    arbitrary work under a signature that authorised different content.
+    The handler must reject before enqueue, and the balance check must
+    not fire.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
+    mh.setup()
+    _install_verify_ok(mh, monkeypatch)
+
+    # Post a body whose ipfs_data is NOT what the ipfs_hash commits to.
+    mismatched_data = '{"other":"payload"}'
+    body = _make_signed_request_body(
+        request_id="7002",
+        ipfs_data=mismatched_data,
+        ipfs_hash=_DEFAULT_IPFS_HASH,  # commits to _DEFAULT_IPFS_DATA
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == hmod.IPFS_HASH_BODY_MISMATCH
+    # Nothing enqueued, no balance RPC.
+    assert handler_context.shared_state["pending_tasks"] == []
+    assert handler_context.shared_state["in_memory_requests"] == {}
+    assert balance_calls == []
+
+
+def test_signed_requests_rejects_when_ipfs_data_is_empty(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Empty ``ipfs_data`` fails the CID-binding check (no bytes to hash)."""
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(
+        request_id="7003",
+        ipfs_data="",
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Nonce coercion + numeric sort discipline
+# ---------------------------------------------------------------------------
+
+
+def test_signed_requests_stores_nonce_as_int_on_pending_task(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The coerced ``int`` nonce lands on the pending task.
+
+    Downstream (see
+    ``task_submission_abci.behaviours._get_offchain_tasks_deliver_data``)
+    sorts the offchain done-task list by ``nonce`` and the sort key must
+    be an ``int`` — a wire ``str`` would sort lexicographically and
+    mis-order the batch against the on-chain ``mapNonces`` array consume.
+    Pin the ``int`` coercion at the enqueue boundary here so any future
+    regression fails locally instead of surfacing as a bad on-chain
+    delivery.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(request_id="7010", nonce="10")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    pending = handler_context.shared_state["pending_tasks"]
+    assert len(pending) == 1
+    stored_nonce = pending[0]["nonce"]
+    assert isinstance(
+        stored_nonce, int
+    ), f"nonce must be int post ingress coercion, got {type(stored_nonce).__name__}"
+    assert stored_nonce == 10
+
+
+def test_signed_requests_two_task_batch_sorts_nonce_numerically(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Nonces ``9`` and ``10`` sort numerically (9 before 10), not as strings.
+
+    This is the exact scenario the task_submission_abci sort key
+    consumes. A str-typed nonce would sort lexicographically —
+    ``["10", "9"]`` — and the on-chain ``mapNonces`` array consume
+    would fail the whole batch.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+
+    # Send nonce="10" first, then nonce="9". A lexicographic sort would
+    # keep the wire order; a numeric sort would swap them.
+    first_msg: Any = make_http_msg(
+        _make_signed_request_body(request_id="7020", nonce="10")
+    )
+    mh._handle_signed_requests(
+        first_msg,
+        http_dialogue,
+    )
+    second_msg: Any = make_http_msg(
+        _make_signed_request_body(
+            request_id="7021",
+            nonce="9",
+            # Vary the ipfs_data so the CID-bind + dedup checks let
+            # the second request through as a distinct one.
+            ipfs_data='{"foo":"baz"}',
+            ipfs_hash=_ipfs_hash_for('{"foo":"baz"}'),
+        )
+    )
+    mh._handle_signed_requests(
+        second_msg,
+        http_dialogue,
+    )
+
+    pending = handler_context.shared_state["pending_tasks"]
+    assert len(pending) == 2
+    ordered = sorted(pending, key=lambda t: t["nonce"])
+    assert [t["nonce"] for t in ordered] == [
+        9,
+        10,
+    ], "sort by 'nonce' key must be numeric (int), not lexicographic (str)"
+
+
+@pytest.mark.parametrize(
+    "bad_nonce",
+    ["9abc", "-1", str(2**256), "", "042", " 42", "42\n", "๙", "9" * 5000],
+    ids=[
+        "trailing_alpha",
+        "negative",
+        "above_uint256",
+        "empty",
+        "leading_zero_padded",
+        "leading_space",
+        "trailing_newline",
+        "thai_digit",
+        "above_cpython_int_str_digits_limit",
+    ],
+)
+def test_signed_requests_rejects_invalid_nonce(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    bad_nonce: str,
+) -> None:
+    """Non-canonical, out-of-range, or empty nonce is rejected 400 at ingress."""
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(request_id="7030", nonce=bad_nonce)
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Pre-auth vs post-auth writes into offchain_request_responses
+# ---------------------------------------------------------------------------
+
+
+def test_401_bad_sig_does_not_write_offchain_response(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A pre-auth 401 must NOT persist a rejection payload keyed by request_id.
+
+    Otherwise a caller could poison an arbitrary id they do not own, and
+    the legitimate owner would later read that payload via the polling
+    endpoint. Only rejections after signature ownership is proven may
+    write into the shared response cache.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    # Force sig-verify to fail so the accept path 401s.
+    monkeypatch.setattr(
+        mh,
+        "_verify_offchain_request_signature",
+        lambda **_kw: False,
+    )
+
+    body = _make_signed_request_body(request_id="7040")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    # The caller-supplied request_id must NOT have landed in the shared
+    # response cache — that dict is the source the polling endpoint
+    # reads.
+    assert "7040" not in handler_context.shared_state["offchain_request_responses"]
+
+
+def test_402_insufficient_balance_writes_offchain_response(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A post-auth 402 DOES persist the challenge under request_id.
+
+    The caller has already proven signature ownership; the deposit
+    challenge must be readable via the polling endpoint so mech-client
+    can present it to the requester.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=-1
+    )
+    _send_signed_request(mh, http_dialogue, request_id="7050")
+
+    stored = handler_context.shared_state["offchain_request_responses"].get("7050")
+    assert stored is not None, "402 challenge must be persisted for polling"
+    assert stored["status"] == "rejected"
+    assert stored["reason"] == "insufficient balance"
+
+
+# ---------------------------------------------------------------------------
+# Replay protection (dedup on request_id)
+# ---------------------------------------------------------------------------
+
+
+def test_signed_requests_deduplicates_repeated_body(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The same body posted twice returns 200 without a second enqueue.
+
+    Every signed field is bound into the ``request_id``; the same body
+    therefore always hashes to the same id and dedup is exact. Returning
+    a 200 (with an ``already accepted`` note) preserves mech-client's
+    idempotent-retry semantics — a 409 would change the client contract.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+
+    first = _send_signed_request(mh, http_dialogue, request_id="7060")
+    assert first.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+    second = _send_signed_request(mh, http_dialogue, request_id="7060")
+    assert second.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(second.body.decode("utf-8"))
+    assert payload["reason"] == hmod.REQUEST_ALREADY_ACCEPTED
+    # No second enqueue: the pending list is still length 1.
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_signed_requests_distinct_ids_both_enqueue(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Different request_ids both enqueue; dedup does not over-block."""
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+
+    first = _send_signed_request(mh, http_dialogue, request_id="7070")
+    second = _send_signed_request(mh, http_dialogue, request_id="7071")
+
+    assert first.status_code == HttpCode.OK_CODE.value
+    assert second.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 2
+
+
+def test_signed_requests_dedup_covers_delivered_state(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A request_id already in offchain_request_responses is treated as dedup.
+
+    Once a task has been delivered or post-auth-rejected, the writer
+    populates ``offchain_request_responses[str(req_id)]``. A retry against
+    that same id must not re-enqueue: the mech would otherwise execute
+    (and settle) work that has already been paid for and delivered.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    # Pre-seed the response cache as if a previous delivery had settled.
+    handler_context.shared_state["offchain_request_responses"]["7080"] = {
+        "status": "ok",
+        "request_id": "7080",
+    }
+
+    resp = _send_signed_request(mh, http_dialogue, request_id="7080")
+
+    assert resp.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == hmod.REQUEST_ALREADY_ACCEPTED
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Marketplace-mech resolution via mech_to_config, not by index
+# ---------------------------------------------------------------------------
+
+
+def test_setup_resolves_marketplace_mech_from_config_not_by_index(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """The offchain handler resolves the mech by ``is_marketplace_mech``.
+
+    A deployment whose ``mech_to_config`` lists a non-marketplace mech
+    first would 401 every offchain request if the handler used
+    ``agent_mech_contract_addresses[0]``. Cache the address resolved
+    from the config flag so the derivation uses the marketplace mech
+    regardless of ordering.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    non_marketplace = "0xnonmarket0000000000000000000000000000000000000"[:42]
+    marketplace = "0xmarket00000000000000000000000000000000000000000"[:42]
+    handler_context.params.mech_to_config = {
+        non_marketplace.lower(): SimpleNamespace(
+            is_marketplace_mech=False,
+            use_dynamic_pricing=False,
+        ),
+        marketplace.lower(): SimpleNamespace(
+            is_marketplace_mech=True,
+            use_dynamic_pricing=False,
+        ),
+    }
+    handler_context.params.agent_mech_contract_addresses = [
+        non_marketplace,
+        marketplace,
+    ]
+
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    # Skip _initialise_offchain_verification_constants by keeping
+    # use_offchain=False for this test; only the resolver itself is
+    # being pinned here.
+    handler_context.params.use_offchain = False
+    mh.setup()
+
+    assert mh._marketplace_mech_address == marketplace.lower()
+
+
+def test_setup_returns_none_when_no_marketplace_mech_configured(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """No ``is_marketplace_mech`` flag anywhere → cache stays None → accepts 401."""
+    handler_context.params.mech_to_config = {
+        "0xnonmarket": SimpleNamespace(
+            is_marketplace_mech=False,
+            use_dynamic_pricing=False,
+        )
+    }
+    handler_context.params.use_offchain = False
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    assert mh._marketplace_mech_address is None
+
+
+# ---------------------------------------------------------------------------
+# Boot-time self-check: marketplace getRequestId vs local compute_request_id
+# ---------------------------------------------------------------------------
+
+
+def test_selfcheck_mismatch_flips_constants_off_and_subsequent_accepts_401(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A mismatched marketplace getRequestId disables offchain accepts.
+
+    Simulates a marketplace upgrade that changed the ``getRequestId``
+    layout without a corresponding handler bump. The self-check must
+    flip the boot-cached constants off (rather than crash the process)
+    and every subsequent accept must 401 with the sentinel reason so
+    operators can correlate.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    # Constants land loaded from the seed helper; the mismatched view
+    # is what would flip them off in production. Feed a bogus view
+    # return that disagrees with the local ``compute_request_id`` and
+    # drive the self-check manually.
+    monkeypatch.setattr(
+        hmod,
+        "get_marketplace_request_id_view",
+        lambda **_kw: b"\xff" * 32,
+    )
+
+    # Any ``ledger_api`` object works — the ``get_request_id_view`` stub
+    # ignores it. The verify path uses ``EthereumApi`` for its checksum
+    # helper only; a ``MagicMock`` with a chained ``to_checksum_address``
+    # is enough for the failure branch we care about.
+    fake_ledger = MagicMock()
+    fake_ledger.api.to_checksum_address = lambda addr: addr
+    mh._selfcheck_marketplace_request_id_derivation(fake_ledger)
+
+    assert mh._domain_separator is None
+    assert mh._payment_type is None
+
+    balance_calls: List[Any] = []
+
+    def _record_call(**kw: Any) -> None:
+        balance_calls.append(kw)
+        return None
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _record_call)
+
+    # Subsequent accept must 401 (sig-verify short-circuits on the
+    # unset constants) and the balance check must not run.
+    scenario = _make_eoa_scenario()
+    http_msg: Any = make_http_msg(
+        _sig_body(
+            request_id=scenario["request_id"],
+            delivery_rate=scenario["delivery_rate"],
+            nonce=scenario["nonce"],
+            sender=scenario["sender"],
+            signature_hex=scenario["signature_hex"],
+            ipfs_hash=scenario["ipfs_hash"],
+        )
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert balance_calls == []
+
+
+def test_selfcheck_match_leaves_constants_loaded(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A matching self-check keeps constants loaded; accepts continue as normal."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    # Return whatever ``compute_request_id`` produced locally so the
+    # comparison inside the self-check succeeds.
+    from packages.valory.skills.task_execution.utils.request_id import (
+        compute_request_id as _local_compute,
+    )
+
+    expected = _local_compute(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=hmod._SELFCHECK_REQUESTER,
+        request_data=hmod._SELFCHECK_REQUEST_DATA,
+        delivery_rate=hmod._SELFCHECK_DELIVERY_RATE,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=hmod._SELFCHECK_NONCE,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    monkeypatch.setattr(
+        hmod,
+        "get_marketplace_request_id_view",
+        lambda **_kw: expected,
+    )
+
+    fake_ledger = MagicMock()
+    fake_ledger.api.to_checksum_address = lambda addr: addr
+    mh._selfcheck_marketplace_request_id_derivation(fake_ledger)
+
+    assert mh._domain_separator == _SIGVERIFY_DOMAIN_SEPARATOR
+    assert mh._payment_type == _SIGVERIFY_PAYMENT_TYPE

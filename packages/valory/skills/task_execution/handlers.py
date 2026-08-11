@@ -53,8 +53,11 @@ from packages.valory.skills.task_execution.utils import preimage as preimage_buf
 from packages.valory.skills.task_execution.utils.eip1271 import (
     check_eip1271_signature,
     get_marketplace_domain_separator,
+    get_marketplace_request_id_view,
     get_mech_payment_type,
 )
+from packages.valory.skills.task_execution.utils.ipfs import to_multihash
+from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
 from packages.valory.skills.task_execution.utils.request_id import (
     compute_request_id,
     recover_eoa_signer,
@@ -117,6 +120,56 @@ REQUEST_ID_RE = re.compile(r"\A(0|[1-9][0-9]*)\Z")
 # the "opaque ``ValueError`` at the coercion site" outcome the upfront
 # guard exists to close. Mirrors ``MAX_DELIVERY_RATE``.
 MAX_REQUEST_ID = 2**256 - 1
+
+# ``nonce`` on the wire is the decimal encoding of the requester's
+# uint256 ``mapNonces`` counter at the moment of signing. Coerce to
+# ``int`` at ingress and validate the alphabet + magnitude the same
+# way ``request_id`` is validated. Downstream (see
+# ``task_submission_abci.behaviours._get_offchain_tasks_deliver_data``)
+# calls ``sorted(..., key=lambda x: x[NONCE])``; a wire ``str`` would
+# sort lexicographically (``"10"`` before ``"9"``) and the on-chain
+# ``mapNonces`` array consume would fail the whole batch.
+NONCE_RE = re.compile(r"\A(0|[1-9][0-9]*)\Z")
+MAX_NONCE = 2**256 - 1
+
+# Boot-time self-check inputs for the marketplace ``getRequestId`` view
+# vs the local ``compute_request_id`` reimplementation. Any well-formed
+# tuple is fine because we compare two bytes32 outputs, not the
+# semantic meaning of the inputs. Dummy requester + 32-byte data blob
+# + delivery_rate=1 + nonce=0 keep the call cheap and deterministic; a
+# real client is never affected because the values never enter the
+# accept path.
+_SELFCHECK_REQUESTER = "0x0000000000000000000000000000000000000001"
+_SELFCHECK_REQUEST_DATA = b"\x00" * 32
+_SELFCHECK_DELIVERY_RATE = 1
+_SELFCHECK_NONCE = 0
+
+# Sentinel rejection reason surfaced when the boot-time self-check
+# between the marketplace ``getRequestId`` view and the local
+# ``compute_request_id`` disagrees. Every subsequent offchain accept
+# 401s with this reason so operators can grep the log line to the
+# corresponding fatal at boot.
+MARKETPLACE_VERIFICATION_FAILED = "marketplace-verification-failed"
+
+# Rejection reason for a body whose local CID does not match the
+# posted ``ipfs_hash``: the request would enqueue arbitrary work under
+# a signature that authorised different content.
+IPFS_HASH_BODY_MISMATCH = "ipfs_hash does not match ipfs_data content"
+
+# Reason surfaced on the idempotent-retry response (HTTP 200) when the
+# handler already knows the ``request_id`` from the pending queue, the
+# in-flight executor, the done batch, or the rejected-response cache.
+# Kept a 200 so mech-client's own retry loop doesn't treat it as a
+# different response than the first accept.
+REQUEST_ALREADY_ACCEPTED = "already accepted"
+
+# Multihash function-code + digest-length prefix a caller may include on
+# the wire when writing a full 34-byte multihash (``0x1220<digest>``)
+# in ``ipfs_hash``. The 32-byte form (bare SHA-256 digest, 64 hex
+# chars) is the wire default. Kept as a hex ``str`` so the strip is a
+# ``str.startswith`` on the ``0x``-stripped remainder — no ``bytes``
+# round-trip needed for the compare.
+IPFS_HASH_MULTIHASH_PREFIX = "1220"
 
 LEDGER_API_ADDRESS = str(LEDGER_CONNECTION_PUBLIC_ID)
 
@@ -840,12 +893,44 @@ class MechHttpHandler(AbstractResponseHandler):
         # and read on-chain here at handler init; the request-handling path
         # references the cached bytes so a normal accept never triggers an
         # extra RPC for these values.
+        #
+        # ``_marketplace_mech_address`` is resolved by scanning
+        # ``params.mech_to_config`` for the entry flagged
+        # ``is_marketplace_mech``, NOT by taking
+        # ``agent_mech_contract_addresses[0]``. A deployment whose
+        # ``mech_to_config`` lists a non-marketplace mech first would
+        # otherwise cache the wrong ``paymentType`` at setup, derive the
+        # wrong ``request_id`` from every accept, and 401 every offchain
+        # request. Falling back to None leaves the constants unloaded so
+        # the request-handling path 401s with a clear reason.
         self._domain_separator: Optional[bytes] = None
         self._payment_type: Optional[bytes] = None
+        self._marketplace_mech_address: Optional[str] = (
+            self._resolve_marketplace_mech_address()
+        )
         if self.params.use_offchain:
             self._initialise_offchain_verification_constants()
         self.start_prometheus_server()
         super().setup()
+
+    def _resolve_marketplace_mech_address(self) -> Optional[str]:
+        """Return the mech address flagged ``is_marketplace_mech`` in config.
+
+        Mirrors ``TaskExecutionBehaviour._get_designated_marketplace_mech_address``
+        so the offchain accept path and the on-chain delivery path pick the
+        same mech even when ``mech_to_config`` lists a non-marketplace mech
+        first. Returns ``None`` when no marketplace mech is configured; the
+        caller treats that as "offchain unavailable" and refuses subsequent
+        accepts with a clear reason instead of caching a wrong address.
+
+        :return: the marketplace mech address (lowercase, as stored in
+            ``mech_to_config``), or ``None`` if no marketplace mech is
+            configured.
+        """
+        for mech, config in self.params.mech_to_config.items():
+            if config.is_marketplace_mech:
+                return mech
+        return None
 
     def _initialise_offchain_verification_constants(self) -> None:
         """Read the marketplace ``domainSeparator`` and mech ``paymentType``.
@@ -854,7 +939,22 @@ class MechHttpHandler(AbstractResponseHandler):
         request-handling path treats an unset value as an internal error and
         replies 401 so the client sees a clear rejection instead of a
         mis-derived request_id.
+
+        After the constants are loaded, a boot-time self-check calls the
+        marketplace ``getRequestId`` view and compares its bytes32 output
+        with the local ``compute_request_id`` reimplementation on the same
+        dummy inputs. On mismatch the boot-cached constants are flipped off
+        and a fatal-level log line is emitted; every subsequent accept
+        401s. Guards against a marketplace upgrade that silently changes
+        either the ``getRequestId`` layout or the EIP-712 ``domainSeparator``
+        derivation (the marketplace sits behind ``MechMarketplaceProxy``).
         """
+        if self._marketplace_mech_address is None:
+            self.context.logger.warning(
+                "Offchain verification constants unavailable: no "
+                "marketplace mech configured in mech_to_config."
+            )
+            return
         ledger_settings = self._get_ledger_settings()
         if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
             self.context.logger.warning(
@@ -872,7 +972,7 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             self._payment_type = get_mech_payment_type(
                 ledger_api=ledger_api,
-                mech_address=self.params.agent_mech_contract_addresses[0],
+                mech_address=self._marketplace_mech_address,
             )
             self.context.logger.info(
                 "Offchain verification constants loaded: "
@@ -885,6 +985,81 @@ class MechHttpHandler(AbstractResponseHandler):
                 "Failed to load offchain verification constants; "
                 "offchain requests will be refused until the next restart."
             )
+            return
+        self._selfcheck_marketplace_request_id_derivation(ledger_api)
+
+    def _selfcheck_marketplace_request_id_derivation(
+        self, ledger_api: EthereumApi
+    ) -> None:
+        """Cross-check the local request-id derivation against the marketplace.
+
+        Calls the marketplace ``getRequestId`` view with fixed dummy inputs
+        and compares its bytes32 output with ``compute_request_id`` run on
+        the same inputs and the boot-cached ``domain_separator`` and
+        ``payment_type``. On mismatch: log a fatal-level error, flip the
+        boot-cached constants to ``None`` (so every subsequent
+        offchain accept 401s with ``marketplace-verification-failed``),
+        and return without raising. The mismatch is an operational signal;
+        crashing the mech process on a marketplace upgrade would be more
+        disruptive than the accept refusal.
+
+        :param ledger_api: the ledger API object used for the view call.
+        """
+        # Precondition: the caller loaded both constants before invoking.
+        # Belt-and-braces to keep the type checker happy for the two
+        # dereferences below.
+        if self._domain_separator is None or self._payment_type is None:
+            return
+        marketplace_address = self.params.mech_marketplace_address
+        mech_address = cast(str, self._marketplace_mech_address)
+        try:
+            onchain_request_id = get_marketplace_request_id_view(
+                ledger_api=ledger_api,
+                marketplace_address=marketplace_address,
+                mech=mech_address,
+                requester=_SELFCHECK_REQUESTER,
+                data=_SELFCHECK_REQUEST_DATA,
+                delivery_rate=_SELFCHECK_DELIVERY_RATE,
+                payment_type=self._payment_type,
+                nonce=_SELFCHECK_NONCE,
+            )
+            local_request_id = compute_request_id(
+                marketplace=marketplace_address,
+                mech=mech_address,
+                requester=_SELFCHECK_REQUESTER,
+                request_data=_SELFCHECK_REQUEST_DATA,
+                delivery_rate=_SELFCHECK_DELIVERY_RATE,
+                payment_type=self._payment_type,
+                nonce=_SELFCHECK_NONCE,
+                domain_separator=self._domain_separator,
+            )
+        except Exception:  # pylint: disable=broad-exception-caught
+            # Any failure here — RPC unreachable, contract revert,
+            # local derivation raising — leaves the constants unset so
+            # the accept path 401s with a clear reason instead of
+            # trusting a derivation we could not confirm.
+            self.context.logger.exception(
+                "Marketplace request-id self-check failed; disabling "
+                "offchain accepts until the next restart."
+            )
+            self._domain_separator = None
+            self._payment_type = None
+            return
+        if onchain_request_id != local_request_id:
+            self.context.logger.error(
+                "FATAL: marketplace getRequestId does not match the local "
+                "compute_request_id reimplementation "
+                "(onchain=0x%s local=0x%s). The marketplace may have been "
+                "upgraded to a layout this handler does not mirror; "
+                "offchain accepts will 401 until the mech is redeployed "
+                "against a matching handler.",
+                onchain_request_id.hex(),
+                local_request_id.hex(),
+            )
+            self._domain_separator = None
+            self._payment_type = None
+            return
+        self.context.logger.info("Marketplace request-id self-check passed.")
 
     def start_prometheus_server(self) -> None:
         """Starts the prometheus server"""
@@ -932,7 +1107,15 @@ class MechHttpHandler(AbstractResponseHandler):
             sender = data[RequestKey.SENDER.value]
             request_delivery_rate = int(data[RequestKey.DELIVERY_RATE.value])
             signature_hex = data[RequestKey.SIGNATURE.value]
-            request_nonce = int(data[RequestKey.NONCE.value])
+            # ``nonce`` on the wire is form-urlencoded — always ``str``.
+            # Coerce with ``int(...)`` inside the ingress try/except so a
+            # non-numeric value 400s alongside the other body-shape
+            # violations. Downstream (see the ``_enqueue_offchain_request``
+            # writeback and the sort in
+            # ``task_submission_abci.behaviours._get_offchain_tasks_deliver_data``)
+            # gets the coerced ``int`` value.
+            wire_nonce = data[RequestKey.NONCE.value]
+            request_nonce = int(wire_nonce)
         except Exception as e:
             self.context.logger.error(
                 f"Error processing signed request. body_len={len(http_msg.body)} "
@@ -983,6 +1166,29 @@ class MechHttpHandler(AbstractResponseHandler):
             self._handle_bad_request(http_msg, http_dialogue)
             return
 
+        # ``nonce`` gets the same treatment as ``request_id``: canonical
+        # ASCII decimal + uint256 magnitude. The alphabet regex catches
+        # ``"9abc"`` and empty strings; the uint256 bound catches
+        # ``2**256`` and the length short-circuit stops
+        # ``ValueError`` from firing at ``int()`` for pathological input
+        # lengths. Rejects negatives (``\A-`` never matches ``NONCE_RE``)
+        # so ``int(nonce)`` downstream is guaranteed a non-negative int.
+        if not NONCE_RE.fullmatch(wire_nonce or ""):
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id}: "
+                f"nonce must be a canonical ASCII decimal "
+                f"(nonce={wire_nonce!r})."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+        if len(wire_nonce) > len(str(MAX_NONCE)) or request_nonce > MAX_NONCE:
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id}: "
+                f"nonce exceeds uint256 upper bound (nonce={wire_nonce})."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+
         if not IPFS_HASH_RE.match(ipfs_hash):
             self.context.logger.error(
                 f"Rejecting offchain request {request_id}: invalid ipfs_hash "
@@ -1019,6 +1225,11 @@ class MechHttpHandler(AbstractResponseHandler):
             signature_hex=signature_hex,
         )
         if not sig_ok:
+            # Pre-auth 401: do NOT persist a rejection payload keyed by
+            # the caller-supplied ``request_id`` — a caller could
+            # otherwise poison an arbitrary id that a legitimate caller
+            # would later read via the polling endpoint. See
+            # ``_send_rejection_response(record_response=...)``.
             self._send_rejection_response(
                 http_msg,
                 http_dialogue,
@@ -1029,11 +1240,63 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             return
 
+        # Bind the executed payload to the signature. The trader signs
+        # a ``request_id`` derived from ``keccak(ipfs_hash)`` and posts
+        # the ``ipfs_data`` body inline; without a match check the
+        # signature would authorise "work described by CID X" while
+        # the mech executes body Y. Re-derive the CID over the bytes
+        # the mech will actually run and reject the request outright
+        # if it does not equal the posted ``ipfs_hash``.
+        cid_bind_ok = self._verify_ipfs_hash_binding(
+            request_id=request_id,
+            ipfs_hash=ipfs_hash,
+            ipfs_data=data.get(RequestKey.IPFS_DATA.value, ""),
+        )
+        if not cid_bind_ok:
+            self._send_rejection_response(
+                http_msg,
+                http_dialogue,
+                request_id,
+                reason=IPFS_HASH_BODY_MISMATCH,
+                status_code=HttpCode.BAD_REQUEST_CODE.value,
+                status_text="Bad request",
+            )
+            return
+
+        # Replay protection. Once the sig + CID gates have passed, the
+        # accept-time trust base is enough to dedup exactly: every field
+        # that changes the ``request_id`` is signed, so the same body
+        # posted twice hashes to the same id, and any change to a signed
+        # field would have produced a different id. Return 200 with a
+        # note rather than a 409 so mech-client's idempotent-retry
+        # semantics are preserved on a genuine network retry.
+        if self._is_duplicate_request(request_id):
+            self.context.logger.info(
+                "Duplicate offchain request %s already known; returning 200 "
+                "without a second enqueue.",
+                request_id,
+            )
+            self._send_ok_response(
+                http_msg=http_msg,
+                http_dialogue=http_dialogue,
+                data={
+                    RequestKey.REQUEST_ID.value: request_id,
+                    ResponseKey.STATUS.value: ResponseStatus.OK.value,
+                    ResponseKey.REASON.value: REQUEST_ALREADY_ACCEPTED,
+                },
+            )
+            return
+
         balance_check = self._check_offchain_requester_balance(
             sender=sender,
             delivery_rate=request_delivery_rate,
         )
         if balance_check[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+            # Pre-enqueue 503: same pre-auth-write rule as the 401
+            # branch above. The caller has proven signature ownership,
+            # but the ledger read failed before any state was committed;
+            # do not persist a rejection payload for a request that
+            # never made it into pending_tasks.
             self._send_rejection_response(
                 http_msg,
                 http_dialogue,
@@ -1060,6 +1323,12 @@ class MechHttpHandler(AbstractResponseHandler):
                 )
                 self._send_internal_error(http_msg, http_dialogue, request_id)
                 return
+            # 402 is the one rejection path that DOES persist the
+            # response payload keyed by ``request_id``: the caller has
+            # authenticated (signature ownership proven) and needs the
+            # deposit challenge to be readable via the polling endpoint
+            # (``_handle_offchain_request_info``). Every other pre-auth
+            # rejection returns the HTTP response only.
             self._send_rejection_response(
                 http_msg,
                 http_dialogue,
@@ -1069,8 +1338,20 @@ class MechHttpHandler(AbstractResponseHandler):
                 status_text="Payment required",
                 extra_headers=extra_headers,
                 body_extras=challenge_body,
+                record_response=True,
             )
             return
+
+        # ``nonce`` moves from the wire ``str`` to the coerced ``int``
+        # before the enqueue merges the parsed body dict into the
+        # pending task. Without this, ``_enqueue_offchain_request``
+        # would spread the original ``str`` through as ``data["nonce"]``
+        # and the sort key in
+        # ``task_submission_abci.behaviours._get_offchain_tasks_deliver_data``
+        # would fall back to lexicographic order (``"10"`` before
+        # ``"9"``) and mis-order the batch against the on-chain
+        # ``mapNonces`` array consume.
+        data[RequestKey.NONCE.value] = request_nonce  # type: ignore[assignment]
 
         try:
             req = self._enqueue_offchain_request(
@@ -1111,6 +1392,111 @@ class MechHttpHandler(AbstractResponseHandler):
                 f"Failed to send OK response for {request_id}."
             )
             self._send_internal_error(http_msg, http_dialogue, request_id)
+
+    def _verify_ipfs_hash_binding(
+        self,
+        request_id: str,
+        ipfs_hash: str,
+        ipfs_data: str,
+    ) -> bool:
+        """Return True iff the local CID of ``ipfs_data`` matches ``ipfs_hash``.
+
+        The trader signs a ``request_id`` derived from ``keccak(ipfs_hash)``
+        where ``ipfs_hash`` is the on-chain content commitment. The
+        signature therefore binds the ``request_id`` to a content hash,
+        not to any particular body — a client could sign the CID of a
+        benign prompt and paste an expensive one into the same POST.
+        This method re-derives the CID over the raw ``ipfs_data`` bytes
+        the mech will feed to ``_handle_get_task`` and compares against
+        the caller-posted ``ipfs_hash`` before the request enqueues.
+
+        The wire ``ipfs_hash`` is a 0x-prefixed hex string of either
+        32 bytes (bare SHA-256 digest, 64 hex chars — matches
+        ``to_multihash`` on the locally-derived CID) or 34 bytes
+        (SHA-256 multihash prefix ``0x1220`` + 32-byte digest, 68 hex
+        chars). Both forms reduce to the same 32-byte digest for the
+        compare; the multihash prefix is stripped when present.
+
+        :param request_id: the caller-supplied off-chain request id
+            (used only for the log line).
+        :param ipfs_hash: the caller-posted ``ipfs_hash`` from the
+            signed body, already ``IPFS_HASH_RE``-validated.
+        :param ipfs_data: the raw request-metadata JSON string carried
+            inline in the signed body under ``ipfs_data``.
+        :return: True on match; False on any mismatch (empty body,
+            oversize body, digest mismatch).
+        """
+        if not ipfs_data:
+            self.context.logger.error(
+                "Rejecting offchain request %s: ipfs_data is empty; "
+                "cannot re-derive the CID for the binding check.",
+                request_id,
+            )
+            return False
+        try:
+            local_cid = compute_cidv1(ipfs_data.encode(ENCODING_UTF8))
+        except ValueError:
+            # ``compute_cidv1`` raises above the single-block bound
+            # (256 KiB). Reject with the same reason as a hash mismatch
+            # rather than 500: an oversize body is an accept-time
+            # rejection, not a server error.
+            self.context.logger.exception(
+                "Rejecting offchain request %s: ipfs_data exceeds the "
+                "single-block CID bound.",
+                request_id,
+            )
+            return False
+        local_digest_hex = to_multihash(local_cid)
+        # Strip a leading ``0x`` (guaranteed by ``IPFS_HASH_RE``) and,
+        # if the caller sent the 34-byte multihash form, the ``1220``
+        # SHA-256 function-code + digest-length prefix. Both forms
+        # collapse to the 64-hex-char raw digest for the compare.
+        posted_hex = ipfs_hash[2:]
+        if posted_hex.startswith(IPFS_HASH_MULTIHASH_PREFIX):
+            posted_hex = posted_hex[len(IPFS_HASH_MULTIHASH_PREFIX) :]
+        # Case-fold: ``IPFS_HASH_RE`` accepts both cases; ``to_multihash``
+        # returns lowercase. Compare lowercase to lowercase.
+        if posted_hex.lower() != local_digest_hex.lower():
+            self.context.logger.error(
+                "Rejecting offchain request %s: local CID digest "
+                "0x%s does not match posted ipfs_hash %s.",
+                request_id,
+                local_digest_hex,
+                ipfs_hash,
+            )
+            return False
+        return True
+
+    def _is_duplicate_request(self, request_id: str) -> bool:
+        """Return True iff ``request_id`` is already known to the handler.
+
+        Trace of the off-chain request lifecycle:
+
+        1. ``_enqueue_offchain_request`` writes
+           ``in_memory_requests[str(request_id)]`` at accept time.
+        2. The behaviour picks the task, executes it, and pops
+           ``in_memory_requests[str(req_id)]`` in ``_handle_done_task``
+           (see ``behaviours.py:1604``). Between accept and pop the
+           entry is present through every intermediate state (pending
+           list, ``_executing_task`` attribute).
+        3. ``offchain_request_responses[str(request_id)]`` is populated
+           at settlement (delivered) and at post-auth rejection
+           (``_record_offchain_failure``).
+
+        Union of the two dicts therefore covers every state a caller
+        might retry into (pending, executing, delivered, rejected).
+        Keys on both sides are ``str``; the wire ``request_id`` is
+        also ``str`` after the ``REQUEST_ID_RE`` guard, so no coercion
+        is needed for the lookup.
+
+        :param request_id: the wire-format request id (already
+            ``REQUEST_ID_RE``-validated and inside the uint256 bound).
+        :return: True if the id is present in either in-memory dict.
+        """
+        return (
+            request_id in self.in_memory_requests
+            or request_id in self.offchain_request_responses
+        )
 
     def _handle_offchain_request_info(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -1233,8 +1619,9 @@ class MechHttpHandler(AbstractResponseHandler):
         status_text: str,
         extra_headers: str = "",
         body_extras: Optional[Dict[str, Any]] = None,
+        record_response: bool = False,
     ) -> None:
-        """Build a rejection payload, store it, and send the HTTP error response.
+        """Build a rejection payload, optionally persist it, and reply.
 
         :param http_msg: the incoming HTTP request message.
         :param http_dialogue: the HTTP dialogue used to reply.
@@ -1244,6 +1631,14 @@ class MechHttpHandler(AbstractResponseHandler):
         :param status_text: the HTTP status text to emit.
         :param extra_headers: optional pre-formatted header block to prepend.
         :param body_extras: optional dict merged into the JSON response body.
+        :param record_response: when True, persist the rejection payload in
+            ``offchain_request_responses`` keyed by ``request_id`` so the
+            polling endpoint can surface it. Callers on pre-authentication
+            paths (bad signature, malformed body, ledger unavailable)
+            must leave this False so a caller cannot pre-populate an
+            arbitrary payload under an id they do not own. Only the 402
+            balance-insufficient path passes True: the caller has already
+            proven signature ownership and needs the challenge readable.
         """
         # Each header line must be newline-terminated, else it would silently
         # merge with the Content-Type line that follows.
@@ -1260,7 +1655,8 @@ class MechHttpHandler(AbstractResponseHandler):
         }
         if body_extras:
             response_payload.update(body_extras)
-        self.offchain_request_responses[request_id] = response_payload
+        if record_response:
+            self.offchain_request_responses[request_id] = response_payload
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
             target_message=http_msg,
@@ -1283,6 +1679,12 @@ class MechHttpHandler(AbstractResponseHandler):
         with no HTTP reply (hung). This emits a definitive 500 instead; passing
         no extra_headers keeps the senders' own newline guard from re-raising.
 
+        Both current 500 call sites are post-authentication (the sig-verify
+        gate has already passed and the caller has proven ownership of
+        ``request_id``), so persisting the rejection payload for the
+        polling endpoint is safe: it cannot be used to pre-poison an id
+        the caller does not own.
+
         :param http_msg: the incoming HTTP request message.
         :param http_dialogue: the HTTP dialogue used to reply.
         :param request_id: the off-chain request id being rejected.
@@ -1294,6 +1696,7 @@ class MechHttpHandler(AbstractResponseHandler):
             reason="internal error",
             status_code=HttpCode.INTERNAL_SERVER_ERROR_CODE.value,
             status_text="Internal server error",
+            record_response=True,
         )
 
     def _build_402_challenge(
@@ -1350,13 +1753,20 @@ class MechHttpHandler(AbstractResponseHandler):
         """Build the ``WWW-Authenticate`` header line for a 402 response.
 
         :return: a single header line terminated with newline.
+        :raises ValueError: if no marketplace mech is configured; without
+            it the ``realm`` would be blank and clients could not route
+            the deposit to the right balance tracker.
         """
         # The ``realm`` carries the mech address so clients with multiple mechs
         # configured can route the deposit to the right balance tracker.
-        mech_address = self.params.agent_mech_contract_addresses[0]
+        if self._marketplace_mech_address is None:
+            raise ValueError(
+                "cannot build a WWW-Authenticate header without a "
+                "marketplace mech address"
+            )
         return (
             f'WWW-Authenticate: Payment scheme="{PAYMENT_SCHEME}" '
-            f'realm="{mech_address}"\n'
+            f'realm="{self._marketplace_mech_address}"\n'
         )
 
     def _build_payment_receipt_header(
@@ -1554,6 +1964,11 @@ class MechHttpHandler(AbstractResponseHandler):
     ) -> Dict[str, Union[str, int]]:
         """Check requester balance in balance tracker against requested delivery rate."""
         required_amount = int(delivery_rate)
+        if self._marketplace_mech_address is None:
+            return self._make_unavailable_balance_response(
+                required_amount,
+                "No marketplace mech configured for the offchain handler.",
+            )
         ledger_settings = self._get_ledger_settings()
         if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
             return self._make_unavailable_balance_response(
@@ -1568,7 +1983,7 @@ class MechHttpHandler(AbstractResponseHandler):
 
             requester = ledger_api.api.to_checksum_address(sender)
             mech_address = ledger_api.api.to_checksum_address(
-                self.params.agent_mech_contract_addresses[0]
+                self._marketplace_mech_address
             )
             marketplace_address = ledger_api.api.to_checksum_address(
                 self.params.mech_marketplace_address
@@ -1729,8 +2144,14 @@ class MechHttpHandler(AbstractResponseHandler):
             marketplace_address = ledger_api.api.to_checksum_address(
                 self.params.mech_marketplace_address
             )
+            # The cached ``_marketplace_mech_address`` is non-None here
+            # because ``_domain_separator`` / ``_payment_type`` are both
+            # None when the address is None (see
+            # ``_initialise_offchain_verification_constants``), and the
+            # None-guard on those constants at the top of this method
+            # would have already returned False.
             mech_address = ledger_api.api.to_checksum_address(
-                self.params.agent_mech_contract_addresses[0]
+                cast(str, self._marketplace_mech_address)
             )
         except Exception as e:  # pylint: disable=broad-exception-caught
             self.context.logger.error(
