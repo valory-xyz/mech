@@ -1987,6 +1987,11 @@ def _make_signed_request_body(
     placeholders so the ingress parse succeeds; tests that exercise real
     accept paths install a stub verifier via ``_install_verify_ok`` and
     tests that exercise sig-verify itself override these fields.
+
+    :param ipfs_hash: 0x-prefixed hex ipfs hash value for the body.
+    :param delivery_rate: decimal delivery rate string for the body.
+    :param request_id: request_id string for the body.
+    :return: a request-body dict with all required fields populated.
     """
     return {
         "ipfs_hash": ipfs_hash,
@@ -2006,6 +2011,9 @@ def _install_verify_ok(mh: Any, monkeypatch: Any) -> None:
     (balance check, 402 flow, receipt header). The sig-verify method
     itself is exercised by dedicated tests that feed real signatures
     through the real code path.
+
+    :param mh: the ``MechHttpHandler`` instance to patch.
+    :param monkeypatch: the pytest ``monkeypatch`` fixture.
     """
     monkeypatch.setattr(
         mh,
@@ -2020,6 +2028,9 @@ def _install_balance_ok(mh: Any, monkeypatch: Any) -> None:
     Also installs the passing sig-verify stub so downstream tests that
     only care about the balance path don't 401 at the new accept-time
     signature gate.
+
+    :param mh: the ``MechHttpHandler`` instance to patch.
+    :param monkeypatch: the pytest ``monkeypatch`` fixture.
     """
     _install_verify_ok(mh, monkeypatch)
     monkeypatch.setattr(
@@ -2382,6 +2393,10 @@ def _seed_verification_constants(
     non-error value so the ``EthereumApi`` construction path succeeds; the
     ``ledger_api`` returned is discarded because the verify path only uses
     its checksum helper.
+
+    :param mh: the ``MechHttpHandler`` instance to patch.
+    :param params: the params ``SimpleNamespace`` used by the handler.
+    :param monkeypatch: the pytest ``monkeypatch`` fixture.
     """
     params.mech_marketplace_address = _SIGVERIFY_MARKETPLACE
     params.agent_mech_contract_addresses = [_SIGVERIFY_MECH]
@@ -2566,9 +2581,7 @@ def test_verify_offchain_signature_safe_eip1271_true_accepts(
             hmod.ResponseKey.CHAIN_ID.value: 100,
         }
 
-    monkeypatch.setattr(
-        mh, "_check_offchain_requester_balance", _spy_balance_check
-    )
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
 
     # Sender is a Safe (contract) — sign with an arbitrary key that does not
     # recover to the sender, so the ecrecover branch misses and the code
@@ -2632,9 +2645,7 @@ def test_verify_offchain_signature_safe_eip1271_false_rejects_before_balance_che
         balance_calls.append(sender)
         return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
 
-    monkeypatch.setattr(
-        mh, "_check_offchain_requester_balance", _spy_balance_check
-    )
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
 
     safe_sender = _to_checksum("0x" + "aa" * 20)
     ipfs_hash = "0x" + "ab" * 32
@@ -2697,9 +2708,7 @@ def test_verify_offchain_signature_missing_field_returns_400(
         balance_calls.append(sender)
         return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
 
-    monkeypatch.setattr(
-        mh, "_check_offchain_requester_balance", _spy_balance_check
-    )
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
 
     body = _make_signed_request_body(request_id="1")
     body.pop(missing_field)
@@ -2727,9 +2736,7 @@ def test_verify_offchain_signature_rejects_when_wire_request_id_mismatches_deriv
         balance_calls.append(sender)
         return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
 
-    monkeypatch.setattr(
-        mh, "_check_offchain_requester_balance", _spy_balance_check
-    )
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
     monkeypatch.setattr(
         hmod,
         "check_eip1271_signature",
@@ -2773,9 +2780,7 @@ def test_verify_offchain_signature_rejects_when_constants_unloaded(
         balance_calls.append(sender)
         return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
 
-    monkeypatch.setattr(
-        mh, "_check_offchain_requester_balance", _spy_balance_check
-    )
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
 
     body = _make_signed_request_body(request_id="1")
     http_msg: Any = make_http_msg(body)

@@ -119,6 +119,8 @@ def test_check_eip1271_signature_returns_false_on_revert(
 
     Any exception at the call boundary means the sender either reverted or
     does not implement EIP-1271; both mean the signature is not accepted.
+
+    :param raised: the boundary exception injected by the parametrise.
     """
     ledger_api = _make_ledger_api("isValidSignature", raised)
 

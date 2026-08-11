@@ -79,13 +79,13 @@ def compute_request_id(
     nonce: int,
     domain_separator: bytes,
 ) -> bytes:
-    """Compute the marketplace request_id from its constituent fields.
+    r"""Compute the marketplace request_id from its constituent fields.
 
     Mirrors ``MechMarketplace.getRequestId`` byte-for-byte::
 
         requestId = keccak256(
             abi.encodePacked(
-                "\\x19\\x01",
+                "\x19\x01",
                 domainSeparator,
                 keccak256(abi.encode(
                     marketplace, mech, requester,
@@ -132,10 +132,10 @@ def compute_request_id(
 
 
 def recover_eoa_signer(message_hash: bytes, signature: bytes) -> Optional[str]:
-    """Recover the signer address from a raw-hash EOA signature.
+    r"""Recover the signer address from a raw-hash EOA signature.
 
     The marketplace signs the raw ``request_id`` bytes32 directly (no
-    ``\\x19Ethereum Signed Message:\\n32`` prefix) because the request_id
+    ``\x19Ethereum Signed Message:\n32`` prefix) because the request_id
     is itself an EIP-712 signable digest. This helper mirrors the
     marketplace's ``ecrecover`` path: normalise a Ledger-style
     ``v ∈ {0, 1}`` to ``{27, 28}`` and reject an upper-half ``s``

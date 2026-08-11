@@ -49,6 +49,16 @@ def _reference_request_id(
 
     Written from the marketplace's ``getRequestId`` Solidity source, not
     by copying the helper. If the two diverge the test fails.
+
+    :param marketplace: mech marketplace address.
+    :param mech: mech contract address.
+    :param requester: requester address.
+    :param request_data: raw request data bytes.
+    :param delivery_rate: uint256 delivery rate.
+    :param payment_type: bytes32 payment type identifier.
+    :param nonce: uint256 requester nonce.
+    :param domain_separator: 32-byte EIP-712 domain separator.
+    :return: 32-byte reference request_id.
     """
     inner = abi_encode(
         [
