@@ -3371,7 +3371,7 @@ def test_verify_offchain_signature_rejects_401_on_eip1271_timeout(
     mh._handle_signed_requests(http_msg, http_dialogue)
 
     resp = handler_context.outbox.sent[-1]
-    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
     assert stored["reason"] == hmod.EIP1271_CALL_TIMEOUT
     assert balance_calls == []
     assert nonce_calls == [], "nonce read must not run when sig verify rejects"

@@ -2482,12 +2482,30 @@ class MechHttpHandler(AbstractResponseHandler):
 
         recovered = recover_eoa_signer(derived, signature_bytes)
         if recovered is not None and recovered == sender_checksum:
+            self.context.logger.info(
+                "offchain_auth accepted request %s sender=%s "
+                "mechanism=ecrecover recovered=%s",
+                wire_request_id,
+                sender_checksum,
+                recovered,
+            )
             return self._bind_wire_nonce_to_chain(
                 ledger_api=ledger_api,
                 sender_checksum=sender_checksum,
                 wire_nonce=nonce,
                 wire_request_id=wire_request_id,
             )
+        # Log the EOA branch outcome for auditability: recovery either
+        # returned ``None`` (malformed / malleable / bad-v signature) or
+        # yielded an address other than the declared sender. The
+        # EIP-1271 fallback runs next.
+        self.context.logger.debug(
+            "offchain_auth eoa_recovery_failed request=%s sender=%s "
+            "recovered=%s (falls through to EIP-1271 branch)",
+            wire_request_id,
+            sender_checksum,
+            recovered,
+        )
 
         # Sender is either a Safe or an EOA that produced an unrecognised
         # signature. Defer to the sender's EIP-1271 view for the final call.
@@ -2515,12 +2533,24 @@ class MechHttpHandler(AbstractResponseHandler):
                 wire_request_id,
                 exc,
             )
+            # Provider-side slowness — the gas cap already bounds a
+            # hostile ``isValidSignature`` view to sub-millisecond CPU
+            # (that path surfaces as ``ContractLogicError`` and flattens
+            # to ``False`` on the other branch), so a timeout at this
+            # depth is an infrastructure signal, mirroring
+            # ``NONCE_READ_FAILED`` under identical conditions.
             return SignatureVerdict(
                 ok=False,
                 reason=EIP1271_CALL_TIMEOUT,
-                is_infra=False,
+                is_infra=True,
             )
         if eip1271_ok:
+            self.context.logger.info(
+                "offchain_auth accepted request %s sender=%s "
+                "mechanism=eip1271",
+                wire_request_id,
+                sender_checksum,
+            )
             return self._bind_wire_nonce_to_chain(
                 ledger_api=ledger_api,
                 sender_checksum=sender_checksum,

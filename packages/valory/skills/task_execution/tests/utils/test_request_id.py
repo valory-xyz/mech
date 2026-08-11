@@ -17,7 +17,18 @@
 #
 # ------------------------------------------------------------------------------
 
-"""Tests for the marketplace request-id derivation and EOA recovery helpers."""
+"""Tests for the marketplace request-id derivation and EOA recovery helpers.
+
+``eth_abi.encode`` here is the *independent* reference implementation
+that pins the production ``compute_request_id`` byte-for-byte against
+the marketplace's Solidity ``getRequestId`` layout. Production never
+imports ``eth_abi``, only this test does. ``check-dependencies`` still
+forces the declaration in the skill's ``dependencies:`` because the
+scanner walks the test tree too, so the version pin lives in
+``skill.yaml`` (currently ``eth-abi==6.0.0b1``, the pre-release that
+resolves transitively via the ``web3<8,>=7.15.0`` pin — track upstream
+and switch to ``==6.0.0`` once the stable release ships).
+"""
 
 from __future__ import annotations
 
