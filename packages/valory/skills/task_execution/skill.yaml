@@ -42,8 +42,8 @@ fingerprint_ignore_patterns: []
 connections:
 - valory/ipfs:0.1.0:bafybeidob3tcdebjbm4ovwqoz4v2egf7nvoui3hu5on4o3apfchr6rpwwa
 - valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
-- valory/ledger:0.19.0:bafybeidrfb2ixgsmoy73izeuq43npynkot324iayslipogfulcgshq33iu
-- valory/p2p_libp2p_client:0.1.0:bafybeif2pr4vrh2e24enjdymb4ortqkqmvcaq22tlzl5nfccvftomggjiu
+- valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
+- valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 contracts:
 - valory/balance_tracker:0.1.0:bafybeiayyxl643qfpw57vopytxgyd6flxxmwassswuxen7myekqaxdxxvi
 - valory/mech_marketplace:0.1.0:bafybeigrcnjaycggulxyx2tsjub4ssjij66d7nfzsavo6gd54hm7beliiu
@@ -56,7 +56,7 @@ protocols:
 - valory/kv_store:0.1.0:bafybeidlfrgv5rc7m7kj3j6u6umogmpy5bgcdzqtnsy3v75wn3likvyt6m
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeidvxzo27p5fkthf6xj5n4e6vwthldcuwx3wvjx4fzpwi6cc7yhn3m
+- valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 behaviours:
   task_execution:
     args: {}

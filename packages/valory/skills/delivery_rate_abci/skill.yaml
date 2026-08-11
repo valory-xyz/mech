@@ -27,8 +27,8 @@ protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeidvxzo27p5fkthf6xj5n4e6vwthldcuwx3wvjx4fzpwi6cc7yhn3m
-- valory/transaction_settlement_abci:0.1.0:bafybeibmkegs4e63zldrhsa24h7s7cpgqdf3mmkktopwywtyjjxtnsuv2m
+- valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
+- valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
   main:
     args: {}

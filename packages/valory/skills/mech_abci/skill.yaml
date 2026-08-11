@@ -22,19 +22,19 @@ fingerprint:
   tests/test_models.py: bafybeif4iuuknrtx3tc72y2ii237dqtl6nlqgpdywy227sfqbvxkk6mugy
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeihjuoo45sk6dktxktqgfhyk2t5qsomztmsfzgv3vt3bq7updg3piq
+- valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
 contracts: []
 protocols:
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeidvxzo27p5fkthf6xj5n4e6vwthldcuwx3wvjx4fzpwi6cc7yhn3m
-- valory/delivery_rate_abci:0.1.0:bafybeifjtxexh6trir7thjtl63g2v2nbucyzsnuemlzf2suugdxnxqmzae
-- valory/registration_abci:0.1.0:bafybeibxrtnilq2oz6rt2rvmitw7z3sp4t2grlc7mhmgiwarillhrylo6e
-- valory/reset_pause_abci:0.1.0:bafybeifa6tbg54qc7fhdeqlhuld6fcniaz5wksrvdmyetproagccxgdtga
-- valory/task_execution:0.1.0:bafybeiexvgxjymcd43a4fgwey6hwlr5iir5wnenbfub2yvd5l4zd3chvsi
-- valory/task_submission_abci:0.1.0:bafybeihmvdk4wxzbwoehztin7zosiqykq6egyc4eixnfbyvfv4hfnru3de
-- valory/termination_abci:0.1.0:bafybeigdxyvzuzyfy7vbjz7lgmpxopif7vrq2hpwg7cinbpehoicienrvi
-- valory/transaction_settlement_abci:0.1.0:bafybeibmkegs4e63zldrhsa24h7s7cpgqdf3mmkktopwywtyjjxtnsuv2m
+- valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
+- valory/delivery_rate_abci:0.1.0:bafybeifjiazvf3qhr2264i55u4tlvmyf6ztgak2ndqolujt4kw6jiy7l3m
+- valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
+- valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
+- valory/task_execution:0.1.0:bafybeierqzfkkvyah6g2g7ra3ztkggzvlg5pplx6iqxduhy7qhzpmlmxly
+- valory/task_submission_abci:0.1.0:bafybeiayhuho5dyqqng6vgwtajyu737ambdsgf24for6jgkrvo35wbgfay
+- valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
+- valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
   main:
     args: {}
