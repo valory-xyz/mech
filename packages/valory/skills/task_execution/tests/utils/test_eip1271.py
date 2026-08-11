@@ -31,13 +31,17 @@ from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
-from web3.exceptions import ContractLogicError
+import requests
+from web3.exceptions import (
+    BadFunctionCallOutput,
+    ContractLogicError,
+    Web3RPCError,
+)
 
 from packages.valory.skills.task_execution.utils.eip1271 import (
     EIP1271_MAGIC_VALUE,
     check_eip1271_signature,
     get_marketplace_domain_separator,
-    get_mech_payment_type,
 )
 
 _CONTRACT_ADDRESS = "0x1111111111111111111111111111111111111111"
@@ -109,16 +113,31 @@ def test_check_eip1271_signature_returns_false_on_non_magic_value(
         pytest.param(
             ContractLogicError("execution reverted"), id="contract_logic_error"
         ),
+        pytest.param(
+            BadFunctionCallOutput("decode failure"), id="bad_function_call_output"
+        ),
+        pytest.param(Web3RPCError("rpc error"), id="web3_rpc_error"),
         pytest.param(ValueError("abi decode failure"), id="value_error"),
+        pytest.param(
+            requests.exceptions.ConnectionError("boom"), id="connection_error"
+        ),
+        pytest.param(requests.exceptions.ReadTimeout("slow"), id="read_timeout"),
+        pytest.param(requests.exceptions.HTTPError("bad status"), id="http_error"),
     ],
 )
-def test_check_eip1271_signature_returns_false_on_revert(
+def test_check_eip1271_signature_returns_false_on_boundary_exception(
     raised: BaseException,
 ) -> None:
-    """A revert or ABI-decode failure at the ledger boundary maps to False.
+    """Any recognised failure at the ledger boundary maps to False.
 
-    Any exception at the call boundary means the sender either reverted or
-    does not implement EIP-1271; both mean the signature is not accepted.
+    Web3 raises ``BadFunctionCallOutput`` when ``eth_call`` targets a
+    codeless address (the common case for a Safe pointed at the wrong
+    proxy) and ``Web3RPCError`` on JSON-RPC failures; ``requests``
+    transport failures (connection error, read timeout, HTTP error)
+    surface as siblings under ``RequestException``. All must map to
+    False so the accept path's fallback treats the outcome as a
+    signature rejection instead of crashing the framework's default
+    ``propagate`` handler and stopping the agent.
 
     :param raised: the boundary exception injected by the parametrise.
     """
@@ -159,27 +178,7 @@ def test_get_marketplace_domain_separator_rejects_wrong_length() -> None:
         )
 
 
-# --- get_mech_payment_type ---------------------------------------------------
-
-
-def test_get_mech_payment_type_returns_bytes32() -> None:
-    """Return the 32-byte mech payment type."""
-    expected = b"\xcd" * 32
-    ledger_api = _make_ledger_api("paymentType", expected)
-
-    result = get_mech_payment_type(
-        ledger_api=ledger_api,
-        mech_address=_CONTRACT_ADDRESS,
-    )
-    assert result == expected
-
-
-def test_get_mech_payment_type_rejects_wrong_length() -> None:
-    """A ``paymentType`` return that is not 32 bytes raises."""
-    ledger_api = _make_ledger_api("paymentType", b"\x00" * 30)
-
-    with pytest.raises(ValueError, match="payment_type length"):
-        get_mech_payment_type(
-            ledger_api=ledger_api,
-            mech_address=_CONTRACT_ADDRESS,
-        )
+# ``get_mech_payment_type`` was removed in favour of the packaged
+# ``OlasMechContract.get_mech_type`` wrapper; both call the same
+# ``paymentType()`` selector and the wrapper carries its own tests
+# alongside the contract package.

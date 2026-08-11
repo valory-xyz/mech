@@ -30,12 +30,8 @@ from __future__ import annotations
 from typing import Optional
 
 from eth_account import Account
+from eth_keys.exceptions import BadSignature
 from eth_utils import keccak, to_checksum_address
-
-# EIP-1271 magic value returned by a contract's isValidSignature when it
-# accepts the presented (message_hash, signature) pair. bytes4 of
-# keccak256("isValidSignature(bytes32,bytes)").
-EIP1271_MAGIC_VALUE: bytes = b"\x16\x26\xba\x7e"
 
 # Length of a canonical secp256k1 signature: r (32) + s (32) + v (1).
 SIGNATURE_BYTES_LENGTH: int = 65
@@ -104,7 +100,9 @@ def compute_request_id(
     :param nonce: uint256 requester nonce as tracked by
         ``MechMarketplace.mapNonces[requester]`` at the time of signing.
     :param domain_separator: 32-byte EIP-712 domain separator, as returned
-        by ``MechMarketplace.domainSeparator()``.
+        by ``MechMarketplace.getDomainSeparator()`` (chain-fork-safe view
+        that returns ``block.chainid == chainId ? domainSeparator :
+        _computeDomainSeparator()``).
     :return: 32-byte request_id.
     """
     if len(domain_separator) != 32:
@@ -163,11 +161,22 @@ def recover_eoa_signer(message_hash: bytes, signature: bytes) -> Optional[str]:
 
     normalised = signature[:64] + bytes([v])
 
+    # ``Account._recover_hash`` is a private helper on ``eth-account``
+    # (pinned to ``0.13.7`` in ``skill.yaml``). It is used because the
+    # public ``Account.recover_message`` would prepend the EIP-191
+    # ``\x19Ethereum Signed Message:\n32`` header, which is not what
+    # the marketplace signs — the marketplace signs the raw request-id
+    # bytes32 directly. If a routine ``eth-account`` bump removes the
+    # underscore-prefixed API, the exception surfaces here (as
+    # ``AttributeError``) and every EOA request falls through to the
+    # EIP-1271 branch: ``skill.yaml`` pin plus this comment are the
+    # coupling the caller has to notice.
     try:
         recovered = Account._recover_hash(message_hash, signature=normalised)
-    except Exception:  # pylint: disable=broad-exception-caught
-        # Any recovery failure — bad r/s, curve point at infinity, decode
-        # error — is treated as a failed recovery so the caller can fall
-        # through to the EIP-1271 path.
+    except (BadSignature, ValueError, AttributeError):
+        # Recovery failures ``eth-keys`` surfaces as ``BadSignature`` and
+        # ``eth-account`` surfaces as ``ValueError`` on malformed inputs
+        # (bad ``r``/``s``, curve point at infinity, decode error). The
+        # caller falls through to the EIP-1271 branch on ``None``.
         return None
     return to_checksum_address(recovered)

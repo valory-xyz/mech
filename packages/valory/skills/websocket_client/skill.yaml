@@ -27,13 +27,14 @@ handlers:
     args: {}
     class_name: WebSocketHandler
 models:
+  params:
+    args:
+      subscription_id: websocket-subscription
+      websocket_provider: ws://localhost:8001
+    class_name: Params
   websocket_client_dialogues:
     args: {}
     class_name: WebsocketClientDialogues
-  params:
-    args:
-      websocket_provider: ws://localhost:8001
-      subscription_id: websocket-subscription
-    class_name: Params
 dependencies: {}
 is_abstract: true
+customs: []

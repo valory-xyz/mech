@@ -31,23 +31,23 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/olas_mech:0.1.0:bafybeigwnetiwhhvcdjmda2nmd2n35alytq5ftf7qionibht2sfgsl3rpm
-- valory/mech_marketplace:0.1.0:bafybeigrcnjaycggulxyx2tsjub4ssjij66d7nfzsavo6gd54hm7beliiu
-- valory/complementary_service_metadata:0.1.0:bafybeihukaditdbnvhkxnt2bfqtclfnniw6l2dwks4dx3hhzlvt46ilduq
-- valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
-- valory/multisend:0.1.0:bafybeifqtf24h7lhhbairveqmq2klhvbswajmbpoyqj4xrgye7c22pxubi
-- valory/service_registry:0.1.0:bafybeicbfffywnaaehptzasxsdoyguuurpleirsnor5xf7rqk57isjkury
-- valory/hash_checkpoint:0.1.0:bafybeih76qkq55amfkgqewmfzrqpffmgcg7aurgnpjhpzkhh6ek7i5mh3m
 - valory/balance_tracker:0.1.0:bafybeiayyxl643qfpw57vopytxgyd6flxxmwassswuxen7myekqaxdxxvi
+- valory/complementary_service_metadata:0.1.0:bafybeihukaditdbnvhkxnt2bfqtclfnniw6l2dwks4dx3hhzlvt46ilduq
 - valory/erc20:0.1.0:bafybeibpuyikvpmtaraca4lqokf3kf6jlpmafkqm6oixnps3ig23jfbllq
+- valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
+- valory/hash_checkpoint:0.1.0:bafybeih76qkq55amfkgqewmfzrqpffmgcg7aurgnpjhpzkhh6ek7i5mh3m
+- valory/mech_marketplace:0.1.0:bafybeigrcnjaycggulxyx2tsjub4ssjij66d7nfzsavo6gd54hm7beliiu
+- valory/multisend:0.1.0:bafybeifqtf24h7lhhbairveqmq2klhvbswajmbpoyqj4xrgye7c22pxubi
+- valory/olas_mech:0.1.0:bafybeigwnetiwhhvcdjmda2nmd2n35alytq5ftf7qionibht2sfgsl3rpm
+- valory/service_registry:0.1.0:bafybeicbfffywnaaehptzasxsdoyguuurpleirsnor5xf7rqk57isjkury
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
-- valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
-- valory/task_execution:0.1.0:bafybeidrdvzykow7biibnvdgaici5b7ssdn5qhbg4dge75wetvs5ijpyiu
+- valory/abstract_round_abci:0.1.0:bafybeidvxzo27p5fkthf6xj5n4e6vwthldcuwx3wvjx4fzpwi6cc7yhn3m
+- valory/task_execution:0.1.0:bafybeigbciefghh32opfl5te7cbwm5p2oie52r2y64n6h6zkzuvffbu7lq
+- valory/transaction_settlement_abci:0.1.0:bafybeibmkegs4e63zldrhsa24h7s7cpgqdf3mmkktopwywtyjjxtnsuv2m
 behaviours:
   main:
     args: {}
@@ -99,9 +99,10 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      mech_to_config: {}
-      mech_to_max_delivery_rate: {}
+      agent_funding_amount: 200000000000000000
       cleanup_history_depth_current: null
+      complementary_service_metadata_address: '0x0000000000000000000000000000000000000000'
+      default_chain_id: gnosis
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0
       genesis_config:
@@ -121,17 +122,28 @@ models:
           version: {}
         genesis_time: '2022-05-20T16:00:21.735122717Z'
         voting_power: '10'
+      hash_checkpoint_address: '0x0000000000000000000000000000000000000000'
       history_check_timeout: 1205
       ipfs_domain_name: null
-      complementary_service_metadata_address: '0x0000000000000000000000000000000000000000'
-      metadata_hash: '00000000000000000000000000000000000000000000000000'
       ipfs_fetch_timeout: 15.0
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
+      light_slash_unit_amount: 5000000000000000
       max_attempts: 10
       max_healthcheck: 120
-      hash_checkpoint_address: '0x0000000000000000000000000000000000000000'
+      mech_events_chain_id: 0
+      mech_events_sweep_max_age_seconds: 3600.0
+      mech_events_sweep_pending_enabled: false
+      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
+      mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
+      mech_to_config: {}
+      mech_to_max_delivery_rate: {}
+      metadata_hash: '00000000000000000000000000000000000000000000000000'
+      minimum_agent_balance: 100000000000000000
       on_chain_service_id: null
+      predict_api_events_timeout_seconds: 5.0
+      predict_api_events_url: https://mpp.autonolas.tech/mech/events
+      profit_split_balance: 1000
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
@@ -139,7 +151,10 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
+      serious_slash_unit_amount: 8000000000000000
+      service_endpoint_base: https://dummy_service.autonolas.tech/
       service_id: task_execution
+      service_owner_share: 1000
       service_registry_address: null
       setup:
         all_participants:
@@ -147,6 +162,8 @@ models:
         consensus_threshold: null
         safe_contract_address: '0x0000000000000000000000000000000000000000'
       share_tm_config_on_startup: false
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
       sleep_time: 1
       task_wait_timeout: 15
       tendermint_check_sleep_delay: 3
@@ -154,28 +171,11 @@ models:
       tendermint_max_retries: 5
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
-      mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
-      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
       tx_timeout: 10.0
+      use_offchain: false
+      use_slashing: false
       use_termination: false
       validate_timeout: 1205
-      use_slashing: false
-      service_owner_share: 1000
-      profit_split_balance: 1000
-      slash_cooldown_hours: 3
-      agent_funding_amount: 200000000000000000
-      minimum_agent_balance: 100000000000000000
-      slash_threshold_amount: 10000000000000000
-      light_slash_unit_amount: 5000000000000000
-      serious_slash_unit_amount: 8000000000000000
-      service_endpoint_base: https://dummy_service.autonolas.tech/
-      default_chain_id: gnosis
-      use_offchain: false
-      predict_api_events_url: https://mpp.autonolas.tech/mech/events
-      predict_api_events_timeout_seconds: 5.0
-      mech_events_sweep_pending_enabled: false
-      mech_events_sweep_max_age_seconds: 3600.0
-      mech_events_chain_id: 0
     class_name: Params
   requests:
     args: {}
@@ -197,3 +197,4 @@ dependencies:
   prometheus_client:
     version: ==0.23.1
 is_abstract: true
+customs: []

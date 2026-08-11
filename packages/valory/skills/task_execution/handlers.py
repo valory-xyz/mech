@@ -27,12 +27,14 @@ import time
 import urllib.parse
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, NamedTuple, Optional, Union, cast
 
 from aea.protocols.base import Message
 from aea.skills.base import Handler
 from aea_ledger_ethereum import EthereumApi
 from prometheus_client import start_http_server
+from requests.exceptions import RequestException
+from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3RPCError
 
 from packages.valory.connections.ledger.connection import (
     PUBLIC_ID as LEDGER_CONNECTION_PUBLIC_ID,
@@ -54,7 +56,6 @@ from packages.valory.skills.task_execution.utils.eip1271 import (
     check_eip1271_signature,
     get_marketplace_domain_separator,
     get_marketplace_request_id_view,
-    get_mech_payment_type,
 )
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
@@ -132,6 +133,27 @@ MAX_REQUEST_ID = 2**256 - 1
 NONCE_RE = re.compile(r"\A(0|[1-9][0-9]*)\Z")
 MAX_NONCE = 2**256 - 1
 
+# ``signature`` on the wire is the hex encoding of the packed signature
+# bytes with a mandatory ``0x`` prefix. The settlement path
+# (``task_submission_abci.behaviours``) does an unconditional
+# ``bytes.fromhex(sig[2:])`` when it packs the on-chain payload; a
+# body sent without the ``0x`` would have its first hex byte silently
+# truncated there. The lower bound is 65 bytes for a canonical
+# secp256k1 signature; the upper bound is generous so multi-signer
+# Safe EIP-1271 payloads (n * 65 bytes plus contract signature data)
+# fit while capping payload growth to a fixed constant. The alphabet
+# is case-insensitive hex and the length is always even
+# (``bytes.fromhex`` would otherwise raise on the settlement path).
+SIGNATURE_BYTES_MIN = 65
+SIGNATURE_BYTES_MAX = 2048
+SIGNATURE_RE = re.compile(
+    r"\A0x(?:[0-9a-fA-F]{2}){"
+    + str(SIGNATURE_BYTES_MIN)
+    + ","
+    + str(SIGNATURE_BYTES_MAX)
+    + r"}\Z"
+)
+
 # Boot-time self-check inputs for the marketplace ``getRequestId`` view
 # vs the local ``compute_request_id`` reimplementation. Any well-formed
 # tuple is fine because we compare two bytes32 outputs, not the
@@ -144,17 +166,22 @@ _SELFCHECK_REQUEST_DATA = b"\x00" * 32
 _SELFCHECK_DELIVERY_RATE = 1
 _SELFCHECK_NONCE = 0
 
-# Sentinel rejection reason surfaced when the boot-time self-check
-# between the marketplace ``getRequestId`` view and the local
-# ``compute_request_id`` disagrees. Every subsequent offchain accept
-# 401s with this reason so operators can grep the log line to the
-# corresponding fatal at boot.
-MARKETPLACE_VERIFICATION_FAILED = "marketplace-verification-failed"
-
 # Rejection reason for a body whose local CID does not match the
 # posted ``ipfs_hash``: the request would enqueue arbitrary work under
 # a signature that authorised different content.
 IPFS_HASH_BODY_MISMATCH = "ipfs_hash does not match ipfs_data content"
+
+# Rejection reason for a body whose ``ipfs_data`` exceeds the 256 KiB
+# single-block CID bound (``compute_cidv1`` raises above it). Distinct
+# from ``IPFS_HASH_BODY_MISMATCH`` so a caller can tell a size overflow
+# apart from a genuine content-hash disagreement.
+IPFS_DATA_OVERSIZE = "ipfs_data exceeds the single-block CID bound"
+
+# Single-block CID bound (256 KiB). Mirrors ``local_cid._MAX_BLOCK_BYTES``
+# and is used to range-check ``ipfs_data`` before ``compute_cidv1`` is
+# called so an oversize body surfaces as ``IPFS_DATA_OVERSIZE`` (accept
+# rejection) rather than a misleading CID-mismatch reason.
+MAX_IPFS_DATA_BYTES = 256 * 1024
 
 # Reason surfaced on the idempotent-retry response (HTTP 200) when the
 # handler already knows the ``request_id`` from the pending queue, the
@@ -244,6 +271,23 @@ PAYMENT_SCHEME = "olas-prepay"
 DEPOSIT_FN_ABI = "depositFor(address requester, uint256 amount)"
 SETTLEMENT_STATUS_PENDING = "pending"
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+
+
+class SignatureVerdict(NamedTuple):
+    """Outcome of ``_verify_offchain_request_signature``.
+
+    ``is_infra`` distinguishes verification failures caused by our
+    side (boot constants unset, ledger settings missing, address
+    preparation failure) from a genuinely bad caller signature. The
+    caller routes ``is_infra=True`` outcomes to a 503 ("try again
+    later") so a well-behaved client backs off instead of giving up
+    on the assumption its credentials are wrong; ``is_infra=False``
+    outcomes stay 401 ("unauthorized").
+    """
+
+    ok: bool
+    reason: str
+    is_infra: bool
 
 
 class BaseHandler(Handler):
@@ -970,10 +1014,20 @@ class MechHttpHandler(AbstractResponseHandler):
                 ledger_api=ledger_api,
                 marketplace_address=self.params.mech_marketplace_address,
             )
-            self._payment_type = get_mech_payment_type(
-                ledger_api=ledger_api,
-                mech_address=self._marketplace_mech_address,
+            # Read the mech ``paymentType`` through the packaged
+            # ``OlasMechContract`` wrapper (same selector,
+            # ``paymentType()``, same ``bytes32`` return) so this
+            # module does not carry a second ABI fragment for the
+            # same view.
+            payment_type_res = OlasMechContract.get_mech_type(
+                ledger_api, self._marketplace_mech_address
             )
+            payment_type_raw = payment_type_res.get(BodyKey.MECH_TYPE.value)
+            self._payment_type = bytes(cast(bytes, payment_type_raw))
+            if len(self._payment_type) != 32:
+                raise ValueError(
+                    f"payment_type length is {len(self._payment_type)}, expected 32"
+                )
             self.context.logger.info(
                 "Offchain verification constants loaded: "
                 "domain_separator=0x%s payment_type=0x%s",
@@ -996,12 +1050,18 @@ class MechHttpHandler(AbstractResponseHandler):
         Calls the marketplace ``getRequestId`` view with fixed dummy inputs
         and compares its bytes32 output with ``compute_request_id`` run on
         the same inputs and the boot-cached ``domain_separator`` and
-        ``payment_type``. On mismatch: log a fatal-level error, flip the
-        boot-cached constants to ``None`` (so every subsequent
-        offchain accept 401s with ``marketplace-verification-failed``),
-        and return without raising. The mismatch is an operational signal;
-        crashing the mech process on a marketplace upgrade would be more
-        disruptive than the accept refusal.
+        ``payment_type``. Outcomes:
+
+        - On value mismatch (or a genuine contract revert / decode
+          error): treat as a real incompat, flip the boot-cached
+          constants to ``None`` (subsequent accepts route to 503 via
+          the sig-verify infra branch), and log fatal-level.
+        - On a transport failure (RPC unreachable, timeout, socket
+          error): leave the constants loaded so a transient blip does
+          not permanently disable the endpoint. The sig-verify path's
+          own EIP-1271 call will hit the same RPC on the next request;
+          if it stays down, per-request 503s and standard alerts fire
+          without the boot handler locking the endpoint open-loop.
 
         :param ledger_api: the ledger API object used for the view call.
         """
@@ -1033,14 +1093,25 @@ class MechHttpHandler(AbstractResponseHandler):
                 nonce=_SELFCHECK_NONCE,
                 domain_separator=self._domain_separator,
             )
-        except Exception:  # pylint: disable=broad-exception-caught
-            # Any failure here — RPC unreachable, contract revert,
-            # local derivation raising — leaves the constants unset so
-            # the accept path 401s with a clear reason instead of
-            # trusting a derivation we could not confirm.
+        except (RequestException, TimeoutError, Web3RPCError):
+            # Transport-level failure: leave the constants loaded so a
+            # transient RPC blip does not permanently disable the
+            # endpoint. Per-request sig verification will re-attempt
+            # against the same RPC.
+            self.context.logger.warning(
+                "Marketplace request-id self-check hit a transport error; "
+                "keeping the boot-cached constants and continuing.",
+                exc_info=True,
+            )
+            return
+        except (ContractLogicError, BadFunctionCallOutput, ValueError):
+            # Genuine incompat: a revert, an undecodable return, or the
+            # local derivation raising. Flip the constants off so
+            # subsequent accepts refuse with a clear infra-side reason.
             self.context.logger.exception(
-                "Marketplace request-id self-check failed; disabling "
-                "offchain accepts until the next restart."
+                "Marketplace request-id self-check failed with a "
+                "contract-level error; disabling offchain accepts "
+                "until the next restart."
             )
             self._domain_separator = None
             self._payment_type = None
@@ -1125,67 +1196,17 @@ class MechHttpHandler(AbstractResponseHandler):
             return
 
         # ``request_id`` on the wire is the decimal encoding of the uint256
-        # marketplace ``getRequestId`` return, so it must be canonical ASCII
-        # decimal (see ``REQUEST_ID_RE``) AND fit in uint256. Validate here
-        # alongside the other body-shape checks so a non-canonical id is
-        # rejected with a specific log line rather than surfacing later as
-        # an opaque ``ValueError`` inside :meth:`_enqueue_offchain_request`'s
-        # ``int(request_id)`` coercion, or — worse — passing coercion via
-        # ``int('๔๒')`` and desynchronising the writer's
-        # ``str(int(request_id))`` key from the wire ``request_id``.
-        # ``fullmatch`` (vs ``match``) rejects a trailing ``\n`` that ``$``
-        # would let through — see ``REQUEST_ID_RE`` docstring.
-        if not REQUEST_ID_RE.fullmatch(request_id or ""):
-            self.context.logger.error(
-                f"Rejecting offchain request {request_id!r}: "
-                f"request_id must be a canonical ASCII decimal "
-                f"(len={len(request_id) if request_id else 0})."
-            )
+        # marketplace ``getRequestId`` return; ``nonce`` is the decimal
+        # encoding of the requester's uint256 ``mapNonces`` counter at
+        # signing time. Both must be canonical ASCII decimals inside the
+        # uint256 upper bound — validated by the shared helper below so
+        # the two call sites stay in lock-step. See the helper's
+        # docstring for the rationale on the alphabet regex plus the
+        # length short-circuit before ``int()``.
+        if not self._reject_unless_uint256_decimal(request_id, "request_id"):
             self._handle_bad_request(http_msg, http_dialogue)
             return
-        # Regex constrains the alphabet; the magnitude has to be checked
-        # separately. The length branch MUST short-circuit before the
-        # ``int()`` call: on CPython 3.11+, ``int()`` on a string longer
-        # than ``sys.get_int_max_str_digits()`` (4300 by default) raises
-        # ``ValueError`` — a 5000-digit canonical decimal would pass
-        # ``fullmatch`` but blow up here, outside any ``try/except``, and
-        # bypass this handler's own 400 return. ``len(str(MAX_REQUEST_ID))``
-        # is 78, well under the CPython cap, so the length branch is the
-        # cheap guard that makes the value branch safe. Rejecting a
-        # >uint256 id here matches the range check
-        # ``request_delivery_rate`` already gets below.
-        if (
-            len(request_id) > len(str(MAX_REQUEST_ID))
-            or int(request_id) > MAX_REQUEST_ID
-        ):
-            self.context.logger.error(
-                f"Rejecting offchain request {request_id!r}: "
-                f"request_id exceeds uint256 upper bound "
-                f"(MAX_REQUEST_ID={MAX_REQUEST_ID})."
-            )
-            self._handle_bad_request(http_msg, http_dialogue)
-            return
-
-        # ``nonce`` gets the same treatment as ``request_id``: canonical
-        # ASCII decimal + uint256 magnitude. The alphabet regex catches
-        # ``"9abc"`` and empty strings; the uint256 bound catches
-        # ``2**256`` and the length short-circuit stops
-        # ``ValueError`` from firing at ``int()`` for pathological input
-        # lengths. Rejects negatives (``\A-`` never matches ``NONCE_RE``)
-        # so ``int(nonce)`` downstream is guaranteed a non-negative int.
-        if not NONCE_RE.fullmatch(wire_nonce or ""):
-            self.context.logger.error(
-                f"Rejecting offchain request {request_id}: "
-                f"nonce must be a canonical ASCII decimal "
-                f"(nonce={wire_nonce!r})."
-            )
-            self._handle_bad_request(http_msg, http_dialogue)
-            return
-        if len(wire_nonce) > len(str(MAX_NONCE)) or request_nonce > MAX_NONCE:
-            self.context.logger.error(
-                f"Rejecting offchain request {request_id}: "
-                f"nonce exceeds uint256 upper bound (nonce={wire_nonce})."
-            )
+        if not self._reject_unless_uint256_decimal(wire_nonce, "nonce"):
             self._handle_bad_request(http_msg, http_dialogue)
             return
 
@@ -1193,6 +1214,26 @@ class MechHttpHandler(AbstractResponseHandler):
             self.context.logger.error(
                 f"Rejecting offchain request {request_id}: invalid ipfs_hash "
                 f"format (len={len(ipfs_hash)})."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+
+        # ``signature`` on the wire is the one signed field with no format
+        # guard at the parser layer. The settlement path does an
+        # unconditional ``bytes.fromhex(sig[2:])`` when packing the
+        # on-chain payload; a body without the mandatory ``0x`` prefix
+        # would have its first hex byte silently truncated there, the
+        # marketplace would revert with ``IncorrectSignatureLength``, and
+        # the whole per-sender batch would be dropped. Validate the
+        # format alongside the other body-shape checks so a
+        # missing-prefix or bad-hex signature 400s at ingress rather
+        # than surfacing as an on-chain revert at settlement time.
+        if not SIGNATURE_RE.fullmatch(signature_hex or ""):
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id}: signature must be "
+                f"a 0x-prefixed even-length hex string within "
+                f"[{SIGNATURE_BYTES_MIN}, {SIGNATURE_BYTES_MAX}] bytes "
+                f"(len={len(signature_hex) if signature_hex else 0})."
             )
             self._handle_bad_request(http_msg, http_dialogue)
             return
@@ -1215,8 +1256,8 @@ class MechHttpHandler(AbstractResponseHandler):
 
         # Verify the request signature before charging the requester's balance.
         # EIP-1271 for Safe senders, plain ecrecover for EOAs. Sequential by
-        # design: a failure here 401s before the balance-check RPC runs.
-        sig_ok = self._verify_offchain_request_signature(
+        # design: a failure here rejects before the balance-check RPC runs.
+        sig_verdict = self._verify_offchain_request_signature(
             sender=sender,
             ipfs_hash=ipfs_hash,
             delivery_rate=request_delivery_rate,
@@ -1224,19 +1265,32 @@ class MechHttpHandler(AbstractResponseHandler):
             wire_request_id=request_id,
             signature_hex=signature_hex,
         )
-        if not sig_ok:
-            # Pre-auth 401: do NOT persist a rejection payload keyed by
-            # the caller-supplied ``request_id`` — a caller could
-            # otherwise poison an arbitrary id that a legitimate caller
-            # would later read via the polling endpoint. See
+        if not sig_verdict.ok:
+            # Route infra-side failures (boot constants unset, ledger
+            # settings missing, address preparation failure) to 503 so a
+            # well-behaved client backs off and retries instead of
+            # concluding its credentials are wrong. Bad-caller
+            # signatures still 401.
+            #
+            # Pre-auth: do NOT persist a rejection payload keyed by
+            # the caller-supplied ``request_id`` on either branch — a
+            # caller could otherwise poison an arbitrary id that a
+            # legitimate caller would later read via the polling
+            # endpoint. See
             # ``_send_rejection_response(record_response=...)``.
+            if sig_verdict.is_infra:
+                status_code = HttpCode.SERVICE_UNAVAILABLE_CODE.value
+                status_text = "Service unavailable"
+            else:
+                status_code = HttpCode.UNAUTHORIZED_CODE.value
+                status_text = "Unauthorized"
             self._send_rejection_response(
                 http_msg,
                 http_dialogue,
                 request_id,
-                reason="signature verification failed",
-                status_code=HttpCode.UNAUTHORIZED_CODE.value,
-                status_text="Unauthorized",
+                reason=sig_verdict.reason,
+                status_code=status_code,
+                status_text=status_text,
             )
             return
 
@@ -1247,7 +1301,7 @@ class MechHttpHandler(AbstractResponseHandler):
         # the mech executes body Y. Re-derive the CID over the bytes
         # the mech will actually run and reject the request outright
         # if it does not equal the posted ``ipfs_hash``.
-        cid_bind_ok = self._verify_ipfs_hash_binding(
+        cid_bind_ok, cid_reject_reason = self._verify_ipfs_hash_binding(
             request_id=request_id,
             ipfs_hash=ipfs_hash,
             ipfs_data=data.get(RequestKey.IPFS_DATA.value, ""),
@@ -1257,7 +1311,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 http_msg,
                 http_dialogue,
                 request_id,
-                reason=IPFS_HASH_BODY_MISMATCH,
+                reason=cid_reject_reason,
                 status_code=HttpCode.BAD_REQUEST_CODE.value,
                 status_text="Bad request",
             )
@@ -1351,14 +1405,20 @@ class MechHttpHandler(AbstractResponseHandler):
         # would fall back to lexicographic order (``"10"`` before
         # ``"9"``) and mis-order the batch against the on-chain
         # ``mapNonces`` array consume.
-        data[RequestKey.NONCE.value] = request_nonce  # type: ignore[assignment]
+        # Copy at the call site rather than mutating in place: the
+        # parsed body is typed ``Dict[str, str]`` and other consumers
+        # (``preimage_buffer.record_accept``) read the same dict; a
+        # spread copy keeps the source dict immutable and lets the
+        # enqueue accept the wider ``Dict[str, Any]`` type without a
+        # ``type: ignore``.
+        enqueue_data = {**data, RequestKey.NONCE.value: request_nonce}
 
         try:
             req = self._enqueue_offchain_request(
                 request_id=request_id,
                 ipfs_hash=ipfs_hash,
                 request_delivery_rate=request_delivery_rate,
-                data=data,
+                data=enqueue_data,
             )
         except Exception as e:
             self.context.logger.error(
@@ -1393,13 +1453,60 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             self._send_internal_error(http_msg, http_dialogue, request_id)
 
+    def _reject_unless_uint256_decimal(self, value: str, name: str) -> bool:
+        """Return True iff ``value`` is a canonical ASCII decimal in uint256.
+
+        Combined alphabet + magnitude guard for the two wire fields
+        the handler treats as uint256 decimals (``request_id`` and
+        ``nonce``). The alphabet regex catches ``"9abc"``, empty
+        strings, leading zeros, Unicode digits (``๙``, ``٩``,
+        superscripts), and any string ``int()`` would happily coerce
+        to a value that doesn't round-trip via ``str(int(x)) == x``.
+        The uint256 range check catches ``2**256``. The length check
+        MUST short-circuit before ``int(value)``: on CPython 3.11+,
+        ``int()`` on a string longer than
+        ``sys.get_int_max_str_digits()`` (4300 by default) raises
+        ``ValueError`` — a 5000-digit canonical decimal would pass
+        ``fullmatch`` but blow up here, outside any try/except, and
+        bypass the caller's own 400 return. ``len(str(2**256-1))`` is
+        78, well under the CPython cap, so the length branch is the
+        cheap guard that makes the value branch safe.
+
+        Emits a specific error log naming ``name`` on rejection so
+        operators can attribute a 400 to the right field.
+
+        :param value: the wire-format value being validated. May be
+            ``None``/empty; the alphabet regex rejects both.
+        :param name: the wire field name for the rejection log line.
+        :return: True on a canonical uint256 decimal; False otherwise.
+        """
+        # ``str(2**256 - 1)`` is 78 chars; both request_id and nonce
+        # share the same magnitude bound. Kept as a single check
+        # instead of parametrising on ``MAX_REQUEST_ID`` vs
+        # ``MAX_NONCE`` because the two are numerically identical and
+        # any drift would be a spec regression, not a design change.
+        max_len = len(str(MAX_REQUEST_ID))
+        if not value or not REQUEST_ID_RE.fullmatch(value):
+            self.context.logger.error(
+                f"Rejecting offchain request: {name} must be a canonical "
+                f"ASCII decimal ({name}={value!r})."
+            )
+            return False
+        if len(value) > max_len or int(value) > MAX_REQUEST_ID:
+            self.context.logger.error(
+                f"Rejecting offchain request: {name} exceeds uint256 upper "
+                f"bound ({name}={value})."
+            )
+            return False
+        return True
+
     def _verify_ipfs_hash_binding(
         self,
         request_id: str,
         ipfs_hash: str,
         ipfs_data: str,
-    ) -> bool:
-        """Return True iff the local CID of ``ipfs_data`` matches ``ipfs_hash``.
+    ) -> "tuple[bool, str]":
+        """Return (True, "") iff the local CID of ``ipfs_data`` matches ``ipfs_hash``.
 
         The trader signs a ``request_id`` derived from ``keccak(ipfs_hash)``
         where ``ipfs_hash`` is the on-chain content commitment. The
@@ -1415,7 +1522,9 @@ class MechHttpHandler(AbstractResponseHandler):
         ``to_multihash`` on the locally-derived CID) or 34 bytes
         (SHA-256 multihash prefix ``0x1220`` + 32-byte digest, 68 hex
         chars). Both forms reduce to the same 32-byte digest for the
-        compare; the multihash prefix is stripped when present.
+        compare; the multihash prefix is stripped only from the 68-char
+        form (a bare 64-char digest whose bytes happen to start with
+        ``1220`` is content, not a prefix).
 
         :param request_id: the caller-supplied off-chain request id
             (used only for the log line).
@@ -1423,8 +1532,11 @@ class MechHttpHandler(AbstractResponseHandler):
             signed body, already ``IPFS_HASH_RE``-validated.
         :param ipfs_data: the raw request-metadata JSON string carried
             inline in the signed body under ``ipfs_data``.
-        :return: True on match; False on any mismatch (empty body,
-            oversize body, digest mismatch).
+        :return: ``(True, "")`` on match; ``(False, reason)`` on
+            rejection, where ``reason`` is one of
+            ``IPFS_HASH_BODY_MISMATCH`` (empty body or digest
+            disagreement) or ``IPFS_DATA_OVERSIZE`` (body over the
+            single-block CID bound).
         """
         if not ipfs_data:
             self.context.logger.error(
@@ -1432,27 +1544,47 @@ class MechHttpHandler(AbstractResponseHandler):
                 "cannot re-derive the CID for the binding check.",
                 request_id,
             )
-            return False
+            return False, IPFS_HASH_BODY_MISMATCH
+        encoded_body = ipfs_data.encode(ENCODING_UTF8)
+        # Range-check the encoded body before ``compute_cidv1`` so an
+        # oversize body surfaces as a distinct rejection reason
+        # (``IPFS_DATA_OVERSIZE``) instead of being folded into the
+        # ``ValueError`` catch below alongside actual CID-mismatch
+        # cases. The 256 KiB single-block bound applies to the encoded
+        # bytes, not the source string length.
+        if len(encoded_body) > MAX_IPFS_DATA_BYTES:
+            self.context.logger.error(
+                "Rejecting offchain request %s: ipfs_data length %d bytes "
+                "exceeds the single-block CID bound (%d bytes).",
+                request_id,
+                len(encoded_body),
+                MAX_IPFS_DATA_BYTES,
+            )
+            return False, IPFS_DATA_OVERSIZE
         try:
-            local_cid = compute_cidv1(ipfs_data.encode(ENCODING_UTF8))
+            local_cid = compute_cidv1(encoded_body)
         except ValueError:
-            # ``compute_cidv1`` raises above the single-block bound
-            # (256 KiB). Reject with the same reason as a hash mismatch
-            # rather than 500: an oversize body is an accept-time
-            # rejection, not a server error.
+            # Reachable only via ``local_cid._varint`` (rejects negative
+            # sizes it does not see today because the size guard above
+            # short-circuits first). Kept as a defensive fallback so a
+            # future ``compute_cidv1`` refactor cannot silently 500 on
+            # an accept-time input.
             self.context.logger.exception(
-                "Rejecting offchain request %s: ipfs_data exceeds the "
-                "single-block CID bound.",
+                "Rejecting offchain request %s: local CID derivation "
+                "raised ValueError; treating as a content-hash mismatch.",
                 request_id,
             )
-            return False
+            return False, IPFS_HASH_BODY_MISMATCH
         local_digest_hex = to_multihash(local_cid)
         # Strip a leading ``0x`` (guaranteed by ``IPFS_HASH_RE``) and,
-        # if the caller sent the 34-byte multihash form, the ``1220``
-        # SHA-256 function-code + digest-length prefix. Both forms
-        # collapse to the 64-hex-char raw digest for the compare.
+        # only for the 68-char multihash form, the ``1220`` SHA-256
+        # function-code + digest-length prefix. The 64-char bare-digest
+        # form is left as-is: a bare digest whose bytes happen to start
+        # with ``1220`` is content, not a wrapper, and stripping four
+        # chars there would deterministically break every valid payload
+        # whose digest starts with that nibble sequence.
         posted_hex = ipfs_hash[2:]
-        if posted_hex.startswith(IPFS_HASH_MULTIHASH_PREFIX):
+        if len(posted_hex) == 68 and posted_hex.startswith(IPFS_HASH_MULTIHASH_PREFIX):
             posted_hex = posted_hex[len(IPFS_HASH_MULTIHASH_PREFIX) :]
         # Case-fold: ``IPFS_HASH_RE`` accepts both cases; ``to_multihash``
         # returns lowercase. Compare lowercase to lowercase.
@@ -1464,11 +1596,11 @@ class MechHttpHandler(AbstractResponseHandler):
                 local_digest_hex,
                 ipfs_hash,
             )
-            return False
-        return True
+            return False, IPFS_HASH_BODY_MISMATCH
+        return True, ""
 
     def _is_duplicate_request(self, request_id: str) -> bool:
-        """Return True iff ``request_id`` is already known to the handler.
+        """Return True iff ``request_id`` is already in an accepted state.
 
         Trace of the off-chain request lifecycle:
 
@@ -1480,23 +1612,34 @@ class MechHttpHandler(AbstractResponseHandler):
            entry is present through every intermediate state (pending
            list, ``_executing_task`` attribute).
         3. ``offchain_request_responses[str(request_id)]`` is populated
-           at settlement (delivered) and at post-auth rejection
+           at settlement (delivered), on 402 challenges (pre-enqueue,
+           the caller must retry after depositing), on defensive 500
+           responses (post-auth), and on post-auth rejection
            (``_record_offchain_failure``).
 
-        Union of the two dicts therefore covers every state a caller
-        might retry into (pending, executing, delivered, rejected).
-        Keys on both sides are ``str``; the wire ``request_id`` is
-        also ``str`` after the ``REQUEST_ID_RE`` guard, so no coercion
-        is needed for the lookup.
+        Only settled entries — those whose ``status`` is not
+        ``REJECTED`` — count as "already accepted" for dedup. A stored
+        rejection means the request was NOT enqueued, so the retry
+        that follows a 402 deposit (mech-client's ``auto_deposit`` path
+        re-posts the identical body) must not be short-circuited into
+        an ``already accepted`` reply that never runs the balance
+        check. Keys on both sides are ``str``; the wire ``request_id``
+        is also ``str`` after the ``REQUEST_ID_RE`` guard, so no
+        coercion is needed for the lookup.
 
         :param request_id: the wire-format request id (already
             ``REQUEST_ID_RE``-validated and inside the uint256 bound).
-        :return: True if the id is present in either in-memory dict.
+        :return: True if the id is present in ``in_memory_requests``
+            (pending or executing), or the ``offchain_request_responses``
+            entry for it is a settled/accepted payload rather than a
+            rejection.
         """
-        return (
-            request_id in self.in_memory_requests
-            or request_id in self.offchain_request_responses
-        )
+        if request_id in self.in_memory_requests:
+            return True
+        stored = self.offchain_request_responses.get(request_id)
+        if stored is None:
+            return False
+        return stored.get(ResponseKey.STATUS.value) != ResponseStatus.REJECTED.value
 
     def _handle_offchain_request_info(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
@@ -1753,9 +1896,13 @@ class MechHttpHandler(AbstractResponseHandler):
         """Build the ``WWW-Authenticate`` header line for a 402 response.
 
         :return: a single header line terminated with newline.
-        :raises ValueError: if no marketplace mech is configured; without
-            it the ``realm`` would be blank and clients could not route
-            the deposit to the right balance tracker.
+        :raises ValueError: defensive-only. The 402 branch that calls
+            this is only reached after ``_check_offchain_requester_balance``
+            returned OK, and that method returns ``UNAVAILABLE`` when
+            ``_marketplace_mech_address is None`` — so the guard below
+            is unreachable on today's paths. Kept so a future refactor
+            that widens the balance-check contract cannot silently emit
+            a blank-realm challenge.
         """
         # The ``realm`` carries the mech address so clients with multiple mechs
         # configured can route the deposit to the right balance tracker.
@@ -1831,14 +1978,18 @@ class MechHttpHandler(AbstractResponseHandler):
         request_id: str,
         ipfs_hash: str,
         request_delivery_rate: int,
-        data: Dict[str, str],
+        data: Dict[str, Any],
     ) -> Dict[str, Any]:
         """Enqueue the off-chain task and buffer its request metadata locally.
 
         :param request_id: the off-chain request id.
         :param ipfs_hash: the requester-supplied content hash (0x-prefixed hex).
         :param request_delivery_rate: the requester-signed delivery rate.
-        :param data: the parsed HTTP body dict (signature, sender, ipfs_data, etc).
+        :param data: the request-body dict. Caller passes a copy of the
+            parsed HTTP body with ``nonce`` coerced to ``int`` so the
+            downstream lexicographic-vs-numeric sort discipline holds;
+            the type is ``Dict[str, Any]`` (not ``Dict[str, str]``)
+            because the coerced ``nonce`` is an ``int``.
         :return: the queued task dict.
         :raises Exception: if either queue write fails; partial state is rolled back.
         """
@@ -2079,17 +2230,18 @@ class MechHttpHandler(AbstractResponseHandler):
         nonce: int,
         wire_request_id: str,
         signature_hex: str,
-    ) -> bool:
+    ) -> SignatureVerdict:
         """Verify the caller signed the marketplace-derived request_id.
 
         Sequential path:
 
-        1. Reject if the deployment-scoped constants (marketplace
-           ``domainSeparator``, mech ``paymentType``) are missing.
-        2. Compute the request_id locally from
-           ``(marketplace, mech, sender, ipfs_hash, delivery_rate,
-           payment_type, nonce, domain_separator)`` and require it to
-           match the value on the wire.
+        1. Infra failure if the deployment-scoped constants
+           (marketplace ``domainSeparator``, mech ``paymentType``) are
+           missing. The caller replies 503.
+        2. Client failure if the ``ipfs_hash`` or ``signature`` bytes
+           are malformed hex, if the derivation fails, or if the wire
+           request_id disagrees with the locally-derived value. The
+           caller replies 401.
         3. Try local ``ecrecover`` against ``sender``. Match wins with
            zero RPC.
         4. Fall back to the sender's EIP-1271 ``isValidSignature`` view.
@@ -2104,7 +2256,12 @@ class MechHttpHandler(AbstractResponseHandler):
             the wire; must equal the locally-derived value.
         :param signature_hex: hex-encoded signature bytes, with or without
             a leading ``0x``.
-        :return: True on a valid EOA or Safe signature; False otherwise.
+        :return: a :class:`SignatureVerdict`. ``ok=True`` on a valid
+            signature; ``ok=False`` with ``is_infra=True`` on
+            server-side prerequisites (constants unset, ledger config
+            missing, address preparation failure) or ``is_infra=False``
+            on a bad-caller outcome (malformed hex, derivation
+            mismatch, sig recovery failure).
         """
         if self._domain_separator is None or self._payment_type is None:
             self.context.logger.error(
@@ -2112,7 +2269,11 @@ class MechHttpHandler(AbstractResponseHandler):
                 "unavailable; rejecting request %s.",
                 wire_request_id,
             )
-            return False
+            return SignatureVerdict(
+                ok=False,
+                reason="marketplace verification constants unavailable",
+                is_infra=True,
+            )
 
         try:
             request_data = bytes.fromhex(ipfs_hash[2:])
@@ -2124,7 +2285,11 @@ class MechHttpHandler(AbstractResponseHandler):
                 "Malformed hex in signature or ipfs_hash for request %s.",
                 wire_request_id,
             )
-            return False
+            return SignatureVerdict(
+                ok=False,
+                reason="malformed signature or ipfs_hash hex",
+                is_infra=False,
+            )
 
         ledger_settings = self._get_ledger_settings()
         if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
@@ -2134,7 +2299,11 @@ class MechHttpHandler(AbstractResponseHandler):
                 ledger_settings.get(ResponseKey.REASON.value, "unknown"),
                 wire_request_id,
             )
-            return False
+            return SignatureVerdict(
+                ok=False,
+                reason="ledger settings unavailable",
+                is_infra=True,
+            )
 
         try:
             rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
@@ -2149,7 +2318,7 @@ class MechHttpHandler(AbstractResponseHandler):
             # None when the address is None (see
             # ``_initialise_offchain_verification_constants``), and the
             # None-guard on those constants at the top of this method
-            # would have already returned False.
+            # would have already returned an infra verdict.
             mech_address = ledger_api.api.to_checksum_address(
                 cast(str, self._marketplace_mech_address)
             )
@@ -2159,7 +2328,11 @@ class MechHttpHandler(AbstractResponseHandler):
                 wire_request_id,
                 e,
             )
-            return False
+            return SignatureVerdict(
+                ok=False,
+                reason="address preparation failed",
+                is_infra=True,
+            )
 
         try:
             derived = compute_request_id(
@@ -2176,7 +2349,11 @@ class MechHttpHandler(AbstractResponseHandler):
             self.context.logger.error(
                 "Request-id derivation failed for %s: %s.", wire_request_id, e
             )
-            return False
+            return SignatureVerdict(
+                ok=False,
+                reason="request-id derivation failed",
+                is_infra=False,
+            )
 
         # ``wire_request_id`` has already passed the canonical ASCII decimal
         # + uint256 guards above, so ``int(...)`` is safe.
@@ -2188,19 +2365,30 @@ class MechHttpHandler(AbstractResponseHandler):
                 derived.hex(),
                 sender_checksum,
             )
-            return False
+            return SignatureVerdict(
+                ok=False,
+                reason="wire request_id does not match local derivation",
+                is_infra=False,
+            )
 
         recovered = recover_eoa_signer(derived, signature_bytes)
         if recovered is not None and recovered == sender_checksum:
-            return True
+            return SignatureVerdict(ok=True, reason="", is_infra=False)
 
         # Sender is either a Safe or an EOA that produced an unrecognised
         # signature. Defer to the sender's EIP-1271 view for the final call.
-        return check_eip1271_signature(
+        eip1271_ok = check_eip1271_signature(
             ledger_api=ledger_api,
             contract_address=sender_checksum,
             message_hash=derived,
             signature=signature_bytes,
+        )
+        if eip1271_ok:
+            return SignatureVerdict(ok=True, reason="", is_infra=False)
+        return SignatureVerdict(
+            ok=False,
+            reason="signature verification failed",
+            is_infra=False,
         )
 
     def _get_ledger_settings(self) -> Dict[str, Union[str, int]]:

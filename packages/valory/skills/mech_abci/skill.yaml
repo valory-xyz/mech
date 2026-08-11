@@ -22,19 +22,19 @@ fingerprint:
   tests/test_models.py: bafybeif4iuuknrtx3tc72y2ii237dqtl6nlqgpdywy227sfqbvxkk6mugy
 fingerprint_ignore_patterns: []
 connections:
-- valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
+- valory/http_server:0.22.0:bafybeihjuoo45sk6dktxktqgfhyk2t5qsomztmsfzgv3vt3bq7updg3piq
 contracts: []
 protocols:
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
-- valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
-- valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
-- valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_submission_abci:0.1.0:bafybeicvk5e6h7ucjrc5jhnv4qhqjucg6abdig6n4waconethh53uksbii
-- valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
-- valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
-- valory/delivery_rate_abci:0.1.0:bafybeiathwdfpcfqbipqbkslv6j22q5cvov4n3czmehzij3czrhdnlg42e
-- valory/task_execution:0.1.0:bafybeidrdvzykow7biibnvdgaici5b7ssdn5qhbg4dge75wetvs5ijpyiu
+- valory/abstract_round_abci:0.1.0:bafybeidvxzo27p5fkthf6xj5n4e6vwthldcuwx3wvjx4fzpwi6cc7yhn3m
+- valory/delivery_rate_abci:0.1.0:bafybeifjtxexh6trir7thjtl63g2v2nbucyzsnuemlzf2suugdxnxqmzae
+- valory/registration_abci:0.1.0:bafybeibxrtnilq2oz6rt2rvmitw7z3sp4t2grlc7mhmgiwarillhrylo6e
+- valory/reset_pause_abci:0.1.0:bafybeifa6tbg54qc7fhdeqlhuld6fcniaz5wksrvdmyetproagccxgdtga
+- valory/task_execution:0.1.0:bafybeigbciefghh32opfl5te7cbwm5p2oie52r2y64n6h6zkzuvffbu7lq
+- valory/task_submission_abci:0.1.0:bafybeigvk6vrawvvsswcujciempa6usumogedaeaqc4pjlr3ztfmq5hw7a
+- valory/termination_abci:0.1.0:bafybeigdxyvzuzyfy7vbjz7lgmpxopif7vrq2hpwg7cinbpehoicienrvi
+- valory/transaction_settlement_abci:0.1.0:bafybeibmkegs4e63zldrhsa24h7s7cpgqdf3mmkktopwywtyjjxtnsuv2m
 behaviours:
   main:
     args: {}
@@ -86,13 +86,18 @@ models:
     class_name: LedgerApiDialogues
   params:
     args:
-      mech_to_config: {}
+      agent_funding_amount: 200000000000000000
       api_keys: {}
       cleanup_history_depth: 1
       cleanup_history_depth_current: null
+      complementary_service_metadata_address: '0x0000000000000000000000000000000000000000'
+      default_chain_id: gnosis
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
-      tools_to_package_hash: {}
       finalize_timeout: 60.0
+      gas_params:
+        gas_price: null
+        max_fee_per_gas: null
+        max_priority_fee_per_gas: null
       genesis_config:
         genesis_time: '2022-09-26T00:00:00.000000000Z'
         chain_id: chain-c4daS1
@@ -110,73 +115,68 @@ models:
             - ed25519
           version: {}
         voting_power: '10'
+      hash_checkpoint_address: '0x0000000000000000000000000000000000000000'
       history_check_timeout: 1205
       init_fallback_gas: 0
+      ipfs_fetch_timeout: 15.0
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
+      light_slash_unit_amount: 5000000000000000
+      manual_gas_limit: 1000000
       max_attempts: 10
       max_healthcheck: 120
+      mech_events_chain_id: 0
+      mech_events_sweep_max_age_seconds: 3600.0
+      mech_events_sweep_pending_enabled: false
+      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
+      mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
+      mech_to_config: {}
+      mech_to_max_delivery_rate: {}
+      metadata_hash: '00000000000000000000000000000000000000000000000000'
+      minimum_agent_balance: 100000000000000000
       multisend_address: '0x0000000000000000000000000000000000000000'
       on_chain_service_id: null
       polling_interval: 25
+      predict_api_events_timeout_seconds: 5.0
+      predict_api_events_url: https://mpp.autonolas.tech/mech/events
+      profit_split_balance: 100
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
       reset_period_count: 100
-      gas_params:
-        gas_price: null
-        max_fee_per_gas: null
-        max_priority_fee_per_gas: null
       reset_tendermint_after: 100
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
-      ipfs_fetch_timeout: 15.0
+      serious_slash_unit_amount: 8000000000000000
+      service_endpoint_base: https://dummy_service.autonolas.tech/
       service_id: mech
+      service_owner_share: 1000
       service_registry_address: null
       setup:
         all_participants: []
         safe_contract_address: '0x0000000000000000000000000000000000000000'
         consensus_threshold: null
       share_tm_config_on_startup: false
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
       sleep_time: 1
+      task_wait_timeout: 15.0
       tendermint_check_sleep_delay: 3
       tendermint_com_url: http://localhost:8080
       tendermint_max_retries: 5
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
+      termination_from_block: 0
       termination_sleep: 900
+      tools_to_package_hash: {}
+      tools_to_pricing: {}
       tx_timeout: 10.0
+      use_offchain: false
       use_polling: false
+      use_slashing: false
       use_termination: false
       validate_timeout: 1205
-      task_wait_timeout: 15.0
-      use_slashing: false
-      manual_gas_limit: 1000000
-      mech_staking_instance_address: '0x0000000000000000000000000000000000000000'
-      mech_marketplace_address: '0x0000000000000000000000000000000000000000'
-      complementary_service_metadata_address: '0x0000000000000000000000000000000000000000'
-      metadata_hash: '00000000000000000000000000000000000000000000000000'
-      slash_cooldown_hours: 3
-      hash_checkpoint_address: '0x0000000000000000000000000000000000000000'
-      slash_threshold_amount: 10000000000000000
-      termination_from_block: 0
-      light_slash_unit_amount: 5000000000000000
-      service_owner_share: 1000
-      profit_split_balance: 100
-      serious_slash_unit_amount: 8000000000000000
-      agent_funding_amount: 200000000000000000
-      minimum_agent_balance: 100000000000000000
-      mech_to_max_delivery_rate: {}
-      tools_to_pricing: {}
-      service_endpoint_base: https://dummy_service.autonolas.tech/
-      default_chain_id: gnosis
-      use_offchain: false
-      predict_api_events_url: https://mpp.autonolas.tech/mech/events
-      predict_api_events_timeout_seconds: 5.0
-      mech_events_sweep_pending_enabled: false
-      mech_events_sweep_max_age_seconds: 3600.0
-      mech_events_chain_id: 0
     class_name: Params
   randomness_api:
     args:
@@ -205,3 +205,4 @@ dependencies:
   open-aea-cli-ipfs:
     version: ==2.2.9
 is_abstract: false
+customs: []
