@@ -34,6 +34,7 @@ from aea.mail.base import EnvelopeContext
 from aea.protocols.base import Message
 from aea.protocols.dialogue.base import Dialogue
 from aea.skills.behaviours import SimpleBehaviour
+from eth_utils import to_checksum_address
 from pebble import ProcessPool
 from prometheus_client import Counter, Gauge, Histogram
 
@@ -183,11 +184,18 @@ def _release_outstanding_nonce(
     settling_all = shared_state.setdefault(SETTLING_NONCES_BY_SENDER, {})
     accepted_key = _find_sender_key(accepted_all or {}, sender)
     if accepted_key is None:
-        # No accepted entry to move (already rolled back / on-chain
-        # path / crash-recovery). Still add to settling under the
-        # lowercase key so a subsequent settlement prune is
-        # deterministic; the pruner discards anything < on_chain.
-        settling_key = _find_sender_key(settling_all, sender) or str(sender).lower()
+        # No accepted entry to move (already rolled back, on-chain
+        # path, or crash-recovery). Canonicalise the settling key to
+        # the EIP-55 checksum form so it agrees with the key shape
+        # the handler-side maps and their exact-lookup consumers
+        # use. A raw wire ``sender`` that is not a valid address
+        # cannot be canonicalised and the release becomes a no-op.
+        try:
+            settling_key = _find_sender_key(
+                settling_all, sender
+            ) or to_checksum_address(str(sender))
+        except (TypeError, ValueError):
+            return
     else:
         entries = accepted_all[accepted_key]  # type: ignore[index]
         entries.discard(wire_nonce)
@@ -1296,13 +1304,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         executing_task = cast(Dict[str, Any], self._executing_task)
         req_id = executing_task.get("requestId", None)
 
-        # This should never be the case but added to handle all cases for latest mypy updates
+        # Off-chain ``requestId`` is coerced to ``int`` at accept time
+        # (see ``handlers._enqueue_offchain_request``), so a wire
+        # ``request_id`` of ``"0"`` is falsy under this check.
+        # Routing through ``_reset_executing_task`` keeps the
+        # accepted-nonce discard uniform across every drop path.
         if not req_id:
             self.context.logger.error(
                 "Request id not found inside executing task for handle timedout task."
             )
-            self._executing_task = None
-            self._async_result = None
+            self._reset_executing_task()
             return None
 
         # Prometheus has no way to remove/clear metrics, so we set to default 0
@@ -1372,10 +1383,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "Task data arrived after deadline. "
                 "Skipping tool execution and cleaning up."
             )
-            self._executing_task = None
-            self._async_result = None
-            self._request_handling_deadline = None
+            # Route through ``_reset_executing_task`` so the accepted-
+            # nonce discard runs on this drop branch, matching every
+            # other terminal branch on the off-chain path.
             self.tool_preparation_start_time = 0.0
+            self._reset_executing_task()
             return
 
         executing_task = cast(Dict[str, Any], self._executing_task)

@@ -2096,6 +2096,97 @@ def test_handle_timeout_task_no_req_id_resets_state(
     assert behaviour._async_result is None
 
 
+def test_handle_timeout_task_offchain_zero_request_id_discards_nonce(
+    behaviour: Any, params_stub: Any, shared_state: Any
+) -> None:
+    """Off-chain task with ``request_id=0`` still gets its accepted nonce discarded.
+
+    Off-chain ``requestId`` is coerced to ``int`` at accept time, so
+    a wire value of ``"0"`` is falsy under the ``if not req_id`` guard
+    and takes the early-reset branch. Routing that branch through
+    ``_reset_executing_task`` keeps the accepted-nonce discard uniform
+    across every drop path on the off-chain rail.
+
+    :param behaviour: pytest fixture, TaskExecutionBehaviour.
+    :param params_stub: pytest fixture, params namespace.
+    :param shared_state: pytest fixture, initial shared_state map.
+    """
+    sender = "0xSenderAddress"
+    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {0}}
+    behaviour._executing_task = {
+        "requestId": 0,  # falsy int — off-chain accept coerces "0" → 0
+        "sender": sender,
+        "nonce": 0,
+        "is_offchain": True,
+    }
+    behaviour._async_result = MagicMock()
+    behaviour._handle_timeout_task()
+    assert behaviour._executing_task is None
+    assert sender not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
+
+
+def test_handle_get_task_post_deadline_offchain_discards_nonce(
+    behaviour: Any, params_stub: Any, shared_state: Any
+) -> None:
+    """Post-deadline arrival for an off-chain task discards the accepted nonce.
+
+    ``_handle_get_task`` short-circuits when the IPFS response lands
+    after ``_request_handling_deadline``. Routing that drop branch
+    through ``_reset_executing_task`` keeps the accepted-nonce
+    discard uniform across every drop path on the off-chain rail.
+
+    :param behaviour: pytest fixture, TaskExecutionBehaviour.
+    :param params_stub: pytest fixture, params namespace.
+    :param shared_state: pytest fixture, initial shared_state map.
+    """
+    sender = "0xSenderAddress"
+    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {42}}
+    behaviour._executing_task = {
+        "requestId": 55,
+        "sender": sender,
+        "nonce": 42,
+        "is_offchain": True,
+    }
+    behaviour._request_handling_deadline = time.time() - 1.0  # already elapsed
+    behaviour._async_result = MagicMock()
+    message = SimpleNamespace(files={})
+    behaviour._handle_get_task(message, MagicMock())
+    assert behaviour._executing_task is None
+    assert sender not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
+
+
+def test_release_outstanding_nonce_settling_fallback_canonicalises_to_checksum(
+    shared_state: Any,
+) -> None:
+    """Settling fallback writes under the EIP-55 checksum key when no accepted match.
+
+    Handler-side consumers (``_reconcile_stale_accepted`` /
+    ``_reconcile_stale_settling``, dedup, cap check) do exact-lookups
+    on the checksum key. A raw wire ``sender`` that is not already
+    keyed in the settling map is canonicalised to the checksum form
+    so it agrees with the handler-side key shape.
+
+    :param shared_state: pytest fixture, initial shared_state map.
+    """
+    from eth_utils import to_checksum_address as _canonical
+
+    lower_addr = "0xabcdefabcdef0123456789abcdefabcdef012345"
+    expected_checksum = _canonical(lower_addr)
+    # No prior accepted or settling entry — release exercises the
+    # fallback branch that has to build the settling key from scratch.
+    shared_state.setdefault(beh_mod.ACCEPTED_NONCES_BY_SENDER, {})
+    shared_state.setdefault(beh_mod.SETTLING_NONCES_BY_SENDER, {})
+    beh_mod._release_outstanding_nonce(
+        shared_state,
+        {"sender": lower_addr, "nonce": 7, "is_offchain": True},
+    )
+    settling = shared_state[beh_mod.SETTLING_NONCES_BY_SENDER]
+    # Key is EIP-55 checksum, not the raw lowercase wire value.
+    assert expected_checksum in settling
+    assert lower_addr not in settling
+    assert settling[expected_checksum] == {7}
+
+
 def test_handle_timeout_task_adds_back_to_queue(
     behaviour: Any, params_stub: Any, monkeypatch: Any
 ) -> None:

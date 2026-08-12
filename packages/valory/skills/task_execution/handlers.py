@@ -3262,46 +3262,158 @@ class MechHttpHandler(AbstractResponseHandler):
             is_infra=False,
         )
 
-    @staticmethod
-    def _prune_stale_nonces(
-        nonces_by_sender: Dict[str, Set[int]],
+    def _reconcile_stale_accepted(
+        self,
         sender_checksum: str,
         on_chain_nonce: int,
     ) -> Set[int]:
-        """Drop entries at or below ``on_chain_nonce`` and return what remains.
+        """Evict orphaned accepted entries and return what remains.
 
-        Called on both ``accepted`` and ``settling`` before computing
-        the admission gate's next-expected-slot formula. Guards two
-        recovery paths:
+        An accepted entry with nonce **strictly below** ``on_chain_nonce``
+        cannot settle: ``deliverMarketplaceWithSignatures`` derives
+        each ``requestId`` from its own ``mapNonces[sender]`` at
+        settlement time, and a task signed against an older slot does
+        not match. This state is reached when the same sender uses
+        both the on-chain and off-chain rails — an on-chain
+        ``request()`` bumps ``mapNonces`` past a slot whose off-chain
+        task is still in ``pending_tasks``.
 
-        * ``settling`` shrinks naturally when the batch settlement
-          advances ``mapNonces`` past the nonce, but only if we prune
-          on read — the release side has no observer for the on-chain
-          counter.
-        * ``accepted`` should never contain a nonce at or below
-          ``on_chain_nonce`` in the healthy case (the release path
-          moves entries to ``settling`` before settlement can advance
-          the counter), but a crash / restart / a sender using both
-          the on-chain and off-chain rails could leave a stale entry
-          in the set indefinitely, silently inflating the gate's slot
-          count forever.
+        For each such entry the method evicts the corresponding
+        pending task, pops its in-memory payload, and writes a
+        rejection into ``offchain_request_responses`` so the polling
+        client sees a definitive result. A WARNING per eviction
+        carries sender + nonce + on_chain for operator triage.
 
-        :param nonces_by_sender: the accepted or settling map.
         :param sender_checksum: the sender's checksum key.
         :param on_chain_nonce: current ``mapNonces[sender]`` value.
-        :return: the surviving set for ``sender_checksum`` (empty set
-            if the sender had none or every entry was stale). Also
-            pops the sender key from the map if nothing survives.
+        :return: the surviving set for ``sender_checksum`` (empty
+            set if the sender had none or every entry was orphaned).
+            Also pops the sender key from the map if nothing survives.
         """
-        entries = nonces_by_sender.get(sender_checksum)
+        entries = self.accepted_nonces_by_sender.get(sender_checksum)
         if not entries:
             return set()
-        stale = {n for n in entries if n < on_chain_nonce}
-        if stale:
-            entries -= stale
-            if not entries:
-                nonces_by_sender.pop(sender_checksum, None)
+        orphaned = {n for n in entries if n < on_chain_nonce}
+        if not orphaned:
+            return entries
+        for wire_nonce in sorted(orphaned):
+            self.context.logger.warning(
+                "Evicting orphaned accepted nonce %d for sender %s: "
+                "on-chain mapNonces has advanced to %d "
+                "(concurrent on-chain activity from this sender "
+                "consumed the slot; the task cannot settle).",
+                wire_nonce,
+                sender_checksum,
+                on_chain_nonce,
+            )
+            self._evict_orphaned_pending(sender_checksum, wire_nonce, on_chain_nonce)
+        entries -= orphaned
+        if not entries:
+            self.accepted_nonces_by_sender.pop(sender_checksum, None)
         return entries
+
+    def _reconcile_stale_settling(
+        self,
+        sender_checksum: str,
+        on_chain_nonce: int,
+    ) -> Set[int]:
+        """Drop settling entries the on-chain counter has already consumed.
+
+        Called on ``settling`` before computing the admission gate's
+        next-expected-slot formula. A settling entry with nonce
+        **strictly below** ``on_chain_nonce`` corresponds to a slot
+        the marketplace has already consumed (``mapNonces`` advances
+        via ``deliverMarketplaceWithSignatures`` finishing a batch,
+        or via a same-sender on-chain ``request()``). The drain is
+        logged at INFO so the transition is observable.
+
+        An entry AT ``on_chain_nonce`` is the next slot to be
+        consumed and stays: the same wire nonce must remain
+        recognisable as a duplicate while its batch is in flight.
+
+        :param sender_checksum: the sender's checksum key.
+        :param on_chain_nonce: current ``mapNonces[sender]`` value.
+        :return: the surviving set for ``sender_checksum``.
+        """
+        entries = self.settling_nonces_by_sender.get(sender_checksum)
+        if not entries:
+            return set()
+        drained = {n for n in entries if n < on_chain_nonce}
+        if not drained:
+            return entries
+        self.context.logger.info(
+            "Draining %d settled nonce(s) from sender %s "
+            "(on-chain mapNonces advanced to %d): %s",
+            len(drained),
+            sender_checksum,
+            on_chain_nonce,
+            sorted(drained),
+        )
+        entries -= drained
+        if not entries:
+            self.settling_nonces_by_sender.pop(sender_checksum, None)
+        return entries
+
+    def _evict_orphaned_pending(
+        self,
+        sender_checksum: str,
+        wire_nonce: int,
+        on_chain_nonce: int,
+    ) -> None:
+        """Remove an orphaned pending task and write its rejection payload.
+
+        Handler-side counterpart to
+        ``behaviours.TaskExecutionBehaviour._record_offchain_failure``
+        for slots the on-chain rail has advanced past. Pending tasks
+        carry the raw wire ``sender`` (may be lowercase or checksum),
+        so the match is case-insensitive; ``nonce`` is the coerced
+        ``int`` written at accept time.
+
+        :param sender_checksum: the sender's checksum key.
+        :param wire_nonce: the orphaned wire nonce.
+        :param on_chain_nonce: current ``mapNonces[sender]`` used in
+            the WARNING log for operator triage.
+        """
+        sender_lower = sender_checksum.lower()
+        pending = self.pending_tasks
+        for idx in range(len(pending) - 1, -1, -1):
+            task = pending[idx]
+            if not task.get(RequestKey.IS_OFFCHAIN.value):
+                continue
+            if str(task.get("sender", "")).lower() != sender_lower:
+                continue
+            raw_nonce = task.get("nonce")
+            if raw_nonce is None:
+                continue
+            try:
+                task_nonce = int(raw_nonce)
+            except (TypeError, ValueError):
+                continue
+            if task_nonce != wire_nonce:
+                continue
+            request_id = str(task.get(RequestKey.REQUEST_ID_CAMEL.value, ""))
+            del pending[idx]
+            if request_id:
+                self.in_memory_requests.pop(request_id, None)
+                self.offchain_request_responses[request_id] = {
+                    RequestKey.REQUEST_ID.value: request_id,
+                    ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
+                    ResponseKey.REASON.value: (
+                        "on-chain nonce advanced past this slot; "
+                        "concurrent on-chain activity from this "
+                        "sender consumed it before the off-chain "
+                        "batch could settle"
+                    ),
+                }
+            self.context.logger.warning(
+                "Evicted orphaned pending task request_id=%s "
+                "(sender=%s, nonce=%d, on_chain=%d).",
+                request_id,
+                sender_checksum,
+                wire_nonce,
+                on_chain_nonce,
+            )
+            return
 
     def _bind_wire_nonce_to_chain(
         self,
@@ -3471,15 +3583,13 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason=NONCE_READ_UNRECOVERABLE,
                 is_infra=True,
             )
-        # Prune stale entries in both maps before computing the count.
-        # See ``_prune_stale_nonces`` for the crash-recovery rationale
-        # and the settlement-gap semantics of ``settling``.
-        accepted = self._prune_stale_nonces(
-            self.accepted_nonces_by_sender, sender_checksum, on_chain_nonce
-        )
-        settling = self._prune_stale_nonces(
-            self.settling_nonces_by_sender, sender_checksum, on_chain_nonce
-        )
+        # Reconcile both maps against the current on-chain counter
+        # before computing the slot count. Accepted entries below
+        # the counter carry their pending tasks with them to the
+        # eviction path; settling entries below the counter are
+        # drained (their slot has already been consumed on chain).
+        accepted = self._reconcile_stale_accepted(sender_checksum, on_chain_nonce)
+        settling = self._reconcile_stale_settling(sender_checksum, on_chain_nonce)
         expected_next_nonce = on_chain_nonce + len(accepted) + len(settling)
         # Duplicate detection covers both sets: a wire nonce already
         # accepted (and either still pending on the mech side or moved

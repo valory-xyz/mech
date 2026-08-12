@@ -5317,6 +5317,91 @@ def test_enqueue_writes_checksum_key_release_matches_lowercase_wire(
     }
 
 
+def test_orphaned_accepted_entry_evicts_pending_task_and_writes_rejection(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Accepted entry below on-chain nonce is evicted with a rejection payload.
+
+    When the same sender fires an on-chain ``request()`` while an
+    off-chain task is still in ``pending_tasks``, ``mapNonces`` jumps
+    past the off-chain slot. The next off-chain accept from any
+    sender reconciles the accepted map: the orphaned entry is
+    dropped, its pending task is removed from ``pending_tasks`` and
+    ``in_memory_requests``, and a definitive rejection lands in
+    ``offchain_request_responses`` so the polling client sees a
+    terminal result instead of polling forever.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    sender = _make_eoa_scenario(nonce=0)["sender"]
+    orphaned_request_id = "9001"
+    orphaned_task = {
+        hmod.RequestKey.REQUEST_ID_CAMEL.value: int(orphaned_request_id),
+        hmod.RequestKey.IS_OFFCHAIN.value: True,
+        "sender": sender,
+        "nonce": 0,
+    }
+    handler_context.shared_state[hmod.PENDING_TASKS] = [orphaned_task]
+    handler_context.shared_state.setdefault(hmod.IN_MEMORY_REQUESTS, {})[
+        orphaned_request_id
+    ] = "orphaned-payload"
+    handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] = {sender: {0}}
+
+    # On-chain mapNonces has advanced past slot 0 (concurrent
+    # on-chain request from the same sender consumed the slot).
+    _install_nonce_stub(monkeypatch, on_chain_nonce=1)
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+    scenario = _make_eoa_scenario(nonce=1)
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    mh._handle_signed_requests(cast(HttpMessage, make_http_msg(body)), http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+
+    # Orphaned nonce 0 evicted; the freshly-accepted nonce 1 remains.
+    assert handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] == {sender: {1}}
+
+    # Orphaned pending task removed; only the freshly-accepted one
+    # remains (the new nonce=1 request).
+    pending_ids = [
+        t[hmod.RequestKey.REQUEST_ID_CAMEL.value]
+        for t in handler_context.shared_state[hmod.PENDING_TASKS]
+    ]
+    assert int(orphaned_request_id) not in pending_ids
+
+    # In-memory payload dropped for the orphaned request.
+    assert (
+        orphaned_request_id not in handler_context.shared_state[hmod.IN_MEMORY_REQUESTS]
+    )
+
+    # Rejection payload written so the polling client sees a
+    # definitive result.
+    rejections = handler_context.shared_state[hmod.OFFCHAIN_REQUEST_RESPONSES]
+    assert orphaned_request_id in rejections
+    assert (
+        rejections[orphaned_request_id][hmod.ResponseKey.STATUS.value]
+        == hmod.ResponseStatus.REJECTED.value
+    )
+
+
 def test_settling_pruned_when_on_chain_advances(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
