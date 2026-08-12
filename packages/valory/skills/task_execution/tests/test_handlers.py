@@ -23,7 +23,7 @@ import json
 import time
 import urllib.parse
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -40,6 +40,33 @@ from packages.valory.skills.task_execution.handlers import (
     LedgerHandler,
     MechHttpHandler,
 )
+from packages.valory.skills.task_execution.utils.eip1271 import (
+    Eip1271Verdict as _Eip1271Verdict,
+)
+from packages.valory.skills.task_execution.utils.ipfs import (
+    to_multihash as _to_multihash,
+)
+from packages.valory.skills.task_execution.utils.local_cid import (
+    compute_cidv1 as _compute_cidv1,
+)
+
+
+def _ipfs_hash_for(ipfs_data: str) -> str:
+    """Compute the 32-byte-form wire ``ipfs_hash`` for an ``ipfs_data`` payload.
+
+    :param ipfs_data: the raw JSON string carried inline in the signed body.
+    :return: the 0x-prefixed 64-hex-char SHA-256 digest form of the
+        computed CID, matched by the handler's accept-time CID-binding
+        check. The 34-byte multihash form is exercised separately.
+    """
+    return "0x" + _to_multihash(_compute_cidv1(ipfs_data.encode("utf-8")))
+
+
+# The canonical test-payload / hash pair used by every downstream test
+# whose focus is NOT the CID-binding check itself. Precomputed once at
+# module import so the fixtures can reference it as a plain constant.
+_DEFAULT_IPFS_DATA = '{"foo":"bar"}'
+_DEFAULT_IPFS_HASH = _ipfs_hash_for(_DEFAULT_IPFS_DATA)
 
 
 @pytest.mark.parametrize(
@@ -419,14 +446,18 @@ def test_signed_requests_balance_scenarios(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
 
-    ipfs_hash: str = "0x" + "ab" * 32
+    ipfs_data: str = _DEFAULT_IPFS_DATA
+    ipfs_hash: str = _DEFAULT_IPFS_HASH
     body: Dict[str, str] = {
         "ipfs_hash": ipfs_hash,
         "request_id": request_id,
-        "ipfs_data": '{"foo":"bar"}',
+        "ipfs_data": ipfs_data,
         "delivery_rate": "123",
         "sender": "0x0000000000000000000000000000000000000001",
+        "signature": "0x" + "00" * 65,
+        "nonce": "0",
     }
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
@@ -445,7 +476,7 @@ def test_signed_requests_balance_scenarios(
         # dict is still str-keyed since the local ``request_id`` variable
         # in the handler stays str for the HTTP-state lookups.
         assert pend[0]["requestId"] == int(request_id)
-        assert in_mem[request_id] == '{"foo":"bar"}'
+        assert in_mem[request_id] == ipfs_data
     else:
         assert pend == [] and ipfsq == [] and in_mem == {}
 
@@ -616,16 +647,20 @@ def test_fetch_offchain_request_info_returns_insufficient_balance_response(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
 
     request_id = "1003"
-    ipfs_hash: str = "0x" + "ab" * 32
+    ipfs_data: str = _DEFAULT_IPFS_DATA
+    ipfs_hash: str = _DEFAULT_IPFS_HASH
     send_msg: Any = make_http_msg(
         {
             "ipfs_hash": ipfs_hash,
             "request_id": request_id,
-            "ipfs_data": '{"foo":"bar"}',
+            "ipfs_data": ipfs_data,
             "delivery_rate": "123",
             "sender": "0x0000000000000000000000000000000000000001",
+            "signature": "0x" + "00" * 65,
+            "nonce": "0",
         }
     )
     mh._handle_signed_requests(send_msg, http_dialogue)
@@ -663,6 +698,7 @@ def test_signed_requests_rollback_partial_enqueue(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
 
     class FailingDict(dict):
         """Dict that raises on assignment to simulate partial buffer write."""
@@ -672,15 +708,18 @@ def test_signed_requests_rollback_partial_enqueue(
 
     handler_context.shared_state["in_memory_requests"] = FailingDict()
 
-    ipfs_hash: str = "0x" + "ab" * 32
+    ipfs_data: str = _DEFAULT_IPFS_DATA
+    ipfs_hash: str = _DEFAULT_IPFS_HASH
     body: Dict[str, str] = {
         "ipfs_hash": ipfs_hash,
         # Numeric — the ingress coercion in ``_enqueue_offchain_request``
         # runs before the buffer-write attempt this test simulates.
         "request_id": "6",
-        "ipfs_data": '{"foo":"bar"}',
+        "ipfs_data": ipfs_data,
         "delivery_rate": "123",
         "sender": "0x0000000000000000000000000000000000000001",
+        "signature": "0x" + "00" * 65,
+        "nonce": "0",
     }
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
@@ -717,6 +756,7 @@ def _patched_handler_for_balance(
         },
     )
     mh.setup()
+    _install_verify_ok(mh, monkeypatch)
     return mh
 
 
@@ -726,11 +766,13 @@ def _send_signed_request(
     """Drive a signed offchain request and return the final HTTP response."""
     http_msg: Any = make_http_msg(
         {
-            "ipfs_hash": "0x" + "ab" * 32,
+            "ipfs_hash": _DEFAULT_IPFS_HASH,
             "request_id": request_id,
-            "ipfs_data": '{"foo":"bar"}',
+            "ipfs_data": _DEFAULT_IPFS_DATA,
             "delivery_rate": "123",
             "sender": "0x0000000000000000000000000000000000000001",
+            "signature": "0x" + "00" * 65,
+            "nonce": "0",
         }
     )
     mh._handle_signed_requests(http_msg, http_dialogue)
@@ -777,9 +819,13 @@ def test_402_emits_www_authenticate_header(
     resp = _send_signed_request(mh, http_dialogue, request_id="4021")
 
     assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    # The realm is the marketplace-mech address resolved from
+    # ``mech_to_config``. ``models.Params`` lowercases every key at load
+    # so the resolved address is always the lowercase form; the
+    # ``params_stub`` fixture pins the lowercase form too.
     assert (
         'WWW-Authenticate: Payment scheme="olas-prepay" '
-        'realm="0xMechAddr"' in resp.headers
+        'realm="0xmechaddr"' in resp.headers
     )
 
 
@@ -1965,22 +2011,90 @@ def test_filter_requests_empty_list(
 
 
 def _make_signed_request_body(
-    ipfs_hash: str = "0x" + "ab" * 32,
+    ipfs_hash: str = _DEFAULT_IPFS_HASH,
     delivery_rate: str = "123",
     request_id: str = "req-hardening",
+    ipfs_data: str = _DEFAULT_IPFS_DATA,
+    nonce: str = "0",
 ) -> Dict[str, str]:
-    """Build a valid signed-request body used by hardening tests."""
+    """Build a valid signed-request body used by hardening tests.
+
+    ``signature`` and ``nonce`` are populated with syntactically-valid
+    placeholders so the ingress parse succeeds; tests that exercise real
+    accept paths install a stub verifier via ``_install_verify_ok`` and
+    tests that exercise sig-verify itself override these fields.
+
+    The default ``ipfs_hash`` is the multihash-stripped CID of
+    ``_DEFAULT_IPFS_DATA`` so the CID-binding check at the top of the
+    accept path passes without the individual test having to derive
+    the hash itself. Tests that want to exercise the mismatch branch
+    override either ``ipfs_hash`` or ``ipfs_data`` (or both) directly.
+
+    :param ipfs_hash: 0x-prefixed hex ipfs hash value for the body.
+    :param delivery_rate: decimal delivery rate string for the body.
+    :param request_id: request_id string for the body.
+    :param ipfs_data: raw JSON string for the body.
+    :param nonce: decimal nonce string for the body.
+    :return: a request-body dict with all required fields populated.
+    """
     return {
         "ipfs_hash": ipfs_hash,
         "request_id": request_id,
-        "ipfs_data": '{"foo":"bar"}',
+        "ipfs_data": ipfs_data,
         "delivery_rate": delivery_rate,
         "sender": "0x0000000000000000000000000000000000000001",
+        "signature": "0x" + "00" * 65,
+        "nonce": nonce,
     }
 
 
+def _install_verify_ok(mh: Any, monkeypatch: Any) -> None:
+    """Make _verify_offchain_request_signature accept every request.
+
+    Boundary-level stub for tests that focus on downstream behaviour
+    (balance check, 402 flow, receipt header). The sig-verify method
+    itself is exercised by dedicated tests that feed real signatures
+    through the real code path. Returns a ``SignatureVerdict`` (post
+    the ``bool`` → verdict refactor) so callers can branch on
+    ``is_infra`` to distinguish 401 vs 503.
+
+    Also stubs the admission-gate call (``_bind_wire_nonce_to_chain``)
+    and the checksum resolver (``_resolve_sender_checksum``) so
+    downstream tests that only care about the balance / 402 / receipt
+    branches don't need to also stand up a ``MechMarketplaceContract``
+    stub — the admission gate is exercised by its own dedicated tests.
+
+    :param mh: the ``MechHttpHandler`` instance to patch.
+    :param monkeypatch: the pytest ``monkeypatch`` fixture.
+    """
+    monkeypatch.setattr(
+        mh,
+        "_verify_offchain_request_signature",
+        lambda **_kwargs: hmod.SignatureVerdict(ok=True, reason="", is_infra=False),
+    )
+    monkeypatch.setattr(
+        mh,
+        "_bind_wire_nonce_to_chain",
+        lambda **_kwargs: hmod.SignatureVerdict(ok=True, reason="", is_infra=False),
+    )
+    monkeypatch.setattr(
+        mh,
+        "_resolve_sender_checksum",
+        lambda sender: str(sender),
+    )
+
+
 def _install_balance_ok(mh: Any, monkeypatch: Any) -> None:
-    """Make _check_offchain_requester_balance return an OK, sufficient response."""
+    """Make _check_offchain_requester_balance return an OK, sufficient response.
+
+    Also installs the passing sig-verify stub so downstream tests that
+    only care about the balance path don't 401 at the new accept-time
+    signature gate.
+
+    :param mh: the ``MechHttpHandler`` instance to patch.
+    :param monkeypatch: the pytest ``monkeypatch`` fixture.
+    """
+    _install_verify_ok(mh, monkeypatch)
     monkeypatch.setattr(
         mh,
         "_check_offchain_requester_balance",
@@ -2165,9 +2279,11 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     body["request_id_nonce"] = "999"
     body["requestIdWithNonce"] = "999"
     body["tool"] = "attacker-tool"
-    # Plus a benign key that must survive the filter untouched, so the
-    # test also pins that non-reserved keys still flow through.
-    body["signature"] = "0xdead"
+    # ``signature`` is a full-length placeholder so the ingress
+    # format guard (``SIGNATURE_RE``) accepts it; the test still
+    # pins that it survives the reserved-key filter untouched.
+    valid_signature = "0x" + "aa" * 65
+    body["signature"] = valid_signature
 
     http_msg: Any = make_http_msg(body)
     mh._handle_signed_requests(http_msg, http_dialogue)
@@ -2180,7 +2296,11 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     # Trusted values won on every reserved key.
     assert task[hmod.RequestKey.REQUEST_ID_CAMEL.value] == 42
     assert task[hmod.RequestKey.IS_OFFCHAIN.value] is True
-    assert task[hmod.BodyKey.DATA.value] == bytes.fromhex("ab" * 32)
+    # ``BodyKey.DATA`` is derived from the wire ``ipfs_hash`` — which
+    # ``_make_signed_request_body`` sets to the CID of
+    # ``_DEFAULT_IPFS_DATA`` so the accept-time CID-binding check
+    # passes. Assert against the same derivation.
+    assert task[hmod.BodyKey.DATA.value] == bytes.fromhex(_DEFAULT_IPFS_HASH[2:])
     assert task[hmod.RequestKey.REQUEST_DELIVERY_RATE.value] == 123
     # Snake-case ``request_id`` must never appear on the pending task:
     # ``_handle_done_task`` spreads ``**executing_task`` into ``done_task``
@@ -2198,7 +2318,7 @@ def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     ):
         assert reserved not in task, f"reserved key {reserved!r} leaked from body"
     # Non-reserved key still flows through.
-    assert task["signature"] == "0xdead"
+    assert task["signature"] == valid_signature
 
 
 # --- guard tests for the defensive paths added in the remediation -----------
@@ -2301,6 +2421,7 @@ def test_handler_replies_500_when_402_build_fails(
         },
     )
     mh = _http_handler(handler_context, monkeypatch)
+    _install_verify_ok(mh, monkeypatch)
     http_msg: Any = make_http_msg(
         _make_signed_request_body(delivery_rate="1", request_id="500")
     )
@@ -2308,3 +2429,3531 @@ def test_handler_replies_500_when_402_build_fails(
 
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.INTERNAL_SERVER_ERROR_CODE.value
+
+
+# ---------------------------------------------------------------------------
+# Offchain signature verification
+# ---------------------------------------------------------------------------
+
+
+import requests as _requests_for_sigverify  # noqa: E402
+from eth_account import Account as _Account  # noqa: E402
+from eth_utils import to_checksum_address as _to_checksum  # noqa: E402
+
+from packages.valory.skills.task_execution.utils.request_id import (  # noqa: E402
+    compute_request_id as _compute_request_id,
+)
+
+_SIGVERIFY_MARKETPLACE = "0xdEaDbeefdEaDbeefdEadbEefdeADBeEfDeAdBeEf"
+_SIGVERIFY_MECH = "0xCAFECAFECAFECAFECAFECAFECAFECAFECAFECAFE"
+_SIGVERIFY_DOMAIN_SEPARATOR = b"\xab" * 32
+_SIGVERIFY_PAYMENT_TYPE = b"\xcd" * 32
+_SIGVERIFY_PRIVATE_KEY = "0x" + "42" * 32
+
+
+def _seed_verification_constants(
+    mh: MechHttpHandler, params: SimpleNamespace, monkeypatch: Any
+) -> None:
+    """Seed the marketplace / mech addresses and boot-time constants used by verify.
+
+    The constants would normally be fetched from chain in ``setup()``; this
+    helper stamps them directly so the sig-verify path can run end-to-end
+    without an RPC. ``_get_ledger_settings`` is also patched to return a
+    non-error value so the ``EthereumApi`` construction path succeeds; the
+    ``ledger_api`` returned is discarded because the verify path only uses
+    its checksum helper.
+
+    :param mh: the ``MechHttpHandler`` instance to patch.
+    :param params: the params ``SimpleNamespace`` used by the handler.
+    :param monkeypatch: the pytest ``monkeypatch`` fixture.
+    """
+    params.mech_marketplace_address = _SIGVERIFY_MARKETPLACE
+    params.agent_mech_contract_addresses = [_SIGVERIFY_MECH]
+    # Post the round-6 refactor, the handler resolves the mech address
+    # via ``mech_to_config`` scanning for ``is_marketplace_mech``; stamp
+    # a matching entry so ``_resolve_marketplace_mech_address`` returns
+    # ``_SIGVERIFY_MECH`` and the sig-verify path uses the same address
+    # the test's ``_compute_request_id`` was called with.
+    params.mech_to_config = {
+        _SIGVERIFY_MECH.lower(): SimpleNamespace(
+            is_marketplace_mech=True,
+            use_dynamic_pricing=False,
+        )
+    }
+    mh._domain_separator = _SIGVERIFY_DOMAIN_SEPARATOR
+    mh._payment_type = _SIGVERIFY_PAYMENT_TYPE
+    mh._marketplace_mech_address = _SIGVERIFY_MECH
+    # Bypass the RPC that _verify_offchain_request_signature would otherwise
+    # try to open. Both the balance and verify paths would call this — the
+    # verify path only needs the address prep to succeed. Returning ``ok``
+    # with an unroutable RPC is fine because the tests never let the code
+    # actually make a network call.
+    monkeypatch.setattr(
+        mh,
+        "_get_ledger_settings",
+        lambda: {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.RPC_ADDRESS.value: "http://127.0.0.1:1",
+            hmod.ResponseKey.CHAIN_ID.value: 100,
+        },
+    )
+    # Stub the on-chain ``mapNonces`` read on ``MechMarketplaceContract``
+    # so the sig-verify nonce-binding step does not attempt a real RPC
+    # against the placeholder endpoint stamped above. Returning 0 keeps
+    # the default scenario nonces (``0..16``) inside the accept window
+    # so happy-path tests still exercise the accept branch; tests that
+    # want a different on-chain value re-monkeypatch this attribute.
+    monkeypatch.setattr(
+        hmod.MechMarketplaceContract,
+        "get_nonce",
+        classmethod(
+            lambda cls, ledger_api, contract_address, sender_address: {"data": 0}
+        ),
+    )
+
+
+def _sig_body(
+    request_id: str,
+    delivery_rate: int,
+    nonce: int,
+    sender: str,
+    signature_hex: str,
+    ipfs_hash: str = _DEFAULT_IPFS_HASH,
+    ipfs_data: str = _DEFAULT_IPFS_DATA,
+) -> Dict[str, str]:
+    """Build a signed-request body populated for a sig-verify scenario.
+
+    The default ``ipfs_hash`` matches the CID of ``ipfs_data`` so the
+    accept path's binding check passes; tests that exercise a mismatch
+    override either field directly.
+
+    :param request_id: decimal request_id string for the body.
+    :param delivery_rate: requester-signed delivery rate.
+    :param nonce: requester nonce.
+    :param sender: requester address.
+    :param signature_hex: hex-encoded signature bytes.
+    :param ipfs_hash: 0x-prefixed hex ipfs hash value for the body.
+    :param ipfs_data: raw JSON string carried inline in the body.
+    :return: a signed-request body dict.
+    """
+    return {
+        "ipfs_hash": ipfs_hash,
+        "request_id": request_id,
+        "ipfs_data": ipfs_data,
+        "delivery_rate": str(delivery_rate),
+        "sender": sender,
+        "signature": signature_hex,
+        "nonce": str(nonce),
+    }
+
+
+def _make_eoa_scenario(delivery_rate: int = 123, nonce: int = 0) -> Dict[str, Any]:
+    """Sign a request_id derived from the marketplace formula with a fixed EOA key.
+
+    ``nonce=0`` matches the default ``get_nonce`` stub installed by
+    ``_seed_verification_constants`` combined with an empty
+    outstanding-nonces set on a fresh handler, so happy-path callers
+    hit the admission gate's ``wire == expected`` accept branch
+    without an extra monkeypatch.
+
+    :param delivery_rate: the requester-signed delivery rate embedded
+        in the derived request id.
+    :param nonce: the wire nonce embedded in the derived request id.
+    :return: dict with the fields the ``_sig_body`` helper needs
+        (sender / request_id / ipfs_hash / delivery_rate / nonce /
+        signature_hex).
+    """
+    account = _Account.from_key(_SIGVERIFY_PRIVATE_KEY)
+    sender = _to_checksum(account.address)
+    # The signature commits to ``keccak(ipfs_hash)``; the CID-binding
+    # check in the accept path then requires ``ipfs_hash`` to be the CID
+    # of the ``ipfs_data`` bytes the mech will run. ``_sig_body`` uses
+    # ``_DEFAULT_IPFS_DATA`` for the body; the ``ipfs_hash`` computed
+    # from that same payload is what the returned scenario carries so
+    # the accept path sees a matched pair.
+    ipfs_hash = _DEFAULT_IPFS_HASH
+    request_data = bytes.fromhex(ipfs_hash[2:])
+    request_id_bytes = _compute_request_id(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=sender,
+        request_data=request_data,
+        delivery_rate=delivery_rate,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=nonce,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    signature = account.unsafe_sign_hash(request_id_bytes).signature
+    return {
+        "sender": sender,
+        "request_id": str(int.from_bytes(request_id_bytes, "big")),
+        "ipfs_hash": ipfs_hash,
+        "delivery_rate": delivery_rate,
+        "nonce": nonce,
+        "signature_hex": "0x" + signature.hex(),
+    }
+
+
+def test_verify_offchain_signature_eoa_valid_accepts_and_enqueues(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A well-formed EOA-signed request is accepted (200) and enqueued."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Dict[str, Any]] = []
+
+    def fake_balance(sender: str, delivery_rate: int) -> Dict[str, Any]:
+        balance_calls.append({"sender": sender, "delivery_rate": delivery_rate})
+        return {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
+            hmod.ResponseKey.AVAILABLE_AMOUNT.value: int(delivery_rate) + 1,
+            hmod.ResponseKey.REASON.value: "ok",
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: "0xpaymenttype",
+            hmod.ResponseKey.CHAIN_ID.value: 100,
+        }
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", fake_balance)
+
+    scenario = _make_eoa_scenario()
+    http_msg: Any = make_http_msg(
+        _sig_body(
+            request_id=scenario["request_id"],
+            delivery_rate=scenario["delivery_rate"],
+            nonce=scenario["nonce"],
+            sender=scenario["sender"],
+            signature_hex=scenario["signature_hex"],
+            ipfs_hash=scenario["ipfs_hash"],
+        )
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(balance_calls) == 1, "balance check must run after a valid signature"
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_verify_offchain_signature_eoa_invalid_rejects_401_before_balance_check(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A bad EOA signature is rejected 401 before the balance-check RPC runs."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Dict[str, Any]] = []
+
+    def fake_balance(sender: str, delivery_rate: int) -> Dict[str, Any]:
+        balance_calls.append({"sender": sender, "delivery_rate": delivery_rate})
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", fake_balance)
+
+    scenario = _make_eoa_scenario()
+    # Corrupt the signature by flipping the s component; recovery will
+    # succeed to a different address than the declared sender, and the
+    # EIP-1271 fallback will fail (sender has no code).
+    bad_sig = "0x" + "00" * 32 + scenario["signature_hex"][2 + 64 :]
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=bad_sig,
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    # Make the EIP-1271 fallback return False so the outcome is deterministic
+    # (the real fallback would depend on whether the "sender" address has
+    # code on the fake RPC — it doesn't, but we don't want the test to hang
+    # on a network attempt either).
+    monkeypatch.setattr(
+        hmod,
+        "check_eip1271_signature",
+        lambda **_kw: _Eip1271Verdict.DECLINED,
+    )
+
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert balance_calls == [], "balance check must not run when signature fails"
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_safe_eip1271_true_accepts(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A Safe sender whose isValidSignature returns the magic value is accepted."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
+            hmod.ResponseKey.AVAILABLE_AMOUNT.value: int(delivery_rate) + 1,
+            hmod.ResponseKey.REASON.value: "ok",
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: "0xpaymenttype",
+            hmod.ResponseKey.CHAIN_ID.value: 100,
+        }
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
+
+    # Sender is a Safe (contract) — sign with an arbitrary key that does not
+    # recover to the sender, so the ecrecover branch misses and the code
+    # falls through to the EIP-1271 wrapper.
+    safe_sender = _to_checksum("0x" + "99" * 20)
+    ipfs_hash = _DEFAULT_IPFS_HASH
+    request_data = bytes.fromhex(ipfs_hash[2:])
+    delivery_rate = 42
+    nonce = 3
+    _install_nonce_stub(monkeypatch, on_chain_nonce=nonce)
+    request_id_bytes = _compute_request_id(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=safe_sender,
+        request_data=request_data,
+        delivery_rate=delivery_rate,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=nonce,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    # An arbitrary EOA signs the hash; recovery will succeed to that EOA's
+    # address, which is NOT ``safe_sender``, forcing the EIP-1271 fallback.
+    arbitrary_sig = (
+        _Account.from_key("0x" + "77" * 32).unsafe_sign_hash(request_id_bytes).signature
+    )
+
+    monkeypatch.setattr(
+        hmod,
+        "check_eip1271_signature",
+        lambda **_kw: _Eip1271Verdict.VALID,
+    )
+
+    body = _sig_body(
+        request_id=str(int.from_bytes(request_id_bytes, "big")),
+        delivery_rate=delivery_rate,
+        nonce=nonce,
+        sender=safe_sender,
+        signature_hex="0x" + arbitrary_sig.hex(),
+        ipfs_hash=ipfs_hash,
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert balance_calls == [safe_sender]
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_verify_offchain_signature_safe_eip1271_false_rejects_before_balance_check(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A Safe whose isValidSignature returns False is rejected 401 before balance check."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
+
+    safe_sender = _to_checksum("0x" + "aa" * 20)
+    ipfs_hash = "0x" + "ab" * 32
+    request_data = bytes.fromhex(ipfs_hash[2:])
+    delivery_rate = 42
+    nonce = 3
+    request_id_bytes = _compute_request_id(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=safe_sender,
+        request_data=request_data,
+        delivery_rate=delivery_rate,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=nonce,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    arbitrary_sig = (
+        _Account.from_key("0x" + "77" * 32).unsafe_sign_hash(request_id_bytes).signature
+    )
+
+    monkeypatch.setattr(
+        hmod,
+        "check_eip1271_signature",
+        lambda **_kw: _Eip1271Verdict.DECLINED,
+    )
+
+    body = _sig_body(
+        request_id=str(int.from_bytes(request_id_bytes, "big")),
+        delivery_rate=delivery_rate,
+        nonce=nonce,
+        sender=safe_sender,
+        signature_hex="0x" + arbitrary_sig.hex(),
+        ipfs_hash=ipfs_hash,
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert balance_calls == [], "balance check must not run when signature fails"
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    ["signature", "nonce"],
+)
+def test_verify_offchain_signature_missing_field_returns_400(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    missing_field: str,
+) -> None:
+    """Missing signature or nonce field is rejected 400 at ingress parsing."""
+    mh = _http_handler(handler_context, monkeypatch)
+    _install_verify_ok(mh, monkeypatch)
+    balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
+
+    body = _make_signed_request_body(request_id="1")
+    body.pop(missing_field)
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert balance_calls == []
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_rejects_when_wire_request_id_mismatches_derivation(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A wire request_id that does not match the local derivation fails verification."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
+    monkeypatch.setattr(
+        hmod,
+        "check_eip1271_signature",
+        lambda **_kw: _Eip1271Verdict.DECLINED,
+    )
+
+    scenario = _make_eoa_scenario()
+    # Substitute a numerically-valid but wrong request_id; the signature was
+    # produced over the correct one, so the derivation-mismatch branch fires.
+    wrong_request_id = str((int(scenario["request_id"]) + 1) % (2**256))
+    body = _sig_body(
+        request_id=wrong_request_id,
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert balance_calls == []
+
+
+def test_verify_offchain_signature_rejects_503_when_constants_unloaded(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Unloaded boot constants surface as 503 (infra), not 401 (bad-sig).
+
+    The sig-verifier returns a ``SignatureVerdict`` with
+    ``is_infra=True`` when the marketplace domain-separator or mech
+    ``paymentType`` is unset (setup failed or a self-check mismatch
+    flipped them off). The handler routes those verdicts to 503 so a
+    well-behaved client treats the failure as retryable instead of
+    concluding its credentials are wrong.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    # Force the unloaded state that a failed setup would leave behind.
+    mh._domain_separator = None
+    mh._payment_type = None
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
+
+    body = _make_signed_request_body(request_id="1")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert balance_calls == []
+    # Pre-auth 503: the caller-supplied request_id must not have
+    # landed in the shared response cache — a 503 does not persist
+    # a rejection payload any more than a 401 does.
+    assert "1" not in handler_context.shared_state["offchain_request_responses"]
+
+
+# ---------------------------------------------------------------------------
+# Nonce binding to on-chain ``MechMarketplace.mapNonces[sender]`` and
+# EIP-1271 call safety limits (short timeout + gas cap + cached
+# ``EthereumApi``).
+# ---------------------------------------------------------------------------
+
+
+def _install_nonce_stub(monkeypatch: Any, on_chain_nonce: int) -> List[Dict[str, Any]]:
+    """Stub ``MechMarketplaceContract.get_nonce`` to return a fixed value.
+
+    Records the call args on a list so tests can assert on which sender
+    address the on-chain read was made against. Overrides the default
+    permissive stub installed by ``_seed_verification_constants``.
+
+    :param monkeypatch: the pytest ``monkeypatch`` fixture.
+    :param on_chain_nonce: the value returned as the on-chain
+        ``mapNonces[sender]`` counter.
+    :return: the shared list that captures per-call kwargs.
+    """
+    calls: List[Dict[str, Any]] = []
+
+    def _stub(
+        cls: Any, ledger_api: Any, contract_address: Any, sender_address: Any
+    ) -> Dict[str, int]:
+        calls.append(
+            {
+                "contract_address": contract_address,
+                "sender_address": sender_address,
+            }
+        )
+        return {"data": on_chain_nonce}
+
+    monkeypatch.setattr(hmod.MechMarketplaceContract, "get_nonce", classmethod(_stub))
+    return calls
+
+
+def _make_safe_eip1271_scenario(nonce: int) -> Dict[str, Any]:
+    """Build a Safe-shaped sig-verify scenario at a caller-chosen nonce.
+
+    The signature is signed with an arbitrary key that does NOT recover
+    to the Safe address so the ecrecover branch misses and the accept
+    path falls through to the EIP-1271 fallback. Test-side patches
+    control whether ``check_eip1271_signature`` returns True and
+    whether the on-chain ``mapNonces`` read matches.
+
+    :param nonce: the wire nonce embedded in the request body.
+    :return: dict with the fields the ``_sig_body`` helper needs.
+    """
+    safe_sender = _to_checksum("0x" + "77" * 20)
+    ipfs_hash = _DEFAULT_IPFS_HASH
+    request_data = bytes.fromhex(ipfs_hash[2:])
+    delivery_rate = 42
+    request_id_bytes = _compute_request_id(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=safe_sender,
+        request_data=request_data,
+        delivery_rate=delivery_rate,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=nonce,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    arbitrary_sig = (
+        _Account.from_key("0x" + "33" * 32).unsafe_sign_hash(request_id_bytes).signature
+    )
+    return {
+        "sender": safe_sender,
+        "request_id": str(int.from_bytes(request_id_bytes, "big")),
+        "ipfs_hash": ipfs_hash,
+        "delivery_rate": delivery_rate,
+        "nonce": nonce,
+        "signature_hex": "0x" + arbitrary_sig.hex(),
+    }
+
+
+def _ok_balance_check(
+    delivery_rate: int = 42,
+) -> Dict[str, Any]:
+    """Return a balance-check ``ok`` response covering ``delivery_rate + 1``."""
+    return {
+        hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+        hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
+        hmod.ResponseKey.AVAILABLE_AMOUNT.value: int(delivery_rate) + 1,
+        hmod.ResponseKey.REASON.value: "ok",
+        hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+        hmod.ResponseKey.PAYMENT_TYPE.value: "0xpaymenttype",
+        hmod.ResponseKey.CHAIN_ID.value: 100,
+    }
+
+
+def test_verify_offchain_signature_accepts_when_wire_nonce_matches_on_chain(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Wire nonce equal to ``mapNonces[sender]`` accepts and enqueues.
+
+    Pins the exact-match lower boundary of the accepted nonce window.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=5)
+    nonce_calls = _install_nonce_stub(monkeypatch, on_chain_nonce=5)
+    monkeypatch.setattr(
+        mh, "_check_offchain_requester_balance", lambda **_kw: _ok_balance_check()
+    )
+    # Avoid the balance-check kwargs mismatch — the handler passes
+    # ``sender=`` and ``delivery_rate=`` positionally on some callers.
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(nonce_calls) == 1
+    assert nonce_calls[0]["sender_address"] == scenario["sender"]
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_verify_offchain_signature_rejects_first_request_when_wire_nonce_above_chain(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """First request from a sender: wire=on_chain+1 rejects 503, not accept.
+
+    With no outstanding requests from the sender, the admission gate's
+    expected slot is exactly the on-chain ``mapNonces`` value. A wire
+    value one above that skips a slot — settlement would derive a
+    different ``request_id`` for it and revert the whole per-sender
+    batch. Reject 503 so the client can retry once its earlier
+    requests drain (empty in this scenario, so the retry sees the
+    same expected slot and lands on the accept branch).
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=1)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=0)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+    _real_send_rejection = mh._send_rejection_response
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.NONCE_ABOVE_EXPECTED
+    assert balance_calls == []
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_admission_gate_after_two_outstanding_accepts(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Two outstanding at ``k, k+1``: next accept requires ``k+2``.
+
+    Seeds the sender's outstanding-nonce set at ``{0, 1}`` (as if two
+    earlier requests were already accepted) and asserts that a third
+    accept with wire ``nonce=2`` is admitted, while wire ``nonce=3``
+    is rejected 503 (skips a slot) and wire ``nonce=1`` is rejected
+    401 (duplicate of an outstanding slot).
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    _install_nonce_stub(monkeypatch, on_chain_nonce=0)
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+
+    # Preload the sender's outstanding-nonce set with the two nonces
+    # a pair of prior accepts would have recorded. The scenario helper
+    # deterministically returns the same sender across calls, so the
+    # key here matches what ``_bind_wire_nonce_to_chain`` will look up.
+    sender_checksum = _make_eoa_scenario(nonce=0)["sender"]
+    handler_context.shared_state[hmod.OUTSTANDING_NONCES_BY_SENDER] = {
+        sender_checksum: {0, 1},
+    }
+
+    # Third accept at the expected next slot (k+2): admitted.
+    scenario_accept = _make_eoa_scenario(nonce=2)
+    body = _sig_body(
+        request_id=scenario_accept["request_id"],
+        delivery_rate=scenario_accept["delivery_rate"],
+        nonce=scenario_accept["nonce"],
+        sender=scenario_accept["sender"],
+        signature_hex=scenario_accept["signature_hex"],
+        ipfs_hash=scenario_accept["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    accept_resp = handler_context.outbox.sent[-1]
+    assert accept_resp.status_code == HttpCode.OK_CODE.value
+    assert (
+        2
+        in handler_context.shared_state[hmod.OUTSTANDING_NONCES_BY_SENDER][
+            sender_checksum
+        ]
+    )
+
+    # Fourth accept skipping a slot (k+3 when k+2 is now expected): 503.
+    scenario_ahead = _make_eoa_scenario(nonce=4)
+    body_ahead = _sig_body(
+        request_id=scenario_ahead["request_id"],
+        delivery_rate=scenario_ahead["delivery_rate"],
+        nonce=scenario_ahead["nonce"],
+        sender=scenario_ahead["sender"],
+        signature_hex=scenario_ahead["signature_hex"],
+        ipfs_hash=scenario_ahead["ipfs_hash"],
+    )
+    http_msg_ahead: Any = make_http_msg(body_ahead)
+    mh._handle_signed_requests(http_msg_ahead, http_dialogue)
+    ahead_resp = handler_context.outbox.sent[-1]
+    assert ahead_resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+
+    # Fifth accept duplicating an outstanding slot (k+1): 401.
+    scenario_dup = _make_eoa_scenario(nonce=1)
+    body_dup = _sig_body(
+        request_id=scenario_dup["request_id"],
+        delivery_rate=scenario_dup["delivery_rate"],
+        nonce=scenario_dup["nonce"],
+        sender=scenario_dup["sender"],
+        signature_hex=scenario_dup["signature_hex"],
+        ipfs_hash=scenario_dup["ipfs_hash"],
+    )
+    http_msg_dup: Any = make_http_msg(body_dup)
+    mh._handle_signed_requests(http_msg_dup, http_dialogue)
+    dup_resp = handler_context.outbox.sent[-1]
+    assert dup_resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+
+
+def test_accept_records_sender_nonce_in_outstanding_set(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A successful accept records the wire nonce under the sender's checksum.
+
+    Pins the accept-side half of the outstanding-nonces lifecycle so a
+    regression that stops populating the set would still admit the
+    first accept but silently regress the ``next expected == on_chain
+    + len(outstanding)`` semantics on the second.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=0)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=0)
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    outstanding = handler_context.shared_state[hmod.OUTSTANDING_NONCES_BY_SENDER]
+    assert outstanding == {scenario["sender"]: {0}}
+
+
+def test_verify_offchain_signature_rejects_401_when_wire_nonce_below_on_chain(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Wire nonce below ``mapNonces[sender]`` rejects 401 before balance check."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=2)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=5)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        # Delegate to the real path so the response is emitted normally.
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    _real_send_rejection = mh._send_rejection_response
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    assert stored["reason"] == hmod.NONCE_BELOW_EXPECTED
+    assert balance_calls == [], "balance check must not run when nonce is stale"
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_rejects_503_when_wire_nonce_above_expected(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Wire nonce above the sender's next expected slot rejects 503.
+
+    The sender is racing ahead of its own in-flight queue; mech-client
+    retries 503 in the next round so the earlier requests get a chance
+    to drain and the same body settles when the slot opens. 401 would
+    be wrong — the client would treat the credential as permanently
+    invalid and stop retrying.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    on_chain = 4
+    # No outstanding, so expected next slot equals ``on_chain``. Any
+    # wire above that skips a slot.
+    wire = on_chain + 5
+
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=wire)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=on_chain)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+    _real_send_rejection = mh._send_rejection_response
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.NONCE_ABOVE_EXPECTED
+    assert balance_calls == []
+
+
+def test_verify_offchain_signature_returns_503_when_mapnonces_read_fails(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A transport failure on the ``mapNonces`` read returns 503, not 401.
+
+    Failing closed at the nonce read (rather than accepting) keeps a
+    request that settlement would later reject from enqueuing work the
+    operator pays to execute. A ``requests`` transport error is used
+    here because that is what a real RPC endpoint failure surfaces as.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=3)
+
+    def _boom(
+        cls: Any, ledger_api: Any, contract_address: Any, sender_address: Any
+    ) -> Dict[str, int]:
+        raise _requests_for_sigverify.exceptions.ConnectionError("rpc down")
+
+    monkeypatch.setattr(hmod.MechMarketplaceContract, "get_nonce", classmethod(_boom))
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+    _real_send_rejection = mh._send_rejection_response
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.NONCE_READ_FAILED
+    assert balance_calls == []
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_rejects_503_on_eip1271_timeout(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A transport timeout on the EIP-1271 call surfaces as 503 with the timeout reason.
+
+    Provider-side slowness is an infrastructure signal, not a
+    credential rejection: the ``gas`` cap bounds a hostile
+    ``isValidSignature`` view to sub-millisecond CPU on the RPC side
+    (that path surfaces as ``ContractLogicError`` and flattens to
+    ``False`` on the other branch), so a timeout at this depth
+    mirrors ``NONCE_READ_FAILED`` — an ``is_infra=True`` verdict that
+    routes to 503 so a well-behaved client backs off and retries. The
+    nonce read after the sig branch must NOT run when sig-verify
+    rejects, so no on-chain ``mapNonces`` call is issued.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_safe_eip1271_scenario(nonce=3)
+    nonce_calls = _install_nonce_stub(monkeypatch, on_chain_nonce=3)
+
+    def _timeout(**_kw: Any) -> bool:
+        raise TimeoutError("isValidSignature slow")
+
+    monkeypatch.setattr(hmod, "check_eip1271_signature", _timeout)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+    _real_send_rejection = mh._send_rejection_response
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.EIP1271_CALL_TIMEOUT
+    assert balance_calls == []
+    assert nonce_calls == [], "nonce read must not run when sig verify rejects"
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_wall_clock_deadline_bounds_eip1271_call(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The wall-clock deadline caps the EIP-1271 call independently of provider timeout.
+
+    Replaces ``check_eip1271_signature`` with a stub that sleeps well
+    past the wall-clock deadline. The stub would otherwise pin the
+    handler thread for its full sleep — long enough for the
+    http_server to time out the client at its own 5s reply budget,
+    and long enough to stall ABCI processing on the AEA main loop.
+    Assert the handler returns a 503 within a small epsilon of the
+    deadline (not after the sleep), with the ``EIP1271_CALL_TIMEOUT``
+    reason so operators can attribute the outcome.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    import time as _time
+
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_safe_eip1271_scenario(nonce=3)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=3)
+
+    # Reduce the deadline to keep the test fast while still exercising
+    # the deadline branch. The sleep length is 50x the deadline so a
+    # regression that waited out the callable would visibly hang the
+    # test instead of being masked by a wide epsilon.
+    test_deadline = 0.2
+    monkeypatch.setattr(hmod, "_RPC_WALL_CLOCK_DEADLINE_SECONDS", test_deadline)
+
+    def _slow_eip1271(**_kw: Any) -> _Eip1271Verdict:
+        _time.sleep(test_deadline * 50)
+        return _Eip1271Verdict.VALID
+
+    monkeypatch.setattr(hmod, "check_eip1271_signature", _slow_eip1271)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+    _real_send_rejection = mh._send_rejection_response
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    started_at = _time.monotonic()
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    elapsed = _time.monotonic() - started_at
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.EIP1271_CALL_TIMEOUT
+    # Deadline enforcement — the handler must return within deadline
+    # plus a small epsilon for handler overhead (EthereumApi
+    # construction, sig-verify prep, response encoding), NOT after
+    # the 50x-deadline sleep the stub would otherwise impose. 2s of
+    # slack absorbs handler overhead (EthereumApi construction,
+    # sig-verify prep, response encoding) under CI parallel load
+    # while keeping the assertion well below the 10s the stub would
+    # sleep if the deadline did nothing — so a regression that waited
+    # out the full sleep is still caught immediately.
+    assert elapsed < test_deadline + 2.0, (
+        f"handler returned in {elapsed:.3f}s but wall-clock deadline is "
+        f"{test_deadline}s; regression would let a slow isValidSignature "
+        f"pin the AEA main loop past the http_server reply budget"
+    )
+    assert balance_calls == []
+
+
+def test_bind_wire_nonce_to_chain_wall_clock_deadline_bounds_mapnonces_read(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The wall-clock deadline caps the ``mapNonces`` read the same way.
+
+    Same shape as the EIP-1271 test above but on the nonce-bind path.
+    Asserts the admission gate returns 503 with ``NONCE_READ_FAILED``
+    within the deadline when the underlying read hangs.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    import time as _time
+
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=0)
+    test_deadline = 0.2
+    monkeypatch.setattr(hmod, "_RPC_WALL_CLOCK_DEADLINE_SECONDS", test_deadline)
+
+    def _slow_get_nonce(
+        cls: Any, ledger_api: Any, contract_address: Any, sender_address: Any
+    ) -> Dict[str, int]:
+        _time.sleep(test_deadline * 50)
+        return {"data": 0}
+
+    monkeypatch.setattr(
+        hmod.MechMarketplaceContract, "get_nonce", classmethod(_slow_get_nonce)
+    )
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+    _real_send_rejection = mh._send_rejection_response
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    started_at = _time.monotonic()
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    elapsed = _time.monotonic() - started_at
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.NONCE_READ_FAILED
+    # Tight epsilon so a regression that waited out the 50x sleep
+    # (10s vs 0.2s deadline) visibly fails instead of masking. 2s of
+    # slack absorbs handler overhead (EthereumApi construction,
+    # sig-verify prep, response encoding) under CI parallel load
+    # while keeping the assertion well below the 10s the stub would
+    # sleep if the deadline did nothing — so a regression is caught
+    # immediately.
+    assert elapsed < test_deadline + 2.0, (
+        f"handler returned in {elapsed:.3f}s but wall-clock deadline is "
+        f"{test_deadline}s; regression would let a slow mapNonces read "
+        f"pin the AEA main loop past the http_server reply budget"
+    )
+    assert balance_calls == []
+
+
+def test_get_ledger_api_caches_instance_per_rpc_and_chain_and_timeout(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """Repeated ``_get_ledger_api`` calls with the same key return the same instance.
+
+    The cache eliminates per-request ``RotatingHTTPProvider`` and
+    connection pool construction on the accept path. Different timeout
+    values are separately keyed so the short-timeout instance used for
+    the EIP-1271 view does not overwrite the ledger-default instance
+    used for balance checks.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    construction_count = {"n": 0}
+    real_ctor = hmod.EthereumApi
+
+    def _counting_ctor(**kwargs: Any) -> Any:
+        construction_count["n"] += 1
+        return real_ctor(**kwargs)
+
+    monkeypatch.setattr(hmod, "EthereumApi", _counting_ctor)
+
+    # Same key, 100 accesses — one construction.
+    first = mh._get_ledger_api("http://127.0.0.1:1", 100)
+    for _ in range(99):
+        assert mh._get_ledger_api("http://127.0.0.1:1", 100) is first
+    assert construction_count["n"] == 1
+
+    # Different chain_id — new construction.
+    second = mh._get_ledger_api("http://127.0.0.1:1", 137)
+    assert second is not first
+    assert construction_count["n"] == 2
+
+    # Same rpc + chain but a short timeout — separate cache slot.
+    short = mh._get_ledger_api("http://127.0.0.1:1", 100, timeout_seconds=3.0)
+    assert short is not first
+    assert construction_count["n"] == 3
+    # Repeated short-timeout access — no extra construction.
+    assert mh._get_ledger_api("http://127.0.0.1:1", 100, timeout_seconds=3.0) is short
+    assert construction_count["n"] == 3
+
+
+# ---------------------------------------------------------------------------
+# CID-binding check on the accept path (ipfs_hash must equal CID of ipfs_data)
+# ---------------------------------------------------------------------------
+
+
+def test_signed_requests_accepts_body_whose_cid_matches_posted_ipfs_hash(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A body whose CID matches the wire ``ipfs_hash`` is accepted and enqueued.
+
+    The 34-byte multihash form (``0x1220 || sha256``) is accepted as
+    equivalent to the 32-byte bare-digest form; both reduce to the same
+    32-byte digest for the compare.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    # Build the wire ipfs_hash in the 34-byte multihash form: strip the
+    # ``0x`` prefix, prepend the SHA-256 multihash prefix ``1220``, add
+    # ``0x`` back. The handler's binding check must accept both encodings.
+    multihash_form_ipfs_hash = "0x1220" + _DEFAULT_IPFS_HASH[2:]
+    body = _make_signed_request_body(
+        request_id="7001",
+        ipfs_data=_DEFAULT_IPFS_DATA,
+        ipfs_hash=multihash_form_ipfs_hash,
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_signed_requests_rejects_when_ipfs_hash_does_not_match_body(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A body whose CID does NOT match the wire ipfs_hash is rejected 400.
+
+    The signature authorises work described by ``keccak(ipfs_hash)``; a
+    body that hashes to a different content commitment would enqueue
+    arbitrary work under a signature that authorised different content.
+    The handler must reject before enqueue, and the balance check must
+    not fire.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    balance_calls: List[Any] = []
+
+    def _spy_balance_check(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return {hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value}
+
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance_check)
+    mh.setup()
+    _install_verify_ok(mh, monkeypatch)
+
+    # Post a body whose ipfs_data is NOT what the ipfs_hash commits to.
+    mismatched_data = '{"other":"payload"}'
+    body = _make_signed_request_body(
+        request_id="7002",
+        ipfs_data=mismatched_data,
+        ipfs_hash=_DEFAULT_IPFS_HASH,  # commits to _DEFAULT_IPFS_DATA
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == hmod.IPFS_HASH_BODY_MISMATCH
+    # Nothing enqueued, no balance RPC.
+    assert handler_context.shared_state["pending_tasks"] == []
+    assert handler_context.shared_state["in_memory_requests"] == {}
+    assert balance_calls == []
+
+
+def test_signed_requests_rejects_when_ipfs_data_is_empty(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Empty ``ipfs_data`` fails the CID-binding check (no bytes to hash)."""
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(
+        request_id="7003",
+        ipfs_data="",
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Nonce coercion + numeric sort discipline
+# ---------------------------------------------------------------------------
+
+
+def test_signed_requests_stores_nonce_as_int_on_pending_task(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The coerced ``int`` nonce lands on the pending task.
+
+    Downstream (see
+    ``task_submission_abci.behaviours._get_offchain_tasks_deliver_data``)
+    sorts the offchain done-task list by ``nonce`` and the sort key must
+    be an ``int`` — a wire ``str`` would sort lexicographically and
+    mis-order the batch against the on-chain ``mapNonces`` array consume.
+    Pin the ``int`` coercion at the enqueue boundary here so any future
+    regression fails locally instead of surfacing as a bad on-chain
+    delivery.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(request_id="7010", nonce="10")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    pending = handler_context.shared_state["pending_tasks"]
+    assert len(pending) == 1
+    stored_nonce = pending[0]["nonce"]
+    assert isinstance(
+        stored_nonce, int
+    ), f"nonce must be int post ingress coercion, got {type(stored_nonce).__name__}"
+    assert stored_nonce == 10
+
+
+def test_signed_requests_two_task_batch_sorts_nonce_numerically(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Nonces ``9`` and ``10`` sort numerically (9 before 10), not as strings.
+
+    This is the exact scenario the task_submission_abci sort key
+    consumes. A str-typed nonce would sort lexicographically —
+    ``["10", "9"]`` — and the on-chain ``mapNonces`` array consume
+    would fail the whole batch.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+
+    # Send nonce="10" first, then nonce="9". A lexicographic sort would
+    # keep the wire order; a numeric sort would swap them.
+    first_msg: Any = make_http_msg(
+        _make_signed_request_body(request_id="7020", nonce="10")
+    )
+    mh._handle_signed_requests(
+        first_msg,
+        http_dialogue,
+    )
+    second_msg: Any = make_http_msg(
+        _make_signed_request_body(
+            request_id="7021",
+            nonce="9",
+            # Vary the ipfs_data so the CID-bind + dedup checks let
+            # the second request through as a distinct one.
+            ipfs_data='{"foo":"baz"}',
+            ipfs_hash=_ipfs_hash_for('{"foo":"baz"}'),
+        )
+    )
+    mh._handle_signed_requests(
+        second_msg,
+        http_dialogue,
+    )
+
+    pending = handler_context.shared_state["pending_tasks"]
+    assert len(pending) == 2
+    ordered = sorted(pending, key=lambda t: t["nonce"])
+    assert [t["nonce"] for t in ordered] == [
+        9,
+        10,
+    ], "sort by 'nonce' key must be numeric (int), not lexicographic (str)"
+
+
+@pytest.mark.parametrize(
+    "bad_nonce",
+    ["9abc", "-1", str(2**256), "", "042", " 42", "42\n", "๙", "9" * 5000],
+    ids=[
+        "trailing_alpha",
+        "negative",
+        "above_uint256",
+        "empty",
+        "leading_zero_padded",
+        "leading_space",
+        "trailing_newline",
+        "thai_digit",
+        "above_cpython_int_str_digits_limit",
+    ],
+)
+def test_signed_requests_rejects_invalid_nonce(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    bad_nonce: str,
+) -> None:
+    """Non-canonical, out-of-range, or empty nonce is rejected 400 at ingress."""
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(request_id="7030", nonce=bad_nonce)
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Pre-auth vs post-auth writes into offchain_request_responses
+# ---------------------------------------------------------------------------
+
+
+def test_401_bad_sig_does_not_write_offchain_response(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A pre-auth 401 must NOT persist a rejection payload keyed by request_id.
+
+    Otherwise a caller could poison an arbitrary id they do not own, and
+    the legitimate owner would later read that payload via the polling
+    endpoint. Only rejections after signature ownership is proven may
+    write into the shared response cache.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    # Force sig-verify to fail so the accept path 401s.
+    monkeypatch.setattr(
+        mh,
+        "_verify_offchain_request_signature",
+        lambda **_kw: hmod.SignatureVerdict(
+            ok=False,
+            reason="signature verification failed",
+            is_infra=False,
+        ),
+    )
+
+    body = _make_signed_request_body(request_id="7040")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+    # The caller-supplied request_id must NOT have landed in the shared
+    # response cache — that dict is the source the polling endpoint
+    # reads.
+    assert "7040" not in handler_context.shared_state["offchain_request_responses"]
+
+
+def test_402_insufficient_balance_writes_offchain_response(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A post-auth 402 DOES persist the challenge under request_id.
+
+    The caller has already proven signature ownership; the deposit
+    challenge must be readable via the polling endpoint so mech-client
+    can present it to the requester.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=-1
+    )
+    _send_signed_request(mh, http_dialogue, request_id="7050")
+
+    stored = handler_context.shared_state["offchain_request_responses"].get("7050")
+    assert stored is not None, "402 challenge must be persisted for polling"
+    assert stored["status"] == "rejected"
+    assert stored["reason"] == "insufficient balance"
+
+
+# ---------------------------------------------------------------------------
+# Replay protection (dedup on request_id)
+# ---------------------------------------------------------------------------
+
+
+def test_signed_requests_deduplicates_repeated_body(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The same body posted twice returns 200 without a second enqueue.
+
+    Every signed field is bound into the ``request_id``; the same body
+    therefore always hashes to the same id and dedup is exact. Returning
+    a 200 (with an ``already accepted`` note) preserves mech-client's
+    idempotent-retry semantics — a 409 would change the client contract.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+
+    first = _send_signed_request(mh, http_dialogue, request_id="7060")
+    assert first.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+    second = _send_signed_request(mh, http_dialogue, request_id="7060")
+    assert second.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(second.body.decode("utf-8"))
+    assert payload["reason"] == hmod.REQUEST_ALREADY_ACCEPTED
+    # No second enqueue: the pending list is still length 1.
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_signed_requests_distinct_ids_both_enqueue(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Different request_ids both enqueue; dedup does not over-block."""
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+
+    first = _send_signed_request(mh, http_dialogue, request_id="7070")
+    second = _send_signed_request(mh, http_dialogue, request_id="7071")
+
+    assert first.status_code == HttpCode.OK_CODE.value
+    assert second.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 2
+
+
+def test_signed_requests_retry_after_delivery_returns_200_even_when_nonce_stale(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Dedup runs BEFORE the nonce-bind admission gate.
+
+    A client re-posting an already-delivered request has by then
+    watched the on-chain ``mapNonces`` counter advance past the value
+    it originally signed. If the admission gate ran before dedup, the
+    retry would 401 (``NONCE_BELOW_EXPECTED``) instead of the
+    idempotent 200 (``REQUEST_ALREADY_ACCEPTED``) mech-client's own
+    retry loop depends on. Seed the response cache as if a delivery
+    settled, install a nonce stub that would refuse the request as
+    stale, and assert the retry still returns 200 with the
+    ``REQUEST_ALREADY_ACCEPTED`` reason.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+
+    # Force the admission gate to reject if it runs: on_chain far past
+    # the wire nonce (``0`` from ``_send_signed_request``) would land
+    # the request on ``NONCE_BELOW_EXPECTED`` (401). Dedup running
+    # first is the only way the response is a 200.
+    #
+    # ``_install_verify_ok`` inside ``_patched_handler_for_balance``
+    # has already installed a passing admission stub; override it here
+    # so the gate would 401 IF the ordering regressed.
+    def _reject_nonce(**_kw: Any) -> hmod.SignatureVerdict:
+        return hmod.SignatureVerdict(
+            ok=False,
+            reason=hmod.NONCE_BELOW_EXPECTED,
+            is_infra=False,
+        )
+
+    monkeypatch.setattr(mh, "_bind_wire_nonce_to_chain", _reject_nonce)
+    handler_context.shared_state["offchain_request_responses"]["7085"] = {
+        "status": "ok",
+        "request_id": "7085",
+    }
+
+    resp = _send_signed_request(mh, http_dialogue, request_id="7085")
+
+    assert resp.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == hmod.REQUEST_ALREADY_ACCEPTED
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_signed_requests_dedup_covers_delivered_state(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A request_id already in offchain_request_responses is treated as dedup.
+
+    Once a task has been delivered or post-auth-rejected, the writer
+    populates ``offchain_request_responses[str(req_id)]``. A retry against
+    that same id must not re-enqueue: the mech would otherwise execute
+    (and settle) work that has already been paid for and delivered.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    # Pre-seed the response cache as if a previous delivery had settled.
+    handler_context.shared_state["offchain_request_responses"]["7080"] = {
+        "status": "ok",
+        "request_id": "7080",
+    }
+
+    resp = _send_signed_request(mh, http_dialogue, request_id="7080")
+
+    assert resp.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == hmod.REQUEST_ALREADY_ACCEPTED
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Marketplace-mech resolution via mech_to_config, not by index
+# ---------------------------------------------------------------------------
+
+
+def test_setup_resolves_marketplace_mech_from_config_not_by_index(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """The offchain handler resolves the mech by ``is_marketplace_mech``.
+
+    A deployment whose ``mech_to_config`` lists a non-marketplace mech
+    first would 401 every offchain request if the handler used
+    ``agent_mech_contract_addresses[0]``. Cache the address resolved
+    from the config flag so the derivation uses the marketplace mech
+    regardless of ordering.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    non_marketplace = "0xnonmarket0000000000000000000000000000000000000"[:42]
+    marketplace = "0xmarket00000000000000000000000000000000000000000"[:42]
+    handler_context.params.mech_to_config = {
+        non_marketplace.lower(): SimpleNamespace(
+            is_marketplace_mech=False,
+            use_dynamic_pricing=False,
+        ),
+        marketplace.lower(): SimpleNamespace(
+            is_marketplace_mech=True,
+            use_dynamic_pricing=False,
+        ),
+    }
+    handler_context.params.agent_mech_contract_addresses = [
+        non_marketplace,
+        marketplace,
+    ]
+
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    # Skip _initialise_offchain_verification_constants by keeping
+    # use_offchain=False for this test; only the resolver itself is
+    # being pinned here.
+    handler_context.params.use_offchain = False
+    mh.setup()
+
+    assert mh._marketplace_mech_address == marketplace.lower()
+
+
+def test_setup_returns_none_when_no_marketplace_mech_configured(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """No ``is_marketplace_mech`` flag anywhere → cache stays None → accepts 401."""
+    handler_context.params.mech_to_config = {
+        "0xnonmarket": SimpleNamespace(
+            is_marketplace_mech=False,
+            use_dynamic_pricing=False,
+        )
+    }
+    handler_context.params.use_offchain = False
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    assert mh._marketplace_mech_address is None
+
+
+# ---------------------------------------------------------------------------
+# Boot-time self-check: marketplace getRequestId vs local compute_request_id
+# ---------------------------------------------------------------------------
+
+
+def test_selfcheck_mismatch_flips_constants_off_and_subsequent_accepts_503(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A mismatched marketplace getRequestId disables offchain accepts.
+
+    Simulates a marketplace upgrade that changed the ``getRequestId``
+    layout without a corresponding handler bump. The self-check must
+    flip the boot-cached constants off (rather than crash the process)
+    and every subsequent accept must 503 (infra-side signal, distinct
+    from a 401 bad-signature) so operators can correlate and clients
+    back off rather than treating the failure as a credential issue.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    # Constants land loaded from the seed helper; the mismatched view
+    # is what would flip them off in production. Feed a bogus view
+    # return that disagrees with the local ``compute_request_id`` and
+    # drive the self-check manually.
+    monkeypatch.setattr(
+        hmod,
+        "get_marketplace_request_id_view",
+        lambda **_kw: b"\xff" * 32,
+    )
+
+    # Any ``ledger_api`` object works — the ``get_request_id_view`` stub
+    # ignores it. The verify path uses ``EthereumApi`` for its checksum
+    # helper only; a ``MagicMock`` with a chained ``to_checksum_address``
+    # is enough for the failure branch we care about.
+    fake_ledger = MagicMock()
+    fake_ledger.api.to_checksum_address = lambda addr: addr
+    mh._selfcheck_marketplace_request_id_derivation(fake_ledger)
+
+    assert mh._domain_separator is None
+    assert mh._payment_type is None
+
+    balance_calls: List[Any] = []
+
+    def _record_call(**kw: Any) -> None:
+        balance_calls.append(kw)
+        return None
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _record_call)
+
+    # Subsequent accept must 503 (sig-verify short-circuits on the
+    # unset constants and routes to infra-side status) and the
+    # balance check must not run.
+    scenario = _make_eoa_scenario()
+    http_msg: Any = make_http_msg(
+        _sig_body(
+            request_id=scenario["request_id"],
+            delivery_rate=scenario["delivery_rate"],
+            nonce=scenario["nonce"],
+            sender=scenario["sender"],
+            signature_hex=scenario["signature_hex"],
+            ipfs_hash=scenario["ipfs_hash"],
+        )
+    )
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert balance_calls == []
+
+
+def test_selfcheck_match_leaves_constants_loaded(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A matching self-check keeps constants loaded; accepts continue as normal."""
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    # Return whatever ``compute_request_id`` produced locally so the
+    # comparison inside the self-check succeeds.
+    from packages.valory.skills.task_execution.utils.request_id import (
+        compute_request_id as _local_compute,
+    )
+
+    expected = _local_compute(
+        marketplace=_SIGVERIFY_MARKETPLACE,
+        mech=_SIGVERIFY_MECH,
+        requester=hmod._SELFCHECK_REQUESTER,
+        request_data=hmod._SELFCHECK_REQUEST_DATA,
+        delivery_rate=hmod._SELFCHECK_DELIVERY_RATE,
+        payment_type=_SIGVERIFY_PAYMENT_TYPE,
+        nonce=hmod._SELFCHECK_NONCE,
+        domain_separator=_SIGVERIFY_DOMAIN_SEPARATOR,
+    )
+    monkeypatch.setattr(
+        hmod,
+        "get_marketplace_request_id_view",
+        lambda **_kw: expected,
+    )
+
+    fake_ledger = MagicMock()
+    fake_ledger.api.to_checksum_address = lambda addr: addr
+    mh._selfcheck_marketplace_request_id_derivation(fake_ledger)
+
+    assert mh._domain_separator == _SIGVERIFY_DOMAIN_SEPARATOR
+    assert mh._payment_type == _SIGVERIFY_PAYMENT_TYPE
+
+
+# ---------------------------------------------------------------------------
+# Self-check: transport failures leave constants loaded (don't disable perm)
+# ---------------------------------------------------------------------------
+
+
+import requests  # noqa: E402
+from web3.exceptions import (  # noqa: E402
+    BadFunctionCallOutput as _Web3BadFunctionCallOutput,
+)
+from web3.exceptions import ContractLogicError as _Web3ContractLogicError  # noqa: E402
+from web3.exceptions import Web3RPCError as _Web3RPCError  # noqa: E402
+
+
+@pytest.mark.parametrize(
+    "transport_exc",
+    [
+        pytest.param(
+            requests.exceptions.ConnectionError("boom"), id="connection_error"
+        ),
+        pytest.param(requests.exceptions.ReadTimeout("slow"), id="read_timeout"),
+        pytest.param(TimeoutError("deadline"), id="timeout_error"),
+        pytest.param(_Web3RPCError("rpc"), id="web3_rpc_error"),
+    ],
+)
+def test_selfcheck_transport_error_keeps_constants_loaded(
+    handler_context: Any,
+    monkeypatch: Any,
+    transport_exc: BaseException,
+) -> None:
+    """A transient RPC blip during the self-check does not permanently 503 the endpoint.
+
+    The self-check must distinguish a genuine contract incompat (revert,
+    undecodable return, local derivation raising ValueError) from a
+    transport-side failure. Only the incompat branch flips the boot
+    constants off; transport failures log a warning and leave the
+    constants loaded so per-request sig verification can re-try on the
+    next call.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param transport_exc: the transport-level exception injected by the parametrise.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    def _raise(**_kw: Any) -> bytes:
+        raise transport_exc
+
+    monkeypatch.setattr(hmod, "get_marketplace_request_id_view", _raise)
+
+    fake_ledger = MagicMock()
+    fake_ledger.api.to_checksum_address = lambda addr: addr
+    mh._selfcheck_marketplace_request_id_derivation(fake_ledger)
+
+    # Transport failure must leave the constants loaded so a well-behaved
+    # client is not permanently locked out by a boot-time RPC blip.
+    assert mh._domain_separator == _SIGVERIFY_DOMAIN_SEPARATOR
+    assert mh._payment_type == _SIGVERIFY_PAYMENT_TYPE
+
+
+@pytest.mark.parametrize(
+    "contract_exc",
+    [
+        pytest.param(
+            _Web3ContractLogicError("execution reverted"),
+            id="contract_logic_error",
+        ),
+        pytest.param(
+            _Web3BadFunctionCallOutput("decode failure"),
+            id="bad_function_call_output",
+        ),
+        pytest.param(ValueError("derivation raised"), id="value_error"),
+    ],
+)
+def test_selfcheck_contract_error_flips_constants_off(
+    handler_context: Any,
+    monkeypatch: Any,
+    contract_exc: BaseException,
+) -> None:
+    """Contract-level failures during the self-check flip the constants off.
+
+    A revert (``ContractLogicError``), an undecodable return
+    (``BadFunctionCallOutput``), or the local derivation raising
+    ``ValueError`` all mean the marketplace ``getRequestId`` layout does
+    not match the local ``compute_request_id`` reimplementation. The
+    boot-cached constants must be nulled so subsequent accepts refuse
+    with an infra-side signal (503) instead of trusting a derivation the
+    boot handler could not confirm.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param contract_exc: the contract-level exception injected by the parametrise.
+    """
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    def _raise(**_kw: Any) -> bytes:
+        raise contract_exc
+
+    monkeypatch.setattr(hmod, "get_marketplace_request_id_view", _raise)
+
+    fake_ledger = MagicMock()
+    fake_ledger.api.to_checksum_address = lambda addr: addr
+    mh._selfcheck_marketplace_request_id_derivation(fake_ledger)
+
+    assert mh._domain_separator is None
+    assert mh._payment_type is None
+
+
+# ---------------------------------------------------------------------------
+# CID-binding prefix strip: only fire on the 68-char multihash form
+# ---------------------------------------------------------------------------
+
+
+def test_cid_binding_bare_digest_starting_with_1220_accepted() -> None:
+    """A 64-char bare digest whose bytes happen to start with ``1220`` still matches.
+
+    The multihash-prefix strip in ``_verify_ipfs_hash_binding`` fires
+    only on the 68-char form (``0x1220 || sha256``). A 64-char bare
+    digest whose first two bytes happen to be ``0x12 0x20`` is content,
+    not a wrapper, and stripping four chars there would leave 60 hex
+    chars — no valid 32-byte digest could match, so any payload whose
+    computed digest starts with those two bytes would deterministically
+    400 with a spurious CID-mismatch reason. Ojus reproduced this on
+    ``{"nonce":33423}``; this test drives an equivalent scenario using
+    a stubbed derivation to make the assertion deterministic without
+    relying on a brute-forced payload.
+
+    The scenario constructs a body whose posted 64-char digest starts
+    with ``1220`` (bytes-wise), stubs ``to_multihash`` to return the
+    same digest for the ``compute_cidv1`` output on that body, and
+    asserts the accept-time check returns ``(True, "")``.
+    """
+    from packages.valory.skills.task_execution import handlers as _h
+
+    # A bare 64-char digest whose bytes start with 12 20.
+    bare_digest = "1220" + "ab" * 30  # 4 + 60 = 64 hex chars
+    assert len(bare_digest) == 64
+
+    class _FakeContext:
+        class logger:
+            @staticmethod
+            def error(*_a: Any, **_kw: Any) -> None:
+                pass
+
+    class _MinimalHandler:
+        context = _FakeContext()
+
+    dummy = _MinimalHandler()
+    ipfs_data = '{"payload":"whatever"}'
+    # Force ``to_multihash(compute_cidv1(...))`` to return the same
+    # bare-digest hex the caller posted. The prefix-strip must NOT
+    # touch the 64-char form; if it does, only 60 hex chars survive
+    # for the compare and this test fails.
+    # Call the unbound method with an explicit ``cast`` to satisfy the
+    # ``self`` type; the method only touches ``self.context.logger`` and
+    # arithmetic on the arguments, so a duck-typed stub passes at runtime.
+    with patch.object(_h, "to_multihash", return_value=bare_digest):
+        ok, reason = MechHttpHandler._verify_ipfs_hash_binding(
+            cast(MechHttpHandler, dummy),
+            request_id="rid",
+            ipfs_hash="0x" + bare_digest,
+            ipfs_data=ipfs_data,
+        )
+    assert ok is True, reason
+    assert reason == ""
+
+
+def test_cid_binding_multihash_prefix_stripped_only_from_68_char_form() -> None:
+    """The 68-char multihash form has its ``1220`` prefix stripped for compare."""
+    from packages.valory.skills.task_execution import handlers as _h
+
+    bare_digest = "ab" * 32  # 64 hex chars, does NOT start with 1220
+    multihash_form = "1220" + bare_digest  # 68 hex chars
+
+    class _FakeContext:
+        class logger:
+            @staticmethod
+            def error(*_a: Any, **_kw: Any) -> None:
+                pass
+
+    class _MinimalHandler:
+        context = _FakeContext()
+
+    dummy = _MinimalHandler()
+    # Call the unbound method with an explicit ``cast`` to satisfy the
+    # ``self`` type; see the sibling ``_bare_digest`` test above for the
+    # duck-typed-stub rationale.
+    with patch.object(_h, "to_multihash", return_value=bare_digest):
+        ok, reason = MechHttpHandler._verify_ipfs_hash_binding(
+            cast(MechHttpHandler, dummy),
+            request_id="rid",
+            ipfs_hash="0x" + multihash_form,
+            ipfs_data='{"any":"data"}',
+        )
+    assert ok is True, reason
+
+
+# ---------------------------------------------------------------------------
+# Oversize ipfs_data surfaces as a distinct rejection reason, not CID mismatch
+# ---------------------------------------------------------------------------
+
+
+def test_signed_requests_rejects_oversize_ipfs_data_with_distinct_reason(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A body in the 256 KiB - 1 MB window 400s with ``IPFS_DATA_OVERSIZE``.
+
+    ``MAX_HTTP_BODY_BYTES`` is 1 MB but ``compute_cidv1`` raises above
+    the 256 KiB single-block bound. Bodies in that window are outside
+    the CID-mismatch domain — the caller's ``ipfs_hash`` could not
+    match any 32-byte digest for a body that cannot itself produce a
+    single-block CID — so the handler surfaces them as
+    ``IPFS_DATA_OVERSIZE`` distinct from ``IPFS_HASH_BODY_MISMATCH``
+    so the caller can attribute the 400 to size rather than a
+    hash-vs-content disagreement.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    # 512 KiB body — inside the HTTP body cap (1 MB) but well past the
+    # single-block CID bound (256 KiB).
+    oversize_padding = 512 * 1024
+    body = _make_signed_request_body(
+        request_id="8001",
+        ipfs_data='{"x":"' + "y" * oversize_padding + '"}',
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert (
+        payload["reason"] == hmod.IPFS_DATA_OVERSIZE
+    ), f"oversize body must report a distinct reason; got {payload['reason']!r}"
+    assert payload["reason"] != hmod.IPFS_HASH_BODY_MISMATCH
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Signature ingress format guard (0x-prefixed even-length hex, bounded length)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "bad_signature",
+    [
+        pytest.param("aa" * 65, id="missing_0x_prefix"),
+        pytest.param("0x" + "aa" * 64, id="short_by_one_byte"),
+        pytest.param("0x" + "z" * 130, id="non_hex_chars"),
+        pytest.param("0x" + "a" * 129, id="odd_hex_length"),
+        pytest.param("0x", id="empty_after_prefix"),
+        pytest.param("0x" + "aa" * 2049, id="above_upper_bound"),
+    ],
+)
+def test_signed_requests_rejects_bad_signature_format(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    bad_signature: str,
+) -> None:
+    """A malformed / missing-prefix / oversized signature is rejected 400 at ingress.
+
+    The settlement path does an unconditional ``bytes.fromhex(sig[2:])``
+    when it packs the on-chain payload; a body sent without the
+    mandatory ``0x`` would have its first hex byte silently truncated
+    there, the marketplace would revert with
+    ``IncorrectSignatureLength``, and the whole per-sender batch would
+    be dropped. Validating the format at ingress catches every bad
+    variant before enqueue.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param bad_signature: the malformed signature under test.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(request_id="8100")
+    body["signature"] = bad_signature
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_signed_requests_accepts_prefixed_signature(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A canonical ``0x`` + 65-byte hex signature clears the ingress format guard.
+
+    Regression guard so the ``SIGNATURE_RE`` bounds don't over-reject
+    real client payloads. The stubbed verifier is enough — this test
+    is aimed at the ingress format check, not the sig verifier itself.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(request_id="8101")
+    body["signature"] = "0x" + "ab" * 65
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Sender ingress format guard (0x-prefixed 20-byte hex address)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "bad_sender",
+    [
+        pytest.param("not-an-address", id="not_hex_at_all"),
+        pytest.param("0x", id="empty_after_prefix"),
+        pytest.param("0x" + "a" * 39, id="short_by_one_nibble"),
+        pytest.param("0x" + "a" * 41, id="long_by_one_nibble"),
+        pytest.param("0x" + "z" * 40, id="non_hex_chars"),
+        pytest.param("0000000000000000000000000000000000000001", id="missing_prefix"),
+        pytest.param("", id="empty_string"),
+    ],
+)
+def test_signed_requests_rejects_bad_sender_format(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    bad_sender: str,
+) -> None:
+    """A malformed sender address is rejected 400 at ingress, not 503.
+
+    Without the ingress guard, a bad address travels into
+    ``_verify_offchain_request_signature``, ``to_checksum_address(sender)``
+    raises inside the address-preparation block, and the verdict
+    returns ``is_infra=True`` — routed to 503 by the caller because
+    the same block also converts the deployment-scoped marketplace
+    and mech addresses whose conversion failure IS genuine infra. A
+    503 tells a well-behaved auto-retry client "try again later" for
+    a request that will never succeed; the classification has to be
+    a 400 client error instead.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param bad_sender: the malformed sender address under test.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(request_id="8110")
+    body["sender"] = bad_sender
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.BAD_REQUEST_CODE.value
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_signed_requests_accepts_lowercase_sender_address(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A lowercase 0x-prefixed 20-byte hex address clears the ingress guard.
+
+    Regression guard so the ``ADDRESS_RE`` bounds don't over-reject
+    real client payloads that ship non-checksum casing. The checksum
+    conversion is done downstream by ``_resolve_sender_checksum``.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(request_id="8111")
+    body["sender"] = "0x" + "ab" * 20
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Dedup vs 402 / 500 retry: only accepted state blocks a re-post
+# ---------------------------------------------------------------------------
+
+
+def test_402_then_deposit_then_identical_retry_enqueues(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """After a 402, an identical retry re-runs the balance check and enqueues.
+
+    The 402 branch persists the challenge in
+    ``offchain_request_responses`` so the polling endpoint can surface
+    it. Dedup must not treat a stored rejection as "already accepted":
+    the caller's mech-client ``auto_deposit`` path deposits the
+    shortfall and re-posts the identical body, and this second POST
+    must re-run the balance check (now sufficient) and enqueue the
+    task. A dedup that blocked the retry would produce
+    ``deposit-but-no-work`` — the requester's balance would be debited
+    on chain later without the mech ever executing.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _install_verify_ok(mh, monkeypatch)
+
+    # The balance check returns "insufficient" on the first call and
+    # "sufficient" on every subsequent call — simulating a deposit
+    # landing between the two POSTs.
+    balance_calls: List[int] = []
+
+    def _flip_after_first_call(sender: str, delivery_rate: int) -> Dict[str, Any]:
+        balance_calls.append(delivery_rate)
+        if len(balance_calls) == 1:
+            available = int(delivery_rate) - 1
+        else:
+            available = int(delivery_rate) + 1
+        return {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
+            hmod.ResponseKey.AVAILABLE_AMOUNT.value: available,
+            hmod.ResponseKey.REASON.value: "ok",
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: "0xpaymenttype",
+            hmod.ResponseKey.CHAIN_ID.value: 100,
+        }
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _flip_after_first_call)
+
+    request_id = "8200"
+    first = _send_signed_request(mh, http_dialogue, request_id=request_id)
+    assert first.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    assert (
+        handler_context.shared_state["offchain_request_responses"]
+        .get(request_id, {})
+        .get("status")
+        == hmod.ResponseStatus.REJECTED.value
+    )
+    assert handler_context.shared_state["pending_tasks"] == []
+
+    # Identical retry (mech-client's ``auto_deposit`` path re-posts the
+    # same body). Must not short-circuit into "already accepted".
+    second = _send_signed_request(mh, http_dialogue, request_id=request_id)
+    assert second.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(second.body.decode("utf-8"))
+    assert payload.get("reason") != hmod.REQUEST_ALREADY_ACCEPTED, payload
+    assert len(balance_calls) == 2, "balance check must run again on retry"
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_500_then_identical_retry_enqueues(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A prior 500 internal error does not block an identical retry.
+
+    ``_send_internal_error`` persists a REJECTED payload keyed by
+    ``request_id`` so the polling endpoint can surface the outcome.
+    The dedup helper must not treat that stored rejection as accepted;
+    the caller retries the identical body and the accept path must
+    run through balance-check and enqueue on the second POST.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _install_verify_ok(mh, monkeypatch)
+
+    # Pre-seed a REJECTED payload as if a prior 500 (or record-response
+    # rejection) had landed. The dedup helper must NOT treat this as
+    # accepted state.
+    request_id = "8210"
+    handler_context.shared_state["offchain_request_responses"][request_id] = {
+        "request_id": request_id,
+        "status": hmod.ResponseStatus.REJECTED.value,
+        "reason": "internal error",
+    }
+
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: {
+            hmod.ResponseKey.STATUS.value: hmod.ResponseStatus.OK.value,
+            hmod.ResponseKey.REQUIRED_AMOUNT.value: int(delivery_rate),
+            hmod.ResponseKey.AVAILABLE_AMOUNT.value: int(delivery_rate) + 10,
+            hmod.ResponseKey.REASON.value: "ok",
+            hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
+            hmod.ResponseKey.PAYMENT_TYPE.value: "0xpaymenttype",
+            hmod.ResponseKey.CHAIN_ID.value: 100,
+        },
+    )
+
+    resp = _send_signed_request(mh, http_dialogue, request_id=request_id)
+    assert resp.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload.get("reason") != hmod.REQUEST_ALREADY_ACCEPTED, payload
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+    # Post-enqueue, the stale REJECTED payload was cleared.
+    assert request_id not in handler_context.shared_state["offchain_request_responses"]
+
+
+def test_dedup_still_blocks_delivered_state(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A non-REJECTED entry in the response cache still blocks re-enqueue.
+
+    Pins the other side of the dedup contract: an OK/delivered payload
+    from a prior successful settlement must still short-circuit into
+    the ``already accepted`` reply so the mech does not re-execute
+    (and settle) work that has already been paid for and delivered.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    request_id = "8220"
+    handler_context.shared_state["offchain_request_responses"][request_id] = {
+        "status": hmod.ResponseStatus.OK.value,
+        "request_id": request_id,
+    }
+    resp = _send_signed_request(mh, http_dialogue, request_id=request_id)
+    assert resp.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == hmod.REQUEST_ALREADY_ACCEPTED
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+# ---------------------------------------------------------------------------
+# Sig verifier verdict routing: infra failures 503, bad-caller failures 401
+# ---------------------------------------------------------------------------
+
+
+def test_infra_verdict_from_verify_routes_to_503(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A ``SignatureVerdict(is_infra=True)`` from the verifier surfaces as 503.
+
+    Server-side prerequisites (boot constants unset, ledger settings
+    missing, address preparation failure) sit outside the caller's
+    control, so the handler routes them to 503 ("try again later")
+    instead of 401 so a well-behaved client backs off instead of
+    treating the failure as a credential issue. Bad-caller outcomes
+    (recovery mismatch, malformed hex) stay 401.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    monkeypatch.setattr(
+        mh,
+        "_verify_offchain_request_signature",
+        lambda **_kw: hmod.SignatureVerdict(
+            ok=False,
+            reason="marketplace verification constants unavailable",
+            is_infra=True,
+        ),
+    )
+
+    body = _make_signed_request_body(request_id="8300")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == "marketplace verification constants unavailable"
+    # No pre-auth persistence on 503 either.
+    assert "8300" not in handler_context.shared_state["offchain_request_responses"]
+
+
+def test_bad_sig_verdict_from_verify_stays_401(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A bad-caller verdict (``is_infra=False``) keeps the 401 status."""
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    monkeypatch.setattr(
+        mh,
+        "_verify_offchain_request_signature",
+        lambda **_kw: hmod.SignatureVerdict(
+            ok=False,
+            reason="signature verification failed",
+            is_infra=False,
+        ),
+    )
+    body = _make_signed_request_body(request_id="8301")
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+
+
+# ---------------------------------------------------------------------------
+# Golden CID pair — end-to-end pin so the derivation stays in sync with
+# ipfs's real output as encoded by ``local_cid.compute_cidv1``.
+# ---------------------------------------------------------------------------
+
+
+def test_signed_requests_accepts_body_at_golden_cid_pair(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A hardcoded golden (data, digest) pair from the CID fixtures accepts.
+
+    The default ``_ipfs_hash_for`` helper derives the expected digest
+    from the same two functions the handler uses (``_to_multihash`` and
+    ``_compute_cidv1``), so it can only prove the two are internally
+    consistent. This test drives the accept path with a pair generated
+    from the real ``ipfs add --cid-version=1 --raw-leaves=false`` output
+    (see ``tests/utils/test_local_cid.py::_FIXTURES``) so a derivation
+    change that breaks parity with go-ipfs fails here loudly instead of
+    silently producing CIDs the on-chain commitment side no longer
+    accepts.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    # Content + expected CIDv1 — the ``small_json`` fixture from
+    # ``tests/utils/test_local_cid.py::_FIXTURES``. The go-ipfs
+    # output is a multibase base32 CID string; the wire ``ipfs_hash``
+    # is the 32-byte SHA-256 digest of the DAG-PB block, which is
+    # what ``to_multihash(compute_cidv1(...))`` produces.
+    golden_data = '{"requestId":"42","result":"ok"}'
+    golden_digest = "0x" + _to_multihash(_compute_cidv1(golden_data.encode("utf-8")))
+    # Confirm the golden derivation matches the corresponding go-ipfs
+    # CIDv1 fixture; this catches any drift between the pair used
+    # here and the real-ipfs fixture in ``test_local_cid.py``.
+    from packages.valory.skills.task_execution.utils.local_cid import (
+        compute_cidv1 as _lc_compute,
+    )
+
+    assert (
+        _lc_compute(golden_data.encode("utf-8"))
+        == "bafybeihjg4w34tu2zmlriemthl24wdynhfx2rpsiflv7wxmb4lsk34etlu"
+    ), "golden pair drifted vs the real-ipfs fixture; update in lock-step"
+
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    body = _make_signed_request_body(
+        request_id="8400",
+        ipfs_data=golden_data,
+        ipfs_hash=golden_digest,
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# Round-5 review follow-ups: accepted / settling split, per-sender cap,
+# tri-state EIP-1271, executor saturation + late-outcome, defensive
+# handler-wide except, balance-check wall-clock deadline.
+# ---------------------------------------------------------------------------
+
+import concurrent.futures as _cf  # noqa: E402
+
+
+def test_accepted_settling_split_pins_ojus_simulation(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Reproduce the release/settlement-gap simulation from round-5 review.
+
+    Three accepts land on nonces 0/1/2 with on_chain_nonce=0. The
+    mech-side done path moves nonce 0 to the settling set (on_chain
+    still 0). A re-post of nonce 1 is rejected (duplicate in
+    accepted). A fresh accept at nonce 3 succeeds because
+    expected = on_chain + accepted + settling = 0 + 2 + 1 = 3.
+
+    Under the pre-split code, that last accept would 503 because the
+    formula was ``on_chain + len(outstanding)`` and the release path
+    dropped the settled entry from ``outstanding`` before the on-chain
+    counter caught up.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    _install_nonce_stub(monkeypatch, on_chain_nonce=0)
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+
+    def _accept(nonce: int) -> SimpleNamespace:
+        scenario = _make_eoa_scenario(nonce=nonce)
+        body = _sig_body(
+            request_id=scenario["request_id"],
+            delivery_rate=scenario["delivery_rate"],
+            nonce=scenario["nonce"],
+            sender=scenario["sender"],
+            signature_hex=scenario["signature_hex"],
+            ipfs_hash=scenario["ipfs_hash"],
+        )
+        mh._handle_signed_requests(
+            cast(HttpMessage, make_http_msg(body)), http_dialogue
+        )
+        return handler_context.outbox.sent[-1]
+
+    assert _accept(0).status_code == HttpCode.OK_CODE.value
+    assert _accept(1).status_code == HttpCode.OK_CODE.value
+    assert _accept(2).status_code == HttpCode.OK_CODE.value
+    sender = _make_eoa_scenario(nonce=0)["sender"]
+    assert handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] == {
+        sender: {0, 1, 2}
+    }
+
+    # Simulate the mech-side done path for nonce 0: move to settling.
+    from packages.valory.skills.task_execution.behaviours import (
+        _release_outstanding_nonce as _release,
+    )
+
+    _release(
+        handler_context.shared_state,
+        {"sender": sender, "nonce": 0, "is_offchain": True},
+    )
+    assert handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] == {
+        sender: {1, 2}
+    }
+    assert handler_context.shared_state[hmod.SETTLING_NONCES_BY_SENDER] == {sender: {0}}
+
+    # The key regression the split protects against: honest sequential
+    # accept at nonce 3 with expected = on_chain(0) + accepted(2) +
+    # settling(1) = 3. Pre-split code: expected = 0 + outstanding(2) = 2
+    # and the accept would 503 with NONCE_ABOVE_EXPECTED until the
+    # batch settlement lands and mapNonces catches up.
+    fresh = _accept(3)
+    assert fresh.status_code == HttpCode.OK_CODE.value
+
+    # Duplicate detection still fires on a wire nonce that collides
+    # with the settling set even after the accepted set has moved on.
+    # Bypass the dedup gate by calling ``_bind_wire_nonce_to_chain``
+    # directly (a full forged-signature scenario for a different
+    # request_id under the same sender+nonce would over-engineer the
+    # test). Pre-split code would either accept-as-duplicate here or
+    # never reach this branch depending on the ordering of accepted /
+    # settlement, both of which let a duplicate under a colliding
+    # request_id enqueue.
+    verdict = mh._bind_wire_nonce_to_chain(
+        sender_checksum=sender,
+        wire_nonce=0,
+        wire_request_id="unused-in-log-only",
+    )
+    assert verdict.ok is False
+    assert verdict.reason == hmod.NONCE_BELOW_EXPECTED
+
+
+def test_enqueue_writes_checksum_key_release_matches_lowercase_wire(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Real accept path writes checksum key; release matches lowercase wire dict.
+
+    The accept path resolves the wire sender via
+    ``_resolve_sender_checksum`` (which returns the EIP-55 checksum
+    form) before writing to ``ACCEPTED_NONCES_BY_SENDER``. The
+    release helper on the behaviour side reads the sender off the
+    raw ``executing_task`` dict, whose value is the wire casing from
+    the client — not the checksum. The two sides only agree because
+    the release helper's ``_find_sender_key`` scan compares
+    case-insensitively.
+
+    A later "simplification" that swaps the scan for
+    ``outstanding_all.get(sender)`` would silently turn every
+    release into a no-op for any non-checksum wire casing and
+    reintroduce the permanent-lockout mode (the accepted set grows,
+    the admission gate's slot count grows with it, the sender's
+    next legitimate request 503s at the per-sender cap forever). This
+    test crosses the seam through the real handler enqueue path so
+    the case-insensitivity contract is pinned as intentional rather
+    than incidental.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    from packages.valory.skills.task_execution.behaviours import (
+        _release_outstanding_nonce as _release,
+    )
+
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+    # ``_install_verify_ok`` stubs ``_resolve_sender_checksum`` to
+    # ``str(sender)`` (raw wire) — override to the EIP-55 checksum
+    # form so the write side of the seam matches production.
+    checksum = "0xABCDEFabcdef0123456789ABCDEFabcdef012345"
+    monkeypatch.setattr(mh, "_resolve_sender_checksum", lambda _s: checksum)
+
+    body = _make_signed_request_body(request_id="8300", nonce="0")
+    # Client posts the address in lowercase (a common wire casing).
+    body["sender"] = checksum.lower()
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp: SimpleNamespace = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    # Write side of the seam: the accepted map is keyed by checksum,
+    # not by the raw wire (lowercase) sender.
+    assert handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] == {
+        checksum: {0}
+    }
+
+    # Read side of the seam: the release helper reads the raw wire
+    # sender off ``executing_task`` (lowercase) but must still find
+    # the checksum-keyed entry.
+    _release(
+        handler_context.shared_state,
+        {"sender": checksum.lower(), "nonce": 0, "is_offchain": True},
+    )
+    assert handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] == {}
+    assert handler_context.shared_state[hmod.SETTLING_NONCES_BY_SENDER] == {
+        checksum: {0}
+    }
+
+
+def test_orphaned_accepted_entry_evicts_pending_task_and_writes_rejection(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Accepted entry below on-chain nonce is evicted with a rejection payload.
+
+    When the same sender fires an on-chain ``request()`` while an
+    off-chain task is still in ``pending_tasks``, ``mapNonces`` jumps
+    past the off-chain slot. The next off-chain accept from any
+    sender reconciles the accepted map: the orphaned entry is
+    dropped, its pending task is removed from ``pending_tasks`` and
+    ``in_memory_requests``, and a definitive rejection lands in
+    ``offchain_request_responses`` so the polling client sees a
+    terminal result instead of polling forever.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    sender = _make_eoa_scenario(nonce=0)["sender"]
+    orphaned_request_id = "9001"
+    orphaned_task = {
+        hmod.RequestKey.REQUEST_ID_CAMEL.value: int(orphaned_request_id),
+        hmod.RequestKey.IS_OFFCHAIN.value: True,
+        "sender": sender,
+        "nonce": 0,
+    }
+    handler_context.shared_state[hmod.PENDING_TASKS] = [orphaned_task]
+    handler_context.shared_state.setdefault(hmod.IN_MEMORY_REQUESTS, {})[
+        orphaned_request_id
+    ] = "orphaned-payload"
+    handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] = {sender: {0}}
+
+    # On-chain mapNonces has advanced past slot 0 (concurrent
+    # on-chain request from the same sender consumed the slot).
+    _install_nonce_stub(monkeypatch, on_chain_nonce=1)
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+    scenario = _make_eoa_scenario(nonce=1)
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    mh._handle_signed_requests(cast(HttpMessage, make_http_msg(body)), http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+
+    # Orphaned nonce 0 evicted; the freshly-accepted nonce 1 remains.
+    assert handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] == {sender: {1}}
+
+    # Orphaned pending task removed; only the freshly-accepted one
+    # remains (the new nonce=1 request).
+    pending_ids = [
+        t[hmod.RequestKey.REQUEST_ID_CAMEL.value]
+        for t in handler_context.shared_state[hmod.PENDING_TASKS]
+    ]
+    assert int(orphaned_request_id) not in pending_ids
+
+    # In-memory payload dropped for the orphaned request.
+    assert (
+        orphaned_request_id not in handler_context.shared_state[hmod.IN_MEMORY_REQUESTS]
+    )
+
+    # Rejection payload written so the polling client sees a
+    # definitive result.
+    rejections = handler_context.shared_state[hmod.OFFCHAIN_REQUEST_RESPONSES]
+    assert orphaned_request_id in rejections
+    assert (
+        rejections[orphaned_request_id][hmod.ResponseKey.STATUS.value]
+        == hmod.ResponseStatus.REJECTED.value
+    )
+
+
+def test_settling_pruned_when_on_chain_advances(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A settlement that moves ``mapNonces`` past a settling nonce prunes it.
+
+    Pins the drain-on-read semantics: without pruning, the settling
+    set would grow forever and inflate the admission gate's slot
+    count.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    sender = _make_eoa_scenario(nonce=0)["sender"]
+    handler_context.shared_state[hmod.SETTLING_NONCES_BY_SENDER] = {sender: {0}}
+
+    _install_nonce_stub(monkeypatch, on_chain_nonce=1)
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+    scenario = _make_eoa_scenario(nonce=1)
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    mh._handle_signed_requests(cast(HttpMessage, make_http_msg(body)), http_dialogue)
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    assert sender not in handler_context.shared_state[hmod.SETTLING_NONCES_BY_SENDER]
+
+
+def test_max_accepted_per_sender_cap_rejects_503(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Reaching ``MAX_ACCEPTED_PER_SENDER`` rejects the next accept 503.
+
+    Guards the DoS-bound that replaced the deleted
+    ``MAX_OUTSTANDING_NONCE_WINDOW`` protocol constraint. The reason
+    string ``SENDER_INFLIGHT_LIMIT`` distinguishes the outcome from
+    a credential rejection so mech-client's 503 retry loop backs off
+    rather than concluding its signature is wrong.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    monkeypatch.setattr(hmod, "MAX_ACCEPTED_PER_SENDER", 4)
+
+    sender = _make_eoa_scenario(nonce=0)["sender"]
+    handler_context.shared_state[hmod.ACCEPTED_NONCES_BY_SENDER] = {
+        sender: {0, 1, 2, 3},
+    }
+    _install_nonce_stub(monkeypatch, on_chain_nonce=0)
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+    stored: Dict[str, Any] = {}
+    _real = mh._send_rejection_response
+
+    def _cap(
+        _msg: Any,
+        _dlg: Any,
+        rid: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real(
+            _msg,
+            _dlg,
+            rid,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _cap)
+
+    scenario = _make_eoa_scenario(nonce=4)
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    mh._handle_signed_requests(cast(HttpMessage, make_http_msg(body)), http_dialogue)
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.SENDER_INFLIGHT_LIMIT
+
+
+def test_eip1271_call_failed_verdict_routes_to_503(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A ``CALL_FAILED`` verdict from the EIP-1271 helper routes to 503.
+
+    Distinguishing CALL_FAILED from DECLINED is the whole point of
+    the tri-state refactor: a legitimate Safe requester saw 401
+    "unauthorized" during an RPC outage under the old boolean
+    return. Tri-state routes to 503 (``EIP1271_CALL_FAILED``) so the
+    client backs off during an RPC outage rather than treating
+    its credentials as permanently invalid.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_safe_eip1271_scenario(nonce=3)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=3)
+    monkeypatch.setattr(
+        hmod,
+        "check_eip1271_signature",
+        lambda **_kw: _Eip1271Verdict.CALL_FAILED,
+    )
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+    stored: Dict[str, Any] = {}
+    _real = mh._send_rejection_response
+
+    def _cap(
+        _msg: Any,
+        _dlg: Any,
+        rid: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        _real(
+            _msg,
+            _dlg,
+            rid,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _cap)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    mh._handle_signed_requests(cast(HttpMessage, make_http_msg(body)), http_dialogue)
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.EIP1271_CALL_FAILED
+    assert balance_calls == []
+
+
+def test_handler_wide_except_absorbs_random_exception(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A random exception (``ConnectionResetError``) inside the handler still 503s.
+
+    ``ConnectionResetError`` is an ``OSError``, NOT covered by the
+    inner ``(Web3Exception, RequestException, ValueError)`` tuple,
+    so a mid-flight RPC reset would otherwise propagate out and
+    stop the agent under the default ``propagate`` skill exception
+    policy. The defensive top-level ``try/except Exception`` makes
+    the handler structurally undyable.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_safe_eip1271_scenario(nonce=3)
+
+    def _boom(**_kw: Any) -> _Eip1271Verdict:
+        raise ConnectionResetError("mid-flight reset")
+
+    monkeypatch.setattr(hmod, "check_eip1271_signature", _boom)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=3)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    mh._handle_signed_requests(cast(HttpMessage, make_http_msg(body)), http_dialogue)
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == "internal error"
+
+
+def test_rpc_executor_queue_saturation_returns_fast(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """Saturating the executor's queue raises ``RPC_QUEUE_SATURATED`` fast.
+
+    Pins the queue-guard: when the worker pool is drained by hung
+    callables and the queue is at ``_RPC_EXECUTOR_MAX_QUEUE``, the
+    submit-time guard fires with ``RuntimeError(RPC_QUEUE_SATURATED)``
+    instead of piling more work onto the queue for the caller to
+    timeout on.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    executor = mh._get_rpc_executor()
+
+    class _FakeQueue:
+        def qsize(self) -> int:
+            return 999
+
+    monkeypatch.setattr(executor, "_work_queue", _FakeQueue())
+
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match=hmod.RPC_QUEUE_SATURATED):
+        mh._run_with_wall_clock_deadline(
+            lambda: "unreachable",
+            deadline_seconds=5.0,
+            label="test_saturation",
+        )
+    elapsed = time.monotonic() - started
+    assert elapsed < 0.5, f"queue-saturation branch waited {elapsed:.3f}s"
+
+
+def test_rpc_executor_late_outcome_callback_logs_exception(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A callable that raises after the deadline gets its exception logged.
+
+    Pins the ``add_done_callback`` glue: ``concurrent.futures.Future``
+    does NOT log unretrieved exceptions (unlike ``asyncio.Future``),
+    so an abandoned callable's failure would otherwise be silently
+    discarded — exactly the path where root-cause visibility matters
+    most for operator triage.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    import threading as _t
+
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    late_events: List[str] = []
+
+    def _capture(msg: str, *args: Any, **_kwargs: Any) -> None:
+        try:
+            late_events.append(msg % args)
+        except TypeError:
+            late_events.append(msg)
+
+    handler_context.logger.warning = _capture
+
+    finished = _t.Event()
+
+    def _delayed_boom() -> None:
+        time.sleep(0.15)
+        try:
+            raise RuntimeError("late failure the caller no longer wants")
+        finally:
+            finished.set()
+
+    with pytest.raises(_cf.TimeoutError):
+        mh._run_with_wall_clock_deadline(
+            _delayed_boom, deadline_seconds=0.02, label="test_late_outcome"
+        )
+    finished.wait(timeout=2.0)
+    time.sleep(0.05)
+    assert any(
+        "completed after deadline" in ev and "test_late_outcome" in ev
+        for ev in late_events
+    ), late_events
+
+
+def test_teardown_shuts_down_rpc_executor_without_waiting(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """``teardown()`` closes the executor with ``wait=False, cancel_futures=True``.
+
+    Without this, non-daemon worker threads holding abandoned reads
+    would keep the process alive past the SIGTERM → SIGKILL grace
+    window. Test spies on ``shutdown`` to pin the kwargs.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+
+    _ = mh._get_rpc_executor()
+    shutdown_calls: List[Dict[str, Any]] = []
+    original_shutdown = mh._rpc_executor.shutdown  # type: ignore[union-attr]
+
+    def _spy(*args: Any, **kwargs: Any) -> None:
+        shutdown_calls.append(kwargs)
+        original_shutdown(*args, **kwargs)
+
+    monkeypatch.setattr(mh._rpc_executor, "shutdown", _spy)
+    mh.teardown()
+    assert shutdown_calls == [{"wait": False, "cancel_futures": True}]
+
+
+def test_balance_check_wall_clock_deadline_short_circuits(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A slow balance RPC returns 503 within the deadline, task not enqueued.
+
+    Pins the executor wrap around the three balance-path RPCs
+    (``paymentType``, ``getBalanceTrackerForMechType``,
+    ``getRequesterBalance``). Under the pre-fix behaviour all three
+    were unbounded at the ledger-default 30s per HTTP request times
+    the retry loop, letting a slow node stall the AEA main thread
+    past the ``http_server`` reply budget on the balance-check path.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    import time as _time
+
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    _install_verify_ok(mh, monkeypatch)
+
+    test_deadline = 0.2
+    monkeypatch.setattr(hmod, "_BALANCE_RPC_DEADLINE_SECONDS", test_deadline)
+
+    def _slow_payment_type(*_args: Any, **_kwargs: Any) -> Dict[str, Any]:
+        _time.sleep(test_deadline * 50)
+        return {"mech_type": "0xpt"}
+
+    monkeypatch.setattr(
+        hmod.OlasMechContract, "get_mech_type", staticmethod(_slow_payment_type)
+    )
+
+    body = _make_signed_request_body(request_id="9999")
+    http_msg: Any = make_http_msg(body)
+    started = _time.monotonic()
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    elapsed = _time.monotonic() - started
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert elapsed < test_deadline + 2.0, (
+        f"handler returned in {elapsed:.3f}s but balance-RPC deadline is "
+        f"{test_deadline}s; regression would let a slow paymentType read "
+        f"pin the AEA main loop past the http_server reply budget"
+    )
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_update_pending_list_preserves_offchain_tasks(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """Off-chain tasks stay in ``pending_tasks`` across on-chain status checks.
+
+    ``_update_pending_list`` rewrites ``pending_tasks`` from the
+    on-chain status response; off-chain task ids are never visible on
+    chain until settlement, so filtering strictly by that response
+    would silently drop every off-chain task on every polling cycle
+    (and leak the corresponding outstanding-nonce entry). The guard
+    keeps ``is_offchain=True`` tasks by construction.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+    handler_context.shared_state[hmod.PENDING_TASKS] = [
+        {"requestId": 100, "is_offchain": True},
+        {"requestId": 200, "is_offchain": False},
+        {"requestId": 300},
+    ]
+    body = {hmod.BodyKey.REQUEST_IDS.value: [200]}
+    ch._update_pending_list(body)
+    survivors = [
+        t["requestId"] for t in handler_context.shared_state[hmod.PENDING_TASKS]
+    ]
+    assert survivors == [100, 200]
+
+
+def test_sender_resolution_failure_returns_distinct_reason(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Failed checksum resolution surfaces ``SENDER_RESOLUTION_FAILED``.
+
+    Distinguishes a config-side failure (missing / malformed RPC
+    settings) from an RPC round-trip failure. Both surface as 503
+    but the reason string routes operator paging to the right
+    subsystem.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    monkeypatch.setattr(
+        mh,
+        "_verify_offchain_request_signature",
+        lambda **_kw: hmod.SignatureVerdict(ok=True, reason="", is_infra=False),
+    )
+    monkeypatch.setattr(mh, "_resolve_sender_checksum", lambda sender: None)
+
+    stored: Dict[str, Any] = {}
+    _real = mh._send_rejection_response
+
+    def _cap(
+        _msg: Any,
+        _dlg: Any,
+        rid: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        _real(
+            _msg,
+            _dlg,
+            rid,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _cap)
+    body = _make_signed_request_body(request_id="1234")
+    mh._handle_signed_requests(cast(HttpMessage, make_http_msg(body)), http_dialogue)
+    assert stored["reason"] == hmod.SENDER_RESOLUTION_FAILED
+
+
+def test_mapnonces_deterministic_failure_returns_unrecoverable_reason(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A deterministic ABI failure on ``mapNonces`` surfaces the unrecoverable reason.
+
+    Distinct from ``NONCE_READ_FAILED`` (transient RPC / transport)
+    so operator paging can differentiate "check the logs and re-config"
+    from "check the RPC endpoint." Same 503 status code either way.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    from web3.exceptions import BadFunctionCallOutput as _BadFn
+
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=3)
+
+    def _boom(
+        cls: Any, ledger_api: Any, contract_address: Any, sender_address: Any
+    ) -> Dict[str, int]:
+        raise _BadFn("wrong ABI at marketplace address")
+
+    monkeypatch.setattr(hmod.MechMarketplaceContract, "get_nonce", classmethod(_boom))
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+    stored: Dict[str, Any] = {}
+    _real = mh._send_rejection_response
+
+    def _cap(
+        _msg: Any,
+        _dlg: Any,
+        rid: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        _real(
+            _msg,
+            _dlg,
+            rid,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _cap)
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    mh._handle_signed_requests(cast(HttpMessage, make_http_msg(body)), http_dialogue)
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.NONCE_READ_UNRECOVERABLE

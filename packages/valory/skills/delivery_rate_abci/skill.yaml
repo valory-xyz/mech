@@ -20,9 +20,9 @@ fingerprint:
 fingerprint_ignore_patterns: []
 connections: []
 contracts:
-- valory/olas_mech:0.1.0:bafybeigwnetiwhhvcdjmda2nmd2n35alytq5ftf7qionibht2sfgsl3rpm
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/multisend:0.1.0:bafybeifqtf24h7lhhbairveqmq2klhvbswajmbpoyqj4xrgye7c22pxubi
+- valory/olas_mech:0.1.0:bafybeigwnetiwhhvcdjmda2nmd2n35alytq5ftf7qionibht2sfgsl3rpm
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
@@ -81,6 +81,7 @@ models:
   params:
     args:
       cleanup_history_depth_current: null
+      default_chain_id: gnosis
       drand_public_key: 868f005eb8e6e4ca0a47c8a77ceaa5309a47978a7c71bc5cce96366b5d7a569937c529eeda66c7293784a9402801af31
       finalize_timeout: 60.0
       genesis_config:
@@ -105,9 +106,13 @@ models:
       ipfs_fetch_timeout: 15.0
       keeper_allowed_retries: 3
       keeper_timeout: 30.0
+      light_slash_unit_amount: 5000000000000000
+      manual_gas_limit: 1000000
       max_attempts: 10
       max_healthcheck: 120
+      mech_to_max_delivery_rate: {}
       on_chain_service_id: null
+      profit_split_balance: 1000
       request_retry_delay: 1.0
       request_timeout: 10.0
       reset_pause_duration: 10
@@ -115,7 +120,10 @@ models:
       retry_attempts: 400
       retry_timeout: 3
       round_timeout_seconds: 30.0
+      serious_slash_unit_amount: 8000000000000000
+      service_endpoint_base: https://dummy_service.autonolas.tech/
       service_id: task_execution
+      service_owner_share: 1000
       service_registry_address: null
       setup:
         all_participants:
@@ -123,6 +131,8 @@ models:
         consensus_threshold: null
         safe_contract_address: '0x0000000000000000000000000000000000000000'
       share_tm_config_on_startup: false
+      slash_cooldown_hours: 3
+      slash_threshold_amount: 10000000000000000
       sleep_time: 1
       task_wait_timeout: 15
       tendermint_check_sleep_delay: 3
@@ -131,19 +141,9 @@ models:
       tendermint_p2p_url: localhost:26656
       tendermint_url: http://localhost:26657
       tx_timeout: 10.0
-      use_termination: false
-      manual_gas_limit: 1000000
-      validate_timeout: 1205
       use_slashing: false
-      service_owner_share: 1000
-      profit_split_balance: 1000
-      slash_cooldown_hours: 3
-      slash_threshold_amount: 10000000000000000
-      light_slash_unit_amount: 5000000000000000
-      serious_slash_unit_amount: 8000000000000000
-      mech_to_max_delivery_rate: {}
-      service_endpoint_base: https://dummy_service.autonolas.tech/
-      default_chain_id: gnosis
+      use_termination: false
+      validate_timeout: 1205
     class_name: Params
   requests:
     args: {}
@@ -159,3 +159,4 @@ models:
     class_name: TendermintDialogues
 dependencies: {}
 is_abstract: true
+customs: []
