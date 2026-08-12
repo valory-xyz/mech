@@ -448,6 +448,7 @@ class ResponseKey(str, Enum):
     CHAIN_ID = "chain_id"
     BALANCE_TRACKER_ADDRESS = "balance_tracker_address"
     PAYMENT_TYPE = "payment_type"
+    ASSET_ADDRESS = "asset_address"
 
 
 # 402 challenge constants — surfaced so clients can branch on a stable label.
@@ -1227,6 +1228,7 @@ class MechHttpHandler(AbstractResponseHandler):
         # for the balance-check reads without either overwriting the
         # other's provider timeout.
         self._ledger_api_cache: Dict[Tuple[str, int, float], EthereumApi] = {}
+        self._balance_tracker_asset_cache: Dict[str, str] = {}
         # Executor for on-path RPCs whose wall-clock duration must be
         # capped independently of the per-HTTP-request provider timeout.
         # See ``_RPC_WALL_CLOCK_DEADLINE_SECONDS`` for the multiplication
@@ -2528,8 +2530,6 @@ class MechHttpHandler(AbstractResponseHandler):
         :return: the structured 402 challenge as a dict ready for JSON encoding.
         :raises ValueError: if ``balance_check`` lacks the balance-tracker address.
         """
-        # Native-asset payment models surface the zero address for ``asset``;
-        # clients that see it must skip the ERC20 approve step.
         if ResponseKey.BALANCE_TRACKER_ADDRESS.value not in balance_check:
             raise ValueError(
                 "cannot build a 402 challenge from a balance check without a "
@@ -2539,13 +2539,9 @@ class MechHttpHandler(AbstractResponseHandler):
         balance_tracker_address = cast(
             str, balance_check[ResponseKey.BALANCE_TRACKER_ADDRESS.value]
         )
-        # Normalize the lookup key — `or ""` guards a present-but-None
-        # payment_type (a bare cast would be a runtime no-op and .lower() would
-        # then AttributeError); the map keys are lower-cased at load time
-        # (models.Params) so a checksummed payment_type still resolves.
-        payment_type = (balance_check.get(ResponseKey.PAYMENT_TYPE.value) or "").lower()
-        asset_address = self.params.payment_type_to_asset_address.get(
-            payment_type, ZERO_ADDRESS
+        asset_address = cast(
+            str,
+            balance_check.get(ResponseKey.ASSET_ADDRESS.value) or ZERO_ADDRESS,
         )
         return {
             "scheme": PAYMENT_SCHEME,
@@ -2887,6 +2883,10 @@ class MechHttpHandler(AbstractResponseHandler):
                 balance_tracker_address=balance_tracker_address,
                 requester=requester,
             )
+            asset_address = self._resolve_balance_tracker_asset(
+                ledger_api=ledger_api,
+                balance_tracker_address=balance_tracker_address,
+            )
             decision = (
                 BALANCE_LOG_DECISION_ACCEPTED
                 if available_amount >= required_amount
@@ -2903,6 +2903,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 ResponseKey.REASON.value: "balance check completed",
                 ResponseKey.BALANCE_TRACKER_ADDRESS.value: balance_tracker_address,
                 ResponseKey.PAYMENT_TYPE.value: payment_type,
+                ResponseKey.ASSET_ADDRESS.value: asset_address,
                 ResponseKey.CHAIN_ID.value: chain_id,
             }
         except Exception as e:
@@ -2982,6 +2983,47 @@ class MechHttpHandler(AbstractResponseHandler):
             label="balance_tracker_getRequesterBalance",
         )
         return cast(int, requester_balance_res.get(BodyKey.REQUESTER_BALANCE.value, 0))
+
+    def _resolve_balance_tracker_asset(
+        self, ledger_api: EthereumApi, balance_tracker_address: str
+    ) -> str:
+        """Return the asset the balance tracker accepts for deposits.
+
+        Cached per ``balance_tracker_address`` for the process lifetime;
+        ``BalanceTrackerFixedPriceToken.token`` is ``immutable`` in
+        Solidity. Native trackers revert on ``token()``; that revert
+        is their identity and returns ``ZERO_ADDRESS``.
+
+        :param ledger_api: the ledger API object.
+        :param balance_tracker_address: the balance tracker address.
+        :return: the ERC-20 asset address, or ``ZERO_ADDRESS`` for
+            native-payment trackers.
+        """
+        cached = self._balance_tracker_asset_cache.get(balance_tracker_address)
+        if cached is not None:
+            return cached
+        try:
+            token_res = self._run_with_wall_clock_deadline(
+                lambda: BalanceTrackerContract.get_token_address(
+                    ledger_api=ledger_api,
+                    contract_address=balance_tracker_address,
+                ),
+                deadline_seconds=_BALANCE_RPC_DEADLINE_SECONDS,
+                label="balance_tracker_token",
+            )
+            asset = cast(str, token_res.get("token_address") or ZERO_ADDRESS)
+        except ContractLogicError:
+            asset = ZERO_ADDRESS
+        except Exception:  # pylint: disable=broad-exception-caught
+            self.context.logger.warning(
+                "Failed to resolve balance tracker asset for %s; "
+                "falling back to native.",
+                balance_tracker_address,
+                exc_info=True,
+            )
+            asset = ZERO_ADDRESS
+        self._balance_tracker_asset_cache[balance_tracker_address] = asset
+        return asset
 
     def _verify_offchain_request_signature(
         self,

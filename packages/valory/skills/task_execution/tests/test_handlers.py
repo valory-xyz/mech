@@ -737,6 +737,7 @@ def _patched_handler_for_balance(
     available_offset: int,
     payment_type: str = "0xpaymenttype",
     balance_tracker_address: str = "0xBalanceTracker",
+    asset_address: str = "0x0000000000000000000000000000000000000000",
     chain_id: int = 100,
 ) -> MechHttpHandler:
     """Build a MechHttpHandler with the balance check patched to a fixed result."""
@@ -752,6 +753,7 @@ def _patched_handler_for_balance(
             "reason": "balance check completed",
             "balance_tracker_address": balance_tracker_address,
             "payment_type": payment_type,
+            "asset_address": asset_address,
             "chain_id": chain_id,
         },
     )
@@ -783,11 +785,11 @@ def test_402_body_includes_structured_challenge(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
     """402 body carries the structured challenge fields alongside the legacy keys."""
-    handler_context.params.payment_type_to_asset_address = {
-        "0xpaymenttype": "0xUSDCToken",
-    }
     mh = _patched_handler_for_balance(
-        handler_context, monkeypatch, available_offset=-50
+        handler_context,
+        monkeypatch,
+        available_offset=-50,
+        asset_address="0xUSDCToken",
     )
 
     resp = _send_signed_request(mh, http_dialogue, request_id="402")
@@ -829,13 +831,10 @@ def test_402_emits_www_authenticate_header(
     )
 
 
-def test_402_native_asset_when_payment_type_unmapped(
+def test_402_native_asset_when_balance_tracker_is_native(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
-    """Unmapped payment types surface the zero address as the asset."""
-    # Clients seeing the zero address must skip the ERC20 approve step and
-    # treat the payment as a native-asset deposit.
-    handler_context.params.payment_type_to_asset_address = {}
+    """Native-payment balance trackers surface the zero address as the asset."""
     mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=-1)
     resp = _send_signed_request(mh, http_dialogue, request_id="4022")
 
@@ -2343,35 +2342,85 @@ def test_build_402_challenge_raises_without_balance_tracker_address(
         )
 
 
-def test_build_402_challenge_payment_type_case_insensitive(
+def test_build_402_challenge_forwards_asset_address_from_balance_check(
     handler_context: Any, monkeypatch: Any
 ) -> None:
-    """A checksummed payment_type resolves against the lower-cased asset map."""
-    handler_context.params.payment_type_to_asset_address = {"0xabc": "0xAssetAddr"}
+    """The 402 challenge's ``asset`` field comes from ``balance_check.asset_address``."""
     mh = _http_handler(handler_context, monkeypatch)
     challenge = mh._build_402_challenge(
         {
             hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
-            hmod.ResponseKey.PAYMENT_TYPE.value: "0xABC",
+            hmod.ResponseKey.ASSET_ADDRESS.value: "0xUSDCToken",
         },
         error_msg="insufficient balance",
     )
-    assert challenge["asset"] == "0xAssetAddr"
+    assert challenge["asset"] == "0xUSDCToken"
 
 
-def test_build_402_challenge_none_payment_type_is_safe(
+def test_build_402_challenge_missing_asset_address_falls_back_to_native(
     handler_context: Any, monkeypatch: Any
 ) -> None:
-    """A present-but-None payment_type must not AttributeError on .lower()."""
+    """A missing or None ``asset_address`` falls back to ``ZERO_ADDRESS`` (native)."""
     mh = _http_handler(handler_context, monkeypatch)
     challenge = mh._build_402_challenge(
         {
             hmod.ResponseKey.BALANCE_TRACKER_ADDRESS.value: "0xBalanceTracker",
-            hmod.ResponseKey.PAYMENT_TYPE.value: None,
+            hmod.ResponseKey.ASSET_ADDRESS.value: None,
         },
         error_msg="insufficient balance",
     )
     assert challenge["asset"] == hmod.ZERO_ADDRESS
+
+
+def test_resolve_balance_tracker_asset_caches_per_address(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """The token() lookup runs once per tracker address and is cached."""
+    mh = _http_handler(handler_context, monkeypatch)
+    calls: List[str] = []
+
+    def _stub(**kwargs: Any) -> Dict[str, str]:
+        calls.append(kwargs["contract_address"])
+        return {"token_address": "0xUSDCToken"}
+
+    monkeypatch.setattr(hmod.BalanceTrackerContract, "get_token_address", _stub)
+    ledger_api = MagicMock()
+
+    a1 = mh._resolve_balance_tracker_asset(ledger_api, "0xTracker1")
+    a2 = mh._resolve_balance_tracker_asset(ledger_api, "0xTracker1")
+    a3 = mh._resolve_balance_tracker_asset(ledger_api, "0xTracker2")
+
+    assert a1 == "0xUSDCToken"
+    assert a2 == "0xUSDCToken"
+    assert a3 == "0xUSDCToken"
+    assert calls == ["0xTracker1", "0xTracker2"]
+
+
+def test_resolve_balance_tracker_asset_native_tracker_returns_zero_address(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A native tracker reverts on ``token()`` and resolves to ``ZERO_ADDRESS``."""
+    mh = _http_handler(handler_context, monkeypatch)
+
+    def _revert(**_kwargs: Any) -> None:
+        raise hmod.ContractLogicError("execution reverted")
+
+    monkeypatch.setattr(hmod.BalanceTrackerContract, "get_token_address", _revert)
+    asset = mh._resolve_balance_tracker_asset(MagicMock(), "0xNativeTracker")
+    assert asset == hmod.ZERO_ADDRESS
+    # Same address a second time — no re-attempt of the reverting call.
+    calls: List[Any] = []
+
+    def _would_replace(**kwargs: Any) -> Dict[str, str]:
+        calls.append(kwargs)
+        return {"token_address": "0xShouldNotSee"}
+
+    monkeypatch.setattr(
+        hmod.BalanceTrackerContract, "get_token_address", _would_replace
+    )
+    asset2 = mh._resolve_balance_tracker_asset(MagicMock(), "0xNativeTracker")
+    assert asset2 == hmod.ZERO_ADDRESS
+    assert calls == []
 
 
 def test_send_ok_response_rejects_non_newline_extra_headers(
