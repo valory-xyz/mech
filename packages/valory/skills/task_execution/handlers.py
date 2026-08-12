@@ -1243,9 +1243,13 @@ class MechHttpHandler(AbstractResponseHandler):
             # must terminate /send_signed_requests at a single agent
             # or the gate misbehaves. Warn loudly on boot so the
             # invariant is alertable rather than invisible when the
-            # deployment fans out ingress.
-            num_agents = getattr(self.params, "num_agents", 1) or 1
-            if num_agents > 1:
+            # deployment fans out ingress. ``isinstance`` guard so
+            # test harnesses that stand up ``skill_context`` with a
+            # ``MagicMock`` params namespace don't trip the ``>``
+            # comparison — real ``Params.num_agents`` is always an
+            # ``int``.
+            num_agents = getattr(self.params, "num_agents", 1)
+            if isinstance(num_agents, int) and num_agents > 1:
                 self.context.logger.warning(
                     "Offchain accept path is enabled with num_agents=%d; "
                     "deployment MUST ensure /send_signed_requests ingress "
