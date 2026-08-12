@@ -1797,6 +1797,9 @@ def test_check_offchain_requester_balance_success(
         lambda **kw: "0x" + "1" * 40,  # non-zero
     )
     monkeypatch.setattr(mh, "_get_requester_balance", lambda **kw: 500)
+    monkeypatch.setattr(
+        mh, "_resolve_balance_tracker_asset", lambda **kw: "0xUSDCToken"
+    )
 
     fake_api = MagicMock()
     fake_api.api.to_checksum_address = lambda x: x
@@ -1809,6 +1812,10 @@ def test_check_offchain_requester_balance_success(
     assert result["status"] == "ok"
     assert result["available_amount"] == 500
     assert result["required_amount"] == 100
+    # The 402 challenge builder reads asset from this key; if the wiring
+    # regresses, the challenge would fall back to ZERO_ADDRESS and the
+    # trader's asset-match guard would reject every deposit.
+    assert result[hmod.ResponseKey.ASSET_ADDRESS.value] == "0xUSDCToken"
 
 
 def test_check_offchain_requester_balance_exception(
@@ -2396,19 +2403,42 @@ def test_resolve_balance_tracker_asset_caches_per_address(
     assert calls == ["0xTracker1", "0xTracker2"]
 
 
+@pytest.mark.parametrize(
+    "raised",
+    [
+        pytest.param(
+            hmod.ContractLogicError("execution reverted"), id="contract_logic_error"
+        ),
+        pytest.param(
+            hmod.BadFunctionCallOutput("bare 0x return"),
+            id="bad_function_call_output",
+        ),
+    ],
+)
 def test_resolve_balance_tracker_asset_native_tracker_returns_zero_address(
-    handler_context: Any, monkeypatch: Any
+    handler_context: Any, monkeypatch: Any, raised: BaseException
 ) -> None:
-    """A native tracker reverts on ``token()`` and resolves to ``ZERO_ADDRESS``."""
+    """A native tracker surfaces as ``ContractLogicError`` or ``BadFunctionCallOutput``.
+
+    Both are deterministic identities of a native tracker (the
+    provider chooses between them based on whether it returns an
+    error object or a bare ``0x`` for the missing selector). Both
+    resolve to ``ZERO_ADDRESS`` and cache so the next 402 for the
+    same tracker does not re-RPC.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param raised: the deterministic native-tracker exception under test.
+    """
     mh = _http_handler(handler_context, monkeypatch)
 
     def _revert(**_kwargs: Any) -> None:
-        raise hmod.ContractLogicError("execution reverted")
+        raise raised
 
     monkeypatch.setattr(hmod.BalanceTrackerContract, "get_token_address", _revert)
     asset = mh._resolve_balance_tracker_asset(MagicMock(), "0xNativeTracker")
     assert asset == hmod.ZERO_ADDRESS
-    # Same address a second time — no re-attempt of the reverting call.
+    # Same address a second time — no re-attempt of the deterministic call.
     calls: List[Any] = []
 
     def _would_replace(**kwargs: Any) -> Dict[str, str]:
@@ -2421,6 +2451,49 @@ def test_resolve_balance_tracker_asset_native_tracker_returns_zero_address(
     asset2 = mh._resolve_balance_tracker_asset(MagicMock(), "0xNativeTracker")
     assert asset2 == hmod.ZERO_ADDRESS
     assert calls == []
+
+
+def test_resolve_balance_tracker_asset_transient_failure_is_not_cached(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """Timeout / queue-saturation returns ZERO_ADDRESS but does not poison the cache.
+
+    ``_run_with_wall_clock_deadline`` raises
+    ``concurrent.futures.TimeoutError`` on deadline expiry and
+    ``RuntimeError(RPC_QUEUE_SATURATED)`` under executor queue
+    pressure. Caching the ZERO_ADDRESS fallback on those paths would
+    latch a wrong-asset verdict for the process lifetime — exactly
+    the config-drift class this PR replaces with an on-chain read.
+    The transient branch must NOT write the cache so the next
+    request retries and eventually reads the real token address.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    import concurrent.futures as _cf
+
+    mh = _http_handler(handler_context, monkeypatch)
+    calls: List[Any] = []
+
+    def _timeout_once_then_ok(**kwargs: Any) -> Dict[str, str]:
+        calls.append(kwargs)
+        if len(calls) == 1:
+            raise _cf.TimeoutError("balance_tracker_token deadline")
+        return {"token_address": "0xUSDCToken"}
+
+    monkeypatch.setattr(
+        hmod.BalanceTrackerContract, "get_token_address", _timeout_once_then_ok
+    )
+    ledger_api = MagicMock()
+
+    first = mh._resolve_balance_tracker_asset(ledger_api, "0xUSDCTracker")
+    assert first == hmod.ZERO_ADDRESS
+    assert "0xUSDCTracker" not in mh._balance_tracker_asset_cache
+
+    second = mh._resolve_balance_tracker_asset(ledger_api, "0xUSDCTracker")
+    assert second == "0xUSDCToken"
+    assert mh._balance_tracker_asset_cache["0xUSDCTracker"] == "0xUSDCToken"
+    assert len(calls) == 2
 
 
 def test_send_ok_response_rejects_non_newline_extra_headers(

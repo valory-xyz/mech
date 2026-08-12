@@ -2989,10 +2989,20 @@ class MechHttpHandler(AbstractResponseHandler):
     ) -> str:
         """Return the asset the balance tracker accepts for deposits.
 
-        Cached per ``balance_tracker_address`` for the process lifetime;
+        Deterministic outcomes cache per ``balance_tracker_address``
+        for the process lifetime;
         ``BalanceTrackerFixedPriceToken.token`` is ``immutable`` in
-        Solidity. Native trackers revert on ``token()``; that revert
-        is their identity and returns ``ZERO_ADDRESS``.
+        Solidity, so a successful read never goes stale. Native
+        trackers do not implement ``token()`` and the call surfaces
+        as either :class:`ContractLogicError` (provider returned an
+        error object) or :class:`BadFunctionCallOutput` (provider
+        returned bare ``0x``); both are the native-tracker identity
+        and cache as ``ZERO_ADDRESS``.
+
+        Transient failures (timeout, queue saturation, transport)
+        return ``ZERO_ADDRESS`` for this reply but do NOT cache so
+        the next request retries the read rather than latching an
+        infra-side blip into a wrong-asset verdict.
 
         :param ledger_api: the ledger API object.
         :param balance_tracker_address: the balance tracker address.
@@ -3012,16 +3022,16 @@ class MechHttpHandler(AbstractResponseHandler):
                 label="balance_tracker_token",
             )
             asset = cast(str, token_res.get("token_address") or ZERO_ADDRESS)
-        except ContractLogicError:
+        except (ContractLogicError, BadFunctionCallOutput):
             asset = ZERO_ADDRESS
         except Exception:  # pylint: disable=broad-exception-caught
             self.context.logger.warning(
                 "Failed to resolve balance tracker asset for %s; "
-                "falling back to native.",
+                "falling back to native for this reply without caching.",
                 balance_tracker_address,
                 exc_info=True,
             )
-            asset = ZERO_ADDRESS
+            return ZERO_ADDRESS
         self._balance_tracker_asset_cache[balance_tracker_address] = asset
         return asset
 
