@@ -128,14 +128,6 @@ class Params(Model):
         self.polygon_ledger_rpc: str = kwargs.get("polygon_ledger_rpc", "")
         self.base_ledger_rpc: str = kwargs.get("base_ledger_rpc", "")
         self.optimism_ledger_rpc: str = kwargs.get("optimism_ledger_rpc", "")
-        # Lower-case the payment_type keys at load so a checksummed-vs-lowercase
-        # hex mismatch at lookup time can't silently fall back to the zero
-        # address (which would signal a native-asset deposit for what is really
-        # an ERC-20 payment model).
-        self.payment_type_to_asset_address: Dict[str, str] = {
-            key.lower(): value
-            for key, value in kwargs.get("payment_type_to_asset_address", {}).items()
-        }
         # Dual-purpose gate: controls BOTH offchain-request ingress AND
         # egress to the predict-api events endpoint (settlement writes for
         # both offchain-settled AND on-chain-settled requests). A mech is
