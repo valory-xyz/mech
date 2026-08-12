@@ -1973,6 +1973,45 @@ def test_finalize_done_task_no_executing_task_is_safe(
     assert behaviour._executing_task is None
 
 
+def test_release_outstanding_nonce_drops_sender_entry_when_last_nonce_removed() -> None:
+    """Removing the last outstanding nonce for a sender pops the sender key.
+
+    Leaving an empty ``set()`` under the sender key would still make
+    the admission gate's ``len(outstanding_by_sender[sender])``
+    read succeed with ``0``, but a subsequent per-sender iteration
+    would visit the empty entry uselessly. Prefer the explicit pop
+    so the dict shrinks back to shape on the last drain.
+    """
+    shared_state: Dict[str, Any] = {
+        beh_mod.OUTSTANDING_NONCES_BY_SENDER: {
+            "0xabc": {5, 6},
+            "0xdef": {1},
+        },
+    }
+    executing = {"sender": "0xdef", "nonce": 1}
+
+    beh_mod._release_outstanding_nonce(shared_state, executing)
+
+    assert "0xdef" not in shared_state[beh_mod.OUTSTANDING_NONCES_BY_SENDER]
+    assert shared_state[beh_mod.OUTSTANDING_NONCES_BY_SENDER]["0xabc"] == {5, 6}
+
+
+def test_release_outstanding_nonce_is_noop_when_sender_missing() -> None:
+    """A finalize whose sender never appeared in the outstanding set is a no-op.
+
+    Covers the on-chain path (which never populates the set) and any
+    rollback that already cleared its own entry before finalize ran.
+    """
+    shared_state: Dict[str, Any] = {
+        beh_mod.OUTSTANDING_NONCES_BY_SENDER: {"0xabc": {1}},
+    }
+    executing = {"sender": "0xzzz", "nonce": 99}
+
+    beh_mod._release_outstanding_nonce(shared_state, executing)  # must not raise
+
+    assert shared_state[beh_mod.OUTSTANDING_NONCES_BY_SENDER] == {"0xabc": {1}}
+
+
 def test_handle_store_response_dynamic_pricing_recorded(
     behaviour: Any, params_stub: Any, shared_state: Dict[str, Any], monkeypatch: Any
 ) -> None:

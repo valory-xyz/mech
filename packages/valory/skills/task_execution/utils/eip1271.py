@@ -39,7 +39,7 @@ from typing import Any, Dict
 
 from aea_ledger_ethereum import EthereumApi
 from requests.exceptions import RequestException, Timeout
-from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3RPCError
+from web3.exceptions import Web3Exception
 
 # bytes4 of ``keccak256("isValidSignature(bytes32,bytes)")``. A contract
 # sender must return exactly this value from its ``isValidSignature`` view
@@ -146,22 +146,27 @@ def check_eip1271_signature(
         # signature-rejected outcome that a revert or bad output would
         # produce.
         raise TimeoutError(str(exc)) from exc
-    except (
-        ContractLogicError,
-        BadFunctionCallOutput,
-        Web3RPCError,
-        ValueError,
-        RequestException,
-    ):
-        # Web3 raises ``BadFunctionCallOutput`` when the target address
-        # holds no code and ``Web3RPCError`` when the node returns a
-        # JSON-RPC error; ``requests`` transport failures other than a
-        # timeout (connection error, HTTP error) surface as
-        # ``RequestException``. Any of them means the contract did not
-        # unambiguously return the magic value, so the signature is
-        # not accepted. An out-of-gas revert triggered by the ``gas``
-        # cap above lands here as ``ContractLogicError`` and returns
-        # ``False`` the same way any other revert does.
+    except (Web3Exception, RequestException, ValueError):
+        # Broad web3 + requests + ValueError capture: every
+        # ``Web3Exception`` subclass reaches this branch, not just the
+        # obvious ones (``ContractLogicError`` on revert,
+        # ``BadFunctionCallOutput`` on a codeless target,
+        # ``Web3RPCError`` on a JSON-RPC error). The two subclasses
+        # that a narrower tuple used to miss —
+        # ``BadResponseFormat`` and ``Web3ValidationError`` — are
+        # raised OUTSIDE the ``RotatingHTTPProvider.make_request``
+        # boundary (in ``web3.manager.formatted_response``), so the
+        # rotation layer's own ``except Exception`` never sees them
+        # and they would otherwise propagate out through
+        # ``check_eip1271_signature``, out of the accept path, and
+        # crash the AEA framework's default ``propagate`` handler.
+        # ``RequestException`` covers connection / HTTP / non-timeout
+        # transport failures; ``ValueError`` covers ABI decode
+        # failures the web3 layer surfaces without a
+        # ``BadFunctionCallOutput`` wrap. An out-of-gas revert
+        # triggered by the ``gas`` cap above lands here as
+        # ``ContractLogicError`` (a ``Web3Exception`` subclass) and
+        # returns ``False`` the same way any other revert does.
         return False
     return bytes(returned) == EIP1271_MAGIC_VALUE
 

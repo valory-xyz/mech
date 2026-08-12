@@ -23,7 +23,7 @@ import json
 import time
 import urllib.parse
 from types import SimpleNamespace
-from typing import Any, Dict, List
+from typing import Any, Dict, List, cast
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -2055,6 +2055,12 @@ def _install_verify_ok(mh: Any, monkeypatch: Any) -> None:
     the ``bool`` → verdict refactor) so callers can branch on
     ``is_infra`` to distinguish 401 vs 503.
 
+    Also stubs the admission-gate call (``_bind_wire_nonce_to_chain``)
+    and the checksum resolver (``_resolve_sender_checksum``) so
+    downstream tests that only care about the balance / 402 / receipt
+    branches don't need to also stand up a ``MechMarketplaceContract``
+    stub — the admission gate is exercised by its own dedicated tests.
+
     :param mh: the ``MechHttpHandler`` instance to patch.
     :param monkeypatch: the pytest ``monkeypatch`` fixture.
     """
@@ -2062,6 +2068,16 @@ def _install_verify_ok(mh: Any, monkeypatch: Any) -> None:
         mh,
         "_verify_offchain_request_signature",
         lambda **_kwargs: hmod.SignatureVerdict(ok=True, reason="", is_infra=False),
+    )
+    monkeypatch.setattr(
+        mh,
+        "_bind_wire_nonce_to_chain",
+        lambda **_kwargs: hmod.SignatureVerdict(ok=True, reason="", is_infra=False),
+    )
+    monkeypatch.setattr(
+        mh,
+        "_resolve_sender_checksum",
+        lambda sender: str(sender),
     )
 
 
@@ -2420,6 +2436,7 @@ def test_handler_replies_500_when_402_build_fails(
 import requests as _requests_for_sigverify  # noqa: E402
 from eth_account import Account as _Account  # noqa: E402
 from eth_utils import to_checksum_address as _to_checksum  # noqa: E402
+
 from packages.valory.skills.task_execution.utils.request_id import (  # noqa: E402
     compute_request_id as _compute_request_id,
 )
@@ -2527,8 +2544,22 @@ def _sig_body(
     }
 
 
-def _make_eoa_scenario(delivery_rate: int = 123, nonce: int = 7) -> Dict[str, Any]:
-    """Sign a request_id derived from the marketplace formula with a fixed EOA key."""
+def _make_eoa_scenario(delivery_rate: int = 123, nonce: int = 0) -> Dict[str, Any]:
+    """Sign a request_id derived from the marketplace formula with a fixed EOA key.
+
+    ``nonce=0`` matches the default ``get_nonce`` stub installed by
+    ``_seed_verification_constants`` combined with an empty
+    outstanding-nonces set on a fresh handler, so happy-path callers
+    hit the admission gate's ``wire == expected`` accept branch
+    without an extra monkeypatch.
+
+    :param delivery_rate: the requester-signed delivery rate embedded
+        in the derived request id.
+    :param nonce: the wire nonce embedded in the derived request id.
+    :return: dict with the fields the ``_sig_body`` helper needs
+        (sender / request_id / ipfs_hash / delivery_rate / nonce /
+        signature_hex).
+    """
     account = _Account.from_key(_SIGVERIFY_PRIVATE_KEY)
     sender = _to_checksum(account.address)
     # The signature commits to ``keccak(ipfs_hash)``; the CID-binding
@@ -2686,6 +2717,7 @@ def test_verify_offchain_signature_safe_eip1271_true_accepts(
     request_data = bytes.fromhex(ipfs_hash[2:])
     delivery_rate = 42
     nonce = 3
+    _install_nonce_stub(monkeypatch, on_chain_nonce=nonce)
     request_id_bytes = _compute_request_id(
         marketplace=_SIGVERIFY_MARKETPLACE,
         mech=_SIGVERIFY_MECH,
@@ -3039,29 +3071,192 @@ def test_verify_offchain_signature_accepts_when_wire_nonce_matches_on_chain(
     assert len(handler_context.shared_state["pending_tasks"]) == 1
 
 
-def test_verify_offchain_signature_accepts_when_wire_nonce_at_upper_window_edge(
+def test_verify_offchain_signature_rejects_first_request_when_wire_nonce_above_chain(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
-    """Wire nonce at ``on_chain + MAX_OUTSTANDING_NONCE_WINDOW`` accepts.
+    """First request from a sender: wire=on_chain+1 rejects 503, not accept.
 
-    Pins the exact-match upper boundary of the accepted window (15
-    over the on-chain value when the window is 16 — the on-chain
-    value 1 plus the window 15 equals the tested wire value 16).
+    With no outstanding requests from the sender, the admission gate's
+    expected slot is exactly the on-chain ``mapNonces`` value. A wire
+    value one above that skips a slot — settlement would derive a
+    different ``request_id`` for it and revert the whole per-sender
+    batch. Reject 503 so the client can retry once its earlier
+    requests drain (empty in this scenario, so the retry sees the
+    same expected slot and lands on the accept branch).
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param http_dialogue: pytest fixture, HTTP dialogue stub.
     :param monkeypatch: pytest fixture, per-test monkeypatch helper.
     """
-    on_chain = 1
-    wire = on_chain + hmod.MAX_OUTSTANDING_NONCE_WINDOW - 1
-
     mh = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     mh.setup()
     _seed_verification_constants(mh, handler_context.params, monkeypatch)
 
-    scenario = _make_eoa_scenario(nonce=wire)
-    nonce_calls = _install_nonce_stub(monkeypatch, on_chain_nonce=on_chain)
+    scenario = _make_eoa_scenario(nonce=1)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=0)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+    _real_send_rejection = mh._send_rejection_response
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.NONCE_ABOVE_EXPECTED
+    assert balance_calls == []
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_admission_gate_after_two_outstanding_accepts(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Two outstanding at ``k, k+1``: next accept requires ``k+2``.
+
+    Seeds the sender's outstanding-nonce set at ``{0, 1}`` (as if two
+    earlier requests were already accepted) and asserts that a third
+    accept with wire ``nonce=2`` is admitted, while wire ``nonce=3``
+    is rejected 503 (skips a slot) and wire ``nonce=1`` is rejected
+    401 (duplicate of an outstanding slot).
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    _install_nonce_stub(monkeypatch, on_chain_nonce=0)
+    monkeypatch.setattr(
+        mh,
+        "_check_offchain_requester_balance",
+        lambda sender, delivery_rate: _ok_balance_check(delivery_rate),
+    )
+
+    # Preload the sender's outstanding-nonce set with the two nonces
+    # a pair of prior accepts would have recorded. The scenario helper
+    # deterministically returns the same sender across calls, so the
+    # key here matches what ``_bind_wire_nonce_to_chain`` will look up.
+    sender_checksum = _make_eoa_scenario(nonce=0)["sender"]
+    handler_context.shared_state[hmod.OUTSTANDING_NONCES_BY_SENDER] = {
+        sender_checksum: {0, 1},
+    }
+
+    # Third accept at the expected next slot (k+2): admitted.
+    scenario_accept = _make_eoa_scenario(nonce=2)
+    body = _sig_body(
+        request_id=scenario_accept["request_id"],
+        delivery_rate=scenario_accept["delivery_rate"],
+        nonce=scenario_accept["nonce"],
+        sender=scenario_accept["sender"],
+        signature_hex=scenario_accept["signature_hex"],
+        ipfs_hash=scenario_accept["ipfs_hash"],
+    )
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    accept_resp = handler_context.outbox.sent[-1]
+    assert accept_resp.status_code == HttpCode.OK_CODE.value
+    assert (
+        2
+        in handler_context.shared_state[hmod.OUTSTANDING_NONCES_BY_SENDER][
+            sender_checksum
+        ]
+    )
+
+    # Fourth accept skipping a slot (k+3 when k+2 is now expected): 503.
+    scenario_ahead = _make_eoa_scenario(nonce=4)
+    body_ahead = _sig_body(
+        request_id=scenario_ahead["request_id"],
+        delivery_rate=scenario_ahead["delivery_rate"],
+        nonce=scenario_ahead["nonce"],
+        sender=scenario_ahead["sender"],
+        signature_hex=scenario_ahead["signature_hex"],
+        ipfs_hash=scenario_ahead["ipfs_hash"],
+    )
+    http_msg_ahead: Any = make_http_msg(body_ahead)
+    mh._handle_signed_requests(http_msg_ahead, http_dialogue)
+    ahead_resp = handler_context.outbox.sent[-1]
+    assert ahead_resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+
+    # Fifth accept duplicating an outstanding slot (k+1): 401.
+    scenario_dup = _make_eoa_scenario(nonce=1)
+    body_dup = _sig_body(
+        request_id=scenario_dup["request_id"],
+        delivery_rate=scenario_dup["delivery_rate"],
+        nonce=scenario_dup["nonce"],
+        sender=scenario_dup["sender"],
+        signature_hex=scenario_dup["signature_hex"],
+        ipfs_hash=scenario_dup["ipfs_hash"],
+    )
+    http_msg_dup: Any = make_http_msg(body_dup)
+    mh._handle_signed_requests(http_msg_dup, http_dialogue)
+    dup_resp = handler_context.outbox.sent[-1]
+    assert dup_resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
+
+
+def test_accept_records_sender_nonce_in_outstanding_set(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A successful accept records the wire nonce under the sender's checksum.
+
+    Pins the accept-side half of the outstanding-nonces lifecycle so a
+    regression that stops populating the set would still admit the
+    first accept but silently regress the ``next expected == on_chain
+    + len(outstanding)`` semantics on the second.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=0)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=0)
     monkeypatch.setattr(
         mh,
         "_check_offchain_requester_balance",
@@ -3081,8 +3276,8 @@ def test_verify_offchain_signature_accepts_when_wire_nonce_at_upper_window_edge(
 
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.OK_CODE.value
-    assert len(nonce_calls) == 1
-    assert len(handler_context.shared_state["pending_tasks"]) == 1
+    outstanding = handler_context.shared_state[hmod.OUTSTANDING_NONCES_BY_SENDER]
+    assert outstanding == {scenario["sender"]: {0}}
 
 
 def test_verify_offchain_signature_rejects_401_when_wire_nonce_below_on_chain(
@@ -3145,17 +3340,30 @@ def test_verify_offchain_signature_rejects_401_when_wire_nonce_below_on_chain(
 
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
-    assert stored["reason"] == hmod.NONCE_BELOW_CHAIN
+    assert stored["reason"] == hmod.NONCE_BELOW_EXPECTED
     assert balance_calls == [], "balance check must not run when nonce is stale"
     assert handler_context.shared_state["pending_tasks"] == []
 
 
-def test_verify_offchain_signature_rejects_401_when_wire_nonce_above_window(
+def test_verify_offchain_signature_rejects_503_when_wire_nonce_above_expected(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
-    """Wire nonce more than ``MAX_OUTSTANDING_NONCE_WINDOW`` above on-chain rejects 401."""
+    """Wire nonce above the sender's next expected slot rejects 503.
+
+    The sender is racing ahead of its own in-flight queue; mech-client
+    retries 503 in the next round so the earlier requests get a chance
+    to drain and the same body settles when the slot opens. 401 would
+    be wrong — the client would treat the credential as permanently
+    invalid and stop retrying.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
     on_chain = 4
-    wire = on_chain + hmod.MAX_OUTSTANDING_NONCE_WINDOW + 1
+    # No outstanding, so expected next slot equals ``on_chain``. Any
+    # wire above that skips a slot.
+    wire = on_chain + 5
 
     mh = MechHttpHandler(name="http", skill_context=handler_context)
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
@@ -3211,8 +3419,8 @@ def test_verify_offchain_signature_rejects_401_when_wire_nonce_above_window(
     mh._handle_signed_requests(http_msg, http_dialogue)
 
     resp = handler_context.outbox.sent[-1]
-    assert resp.status_code == HttpCode.UNAUTHORIZED_CODE.value
-    assert stored["reason"] == hmod.NONCE_ABOVE_WINDOW
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.NONCE_ABOVE_EXPECTED
     assert balance_calls == []
 
 
@@ -3296,17 +3504,20 @@ def test_verify_offchain_signature_returns_503_when_mapnonces_read_fails(
     assert handler_context.shared_state["pending_tasks"] == []
 
 
-def test_verify_offchain_signature_rejects_401_on_eip1271_timeout(
+def test_verify_offchain_signature_rejects_503_on_eip1271_timeout(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
-    """A transport timeout on the EIP-1271 call surfaces as 401 with the timeout reason.
+    """A transport timeout on the EIP-1271 call surfaces as 503 with the timeout reason.
 
-    Well-behaved Safes reply to ``isValidSignature`` in milliseconds; a
-    view that exceeds the provider-level HTTP timeout is more likely
-    hostile than transient, so returning 401 (instead of 503) prevents
-    infinite operator-paid retries. The nonce read after the sig
-    branch must NOT run in this case — the verdict has already
-    rejected, so no on-chain read is issued.
+    Provider-side slowness is an infrastructure signal, not a
+    credential rejection: the ``gas`` cap bounds a hostile
+    ``isValidSignature`` view to sub-millisecond CPU on the RPC side
+    (that path surfaces as ``ContractLogicError`` and flattens to
+    ``False`` on the other branch), so a timeout at this depth
+    mirrors ``NONCE_READ_FAILED`` — an ``is_infra=True`` verdict that
+    routes to 503 so a well-behaved client backs off and retries. The
+    nonce read after the sig branch must NOT run when sig-verify
+    rejects, so no on-chain ``mapNonces`` call is issued.
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param http_dialogue: pytest fixture, HTTP dialogue stub.
@@ -3376,6 +3587,199 @@ def test_verify_offchain_signature_rejects_401_on_eip1271_timeout(
     assert balance_calls == []
     assert nonce_calls == [], "nonce read must not run when sig verify rejects"
     assert handler_context.shared_state["pending_tasks"] == []
+
+
+def test_verify_offchain_signature_wall_clock_deadline_bounds_eip1271_call(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The wall-clock deadline caps the EIP-1271 call independently of provider timeout.
+
+    Replaces ``check_eip1271_signature`` with a stub that sleeps well
+    past the wall-clock deadline. The stub would otherwise pin the
+    handler thread for its full sleep — long enough for the
+    http_server to time out the client at its own 5s reply budget,
+    and long enough to stall ABCI processing on the AEA main loop.
+    Assert the handler returns a 503 within a small epsilon of the
+    deadline (not after the sleep), with the ``EIP1271_CALL_TIMEOUT``
+    reason so operators can attribute the outcome.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    import time as _time
+
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_safe_eip1271_scenario(nonce=3)
+    _install_nonce_stub(monkeypatch, on_chain_nonce=3)
+
+    # Reduce the deadline to keep the test fast while still exercising
+    # the deadline branch. The sleep length is 5x the deadline so the
+    # test would visibly hang if the deadline were not enforced.
+    test_deadline = 0.2
+    monkeypatch.setattr(hmod, "_RPC_WALL_CLOCK_DEADLINE_SECONDS", test_deadline)
+
+    def _slow_eip1271(**_kw: Any) -> bool:
+        _time.sleep(test_deadline * 5)
+        return True
+
+    monkeypatch.setattr(hmod, "check_eip1271_signature", _slow_eip1271)
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+    _real_send_rejection = mh._send_rejection_response
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    started_at = _time.monotonic()
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    elapsed = _time.monotonic() - started_at
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.EIP1271_CALL_TIMEOUT
+    # Deadline enforcement — the handler must return within deadline +
+    # a small epsilon for scheduling / test overhead, NOT after the
+    # 5x-deadline sleep the stub would otherwise impose.
+    assert elapsed < test_deadline + 2.0, (
+        f"handler returned in {elapsed:.3f}s but wall-clock deadline is "
+        f"{test_deadline}s; regression would let a slow isValidSignature "
+        f"pin the AEA main loop past the http_server reply budget"
+    )
+    assert balance_calls == []
+
+
+def test_bind_wire_nonce_to_chain_wall_clock_deadline_bounds_mapnonces_read(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The wall-clock deadline caps the ``mapNonces`` read the same way.
+
+    Same shape as the EIP-1271 test above but on the nonce-bind path.
+    Asserts the admission gate returns 503 with ``NONCE_READ_FAILED``
+    within the deadline when the underlying read hangs.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    import time as _time
+
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    _seed_verification_constants(mh, handler_context.params, monkeypatch)
+
+    scenario = _make_eoa_scenario(nonce=0)
+    test_deadline = 0.2
+    monkeypatch.setattr(hmod, "_RPC_WALL_CLOCK_DEADLINE_SECONDS", test_deadline)
+
+    def _slow_get_nonce(
+        cls: Any, ledger_api: Any, contract_address: Any, sender_address: Any
+    ) -> Dict[str, int]:
+        _time.sleep(test_deadline * 5)
+        return {"data": 0}
+
+    monkeypatch.setattr(
+        hmod.MechMarketplaceContract, "get_nonce", classmethod(_slow_get_nonce)
+    )
+
+    balance_calls: List[Any] = []
+
+    def _spy_balance(sender: Any, delivery_rate: Any) -> Dict[str, Any]:
+        balance_calls.append(sender)
+        return _ok_balance_check(delivery_rate)
+
+    monkeypatch.setattr(mh, "_check_offchain_requester_balance", _spy_balance)
+
+    stored: Dict[str, Any] = {}
+    _real_send_rejection = mh._send_rejection_response
+
+    def _capture_rejection(
+        _http_msg: Any,
+        _http_dialogue: Any,
+        request_id: str,
+        reason: str,
+        status_code: int,
+        status_text: str,
+        **_kwargs: Any,
+    ) -> None:
+        stored["reason"] = reason
+        stored["status_code"] = status_code
+        _real_send_rejection(
+            _http_msg,
+            _http_dialogue,
+            request_id,
+            reason=reason,
+            status_code=status_code,
+            status_text=status_text,
+            **_kwargs,
+        )
+
+    monkeypatch.setattr(mh, "_send_rejection_response", _capture_rejection)
+
+    body = _sig_body(
+        request_id=scenario["request_id"],
+        delivery_rate=scenario["delivery_rate"],
+        nonce=scenario["nonce"],
+        sender=scenario["sender"],
+        signature_hex=scenario["signature_hex"],
+        ipfs_hash=scenario["ipfs_hash"],
+    )
+    started_at = _time.monotonic()
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    elapsed = _time.monotonic() - started_at
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
+    assert stored["reason"] == hmod.NONCE_READ_FAILED
+    assert elapsed < test_deadline + 2.0, (
+        f"handler returned in {elapsed:.3f}s but wall-clock deadline is "
+        f"{test_deadline}s; regression would let a slow mapNonces read "
+        f"pin the AEA main loop past the http_server reply budget"
+    )
+    assert balance_calls == []
 
 
 def test_get_ledger_api_caches_instance_per_rpc_and_chain_and_timeout(
@@ -3773,6 +4177,58 @@ def test_signed_requests_distinct_ids_both_enqueue(
     assert len(handler_context.shared_state["pending_tasks"]) == 2
 
 
+def test_signed_requests_retry_after_delivery_returns_200_even_when_nonce_stale(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Dedup runs BEFORE the nonce-bind admission gate.
+
+    A client re-posting an already-delivered request has by then
+    watched the on-chain ``mapNonces`` counter advance past the value
+    it originally signed. If the admission gate ran before dedup, the
+    retry would 401 (``NONCE_BELOW_EXPECTED``) instead of the
+    idempotent 200 (``REQUEST_ALREADY_ACCEPTED``) mech-client's own
+    retry loop depends on. Seed the response cache as if a delivery
+    settled, install a nonce stub that would refuse the request as
+    stale, and assert the retry still returns 200 with the
+    ``REQUEST_ALREADY_ACCEPTED`` reason.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh: MechHttpHandler = _patched_handler_for_balance(
+        handler_context, monkeypatch, available_offset=10
+    )
+
+    # Force the admission gate to reject if it runs: on_chain far past
+    # the wire nonce (``0`` from ``_send_signed_request``) would land
+    # the request on ``NONCE_BELOW_EXPECTED`` (401). Dedup running
+    # first is the only way the response is a 200.
+    #
+    # ``_install_verify_ok`` inside ``_patched_handler_for_balance``
+    # has already installed a passing admission stub; override it here
+    # so the gate would 401 IF the ordering regressed.
+    def _reject_nonce(**_kw: Any) -> hmod.SignatureVerdict:
+        return hmod.SignatureVerdict(
+            ok=False,
+            reason=hmod.NONCE_BELOW_EXPECTED,
+            is_infra=False,
+        )
+
+    monkeypatch.setattr(mh, "_bind_wire_nonce_to_chain", _reject_nonce)
+    handler_context.shared_state["offchain_request_responses"]["7085"] = {
+        "status": "ok",
+        "request_id": "7085",
+    }
+
+    resp = _send_signed_request(mh, http_dialogue, request_id="7085")
+
+    assert resp.status_code == HttpCode.OK_CODE.value
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["reason"] == hmod.REQUEST_ALREADY_ACCEPTED
+    assert handler_context.shared_state["pending_tasks"] == []
+
+
 def test_signed_requests_dedup_covers_delivered_state(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:
@@ -4136,16 +4592,18 @@ def test_cid_binding_bare_digest_starting_with_1220_accepted() -> None:
     class _MinimalHandler:
         context = _FakeContext()
 
-        _verify_ipfs_hash_binding = MechHttpHandler._verify_ipfs_hash_binding
-
     dummy = _MinimalHandler()
     ipfs_data = '{"payload":"whatever"}'
     # Force ``to_multihash(compute_cidv1(...))`` to return the same
     # bare-digest hex the caller posted. The prefix-strip must NOT
     # touch the 64-char form; if it does, only 60 hex chars survive
     # for the compare and this test fails.
+    # Call the unbound method with an explicit ``cast`` to satisfy the
+    # ``self`` type; the method only touches ``self.context.logger`` and
+    # arithmetic on the arguments, so a duck-typed stub passes at runtime.
     with patch.object(_h, "to_multihash", return_value=bare_digest):
-        ok, reason = dummy._verify_ipfs_hash_binding(
+        ok, reason = MechHttpHandler._verify_ipfs_hash_binding(
+            cast(MechHttpHandler, dummy),
             request_id="rid",
             ipfs_hash="0x" + bare_digest,
             ipfs_data=ipfs_data,
@@ -4170,11 +4628,13 @@ def test_cid_binding_multihash_prefix_stripped_only_from_68_char_form() -> None:
     class _MinimalHandler:
         context = _FakeContext()
 
-        _verify_ipfs_hash_binding = MechHttpHandler._verify_ipfs_hash_binding
-
     dummy = _MinimalHandler()
+    # Call the unbound method with an explicit ``cast`` to satisfy the
+    # ``self`` type; see the sibling ``_bare_digest`` test above for the
+    # duck-typed-stub rationale.
     with patch.object(_h, "to_multihash", return_value=bare_digest):
-        ok, reason = dummy._verify_ipfs_hash_binding(
+        ok, reason = MechHttpHandler._verify_ipfs_hash_binding(
+            cast(MechHttpHandler, dummy),
             request_id="rid",
             ipfs_hash="0x" + multihash_form,
             ipfs_data='{"any":"data"}',

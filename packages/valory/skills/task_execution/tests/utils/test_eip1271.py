@@ -34,8 +34,10 @@ import pytest
 import requests
 from web3.exceptions import (
     BadFunctionCallOutput,
+    BadResponseFormat,
     ContractLogicError,
     Web3RPCError,
+    Web3ValidationError,
 )
 
 from packages.valory.skills.task_execution.utils.eip1271 import (
@@ -127,6 +129,13 @@ def test_check_eip1271_signature_returns_false_on_non_magic_value(
             BadFunctionCallOutput("decode failure"), id="bad_function_call_output"
         ),
         pytest.param(Web3RPCError("rpc error"), id="web3_rpc_error"),
+        pytest.param(
+            BadResponseFormat("non-conforming json-rpc envelope"),
+            id="bad_response_format",
+        ),
+        pytest.param(
+            Web3ValidationError("schema mismatch"), id="web3_validation_error"
+        ),
         pytest.param(ValueError("abi decode failure"), id="value_error"),
         pytest.param(
             requests.exceptions.ConnectionError("boom"), id="connection_error"
@@ -143,10 +152,15 @@ def test_check_eip1271_signature_returns_false_on_boundary_exception(
     codeless address (the common case for a Safe pointed at the wrong
     proxy) and ``Web3RPCError`` on JSON-RPC failures; ``requests``
     transport failures other than a timeout (connection error, HTTP
-    error) surface as siblings under ``RequestException``. All must
-    map to False so the accept path's fallback treats the outcome as a
-    signature rejection instead of crashing the framework's default
-    ``propagate`` handler and stopping the agent. Timeouts are
+    error) surface as siblings under ``RequestException``.
+    ``BadResponseFormat`` and ``Web3ValidationError`` are the two
+    ``Web3Exception`` siblings raised outside the
+    ``RotatingHTTPProvider.make_request`` boundary (in
+    ``web3.manager.formatted_response``), so a narrower ``except``
+    tuple would let them propagate out through the accept path and
+    crash the framework's default ``propagate`` handler. All must map
+    to False so the accept path's fallback treats the outcome as a
+    signature rejection instead of stopping the agent. Timeouts are
     covered separately below because the caller distinguishes them
     from a plain signature rejection.
 

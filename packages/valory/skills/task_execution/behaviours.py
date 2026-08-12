@@ -90,12 +90,71 @@ REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 # buffered request metadata from the behaviour side.
 OFFCHAIN_REQUEST_RESPONSES = "offchain_request_responses"
 IN_MEMORY_REQUESTS = "in_memory_requests"
+# Shared-state key owned by the MechHttpHandler; mirrored here because the
+# off-chain finalize / rejection paths need to drop the sender's outstanding
+# wire-nonce entry so the handler-side admission gate on subsequent accepts
+# computes the correct next-expected slot.
+OUTSTANDING_NONCES_BY_SENDER = "outstanding_nonces_by_sender"
+# Wire-body keys copied through into the pending task dict at accept time.
+# Kept as literals here (rather than importing from handlers) so the
+# behaviour does not add a cross-module import for a handful of string
+# constants shared across the accept and finalize sides.
+_SENDER_KEY = "sender"
+_NONCE_KEY = "nonce"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
 RESPONSE_SCHEMA_VERSION = "2.0"
 IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
+
+
+def _release_outstanding_nonce(
+    shared_state: Dict[str, Any],
+    executing_task: Optional[Dict[str, Any]],
+) -> None:
+    """Drop the sender+nonce entry recorded at accept time, if any.
+
+    The handler's admission gate on the next accept from the same
+    sender computes the next-expected slot as
+    ``on_chain_mapNonces + len(outstanding_nonces_by_sender[sender])``.
+    Leaving a settled or rejected entry in the outstanding set would
+    make the gate demand a nonce one slot higher than settlement
+    actually expects, dragging the sender's next legitimate request
+    into a permanent 401 loop.
+
+    Idempotent on missing keys: the on-chain path never populates the
+    outstanding set, and a rollback that ran before this call already
+    cleared its own entry.
+
+    :param shared_state: the AEA shared-state dict.
+    :param executing_task: the just-settled task dict (or None). Read
+        the sender + nonce pair off it because the request-id string
+        is not enough — the outstanding set is keyed by sender
+        checksum, and the wire nonce (int) is the entry inside the
+        per-sender set.
+    """
+    if not executing_task:
+        return
+    sender = executing_task.get(_SENDER_KEY)
+    nonce = executing_task.get(_NONCE_KEY)
+    if sender is None or nonce is None:
+        return
+    outstanding_all = shared_state.get(OUTSTANDING_NONCES_BY_SENDER)
+    if not outstanding_all:
+        return
+    # ``sender`` on ``executing_task`` is the raw wire value; the
+    # admission gate keys on the checksum-cased address. Compare
+    # case-insensitively via the lowercase 0x-address form since a
+    # dict-key lookup would otherwise miss a mixed-case wire value.
+    sender_str = str(sender).lower()
+    for key in list(outstanding_all.keys()):
+        if key.lower() == sender_str:
+            entries = outstanding_all[key]
+            entries.discard(int(nonce))
+            if not entries:
+                outstanding_all.pop(key, None)
+            break
 
 
 def _iso_z(dt: datetime) -> str:
@@ -1602,6 +1661,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # ``handlers.py:776``), so the pop needs the ``str`` form or it
         # silently misses and leaks the full request JSON.
         self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(str(req_id), None)
+        # Free the sender's outstanding-nonce slot so the handler-side
+        # admission gate on the sender's next accept computes the correct
+        # next-expected value (on_chain + outstanding_count). A no-op on
+        # the on-chain path (which never populates the set).
+        _release_outstanding_nonce(self.context.shared_state, executing_task)
         self._reset_executing_task()
 
     def _build_predict_api_event(
@@ -1960,6 +2024,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             req_id, reason, None, preimage_buffer.STATUS_REJECTED
         )
         self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
+        # Free the sender's outstanding-nonce slot even on the rejection
+        # path so a subsequent legitimate accept from the same sender is
+        # not blocked by a stale entry. Read the sender + nonce off the
+        # still-set ``_executing_task`` slot before it is cleared below.
+        _release_outstanding_nonce(self.context.shared_state, self._executing_task)
         self._reset_executing_task()
 
     # --- off-chain preimage buffer (kv_store) -----------------------------

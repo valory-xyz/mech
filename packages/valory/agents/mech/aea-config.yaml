@@ -41,11 +41,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeiey3zrdef6qcspojfbi2qmzc7cdxrwljmu6cnfxqr7okwfimyjrey
 - valory/delivery_rate_abci:0.1.0:bafybeifjiazvf3qhr2264i55u4tlvmyf6ztgak2ndqolujt4kw6jiy7l3m
-- valory/mech_abci:0.1.0:bafybeif4v5ah7kmxqzv7ou7327uwbjw5j74ayfxfgv6mjquvnjpynjhqqm
+- valory/mech_abci:0.1.0:bafybeidwew2zu3gw3vsm3qz7av7gxcqxgnpx5skadzmczcbpr3cjvfvpym
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeihpeekvw2q7xhhikul4fdohlcsinn642b32vhjufvd4vhqpo4shaq
-- valory/task_submission_abci:0.1.0:bafybeidz3nidtvdbk67fn3epxcottuwfycund3tiwkyba6eqshdkbjefmu
+- valory/task_execution:0.1.0:bafybeict52dva76yt5h4oragymiczokwptr44kgyey7imred345vicrtwi
+- valory/task_submission_abci:0.1.0:bafybeidvjxawskjuu43bzju2mobjgll3jzkdebmy7xhdfr644dtud7bkoa
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m

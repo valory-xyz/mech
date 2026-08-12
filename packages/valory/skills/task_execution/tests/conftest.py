@@ -47,17 +47,25 @@ from packages.valory.skills.task_execution.behaviours import (
 # ----------------------------- Shared stubs -----------------------------------
 
 
-def _make_logger(include_debug: bool = False) -> SimpleNamespace:
-    """Create a no-op logger stub. Single source of truth for all test contexts."""
-    ns = SimpleNamespace(
+def _make_logger() -> SimpleNamespace:
+    """Create a no-op logger stub used by every test context.
+
+    ``debug`` is always exposed because the offchain sig-verify path
+    logs an audit line on the EOA-recovery-mismatch branch that
+    predates every current handler test. Hiding ``debug`` behind a
+    flag would AttributeError on that path the moment it is exercised
+    end-to-end.
+
+    :return: a ``SimpleNamespace`` with no-op ``info`` / ``warning`` /
+        ``error`` / ``exception`` / ``debug`` attributes.
+    """
+    return SimpleNamespace(
         info=lambda *a, **k: None,
         warning=lambda *a, **k: None,
         error=lambda *a, **k: None,
         exception=lambda *a, **k: None,
+        debug=lambda *a, **k: None,
     )
-    if include_debug:
-        ns.debug = lambda *a, **k: None  # type: ignore[attr-defined]
-    return ns
 
 
 class _DLG:
@@ -405,7 +413,7 @@ def dialogue_skill_context(shared_state: Dict[str, Any]) -> SimpleNamespace:
     return SimpleNamespace(
         skill_id="valory/task_execution:0.1.0",
         agent_address="0xagent",
-        logger=_make_logger(include_debug=True),
+        logger=_make_logger(),
         shared_state=shared_state,
     )
 
