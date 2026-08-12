@@ -3765,3 +3765,193 @@ def test_finalize_done_task_omits_predict_api_event_when_use_offchain_off(
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
     assert "predict_api_event" not in done_tasks[0]
+
+
+# ---------------------------------------------------------------------------
+# Round-5 review: outstanding-nonce lifecycle across accepted / settling /
+# rejected paths, and the tool-not-installed drop for off-chain tasks.
+# ---------------------------------------------------------------------------
+
+
+def test_release_outstanding_nonce_moves_accepted_to_settling(
+    shared_state: Any,
+) -> None:
+    """Release moves the sender+nonce from accepted → settling.
+
+    The admission gate on the handler side computes the next-expected
+    slot as ``on_chain + len(accepted) + len(settling)``; a release
+    that dropped the entry from accepted without adding it to settling
+    would under-count the slot during the release/settlement gap
+    (several ABCI rounds), letting a duplicate wire nonce re-enter
+    under a colliding request_id.
+
+    :param shared_state: pytest fixture, initial shared_state map.
+    """
+    sender = "0xSender"
+    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {0, 1, 2}}
+    beh_mod._release_outstanding_nonce(
+        shared_state,
+        {"sender": sender, "nonce": 0, "is_offchain": True},
+    )
+    assert shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] == {sender: {1, 2}}
+    assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {sender: {0}}
+
+
+def test_discard_outstanding_nonce_drops_from_both_sets(
+    shared_state: Any,
+) -> None:
+    """Discard removes the sender+nonce from BOTH accepted and settling.
+
+    Used on the rejection path — a rejected task never settles, so
+    leaving anything in settling would keep the admission-gate slot
+    count inflated until either (a) the pruner eventually removes it
+    or (b) forever if the sender never sends again.
+
+    :param shared_state: pytest fixture, initial shared_state map.
+    """
+    sender = "0xSender"
+    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {5}}
+    shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] = {sender: {3, 4}}
+    # Case: nonce present in accepted; drop from both.
+    beh_mod._discard_outstanding_nonce(
+        shared_state,
+        {"sender": sender, "nonce": 5, "is_offchain": True},
+    )
+    assert sender not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
+    assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {sender: {3, 4}}
+    # Case: nonce present in settling only.
+    beh_mod._discard_outstanding_nonce(
+        shared_state,
+        {"sender": sender, "nonce": 4, "is_offchain": True},
+    )
+    assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {sender: {3}}
+
+
+def test_release_outstanding_nonce_case_insensitive_sender_match(
+    shared_state: Any,
+) -> None:
+    """Release matches sender case-insensitively across the accepted map.
+
+    ``executing_task`` carries the raw wire sender value; the
+    handler-side admission gate keys on the checksum-cased address.
+    Without case-insensitive matching a mixed-case wire value would
+    miss the accepted entry and leak the nonce.
+
+    :param shared_state: pytest fixture, initial shared_state map.
+    """
+    checksum = "0xABCDEFabcdef0123456789ABCDEFabcdef012345"
+    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {checksum: {7}}
+    beh_mod._release_outstanding_nonce(
+        shared_state,
+        {"sender": checksum.lower(), "nonce": 7, "is_offchain": True},
+    )
+    assert checksum not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
+    assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {checksum: {7}}
+
+
+def test_handle_get_task_offchain_typo_tool_releases_nonce(
+    behaviour: Any,
+    params_stub: Any,
+    monkeypatch: Any,
+    shared_state: Any,
+) -> None:
+    """Off-chain task with a typo'd tool name releases the nonce, not just drops.
+
+    Off-chain tasks never carry ``priorityMech`` (the field is set by
+    the on-chain contract call reader; the accept path does not
+    populate it), so ``stepping_in`` evaluates to True for every
+    off-chain task and the tool-not-installed drop branch always
+    fires for a typo. Without the release, the nonce stays in the
+    accepted set forever and the sender's next legitimate request
+    hard-503s at the admission gate.
+
+    :param behaviour: pytest fixture, TaskExecutionBehaviour.
+    :param params_stub: pytest fixture, params namespace.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    :param shared_state: pytest fixture, initial shared_state map.
+    """
+    from types import SimpleNamespace as NS
+
+    my_mech = "0xmymech"
+    params_stub.mech_to_config = {
+        my_mech: NS(is_marketplace_mech=True, use_dynamic_pricing=False)
+    }
+    sender = "0xSenderAddress"
+    # Preload the sender's accepted set — as if the accept path had
+    # just enqueued the task.
+    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {42}}
+    behaviour._executing_task = {
+        "requestId": 55,
+        # No priorityMech: off-chain path never carries it.
+        "request_delivery_rate": 100,
+        "contract_address": "0xmech",
+        "sender": sender,
+        "nonce": 42,
+        "is_offchain": True,
+    }
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    msg = SimpleNamespace(
+        files={"task.json": json.dumps({"prompt": "hi", "tool": "unknown_tool"})}
+    )
+    behaviour._handle_get_task(msg, MagicMock())
+
+    # Task slot cleared.
+    assert behaviour._executing_task is None
+    # Nonce discarded from the accepted set — key gone, no leak.
+    assert sender not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
+    # Definitive rejection landed on the poll-response cache so the
+    # client learns the outcome instead of polling forever.
+    rejections = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]
+    assert "55" in rejections
+    assert rejections["55"]["status"] == "rejected"
+
+
+def test_reset_executing_task_defensive_discard_on_offchain_task(
+    behaviour: Any,
+    shared_state: Any,
+) -> None:
+    """``_reset_executing_task`` discards nonce for any lingering off-chain task.
+
+    Belt-and-braces: any drop path a future refactor forgets to
+    thread ``_record_offchain_failure`` / ``_release_outstanding_nonce``
+    through cannot leak the sender's outstanding-nonce entry — the
+    reset itself unconditionally discards.
+
+    :param behaviour: pytest fixture, TaskExecutionBehaviour.
+    :param shared_state: pytest fixture, initial shared_state map.
+    """
+    sender = "0xSenderAddress"
+    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {9}}
+    behaviour._executing_task = {
+        "requestId": 1,
+        "sender": sender,
+        "nonce": 9,
+        "is_offchain": True,
+    }
+    behaviour._reset_executing_task()
+    assert sender not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
+    assert behaviour._executing_task is None
+
+
+def test_reset_executing_task_noop_on_onchain_task(
+    behaviour: Any,
+    shared_state: Any,
+) -> None:
+    """``_reset_executing_task`` never touches the maps on on-chain tasks.
+
+    Guards against a defensive discard that fires for every reset
+    and accidentally drops off-chain state populated by an unrelated
+    request from the same sender.
+
+    :param behaviour: pytest fixture, TaskExecutionBehaviour.
+    :param shared_state: pytest fixture, initial shared_state map.
+    """
+    sender = "0xSenderAddress"
+    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {9}}
+    behaviour._executing_task = {
+        "requestId": 1,
+        # No is_offchain flag → treated as on-chain by _reset defense.
+    }
+    behaviour._reset_executing_task()
+    assert shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] == {sender: {9}}

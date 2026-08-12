@@ -42,6 +42,7 @@ from web3.exceptions import (
 
 from packages.valory.skills.task_execution.utils.eip1271 import (
     EIP1271_MAGIC_VALUE,
+    Eip1271Verdict,
     check_eip1271_signature,
     get_marketplace_domain_separator,
 )
@@ -81,8 +82,8 @@ def _make_ledger_api(fn_name: str, call_return: Any) -> SimpleNamespace:
 # --- check_eip1271_signature -------------------------------------------------
 
 
-def test_check_eip1271_signature_returns_true_on_magic_value() -> None:
-    """Return True when the contract returns the EIP-1271 magic value."""
+def test_check_eip1271_signature_returns_valid_on_magic_value() -> None:
+    """Return VALID when the contract returns the EIP-1271 magic value."""
     ledger_api = _make_ledger_api("isValidSignature", EIP1271_MAGIC_VALUE)
 
     result = check_eip1271_signature(
@@ -92,7 +93,7 @@ def test_check_eip1271_signature_returns_true_on_magic_value() -> None:
         signature=_SIGNATURE,
         gas=_TEST_GAS_CAP,
     )
-    assert result is True
+    assert result is Eip1271Verdict.VALID
 
 
 @pytest.mark.parametrize(
@@ -103,10 +104,10 @@ def test_check_eip1271_signature_returns_true_on_magic_value() -> None:
         pytest.param(b"\xde\xad\xbe\xef", id="unrelated_bytes4"),
     ],
 )
-def test_check_eip1271_signature_returns_false_on_non_magic_value(
+def test_check_eip1271_signature_returns_declined_on_non_magic_value(
     returned: bytes,
 ) -> None:
-    """Return False when the contract returns any bytes4 other than the magic value."""
+    """Return DECLINED when the contract returns any bytes4 other than the magic value."""
     ledger_api = _make_ledger_api("isValidSignature", returned)
 
     result = check_eip1271_signature(
@@ -116,7 +117,7 @@ def test_check_eip1271_signature_returns_false_on_non_magic_value(
         signature=_SIGNATURE,
         gas=_TEST_GAS_CAP,
     )
-    assert result is False
+    assert result is Eip1271Verdict.DECLINED
 
 
 @pytest.mark.parametrize(
@@ -128,6 +129,38 @@ def test_check_eip1271_signature_returns_false_on_non_magic_value(
         pytest.param(
             BadFunctionCallOutput("decode failure"), id="bad_function_call_output"
         ),
+    ],
+)
+def test_check_eip1271_signature_returns_declined_on_credential_side_failure(
+    raised: BaseException,
+) -> None:
+    """A revert or codeless target maps to DECLINED (the contract said no).
+
+    Both branches are semantically "the sender's contract does not
+    accept this signature": ``ContractLogicError`` fires on an explicit
+    ``revert`` (including the out-of-gas revert triggered by the gas
+    cap) and ``BadFunctionCallOutput`` fires on a codeless target
+    (the common case for a Safe pointed at the wrong proxy). The
+    caller routes ``DECLINED`` to 401 so the client learns its
+    signature was not accepted.
+
+    :param raised: the boundary exception injected by the parametrise.
+    """
+    ledger_api = _make_ledger_api("isValidSignature", raised)
+
+    result = check_eip1271_signature(
+        ledger_api=ledger_api,
+        contract_address=_CONTRACT_ADDRESS,
+        message_hash=_MESSAGE_HASH,
+        signature=_SIGNATURE,
+        gas=_TEST_GAS_CAP,
+    )
+    assert result is Eip1271Verdict.DECLINED
+
+
+@pytest.mark.parametrize(
+    "raised",
+    [
         pytest.param(Web3RPCError("rpc error"), id="web3_rpc_error"),
         pytest.param(
             BadResponseFormat("non-conforming json-rpc envelope"),
@@ -143,26 +176,20 @@ def test_check_eip1271_signature_returns_false_on_non_magic_value(
         pytest.param(requests.exceptions.HTTPError("bad status"), id="http_error"),
     ],
 )
-def test_check_eip1271_signature_returns_false_on_boundary_exception(
+def test_check_eip1271_signature_returns_call_failed_on_infra_error(
     raised: BaseException,
 ) -> None:
-    """Any recognised non-timeout failure at the ledger boundary maps to False.
+    """Infra-side failures at the ledger boundary map to CALL_FAILED.
 
-    Web3 raises ``BadFunctionCallOutput`` when ``eth_call`` targets a
-    codeless address (the common case for a Safe pointed at the wrong
-    proxy) and ``Web3RPCError`` on JSON-RPC failures; ``requests``
-    transport failures other than a timeout (connection error, HTTP
-    error) surface as siblings under ``RequestException``.
-    ``BadResponseFormat`` and ``Web3ValidationError`` are the two
-    ``Web3Exception`` siblings raised outside the
-    ``RotatingHTTPProvider.make_request`` boundary (in
-    ``web3.manager.formatted_response``), so a narrower ``except``
+    Distinguishing CALL_FAILED from DECLINED is what stops an RPC
+    outage from surfacing to a legitimate Safe requester as 401
+    "unauthorized" — the caller routes CALL_FAILED to 503 (retry)
+    while DECLINED stays 401 (bad signature). ``BadResponseFormat``
+    and ``Web3ValidationError`` are the two ``Web3Exception`` siblings
+    raised outside the ``RotatingHTTPProvider.make_request`` boundary
+    (in ``web3.manager.formatted_response``), so a narrower ``except``
     tuple would let them propagate out through the accept path and
-    crash the framework's default ``propagate`` handler. All must map
-    to False so the accept path's fallback treats the outcome as a
-    signature rejection instead of stopping the agent. Timeouts are
-    covered separately below because the caller distinguishes them
-    from a plain signature rejection.
+    crash the framework's default ``propagate`` handler.
 
     :param raised: the boundary exception injected by the parametrise.
     """
@@ -175,7 +202,45 @@ def test_check_eip1271_signature_returns_false_on_boundary_exception(
         signature=_SIGNATURE,
         gas=_TEST_GAS_CAP,
     )
-    assert result is False
+    assert result is Eip1271Verdict.CALL_FAILED
+
+
+def test_check_eip1271_signature_logger_records_branch_for_operator_triage() -> None:
+    """The optional ``logger`` records the exception type on CALL_FAILED.
+
+    Pins that a caller supplying its own logger sees the exception type
+    in the log line so operator triage on a 503 has the underlying
+    fault visible. Without this, every infra-side branch produced the
+    same "signature verification failed" line and operators had no
+    way to distinguish which of the six causes fired.
+    """
+    import logging
+
+    ledger_api = _make_ledger_api("isValidSignature", Web3RPCError("rpc down"))
+    logger = logging.getLogger("test_check_eip1271_signature_logger_records_branch")
+    captured: list[str] = []
+
+    class _Handler(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            captured.append(record.getMessage())
+
+    handler = _Handler(level=logging.WARNING)
+    logger.addHandler(handler)
+    logger.setLevel(logging.WARNING)
+    try:
+        result = check_eip1271_signature(
+            ledger_api=ledger_api,
+            contract_address=_CONTRACT_ADDRESS,
+            message_hash=_MESSAGE_HASH,
+            signature=_SIGNATURE,
+            gas=_TEST_GAS_CAP,
+            logger=logger,
+        )
+    finally:
+        logger.removeHandler(handler)
+    assert result is Eip1271Verdict.CALL_FAILED
+    assert any("CALL_FAILED" in msg for msg in captured), captured
+    assert any("Web3RPCError" in msg for msg in captured), captured
 
 
 @pytest.mark.parametrize(

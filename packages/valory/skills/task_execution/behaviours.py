@@ -90,11 +90,15 @@ REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 # buffered request metadata from the behaviour side.
 OFFCHAIN_REQUEST_RESPONSES = "offchain_request_responses"
 IN_MEMORY_REQUESTS = "in_memory_requests"
-# Shared-state key owned by the MechHttpHandler; mirrored here because the
-# off-chain finalize / rejection paths need to drop the sender's outstanding
-# wire-nonce entry so the handler-side admission gate on subsequent accepts
-# computes the correct next-expected slot.
-OUTSTANDING_NONCES_BY_SENDER = "outstanding_nonces_by_sender"
+# Shared-state keys owned by the MechHttpHandler; mirrored here because
+# the off-chain finalize / rejection paths need to move the sender's
+# wire-nonce entry across the accepted→settling boundary so the
+# handler-side admission gate on subsequent accepts computes the
+# correct next-expected slot across the release/settlement gap.
+ACCEPTED_NONCES_BY_SENDER = "accepted_nonces_by_sender"
+SETTLING_NONCES_BY_SENDER = "settling_nonces_by_sender"
+# Kept as an alias for consumers still referring to the pre-split name.
+OUTSTANDING_NONCES_BY_SENDER = ACCEPTED_NONCES_BY_SENDER
 # Wire-body keys copied through into the pending task dict at accept time.
 # Kept as literals here (rather than importing from handlers) so the
 # behaviour does not add a cross-module import for a handful of string
@@ -109,30 +113,61 @@ IPFS_MAX_TASK_BYTES = 1_048_576  # 1MB cap on attacker-controlled task payload
 MAX_PROMPT_BYTES = 100_000  # 100KB cap on the prompt field
 
 
+def _find_sender_key(
+    nonces_by_sender: Dict[str, Any],
+    sender: Any,
+) -> Optional[str]:
+    """Return the checksum-cased key in ``nonces_by_sender`` that matches ``sender``.
+
+    ``sender`` on ``executing_task`` is the raw wire value; the
+    admission gate keys on the checksum-cased address, so a
+    ``dict[sender]`` lookup would miss a mixed-case wire value.
+    Compare case-insensitively via the lowercase 0x-address form.
+
+    :param nonces_by_sender: the per-sender nonce map.
+    :param sender: the raw wire sender value.
+    :return: the matching key from ``nonces_by_sender``, or None.
+    """
+    if not nonces_by_sender or sender is None:
+        return None
+    sender_str = str(sender).lower()
+    for key in list(nonces_by_sender.keys()):
+        if key.lower() == sender_str:
+            return key
+    return None
+
+
 def _release_outstanding_nonce(
     shared_state: Dict[str, Any],
     executing_task: Optional[Dict[str, Any]],
 ) -> None:
-    """Drop the sender+nonce entry recorded at accept time, if any.
+    """Move the sender+nonce entry from the accepted set to the settling set.
 
-    The handler's admission gate on the next accept from the same
-    sender computes the next-expected slot as
-    ``on_chain_mapNonces + len(outstanding_nonces_by_sender[sender])``.
-    Leaving a settled or rejected entry in the outstanding set would
-    make the gate demand a nonce one slot higher than settlement
-    actually expects, dragging the sender's next legitimate request
-    into a permanent 401 loop.
+    Called when a task moves from ``pending_tasks`` to ``done_tasks``
+    (``_finalize_done_task``). The wire nonce transitions from
+    "accepted, not-yet-done" to "done, not-yet-settled". The
+    handler-side admission gate computes the next-expected slot as
+    ``on_chain_mapNonces + len(accepted) + len(settling)``; leaving
+    the entry in ``accepted`` after the release would double-count
+    it when the on-chain counter also reflected the same nonce.
+    Removing it from both without adding to ``settling`` would
+    UNDER-count during the release/settlement gap (typically several
+    ABCI rounds) — the same window where the pre-split code let a
+    duplicate wire nonce re-enter under a colliding request_id.
 
-    Idempotent on missing keys: the on-chain path never populates the
-    outstanding set, and a rollback that ran before this call already
-    cleared its own entry.
+    The settling entry is drained later by the pruning pass in
+    ``_bind_wire_nonce_to_chain`` when the on-chain
+    ``mapNonces[sender]`` advances past the nonce.
+
+    Idempotent on missing keys: the on-chain path never populates
+    either set, and a rollback that ran before this call already
+    cleared its own entry from ``accepted``.
 
     :param shared_state: the AEA shared-state dict.
-    :param executing_task: the just-settled task dict (or None). Read
+    :param executing_task: the just-done task dict (or None). Read
         the sender + nonce pair off it because the request-id string
-        is not enough — the outstanding set is keyed by sender
-        checksum, and the wire nonce (int) is the entry inside the
-        per-sender set.
+        is not enough — the maps are keyed by sender checksum, and
+        the wire nonce (int) is the entry inside the per-sender set.
     """
     if not executing_task:
         return
@@ -140,21 +175,67 @@ def _release_outstanding_nonce(
     nonce = executing_task.get(_NONCE_KEY)
     if sender is None or nonce is None:
         return
-    outstanding_all = shared_state.get(OUTSTANDING_NONCES_BY_SENDER)
-    if not outstanding_all:
+    try:
+        wire_nonce = int(nonce)
+    except (TypeError, ValueError):
         return
-    # ``sender`` on ``executing_task`` is the raw wire value; the
-    # admission gate keys on the checksum-cased address. Compare
-    # case-insensitively via the lowercase 0x-address form since a
-    # dict-key lookup would otherwise miss a mixed-case wire value.
-    sender_str = str(sender).lower()
-    for key in list(outstanding_all.keys()):
-        if key.lower() == sender_str:
-            entries = outstanding_all[key]
-            entries.discard(int(nonce))
-            if not entries:
-                outstanding_all.pop(key, None)
-            break
+    accepted_all = shared_state.get(ACCEPTED_NONCES_BY_SENDER)
+    settling_all = shared_state.setdefault(SETTLING_NONCES_BY_SENDER, {})
+    accepted_key = _find_sender_key(accepted_all or {}, sender)
+    if accepted_key is None:
+        # No accepted entry to move (already rolled back / on-chain
+        # path / crash-recovery). Still add to settling under the
+        # lowercase key so a subsequent settlement prune is
+        # deterministic; the pruner discards anything < on_chain.
+        settling_key = _find_sender_key(settling_all, sender) or str(sender).lower()
+    else:
+        entries = accepted_all[accepted_key]  # type: ignore[index]
+        entries.discard(wire_nonce)
+        if not entries:
+            accepted_all.pop(accepted_key, None)  # type: ignore[union-attr]
+        settling_key = accepted_key
+    settling_all.setdefault(settling_key, set()).add(wire_nonce)
+
+
+def _discard_outstanding_nonce(
+    shared_state: Dict[str, Any],
+    executing_task: Optional[Dict[str, Any]],
+) -> None:
+    """Drop the sender+nonce from BOTH the accepted and settling sets.
+
+    Used on the rejection / failure paths (``_record_offchain_failure``,
+    and the defensive release inside ``_reset_executing_task`` for
+    off-chain drops that skip both ``_finalize_done_task`` and
+    ``_record_offchain_failure``). Different from
+    :func:`_release_outstanding_nonce`, which moves the entry from
+    accepted to settling so settlement can eventually drain it — a
+    rejected task will never reach settlement, so both sets need to
+    be cleared to keep the admission-gate slot count truthful.
+
+    :param shared_state: the AEA shared-state dict.
+    :param executing_task: the failed task dict (or None).
+    """
+    if not executing_task:
+        return
+    sender = executing_task.get(_SENDER_KEY)
+    nonce = executing_task.get(_NONCE_KEY)
+    if sender is None or nonce is None:
+        return
+    try:
+        wire_nonce = int(nonce)
+    except (TypeError, ValueError):
+        return
+    for map_key in (ACCEPTED_NONCES_BY_SENDER, SETTLING_NONCES_BY_SENDER):
+        target = shared_state.get(map_key)
+        if not target:
+            continue
+        sender_key = _find_sender_key(target, sender)
+        if sender_key is None:
+            continue
+        entries = target[sender_key]
+        entries.discard(wire_nonce)
+        if not entries:
+            target.pop(sender_key, None)
 
 
 def _iso_z(dt: datetime) -> str:
@@ -1348,6 +1429,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         my_mech = self._get_designated_marketplace_mech_address().lower()
         exec_prio = str(executing_task.get("priorityMech", "")).lower()
+        # Off-chain tasks never carry ``priorityMech`` (the field is set
+        # by the on-chain contract call reader; the accept path does not
+        # populate it), so ``stepping_in`` evaluates to True for every
+        # off-chain task and the tool-not-installed drop below always
+        # fires for a typo'd tool name. Route those drops through
+        # ``_record_offchain_failure`` so the client sees a definitive
+        # rejection over the polling endpoint AND the sender's
+        # outstanding-nonce entry is discarded — leaving it behind
+        # would inflate the admission gate's slot count forever, hard-
+        # 401'ing every subsequent request from the same sender.
         stepping_in = exec_prio != my_mech
         tool_name = task_data["tool"]
         if stepping_in and tool_name not in self._tools_to_package_hash:
@@ -1360,14 +1451,19 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 tool=tool_name,
                 reason=reason,
             )
+            if bool(executing_task.get("is_offchain", False)):
+                # Definitive rejection + nonce release + slot reset in
+                # one call. Reads sender / nonce off ``_executing_task``
+                # before the reset clears it.
+                self._record_offchain_failure(str(rid), reason)
+                self.tool_preparation_start_time = 0.0
+                return
             # Prometheus has no way to remove/clear metrics, so we set to default 0
             self.mech_metrics.set_gauge(
                 self.mech_metrics.mech_tasks_inflight,
                 0,
             )
-            self._executing_task = None
-            self._request_handling_deadline = None
-            self._async_result = None
+            self._reset_executing_task()
             # reset the time counter used to measure time taken to prepare the task
             self.tool_preparation_start_time = 0.0
             return
@@ -1991,7 +2087,26 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         }
 
     def _reset_executing_task(self) -> None:
-        """Reset the in-flight task slot so the next task can be picked up."""
+        """Reset the in-flight task slot so the next task can be picked up.
+
+        Belt-and-braces: any off-chain task still bound to the slot at
+        reset time gets its nonce dropped from both the accepted and
+        settling sets, so any drop path a future refactor forgets to
+        thread ``_record_offchain_failure`` / ``_release_outstanding_nonce``
+        through cannot leak the sender's outstanding-nonce entry.
+        No-op on on-chain tasks (they never populate either set) and
+        no-op when the slot is already empty. The primary release
+        paths (``_finalize_done_task`` → ``_release_outstanding_nonce``
+        and ``_record_offchain_failure`` → ``_discard_outstanding_nonce``)
+        run BEFORE this method, so this discard is guaranteed to be a
+        no-op on the happy paths.
+        """
+        # Discard before clearing the slot so ``_executing_task`` still
+        # carries the sender + nonce pair the discard reads off.
+        if self._executing_task is not None and bool(
+            self._executing_task.get("is_offchain", False)
+        ):
+            _discard_outstanding_nonce(self.context.shared_state, self._executing_task)
         # Prometheus has no clear; set the in-flight gauge back to 0.
         self.mech_metrics.set_gauge(self.mech_metrics.mech_tasks_inflight, 0)
         self._executing_task = None
@@ -2024,11 +2139,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             req_id, reason, None, preimage_buffer.STATUS_REJECTED
         )
         self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
-        # Free the sender's outstanding-nonce slot even on the rejection
-        # path so a subsequent legitimate accept from the same sender is
-        # not blocked by a stale entry. Read the sender + nonce off the
-        # still-set ``_executing_task`` slot before it is cleared below.
-        _release_outstanding_nonce(self.context.shared_state, self._executing_task)
+        # Drop from both accepted and settling on the rejection path.
+        # A rejected task will never settle, so leaving anything in
+        # ``settling`` would keep the admission-gate slot count
+        # inflated until the pruner eventually removes it (or, if the
+        # sender never sends again, forever).
+        _discard_outstanding_nonce(self.context.shared_state, self._executing_task)
         self._reset_executing_task()
 
     # --- off-chain preimage buffer (kv_store) -----------------------------

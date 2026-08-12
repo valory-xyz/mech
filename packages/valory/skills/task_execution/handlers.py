@@ -65,6 +65,7 @@ from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.eip1271 import (
+    Eip1271Verdict,
     check_eip1271_signature,
     get_marketplace_domain_separator,
     get_marketplace_request_id_view,
@@ -93,15 +94,33 @@ PAYMENT_INFO = "payment_info"
 ROUTES_INFO = "routes_info"
 OFFCHAIN_REQUEST_RESPONSES = "offchain_request_responses"
 IN_MEMORY_REQUESTS = "in_memory_requests"
-# Live outstanding accepted-but-unsettled wire nonces per sender. Keyed
-# by the sender's checksum address; values are the set of wire nonces
-# currently held in ``pending_tasks`` / ``in_memory_requests`` awaiting
-# settlement. Read by the nonce-bind admission gate to require the next
-# wire nonce equal exactly the on-chain ``mapNonces`` value plus the
-# outstanding count (no gaps, no duplicates). Written from the accept
-# path (on enqueue) and cleared on rollback, done, and rejection —
-# same lifecycle as ``in_memory_requests`` so the two stay coherent.
-OUTSTANDING_NONCES_BY_SENDER = "outstanding_nonces_by_sender"
+# Accepted-but-not-yet-done wire nonces per sender. Populated on
+# ``_enqueue_offchain_request`` and removed on rollback / done / rejection.
+# ``done`` here means the task completed on the mech side (
+# ``_finalize_done_task``) — at that moment the nonce transitions from
+# the accepted set to the settling set, where it stays until the batch
+# on-chain settlement advances ``MechMarketplace.mapNonces[sender]``
+# past the nonce and the pruning pass in ``_bind_wire_nonce_to_chain``
+# removes it. See ``SETTLING_NONCES_BY_SENDER`` for the settlement-gap
+# half of the split.
+ACCEPTED_NONCES_BY_SENDER = "accepted_nonces_by_sender"
+# Wire nonces that have moved to done_tasks but whose batch settlement
+# has not yet landed on chain. Populated when
+# ``_release_outstanding_nonce`` fires on ``_finalize_done_task`` and
+# drained when ``_bind_wire_nonce_to_chain`` reads a
+# ``mapNonces[sender]`` value at or past the nonce (pruning below).
+# Required so the admission gate's next-expected-slot formula stays
+# monotonic across the release/settlement gap: without this half, the
+# formula would double-count the nonce (once in ``mapNonces`` which
+# hasn't advanced yet, once nowhere because ``accepted`` was already
+# cleared) and admit a duplicate under a colliding request_id or 503
+# the sender's next honest sequential slot until settlement lands.
+SETTLING_NONCES_BY_SENDER = "settling_nonces_by_sender"
+# Retained for backward compat with tests / consumers still keyed on
+# the pre-split name. Kept identical to ``ACCEPTED_NONCES_BY_SENDER``
+# so a shared-state seed against the old key still populates the
+# accepted-half of the admission gate.
+OUTSTANDING_NONCES_BY_SENDER = ACCEPTED_NONCES_BY_SENDER
 JSON_CONTENT_HEADER = "Content-Type: application/json\n"
 ENCODING_UTF8 = "utf-8"
 
@@ -156,16 +175,44 @@ MAX_REQUEST_ID = 2**256 - 1
 NONCE_BELOW_EXPECTED = "wire nonce below sender's next expected slot"
 NONCE_ABOVE_EXPECTED = "wire nonce above sender's next expected slot"
 NONCE_READ_FAILED = "on-chain mapNonces read failed"
+# Non-transient companion of ``NONCE_READ_FAILED`` used when the
+# ``mapNonces`` read fails deterministically (ABI drift, wrong
+# ``mech_marketplace_address``, unwrapped ledger return). Same 503
+# status code so the client backs off, but the reason string names the
+# fault as unrecoverable so an operator paging on the log line can
+# distinguish an infra blip from a config error.
+NONCE_READ_UNRECOVERABLE = "on-chain mapNonces read unrecoverable"
+# Distinct reason surfaced when checksum conversion of the wire
+# ``sender`` fails — a config-side problem (missing / malformed RPC
+# settings) rather than an RPC round-trip failure. Kept separate from
+# ``NONCE_READ_FAILED`` so operators can attribute the outcome to the
+# right subsystem.
+SENDER_RESOLUTION_FAILED = "sender address resolution failed"
+# Reason surfaced when the sender exceeds the per-sender in-flight cap
+# (``MAX_ACCEPTED_PER_SENDER``). ``is_infra=True`` at the caller so
+# mech-client's 503 handling backs off rather than treating the
+# outcome as a credential rejection — nothing about the client's
+# signature is wrong, they simply have too much unsettled work.
+SENDER_INFLIGHT_LIMIT = "sender in-flight request limit reached"
+# Reason surfaced when the EIP-1271 ``isValidSignature`` view call
+# fails with an infra-side error distinct from a genuine credential
+# rejection (``Web3RPCError``, ``BadResponseFormat``,
+# ``Web3ValidationError``, ``RequestException``, ``ValueError``, or
+# the wall-clock deadline). ``is_infra=True`` at the caller so the
+# client sees 503 with a "try again later" verdict rather than 401
+# "unauthorized" during an infra failure. A revert, an out-of-gas,
+# or a codeless target still returns the ``DECLINED`` verdict below
+# and stays 401.
+EIP1271_CALL_FAILED = "eip1271 isValidSignature call failed"
 
 # Timeout applied to the sender's ``isValidSignature`` view via the
 # provider-level HTTP timeout on the dedicated ``EthereumApi`` used for
 # EIP-1271 verification. Kept short so a slow or hostile Safe
 # ``isValidSignature`` cannot pin the AEA main thread past the
 # ``http_server`` reply budget (default ``RESPONSE_TIMEOUT=5s``). The
-# balance-check path continues to use a separately-cached
-# ``EthereumApi`` with the ledger default so a longer-running balance
-# read is not truncated at three seconds.
-_EIP1271_CALL_TIMEOUT_SECONDS = 3.0
+# balance-check path uses ``_BALANCE_RPC_DEADLINE_SECONDS`` under the
+# same executor to bound its own three unbounded balance-read RPCs.
+_EIP1271_CALL_TIMEOUT_SECONDS = 2.0
 
 # ``gas`` cap applied to the ``isValidSignature`` ``eth_call``. Bounds
 # the amount of work a sender contract can force the RPC node to do
@@ -181,10 +228,10 @@ _EIP1271_CALL_GAS_CAP = 500_000
 # unresponsive Safe apart from an actively-declined signature.
 EIP1271_CALL_TIMEOUT = "eip1271 isValidSignature call timed out"
 
-# Wall-clock deadline enforced on the two on-path RPCs the sig-verify
-# code makes (EIP-1271 ``isValidSignature`` and marketplace
-# ``mapNonces``). The per-HTTP-request timeout on ``EthereumApi`` is
-# not a wall-clock bound: both ``web3.HTTPProvider``'s
+# Wall-clock deadline enforced on the on-path RPCs the accept path
+# makes (EIP-1271 ``isValidSignature``, marketplace ``mapNonces``, and
+# the three balance-check reads). The per-HTTP-request timeout on
+# ``EthereumApi`` is not a wall-clock bound: both ``web3.HTTPProvider``'s
 # ``exception_retry_configuration`` (five retries with backoff on
 # ``requests.Timeout``) and open-aea's ``RotatingHTTPProvider``
 # (``min(MAX_RETRIES=6, url_count * 2)`` outer retries with
@@ -197,10 +244,55 @@ EIP1271_CALL_TIMEOUT = "eip1271 isValidSignature call timed out"
 # underlying HTTP call keeps running in the worker thread but the
 # handler-thread returns and the outcome maps to the same infra
 # verdicts (``EIP1271_CALL_TIMEOUT`` / ``NONCE_READ_FAILED``) as any
-# other transport failure. Four seconds leaves a one-second margin
-# under the five-second http_server reply budget so the client sees a
-# verdict before the server-side timeout fires.
-_RPC_WALL_CLOCK_DEADLINE_SECONDS = 4.0
+# other transport failure. Two seconds fits inside the accept-path
+# per-request budget: worst-case 2 (sig) + 2 (mapNonces) + 3 * 2
+# (balance path) = 10s of RPC work under complete infra collapse.
+# The healthy case (all RPCs <500ms) still returns inside the 5s
+# ``http_server`` reply budget with room to spare. The pathological
+# all-timeout case gives the client a 408 from the server-side
+# ``http_server`` timeout — accepted trade-off since no accept
+# verdict is coming from the mech either under total RPC collapse.
+_RPC_WALL_CLOCK_DEADLINE_SECONDS = 2.0
+
+# Wall-clock deadline for each of the three balance-check RPCs
+# (``paymentType`` on the mech, ``getBalanceTrackerForMechType`` on the
+# marketplace, ``getRequesterBalance`` on the balance tracker). Each
+# call was previously unbounded at the ledger-default 30 s per HTTP
+# request times the ``RotatingHTTPProvider`` retry loop. Two seconds
+# per call caps the healthy-case aggregate under a second and the
+# worst-case aggregate at six seconds, matching the same trade-off
+# ``_RPC_WALL_CLOCK_DEADLINE_SECONDS`` picks for the sig-verify calls.
+_BALANCE_RPC_DEADLINE_SECONDS = 2.0
+
+# Per-sender cap on ``accepted + settling`` in-flight nonces. Guards
+# the previously-unbounded growth of ``accepted_nonces_by_sender`` and
+# ``pending_tasks`` after the deletion of the arbitrary
+# ``MAX_OUTSTANDING_NONCE_WINDOW`` protocol constraint. 64 is a
+# generous burst budget for a well-behaved trader (mech-client rarely
+# fires more than a handful of parallel requests) while keeping the
+# handler's post-auth pre-payment memory footprint bounded on the DoS
+# path. Operators tuning this need to keep it above the peak
+# legitimate burst and well below any absolute per-agent memory bound.
+MAX_ACCEPTED_PER_SENDER = 64
+
+# Bound on the RPC executor's pending-work queue. ``submit()`` on an
+# unbounded queue never blocks, so a wave of hung RPCs draining the
+# worker pool (all workers stuck on slow / hostile calls) still
+# accepts new submissions; ``future.result(deadline)`` then fires
+# WITHOUT the callable ever having run and the caller reports a
+# retry-storm-inducing ``NONCE_READ_FAILED`` on every request. Sizing
+# this at 4 * ``_RPC_EXECUTOR_MAX_WORKERS`` gives one queue slot per
+# worker plus three deep so a short burst can still land while the
+# saturation branch fires early on a real overload.
+_RPC_EXECUTOR_MAX_QUEUE = 16
+
+# Reason surfaced when the RPC executor's queue is saturated at
+# submit-time or the callable has not started running by the deadline.
+# ``is_infra=True`` at the caller — 503 with a distinct log line so
+# operators can distinguish "we couldn't even try" from "the RPC
+# returned late" (which flattens to ``NONCE_READ_FAILED`` or
+# ``EIP1271_CALL_TIMEOUT`` as before).
+RPC_QUEUE_SATURATED = "on-path RPC executor saturated"
 
 # ``max_workers`` for the ``ThreadPoolExecutor`` cached on
 # :class:`MechHttpHandler` and used to enforce
@@ -230,6 +322,21 @@ SIGNATURE_RE = re.compile(
     + str(SIGNATURE_BYTES_MAX)
     + r"}\Z"
 )
+
+# ``sender`` on the wire is the requester address (EOA or Safe) — a
+# 0x-prefixed 20-byte hex string, no checksum requirement (the address
+# preparation step in ``_verify_offchain_request_signature`` calls
+# ``to_checksum_address`` on it). A malformed value would otherwise
+# raise inside the address-preparation block whose ``except``
+# classifies the outcome as infra (``is_infra=True`` → 503) because
+# the same block also converts the deployment-scoped
+# ``mech_marketplace_address`` and ``_marketplace_mech_address``,
+# whose failures ARE genuine infra. Guarding at ingress keeps that
+# classification honest: a client-supplied bad address 400s here
+# alongside the other body-shape violations rather than being
+# reported to the client as "server broken, please retry" — which
+# a well-behaved auto-retry client would loop on forever.
+ADDRESS_RE = re.compile(r"\A0x[0-9a-fA-F]{40}\Z")
 
 # Boot-time self-check inputs for the marketplace ``getRequestId`` view
 # vs the local ``compute_request_id`` reimplementation. Any well-formed
@@ -646,11 +753,26 @@ class ContractHandler(BaseHandler):
         )
 
     def _update_pending_list(self, body: Dict[str, List]) -> None:
+        """Rewrite ``pending_tasks`` to only ids the on-chain status check returned.
+
+        Off-chain tasks (``is_offchain=True``) are NOT present in the
+        on-chain status body — their ``request_id`` is not visible on
+        chain until settlement lands. Filtering by
+        ``body[REQUEST_IDS]`` alone would silently drop every
+        outstanding off-chain task on every polling cycle and leak
+        their outstanding-nonce entries. Retain off-chain tasks by
+        construction so this method only prunes on-chain entries the
+        status check did not return.
+
+        :param body: the on-chain status response body.
+        """
         before = len(self.pending_tasks)
+        on_chain_ids = body[BodyKey.REQUEST_IDS.value]
         self.context.shared_state[PENDING_TASKS] = [
             req
             for req in self.pending_tasks
-            if req[RequestKey.REQUEST_ID_CAMEL.value] in body[BodyKey.REQUEST_IDS.value]
+            if req.get(RequestKey.IS_OFFCHAIN.value)
+            or req[RequestKey.REQUEST_ID_CAMEL.value] in on_chain_ids
         ]
         after = len(self.pending_tasks)
         self.context.logger.info(
@@ -994,18 +1116,48 @@ class MechHttpHandler(AbstractResponseHandler):
         return self.context.shared_state[IN_MEMORY_REQUESTS]
 
     @property
-    def outstanding_nonces_by_sender(self) -> Dict[str, Set[int]]:
-        """Get the live outstanding wire-nonce set per sender checksum.
+    def accepted_nonces_by_sender(self) -> Dict[str, Set[int]]:
+        """Get the accepted-but-not-yet-done wire nonce set per sender.
 
-        Values are ``set`` instances so admission-gate reads and mutation
-        on accept / rollback / done can share a single container without
-        rebuilding on every mutation.
+        Populated on ``_enqueue_offchain_request`` and drained on
+        rollback / done / rejection. Values are ``set`` instances so
+        admission-gate reads and mutation share a single container
+        without rebuilding on every mutation.
 
         :return: a dict keyed by sender checksum address. A missing key
-            means "no in-flight requests from this sender" and the
-            admission gate uses ``len()==0`` in that case.
+            means "no accepted-but-not-yet-done requests from this
+            sender" and the admission gate uses ``len()==0`` in that
+            case.
         """
-        return self.context.shared_state[OUTSTANDING_NONCES_BY_SENDER]
+        return self.context.shared_state[ACCEPTED_NONCES_BY_SENDER]
+
+    @property
+    def settling_nonces_by_sender(self) -> Dict[str, Set[int]]:
+        """Get the done-but-not-yet-settled wire nonce set per sender.
+
+        Populated when a task moves from ``pending_tasks`` to
+        ``done_tasks`` via ``_release_outstanding_nonce`` on the
+        behaviour side, drained by the pruning pass in
+        ``_bind_wire_nonce_to_chain`` when the on-chain
+        ``mapNonces[sender]`` advances past the nonce.
+
+        :return: a dict keyed by sender checksum address. A missing key
+            means "no done-but-unsettled requests from this sender".
+        """
+        return self.context.shared_state[SETTLING_NONCES_BY_SENDER]
+
+    @property
+    def outstanding_nonces_by_sender(self) -> Dict[str, Set[int]]:
+        """Retained alias for the pre-split ``accepted`` half.
+
+        Older tests / call sites written against the pre-split state
+        keep working: this property points at the same underlying
+        dict as ``accepted_nonces_by_sender``.
+
+        :return: the accepted-nonce map (same dict object as
+            :attr:`accepted_nonces_by_sender`).
+        """
+        return self.context.shared_state[ACCEPTED_NONCES_BY_SENDER]
 
     @property
     def params(self) -> Params:
@@ -1021,12 +1173,26 @@ class MechHttpHandler(AbstractResponseHandler):
         self.context.shared_state[IPFS_TASKS] = []
         self.context.shared_state[OFFCHAIN_REQUEST_RESPONSES] = {}
         self.context.shared_state[IN_MEMORY_REQUESTS] = {}
-        # Live outstanding accepted-but-unsettled wire nonces per sender.
-        # Populated on accept (``_enqueue_offchain_request``) and cleared
-        # on rollback / done / rejection — same lifecycle as
-        # ``in_memory_requests`` so the two containers stay coherent for
-        # the admission gate in ``_bind_wire_nonce_to_chain``.
-        self.context.shared_state[OUTSTANDING_NONCES_BY_SENDER] = {}
+        # Split live in-flight wire nonces per sender into two sets so
+        # the admission gate's next-expected-slot formula stays
+        # monotonic across the release/settlement gap. See
+        # ``ACCEPTED_NONCES_BY_SENDER`` / ``SETTLING_NONCES_BY_SENDER``
+        # module docstrings for the semantics; both are keyed by the
+        # sender's checksum address and hold ``set[int]`` values.
+        #
+        # Invariant: this state is per-agent-process. The off-chain
+        # accept path assumes single-agent ingress at
+        # ``/send_signed_requests``: multi-agent deployments MUST
+        # terminate that route on one agent (usually the leader) or
+        # the admission gate breaks (each agent sees an empty
+        # accepted+settling set for a sender the other has already
+        # served, admitting a duplicate under a colliding request_id
+        # settlement will revert). A boot-time WARNING fires below if
+        # ``use_offchain=True`` and ``num_agents>1``. Moving this
+        # state to a shared kv_store / consensus round is a bigger
+        # follow-up; the invariant + warning is the light insurance.
+        self.context.shared_state[ACCEPTED_NONCES_BY_SENDER] = {}
+        self.context.shared_state[SETTLING_NONCES_BY_SENDER] = {}
         self.json_content_header = JSON_CONTENT_HEADER
         # Deployment-scoped constants used by the offchain request-id
         # derivation: the marketplace EIP-712 ``domainSeparator`` and the
@@ -1072,6 +1238,23 @@ class MechHttpHandler(AbstractResponseHandler):
         self._rpc_executor: Optional[concurrent.futures.ThreadPoolExecutor] = None
         if self.params.use_offchain:
             self._initialise_offchain_verification_constants()
+            # Per-agent ingress invariant. The admission gate above
+            # keys on process-local state; multi-agent deployments
+            # must terminate /send_signed_requests at a single agent
+            # or the gate misbehaves. Warn loudly on boot so the
+            # invariant is alertable rather than invisible when the
+            # deployment fans out ingress.
+            num_agents = getattr(self.params, "num_agents", 1) or 1
+            if num_agents > 1:
+                self.context.logger.warning(
+                    "Offchain accept path is enabled with num_agents=%d; "
+                    "deployment MUST ensure /send_signed_requests ingress "
+                    "terminates at a single agent (the outstanding-nonce "
+                    "admission gate is per-agent-process state; fanning "
+                    "out ingress lets one agent admit a wire nonce that "
+                    "another has already served).",
+                    num_agents,
+                )
         self.start_prometheus_server()
         super().setup()
 
@@ -1079,11 +1262,10 @@ class MechHttpHandler(AbstractResponseHandler):
         """Return the lazily-constructed on-path RPC executor.
 
         Kept lazy so a deployment with the off-chain path disabled never
-        spins the pool up. The pool is used exclusively to bound the
-        wall-clock time of the two on-path RPCs (EIP-1271
-        ``isValidSignature`` and marketplace ``mapNonces``); balance
-        checks stay on the AEA main thread because they run through
-        their own longer-timeout ``EthereumApi``.
+        spins the pool up. The pool is used to bound the wall-clock
+        time of every on-path RPC (EIP-1271 ``isValidSignature``,
+        marketplace ``mapNonces``, and the three balance-check reads
+        under ``_check_offchain_requester_balance``).
 
         :return: the cached ``ThreadPoolExecutor`` instance.
         """
@@ -1094,10 +1276,96 @@ class MechHttpHandler(AbstractResponseHandler):
             )
         return self._rpc_executor
 
+    def teardown(self) -> None:
+        """Shut down the RPC executor without waiting for in-flight callables.
+
+        ``ThreadPoolExecutor`` workers are non-daemon: a bare process
+        exit blocks on ``executor._threads.join()`` for any worker
+        still running an abandoned HTTP read, adding seconds to the
+        SIGTERM → SIGKILL window. ``cancel_futures=True`` (Python 3.9+)
+        drops queued callables that never started, and ``wait=False``
+        returns immediately so shutdown does not have to wait on a
+        hung provider read.
+        """
+        if self._rpc_executor is not None:
+            try:
+                self._rpc_executor.shutdown(wait=False, cancel_futures=True)
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Best-effort; teardown must not raise into the AEA
+                # shutdown path.
+                self.context.logger.exception(
+                    "Error shutting down RPC executor during teardown."
+                )
+        super().teardown()
+
+    def _make_late_outcome_callback(
+        self, started_at: float, label: str
+    ) -> Callable[["concurrent.futures.Future[Any]"], None]:
+        """Bind ``started_at`` and ``label`` for use in ``add_done_callback``.
+
+        Extracted so the caller can annotate the callback with a stable
+        one-arg signature (mypy cannot infer the lambda's parameter
+        types at the ``add_done_callback`` site).
+
+        :param started_at: monotonic timestamp of the ``submit()`` call.
+        :param label: short human-readable RPC name for the log line.
+        :return: a one-arg callable suitable for
+            :meth:`concurrent.futures.Future.add_done_callback`.
+        """
+
+        def _cb(fut: "concurrent.futures.Future[Any]") -> None:
+            self._log_late_rpc_outcome(fut, started_at, label)
+
+        return _cb
+
+    def _log_late_rpc_outcome(
+        self,
+        future: "concurrent.futures.Future[Any]",
+        started_at: float,
+        label: str,
+    ) -> None:
+        """Log the late completion of an RPC whose deadline already fired.
+
+        ``concurrent.futures.Future`` (unlike ``asyncio.Future``) never
+        logs an unretrieved exception on its own, so an eth_call that
+        eventually fails after the caller has moved on loses both the
+        error and the traceback silently — exactly the path where the
+        root cause matters most for operator triage.
+
+        :param future: the completed future for the abandoned call.
+        :param started_at: monotonic timestamp of the ``submit()`` call.
+        :param label: short human-readable RPC name for the log line.
+        :return: None.
+        """
+        elapsed = time.monotonic() - started_at
+        try:
+            exc = future.exception()
+        except (
+            concurrent.futures.CancelledError,
+            concurrent.futures.InvalidStateError,
+        ):
+            return
+        if exc is None:
+            self.context.logger.debug(
+                "on-path RPC %s completed after deadline (elapsed=%.3fs); "
+                "outcome was discarded",
+                label,
+                elapsed,
+            )
+            return
+        self.context.logger.warning(
+            "on-path RPC %s completed after deadline (elapsed=%.3fs) with "
+            "an error the caller had already moved past: %r",
+            label,
+            elapsed,
+            exc,
+        )
+
     def _run_with_wall_clock_deadline(
         self,
         fn: Callable[[], Any],
         deadline_seconds: float,
+        label: str = "unnamed",
     ) -> Any:
         """Run ``fn`` on the RPC executor and enforce a wall-clock deadline.
 
@@ -1112,21 +1380,93 @@ class MechHttpHandler(AbstractResponseHandler):
         the broad ``except`` around the ``mapNonces`` read) keeps
         working unchanged.
 
+        Queue saturation is a distinct outcome from "the RPC took too
+        long": a wave of hung callables donates all worker slots to
+        never-returning HTTP reads, ``submit()`` still lands on the
+        unbounded queue, and ``future.result(timeout=...)`` fires
+        WITHOUT the callable ever having started. Detect this with
+        ``future.running()`` after the timeout — if the callable hasn't
+        started, raise :class:`RuntimeError` labelled ``RPC_QUEUE_SATURATED``
+        so the caller can route to a queue-saturation verdict instead
+        of the generic "read failed" one that a real RPC timeout uses.
+        Also short-circuit ``submit()`` on queue depth so a genuine
+        overload rejects fast rather than piling up.
+
         :param fn: zero-arg callable that performs the RPC.
         :param deadline_seconds: wall-clock upper bound in seconds.
+        :param label: short human-readable RPC name used on late-
+            outcome log lines and saturation errors.
         :return: whatever ``fn`` returns.
         :raises concurrent.futures.TimeoutError: when the deadline
             elapses before ``fn`` returns.
+        :raises RuntimeError: on executor shutdown or on saturated
+            queue at submit time.
         """
-        future = self._get_rpc_executor().submit(fn)
+        executor = self._get_rpc_executor()
+        # Reject fast on queue overload. ``_work_queue`` is CPython
+        # private API but its ``qsize()`` is stable and behaviorally
+        # equivalent to ``deque.__len__`` (see cpython:Lib/concurrent/
+        # futures/thread.py — the queue is always ``queue.SimpleQueue``
+        # or ``queue.Queue`` and both expose ``qsize()``). We keep the
+        # bound conservative (``_RPC_EXECUTOR_MAX_QUEUE``) so a real
+        # burst still lands.
+        try:
+            queue_depth = executor._work_queue.qsize()  # noqa: SLF001
+        except Exception:  # pylint: disable=broad-exception-caught
+            queue_depth = 0
+        if queue_depth >= _RPC_EXECUTOR_MAX_QUEUE:
+            self.context.logger.warning(
+                "RPC executor queue saturated at %d for %s; failing fast "
+                "instead of piling on more work.",
+                queue_depth,
+                label,
+            )
+            raise RuntimeError(RPC_QUEUE_SATURATED)
+        started_at = time.monotonic()
+        try:
+            future = executor.submit(fn)
+        except RuntimeError:
+            # ``submit()`` raises on ``executor._shutdown`` or when
+            # ``_adjust_thread_count`` fails. Both are infra signals;
+            # let the caller surface the same 503 verdict.
+            self.context.logger.exception("RPC executor submit failed for %s.", label)
+            raise
         try:
             return future.result(timeout=deadline_seconds)
         except concurrent.futures.TimeoutError:
-            # Best-effort cancel: the underlying HTTP call can't be
-            # interrupted mid-flight, but the future is marked so the
-            # thread pool won't reuse the slot for the same callable if
-            # the call finally returns.
-            future.cancel()
+            # ``TimeoutError`` is aliased to
+            # ``concurrent.futures.TimeoutError`` in Python 3.11+, so
+            # this branch fires for BOTH the wall-clock deadline (the
+            # callable never returned) AND a callable that raised its
+            # own ``TimeoutError`` (which ``future.result`` re-raises).
+            # Disambiguate on ``future.done()``: done + timeout means
+            # the callable finished and raised, and we should let the
+            # exception propagate as a normal callable-side result.
+            if future.done():
+                raise
+            if not future.running():
+                # Callable never got a worker: the pool is drained by
+                # earlier hung calls. Distinguish this from a slow-RPC
+                # timeout so operators see the real cause.
+                self.context.logger.warning(
+                    "RPC callable %s never started before deadline "
+                    "(pool saturated with in-flight abandoned callables); "
+                    "reporting queue saturation.",
+                    label,
+                )
+                _log_cb = self._make_late_outcome_callback(started_at, label)
+                future.add_done_callback(_log_cb)
+                raise RuntimeError(RPC_QUEUE_SATURATED)
+            # ``future.cancel()`` returns False for a RUNNING future —
+            # it does NOT interrupt the underlying HTTP call and it
+            # does NOT protect the worker slot. The comment used to
+            # claim otherwise; corrected here. What we DO get: an
+            # ``add_done_callback`` fires when the abandoned call
+            # finally returns so its exception (if any) lands in the
+            # log rather than being silently discarded by
+            # ``concurrent.futures``.
+            _log_cb = self._make_late_outcome_callback(started_at, label)
+            future.add_done_callback(_log_cb)
             raise
 
     def _get_ledger_api(
@@ -1352,11 +1692,63 @@ class MechHttpHandler(AbstractResponseHandler):
     def _handle_signed_requests(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue
     ) -> None:
-        """
-        Handle POST requests to send signed tx to mech.
+        """Handle POST requests to send signed tx to mech.
 
-        :param http_msg: the HttpMessage instance
-        :param http_dialogue: the HttpDialogue instance
+        Top-level entry point. Delegates to
+        :meth:`_handle_signed_requests_impl` inside a defensive
+        ``try/except Exception`` so any un-caught error inside the
+        accept path (a fresh RPC exception class the inner tuples
+        don't cover, an ``OSError`` from a mid-flight ``ConnectionReset``,
+        anything raised out of an executor callback) surfaces as a
+        503 to the client instead of propagating out to the AEA
+        framework's default ``propagate`` handler and stopping the
+        agent. The narrower catches inside the impl still classify
+        outcomes for the log lines and per-branch verdict reasons.
+
+        :param http_msg: the HttpMessage instance.
+        :param http_dialogue: the HttpDialogue instance.
+        """
+        try:
+            self._handle_signed_requests_impl(http_msg, http_dialogue)
+        except Exception:  # pylint: disable=broad-exception-caught
+            # A defensive backstop for anything the inner
+            # classification branches missed. ``ConnectionResetError``
+            # is an ``OSError`` (not covered by the inner tuple around
+            # ``future.result()``), a fresh ``Web3Exception`` subclass
+            # could be added in a future web3 release, or an executor
+            # callback could raise. Any of those would otherwise
+            # propagate out of the handler and — with the default
+            # ``propagate`` skill exception policy — stop the agent.
+            # ``request_id`` is unknown here (parse may have raised);
+            # the client's own timeout has almost certainly fired.
+            self.context.logger.exception("Unhandled error on offchain accept path")
+            try:
+                self._send_rejection_response(
+                    http_msg,
+                    http_dialogue,
+                    "unknown",
+                    reason="internal error",
+                    status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
+                    status_text="Service unavailable",
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                # The rejection sender itself failed — nothing more we
+                # can do; the client will time out its own request.
+                self.context.logger.exception(
+                    "Failed to emit defensive 503 on unhandled accept-path error"
+                )
+
+    def _handle_signed_requests_impl(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """Body of the signed-request handler; called under the outer guard.
+
+        Split from ``_handle_signed_requests`` so the outer try/except
+        wraps every accept-path branch by construction. See the outer
+        method for the rationale.
+
+        :param http_msg: the HttpMessage instance.
+        :param http_dialogue: the HttpDialogue instance.
         """
         # Phase 1 ships dark: the off-chain HTTP path is disabled by default and
         # enabled per deployment in the Phase 2 rollout (use_offchain). When off,
@@ -1444,6 +1836,15 @@ class MechHttpHandler(AbstractResponseHandler):
                 f"a 0x-prefixed even-length hex string within "
                 f"[{SIGNATURE_BYTES_MIN}, {SIGNATURE_BYTES_MAX}] bytes "
                 f"(len={len(signature_hex) if signature_hex else 0})."
+            )
+            self._handle_bad_request(http_msg, http_dialogue)
+            return
+
+        if not ADDRESS_RE.fullmatch(sender or ""):
+            self.context.logger.error(
+                f"Rejecting offchain request {request_id}: sender must be a "
+                f"0x-prefixed 20-byte hex address "
+                f"(len={len(sender) if sender else 0})."
             )
             self._handle_bad_request(http_msg, http_dialogue)
             return
@@ -1571,13 +1972,14 @@ class MechHttpHandler(AbstractResponseHandler):
             # Sig-verify above already succeeded, so the checksum
             # conversion should be deterministic; a failure here means
             # ledger settings were reconfigured between the two calls
-            # (settings dict is rebuilt per call). Treat as an infra
-            # verdict so the caller retries.
+            # (settings dict is rebuilt per call). Route to a distinct
+            # ``SENDER_RESOLUTION_FAILED`` reason so config-side
+            # failures are not mis-reported as RPC failures.
             self._send_rejection_response(
                 http_msg,
                 http_dialogue,
                 request_id,
-                reason=NONCE_READ_FAILED,
+                reason=SENDER_RESOLUTION_FAILED,
                 status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
                 status_text="Service unavailable",
             )
@@ -2239,11 +2641,16 @@ class MechHttpHandler(AbstractResponseHandler):
         ]
         self.in_memory_requests.pop(request_id, None)
         if sender_checksum is not None and wire_nonce is not None:
-            outstanding = self.outstanding_nonces_by_sender.get(sender_checksum)
-            if outstanding is not None:
-                outstanding.discard(wire_nonce)
-                if not outstanding:
-                    self.outstanding_nonces_by_sender.pop(sender_checksum, None)
+            # Rollback drops from the accepted set only. The settling
+            # set is populated by ``_release_outstanding_nonce`` on the
+            # done path — a rollback fires strictly before that
+            # transition so the entry is guaranteed to still be in the
+            # accepted half.
+            accepted = self.accepted_nonces_by_sender.get(sender_checksum)
+            if accepted is not None:
+                accepted.discard(wire_nonce)
+                if not accepted:
+                    self.accepted_nonces_by_sender.pop(sender_checksum, None)
         self.context.logger.error(
             f"Queue rollback applied for {request_id=}. "
             f"pending_tasks={len(self.pending_tasks)} "
@@ -2378,12 +2785,11 @@ class MechHttpHandler(AbstractResponseHandler):
         try:
             self.pending_tasks.append(req)
             self.in_memory_requests[request_id] = data[RequestKey.IPFS_DATA.value]
-            # Track the wire nonce as live-outstanding for this sender
-            # so the admission gate on subsequent accepts computes the
-            # correct next-expected slot. ``setdefault`` avoids
-            # clobbering an existing set built by an earlier accept
-            # from the same sender.
-            self.outstanding_nonces_by_sender.setdefault(sender_checksum, set()).add(
+            # Track the wire nonce in the sender's accepted set so the
+            # admission gate on subsequent accepts computes the correct
+            # next-expected slot. Moves to the settling set at done
+            # time via ``_release_outstanding_nonce``.
+            self.accepted_nonces_by_sender.setdefault(sender_checksum, set()).add(
                 wire_nonce
             )
         except Exception:
@@ -2503,8 +2909,21 @@ class MechHttpHandler(AbstractResponseHandler):
     def _get_mech_payment_type(
         self, ledger_api: EthereumApi, mech_address: str
     ) -> Optional[str]:
-        """Get the mech payment type from the mech contract."""
-        payment_type_res = OlasMechContract.get_mech_type(ledger_api, mech_address)
+        """Get the mech payment type from the mech contract.
+
+        Wall-clock bounded through the on-path RPC executor so a slow
+        RPC does not stall the AEA main thread past the http_server
+        reply budget. See ``_BALANCE_RPC_DEADLINE_SECONDS``.
+
+        :param ledger_api: the ledger API object.
+        :param mech_address: the mech contract address.
+        :return: the mech's payment type, or None if unavailable.
+        """
+        payment_type_res = self._run_with_wall_clock_deadline(
+            lambda: OlasMechContract.get_mech_type(ledger_api, mech_address),
+            deadline_seconds=_BALANCE_RPC_DEADLINE_SECONDS,
+            label="mech_paymentType",
+        )
         return cast(Optional[str], payment_type_res.get(BodyKey.MECH_TYPE.value))
 
     def _get_balance_tracker_address_for_payment_type(
@@ -2513,22 +2932,50 @@ class MechHttpHandler(AbstractResponseHandler):
         marketplace_address: str,
         payment_type: str,
     ) -> str:
-        """Get the balance tracker address for the provided payment type."""
-        balance_tracker_res = MechMarketplaceContract.get_balance_tracker_for_mech_type(
-            ledger_api=ledger_api,
-            contract_address=marketplace_address,
-            mech_type=payment_type,
+        """Get the balance tracker address for the provided payment type.
+
+        Wall-clock bounded through the on-path RPC executor. See
+        ``_BALANCE_RPC_DEADLINE_SECONDS``.
+
+        :param ledger_api: the ledger API object.
+        :param marketplace_address: the mech marketplace contract address.
+        :param payment_type: the mech's payment type.
+        :return: the balance tracker contract address for the payment type.
+        """
+        balance_tracker_res = self._run_with_wall_clock_deadline(
+            lambda: (
+                MechMarketplaceContract.get_balance_tracker_for_mech_type(
+                    ledger_api=ledger_api,
+                    contract_address=marketplace_address,
+                    mech_type=payment_type,
+                )
+            ),
+            deadline_seconds=_BALANCE_RPC_DEADLINE_SECONDS,
+            label="marketplace_balanceTrackerForMechType",
         )
         return cast(str, balance_tracker_res.get(BodyKey.DATA.value))
 
     def _get_requester_balance(
         self, ledger_api: EthereumApi, balance_tracker_address: str, requester: str
     ) -> int:
-        """Get requester balance from the balance tracker."""
-        requester_balance_res = BalanceTrackerContract.get_requester_balance(
-            ledger_api=ledger_api,
-            contract_address=balance_tracker_address,
-            requester=requester,
+        """Get requester balance from the balance tracker.
+
+        Wall-clock bounded through the on-path RPC executor. See
+        ``_BALANCE_RPC_DEADLINE_SECONDS``.
+
+        :param ledger_api: the ledger API object.
+        :param balance_tracker_address: the balance tracker address.
+        :param requester: the requester (Safe) address.
+        :return: the requester's balance in the balance tracker (0 if unavailable).
+        """
+        requester_balance_res = self._run_with_wall_clock_deadline(
+            lambda: BalanceTrackerContract.get_requester_balance(
+                ledger_api=ledger_api,
+                contract_address=balance_tracker_address,
+                requester=requester,
+            ),
+            deadline_seconds=_BALANCE_RPC_DEADLINE_SECONDS,
+            label="balance_tracker_getRequesterBalance",
         )
         return cast(int, requester_balance_res.get(BodyKey.REQUESTER_BALANCE.value, 0))
 
@@ -2555,16 +3002,21 @@ class MechHttpHandler(AbstractResponseHandler):
         3. Try local ``ecrecover`` against ``sender``. Match wins with
            zero RPC for the sig-recover step.
         4. Fall back to the sender's EIP-1271 ``isValidSignature`` view
-           via a cached short-timeout ``EthereumApi``; a transport
-           timeout on the view surfaces as a 401 with a dedicated
-           reason.
+           via a cached short-timeout ``EthereumApi``. The view
+           returns one of three verdicts: ``VALID`` (accept),
+           ``DECLINED`` (401 signature verification failed), or
+           ``CALL_FAILED`` (503 with the ``EIP1271_CALL_FAILED``
+           reason so an infra failure is not mis-reported as a
+           credential rejection). A transport timeout on the view
+           surfaces as 503 with the ``EIP1271_CALL_TIMEOUT`` reason.
         5. Bind the wire ``nonce`` to the sender's on-chain
-           ``MechMarketplace.mapNonces[sender]`` value. A wire value
-           below the on-chain counter, or more than
-           ``MAX_OUTSTANDING_NONCE_WINDOW`` above it, rejects 401. A
-           transport-level failure on the ``mapNonces`` read fails
-           closed as 503 rather than accepting under an unknown
-           counter.
+           ``MechMarketplace.mapNonces[sender]`` value combined with
+           the sender's live ``accepted + settling`` sets. A wire
+           value below that expected next-slot rejects 401; a wire
+           value above it, or a per-sender in-flight cap breach,
+           rejects 503. A transport-level failure on the ``mapNonces``
+           read fails closed as 503 rather than accepting under an
+           unknown counter.
 
         :param sender: the requester address, EOA or Safe.
         :param ipfs_hash: 0x-prefixed hex string used as the on-chain
@@ -2732,15 +3184,17 @@ class MechHttpHandler(AbstractResponseHandler):
             # web3 + RotatingHTTPProvider retry loops cannot stall the
             # AEA main thread past the http_server reply budget. See
             # ``_RPC_WALL_CLOCK_DEADLINE_SECONDS``.
-            eip1271_ok = self._run_with_wall_clock_deadline(
+            eip1271_verdict = self._run_with_wall_clock_deadline(
                 lambda: check_eip1271_signature(
                     ledger_api=eip1271_ledger_api,
                     contract_address=sender_checksum,
                     message_hash=derived,
                     signature=signature_bytes,
                     gas=_EIP1271_CALL_GAS_CAP,
+                    logger=self.context.logger,
                 ),
                 deadline_seconds=_RPC_WALL_CLOCK_DEADLINE_SECONDS,
+                label="eip1271_isValidSignature",
             )
         except (TimeoutError, concurrent.futures.TimeoutError) as exc:
             self.context.logger.warning(
@@ -2752,8 +3206,8 @@ class MechHttpHandler(AbstractResponseHandler):
             )
             # Provider-side slowness — the gas cap already bounds a
             # hostile ``isValidSignature`` view to sub-millisecond CPU
-            # (that path surfaces as ``ContractLogicError`` and flattens
-            # to ``False`` on the other branch), so a timeout at this
+            # (that path surfaces as ``ContractLogicError`` and returns
+            # ``DECLINED`` on the other branch), so a timeout at this
             # depth is an infrastructure signal, mirroring
             # ``NONCE_READ_FAILED`` under identical conditions.
             return SignatureVerdict(
@@ -2761,18 +3215,89 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason=EIP1271_CALL_TIMEOUT,
                 is_infra=True,
             )
-        if eip1271_ok:
+        except RuntimeError as exc:
+            # Queue saturation or executor shutdown. Both are infra.
+            self.context.logger.warning(
+                "EIP-1271 isValidSignature could not be dispatched for "
+                "sender %s on request %s: %s.",
+                sender_checksum,
+                wire_request_id,
+                exc,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=RPC_QUEUE_SATURATED,
+                is_infra=True,
+            )
+        if eip1271_verdict == Eip1271Verdict.VALID:
             self.context.logger.info(
                 "offchain_auth accepted request %s sender=%s mechanism=eip1271",
                 wire_request_id,
                 sender_checksum,
             )
             return SignatureVerdict(ok=True, reason="", is_infra=False)
+        if eip1271_verdict == Eip1271Verdict.CALL_FAILED:
+            # Infra-side failure inside ``isValidSignature`` (RPC error,
+            # transport error, ABI decode failure). Route to 503 with a
+            # dedicated reason so a legitimate Safe requester is not
+            # 401'd during an RPC outage.
+            self.context.logger.warning(
+                "EIP-1271 isValidSignature call failed for sender %s on "
+                "request %s; routing to 503.",
+                sender_checksum,
+                wire_request_id,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=EIP1271_CALL_FAILED,
+                is_infra=True,
+            )
         return SignatureVerdict(
             ok=False,
             reason="signature verification failed",
             is_infra=False,
         )
+
+    @staticmethod
+    def _prune_stale_nonces(
+        nonces_by_sender: Dict[str, Set[int]],
+        sender_checksum: str,
+        on_chain_nonce: int,
+    ) -> Set[int]:
+        """Drop entries at or below ``on_chain_nonce`` and return what remains.
+
+        Called on both ``accepted`` and ``settling`` before computing
+        the admission gate's next-expected-slot formula. Guards two
+        recovery paths:
+
+        * ``settling`` shrinks naturally when the batch settlement
+          advances ``mapNonces`` past the nonce, but only if we prune
+          on read — the release side has no observer for the on-chain
+          counter.
+        * ``accepted`` should never contain a nonce at or below
+          ``on_chain_nonce`` in the healthy case (the release path
+          moves entries to ``settling`` before settlement can advance
+          the counter), but a crash / restart / a sender using both
+          the on-chain and off-chain rails could leave a stale entry
+          in the set indefinitely, silently inflating the gate's slot
+          count forever.
+
+        :param nonces_by_sender: the accepted or settling map.
+        :param sender_checksum: the sender's checksum key.
+        :param on_chain_nonce: current ``mapNonces[sender]`` value.
+        :return: the surviving set for ``sender_checksum`` (empty set
+            if the sender had none or every entry was stale). Also
+            pops the sender key from the map if nothing survives.
+        """
+        entries = nonces_by_sender.get(sender_checksum)
+        if not entries:
+            return set()
+        stale = {n for n in entries if n < on_chain_nonce}
+        if stale:
+            entries -= stale
+            if not entries:
+                nonces_by_sender.pop(sender_checksum, None)
+        return entries
 
     def _bind_wire_nonce_to_chain(
         self,
@@ -2783,45 +3308,54 @@ class MechHttpHandler(AbstractResponseHandler):
         """Admission gate: bind the wire ``nonce`` to the sender's next slot.
 
         Reads ``MechMarketplace.mapNonces[sender]`` and combines the
-        result with the sender's live outstanding accepted-but-unsettled
-        nonces to compute the single next-expected slot:
-        ``on_chain + len(outstanding)``. This is the contiguity check
-        settlement's ``_deliverMarketplaceWithSignatures`` already
-        enforces on chain — it recomputes each request_id from its own
-        ``nonce, nonce+1, ...`` counter and reverts the whole per-sender
-        batch on the first mismatch. Admitting a request that skips a
-        slot would enqueue work that settlement is guaranteed to
-        revert, dragging every legitimately co-batched request down
-        with it.
+        result with the sender's ``accepted`` and ``settling`` sets to
+        compute the single next-expected slot:
+        ``on_chain + len(accepted) + len(settling)``. This is the
+        contiguity check settlement's
+        ``_deliverMarketplaceWithSignatures`` already enforces on
+        chain — it recomputes each request_id from its own
+        ``nonce, nonce+1, ...`` counter and reverts the whole
+        per-sender batch on the first mismatch. Admitting a request
+        that skips a slot would enqueue work that settlement is
+        guaranteed to revert, dragging every legitimately co-batched
+        request down with it.
+
+        Splitting ``accepted`` from ``settling`` is required for the
+        formula to stay monotonic across the release/settlement gap.
+        ``accepted`` drains on the mech side when the task hits
+        ``_finalize_done_task``; ``mapNonces[sender]`` only advances
+        several ABCI rounds later when
+        ``_deliverMarketplaceWithSignatures`` lands on chain. Without
+        the ``settling`` half, the nonce is counted by NEITHER term
+        during that window and the gate lets a duplicate re-enter
+        (`accepted` cleared, `mapNonces` not yet advanced) OR 503s
+        every honest sequential request the sender fires until the
+        batch settles.
+
+        Both sets are pruned of entries ``< on_chain_nonce`` on every
+        call so a settlement that lands between two accepts drops
+        the corresponding entry from ``settling`` and the formula
+        collapses back to the pre-accept baseline.
 
         Outcomes:
 
-        * ``wire == expected``: accept.
-        * ``wire < expected``: reject 401 (``NONCE_BELOW_EXPECTED``) —
-          the sender signed a nonce that settlement will never derive.
-        * ``wire > expected``: reject 503 (``NONCE_ABOVE_EXPECTED``,
-          ``is_infra=True``) — the sender is racing ahead of its own
-          in-flight queue; mech-client's 503 handling retries in the
-          next round.
-        * ``wire in outstanding``: reject 401 (``NONCE_BELOW_EXPECTED``,
-          identical routing to the "already sent" branch); a duplicate
-          submission of a pending nonce would enqueue a second task
-          under a request_id settlement cannot resolve.
-        * Read failure: reject 503 (``NONCE_READ_FAILED``,
-          ``is_infra=True``).
-
-        The read itself is wall-clock bounded through the on-path RPC
-        executor so a slow ``mapNonces`` read cannot stall the AEA main
-        loop past the ``http_server`` reply budget; the timeout branch
-        routes to the same infra verdict as any other read failure.
+        * ``wire == expected``: accept (pending per-sender cap).
+        * ``wire in accepted`` or ``wire in settling``: reject 401
+          (``NONCE_BELOW_EXPECTED``); a duplicate submission of a
+          nonce that is either in flight or settling.
+        * ``wire < expected``: reject 401 (``NONCE_BELOW_EXPECTED``).
+        * ``wire > expected``: reject 503 (``NONCE_ABOVE_EXPECTED``).
+        * ``accepted + settling >= MAX_ACCEPTED_PER_SENDER``: reject
+          503 (``SENDER_INFLIGHT_LIMIT``); the sender has too much
+          unsettled work.
+        * Read failure: reject 503 (``NONCE_READ_FAILED`` or
+          ``NONCE_READ_UNRECOVERABLE``).
 
         :param sender_checksum: the sender address in checksum form.
         :param wire_nonce: the ``nonce`` supplied on the wire (already
             coerced to ``int`` and range-checked at ingress).
         :param wire_request_id: the wire request_id, for logging only.
-        :return: a :class:`SignatureVerdict`. ``ok=True`` when the wire
-            nonce equals the sender's next expected slot; ``ok=False``
-            with the appropriate reason and infra flag otherwise.
+        :return: a :class:`SignatureVerdict`.
         """
         ledger_settings = self._get_ledger_settings()
         if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
@@ -2854,18 +3388,15 @@ class MechHttpHandler(AbstractResponseHandler):
                     sender_address=sender_checksum,
                 ),
                 deadline_seconds=_RPC_WALL_CLOCK_DEADLINE_SECONDS,
+                label="mapNonces_read",
             )
             on_chain_nonce = int(cast(int, on_chain_result.get(BodyKey.DATA.value, 0)))
-        except Exception as exc:  # pylint: disable=broad-exception-caught
-            # Transport, decode, RPC error, or wall-clock deadline on
-            # the ``mapNonces`` read. Fail closed with an infra verdict
-            # so the caller returns 503 and a well-behaved client
-            # retries; accepting under an unknown nonce would let a
-            # wire value that settlement will later reject enqueue a
-            # task the operator pays to run. ``concurrent.futures.TimeoutError``
-            # is a subclass of ``Exception``, so it lands here as well.
+        except concurrent.futures.TimeoutError as exc:
+            # Wall-clock deadline elapsed. Kept separate from the
+            # broader exception branch below so operators can tell a
+            # slow RPC apart from a deterministic ABI / config drift.
             self.context.logger.warning(
-                "mapNonces read failed for sender %s on request %s: %s.",
+                "mapNonces read timed out for sender %s on request %s: %s.",
                 sender_checksum,
                 wire_request_id,
                 exc,
@@ -2875,25 +3406,91 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason=NONCE_READ_FAILED,
                 is_infra=True,
             )
-        # Combine the on-chain counter with the live outstanding set
-        # for this sender to compute the single next-expected slot.
-        # Missing key = no in-flight requests from this sender.
-        outstanding = self.outstanding_nonces_by_sender.get(sender_checksum, set())
-        expected_next_nonce = on_chain_nonce + len(outstanding)
-        if wire_nonce in outstanding:
-            # Duplicate of a pending nonce. Reject the same way as a
-            # stale wire value: settlement cannot derive the same
-            # request_id twice for the same sender, and accepting the
-            # duplicate would enqueue a second task under a request_id
-            # settlement guarantees to revert.
+        except RuntimeError as exc:
+            # Queue saturation or executor shutdown. Both are infra.
             self.context.logger.warning(
-                "Wire nonce %d already outstanding for sender %s on request %s "
-                "(expected next %d, outstanding=%d).",
+                "mapNonces read could not be dispatched for sender %s on "
+                "request %s: %s.",
+                sender_checksum,
+                wire_request_id,
+                exc,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=RPC_QUEUE_SATURATED,
+                is_infra=True,
+            )
+        except (
+            Web3RPCError,
+            RequestException,
+            ConnectionError,
+            OSError,
+        ) as exc:
+            # Transient RPC / transport failure — a flaky node, a
+            # network blip, a rate-limiter mid-flight reset. Route to
+            # the retryable ``NONCE_READ_FAILED`` reason and let the
+            # caller's 503 nudge mech-client's retry loop.
+            self.context.logger.warning(
+                "mapNonces read failed (transient) for sender %s on " "request %s: %r",
+                sender_checksum,
+                wire_request_id,
+                exc,
+                exc_info=True,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=NONCE_READ_FAILED,
+                is_infra=True,
+            )
+        except Exception as exc:  # pylint: disable=broad-exception-caught
+            # Deterministic failure classes: ``BadFunctionCallOutput``
+            # (wrong ``mech_marketplace_address`` or ABI drift),
+            # ``AttributeError`` (non-dict wrapper return),
+            # ``ValueError`` (ABI decode failure), ``ContractLogicError``
+            # (revert on a proxy pointing at a legacy implementation).
+            # None recover without an operator config change; keep the
+            # 503 so the client backs off, but surface a distinct
+            # reason so the log line names the fault as unrecoverable
+            # rather than collapsing into the same warning that a
+            # flaky node produces. ``exc_info=True`` so the traceback
+            # lands in the log for triage.
+            self.context.logger.warning(
+                "mapNonces read failed unrecoverably for sender %s on "
+                "request %s: %r",
+                sender_checksum,
+                wire_request_id,
+                exc,
+                exc_info=True,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=NONCE_READ_UNRECOVERABLE,
+                is_infra=True,
+            )
+        # Prune stale entries in both maps before computing the count.
+        # See ``_prune_stale_nonces`` for the crash-recovery rationale
+        # and the settlement-gap semantics of ``settling``.
+        accepted = self._prune_stale_nonces(
+            self.accepted_nonces_by_sender, sender_checksum, on_chain_nonce
+        )
+        settling = self._prune_stale_nonces(
+            self.settling_nonces_by_sender, sender_checksum, on_chain_nonce
+        )
+        expected_next_nonce = on_chain_nonce + len(accepted) + len(settling)
+        # Duplicate detection covers both sets: a wire nonce already
+        # accepted (and either still pending on the mech side or moved
+        # to settling awaiting on-chain settlement) is a duplicate
+        # under whichever half currently holds it.
+        if wire_nonce in accepted or wire_nonce in settling:
+            self.context.logger.warning(
+                "Wire nonce %d already in-flight for sender %s on request %s "
+                "(expected next %d, accepted=%d, settling=%d).",
                 wire_nonce,
                 sender_checksum,
                 wire_request_id,
                 expected_next_nonce,
-                len(outstanding),
+                len(accepted),
+                len(settling),
             )
             return SignatureVerdict(
                 ok=False,
@@ -2903,13 +3500,14 @@ class MechHttpHandler(AbstractResponseHandler):
         if wire_nonce < expected_next_nonce:
             self.context.logger.warning(
                 "Wire nonce %d below expected next slot %d for sender %s on "
-                "request %s (on_chain=%d, outstanding=%d).",
+                "request %s (on_chain=%d, accepted=%d, settling=%d).",
                 wire_nonce,
                 expected_next_nonce,
                 sender_checksum,
                 wire_request_id,
                 on_chain_nonce,
-                len(outstanding),
+                len(accepted),
+                len(settling),
             )
             return SignatureVerdict(
                 ok=False,
@@ -2919,13 +3517,14 @@ class MechHttpHandler(AbstractResponseHandler):
         if wire_nonce > expected_next_nonce:
             self.context.logger.warning(
                 "Wire nonce %d above expected next slot %d for sender %s on "
-                "request %s (on_chain=%d, outstanding=%d).",
+                "request %s (on_chain=%d, accepted=%d, settling=%d).",
                 wire_nonce,
                 expected_next_nonce,
                 sender_checksum,
                 wire_request_id,
                 on_chain_nonce,
-                len(outstanding),
+                len(accepted),
+                len(settling),
             )
             # 503 (is_infra=True) — the sender is racing its own
             # in-flight queue. mech-client retries 503 in the next
@@ -2934,6 +3533,25 @@ class MechHttpHandler(AbstractResponseHandler):
             return SignatureVerdict(
                 ok=False,
                 reason=NONCE_ABOVE_EXPECTED,
+                is_infra=True,
+            )
+        # Per-sender in-flight cap. Guards the previously-unbounded
+        # growth of ``accepted_nonces_by_sender`` (and by extension
+        # ``pending_tasks`` and ``in_memory_requests``) on the post-
+        # auth pre-payment surface. See ``MAX_ACCEPTED_PER_SENDER``.
+        if len(accepted) + len(settling) >= MAX_ACCEPTED_PER_SENDER:
+            self.context.logger.warning(
+                "Sender %s hit in-flight cap on request %s "
+                "(accepted=%d, settling=%d, cap=%d); rejecting 503.",
+                sender_checksum,
+                wire_request_id,
+                len(accepted),
+                len(settling),
+                MAX_ACCEPTED_PER_SENDER,
+            )
+            return SignatureVerdict(
+                ok=False,
+                reason=SENDER_INFLIGHT_LIMIT,
                 is_infra=True,
             )
         return SignatureVerdict(ok=True, reason="", is_infra=False)
@@ -2945,15 +3563,21 @@ class MechHttpHandler(AbstractResponseHandler):
         ``_handle_signed_requests`` can compute the checksum once for
         both the dedup key (unchanged) and the outstanding-nonces
         admission gate. Returns ``None`` on a failed checksum
-        conversion; the caller treats that identically to a failed
-        sig-verify because settlement would 401 the sender at the same
-        step later.
+        conversion; the caller routes that to a distinct
+        ``SENDER_RESOLUTION_FAILED`` verdict so a config-side problem
+        (missing / malformed RPC settings) does not get reported to
+        the client as an RPC round-trip failure.
 
         :param sender: the raw sender string from the wire body.
         :return: the checksum-cased address, or ``None`` on failure.
         """
         ledger_settings = self._get_ledger_settings()
         if ledger_settings[ResponseKey.STATUS.value] != ResponseStatus.OK.value:
+            self.context.logger.warning(
+                "Cannot resolve sender checksum: ledger settings unavailable "
+                "(%s); rejecting.",
+                ledger_settings.get(ResponseKey.REASON.value, "unknown"),
+            )
             return None
         try:
             rpc_address = cast(str, ledger_settings[ResponseKey.RPC_ADDRESS.value])
@@ -2961,6 +3585,11 @@ class MechHttpHandler(AbstractResponseHandler):
             ledger_api = self._get_ledger_api(rpc_address, chain_id)
             return cast(str, ledger_api.api.to_checksum_address(sender))
         except Exception:  # pylint: disable=broad-exception-caught
+            self.context.logger.warning(
+                "Sender checksum resolution failed for %r.",
+                sender,
+                exc_info=True,
+            )
             return None
 
     def _get_ledger_settings(self) -> Dict[str, Union[str, int]]:

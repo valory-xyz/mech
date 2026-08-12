@@ -35,16 +35,43 @@ file; the mech ``paymentType`` is read through the packaged
 
 from __future__ import annotations
 
-from typing import Any, Dict
+import logging
+from enum import Enum
+from typing import Any, Dict, Optional
 
 from aea_ledger_ethereum import EthereumApi
 from requests.exceptions import RequestException, Timeout
-from web3.exceptions import Web3Exception
+from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3Exception
 
 # bytes4 of ``keccak256("isValidSignature(bytes32,bytes)")``. A contract
 # sender must return exactly this value from its ``isValidSignature`` view
 # for the presented signature to be accepted per EIP-1271.
 EIP1271_MAGIC_VALUE: bytes = b"\x16\x26\xba\x7e"
+
+
+class Eip1271Verdict(str, Enum):
+    """Tri-state outcome of an ``isValidSignature`` view call.
+
+    * ``VALID`` — the contract returned the EIP-1271 magic value; the
+      presented signature verifies. Accept.
+    * ``DECLINED`` — the contract returned a different bytes4 value,
+      reverted with :class:`ContractLogicError`, or the target address
+      has no code (``BadFunctionCallOutput``). Semantically "the
+      signature does not verify". The caller should reject with 401.
+    * ``CALL_FAILED`` — infra-side failure: ``Web3RPCError``,
+      ``BadResponseFormat``, ``Web3ValidationError``, ``RequestException``,
+      ``ValueError``, or the wall-clock deadline expired. The caller
+      should reject with 503; the sender's credentials are not at
+      fault, an RPC or transport error is.
+
+    A single ``bool`` return flattened all three of the ``CALL_FAILED``
+    reasons into the same outcome as a genuine ``DECLINED``, so a
+    Safe requester saw 401 "unauthorized" during an RPC outage.
+    """
+
+    VALID = "valid"
+    DECLINED = "declined"
+    CALL_FAILED = "call_failed"
 
 
 _IS_VALID_SIGNATURE_ABI: Dict[str, Any] = {
@@ -98,23 +125,27 @@ def check_eip1271_signature(
     message_hash: bytes,
     signature: bytes,
     gas: int,
-) -> bool:
-    """Return True iff the contract at ``contract_address`` accepts the signature.
+    logger: Optional[logging.Logger] = None,
+) -> Eip1271Verdict:
+    """Verify the contract's ``isValidSignature`` view and return a tri-state.
 
-    Calls the sender contract's ``isValidSignature(bytes32,bytes)`` view; any
-    return value other than the EIP-1271 magic value — including a revert or
-    an ABI-decode failure — is flattened to False so the caller can treat the
-    outcome as a simple boolean.
+    Calls the sender contract's ``isValidSignature(bytes32,bytes)``
+    view. The outcome is one of the three :class:`Eip1271Verdict`
+    values so the caller can route "the RPC failed" separately from
+    "the signature does not verify" — flattening those two to the same
+    boolean surfaced RPC outages as 401 "unauthorized" to well-
+    behaved Safe callers.
 
-    The call carries an explicit ``gas`` cap in the ``eth_call`` transaction
-    payload so a sender contract whose ``isValidSignature`` view loops
-    to the block gas limit is capped at a bounded amount of node work per
-    request; an out-of-gas revert then surfaces as ``ContractLogicError``
-    and flattens to ``False`` like any other revert.
+    The call carries an explicit ``gas`` cap in the ``eth_call``
+    transaction payload so a sender contract whose ``isValidSignature``
+    view loops to the block gas limit is capped at a bounded amount
+    of node work per request; an out-of-gas revert then surfaces as
+    :class:`ContractLogicError` and returns ``DECLINED`` like any
+    other revert.
 
-    Transport-level read timeouts propagate as ``TimeoutError`` so the caller
-    can distinguish a slow / hostile ``isValidSignature`` from a plain
-    signature rejection.
+    Transport-level read timeouts propagate as :class:`TimeoutError`
+    so the caller can distinguish a slow / hostile ``isValidSignature``
+    from either a plain rejection or an RPC infra failure.
 
     :param ledger_api: the ledger API object.
     :param contract_address: the contract sender to query.
@@ -123,8 +154,16 @@ def check_eip1271_signature(
     :param gas: the ``gas`` cap applied to the ``eth_call``. Bounds the
         amount of work a sender's ``isValidSignature`` view can force
         the RPC node to do per request.
-    :return: True on magic-value match; False otherwise (including on
-        revert or out-of-gas).
+    :param logger: optional logger used to record which of the three
+        branches fired (including the exception type on ``DECLINED`` /
+        ``CALL_FAILED``). Kept optional so callers with no logger in
+        scope can still call the helper; recommended for the accept
+        path so operator triage on 503s has the exception type
+        visible.
+    :return: an :class:`Eip1271Verdict`. ``VALID`` on magic-value
+        match; ``DECLINED`` on a non-magic return value, revert, or
+        codeless target; ``CALL_FAILED`` on an infra-side failure
+        (RPC error, transport error, ABI-decode failure).
     :raises TimeoutError: when the underlying HTTP read times out (the
         provider-level ``timeout`` on the ``EthereumApi`` fires). The
         caller distinguishes this from a signature rejection.
@@ -142,33 +181,52 @@ def check_eip1271_signature(
         # ``isValidSignature`` view is slow enough that the provider's
         # transport timeout fires. Re-raise as the built-in
         # ``TimeoutError`` so the caller can return a distinct verdict
-        # (401 with the timeout reason) instead of the generic
+        # (503 with the timeout reason) instead of the generic
         # signature-rejected outcome that a revert or bad output would
         # produce.
         raise TimeoutError(str(exc)) from exc
-    except (Web3Exception, RequestException, ValueError):
-        # Broad web3 + requests + ValueError capture: every
-        # ``Web3Exception`` subclass reaches this branch, not just the
-        # obvious ones (``ContractLogicError`` on revert,
-        # ``BadFunctionCallOutput`` on a codeless target,
-        # ``Web3RPCError`` on a JSON-RPC error). The two subclasses
-        # that a narrower tuple used to miss —
-        # ``BadResponseFormat`` and ``Web3ValidationError`` — are
-        # raised OUTSIDE the ``RotatingHTTPProvider.make_request``
-        # boundary (in ``web3.manager.formatted_response``), so the
-        # rotation layer's own ``except Exception`` never sees them
-        # and they would otherwise propagate out through
-        # ``check_eip1271_signature``, out of the accept path, and
-        # crash the AEA framework's default ``propagate`` handler.
-        # ``RequestException`` covers connection / HTTP / non-timeout
-        # transport failures; ``ValueError`` covers ABI decode
-        # failures the web3 layer surfaces without a
-        # ``BadFunctionCallOutput`` wrap. An out-of-gas revert
-        # triggered by the ``gas`` cap above lands here as
-        # ``ContractLogicError`` (a ``Web3Exception`` subclass) and
-        # returns ``False`` the same way any other revert does.
-        return False
-    return bytes(returned) == EIP1271_MAGIC_VALUE
+    except (ContractLogicError, BadFunctionCallOutput) as exc:
+        # ``ContractLogicError`` on revert (including the out-of-gas
+        # revert triggered by the ``gas`` cap above), and
+        # ``BadFunctionCallOutput`` on a codeless target. Both are
+        # semantically "the contract did not accept this signature";
+        # 401 at the caller.
+        if logger is not None:
+            logger.debug(
+                "check_eip1271_signature DECLINED for %s: %s",
+                contract_address,
+                exc,
+            )
+        return Eip1271Verdict.DECLINED
+    except (Web3Exception, RequestException, ValueError) as exc:
+        # Broader web3 + requests + ValueError capture for the
+        # infra-side failure classes: ``Web3RPCError`` on a JSON-RPC
+        # error, ``BadResponseFormat`` / ``Web3ValidationError`` raised
+        # outside the ``RotatingHTTPProvider.make_request`` boundary
+        # (in ``web3.manager.formatted_response``, invisible to the
+        # rotation layer's own ``except Exception``), ``RequestException``
+        # for connection / HTTP / non-timeout transport failures, and
+        # ``ValueError`` for ABI decode failures the web3 layer
+        # surfaces without a ``BadFunctionCallOutput`` wrap. These
+        # are ALL infra-side — the sender's credentials are not at
+        # fault, so returning ``DECLINED`` would surface an RPC
+        # outage as 401 "unauthorized" to a legitimate caller.
+        if logger is not None:
+            logger.warning(
+                "check_eip1271_signature CALL_FAILED for %s: %r",
+                contract_address,
+                exc,
+            )
+        return Eip1271Verdict.CALL_FAILED
+    if bytes(returned) == EIP1271_MAGIC_VALUE:
+        return Eip1271Verdict.VALID
+    if logger is not None:
+        logger.debug(
+            "check_eip1271_signature DECLINED for %s: non-magic return %r",
+            contract_address,
+            bytes(returned).hex() if returned is not None else None,
+        )
+    return Eip1271Verdict.DECLINED
 
 
 def get_marketplace_domain_separator(
