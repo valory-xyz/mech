@@ -209,16 +209,19 @@ def _discard_outstanding_nonce(
     shared_state: Dict[str, Any],
     executing_task: Optional[Dict[str, Any]],
 ) -> None:
-    """Drop the sender+nonce from BOTH the accepted and settling sets.
+    """Drop the sender+nonce from the accepted set.
 
     Used on the rejection / failure paths (``_record_offchain_failure``,
     and the defensive release inside ``_reset_executing_task`` for
     off-chain drops that skip both ``_finalize_done_task`` and
     ``_record_offchain_failure``). Different from
     :func:`_release_outstanding_nonce`, which moves the entry from
-    accepted to settling so settlement can eventually drain it — a
-    rejected task will never reach settlement, so both sets need to
-    be cleared to keep the admission-gate slot count truthful.
+    accepted to settling so settlement can eventually drain it. Only
+    the accepted set is touched here: the settling set is by
+    definition "released and awaiting chain" — clearing it here would
+    undo a release that has already happened on the finalise path and
+    collapse the admission gate's three-state accounting back into a
+    two-state one.
 
     :param shared_state: the AEA shared-state dict.
     :param executing_task: the failed task dict (or None).
@@ -233,17 +236,16 @@ def _discard_outstanding_nonce(
         wire_nonce = int(nonce)
     except (TypeError, ValueError):
         return
-    for map_key in (ACCEPTED_NONCES_BY_SENDER, SETTLING_NONCES_BY_SENDER):
-        target = shared_state.get(map_key)
-        if not target:
-            continue
-        sender_key = _find_sender_key(target, sender)
-        if sender_key is None:
-            continue
-        entries = target[sender_key]
-        entries.discard(wire_nonce)
-        if not entries:
-            target.pop(sender_key, None)
+    target = shared_state.get(ACCEPTED_NONCES_BY_SENDER)
+    if not target:
+        return
+    sender_key = _find_sender_key(target, sender)
+    if sender_key is None:
+        return
+    entries = target[sender_key]
+    entries.discard(wire_nonce)
+    if not entries:
+        target.pop(sender_key, None)
 
 
 def _iso_z(dt: datetime) -> str:

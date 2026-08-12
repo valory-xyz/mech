@@ -2096,63 +2096,41 @@ def test_handle_timeout_task_no_req_id_resets_state(
     assert behaviour._async_result is None
 
 
-def test_handle_timeout_task_offchain_zero_request_id_discards_nonce(
-    behaviour: Any, params_stub: Any, shared_state: Any
+def test_finalize_done_task_composition_leaves_settling_populated(
+    behaviour: Any, shared_state: Any
 ) -> None:
-    """Off-chain task with ``request_id=0`` still gets its accepted nonce discarded.
+    """After release + reset the entry is in settling and gone from accepted.
 
-    Off-chain ``requestId`` is coerced to ``int`` at accept time, so
-    a wire value of ``"0"`` is falsy under the ``if not req_id`` guard
-    and takes the early-reset branch. Routing that branch through
-    ``_reset_executing_task`` keeps the accepted-nonce discard uniform
-    across every drop path on the off-chain rail.
+    The finalize path runs
+    ``_release_outstanding_nonce(shared_state, executing_task)`` then
+    ``self._reset_executing_task()`` back to back. The release moves
+    the entry from accepted to settling; the reset then fires
+    ``_discard_outstanding_nonce`` as belt-and-braces before clearing
+    the slot. This test crosses the seam directly so a future change
+    to ``_discard_outstanding_nonce`` that also drained settling
+    would trip here rather than only trip in a full end-to-end
+    settlement scenario.
 
     :param behaviour: pytest fixture, TaskExecutionBehaviour.
-    :param params_stub: pytest fixture, params namespace.
     :param shared_state: pytest fixture, initial shared_state map.
     """
     sender = "0xSenderAddress"
-    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {0}}
-    behaviour._executing_task = {
-        "requestId": 0,  # falsy int — off-chain accept coerces "0" → 0
+    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {5}}
+    executing_task: Dict[str, Any] = {
+        "requestId": 100,
         "sender": sender,
-        "nonce": 0,
+        "nonce": 5,
         "is_offchain": True,
     }
-    behaviour._async_result = MagicMock()
-    behaviour._handle_timeout_task()
-    assert behaviour._executing_task is None
+    # Mirror the two-line finalize suffix. Slot is bound at reset time
+    # so ``_discard_outstanding_nonce`` sees the same executing_task
+    # dict the release just consumed.
+    behaviour._executing_task = executing_task
+    beh_mod._release_outstanding_nonce(shared_state, executing_task)
+    behaviour._reset_executing_task()
+
     assert sender not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
-
-
-def test_handle_get_task_post_deadline_offchain_discards_nonce(
-    behaviour: Any, params_stub: Any, shared_state: Any
-) -> None:
-    """Post-deadline arrival for an off-chain task discards the accepted nonce.
-
-    ``_handle_get_task`` short-circuits when the IPFS response lands
-    after ``_request_handling_deadline``. Routing that drop branch
-    through ``_reset_executing_task`` keeps the accepted-nonce
-    discard uniform across every drop path on the off-chain rail.
-
-    :param behaviour: pytest fixture, TaskExecutionBehaviour.
-    :param params_stub: pytest fixture, params namespace.
-    :param shared_state: pytest fixture, initial shared_state map.
-    """
-    sender = "0xSenderAddress"
-    shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {42}}
-    behaviour._executing_task = {
-        "requestId": 55,
-        "sender": sender,
-        "nonce": 42,
-        "is_offchain": True,
-    }
-    behaviour._request_handling_deadline = time.time() - 1.0  # already elapsed
-    behaviour._async_result = MagicMock()
-    message = SimpleNamespace(files={})
-    behaviour._handle_get_task(message, MagicMock())
-    assert behaviour._executing_task is None
-    assert sender not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
+    assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {sender: {5}}
 
 
 def test_release_outstanding_nonce_settling_fallback_canonicalises_to_checksum(
@@ -3888,34 +3866,39 @@ def test_release_outstanding_nonce_moves_accepted_to_settling(
     assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {sender: {0}}
 
 
-def test_discard_outstanding_nonce_drops_from_both_sets(
+def test_discard_outstanding_nonce_drops_from_accepted_only(
     shared_state: Any,
 ) -> None:
-    """Discard removes the sender+nonce from BOTH accepted and settling.
+    """Discard removes from accepted and leaves settling untouched.
 
-    Used on the rejection path — a rejected task never settles, so
-    leaving anything in settling would keep the admission-gate slot
-    count inflated until either (a) the pruner eventually removes it
-    or (b) forever if the sender never sends again.
+    ``_discard_outstanding_nonce`` runs on the rejection / drop paths
+    (``_record_offchain_failure``, the defensive net inside
+    ``_reset_executing_task``). A task in ``settling`` has, by
+    definition, already been released by ``_release_outstanding_nonce``
+    on the finalize path and is waiting for on-chain settlement to
+    drain it. Clearing it here would collapse the admission gate's
+    three-state accounting back into a two-state one and reintroduce
+    the release/settlement-gap regression this split exists to
+    prevent.
 
     :param shared_state: pytest fixture, initial shared_state map.
     """
     sender = "0xSender"
     shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] = {sender: {5}}
     shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] = {sender: {3, 4}}
-    # Case: nonce present in accepted; drop from both.
+    # Case: nonce present in accepted — drop from accepted, leave settling.
     beh_mod._discard_outstanding_nonce(
         shared_state,
         {"sender": sender, "nonce": 5, "is_offchain": True},
     )
     assert sender not in shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER]
     assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {sender: {3, 4}}
-    # Case: nonce present in settling only.
+    # Case: nonce present in settling only — settling is untouched.
     beh_mod._discard_outstanding_nonce(
         shared_state,
         {"sender": sender, "nonce": 4, "is_offchain": True},
     )
-    assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {sender: {3}}
+    assert shared_state[beh_mod.SETTLING_NONCES_BY_SENDER] == {sender: {3, 4}}
 
 
 def test_release_outstanding_nonce_case_insensitive_sender_match(

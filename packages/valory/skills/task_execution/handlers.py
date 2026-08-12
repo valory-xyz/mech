@@ -3293,21 +3293,49 @@ class MechHttpHandler(AbstractResponseHandler):
         entries = self.accepted_nonces_by_sender.get(sender_checksum)
         if not entries:
             return set()
-        orphaned = {n for n in entries if n < on_chain_nonce}
+        orphaned = sorted(n for n in entries if n < on_chain_nonce)
         if not orphaned:
             return entries
-        for wire_nonce in sorted(orphaned):
-            self.context.logger.warning(
-                "Evicting orphaned accepted nonce %d for sender %s: "
-                "on-chain mapNonces has advanced to %d "
-                "(concurrent on-chain activity from this sender "
-                "consumed the slot; the task cannot settle).",
-                wire_nonce,
-                sender_checksum,
-                on_chain_nonce,
-            )
-            self._evict_orphaned_pending(sender_checksum, wire_nonce, on_chain_nonce)
-        entries -= orphaned
+        for wire_nonce in orphaned:
+            try:
+                matched = self._evict_orphaned_pending(
+                    sender_checksum, wire_nonce, on_chain_nonce
+                )
+            except Exception:  # pylint: disable=broad-exception-caught
+                # Per-nonce eviction is isolated: a corrupt entry in
+                # ``pending_tasks`` / ``done_tasks`` (non-dict, missing
+                # keys) must not abort the loop and leave later orphans
+                # in the accepted set. Log with traceback and discard
+                # this nonce so the gate's slot count stays truthful.
+                self.context.logger.warning(
+                    "Failure while evicting orphaned nonce %d for sender %s "
+                    "(on_chain=%d); dropping the gate entry regardless.",
+                    wire_nonce,
+                    sender_checksum,
+                    on_chain_nonce,
+                    exc_info=True,
+                )
+                matched = False
+            if matched:
+                self.context.logger.warning(
+                    "Evicted orphaned accepted nonce %d for sender %s: "
+                    "on-chain mapNonces has advanced to %d "
+                    "(concurrent on-chain activity from this sender "
+                    "consumed the slot).",
+                    wire_nonce,
+                    sender_checksum,
+                    on_chain_nonce,
+                )
+            else:
+                self.context.logger.warning(
+                    "No pending/done task matched orphaned nonce %d for "
+                    "sender %s (on_chain=%d); the task may be executing "
+                    "or awaiting settlement. Dropping the gate entry.",
+                    wire_nonce,
+                    sender_checksum,
+                    on_chain_nonce,
+                )
+            entries.discard(wire_nonce)
         if not entries:
             self.accepted_nonces_by_sender.pop(sender_checksum, None)
         return entries
@@ -3359,61 +3387,91 @@ class MechHttpHandler(AbstractResponseHandler):
         sender_checksum: str,
         wire_nonce: int,
         on_chain_nonce: int,
-    ) -> None:
-        """Remove an orphaned pending task and write its rejection payload.
+    ) -> bool:
+        """Remove an orphaned task from pending / done and record the rejection.
+
+        Scans both ``pending_tasks`` and ``done_tasks`` for a matching
+        off-chain task (case-insensitive on sender, exact match on
+        wire_nonce). When found, drops it from the list, removes its
+        in-memory payload, writes a rejection to
+        ``offchain_request_responses`` so the polling client sees a
+        terminal result, and records the rejection in the preimage
+        buffer so the durable audit row moves to the ``rejected``
+        terminal state instead of staying at ``processing``.
 
         Handler-side counterpart to
-        ``behaviours.TaskExecutionBehaviour._record_offchain_failure``
-        for slots the on-chain rail has advanced past. Pending tasks
-        carry the raw wire ``sender`` (may be lowercase or checksum),
-        so the match is case-insensitive; ``nonce`` is the coerced
-        ``int`` written at accept time.
+        ``behaviours.TaskExecutionBehaviour._record_offchain_failure``.
 
         :param sender_checksum: the sender's checksum key.
         :param wire_nonce: the orphaned wire nonce.
-        :param on_chain_nonce: current ``mapNonces[sender]`` used in
-            the WARNING log for operator triage.
+        :param on_chain_nonce: current ``mapNonces[sender]``, used in
+            the eviction log for operator triage.
+        :return: ``True`` if a matching task was found and evicted
+            from either queue, ``False`` otherwise (task may be
+            mid-flight between ``pending_tasks`` and ``done_tasks``).
         """
         sender_lower = sender_checksum.lower()
-        pending = self.pending_tasks
-        for idx in range(len(pending) - 1, -1, -1):
-            task = pending[idx]
+        rejection_reason = (
+            "on-chain nonce advanced past this slot; concurrent on-chain "
+            "activity from this sender consumed it before the off-chain "
+            "batch could settle"
+        )
+        now = time.time()
+
+        def _match(task: Dict[str, Any]) -> bool:
+            if not isinstance(task, dict):
+                return False
             if not task.get(RequestKey.IS_OFFCHAIN.value):
-                continue
-            if str(task.get("sender", "")).lower() != sender_lower:
-                continue
-            raw_nonce = task.get("nonce")
+                return False
+            task_sender = str(task.get(RequestKey.SENDER.value, "")).lower()
+            if task_sender != sender_lower:
+                return False
+            raw_nonce = task.get(RequestKey.NONCE.value)
             if raw_nonce is None:
-                continue
+                return False
             try:
-                task_nonce = int(raw_nonce)
+                return int(raw_nonce) == wire_nonce
             except (TypeError, ValueError):
-                continue
-            if task_nonce != wire_nonce:
-                continue
-            request_id = str(task.get(RequestKey.REQUEST_ID_CAMEL.value, ""))
-            del pending[idx]
-            if request_id:
-                self.in_memory_requests.pop(request_id, None)
-                self.offchain_request_responses[request_id] = {
-                    RequestKey.REQUEST_ID.value: request_id,
-                    ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
-                    ResponseKey.REASON.value: (
-                        "on-chain nonce advanced past this slot; "
-                        "concurrent on-chain activity from this "
-                        "sender consumed it before the off-chain "
-                        "batch could settle"
-                    ),
-                }
-            self.context.logger.warning(
-                "Evicted orphaned pending task request_id=%s "
-                "(sender=%s, nonce=%d, on_chain=%d).",
-                request_id,
-                sender_checksum,
-                wire_nonce,
-                on_chain_nonce,
-            )
-            return
+                return False
+
+        matched = False
+        for source_label, storage in (
+            ("pending_tasks", self.pending_tasks),
+            ("done_tasks", self.done_tasks),
+        ):
+            for idx in range(len(storage) - 1, -1, -1):
+                task = storage[idx]
+                if not _match(task):
+                    continue
+                request_id = str(task.get(RequestKey.REQUEST_ID_CAMEL.value, ""))
+                del storage[idx]
+                if request_id:
+                    self.in_memory_requests.pop(request_id, None)
+                    self.offchain_request_responses[request_id] = {
+                        RequestKey.REQUEST_ID.value: request_id,
+                        ResponseKey.STATUS.value: ResponseStatus.REJECTED.value,
+                        ResponseKey.REASON.value: rejection_reason,
+                    }
+                    if self.params.preimage_retention_enabled:
+                        preimage_buffer.record_settlement(
+                            self.context.shared_state,
+                            request_id,
+                            rejection_reason,
+                            None,
+                            preimage_buffer.STATUS_REJECTED,
+                            now,
+                        )
+                self.context.logger.info(
+                    "Removed orphaned task from %s: request_id=%s "
+                    "sender=%s nonce=%d on_chain=%d.",
+                    source_label,
+                    request_id,
+                    sender_checksum,
+                    wire_nonce,
+                    on_chain_nonce,
+                )
+                matched = True
+        return matched
 
     def _bind_wire_nonce_to_chain(
         self,

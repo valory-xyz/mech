@@ -41,7 +41,19 @@ from typing import Any, Dict, Optional
 
 from aea_ledger_ethereum import EthereumApi
 from requests.exceptions import RequestException, Timeout
-from web3.exceptions import ContractLogicError, Web3Exception
+from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3Exception
+
+# Prefix web3 uses on ``BadFunctionCallOutput`` when the decode failure
+# comes from calling into an address that has no code (i.e. the sender
+# is a plain EOA rather than a contract with an ``isValidSignature``
+# view). See ``web3.contract.utils.call_contract_function``'s
+# ``is_missing_code_error`` branch — it substitutes this message when
+# both the return data and the contract's code are empty. The other
+# ``BadFunctionCallOutput`` shape ("Could not decode contract function
+# call to ... with return data: ...") fires when the target contract
+# has code but the ``eth_call`` response cannot be decoded, which is
+# what a pruned or lagging node returns.
+_MISSING_CODE_MESSAGE_PREFIX = "Could not transact with/call contract function"
 
 # bytes4 of ``keccak256("isValidSignature(bytes32,bytes)")``. A contract
 # sender must return exactly this value from its ``isValidSignature`` view
@@ -54,14 +66,17 @@ class Eip1271Verdict(str, Enum):
 
     * ``VALID`` — the contract returned the EIP-1271 magic value; the
       presented signature verifies. Accept.
-    * ``DECLINED`` — the contract returned a different bytes4 value
-      or reverted with :class:`ContractLogicError`. Semantically "the
-      signature does not verify". The caller should reject with 401.
+    * ``DECLINED`` — the contract returned a different bytes4 value,
+      reverted with :class:`ContractLogicError`, or the target address
+      has no code (``BadFunctionCallOutput`` with the missing-code
+      message shape). Semantically "the signature does not verify".
+      The caller should reject with 401.
     * ``CALL_FAILED`` — infra-side failure: ``Web3RPCError``,
       ``BadResponseFormat``, ``Web3ValidationError``, ``RequestException``,
-      ``BadFunctionCallOutput`` (empty / undecodable ``eth_call``
-      return, e.g. from a pruned or lagging node), ``ValueError``, or
-      the wall-clock deadline expired. The caller should reject with
+      ``BadFunctionCallOutput`` with the decode-failure shape (empty
+      or malformed ``eth_call`` return from a pruned or lagging node
+      against a target that DOES have code), ``ValueError``, or the
+      wall-clock deadline expired. The caller should reject with
       503; the sender's credentials are not at fault, an RPC or
       transport error is.
 
@@ -198,6 +213,33 @@ def check_eip1271_signature(
                 exc,
             )
         return Eip1271Verdict.DECLINED
+    except BadFunctionCallOutput as exc:
+        # Two distinct producers, disambiguated by the message shape
+        # web3 sets on the raise: the ``eth_call`` target has no code
+        # (the sender is a plain EOA whose ``ecrecover`` did not match
+        # the request id) versus the target has code but the return
+        # data does not decode (a pruned or lagging node responded
+        # with empty or malformed data for a genuine contract call).
+        # The first is a credential-side outcome and belongs in 401;
+        # the second is infra-side and belongs in 503.
+        message = str(exc)
+        if message.startswith(_MISSING_CODE_MESSAGE_PREFIX):
+            if logger is not None:
+                logger.debug(
+                    "check_eip1271_signature DECLINED for %s: no code at "
+                    "target (%s)",
+                    contract_address,
+                    exc,
+                )
+            return Eip1271Verdict.DECLINED
+        if logger is not None:
+            logger.warning(
+                "check_eip1271_signature CALL_FAILED for %s: undecodable "
+                "return data (%s)",
+                contract_address,
+                exc,
+            )
+        return Eip1271Verdict.CALL_FAILED
     except (Web3Exception, RequestException, ValueError) as exc:
         # Infra-side failure classes at the JSON-RPC / transport
         # boundary: ``Web3RPCError`` on a JSON-RPC error,
@@ -205,13 +247,12 @@ def check_eip1271_signature(
         # ``web3.manager.formatted_response`` layer (outside the
         # ``RotatingHTTPProvider.make_request`` boundary),
         # ``RequestException`` for connection / HTTP / non-timeout
-        # transport failures, ``BadFunctionCallOutput`` (a
-        # ``Web3Exception`` subclass) for ``eth_call`` returning
-        # empty / undecodable data from a pruned or lagging node,
-        # and ``ValueError`` for ABI decode failures the web3 layer
-        # surfaces without a ``BadFunctionCallOutput`` wrap. All
-        # belong in the retry-later bucket — the sender's credentials
-        # are not at fault.
+        # transport failures, and ``ValueError`` for ABI decode
+        # failures the web3 layer surfaces without a
+        # ``BadFunctionCallOutput`` wrap. All belong in the
+        # retry-later bucket — the sender's credentials are not at
+        # fault. ``BadFunctionCallOutput`` is handled above so the
+        # codeless-target shape can route to ``DECLINED``.
         if logger is not None:
             logger.warning(
                 "check_eip1271_signature CALL_FAILED for %s: %r",

@@ -120,17 +120,37 @@ def test_check_eip1271_signature_returns_declined_on_non_magic_value(
     assert result is Eip1271Verdict.DECLINED
 
 
-def test_check_eip1271_signature_returns_declined_on_revert() -> None:
-    """A revert maps to DECLINED (the contract said no).
+@pytest.mark.parametrize(
+    "raised",
+    [
+        pytest.param(
+            ContractLogicError("execution reverted"), id="contract_logic_error"
+        ),
+        pytest.param(
+            BadFunctionCallOutput(
+                "Could not transact with/call contract function, "
+                "is contract deployed correctly and chain synced?"
+            ),
+            id="bad_function_call_output_missing_code",
+        ),
+    ],
+)
+def test_check_eip1271_signature_returns_declined_on_credential_side_failure(
+    raised: BaseException,
+) -> None:
+    """A revert or codeless target maps to DECLINED (the contract said no).
 
     ``ContractLogicError`` fires on an explicit ``revert`` (including
-    the out-of-gas revert triggered by the gas cap). The caller
-    routes ``DECLINED`` to 401 so the client learns its signature
-    was not accepted.
+    the out-of-gas revert triggered by the gas cap).
+    ``BadFunctionCallOutput`` with the missing-code message shape
+    fires when the ``eth_call`` target has no code at all — a plain
+    EOA whose ``ecrecover`` did not match on the primary path. Both
+    are credential-side outcomes; the caller routes ``DECLINED`` to
+    401 so the client learns its signature was not accepted.
+
+    :param raised: the boundary exception injected by the parametrise.
     """
-    ledger_api = _make_ledger_api(
-        "isValidSignature", ContractLogicError("execution reverted")
-    )
+    ledger_api = _make_ledger_api("isValidSignature", raised)
 
     result = check_eip1271_signature(
         ledger_api=ledger_api,
@@ -155,8 +175,11 @@ def test_check_eip1271_signature_returns_declined_on_revert() -> None:
         ),
         pytest.param(ValueError("abi decode failure"), id="value_error"),
         pytest.param(
-            BadFunctionCallOutput("Could not decode contract function call"),
-            id="bad_function_call_output_from_pruned_node",
+            BadFunctionCallOutput(
+                "Could not decode contract function call to isValidSignature "
+                "with return data: b'', output_types: ['bytes4']"
+            ),
+            id="bad_function_call_output_decode_failure_from_pruned_node",
         ),
         pytest.param(
             requests.exceptions.ConnectionError("boom"), id="connection_error"

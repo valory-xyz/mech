@@ -7,13 +7,13 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiddgrfcoxgz6syq5kyhf2k4dor4ewhr3xiyqrpro4c5idhfqjifsu
-  behaviours.py: bafybeifwktairsa37iovwqa5b4slbtc2mx2iut6teiv2twycetyp3g2snm
+  behaviours.py: bafybeigatm6ewxxop733etomyxei7pmfocjlbye3gk7c2jra5w5u5inira
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
-  handlers.py: bafybeib4hfld2ln2sv2pc2pziscjsupglo574n6g3e2sfroqnopntxqo74
+  handlers.py: bafybeid26cgoukem5zknnuvsuktiuqram4de4ry4qyyq32vkfkyqncniya
   models.py: bafybeiatzqnv75vhmqa4srdfewyfzittjjearnn6noz3qfzr6ydcjhkdhy
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeicwykoemg55dnpaye5g7o7mib2c34o2k6bh5izw4wzwych5kr4pbq
-  tests/test_behaviours.py: bafybeifiaspefq5cshbt2n6gdgoucl5l7vwh7mtfjdhvmqsmwmrkiuvqza
+  tests/test_behaviours.py: bafybeigbaekfxjzhzynskbxbxyxy6p2ue6hcxcctadv44cmvag3ufs6mla
   tests/test_dialogues.py: bafybeig2phgjrv7ugdx4olviuclaxegvyzkcw7t2ztzrp3xcj2ygqs4344
   tests/test_handlers.py: bafybeific6kzxga3xtefrguaps2zvv4mjlowqzbsfq6hytzevfxermariu
   tests/test_models.py: bafybeidyzmub74c3m6zopwgxy43o2mx5tvig4wmahgyhoiur4qz55jgwaq
@@ -22,7 +22,7 @@ fingerprint:
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
   tests/utils/test_benchmarks.py: bafybeifhadhmpwhulgvxm3wgodwstnw3v2lq6uetntww3ia5r7trirfecm
   tests/utils/test_cost_calculation.py: bafybeiglkqnmurf6ner2wy2k6vy4zmfehfgzh2ctzn4ae2t3qhoaqs7he4
-  tests/utils/test_eip1271.py: bafybeif7qtbz4vm6va7u2gvmvnxgemulrqaq64qxhw6hnzfggkndrnnzmy
+  tests/utils/test_eip1271.py: bafybeieat4o4umh6kgxg3qfxkj55xjrd4maz4bgyzh6f233pgyjetgxqiu
   tests/utils/test_ipfs.py: bafybeig7ew26yfre64eajxd2cxl2b6w4jyit5tlr62q6hjcwhlvylrwesq
   tests/utils/test_local_cid.py: bafybeia6zbo4g6n6ypkccuywmnytvx6scyiw2pjn6eva6d6edg6hb6tmke
   tests/utils/test_preimage.py: bafybeiaf46s6zkelr4bqhpm7hlnjl7pbivpxaxckwz2bhzoe66wdnxzvza
@@ -32,7 +32,7 @@ fingerprint:
   utils/apis.py: bafybeih75sdickbk25zvduf2jolikmsfmh6c2rmju5lrdkhyhipmg23u2y
   utils/benchmarks.py: bafybeihqhdvpnp2jsmmab3fogpp7tpukdiwzmwuwq4qt6wk72hgpg6ypga
   utils/cost_calculation.py: bafybeic7siuvsglg7txjpzidskelw32r7lfphupzzrlnir6dbw3wng5v6u
-  utils/eip1271.py: bafybeieeea3klg5doqxtdyvbwrtskx4ktvbwc4scuaq3rnlvoz6mlpw56q
+  utils/eip1271.py: bafybeielxzkaiyprowdpdzvvxztnufid5l477li2pbbukqrpvetu6cz2xy
   utils/ipfs.py: bafybeiagbhhgvyo7mjdqvs5wrxy27bpzydd4aim7ntspv2ebygt7ewitra
   utils/local_cid.py: bafybeiey64eaq533wjyrbyhjlswvvfwtsaa7wyatr5ylpdgtqfqsrr4hlq
   utils/preimage.py: bafybeigdbtby7nts4nsr5icnxqh76nkwoz4xn6jqb2br53lrylh47elmfe
