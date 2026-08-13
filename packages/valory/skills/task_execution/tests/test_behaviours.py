@@ -3136,6 +3136,10 @@ def test_handle_get_task_populates_in_memory_requests(
     write from here in ``_handle_get_task`` after content validation so
     both paths hand real content to the analytics builder instead of
     the ``[offchain request]`` fallback.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
     """
     from types import SimpleNamespace as NS
 

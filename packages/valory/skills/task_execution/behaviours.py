@@ -1441,9 +1441,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._invalid_request = True
             return
 
-        self.context.shared_state.setdefault(IN_MEMORY_REQUESTS, {})[
-            str(req_id)
-        ] = json.dumps(task_data)
+        self.context.shared_state.setdefault(IN_MEMORY_REQUESTS, {})[str(req_id)] = (
+            json.dumps(task_data)
+        )
 
         my_mech = self._get_designated_marketplace_mech_address().lower()
         exec_prio = str(executing_task.get("priorityMech", "")).lower()
