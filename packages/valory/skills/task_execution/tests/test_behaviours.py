@@ -3125,6 +3125,56 @@ def test_handle_get_task_rejects_prompt_over_cap(
     assert mech_lookup_calls == [], "prompt cap did not gate the happy path"
 
 
+def test_handle_get_task_populates_in_memory_requests(
+    behaviour: Any, params_stub: Any, monkeypatch: Any
+) -> None:
+    """Validated IPFS content lands in ``in_memory_requests`` keyed by ``str(req_id)``.
+
+    ``_build_predict_api_event`` reads content from this cache when
+    constructing the analytics row. The off-chain path writes here from
+    ``handlers._enqueue_offchain_request``; the on-chain path must
+    write from here in ``_handle_get_task`` after content validation so
+    both paths hand real content to the analytics builder instead of
+    the ``[offchain request]`` fallback.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    from types import SimpleNamespace as NS
+
+    my_mech = "0xmymech"
+    params_stub.mech_to_config = {
+        my_mech: NS(is_marketplace_mech=True, use_dynamic_pricing=False)
+    }
+    other_mech = "0xothermech"
+    behaviour._executing_task = {
+        "requestId": 77,
+        "priorityMech": other_mech,
+        "request_delivery_rate": 100,
+        "contract_address": "0xmech",
+    }
+    behaviour._request_handling_deadline = None
+    behaviour._invalid_request = False
+    behaviour.context.shared_state[beh_mod.IN_MEMORY_REQUESTS] = {}
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+
+    task_data = {
+        "prompt": "With the given question 'Will X happen?' and the `yes` option...",
+        "tool": "unknown_tool",
+        "nonce": "abc123",
+        "request_context": {"market_id": "0xmarket", "market_prob": "0.42"},
+    }
+    msg = SimpleNamespace(files={"task.json": json.dumps(task_data)})
+
+    behaviour._handle_get_task(msg, MagicMock())
+
+    cached = behaviour.context.shared_state[beh_mod.IN_MEMORY_REQUESTS].get("77")
+    assert cached is not None, "in_memory_requests not populated for request 77"
+    assert json.loads(cached) == task_data
+
+
 # ---------------------------------------------------------------------------
 # Payment-model request deadline
 # ---------------------------------------------------------------------------
