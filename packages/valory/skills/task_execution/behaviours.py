@@ -944,6 +944,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 )
                 self._invalid_request = True
                 return
+            try:
+                task_data["request_cid"] = to_v1(get_ipfs_file_hash(task_data["data"]))
+            except Exception as e:  # pylint: disable=W0718
+                self.context.logger.warning(
+                    f"Could not derive request CID for offchain request "
+                    f"{request_id}: {e}."
+                )
+                task_data["request_cid"] = None
             self._handle_get_task(
                 cast(Any, SimpleNamespace(files={"metadata.json": inline_payload})),
                 cast(Any, None),
@@ -959,6 +967,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             self._invalid_request = True
             return
+        try:
+            task_data["request_cid"] = to_v1(ipfs_hash)
+        except Exception as e:  # pylint: disable=W0718
+            self.context.logger.warning(
+                f"Could not normalise request CID for request {request_id}: {e}."
+            )
+            task_data["request_cid"] = ipfs_hash
         self.context.logger.info(f"IPFS hash: {ipfs_hash}")
         ipfs_msg, message = self._build_ipfs_get_file_req(ipfs_hash)
         self.send_message(
@@ -2056,7 +2071,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "payment_type": str(executing_task.get("payment_type") or "") or None,
                 "delivery_rate": delivery_rate_str,
                 "nonce": nonce_int,
-                "content_cid": cid,
+                "content_cid": executing_task.get("request_cid") or cid,
                 "prompt": prompt,
                 "tool": tool,
                 "model": (
@@ -2098,7 +2113,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     if isinstance(response_data, dict)
                     else {"result": result_value or "", "status": status}
                 ),
-                "response_cid": None,
+                "response_cid": cid,
                 "delivered_at": now_iso,
             },
             "source": predict_api_source,
