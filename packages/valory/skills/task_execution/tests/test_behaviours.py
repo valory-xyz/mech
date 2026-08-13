@@ -1487,6 +1487,92 @@ def test_execute_task_bytes_request_id_converted(
     assert behaviour._executing_task["requestId"] == req_id_int
 
 
+def test_execute_task_onchain_stamps_request_cid_on_executing_task(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    fake_dialogue: Any,
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable,
+) -> None:
+    """On-chain ``_execute_task`` stamps the derived request CID on the executing task.
+
+    The value must be the CID the mech uses to fetch the request payload from
+    IPFS. ``_build_predict_api_event`` reads it back as the request-side
+    ``content_cid`` on the predict-api event.
+
+    :param behaviour: task_execution behaviour under test.
+    :param params_stub: params fixture — sets ``in_flight_req`` and the mech
+        contract address.
+    :param shared_state: shared_state fixture used to enqueue the pending task.
+    :param fake_dialogue: dialogue fixture consumed by the stubbed
+        ``_build_ipfs_get_file_req``.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param patch_ipfs_multihash: fixture-provided callable that stubs
+        ``get_ipfs_file_hash`` / ``to_v1`` / ``to_multihash`` to deterministic
+        values.
+    """
+    patch_ipfs_multihash(file_hash="bafyREQUESTcid")
+    params_stub.in_flight_req = False
+    task: Dict[str, Any] = {
+        "requestId": 314,
+        "request_delivery_rate": 100,
+        "data": b"raw-bytes",
+        "contract_address": "0xmech",
+    }
+    shared_state[beh_mod.PENDING_TASKS].append(task)
+    monkeypatch.setattr(
+        behaviour,
+        "_build_ipfs_get_file_req",
+        lambda h, timeout=None: (object(), fake_dialogue),
+    )
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    behaviour._execute_task()
+    assert behaviour._executing_task["request_cid"] == "bafyREQUESTcid"
+
+
+def test_execute_task_offchain_stamps_request_cid_on_executing_task(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    patch_ipfs_multihash: Callable,
+) -> None:
+    """Off-chain ``_execute_task`` stamps the derived request CID on the executing task.
+
+    The off-chain branch skips the IPFS round-trip and hands
+    ``_handle_get_task`` a synthetic message directly. The request CID must
+    still be derived from ``task_data["data"]`` (the bytes-decoded
+    requester-supplied ipfs_hash) before the handler runs so the downstream
+    predict-api event carries the correct value.
+
+    :param behaviour: task_execution behaviour under test.
+    :param params_stub: params fixture — sets ``in_flight_req`` and the mech
+        contract address.
+    :param shared_state: shared_state fixture used to enqueue the pending task.
+    :param monkeypatch: pytest monkeypatch fixture — stubs ``_handle_get_task``
+        so the assertion runs against the plumbing, not the handler's side
+        effects.
+    :param patch_ipfs_multihash: fixture-provided callable that stubs
+        ``get_ipfs_file_hash`` / ``to_v1`` / ``to_multihash`` to deterministic
+        values.
+    """
+    patch_ipfs_multihash(file_hash="bafyREQUESTcidOFF")
+    params_stub.in_flight_req = False
+    task: Dict[str, Any] = {
+        "requestId": 315,
+        "request_delivery_rate": 100,
+        "data": b"raw-hex-bytes",
+        "is_offchain": True,
+        "ipfs_data": json.dumps({"prompt": "p", "tool": "prediction-offline"}),
+        "contract_address": "0xmech",
+    }
+    shared_state[beh_mod.PENDING_TASKS].append(task)
+    monkeypatch.setattr(behaviour, "_handle_get_task", lambda *a, **k: None)
+    behaviour._execute_task()
+    assert behaviour._executing_task["request_cid"] == "bafyREQUESTcidOFF"
+
+
 # ---------------------------------------------------------------------------
 # _update_pending_tasks
 # ---------------------------------------------------------------------------
@@ -3708,6 +3794,83 @@ def test_build_predict_api_event_marketplace_task_falls_back_to_requester_key(
     )
     assert event["request"]["requester"] == "0xMARKETPLACE_REQUESTER"
     assert event["source"] == "mech_onchain"
+
+
+# ---------------------------------------------------------------------------
+# content_cid / response_cid semantics on _build_predict_api_event
+# ---------------------------------------------------------------------------
+#
+# Predict-api's ``mech_requests.content_cid`` is defined as the request-body
+# CID (the CID the mech fetches the request payload from), and
+# ``mech_responses.response_cid`` is the response-body CID. The builder must
+# carry them under those columns, not swap them.
+
+
+def test_build_predict_api_event_content_cid_is_request_cid_not_response_cid(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """``request.content_cid`` carries the request CID; ``response.response_cid`` carries the response CID."""
+    request_data = {
+        "prompt": "Will BTC reach $100k?",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    request_cid = "bafyREQUESTcid"
+    response_cid = "bafyRESPONSEcid"
+    executing_task["request_cid"] = request_cid
+
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid=response_cid, executing_task=executing_task
+    )
+
+    assert event["request"]["content_cid"] == request_cid
+    assert event["request"]["content_cid"] != response_cid
+    assert event["response"]["response_cid"] == response_cid
+
+
+def test_build_predict_api_event_content_cid_falls_back_to_response_cid_when_missing(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """A missing ``request_cid`` on the executing_task falls back to the response CID.
+
+    The defensive fallback keeps the predict-api row schema-valid on an
+    edge-case task shape where the request CID couldn't be derived
+    (e.g. malformed on-chain ``data`` bytes surviving past the
+    ``_execute_task`` guard, or a legacy path that doesn't populate
+    ``request_cid``). The regular happy path is covered by the sibling
+    test above; this pins the fallback so a future refactor doesn't
+    silently start emitting NULL.
+
+    :param behaviour: task_execution behaviour under test.
+    :param params_stub: params fixture — consumed by
+        ``_predict_api_event_setup`` to populate ``self.params`` bits.
+    :param shared_state: shared_state fixture used by
+        ``_predict_api_event_setup`` for ``IN_MEMORY_REQUESTS`` /
+        ``OFFCHAIN_REQUEST_RESPONSES`` seeding.
+    """
+    request_data = {
+        "prompt": "p",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    executing_task.pop("request_cid", None)
+
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafyRESPONSEcid", executing_task=executing_task
+    )
+
+    assert event["request"]["content_cid"] == "bafyRESPONSEcid"
+    assert event["response"]["response_cid"] == "bafyRESPONSEcid"
 
 
 # ---------------------------------------------------------------------------
