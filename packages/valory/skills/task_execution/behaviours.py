@@ -1284,6 +1284,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._finalize_done_task(local_cid)
             return
 
+        request_id_str = str(req_id)
+        self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
+            request_id_str
+        ] = {
+            "request_id": request_id_str,
+            "response": response,
+        }
+
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
         )

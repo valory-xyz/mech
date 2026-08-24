@@ -1932,6 +1932,65 @@ def test_handle_done_task_onchain_still_uploads_to_ipfs(
     assert shared_state[beh_mod.DONE_TASKS] == []
 
 
+def test_handle_done_task_onchain_stores_response_envelope_in_shared_state(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """On-chain success writes the response envelope under ``str(req_id)`` so
+    the same shared-state slot is populated regardless of delivery path."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=12)
+
+    monkeypatch.setattr(
+        behaviour,
+        "_build_ipfs_store_file_req",
+        lambda files, **k: (object(), fake_dialogue),
+    )
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=_make_success_result())
+
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["12"]
+    assert stored["request_id"] == "12"
+    assert stored["response"]["result"] == "prediction: yes"
+
+
+def test_handle_done_task_onchain_invalid_request_stores_reason_in_shared_state(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """On-chain invalid-request path stores the failure reason under
+    ``response["result"]`` so the shared-state envelope has parity with the
+    success shape."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=13)
+    behaviour._invalid_request = True
+    behaviour._ipfs_error_reason = "tool boom"
+
+    monkeypatch.setattr(
+        behaviour,
+        "_build_ipfs_store_file_req",
+        lambda files, **k: (object(), fake_dialogue),
+    )
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["13"]
+    assert stored["request_id"] == "13"
+    assert stored["response"]["result"] == "tool boom"
+
+
 # ---------------------------------------------------------------------------
 # _handle_store_response branches
 # ---------------------------------------------------------------------------
