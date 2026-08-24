@@ -19,6 +19,7 @@
 
 """This package contains the implementation of ."""
 
+import functools
 import json
 import threading
 import time
@@ -87,8 +88,9 @@ LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 # Shared-state keys owned by the MechHttpHandler (handlers.py); mirrored here
-# because the off-chain finalize path writes the rejection signal and clears the
-# buffered request metadata from the behaviour side.
+# because the off-chain finalize path writes the response envelope for the
+# ``/fetch_offchain_info`` polling endpoint and clears the buffered request
+# metadata from the behaviour side.
 OFFCHAIN_REQUEST_RESPONSES = "offchain_request_responses"
 IN_MEMORY_REQUESTS = "in_memory_requests"
 # Shared-state keys owned by the MechHttpHandler; mirrored here because
@@ -1281,13 +1283,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 local_cid,
                 preimage_buffer.STATUS_DELIVERED,
             )
-            self._finalize_done_task(local_cid)
+            self._finalize_done_task(local_cid, response=response)
             return
 
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
         )
-        self.send_message(msg, dialogue, self._handle_store_response)
+        callback = functools.partial(
+            self._handle_store_response, response=response, req_id=req_id
+        )
+        self.send_message(msg, dialogue, callback)
 
     def _restart_executor(self) -> None:
         """Restarts the executor."""
@@ -1671,7 +1676,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         return message, dialogue
 
-    def _handle_store_response(self, message: IpfsMessage, dialogue: Dialogue) -> None:
+    def _handle_store_response(
+        self,
+        message: IpfsMessage,
+        dialogue: Dialogue,
+        response: Optional[Dict[str, Any]] = None,
+        req_id: Any = None,
+    ) -> None:
         """Handle the response from ipfs for a store response request."""
         if not self._executing_task:
             self.context.logger.error(
@@ -1679,14 +1690,28 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             return
 
-        ipfs_hash = to_v1(message.ipfs_hash)
-        req_id = self._executing_task["requestId"]
-        self.context.logger.info(
-            f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
-        )
-        self._finalize_done_task(ipfs_hash)
+        live_req_id = self._executing_task["requestId"]
+        if req_id is not None and live_req_id != req_id:
+            # Stale callback from a previously-executed task that has since been
+            # timed out or swapped out. Dropping it prevents cross-task
+            # misattribution of the response and the CID.
+            self.context.logger.warning(
+                "Discarding stale IPFS store callback for request %s; "
+                "current executing task is %s.",
+                req_id,
+                live_req_id,
+            )
+            return
 
-    def _finalize_done_task(self, cid: str) -> None:
+        ipfs_hash = to_v1(message.ipfs_hash)
+        self.context.logger.info(
+            f"Response for request {live_req_id} stored on IPFS with hash {ipfs_hash}."
+        )
+        self._finalize_done_task(ipfs_hash, response=response)
+
+    def _finalize_done_task(
+        self, cid: str, response: Optional[Dict[str, Any]] = None
+    ) -> None:
         """Apply the CID to the in-flight done_task and publish it.
 
         Shared by the on-chain path (CID from a real IPFS store response) and the
@@ -1698,6 +1723,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         :param cid: the multibase-encoded CIDv1 to record on chain via
             ``task_result``.
+        :param response: the tool response envelope the predict-api event builder
+            needs. Both call sites pass this in so the value flows down the
+            synchronous stack rather than round-tripping through ``shared_state``.
         """
         executing_task = self._executing_task
         if executing_task is None:
@@ -1777,6 +1805,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 done_task=done_task,
                 cid=cid,
                 executing_task=cast(Dict[str, Any], executing_task),
+                response=response,
             )
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
@@ -1803,20 +1832,21 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         done_task: Dict[str, Any],
         cid: str,
         executing_task: Dict[str, Any],
+        response: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Build the structured predict-api event payload from on-hand data.
 
         The post-settlement behaviour batches every event from one FSM round
         into a single signed POST to the predict-api data lake. Fields are
         populated best-effort from the buffered request metadata
-        (``IN_MEMORY_REQUESTS``), the offchain response
-        (``OFFCHAIN_REQUEST_RESPONSES``), the in-flight ``executing_task``,
-        and skill params. Optional fields that aren't readily available are
-        left ``None``; the predict-api server accepts a NULL there. Required
-        fields default to safe placeholders rather than blocking the row: a
-        malformed event surfaces as a 422 when the predict-api write fires (and
-        lands in the local replay buffer so it's recoverable), which is
-        preferable to silently dropping analytics data.
+        (``IN_MEMORY_REQUESTS``), the tool ``response`` dict threaded down
+        from the caller, the in-flight ``executing_task``, and skill params.
+        Optional fields that aren't readily available are left ``None``; the
+        predict-api server accepts a NULL there. Required fields default to
+        safe placeholders rather than blocking the row: a malformed event
+        surfaces as a 422 when the predict-api write fires (and lands in the
+        local replay buffer so it's recoverable), which is preferable to
+        silently dropping analytics data.
 
         Datetimes are emitted as ISO 8601 strings with UTC offset so the
         predict-api ``AwareDatetime`` parser accepts them; mech ints (Unix
@@ -1827,6 +1857,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         :param done_task: the done-task dict appended to ``done_tasks``.
         :param cid: the locally-computed multibase CIDv1 for the response.
         :param executing_task: the original request dict from the handler.
+        :param response: the tool response envelope threaded from the caller;
+            carries ``result``, ``executed_at``, ``metadata`` and ``cost_dict``
+            for the current task. Kept as a parameter so the value flows down
+            the synchronous stack instead of round-tripping through
+            ``shared_state``, which would otherwise open a stale-callback
+            misattribution window.
         :return: a ``MechSettlementEvent``-shaped dict ready for FSM consensus
             replication and downstream signing in the post-tx behaviour.
         """
@@ -1867,27 +1903,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             request_data = request_data_raw
         else:
             request_data = {}
-        # OFFCHAIN_REQUEST_RESPONSES stores an envelope
-        # ``{"request_id":..., "status":"ok", "content_cid":..., "response":<inner>}``;
-        # the tool's actual ``result`` / ``executed_at`` live on the inner
-        # ``response`` dict, not on the envelope. Reading the envelope
-        # directly (the original code) returned ``None`` for both fields,
-        # forcing every completed task to be tagged ``status="failed"`` in
-        # the analytics row.
-        # ``OFFCHAIN_REQUEST_RESPONSES`` is written under ``str(req_id)`` by
-        # ``_handle_done_task`` and ``_record_offchain_failure``; ``req_id``
-        # is ``int`` for off-chain tasks post-ingress coercion. Read with the
-        # ``str`` key too or the analytics row is tagged ``status="failed"``
-        # for every successful off-chain delivery, silently, because the
-        # poller sees the right answer but the lake row does not.
-        response_envelope_raw = self.context.shared_state.get(
-            OFFCHAIN_REQUEST_RESPONSES, {}
-        ).get(request_id_str, {})
-        response_envelope = (
-            response_envelope_raw if isinstance(response_envelope_raw, dict) else {}
-        )
-        inner_response = response_envelope.get("response", {})
-        response_data = inner_response if isinstance(inner_response, dict) else {}
+        # ``response`` is threaded from the caller (both off-chain and on-chain
+        # finalize paths pass it in). Keeping the read local avoids the
+        # stale-callback / cross-task misattribution window that a round-trip
+        # through ``shared_state`` would open.
+        response_data = response if isinstance(response, dict) else {}
         tool = str(done_task.get("tool") or "unknown")
         delivery_mech = str(
             done_task.get("mech_address") or self.params.mech_marketplace_address or ""

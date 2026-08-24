@@ -19,6 +19,7 @@
 
 """This package contains the tests for the behaviours."""
 
+import functools
 import json
 import re
 import time
@@ -31,6 +32,17 @@ import pytest
 from prometheus_client import REGISTRY
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
+
+
+def _dispatch_target(cb: Any) -> Any:
+    """Return the underlying ``__func__`` a send_message callback (bare or partial) targets.
+
+    :param cb: a bound method or a ``functools.partial`` wrapping one.
+    :return: the callback's ``__func__`` for identity comparison in stubs.
+    """
+    if isinstance(cb, functools.partial):
+        cb = cb.func
+    return getattr(cb, "__func__", cb)
 
 
 def clear_registry() -> None:
@@ -296,7 +308,7 @@ def test_broken_process_pool_restart(
     def send_message_stub(
         msg: Any, dlg: Any, cb: Callable[[Any, Any], None], error_cb: Any = None
     ) -> None:
-        func = getattr(cb, "__func__", cb)
+        func = _dispatch_target(cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             body: Dict[str, Any] = {"prompt": "p", "tool": "sum"}
             cb(SimpleNamespace(files={"task.json": json.dumps(body)}), dlg)
@@ -382,7 +394,7 @@ def test_invalid_tool_is_recorded_and_no_execution(
         :param error_cb: Optional error callback for IPFS failures.
         :type error_cb: Any
         """
-        func = getattr(cb, "__func__", cb)
+        func = _dispatch_target(cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             cb(
                 SimpleNamespace(
@@ -929,7 +941,7 @@ def test_ipfs_error_does_not_cascade_to_next_task(
     ) -> None:
         """First task: IPFS error. Second task: success. STORE always succeeds."""
         task_num["n"] += 1
-        func = getattr(callback, "__func__", callback)
+        func = _dispatch_target(callback)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             if task_num["n"] == 1:
                 # Task 100: IPFS download fails
@@ -1925,11 +1937,176 @@ def test_handle_done_task_onchain_still_uploads_to_ipfs(
     behaviour._handle_done_task(task_result=None)
 
     assert len(send_calls) == 1
-    # IPFS callback is the existing store-response handler, not the local path.
-    # Bound methods compare unequal across access, so check by name.
-    assert send_calls[0][2].__func__ is behaviour._handle_store_response.__func__
+    # IPFS callback is the existing store-response handler, wrapped in a
+    # functools.partial so the response dict can be threaded through.
+    assert (
+        _dispatch_target(send_calls[0][2]) is behaviour._handle_store_response.__func__
+    )
     # The IPFS path defers finalization to the callback; done_tasks empty for now.
     assert shared_state[beh_mod.DONE_TASKS] == []
+
+
+def _onchain_e2e_setup(
+    behaviour: Any,
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> list:
+    """Common send_message / metrics / to_v1 monkeypatches for the on-chain E2E tests.
+
+    :param behaviour: the TaskExecutionBehaviour instance under test.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param fake_dialogue: fake IPFS dialogue for the store request.
+    :return: a list the send_message stub appends captured callbacks into.
+    """
+    captured_callback: list = []
+    monkeypatch.setattr(
+        behaviour,
+        "_build_ipfs_store_file_req",
+        lambda files, **k: (object(), fake_dialogue),
+    )
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda msg, dlg, cb, **k: captured_callback.append(cb),
+    )
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+    monkeypatch.setattr(beh_mod, "to_v1", lambda x: x)
+    return captured_callback
+
+
+@pytest.mark.parametrize(
+    (
+        "invalid",
+        "task_result_factory",
+        "ipfs_error_reason",
+        "expected_event_result",
+        "expected_event_status",
+        "expected_event_error",
+    ),
+    [
+        (
+            False,
+            lambda: _make_success_result(),
+            None,
+            "prediction: yes",
+            "complete",
+            None,
+        ),
+        (True, lambda: None, "tool boom", None, "failed", "tool boom"),
+    ],
+    ids=["success", "invalid_request_failure"],
+)
+def test_handle_done_task_onchain_end_to_end_predict_api_event(  # noqa: PLR0913
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+    invalid: bool,
+    task_result_factory: Any,
+    ipfs_error_reason: Any,
+    expected_event_result: Any,
+    expected_event_status: str,
+    expected_event_error: Any,
+) -> None:
+    """On-chain finalize threads the tool response into the predict-api event without touching shared-state."""
+    req_id = 12
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=req_id)
+    behaviour._invalid_request = invalid
+    behaviour._ipfs_error_reason = ipfs_error_reason
+
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._handle_done_task(task_result=task_result_factory())
+
+    assert len(captured_callback) == 1
+    captured_callback[0](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    event = done_tasks[0]["predict_api_event"]
+    assert event["response"]["result"] == expected_event_result
+    assert event["response"]["status"] == expected_event_status
+    assert event["response"]["error"] == expected_event_error
+
+    # Nothing about the on-chain path may leave state in the off-chain envelope
+    # slot; that slot belongs to the polling endpoint and admission ledger.
+    assert str(req_id) not in shared_state.get(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})
+
+
+def test_handle_store_response_stale_callback_is_dropped(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """A store callback captured for one request but landing after the task slot was reassigned must no-op."""
+    # Seed task A, run through _handle_done_task so the callback is bound to req_id=A.
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=100)
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+    behaviour._handle_done_task(task_result=_make_success_result())
+    assert len(captured_callback) == 1
+
+    # Simulate a timeout + task swap: the slot now holds task B (req_id=200).
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=200)
+    behaviour._invalid_request = False
+    behaviour._ipfs_error_reason = None
+
+    # Task A's late store callback fires; it must not attribute A's response to B.
+    captured_callback[0](SimpleNamespace(ipfs_hash="bafyA"), MagicMock())
+
+    # Nothing lands under task B's id (the mis-attribution vector), and the
+    # slot is left untouched so task B can finalize on its own callback later.
+    assert "200" not in shared_state.get(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})
+    assert shared_state[beh_mod.DONE_TASKS] == []
+    assert behaviour._executing_task["requestId"] == 200
+
+
+def test_handle_store_response_invalid_done_task_does_not_leak_envelope(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """Callback for an on-chain task whose done_task got cleared must leave shared-state untouched."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=42)
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+    behaviour._handle_done_task(task_result=_make_success_result())
+
+    # Clear _done_task, forcing the invalid-done_task early return in _finalize_done_task.
+    behaviour._done_task = None
+
+    captured_callback[0](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+
+    # No envelope leaked into the off-chain slot, and no done_task published.
+    assert "42" not in shared_state.get(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})
+    assert shared_state[beh_mod.DONE_TASKS] == []
+
+
+def test_handle_done_task_onchain_use_offchain_false_leaves_shared_state_clean(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """With ``use_offchain`` off, the on-chain path emits no predict-api event and touches no shared-state envelope."""
+    params_stub.use_offchain = False
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=77)
+    captured_callback = _onchain_e2e_setup(behaviour, monkeypatch, fake_dialogue)
+
+    behaviour._handle_done_task(task_result=_make_success_result())
+    assert len(captured_callback) == 1
+    captured_callback[0](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    assert "predict_api_event" not in done_tasks[0]
+    assert "77" not in shared_state.get(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})
 
 
 # ---------------------------------------------------------------------------
