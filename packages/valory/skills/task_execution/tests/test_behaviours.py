@@ -1939,8 +1939,7 @@ def test_handle_done_task_onchain_stores_response_envelope_in_shared_state(
     monkeypatch: Any,
     fake_dialogue: Any,
 ) -> None:
-    """On-chain success writes the response envelope under ``str(req_id)`` so
-    the same shared-state slot is populated regardless of delivery path."""
+    """On-chain success populates OFFCHAIN_REQUEST_RESPONSES with the response envelope."""
     _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=12)
 
     monkeypatch.setattr(
@@ -1967,9 +1966,7 @@ def test_handle_done_task_onchain_invalid_request_stores_reason_in_shared_state(
     monkeypatch: Any,
     fake_dialogue: Any,
 ) -> None:
-    """On-chain invalid-request path stores the failure reason under
-    ``response["result"]`` so the shared-state envelope has parity with the
-    success shape."""
+    """On-chain invalid-request populates OFFCHAIN_REQUEST_RESPONSES with the failure reason."""
     _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=13)
     behaviour._invalid_request = True
     behaviour._ipfs_error_reason = "tool boom"
