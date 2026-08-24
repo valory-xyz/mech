@@ -19,6 +19,7 @@
 
 """This package contains the tests for the behaviours."""
 
+import functools
 import json
 import re
 import time
@@ -31,6 +32,17 @@ import pytest
 from prometheus_client import REGISTRY
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
+
+
+def _dispatch_target(cb: Any) -> Any:
+    """Return the underlying ``__func__`` a send_message callback (bare or partial) targets.
+
+    :param cb: a bound method or a ``functools.partial`` wrapping one.
+    :return: the callback's ``__func__`` for identity comparison in stubs.
+    """
+    if isinstance(cb, functools.partial):
+        cb = cb.func
+    return getattr(cb, "__func__", cb)
 
 
 def clear_registry() -> None:
@@ -296,7 +308,7 @@ def test_broken_process_pool_restart(
     def send_message_stub(
         msg: Any, dlg: Any, cb: Callable[[Any, Any], None], error_cb: Any = None
     ) -> None:
-        func = getattr(cb, "__func__", cb)
+        func = _dispatch_target(cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             body: Dict[str, Any] = {"prompt": "p", "tool": "sum"}
             cb(SimpleNamespace(files={"task.json": json.dumps(body)}), dlg)
@@ -382,7 +394,7 @@ def test_invalid_tool_is_recorded_and_no_execution(
         :param error_cb: Optional error callback for IPFS failures.
         :type error_cb: Any
         """
-        func = getattr(cb, "__func__", cb)
+        func = _dispatch_target(cb)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             cb(
                 SimpleNamespace(
@@ -929,7 +941,7 @@ def test_ipfs_error_does_not_cascade_to_next_task(
     ) -> None:
         """First task: IPFS error. Second task: success. STORE always succeeds."""
         task_num["n"] += 1
-        func = getattr(callback, "__func__", callback)
+        func = _dispatch_target(callback)
         if func is beh_mod.TaskExecutionBehaviour._handle_get_task:
             if task_num["n"] == 1:
                 # Task 100: IPFS download fails
@@ -1925,9 +1937,11 @@ def test_handle_done_task_onchain_still_uploads_to_ipfs(
     behaviour._handle_done_task(task_result=None)
 
     assert len(send_calls) == 1
-    # IPFS callback is the existing store-response handler, not the local path.
-    # Bound methods compare unequal across access, so check by name.
-    assert send_calls[0][2].__func__ is behaviour._handle_store_response.__func__
+    # IPFS callback is the existing store-response handler, wrapped in a
+    # functools.partial so the response dict can be threaded through.
+    assert (
+        _dispatch_target(send_calls[0][2]) is behaviour._handle_store_response.__func__
+    )
     # The IPFS path defers finalization to the callback; done_tasks empty for now.
     assert shared_state[beh_mod.DONE_TASKS] == []
 
@@ -1937,9 +1951,11 @@ def test_handle_done_task_onchain_still_uploads_to_ipfs(
         "invalid",
         "task_result_factory",
         "ipfs_error_reason",
-        "expected_result",
-        "expected_status",
-        "expected_error",
+        "expected_envelope_result",
+        "expected_envelope_status",
+        "expected_event_result",
+        "expected_event_status",
+        "expected_event_error",
     ),
     [
         (
@@ -1947,10 +1963,21 @@ def test_handle_done_task_onchain_still_uploads_to_ipfs(
             lambda: _make_success_result(),
             None,
             "prediction: yes",
+            "ok",
+            "prediction: yes",
             "complete",
             None,
         ),
-        (True, lambda: None, "tool boom", None, "failed", "tool boom"),
+        (
+            True,
+            lambda: None,
+            "tool boom",
+            "tool boom",
+            "rejected",
+            None,
+            "failed",
+            "tool boom",
+        ),
     ],
     ids=["success", "invalid_request_failure"],
 )
@@ -1963,9 +1990,11 @@ def test_handle_done_task_onchain_end_to_end_predict_api_event(  # noqa: PLR0913
     invalid: bool,
     task_result_factory: Any,
     ipfs_error_reason: Any,
-    expected_result: Any,
-    expected_status: str,
-    expected_error: Any,
+    expected_envelope_result: Any,
+    expected_envelope_status: str,
+    expected_event_result: Any,
+    expected_event_status: str,
+    expected_event_error: Any,
 ) -> None:
     """On-chain finalize propagates the tool result through shared-state into the predict-api event."""
     req_id = 12
@@ -1973,28 +2002,54 @@ def test_handle_done_task_onchain_end_to_end_predict_api_event(  # noqa: PLR0913
     behaviour._invalid_request = invalid
     behaviour._ipfs_error_reason = ipfs_error_reason
 
+    captured_callback: list = []
     monkeypatch.setattr(
         behaviour,
         "_build_ipfs_store_file_req",
         lambda files, **k: (object(), fake_dialogue),
     )
-    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    monkeypatch.setattr(
+        behaviour,
+        "send_message",
+        lambda msg, dlg, cb, **k: captured_callback.append(cb),
+    )
     monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
     monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
     monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
     monkeypatch.setattr(beh_mod, "to_v1", lambda x: x)
 
+    captured_envelope: dict = {}
+    original_finalize = behaviour._finalize_done_task
+
+    def spy_finalize(cid: str) -> None:
+        envelope = (
+            shared_state.get(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})
+            .get(str(req_id), {})
+            .copy()
+        )
+        captured_envelope.update(envelope)
+        original_finalize(cid)
+
+    monkeypatch.setattr(behaviour, "_finalize_done_task", spy_finalize)
+
     behaviour._handle_done_task(task_result=task_result_factory())
-    behaviour._handle_store_response(
-        SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock()
-    )
+
+    assert len(captured_callback) == 1
+    captured_callback[0](SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock())
+
+    assert captured_envelope["request_id"] == str(req_id)
+    assert captured_envelope["status"] == expected_envelope_status
+    assert captured_envelope["content_cid"] == "bafyfakecid"
+    assert captured_envelope["response"]["result"] == expected_envelope_result
 
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
-    event = done_tasks[0]["predict_api_event"]
-    assert event["response"]["result"] == expected_result
-    assert event["response"]["status"] == expected_status
-    assert event["response"]["error"] == expected_error
+    done_task = done_tasks[0]
+    event = done_task["predict_api_event"]
+    assert event["response"]["result"] == expected_event_result
+    assert event["response"]["status"] == expected_event_status
+    assert event["response"]["error"] == expected_event_error
+    assert "_pending_response" not in done_task
 
     assert str(req_id) not in shared_state.get(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})
 

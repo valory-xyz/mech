@@ -19,6 +19,7 @@
 
 """This package contains the implementation of ."""
 
+import functools
 import json
 import threading
 import time
@@ -1284,12 +1285,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._finalize_done_task(local_cid)
             return
 
-        self._done_task["_pending_response"] = response
-
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
         )
-        self.send_message(msg, dialogue, self._handle_store_response)
+        callback = functools.partial(self._handle_store_response, response=response)
+        self.send_message(msg, dialogue, callback)
 
     def _restart_executor(self) -> None:
         """Restarts the executor."""
@@ -1673,7 +1673,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         return message, dialogue
 
-    def _handle_store_response(self, message: IpfsMessage, dialogue: Dialogue) -> None:
+    def _handle_store_response(
+        self,
+        message: IpfsMessage,
+        dialogue: Dialogue,
+        response: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Handle the response from ipfs for a store response request."""
         if not self._executing_task:
             self.context.logger.error(
@@ -1686,18 +1691,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(
             f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
         )
-        done_task = self._done_task if isinstance(self._done_task, dict) else {}
-        pending_response = done_task.get("_pending_response")
-        if pending_response is not None:
-            request_id_str = str(req_id)
-            self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
-                request_id_str
-            ] = {
-                "request_id": request_id_str,
-                "status": "ok",
-                "content_cid": ipfs_hash,
-                "response": pending_response,
-            }
+        if response is not None and self.params.use_offchain:
+            mech_address = self._get_designated_marketplace_mech_address()
+            mech_config = self.params.mech_to_config.get(mech_address.lower())
+            if mech_config is not None and mech_config.is_marketplace_mech:
+                request_id_str = str(req_id)
+                envelope_status = "rejected" if self._invalid_request else "ok"
+                self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
+                    request_id_str
+                ] = {
+                    "request_id": request_id_str,
+                    "status": envelope_status,
+                    "content_cid": ipfs_hash,
+                    "response": response,
+                }
         self._finalize_done_task(ipfs_hash)
 
     def _finalize_done_task(self, cid: str) -> None:
@@ -1799,8 +1806,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self.context.shared_state.get(OFFCHAIN_REQUEST_RESPONSES, {}).pop(
                     str(req_id), None
                 )
-        # Ephemeral field for the IPFS callback; keep it out of consensus.
-        done_task.pop("_pending_response", None)
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
@@ -1898,11 +1903,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # forcing every completed task to be tagged ``status="failed"`` in
         # the analytics row.
         # ``OFFCHAIN_REQUEST_RESPONSES`` is written under ``str(req_id)`` by
-        # ``_handle_done_task`` and ``_record_offchain_failure``; ``req_id``
-        # is ``int`` for off-chain tasks post-ingress coercion. Read with the
-        # ``str`` key too or the analytics row is tagged ``status="failed"``
-        # for every successful off-chain delivery, silently, because the
-        # poller sees the right answer but the lake row does not.
+        # ``_handle_done_task`` (off-chain), ``_handle_store_response`` (on-chain,
+        # after the IPFS CID lands) and ``_record_offchain_failure``. ``req_id``
+        # is ``int`` for off-chain tasks post-ingress coercion, so the lookup
+        # goes through ``str`` too — otherwise every successful off-chain
+        # delivery tags the analytics row ``status="failed"`` silently, since
+        # the poller sees the right answer but the lake row does not.
         response_envelope_raw = self.context.shared_state.get(
             OFFCHAIN_REQUEST_RESPONSES, {}
         ).get(request_id_str, {})
