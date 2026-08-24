@@ -1932,15 +1932,46 @@ def test_handle_done_task_onchain_still_uploads_to_ipfs(
     assert shared_state[beh_mod.DONE_TASKS] == []
 
 
-def test_handle_done_task_onchain_stores_response_envelope_in_shared_state(
+@pytest.mark.parametrize(
+    (
+        "invalid",
+        "task_result_factory",
+        "ipfs_error_reason",
+        "expected_result",
+        "expected_status",
+        "expected_error",
+    ),
+    [
+        (
+            False,
+            lambda: _make_success_result(),
+            None,
+            "prediction: yes",
+            "complete",
+            None,
+        ),
+        (True, lambda: None, "tool boom", None, "failed", "tool boom"),
+    ],
+    ids=["success", "invalid_request_failure"],
+)
+def test_handle_done_task_onchain_end_to_end_predict_api_event(  # noqa: PLR0913
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
     fake_dialogue: Any,
+    invalid: bool,
+    task_result_factory: Any,
+    ipfs_error_reason: Any,
+    expected_result: Any,
+    expected_status: str,
+    expected_error: Any,
 ) -> None:
-    """On-chain success populates OFFCHAIN_REQUEST_RESPONSES with the response envelope."""
-    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=12)
+    """On-chain finalize propagates the tool result through shared-state into the predict-api event."""
+    req_id = 12
+    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=req_id)
+    behaviour._invalid_request = invalid
+    behaviour._ipfs_error_reason = ipfs_error_reason
 
     monkeypatch.setattr(
         behaviour,
@@ -1951,41 +1982,21 @@ def test_handle_done_task_onchain_stores_response_envelope_in_shared_state(
     monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
     monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
     monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+    monkeypatch.setattr(beh_mod, "to_v1", lambda x: x)
 
-    behaviour._handle_done_task(task_result=_make_success_result())
-
-    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["12"]
-    assert stored["request_id"] == "12"
-    assert stored["response"]["result"] == "prediction: yes"
-
-
-def test_handle_done_task_onchain_invalid_request_stores_reason_in_shared_state(
-    behaviour: Any,
-    params_stub: Any,
-    shared_state: Dict[str, Any],
-    monkeypatch: Any,
-    fake_dialogue: Any,
-) -> None:
-    """On-chain invalid-request populates OFFCHAIN_REQUEST_RESPONSES with the failure reason."""
-    _seed_executing_task(behaviour, params_stub, is_offchain=False, req_id=13)
-    behaviour._invalid_request = True
-    behaviour._ipfs_error_reason = "tool boom"
-
-    monkeypatch.setattr(
-        behaviour,
-        "_build_ipfs_store_file_req",
-        lambda files, **k: (object(), fake_dialogue),
+    behaviour._handle_done_task(task_result=task_result_factory())
+    behaviour._handle_store_response(
+        SimpleNamespace(ipfs_hash="bafyfakecid"), MagicMock()
     )
-    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
-    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
-    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", MagicMock())
-    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
 
-    behaviour._handle_done_task(task_result=None)
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    assert len(done_tasks) == 1
+    event = done_tasks[0]["predict_api_event"]
+    assert event["response"]["result"] == expected_result
+    assert event["response"]["status"] == expected_status
+    assert event["response"]["error"] == expected_error
 
-    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["13"]
-    assert stored["request_id"] == "13"
-    assert stored["response"]["result"] == "tool boom"
+    assert str(req_id) not in shared_state.get(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})
 
 
 # ---------------------------------------------------------------------------

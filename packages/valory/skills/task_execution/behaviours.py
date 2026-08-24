@@ -87,8 +87,8 @@ LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 # Shared-state keys owned by the MechHttpHandler (handlers.py); mirrored here
-# because the off-chain finalize path writes the rejection signal and clears the
-# buffered request metadata from the behaviour side.
+# because the finalize path writes response envelopes for both off-chain
+# and on-chain deliveries from the behaviour side.
 OFFCHAIN_REQUEST_RESPONSES = "offchain_request_responses"
 IN_MEMORY_REQUESTS = "in_memory_requests"
 # Shared-state keys owned by the MechHttpHandler; mirrored here because
@@ -1284,13 +1284,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._finalize_done_task(local_cid)
             return
 
-        request_id_str = str(req_id)
-        self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
-            request_id_str
-        ] = {
-            "request_id": request_id_str,
-            "response": response,
-        }
+        self._done_task["_pending_response"] = response
 
         msg, dialogue = self._build_ipfs_store_file_req(
             {str(req_id): json.dumps(response)}
@@ -1692,6 +1686,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(
             f"Response for request {req_id} stored on IPFS with hash {ipfs_hash}."
         )
+        done_task = self._done_task if isinstance(self._done_task, dict) else {}
+        pending_response = done_task.get("_pending_response")
+        if pending_response is not None:
+            request_id_str = str(req_id)
+            self.context.shared_state.setdefault(OFFCHAIN_REQUEST_RESPONSES, {})[
+                request_id_str
+            ] = {
+                "request_id": request_id_str,
+                "status": "ok",
+                "content_cid": ipfs_hash,
+                "response": pending_response,
+            }
         self._finalize_done_task(ipfs_hash)
 
     def _finalize_done_task(self, cid: str) -> None:
@@ -1786,6 +1792,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 cid=cid,
                 executing_task=cast(Dict[str, Any], executing_task),
             )
+            if not is_offchain:
+                # Off-chain envelopes are retained for the polling endpoint
+                # (pruned on same-id re-request in handlers.py); on-chain
+                # envelopes have no equivalent lifecycle and must be pruned here.
+                self.context.shared_state.get(OFFCHAIN_REQUEST_RESPONSES, {}).pop(
+                    str(req_id), None
+                )
+        # Ephemeral field for the IPFS callback; keep it out of consensus.
+        done_task.pop("_pending_response", None)
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
