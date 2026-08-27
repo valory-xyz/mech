@@ -3940,6 +3940,10 @@ def test_build_predict_api_event_carries_request_tx_hash_on_onchain_task(
     ``request_tx_hash`` needs it so consumers can link back to
     Etherscan; without this pass-through mech-analytics rows come back
     NULL and the marketplace-app renders N/A for on-chain rows.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
     """
     request_data = {
         "prompt": "p",
@@ -3994,6 +3998,10 @@ def test_build_predict_api_event_response_delivery_tx_hash_placeholder(
     ``task_submission_abci/behaviours.py``). This test pins the
     placeholder shape so a future refactor that stops emitting the key
     entirely gets caught.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
     """
     request_data = {
         "prompt": "p",
@@ -4023,6 +4031,10 @@ def test_build_predict_api_event_placeholder_only_when_request_data_empty(
     propose-question generates its own question and has no user
     prompt). The new gate only substitutes the placeholder when
     ``request_data`` is empty at the dict level.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
     """
     # Populate IN_MEMORY_REQUESTS with a task that has an empty prompt
     # only via the missing-key path: shape ``_predict_api_event_setup``
@@ -4058,6 +4070,10 @@ def test_build_predict_api_event_empty_prompt_stays_empty_when_payload_present(
     those rows to the empty-IPFS placeholder bucket. Predict-api and
     downstream analytics tolerate ``prompt=""`` — that's the honest
     shape.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
     """
     request_data = {
         "prompt": "",

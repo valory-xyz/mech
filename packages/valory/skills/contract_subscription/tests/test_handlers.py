@@ -57,6 +57,12 @@ def _make_handler_bypassing_init(
     ``self.context.logger``, so bypass ``__init__`` via
     ``__new__`` and inject just those three. Same approach the
     sibling test helpers in this repo use for handler unit tests.
+
+    :param tx_receipt: dict returned by the stubbed
+        ``w3.eth.get_transaction_receipt``.
+    :param rich_logs: value returned by the stubbed
+        ``contract.events.Request().processReceipt``.
+    :return: a ``WebSocketHandler`` wired to the stubbed w3 + contract.
     """
     handler = WebSocketHandler.__new__(WebSocketHandler)
 
@@ -87,6 +93,7 @@ class TestGetTxArgsThreadsTxHash:
     """
 
     def test_returns_event_args_plus_tx_hash_and_false_flag(self) -> None:
+        """Legit Request emission: args carry ``tx_hash`` + ``no_request=False``."""
         tx_hash = "0x" + "ab" * 32
         tx_receipt = {"blockNumber": 12345}
         request_args = {"requestId": 42, "requester": "0x" + "aa" * 20}

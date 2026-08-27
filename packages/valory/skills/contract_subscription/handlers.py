@@ -137,6 +137,14 @@ class WebSocketHandler(BaseWebSocketHandler):
         WebSocket path (the primary ingest, per aea-config.yaml
         ``use_polling: false``) would leave every on-chain request
         landing at predict-api with ``request_tx_hash = NULL``.
+
+        :param tx_hash: hex string of the transaction the WebSocket
+            subscription surfaced. Threaded onto the returned dict so
+            downstream can populate ``request.request_tx_hash``.
+        :return: ``(args_dict, no_request)`` — ``args_dict`` holds the
+            Request event args plus a ``tx_hash`` key; ``no_request``
+            is True on any failure so the caller stops polling for
+            args on this tx.
         """
         try:
             tx_receipt: TxReceipt = self.w3.eth.get_transaction_receipt(tx_hash)

@@ -122,6 +122,7 @@ def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
         each dict; the hash excludes all three either way.
     :return: the 0x-prefixed 32-byte hex digest of the canonical batch.
     """
+
     def _without(d: Dict[str, Any], drop: str) -> Dict[str, Any]:
         return {k: v for k, v in d.items() if k != drop}
 

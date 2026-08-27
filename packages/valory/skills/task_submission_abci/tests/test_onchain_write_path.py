@@ -718,22 +718,29 @@ def _make_egress_self_for_enricher(
     no-op generator so the test can inspect the (mutated) events
     without needing a real HTTP dialogue.
 
-    ``final_tx_hash`` may be a value or the sentinel ``_RAISE`` to
-    force the underlying property to raise (mirrors the cold-entry
-    path where ``SynchronizedData.final_tx_hash`` raises ``ValueError``
-    because the key is absent).
+    :param delivered_events: the list ``_extract_offchain_events`` is
+        stubbed to return; the enricher mutates entries in place.
+    :param final_tx_hash: value the fake ``synchronized_data.final_tx_hash``
+        returns. Ignored when ``raise_on_read`` is True.
+    :param warnings_sink: mutable list captured by the logger stub;
+        defaults to a fresh list.
+    :param info_sink: mutable list captured by the logger stub;
+        defaults to a fresh list.
+    :param shared_state: mapping the fake ``context.shared_state`` holds;
+        defaults to a fresh dict.
+    :param raise_on_read: when True the fake ``final_tx_hash`` property
+        raises ``ValueError`` — mirrors the cold-entry FSM path.
+    :return: a ``SimpleNamespace`` shaped like the pieces of
+        ``self`` the enricher touches, with ``_post_calls`` attached
+        as a captured list of POST invocations.
     """
     warnings_sink = warnings_sink if warnings_sink is not None else []
     info_sink = info_sink if info_sink is not None else []
     shared_state = shared_state if shared_state is not None else {}
 
     logger = SimpleNamespace(
-        info=lambda msg, *a, **k: info_sink.append(
-            msg % a if a else str(msg)
-        ),
-        warning=lambda msg, *a, **k: warnings_sink.append(
-            msg % a if a else str(msg)
-        ),
+        info=lambda msg, *a, **k: info_sink.append(msg % a if a else str(msg)),
+        warning=lambda msg, *a, **k: warnings_sink.append(msg % a if a else str(msg)),
         error=lambda *a, **k: None,
         debug=lambda *a, **k: None,
     )
@@ -865,8 +872,7 @@ def test_enricher_warns_and_skips_when_final_tx_hash_is_empty_string() -> None:
     )
     assert delivered_events[0]["response"]["delivery_tx_hash"] is None
     assert any(
-        "final_tx_hash resolved to" in msg and "falsy" in msg
-        for msg in warnings_sink
+        "final_tx_hash resolved to" in msg and "falsy" in msg for msg in warnings_sink
     ), warnings_sink
     # Batch still ships — best-effort contract: the settlement row
     # lands NULL and backfill fills it in.
