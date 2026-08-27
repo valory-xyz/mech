@@ -2003,6 +2003,26 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # batches isolate the failure modes: a bad sweep can never cost
         # us a real delivered row.
         if delivered_events:
+            # Stamp the settlement tx hash on every delivered event
+            # before signing. This runs post-tx-settlement (the
+            # transaction-submission behaviour has already resolved
+            # ``synchronized_data.final_tx_hash``), so all events in
+            # this round share the same settlement tx by
+            # construction. For batched off-chain settlement one tx
+            # covers every request_id in the batch — consumers must
+            # not dedup by tx hash alone. Predict-api / mech-analytics
+            # tolerate ``None`` on either side, so if the FSM slot is
+            # unexpectedly unset we ship the batch anyway and let the
+            # backfill fill the gap rather than dropping settled
+            # deliveries.
+            final_tx_hash = getattr(
+                self.synchronized_data, "final_tx_hash", None
+            )
+            if final_tx_hash:
+                for event in delivered_events:
+                    response = event.get("response")
+                    if isinstance(response, dict):
+                        response["delivery_tx_hash"] = final_tx_hash
             yield from self._post_predict_api_batch(
                 events=delivered_events,
                 mech_address=mech_address,

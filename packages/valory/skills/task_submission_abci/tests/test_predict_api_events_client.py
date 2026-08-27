@@ -177,6 +177,60 @@ class TestComputeBatchHash:
         )
         assert h1 != h2
 
+    def test_hash_excludes_nested_request_tx_hash(self) -> None:
+        """``request.request_tx_hash`` is stripped from the hash surface.
+
+        Mirrors predict-api's server-side exclusion in
+        ``routes/mech.py``. Regression for the same
+        ``BATCH_HASH_MISMATCH`` shape as the source exclusion: an old
+        mech that doesn't send the field would hash without it, while
+        any new client that hashes ``{request_tx_hash: null}`` would
+        disagree. All three shapes must hash the same.
+        """
+        h_present = compute_batch_hash(
+            [{"request": {"prompt": "p", "request_tx_hash": "0xdead"}}]
+        )
+        h_null = compute_batch_hash(
+            [{"request": {"prompt": "p", "request_tx_hash": None}}]
+        )
+        h_missing = compute_batch_hash([{"request": {"prompt": "p"}}])
+        assert h_present == h_null == h_missing
+
+    def test_hash_excludes_nested_delivery_tx_hash(self) -> None:
+        """``response.delivery_tx_hash`` is stripped from the hash surface.
+
+        Same rollout hazard as ``request_tx_hash``. The post-tx
+        enricher stamps this field from
+        ``synchronized_data.final_tx_hash`` AFTER the hash is computed
+        on the mech side (the field is a placeholder ``None`` at build
+        time), and predict-api ignores it on the hash re-computation.
+        That means a legitimate mech-signed batch stays valid even
+        after the enricher writes a real value.
+        """
+        h_present = compute_batch_hash(
+            [{"response": {"result": "r", "delivery_tx_hash": "0xbeef"}}]
+        )
+        h_null = compute_batch_hash(
+            [{"response": {"result": "r", "delivery_tx_hash": None}}]
+        )
+        h_missing = compute_batch_hash([{"response": {"result": "r"}}])
+        assert h_present == h_null == h_missing
+
+    def test_hash_still_changes_on_non_excluded_nested_fields(self) -> None:
+        """The nested-field exclusion is targeted; siblings still count.
+
+        Guard against a future edit that filters the whole ``request``
+        or ``response`` sub-dict — that would hide tamper on real
+        fields like ``prompt`` and ``result``.
+        """
+        h1 = compute_batch_hash(
+            [{"request": {"prompt": "a", "request_tx_hash": "0x1"}}]
+        )
+        h2 = compute_batch_hash(
+            [{"request": {"prompt": "b", "request_tx_hash": "0x1"}}]
+        )
+        assert h1 != h2
+
 
 # ---------------------------------------------------------------------------
 # build_typed_data

@@ -91,12 +91,36 @@ def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
     the mech's own EOA already signed for; the mech owner is trusted
     for the origin of their own rows.
 
+    The nested ``request.request_tx_hash`` and
+    ``response.delivery_tx_hash`` fields are excluded on the same
+    principle. predict-api adds those columns nullable in an ordered
+    rollout (server first, mech second), so the server mirrors the
+    exclusion at ``routes/mech.py`` for the same batch-hash-parity
+    reason. The two fields still ride the payload — they just don't
+    participate in the signed hash. Same trade-off as ``source``: an
+    in-flight rewrite of an audit / display field on a row the mech's
+    EOA already signed for.
+
     :param events: the ordered list of settled-delivery event dicts.
-        ``source`` may or may not be present on each dict; the hash
-        excludes it either way.
+        ``source``, ``request.request_tx_hash`` and
+        ``response.delivery_tx_hash`` may or may not be present on
+        each dict; the hash excludes all three either way.
     :return: the 0x-prefixed 32-byte hex digest of the canonical batch.
     """
-    hash_input = [{k: v for k, v in event.items() if k != "source"} for event in events]
+    hash_input = []
+    for event in events:
+        stripped = {k: v for k, v in event.items() if k != "source"}
+        req = stripped.get("request")
+        if isinstance(req, dict):
+            stripped["request"] = {
+                k: v for k, v in req.items() if k != "request_tx_hash"
+            }
+        resp = stripped.get("response")
+        if isinstance(resp, dict):
+            stripped["response"] = {
+                k: v for k, v in resp.items() if k != "delivery_tx_hash"
+            }
+        hash_input.append(stripped)
     return "0x" + keccak(canonical_json_bytes(hash_input)).hex()
 
 

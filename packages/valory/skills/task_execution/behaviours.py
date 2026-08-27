@@ -2092,6 +2092,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "delivery_rate": delivery_rate_str,
                 "nonce": nonce_int,
                 "content_cid": executing_task.get("request_cid") or cid,
+                # The on-chain tx that emitted the ``MarketplaceRequest``
+                # event. The marketplace-contract wrapper captures it
+                # into ``executing_task["tx_hash"]`` for on-chain
+                # requests (see
+                # ``packages/valory/contracts/mech_marketplace/contract.py:197,294``).
+                # Legitimately absent for off-chain requests (no on-chain
+                # request event exists) — predict-api stores None → NULL.
+                "request_tx_hash": executing_task.get("tx_hash"),
                 "prompt": prompt,
                 "tool": tool,
                 "model": (
@@ -2134,6 +2142,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     else {"result": result_value or "", "status": status}
                 ),
                 "response_cid": cid,
+                # Placeholder. The settlement tx isn't known here —
+                # the post-tx behaviour stamps it from
+                # ``synchronized_data.final_tx_hash`` on every
+                # delivered event before signing the batch. Left as
+                # ``None`` so pydantic on the server side accepts the
+                # payload if the enricher never ran (retry-safe).
+                "delivery_tx_hash": None,
                 "delivered_at": now_iso,
             },
             "source": predict_api_source,
