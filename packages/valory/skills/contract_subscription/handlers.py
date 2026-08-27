@@ -127,12 +127,22 @@ class WebSocketHandler(BaseWebSocketHandler):
             self.context.logger.info(f"Added job to queue: {event_args}")
 
     def _get_tx_args(self, tx_hash: str) -> Any:
-        """Get the transaction arguments."""
+        """Get the transaction arguments.
+
+        Threads ``tx_hash`` back onto the returned dict so downstream
+        ``_build_predict_api_event`` can populate
+        ``request.request_tx_hash``. The sibling polling path in
+        ``mech_marketplace/contract.py::get_marketplace_undelivered_reqs``
+        already emits ``tx_hash`` on every task; without it here the
+        WebSocket path (the primary ingest, per aea-config.yaml
+        ``use_polling: false``) would leave every on-chain request
+        landing at predict-api with ``request_tx_hash = NULL``.
+        """
         try:
             tx_receipt: TxReceipt = self.w3.eth.get_transaction_receipt(tx_hash)
             self._last_processed_block = tx_receipt["blockNumber"]
             rich_logs = self.contract.events.Request().processReceipt(tx_receipt)  # type: ignore
-            return dict(rich_logs[0]["args"]), False
+            return {**dict(rich_logs[0]["args"]), "tx_hash": tx_hash}, False
 
         except Exception as exc:  # pylint: disable=W0718
             self.context.logger.error(

@@ -2093,12 +2093,16 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "nonce": nonce_int,
                 "content_cid": executing_task.get("request_cid") or cid,
                 # The on-chain tx that emitted the ``MarketplaceRequest``
-                # event. The marketplace-contract wrapper captures it
-                # into ``executing_task["tx_hash"]`` for on-chain
-                # requests (see
-                # ``packages/valory/contracts/mech_marketplace/contract.py:197,294``).
-                # Legitimately absent for off-chain requests (no on-chain
-                # request event exists) — predict-api stores None → NULL.
+                # event. Both marketplace-contract event readers
+                # (``get_marketplace_request_events`` and
+                # ``get_marketplace_undelivered_reqs`` in
+                # ``packages/valory/contracts/mech_marketplace/contract.py``)
+                # write ``tx_hash`` onto every task they emit, and the
+                # WebSocket ingestion path in
+                # ``contract_subscription/handlers.py::_get_tx_args``
+                # threads it through the primary write path. Off-chain
+                # requests legitimately have no on-chain request event
+                # so this field is absent — predict-api stores None → NULL.
                 "request_tx_hash": executing_task.get("tx_hash"),
                 "prompt": prompt,
                 "tool": tool,

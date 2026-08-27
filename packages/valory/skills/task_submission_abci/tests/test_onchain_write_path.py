@@ -700,6 +700,175 @@ def test_egress_gate_off_with_no_events_stays_silent() -> None:
     assert warnings_sink == []
 
 
+def _make_egress_self_for_enricher(
+    *,
+    delivered_events: List[Dict[str, Any]],
+    final_tx_hash: Any,
+    warnings_sink: List[str] | None = None,
+    info_sink: List[str] | None = None,
+    shared_state: Dict[str, Any] | None = None,
+    raise_on_read: bool = False,
+) -> Any:
+    """Build a self with a non-empty delivered batch + a stubbed POST helper.
+
+    The `_do_predict_api_write_best_effort` flow reaches the enricher
+    only when `_extract_offchain_events` returns a non-empty list AND
+    every earlier gate passes. Stub the read side to hand back the
+    caller-supplied list, and stub `_post_predict_api_batch` to a
+    no-op generator so the test can inspect the (mutated) events
+    without needing a real HTTP dialogue.
+
+    ``final_tx_hash`` may be a value or the sentinel ``_RAISE`` to
+    force the underlying property to raise (mirrors the cold-entry
+    path where ``SynchronizedData.final_tx_hash`` raises ``ValueError``
+    because the key is absent).
+    """
+    warnings_sink = warnings_sink if warnings_sink is not None else []
+    info_sink = info_sink if info_sink is not None else []
+    shared_state = shared_state if shared_state is not None else {}
+
+    logger = SimpleNamespace(
+        info=lambda msg, *a, **k: info_sink.append(
+            msg % a if a else str(msg)
+        ),
+        warning=lambda msg, *a, **k: warnings_sink.append(
+            msg % a if a else str(msg)
+        ),
+        error=lambda *a, **k: None,
+        debug=lambda *a, **k: None,
+    )
+
+    class _SyncData:
+        @property
+        def final_tx_hash(self) -> str:  # type: ignore[return]
+            if raise_on_read:
+                raise ValueError("final_tx_hash not in sync db")
+            return final_tx_hash
+
+        done_tasks: List[Dict[str, Any]] = []
+
+    post_calls: List[Dict[str, Any]] = []
+
+    def _fake_post(**kwargs: Any) -> Any:
+        post_calls.append(kwargs)
+        # ``yield from`` on a generator that returns without yielding
+        # completes cleanly. Match that shape.
+        if False:
+            yield None
+
+    self_ = SimpleNamespace(
+        context=SimpleNamespace(shared_state=shared_state, logger=logger),
+        params=SimpleNamespace(
+            use_offchain=True,
+            predict_api_events_url="https://mpp.autonolas.tech/mech/events",
+            mech_events_sweep_pending_enabled=False,
+            mech_events_sweep_max_age_seconds=60.0,
+            mech_events_chain_id=100,
+            mech_marketplace_address="0xMARKET",
+            agent_mech_contract_address="0xMECHCONTRACT",
+        ),
+        synchronized_data=_SyncData(),
+        _extract_offchain_events=lambda: delivered_events,
+        _sweep_pending_undelivered=lambda: ([], []),
+        _post_predict_api_batch=_fake_post,
+    )
+    self_._post_calls = post_calls  # type: ignore[attr-defined]
+    return self_
+
+
+def test_enricher_stamps_delivery_tx_hash_on_every_delivered_event() -> None:
+    """Every event in the delivered batch gets ``final_tx_hash`` stamped.
+
+    Regression against three mutations that would otherwise slip:
+    (a) delete the enrichment loop entirely (every event ships with
+    None); (b) flip ``if final_tx_hash is not None`` to ``is None``
+    (nothing gets stamped); (c) truncate the iteration
+    (``delivered_events[:1]``) — this asserts every event, so N=3
+    catches a slice-off-by-one.
+    """
+    hash_value = "0x" + "ab" * 32
+    delivered_events: List[Dict[str, Any]] = [
+        {"request": {"request_id": f"req-{i}"}, "response": {"delivery_tx_hash": None}}
+        for i in range(3)
+    ]
+    self_ = _make_egress_self_for_enricher(
+        delivered_events=delivered_events,
+        final_tx_hash=hash_value,
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    # Every event's response was stamped, and the POST was made with
+    # the same batch we mutated (arg-alias — behaviour passes the
+    # same list).
+    assert all(
+        e["response"]["delivery_tx_hash"] == hash_value for e in delivered_events
+    )
+    assert len(self_._post_calls) == 1  # type: ignore[attr-defined]
+    assert self_._post_calls[0]["events"] is delivered_events  # type: ignore[attr-defined]
+
+
+def test_enricher_skips_when_final_tx_hash_raises_and_ships_batch_anyway() -> None:
+    """Cold entry: ``final_tx_hash`` raises → skip stamping, still ship.
+
+    ``SynchronizedData.final_tx_hash`` raises ``ValueError`` when the
+    underlying key is absent. Without the try/except added in this
+    PR, the raise escapes ``_do_predict_api_write_best_effort`` (whose
+    docstring promises to never raise) and wedges the FSM. Assert we
+    log the skip AND still ship the batch (with delivery_tx_hash left
+    at whatever placeholder the ingress set — typically None).
+    """
+    delivered_events: List[Dict[str, Any]] = [
+        {"request": {"request_id": "req-cold"}, "response": {"delivery_tx_hash": None}}
+    ]
+    info_sink: List[str] = []
+    self_ = _make_egress_self_for_enricher(
+        delivered_events=delivered_events,
+        final_tx_hash=None,
+        raise_on_read=True,
+        info_sink=info_sink,
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    assert delivered_events[0]["response"]["delivery_tx_hash"] is None
+    assert any("no settlement tx hash resolved" in msg for msg in info_sink), info_sink
+    assert len(self_._post_calls) == 1  # type: ignore[attr-defined]
+
+
+def test_enricher_skips_when_final_tx_hash_matches_prior_period() -> None:
+    """Stale cross-period tx hash is detected and not re-used.
+
+    ``final_tx_hash`` sits in ``cross_period_persisted_keys`` so it
+    survives across periods. A cold entry into PostTxSettlement in
+    period N+1 without a fresh Settlement would otherwise re-use the
+    prior period's hash on the new events. This asserts we skip
+    stamping when the current hash matches the last-enriched one, and
+    log a warning so ops can see the misconfig.
+    """
+    hash_value = "0x" + "cd" * 32
+    delivered_events: List[Dict[str, Any]] = [
+        {"request": {"request_id": "req-new"}, "response": {"delivery_tx_hash": None}}
+    ]
+    warnings_sink: List[str] = []
+    # Seed shared_state as if we already enriched with this hash in a
+    # prior batch.
+    from packages.valory.skills.task_submission_abci.behaviours import (
+        _LAST_ENRICHED_TX_HASH,
+    )
+    self_ = _make_egress_self_for_enricher(
+        delivered_events=delivered_events,
+        final_tx_hash=hash_value,
+        shared_state={_LAST_ENRICHED_TX_HASH: hash_value},
+        warnings_sink=warnings_sink,
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    assert delivered_events[0]["response"]["delivery_tx_hash"] is None
+    assert any("already enriched a prior batch" in msg for msg in warnings_sink), warnings_sink
+
+
 def test_egress_gate_on_with_empty_url_short_circuits_at_debug_level() -> None:
     """``use_offchain=True`` but empty ``predict_api_events_url``: DEBUG log, no HTTP call.
 

@@ -107,19 +107,19 @@ def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
         each dict; the hash excludes all three either way.
     :return: the 0x-prefixed 32-byte hex digest of the canonical batch.
     """
+    def _without(d: Dict[str, Any], drop: str) -> Dict[str, Any]:
+        return {k: v for k, v in d.items() if k != drop}
+
     hash_input = []
     for event in events:
-        stripped = {k: v for k, v in event.items() if k != "source"}
-        req = stripped.get("request")
-        if isinstance(req, dict):
-            stripped["request"] = {
-                k: v for k, v in req.items() if k != "request_tx_hash"
-            }
-        resp = stripped.get("response")
-        if isinstance(resp, dict):
-            stripped["response"] = {
-                k: v for k, v in resp.items() if k != "delivery_tx_hash"
-            }
+        stripped = _without(event, "source")
+        for nested_key, drop_field in (
+            ("request", "request_tx_hash"),
+            ("response", "delivery_tx_hash"),
+        ):
+            nested = stripped.get(nested_key)
+            if isinstance(nested, dict):
+                stripped[nested_key] = _without(nested, drop_field)
         hash_input.append(stripped)
     return "0x" + keccak(canonical_json_bytes(hash_input)).hex()
 
