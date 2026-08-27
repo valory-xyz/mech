@@ -2030,13 +2030,29 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             nonce_int = int(nonce_raw) if nonce_raw is not None else None
         except (TypeError, ValueError):
             nonce_int = None
-        # The predict-api server requires ``prompt`` to be a non-empty string;
-        # placeholder rather than dropping the row. Enforce the cap on the
-        # UTF-8 BYTE length, not on ``len()`` (code points) — a CJK prompt
-        # of 50k code points encodes to ~150 KB and would otherwise sail
-        # past the 100 KB cap; matches how ``IPFS_MAX_TASK_BYTES`` is
-        # enforced elsewhere in this file.
-        prompt = str(request_data.get("prompt") or "[offchain request]")
+        # Placeholder ONLY when the mech never received any IPFS
+        # content for this request — an empty ``request_data`` dict
+        # means the handler couldn't populate ``IN_MEMORY_REQUESTS``,
+        # so the row would land at predict-api with no request-side
+        # context at all and needs a stand-in string.
+        #
+        # ``request_data`` being present with ``prompt=""`` is a
+        # legitimate shape: propose-question generates its own
+        # question and has no user prompt to carry through. The
+        # previous ``prompt or "[offchain request]"`` triggered the
+        # placeholder on that legit empty-string too, silently
+        # attributing 40-70 propose-question rows a day to the
+        # "empty-IPFS" bucket in downstream analytics.
+        #
+        # Enforce the cap on the UTF-8 BYTE length, not on ``len()``
+        # (code points) — a CJK prompt of 50k code points encodes to
+        # ~150 KB and would otherwise sail past the 100 KB cap;
+        # matches how ``IPFS_MAX_TASK_BYTES`` is enforced elsewhere
+        # in this file.
+        if not request_data:
+            prompt = "[offchain request]"
+        else:
+            prompt = str(request_data.get("prompt") or "")
         prompt_bytes = prompt.encode("utf-8")
         if len(prompt_bytes) > MAX_PROMPT_BYTES:
             prompt = prompt_bytes[:MAX_PROMPT_BYTES].decode("utf-8", errors="ignore")
