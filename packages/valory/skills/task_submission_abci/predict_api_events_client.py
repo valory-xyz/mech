@@ -96,7 +96,22 @@ def compute_batch_hash(events: List[Dict[str, Any]]) -> str:
     principle. predict-api adds those columns nullable in an ordered
     rollout (server first, mech second), so the server mirrors the
     exclusion at ``routes/mech.py`` for the same batch-hash-parity
-    reason. The two fields still ride the payload — they just don't
+    reason.
+
+    .. warning::
+        Coupled with predict-api's ``BATCH_HASH_EXCLUDED_FIELDS``
+        constant (PR #182, ``src/models/mech.py``). BOTH sides must
+        exclude the same field set, character-for-character. Pydantic
+        silently ignores unknown keys in its ``exclude`` param, so a
+        rename here without matching the twin surfaces at runtime as
+        ``BATCH_HASH_MISMATCH`` on every write — with no compile-time
+        signal on either side. If you rename or add a nested-key
+        exclusion in the ``for ... in ((...),)`` tuple below, update
+        ``predict-api/server/src/models/mech.py::BATCH_HASH_EXCLUDED_FIELDS``
+        in the same rollout. The two files are the whole hash
+        contract; anything else can drift, this can't.
+
+    The two fields still ride the payload — they just don't
     participate in the signed hash. Same trade-off as ``source``: an
     in-flight rewrite of an audit / display field on a row the mech's
     EOA already signed for.

@@ -144,13 +144,6 @@ LAST_TX = "last_tx"
 # post-tx behaviour reads, never writes).
 PENDING_TASKS = "pending_tasks"
 PAYMENT_MODEL = "payment_model"
-# Marker for the last-enriched settlement tx hash. The FSM keeps
-# ``final_tx_hash`` in ``cross_period_persisted_keys``, so a cold
-# entry into PostTxSettlementRound without a fresh settlement would
-# otherwise re-use the prior period's hash on this period's events.
-# We stash the last hash we actually used and skip enrichment when
-# the current value matches.
-_LAST_ENRICHED_TX_HASH = "predict_api_last_enriched_tx_hash"
 
 
 class OffchainKeys(Enum):
@@ -2030,21 +2023,29 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             # settlement in this period) that raise would escape this
             # method — which the docstring at the top of
             # ``_do_predict_api_write_best_effort`` promises never to
-            # do — and wedge the FSM in a re-entering loop. Catch it
-            # the same way the sibling access at
-            # ``check_last_tx_status`` (this file, above) does.
+            # do — and wedge the FSM in a re-entering loop. Narrowly
+            # catch ``ValueError`` (documented behaviour) at ``debug``
+            # so a broader FSM regression (``AttributeError`` from a
+            # property-chain refactor, ``TypeError`` from a corrupted
+            # DB) bubbles up as a real error rather than getting
+            # silently reported as "no settlement tx hash resolved".
             try:
                 final_tx_hash = self.synchronized_data.final_tx_hash
-            except Exception:  # noqa: BLE001 — mirrors sibling access
+            except ValueError as exc:
+                self.context.logger.debug(
+                    "final_tx_hash unavailable: %s",
+                    exc,
+                )
                 final_tx_hash = None
-            # Guard on ``is not None`` rather than truthiness so a
-            # future writer that lands ``""`` (empty string) trips a
-            # warning instead of being silently indistinguishable from
-            # "unset". Empty string is not a valid tx hash and should
-            # never appear here.
-            last_enriched = self.context.shared_state.get(
-                _LAST_ENRICHED_TX_HASH
-            )
+            # No stale-hash guard: every edge into ``PostTxSettlementRound``
+            # comes from a settlement-confirmed round, and predict-api's
+            # UPSERT is one-directional idempotent (``EXCLUDED.delivery_tx_hash
+            # IS NOT NULL AND stored delivery_tx_hash IS NULL``) so a
+            # re-POST with the same hash can never clobber. A cross-period
+            # "stale hash" isn't reachable on the FSM graph and the
+            # in-memory-only marker that used to guard it was empty
+            # right after the restart it claimed to protect (see the
+            # PR#481 review thread for the full trace).
             if final_tx_hash is None:
                 self.context.logger.info(
                     "predict-api write: no settlement tx hash resolved "
@@ -2052,22 +2053,14 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                     "backfill will fill later."
                 )
             elif not final_tx_hash:
+                # Guard on ``is not None`` upstream and truthiness here
+                # so an empty string (never a valid tx hash) surfaces as
+                # a warning rather than being silently indistinguishable
+                # from "unset" or landing on the wire.
                 self.context.logger.warning(
                     "predict-api write: final_tx_hash resolved to %r "
                     "(non-None, falsy); skipping enrichment. "
                     "Investigate upstream FSM.",
-                    final_tx_hash,
-                )
-            elif final_tx_hash == last_enriched:
-                # This period entered PostTxSettlement without a
-                # fresh settlement — the tx hash is the one we already
-                # stamped in a prior batch. Skip rather than mis-tag
-                # this period's events with the prior period's tx.
-                self.context.logger.warning(
-                    "predict-api write: final_tx_hash=%s already "
-                    "enriched a prior batch (cross-period stale from "
-                    "cross_period_persisted_keys); skipping enrichment. "
-                    "New settlement must land before the next batch.",
                     final_tx_hash,
                 )
             else:
@@ -2075,7 +2068,21 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                     response = event.get("response")
                     if isinstance(response, dict):
                         response["delivery_tx_hash"] = final_tx_hash
-                self.context.shared_state[_LAST_ENRICHED_TX_HASH] = final_tx_hash
+                    else:
+                        # Non-dict ``response`` is a shape bug upstream:
+                        # ``_build_predict_api_event`` always emits a
+                        # dict, but the batch is composed from
+                        # ``synchronized_data.done_tasks`` which was
+                        # serialised across an FSM boundary. Log so the
+                        # bad event is visible; don't skip the batch —
+                        # the mech-side loss is a NULL delivery_tx_hash
+                        # on that one row, which the backfill fills.
+                        self.context.logger.warning(
+                            "predict-api write: event dropped from "
+                            "tx-hash enrichment: response is %r (not a "
+                            "dict); shipping event unstamped.",
+                            type(response).__name__,
+                        )
             yield from self._post_predict_api_batch(
                 events=delivered_events,
                 mech_address=mech_address,

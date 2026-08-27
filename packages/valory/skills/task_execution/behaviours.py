@@ -2030,19 +2030,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             nonce_int = int(nonce_raw) if nonce_raw is not None else None
         except (TypeError, ValueError):
             nonce_int = None
-        # Placeholder ONLY when the mech never received any IPFS
-        # content for this request — an empty ``request_data`` dict
-        # means the handler couldn't populate ``IN_MEMORY_REQUESTS``,
-        # so the row would land at predict-api with no request-side
-        # context at all and needs a stand-in string.
+        # Three legitimate shapes on the way in:
         #
-        # ``request_data`` being present with ``prompt=""`` is a
-        # legitimate shape: propose-question generates its own
-        # question and has no user prompt to carry through. The
-        # previous ``prompt or "[offchain request]"`` triggered the
-        # placeholder on that legit empty-string too, silently
-        # attributing 40-70 propose-question rows a day to the
-        # "empty-IPFS" bucket in downstream analytics.
+        # 1. ``request_data == {}`` — the mech never received any IPFS
+        #    content (handler couldn't populate ``IN_MEMORY_REQUESTS``).
+        #    Row lands at predict-api with no request-side context;
+        #    stand-in placeholder makes the miss legible.
+        # 2. ``request_data == {"raw": ...}`` — the payload was
+        #    non-JSON, or was valid JSON but not a dict (see the
+        #    ``json.loads`` / ``isinstance`` fallback ~line 1895 above).
+        #    Non-empty dict but no ``prompt`` key. The previous check
+        #    (``if not request_data``) missed this case and the row
+        #    shipped ``prompt=""``, losing the "we couldn't parse
+        #    this" signal in downstream analytics — same class of bug
+        #    the empty-dict placeholder guards against, just moved to
+        #    a different bucket. Emit a distinct marker.
+        # 3. ``request_data`` present with ``prompt`` explicitly ``""``
+        #    or absent-and-present-key — a legitimate shape for
+        #    ``propose-question`` and other tools that generate their
+        #    own question. Empty string ships as-is.
         #
         # Enforce the cap on the UTF-8 BYTE length, not on ``len()``
         # (code points) — a CJK prompt of 50k code points encodes to
@@ -2051,6 +2057,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # in this file.
         if not request_data:
             prompt = "[offchain request]"
+        elif "prompt" not in request_data:
+            prompt = "[unparseable payload]"
         else:
             prompt = str(request_data.get("prompt") or "")
         prompt_bytes = prompt.encode("utf-8")

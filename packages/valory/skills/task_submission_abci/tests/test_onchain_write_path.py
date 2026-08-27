@@ -836,37 +836,79 @@ def test_enricher_skips_when_final_tx_hash_raises_and_ships_batch_anyway() -> No
     assert len(self_._post_calls) == 1  # type: ignore[attr-defined]
 
 
-def test_enricher_skips_when_final_tx_hash_matches_prior_period() -> None:
-    """Stale cross-period tx hash is detected and not re-used.
+def test_enricher_warns_and_skips_when_final_tx_hash_is_empty_string() -> None:
+    """Empty-string ``final_tx_hash`` surfaces as a warning, not silently.
 
-    ``final_tx_hash`` sits in ``cross_period_persisted_keys`` so it
-    survives across periods. A cold entry into PostTxSettlement in
-    period N+1 without a fresh Settlement would otherwise re-use the
-    prior period's hash on the new events. This asserts we skip
-    stamping when the current hash matches the last-enriched one, and
-    log a warning so ops can see the misconfig.
+    A future FSM regression that lands ``final_tx_hash=""`` would take
+    the truthiness-false branch and skip stamping, but the guard on
+    ``elif not final_tx_hash:`` is what makes that legible as an
+    "investigate upstream" warning rather than being indistinguishable
+    from the routine ``None`` "no settlement resolved" path. Without
+    this branch, empty-string would either:
+
+    * ride through as-is (invalid tx hash on the wire), or
+    * hit the else branch and stamp ``response["delivery_tx_hash"] = ""``
+      which the predict-api server would then have to reject with
+      ``BATCH_HASH_MISMATCH`` — recovering only via backfill.
     """
-    hash_value = "0x" + "cd" * 32
     delivered_events: List[Dict[str, Any]] = [
-        {"request": {"request_id": "req-new"}, "response": {"delivery_tx_hash": None}}
+        {"request": {"request_id": "req-empty"}, "response": {"delivery_tx_hash": None}}
     ]
     warnings_sink: List[str] = []
-    # Seed shared_state as if we already enriched with this hash in a
-    # prior batch.
-    from packages.valory.skills.task_submission_abci.behaviours import (
-        _LAST_ENRICHED_TX_HASH,
-    )
     self_ = _make_egress_self_for_enricher(
         delivered_events=delivered_events,
-        final_tx_hash=hash_value,
-        shared_state={_LAST_ENRICHED_TX_HASH: hash_value},
+        final_tx_hash="",
         warnings_sink=warnings_sink,
     )
     _drive_generator_once(
         PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
     )
     assert delivered_events[0]["response"]["delivery_tx_hash"] is None
-    assert any("already enriched a prior batch" in msg for msg in warnings_sink), warnings_sink
+    assert any(
+        "final_tx_hash resolved to" in msg and "falsy" in msg
+        for msg in warnings_sink
+    ), warnings_sink
+    # Batch still ships — best-effort contract: the settlement row
+    # lands NULL and backfill fills it in.
+    assert len(self_._post_calls) == 1  # type: ignore[attr-defined]
+
+
+def test_enricher_warns_when_response_is_not_a_dict_and_ships_batch() -> None:
+    """Non-dict ``response`` on an event: warn, skip that stamp, ship the batch.
+
+    ``_build_predict_api_event`` always emits a dict for ``response``,
+    but the batch composes from ``synchronized_data.done_tasks`` which
+    was serialised across an FSM boundary. A future upstream mutation
+    that hands us a scalar / list / None here would silently be
+    dropped by the ``isinstance(response, dict)`` false branch; the
+    warning makes the drop visible so ops can chase the shape bug.
+
+    Regression: without the ``else`` branch a shape bug degrades to
+    "one row missing delivery_tx_hash forever, no signal in logs".
+    """
+    hash_value = "0x" + "cd" * 32
+    delivered_events: List[Dict[str, Any]] = [
+        {"request": {"request_id": "req-dict"}, "response": {"delivery_tx_hash": None}},
+        {"request": {"request_id": "req-scalar"}, "response": "not-a-dict"},
+    ]
+    warnings_sink: List[str] = []
+    self_ = _make_egress_self_for_enricher(
+        delivered_events=delivered_events,
+        final_tx_hash=hash_value,
+        warnings_sink=warnings_sink,
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    # Dict response landed a hash; scalar response was skipped intact.
+    assert delivered_events[0]["response"]["delivery_tx_hash"] == hash_value
+    assert delivered_events[1]["response"] == "not-a-dict"
+    # Warning names the type so ops can chase upstream.
+    assert any(
+        "response is" in msg and "str" in msg for msg in warnings_sink
+    ), warnings_sink
+    # Batch still ships — one bad shape doesn't cost us the real deliveries.
+    assert len(self_._post_calls) == 1  # type: ignore[attr-defined]
 
 
 def test_egress_gate_on_with_empty_url_short_circuits_at_debug_level() -> None:
