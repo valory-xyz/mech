@@ -2030,13 +2030,37 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             nonce_int = int(nonce_raw) if nonce_raw is not None else None
         except (TypeError, ValueError):
             nonce_int = None
-        # The predict-api server requires ``prompt`` to be a non-empty string;
-        # placeholder rather than dropping the row. Enforce the cap on the
-        # UTF-8 BYTE length, not on ``len()`` (code points) — a CJK prompt
-        # of 50k code points encodes to ~150 KB and would otherwise sail
-        # past the 100 KB cap; matches how ``IPFS_MAX_TASK_BYTES`` is
-        # enforced elsewhere in this file.
-        prompt = str(request_data.get("prompt") or "[offchain request]")
+        # Three legitimate shapes on the way in:
+        #
+        # 1. ``request_data == {}`` — the mech never received any IPFS
+        #    content (handler couldn't populate ``IN_MEMORY_REQUESTS``).
+        #    Row lands at predict-api with no request-side context;
+        #    stand-in placeholder makes the miss legible.
+        # 2. ``request_data == {"raw": ...}`` — the payload was
+        #    non-JSON, or was valid JSON but not a dict (see the
+        #    ``json.loads`` / ``isinstance`` fallback ~line 1895 above).
+        #    Non-empty dict but no ``prompt`` key. The previous check
+        #    (``if not request_data``) missed this case and the row
+        #    shipped ``prompt=""``, losing the "we couldn't parse
+        #    this" signal in downstream analytics — same class of bug
+        #    the empty-dict placeholder guards against, just moved to
+        #    a different bucket. Emit a distinct marker.
+        # 3. ``request_data`` present with ``prompt`` explicitly ``""``
+        #    or absent-and-present-key — a legitimate shape for
+        #    ``propose-question`` and other tools that generate their
+        #    own question. Empty string ships as-is.
+        #
+        # Enforce the cap on the UTF-8 BYTE length, not on ``len()``
+        # (code points) — a CJK prompt of 50k code points encodes to
+        # ~150 KB and would otherwise sail past the 100 KB cap;
+        # matches how ``IPFS_MAX_TASK_BYTES`` is enforced elsewhere
+        # in this file.
+        if not request_data:
+            prompt = "[offchain request]"
+        elif "prompt" not in request_data:
+            prompt = "[unparseable payload]"
+        else:
+            prompt = str(request_data.get("prompt") or "")
         prompt_bytes = prompt.encode("utf-8")
         if len(prompt_bytes) > MAX_PROMPT_BYTES:
             prompt = prompt_bytes[:MAX_PROMPT_BYTES].decode("utf-8", errors="ignore")
@@ -2092,6 +2116,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "delivery_rate": delivery_rate_str,
                 "nonce": nonce_int,
                 "content_cid": executing_task.get("request_cid") or cid,
+                # The on-chain tx that emitted the ``MarketplaceRequest``
+                # event. Both marketplace-contract event readers
+                # (``get_marketplace_request_events`` and
+                # ``get_marketplace_undelivered_reqs`` in
+                # ``packages/valory/contracts/mech_marketplace/contract.py``)
+                # write ``tx_hash`` onto every task they emit, and the
+                # WebSocket ingestion path in
+                # ``contract_subscription/handlers.py::_get_tx_args``
+                # threads it through the primary write path. Off-chain
+                # requests legitimately have no on-chain request event
+                # so this field is absent — predict-api stores None → NULL.
+                "request_tx_hash": executing_task.get("tx_hash"),
                 "prompt": prompt,
                 "tool": tool,
                 "model": (
@@ -2134,6 +2170,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     else {"result": result_value or "", "status": status}
                 ),
                 "response_cid": cid,
+                # Placeholder. The settlement tx isn't known here —
+                # the post-tx behaviour stamps it from
+                # ``synchronized_data.final_tx_hash`` on every
+                # delivered event before signing the batch. Left as
+                # ``None`` so pydantic on the server side accepts the
+                # payload if the enricher never ran (retry-safe).
+                "delivery_tx_hash": None,
                 "delivered_at": now_iso,
             },
             "source": predict_api_source,

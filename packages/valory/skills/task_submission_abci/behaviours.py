@@ -2003,6 +2003,86 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # batches isolate the failure modes: a bad sweep can never cost
         # us a real delivered row.
         if delivered_events:
+            # Stamp the settlement tx hash on every delivered event
+            # before signing. This runs post-tx-settlement (the
+            # transaction-submission behaviour has already resolved
+            # ``synchronized_data.final_tx_hash``), so all events in
+            # this round share the same settlement tx by
+            # construction. For batched off-chain settlement one tx
+            # covers every request_id in the batch — consumers must
+            # not dedup by tx hash alone. Predict-api / mech-analytics
+            # tolerate ``None`` on either side, so if the FSM slot is
+            # unexpectedly unset we ship the batch anyway and let the
+            # backfill fill the gap rather than dropping settled
+            # deliveries.
+            #
+            # ``final_tx_hash`` is a property whose backing DB access
+            # raises ``ValueError`` when the key is absent (see
+            # ``rounds.py::SynchronizedData.final_tx_hash``). On a cold
+            # entry into PostTxSettlementRound (first boot, no prior
+            # settlement in this period) that raise would escape this
+            # method — which the docstring at the top of
+            # ``_do_predict_api_write_best_effort`` promises never to
+            # do — and wedge the FSM in a re-entering loop. Narrowly
+            # catch ``ValueError`` (documented behaviour) at ``debug``
+            # so a broader FSM regression (``AttributeError`` from a
+            # property-chain refactor, ``TypeError`` from a corrupted
+            # DB) bubbles up as a real error rather than getting
+            # silently reported as "no settlement tx hash resolved".
+            try:
+                final_tx_hash = self.synchronized_data.final_tx_hash
+            except ValueError as exc:
+                self.context.logger.debug(
+                    "final_tx_hash unavailable: %s",
+                    exc,
+                )
+                final_tx_hash = None
+            # No stale-hash guard: every edge into ``PostTxSettlementRound``
+            # comes from a settlement-confirmed round, and predict-api's
+            # UPSERT is one-directional idempotent (``EXCLUDED.delivery_tx_hash
+            # IS NOT NULL AND stored delivery_tx_hash IS NULL``) so a
+            # re-POST with the same hash can never clobber. A cross-period
+            # "stale hash" isn't reachable on the FSM graph and the
+            # in-memory-only marker that used to guard it was empty
+            # right after the restart it claimed to protect (see the
+            # PR#481 review thread for the full trace).
+            if final_tx_hash is None:
+                self.context.logger.info(
+                    "predict-api write: no settlement tx hash resolved "
+                    "for this batch; delivery_tx_hash left NULL, "
+                    "backfill will fill later."
+                )
+            elif not final_tx_hash:
+                # Guard on ``is not None`` upstream and truthiness here
+                # so an empty string (never a valid tx hash) surfaces as
+                # a warning rather than being silently indistinguishable
+                # from "unset" or landing on the wire.
+                self.context.logger.warning(
+                    "predict-api write: final_tx_hash resolved to %r "
+                    "(non-None, falsy); skipping enrichment. "
+                    "Investigate upstream FSM.",
+                    final_tx_hash,
+                )
+            else:
+                for event in delivered_events:
+                    response = event.get("response")
+                    if isinstance(response, dict):
+                        response["delivery_tx_hash"] = final_tx_hash
+                    else:
+                        # Non-dict ``response`` is a shape bug upstream:
+                        # ``_build_predict_api_event`` always emits a
+                        # dict, but the batch is composed from
+                        # ``synchronized_data.done_tasks`` which was
+                        # serialised across an FSM boundary. Log so the
+                        # bad event is visible; don't skip the batch —
+                        # the mech-side loss is a NULL delivery_tx_hash
+                        # on that one row, which the backfill fills.
+                        self.context.logger.warning(
+                            "predict-api write: event dropped from "
+                            "tx-hash enrichment: response is %r (not a "
+                            "dict); shipping event unstamped.",
+                            type(response).__name__,
+                        )
             yield from self._post_predict_api_batch(
                 events=delivered_events,
                 mech_address=mech_address,

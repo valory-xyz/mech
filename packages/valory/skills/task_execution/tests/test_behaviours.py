@@ -3927,6 +3927,168 @@ def test_build_predict_api_event_onchain_task_carries_mech_onchain_source(
     assert event["response"]["is_offchain"] is False
 
 
+def test_build_predict_api_event_carries_request_tx_hash_on_onchain_task(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """On-chain requests thread ``executing_task['tx_hash']`` onto the event.
+
+    The marketplace-contract wrapper captures the tx that emitted the
+    ``MarketplaceRequest`` event and stashes it under
+    ``executing_task['tx_hash']``. The predict-api row's
+    ``request_tx_hash`` needs it so consumers can link back to
+    Etherscan; without this pass-through mech-analytics rows come back
+    NULL and the marketplace-app renders N/A for on-chain rows.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
+    """
+    request_data = {
+        "prompt": "p",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    executing_task["is_offchain"] = False
+    executing_task["tx_hash"] = "0x" + "ab" * 32
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["request"]["request_tx_hash"] == "0x" + "ab" * 32
+
+
+def test_build_predict_api_event_omits_request_tx_hash_on_offchain_task(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """Off-chain path has no on-chain request event; the field is None."""
+    request_data = {
+        "prompt": "p",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    # ``is_offchain=True`` remains from _predict_api_event_setup default,
+    # and ``tx_hash`` is intentionally absent — matches the shape the
+    # off-chain HTTP handler produces.
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["request"]["request_tx_hash"] is None
+
+
+def test_build_predict_api_event_response_delivery_tx_hash_placeholder(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """The response leaves ``delivery_tx_hash=None`` for the post-tx enricher.
+
+    ``_build_predict_api_event`` runs at task-finalize time, before the
+    settlement tx exists. The post-tx settlement behaviour stamps every
+    delivered event's ``response.delivery_tx_hash`` from
+    ``synchronized_data.final_tx_hash`` before signing the batch (see
+    ``task_submission_abci/behaviours.py``). This test pins the
+    placeholder shape so a future refactor that stops emitting the key
+    entirely gets caught.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
+    """
+    request_data = {
+        "prompt": "p",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert "delivery_tx_hash" in event["response"]
+    assert event["response"]["delivery_tx_hash"] is None
+
+
+def test_build_predict_api_event_placeholder_only_when_request_data_empty(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """No IPFS content received → ``[offchain request]`` placeholder.
+
+    The pre-fix logic gated on ``request_data.get('prompt') or
+    '[offchain request]'`` — that also triggered when the payload was
+    present but the prompt inside was legitimately empty (e.g.
+    propose-question generates its own question and has no user
+    prompt). The new gate only substitutes the placeholder when
+    ``request_data`` is empty at the dict level.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
+    """
+    # Populate IN_MEMORY_REQUESTS with a task that has an empty prompt
+    # only via the missing-key path: shape ``_predict_api_event_setup``
+    # around no request_data at all.
+    req_id = "req-empty-payload"
+    shared_state[beh_mod.IN_MEMORY_REQUESTS] = {}
+    shared_state.setdefault(beh_mod.OFFCHAIN_REQUEST_RESPONSES, {})[req_id] = {
+        "response": {"result": "r", "executed_at": "2026-06-25T00:00:00Z"}
+    }
+    done_task = {"request_id": req_id, "is_offchain": True, "tool": "propose-question"}
+    executing_task = {
+        "requestId": req_id,
+        "request_delivery_rate": 10**16,
+        "is_offchain": True,
+        "sender": "0xrequester",
+    }
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["request"]["prompt"] == "[offchain request]"
+
+
+def test_build_predict_api_event_empty_prompt_stays_empty_when_payload_present(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """Propose-question payload with ``prompt=''`` must NOT get the placeholder.
+
+    The whole point of the fix: a real IPFS payload landed, its
+    ``prompt`` field is legitimately empty (propose-question generates
+    the question itself). The previous ``or`` gate misattributed
+    those rows to the empty-IPFS placeholder bucket. Predict-api and
+    downstream analytics tolerate ``prompt=""`` — that's the honest
+    shape.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
+    """
+    request_data = {
+        "prompt": "",
+        "tool": "propose-question",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["request"]["prompt"] == ""
+
+
 def test_build_predict_api_event_marketplace_task_falls_back_to_requester_key(
     behaviour: Any,
     params_stub: Any,
