@@ -70,6 +70,22 @@ class SynchronizedData(BaseSynchronizedData):
         return cast(List[Dict[str, Any]], self.db.get("done_tasks", []))
 
     @property
+    def submitted_request_ids(self) -> List[str]:
+        """Return request ids of tasks submitted in the most recent settlement.
+
+        Written by :class:`PostTxSettlementRound` end_block and read by
+        :meth:`TaskPoolingBehaviour.handle_submitted_tasks` next period
+        to prune ``shared_state[DONE_TASKS]`` of already-delivered
+        entries. Cross-period-persisted because it's small and the next
+        cycle needs it; the full ``done_tasks`` list is not carried
+        across periods because it holds per-event request/response
+        payload data that would inflate DB serialization.
+
+        :return: the list of request ids from the most recent settlement.
+        """
+        return cast(List[str], self.db.get("submitted_request_ids", []))
+
+    @property
     def final_tx_hash(self) -> str:
         """Get the verified tx hash."""
         return cast(str, self.db.get_strict("final_tx_hash"))
@@ -264,18 +280,18 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     NO_MAJORITY arm only fires if the agents can't agree on having reached
     this round at all, which is the same shape as every consensus round.
 
-    ``done_tasks`` MUST survive this round untouched. It is in
-    ``cross_period_persisted_keys`` because
-    ``TaskPoolingBehaviour.handle_submitted_tasks`` reads it at the START
-    of the next cycle to know which ``request_id``s to prune from
-    ``shared_state[DONE_TASKS]``. Clearing here on DONE strands the
-    delivered tasks in shared state, so every subsequent cycle re-pools
-    and re-delivers the same batch — the Safe tx succeeds each time but
-    the inner ``mech.deliverMulti`` reverts on the already-delivered
-    ids, burning gas without emitting new Deliver events. Any re-fire
-    concern on the NO_MAJORITY / ROUND_TIMEOUT self-loop must be handled
-    inside the behaviour (idempotence flag) rather than by mutating a
-    field the next behaviour depends on.
+    On DONE the round writes ``submitted_request_ids`` — the id-only
+    hand-off used by the next cycle's
+    :meth:`TaskPoolingBehaviour.handle_submitted_tasks` to prune
+    ``shared_state[DONE_TASKS]``. ``done_tasks`` itself stays in the
+    period it was set and is not carried across; the ID hand-off is
+    what rides consensus between cycles.
+
+    Do NOT mutate ``done_tasks`` here. It is still read by predict-api
+    write and log emission earlier in this same behaviour, and the
+    behaviour-side prune in the next cycle depends on
+    ``shared_state[DONE_TASKS]`` reflecting only tasks that were not
+    settled — mutating the consensus field here breaks that contract.
     """
 
     payload_class = PostTxSettlementPayload
@@ -286,7 +302,30 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            return self.synchronized_data, Event.DONE
+            # Extract the id list from this period's done_tasks and
+            # carry it via ``submitted_request_ids`` for the next
+            # cycle's prune. ``str``-normalise for parity with the
+            # ``str``-keyed dedup rule in
+            # ``TaskPoolingRound.end_block``; downstream match sites
+            # normalise the same way.
+            done_tasks = cast(
+                List[Dict[str, Any]],
+                cast(SynchronizedData, self.synchronized_data).done_tasks,
+            )
+            submitted_ids = [
+                str(task["request_id"])
+                for task in done_tasks
+                if task.get("request_id") is not None and task.get("request_id") != ""
+            ]
+            return (
+                self.synchronized_data.update(
+                    synchronized_data_class=SynchronizedData,
+                    **{
+                        get_name(SynchronizedData.submitted_request_ids): submitted_ids,
+                    },
+                ),
+                Event.DONE,
+            )
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
@@ -376,16 +415,21 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         [
-            get_name(SynchronizedData.done_tasks),
+            # Hand-off signal only. ``done_tasks`` is intentionally
+            # not cross-period-persisted because its per-entry payload
+            # data is large enough to inflate DB serialization on the
+            # next registration.
+            get_name(SynchronizedData.submitted_request_ids),
             get_name(SynchronizedData.final_tx_hash),
         ]
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskPoolingRound: set(),
-        # Entered from composition after settlement; relies on done_tasks
-        # being on synchronized_data from the prior TaskPoolingRound cycle
-        # (cross_period_persisted_keys above keeps it alive). No additional
-        # pre-condition fields beyond what the FSM already carries.
+        # Entered from composition after settlement. Reads
+        # ``done_tasks`` from the same FSM cycle's earlier
+        # ``TaskPoolingRound`` (present in the current period's DB
+        # slot). end_block writes the id-only
+        # ``submitted_request_ids`` for the next cycle's prune.
         PostTxSettlementRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {

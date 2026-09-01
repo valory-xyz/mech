@@ -220,20 +220,12 @@ class TestRemoveTasks:
     def test_remove_submitted_task_mixed_types(self) -> None:
         """``remove_tasks`` matches across the ``str`` / ``int`` split.
 
-        Post the ingress coercion in :mod:`task_execution.handlers`,
-        off-chain ``done_tasks`` carry ``request_id`` as ``int``. But a
-        mech resuming with pre-fix off-chain rows in shared state at
-        redeploy time would have ``str`` there, while the newly-emitted
-        ``submitted_tasks`` for the same round carry ``int``. Without
-        the ``str()`` normalization added to the equality check in
-        :meth:`TaskExecutionBaseBehaviour.remove_tasks`, the pre-fix
-        ``str`` row would silently escape removal and be re-emitted next
-        round — the same class of silent-double-delivery bug the dedup
-        normalization in :mod:`task_submission_abci.rounds` prevents.
+        Mixed ``request_id`` types (``str`` vs ``int``) can survive
+        an in-place restart. Both sides are ``str``-normalised on the
+        equality check so a delivered task doesn't silently escape
+        removal and get re-emitted.
         """
-        # Pre-fix ``str`` row survives from an old boot; new
-        # ``submitted_tasks`` for the same request_id comes back as
-        # ``int``.
+        # ``str`` in shared_state; ``int`` in submitted.
         done_tasks_str: List[Dict[str, Any]] = [{"request_id": "5"}]
         ctx = _make_ctx(done_tasks=done_tasks_str)
         b = _DummyBase(name="b", skill_context=ctx)
@@ -246,6 +238,69 @@ class TestRemoveTasks:
         b = _DummyBase(name="b", skill_context=ctx)
         b.remove_tasks([{"request_id": "5"}])
         assert ctx.shared_state[DONE_TASKS] == []
+
+
+class TestRemoveTasksById:
+    """Tests for :meth:`TaskExecutionBaseBehaviour.remove_tasks_by_id`."""
+
+    def test_removes_matching_task(self) -> None:
+        """Passing an id list prunes matching tasks and leaves the rest."""
+        tasks = [{"request_id": "r1"}, {"request_id": "r2"}]
+        ctx = _make_ctx(done_tasks=tasks)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["r1"])
+        remaining = ctx.shared_state[DONE_TASKS]
+        assert len(remaining) == 1
+        assert remaining[0]["request_id"] == "r2"
+
+    def test_empty_id_list_is_noop(self) -> None:
+        """An empty id list leaves shared_state untouched."""
+        tasks = [{"request_id": "r1"}]
+        ctx = _make_ctx(done_tasks=tasks)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id([])
+        assert ctx.shared_state[DONE_TASKS] == tasks
+
+    def test_all_ids_leaves_empty(self) -> None:
+        """Passing every id present clears shared_state."""
+        tasks = [{"request_id": "r1"}, {"request_id": "r2"}]
+        ctx = _make_ctx(done_tasks=tasks)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["r1", "r2"])
+        assert ctx.shared_state[DONE_TASKS] == []
+
+    def test_mixed_type_ids_match_normalised(self) -> None:
+        """``str`` / ``int`` id mismatch across boot boundaries still matches.
+
+        A shared_state row carrying ``int`` and an incoming id list of
+        ``str`` (or vice versa) both normalise to ``str`` on the
+        equality check.
+        """
+        # str shared_state / int id list
+        ctx = _make_ctx(done_tasks=[{"request_id": "5"}])
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id([5])  # type: ignore[list-item]
+        assert ctx.shared_state[DONE_TASKS] == []
+
+        # int shared_state / str id list
+        ctx = _make_ctx(done_tasks=[{"request_id": 5}])
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["5"])
+        assert ctx.shared_state[DONE_TASKS] == []
+
+    def test_id_not_in_shared_state_is_noop(self) -> None:
+        """An id absent from shared_state doesn't affect other entries.
+
+        Guards the case where the executor lost state (restart or
+        prune-race) between the on-chain settle and the next prune.
+        The id is still valid for the marketplace side; we just skip
+        the pop safely.
+        """
+        tasks = [{"request_id": "r1"}]
+        ctx = _make_ctx(done_tasks=tasks)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["r-missing"])
+        assert ctx.shared_state[DONE_TASKS] == tasks
 
 
 class TestSetGauge:
@@ -659,9 +714,32 @@ class TestHandleSubmittedTasks:
         b = _DummyPooling(name="b", skill_context=ctx)
         return b
 
-    def _patch_sd(self, b: Any, done_tasks: Any) -> Any:
+    def _patch_sd(
+        self,
+        b: Any,
+        done_tasks: Any,
+        submitted_ids: Any = None,
+    ) -> Any:
+        """Wire the mocked synchronized_data.
+
+        ``submitted_ids=None`` exercises the fallback path (the DB key
+        isn't set, prune reads ``done_tasks`` instead). Passing a list
+        exercises the primary path where the id hand-off is available.
+
+        :param b: the behaviour under test to attach the mock onto.
+        :param done_tasks: value to expose as ``synchronized_data.done_tasks``.
+        :param submitted_ids: value the mocked ``db.get`` returns for
+            ``"submitted_request_ids"``; ``None`` triggers the fallback.
+        :return: a no-op context manager so the caller's ``with`` block stays uniform.
+        """
         mock_sd = MagicMock()
         mock_sd.done_tasks = done_tasks
+        # ``db.get(key, default)`` returns the second arg when key is
+        # missing. Configure the mock to mimic that shape so the code
+        # under test hits the intended branch.
+        mock_sd.db.get.side_effect = lambda key, default=None: (
+            submitted_ids if key == "submitted_request_ids" else default
+        )
         b._synchronized_data = mock_sd
         return contextlib.nullcontext()
 
@@ -677,7 +755,7 @@ class TestHandleSubmittedTasks:
         b = self._make_b()
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, []),
+            self._patch_sd(b, [], submitted_ids=[]),
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
@@ -686,9 +764,10 @@ class TestHandleSubmittedTasks:
         """Test status true with tasks no block number."""
         task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
         b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task]
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, [task]),
+            self._patch_sd(b, [task], submitted_ids=["r1"]),
             patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
             patch.object(b, "observe_histogram"),
         ):
@@ -699,9 +778,10 @@ class TestHandleSubmittedTasks:
         """Test status true with tasks and block number."""
         task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
         b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task]
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, [task]),
+            self._patch_sd(b, [task], submitted_ids=["r1"]),
             patch.object(
                 b, "_fetch_tx_block_number", side_effect=_gen_returning(12345)
             ),
@@ -710,6 +790,62 @@ class TestHandleSubmittedTasks:
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
+
+    def test_reads_submitted_request_ids_when_present(self) -> None:
+        """Primary path: id list from the DB drives the prune.
+
+        Once ``PostTxSettlementRound`` has written the id list,
+        subsequent cycles use it directly rather than parsing full
+        ``done_tasks`` dicts.
+        """
+        task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            # done_tasks intentionally EMPTY to prove the code doesn't
+            # fall back to it when submitted_ids is provided.
+            self._patch_sd(b, done_tasks=[], submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+            patch.object(b, "remove_tasks_by_id") as mock_remove,
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        mock_remove.assert_called_once_with(["r1"])
+
+    def test_falls_back_to_done_tasks_when_ids_missing(self) -> None:
+        """Fallback path: no id list yet → read from done_tasks.
+
+        Applies for the first cycle on a mech whose persisted state
+        predates ``submitted_request_ids`` being written. After this
+        cycle, ``PostTxSettlementRound`` writes the id list and
+        subsequent cycles take the primary path.
+        """
+        task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            # submitted_ids=None triggers the fallback branch; the
+            # code should derive the id list from done_tasks.
+            self._patch_sd(b, done_tasks=[task], submitted_ids=None),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+            patch.object(b, "remove_tasks_by_id") as mock_remove,
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        mock_remove.assert_called_once_with(["r1"])
+
+    def test_empty_submitted_ids_is_noop(self) -> None:
+        """An empty id list → early return, no prune call."""
+        b = self._make_b()
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, done_tasks=[], submitted_ids=[]),
+            patch.object(b, "remove_tasks_by_id") as mock_remove,
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        mock_remove.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

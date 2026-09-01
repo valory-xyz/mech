@@ -228,30 +228,35 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
 
         :param submitted_tasks: the done tasks that have already been submitted
         """
+        # Extract ids and delegate; both entry points share
+        # ``remove_tasks_by_id`` so match semantics stay consistent.
+        submitted_ids = [
+            str(task["request_id"])
+            for task in submitted_tasks
+            if task.get("request_id") is not None and task.get("request_id") != ""
+        ]
+        self.remove_tasks_by_id(submitted_ids)
+
+    def remove_tasks_by_id(self, submitted_ids: List[str]) -> None:
+        """Pop already-submitted tasks from shared state, matched by request_id.
+
+        :param submitted_ids: request ids of tasks already delivered.
+        """
         # run this in a lock
         # the amount of done tasks will always be relatively low (<<20)
         # we can afford to do this in a lock
+        submitted_id_set = {str(rid) for rid in submitted_ids}
         with self.done_tasks_lock():
             done_tasks = self.done_tasks
-            not_submitted = []
-            # Normalize both sides to ``str`` before comparing so a mix of
-            # ``int`` (on-chain requestId) and ``str`` (pre-ingress-fix
-            # off-chain requestId) doesn't silently fail equality and leave
-            # a delivered task stuck in ``done_tasks`` for the next round to
-            # re-emit. Post the :mod:`task_execution.handlers` ingress fix
-            # both sides are ``int`` and the ``str`` cast is a no-op; the
-            # cast is retained for the same restart-transition reason
-            # called out in :meth:`task_submission_abci.rounds.
-            # TaskPoolingRound.end_block`.
-            for done_task in done_tasks:
-                done_key = str(done_task["request_id"])
-                is_submitted = False
-                for submitted_task in submitted_tasks:
-                    if str(submitted_task["request_id"]) == done_key:
-                        is_submitted = True
-                        break
-                if not is_submitted:
-                    not_submitted.append(done_task)
+            # ``str``-normalise the match key. The shared-state side
+            # may hold ``int`` or ``str`` ``request_id`` (mixed types
+            # can survive an in-place restart transition); normalising
+            # both sides here keeps the prune consistent regardless.
+            not_submitted = [
+                done_task
+                for done_task in done_tasks
+                if str(done_task.get("request_id")) not in submitted_id_set
+            ]
             self.context.shared_state[DONE_TASKS] = not_submitted
 
     @property
@@ -323,43 +328,87 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         return []
 
     def handle_submitted_tasks(self) -> Generator[None, None, None]:
-        """Handle tasks that have been already submitted before (in a prev. period)."""
+        """Handle tasks that have been already submitted before (in a prev. period).
+
+        Reads ``submitted_request_ids`` for the id list, or falls back
+        to ``done_tasks`` when the id field isn't yet in the DB (a
+        mech that resumes with pre-existing state written before this
+        code shipped will see ``None`` on the first read). Per-task
+        metrics are read from ``shared_state[DONE_TASKS]`` since the
+        id-only hand-off doesn't carry tool / start_time.
+
+        :yield: AEA protocol messages while fetching the tx block number.
+        """
         status, tx_hash = self.check_last_tx_status()
         self.context.logger.info(f"Last tx status is: {status}")
-        if status:
-            submitted_tasks = cast(
+        if not status:
+            return
+
+        # Fallback path for state that predates
+        # ``submitted_request_ids`` being written. Applies for at most
+        # one cycle per mech; subsequent cycles read the id list
+        # written by the previous ``PostTxSettlementRound``.
+        submitted_ids_raw = self.synchronized_data.db.get("submitted_request_ids", None)
+        if submitted_ids_raw is None:
+            self.context.logger.info(
+                "submitted_request_ids missing; falling back to done_tasks."
+            )
+            submitted_tasks_fallback = cast(
                 List[Dict[str, Any]], self.synchronized_data.done_tasks
             )
-            if len(submitted_tasks) > 0:
-                for task in submitted_tasks:
-                    req_id = task["request_id"]
-                    tool = task["tool"]
-                    start_time = task["start_time"]
-                    tool_delivery_time_duration = time.perf_counter() - start_time
-                    self.context.logger.info(
-                        f"Request id: {req_id} with tool: {tool} took {tool_delivery_time_duration} seconds to complete delivery"
-                    )
-                    self.observe_histogram(
-                        self.shared_state.tool_delivery_time,
-                        tool_delivery_time_duration,
-                        tool=tool,
-                    )
+            submitted_ids = [
+                str(task["request_id"])
+                for task in submitted_tasks_fallback
+                if task.get("request_id") is not None and task.get("request_id") != ""
+            ]
+        else:
+            submitted_ids = [str(rid) for rid in cast(List[Any], submitted_ids_raw)]
 
-                block_number = yield from self._fetch_tx_block_number(tx_hash)
-                self.context.logger.info(
-                    f"Block number for tx hash: {tx_hash} is {block_number}"
-                )
-                if block_number:
-                    self.set_gauge(
-                        self.shared_state.mech_delivery_last_block_number, block_number
-                    )
+        if len(submitted_ids) == 0:
+            return
 
+        # Emit per-task delivery-time metrics from in-memory state.
+        # A task not found in ``shared_state[DONE_TASKS]`` still
+        # contributes to the prune below, but its metric is skipped;
+        # the delivery already landed on-chain, only the timing
+        # dimension is dropped.
+        shared_done_tasks_by_id = {
+            str(task.get("request_id")): task for task in self.done_tasks
+        }
+        for req_id in submitted_ids:
+            task = shared_done_tasks_by_id.get(req_id)
+            if task is None:
+                continue
+            tool = task.get("tool")
+            start_time = task.get("start_time")
+            if tool is None or start_time is None:
+                continue
+            tool_delivery_time_duration = time.perf_counter() - float(start_time)
             self.context.logger.info(
-                f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}. "
-                f"Removing them from the list of tasks to be processed."
+                f"Request id: {req_id} with tool: {tool} took "
+                f"{tool_delivery_time_duration} seconds to complete delivery"
+            )
+            self.observe_histogram(
+                self.shared_state.tool_delivery_time,
+                tool_delivery_time_duration,
+                tool=tool,
             )
 
-            self.remove_tasks(submitted_tasks)
+        block_number = yield from self._fetch_tx_block_number(tx_hash)
+        self.context.logger.info(
+            f"Block number for tx hash: {tx_hash} is {block_number}"
+        )
+        if block_number:
+            self.set_gauge(
+                self.shared_state.mech_delivery_last_block_number, block_number
+            )
+
+        self.context.logger.info(
+            f"Tasks with ids {submitted_ids} have been submitted. "
+            f"The corresponding tx_hash is: {tx_hash}. "
+            f"Removing them from the list of tasks to be processed."
+        )
+        self.remove_tasks_by_id(submitted_ids)
 
     def check_last_tx_status(self) -> Tuple[bool, str]:
         """Check if the tx in the last round was successful or not"""
