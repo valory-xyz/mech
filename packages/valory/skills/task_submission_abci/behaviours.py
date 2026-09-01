@@ -27,7 +27,18 @@ from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Sequence,
+    Set,
+    Tuple,
+    Type,
+    cast,
+)
 
 from aea.helpers.cid import CID, to_v1
 from prometheus_client import Counter, Gauge, Histogram
@@ -75,6 +86,7 @@ from packages.valory.skills.task_submission_abci.rounds import (
     TaskPoolingRound,
     TaskSubmissionAbciApp,
     TransactionPreparationRound,
+    extract_request_ids,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -228,30 +240,19 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
 
         :param submitted_tasks: the done tasks that have already been submitted
         """
-        # Extract ids and delegate; both entry points share
-        # ``remove_tasks_by_id`` so match semantics stay consistent.
-        submitted_ids = [
-            str(task["request_id"])
-            for task in submitted_tasks
-            if task.get("request_id") is not None and task.get("request_id") != ""
-        ]
-        self.remove_tasks_by_id(submitted_ids)
+        self.remove_tasks_by_id(extract_request_ids(submitted_tasks))
 
-    def remove_tasks_by_id(self, submitted_ids: List[str]) -> None:
+    def remove_tasks_by_id(self, submitted_ids: Sequence[Any]) -> None:
         """Pop already-submitted tasks from shared state, matched by request_id.
 
         :param submitted_ids: request ids of tasks already delivered.
+            Accepts ``int`` or ``str`` shapes; both sides are
+            ``str``-normalised on the equality check.
         """
-        # run this in a lock
-        # the amount of done tasks will always be relatively low (<<20)
-        # we can afford to do this in a lock
+        # Amount of done tasks is small (<<20); the lock cost is trivial.
         submitted_id_set = {str(rid) for rid in submitted_ids}
         with self.done_tasks_lock():
             done_tasks = self.done_tasks
-            # ``str``-normalise the match key. The shared-state side
-            # may hold ``int`` or ``str`` ``request_id`` (mixed types
-            # can survive an in-place restart transition); normalising
-            # both sides here keeps the prune consistent regardless.
             not_submitted = [
                 done_task
                 for done_task in done_tasks
@@ -330,12 +331,11 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     def handle_submitted_tasks(self) -> Generator[None, None, None]:
         """Handle tasks that have been already submitted before (in a prev. period).
 
-        Reads ``submitted_request_ids`` for the id list, or falls back
-        to ``done_tasks`` when the id field isn't yet in the DB (a
-        mech that resumes with pre-existing state written before this
-        code shipped will see ``None`` on the first read). Per-task
-        metrics are read from ``shared_state[DONE_TASKS]`` since the
-        id-only hand-off doesn't carry tool / start_time.
+        Reads ``submitted_request_ids`` for the id list and prunes
+        ``shared_state[DONE_TASKS]`` accordingly. Per-task
+        ``tool_delivery_time`` metrics are read from
+        ``shared_state[DONE_TASKS]`` since the id-only hand-off
+        doesn't carry tool / start_time.
 
         :yield: AEA protocol messages while fetching the tx block number.
         """
@@ -344,31 +344,14 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         if not status:
             return
 
-        # Fallback path for state that predates
-        # ``submitted_request_ids`` being written. Applies for at most
-        # one cycle per mech; subsequent cycles read the id list
-        # written by the previous ``PostTxSettlementRound``.
-        submitted_ids_raw = self.synchronized_data.db.get("submitted_request_ids", None)
-        if submitted_ids_raw is None:
-            self.context.logger.info(
-                "submitted_request_ids missing; falling back to done_tasks."
-            )
-            submitted_tasks_fallback = cast(
-                List[Dict[str, Any]], self.synchronized_data.done_tasks
-            )
-            submitted_ids = [
-                str(task["request_id"])
-                for task in submitted_tasks_fallback
-                if task.get("request_id") is not None and task.get("request_id") != ""
-            ]
-        else:
-            submitted_ids = [str(rid) for rid in cast(List[Any], submitted_ids_raw)]
-
+        submitted_ids = list(
+            cast(SynchronizedData, self.synchronized_data).submitted_request_ids
+        )
         if len(submitted_ids) == 0:
             return
 
         # Emit per-task delivery-time metrics from in-memory state.
-        # A task not found in ``shared_state[DONE_TASKS]`` still
+        # A task not found in shared_state[DONE_TASKS] still
         # contributes to the prune below, but its metric is skipped;
         # the delivery already landed on-chain, only the timing
         # dimension is dropped.
@@ -378,10 +361,22 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         for req_id in submitted_ids:
             task = shared_done_tasks_by_id.get(req_id)
             if task is None:
+                self.context.logger.debug(
+                    "tool_delivery_time skipped for request_id=%s: "
+                    "not in shared_state[DONE_TASKS]",
+                    req_id,
+                )
                 continue
             tool = task.get("tool")
             start_time = task.get("start_time")
             if tool is None or start_time is None:
+                self.context.logger.debug(
+                    "tool_delivery_time skipped for request_id=%s: "
+                    "missing field(s) tool=%r start_time=%r",
+                    req_id,
+                    tool,
+                    start_time,
+                )
                 continue
             tool_delivery_time_duration = time.perf_counter() - float(start_time)
             self.context.logger.info(

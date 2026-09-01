@@ -41,6 +41,24 @@ from packages.valory.skills.task_submission_abci.payloads import (
 )
 
 
+def extract_request_ids(tasks: List[Dict[str, Any]]) -> List[str]:
+    """Return ``str``-normalised request ids from a task list.
+
+    Falsy ids (missing key, ``None``, empty string) are dropped so
+    they don't collide in downstream match sets. Legit ``0`` (int)
+    is kept via the explicit ``is None or == ""`` check rather than
+    a ``not`` truthiness test.
+
+    :param tasks: task dicts (each expected to carry ``"request_id"``).
+    :return: the ``str``-normalised id list, in input order.
+    """
+    return [
+        str(task["request_id"])
+        for task in tasks
+        if task.get("request_id") is not None and task.get("request_id") != ""
+    ]
+
+
 class Event(Enum):
     """TaskSubmissionAbciApp Events"""
 
@@ -287,11 +305,12 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     period it was set and is not carried across; the ID hand-off is
     what rides consensus between cycles.
 
-    Do NOT mutate ``done_tasks`` here. It is still read by predict-api
-    write and log emission earlier in this same behaviour, and the
-    behaviour-side prune in the next cycle depends on
-    ``shared_state[DONE_TASKS]`` reflecting only tasks that were not
-    settled — mutating the consensus field here breaks that contract.
+    Do NOT mutate ``done_tasks`` here. It is still read by
+    :class:`PostTxSettlementBehaviour` earlier in the same period for
+    the predict-api write and log emission, and the behaviour-side
+    prune in the next cycle depends on ``shared_state[DONE_TASKS]``
+    reflecting only tasks that were not settled — mutating the
+    consensus field here breaks that contract.
     """
 
     payload_class = PostTxSettlementPayload
@@ -302,21 +321,8 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            # Extract the id list from this period's done_tasks and
-            # carry it via ``submitted_request_ids`` for the next
-            # cycle's prune. ``str``-normalise for parity with the
-            # ``str``-keyed dedup rule in
-            # ``TaskPoolingRound.end_block``; downstream match sites
-            # normalise the same way.
-            done_tasks = cast(
-                List[Dict[str, Any]],
-                cast(SynchronizedData, self.synchronized_data).done_tasks,
-            )
-            submitted_ids = [
-                str(task["request_id"])
-                for task in done_tasks
-                if task.get("request_id") is not None and task.get("request_id") != ""
-            ]
+            done_tasks = cast(SynchronizedData, self.synchronized_data).done_tasks
+            submitted_ids = extract_request_ids(done_tasks)
             return (
                 self.synchronized_data.update(
                     synchronized_data_class=SynchronizedData,

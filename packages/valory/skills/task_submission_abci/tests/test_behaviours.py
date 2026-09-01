@@ -279,7 +279,7 @@ class TestRemoveTasksById:
         # str shared_state / int id list
         ctx = _make_ctx(done_tasks=[{"request_id": "5"}])
         b = _DummyBase(name="b", skill_context=ctx)
-        b.remove_tasks_by_id([5])  # type: ignore[list-item]
+        b.remove_tasks_by_id([5])
         assert ctx.shared_state[DONE_TASKS] == []
 
         # int shared_state / str id list
@@ -714,32 +714,15 @@ class TestHandleSubmittedTasks:
         b = _DummyPooling(name="b", skill_context=ctx)
         return b
 
-    def _patch_sd(
-        self,
-        b: Any,
-        done_tasks: Any,
-        submitted_ids: Any = None,
-    ) -> Any:
-        """Wire the mocked synchronized_data.
-
-        ``submitted_ids=None`` exercises the fallback path (the DB key
-        isn't set, prune reads ``done_tasks`` instead). Passing a list
-        exercises the primary path where the id hand-off is available.
+    def _patch_sd(self, b: Any, submitted_ids: List[str]) -> Any:
+        """Wire the mocked synchronized_data with a fixed id list.
 
         :param b: the behaviour under test to attach the mock onto.
-        :param done_tasks: value to expose as ``synchronized_data.done_tasks``.
-        :param submitted_ids: value the mocked ``db.get`` returns for
-            ``"submitted_request_ids"``; ``None`` triggers the fallback.
+        :param submitted_ids: value the property returns.
         :return: a no-op context manager so the caller's ``with`` block stays uniform.
         """
         mock_sd = MagicMock()
-        mock_sd.done_tasks = done_tasks
-        # ``db.get(key, default)`` returns the second arg when key is
-        # missing. Configure the mock to mimic that shape so the code
-        # under test hits the intended branch.
-        mock_sd.db.get.side_effect = lambda key, default=None: (
-            submitted_ids if key == "submitted_request_ids" else default
-        )
+        mock_sd.submitted_request_ids = submitted_ids
         b._synchronized_data = mock_sd
         return contextlib.nullcontext()
 
@@ -755,7 +738,7 @@ class TestHandleSubmittedTasks:
         b = self._make_b()
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, [], submitted_ids=[]),
+            self._patch_sd(b, submitted_ids=[]),
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
@@ -767,12 +750,18 @@ class TestHandleSubmittedTasks:
         b.context.shared_state[DONE_TASKS] = [task]
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, [task], submitted_ids=["r1"]),
+            self._patch_sd(b, submitted_ids=["r1"]),
             patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
-            patch.object(b, "observe_histogram"),
+            patch.object(b, "observe_histogram") as mock_hist,
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
+        # Histogram MUST fire for the task in shared_state; a regression
+        # that flips the ``if task is None`` guard would silently skip
+        # the emit without this assertion.
+        mock_hist.assert_called_once()
+        _, kwargs = mock_hist.call_args
+        assert kwargs["tool"] == "t1"
 
     def test_status_true_with_tasks_and_block_number(self) -> None:
         """Test status true with tasks and block number."""
@@ -781,54 +770,27 @@ class TestHandleSubmittedTasks:
         b.context.shared_state[DONE_TASKS] = [task]
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, [task], submitted_ids=["r1"]),
+            self._patch_sd(b, submitted_ids=["r1"]),
             patch.object(
                 b, "_fetch_tx_block_number", side_effect=_gen_returning(12345)
             ),
-            patch.object(b, "observe_histogram"),
+            patch.object(b, "observe_histogram") as mock_hist,
             patch.object(b, "set_gauge"),
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
+        mock_hist.assert_called_once()
+        _, kwargs = mock_hist.call_args
+        assert kwargs["tool"] == "t1"
 
     def test_reads_submitted_request_ids_when_present(self) -> None:
-        """Primary path: id list from the DB drives the prune.
-
-        Once ``PostTxSettlementRound`` has written the id list,
-        subsequent cycles use it directly rather than parsing full
-        ``done_tasks`` dicts.
-        """
+        """Primary path: the id list drives the prune call."""
         task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
         b = self._make_b()
         b.context.shared_state[DONE_TASKS] = [task]
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            # done_tasks intentionally EMPTY to prove the code doesn't
-            # fall back to it when submitted_ids is provided.
-            self._patch_sd(b, done_tasks=[], submitted_ids=["r1"]),
-            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
-            patch.object(b, "observe_histogram"),
-            patch.object(b, "remove_tasks_by_id") as mock_remove,
-        ):
-            _run_gen(b.handle_submitted_tasks())
-        mock_remove.assert_called_once_with(["r1"])
-
-    def test_falls_back_to_done_tasks_when_ids_missing(self) -> None:
-        """Fallback path: no id list yet → read from done_tasks.
-
-        Applies for the first cycle on a mech whose persisted state
-        predates ``submitted_request_ids`` being written. After this
-        cycle, ``PostTxSettlementRound`` writes the id list and
-        subsequent cycles take the primary path.
-        """
-        task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
-        b = self._make_b()
-        b.context.shared_state[DONE_TASKS] = [task]
-        with (
-            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            # submitted_ids=None triggers the fallback branch; the
-            # code should derive the id list from done_tasks.
-            self._patch_sd(b, done_tasks=[task], submitted_ids=None),
+            self._patch_sd(b, submitted_ids=["r1"]),
             patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
             patch.object(b, "observe_histogram"),
             patch.object(b, "remove_tasks_by_id") as mock_remove,
@@ -841,11 +803,56 @@ class TestHandleSubmittedTasks:
         b = self._make_b()
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, done_tasks=[], submitted_ids=[]),
+            self._patch_sd(b, submitted_ids=[]),
             patch.object(b, "remove_tasks_by_id") as mock_remove,
         ):
             _run_gen(b.handle_submitted_tasks())
         mock_remove.assert_not_called()
+
+    def test_histogram_skipped_when_task_absent_from_shared_state(self) -> None:
+        """Skip the histogram when the task is absent from shared state.
+
+        The prune still fires because the delivery landed on-chain.
+        Guards the ``if task is None`` continue branch so a regression
+        that flips the guard would surface here instead of silently
+        emitting garbage timings.
+        """
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = []  # id present in ids, absent here
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram") as mock_hist,
+            patch.object(b, "remove_tasks_by_id") as mock_remove,
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        mock_hist.assert_not_called()
+        # Prune still runs — delivery landed on-chain, only the timing
+        # metric is dropped.
+        mock_remove.assert_called_once_with(["r1"])
+
+    def test_histogram_skipped_when_task_missing_tool_or_start_time(self) -> None:
+        """Skip the histogram when ``tool`` or ``start_time`` is absent.
+
+        Task-execution failures produce entries without ``tool``;
+        emitting a histogram sample against ``tool=None`` would push
+        a nonsense label into the metric.
+        """
+        # Task present in shared_state but missing ``tool``.
+        task_missing_tool = {"request_id": "r1", "start_time": time.perf_counter()}
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task_missing_tool]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram") as mock_hist,
+            patch.object(b, "remove_tasks_by_id") as mock_remove,
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        mock_hist.assert_not_called()
+        mock_remove.assert_called_once_with(["r1"])
 
 
 # ---------------------------------------------------------------------------
