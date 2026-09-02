@@ -67,7 +67,10 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
-from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
+from packages.valory.skills.task_execution.behaviours import (
+    PREDICT_API_EVENTS,
+    PREDICT_API_EVENT_TTL_SECONDS,
+)
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import (
@@ -282,6 +285,15 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         events_by_id = self.context.shared_state.get(PREDICT_API_EVENTS)
         if isinstance(events_by_id, dict):
             for rid in submitted_id_set:
+                events_by_id.pop(rid, None)
+            cutoff = time.time() - PREDICT_API_EVENT_TTL_SECONDS
+            stale = [
+                rid
+                for rid, entry in events_by_id.items()
+                if not isinstance(entry, dict)
+                or float(entry.get("written_at", 0)) < cutoff
+            ]
+            for rid in stale:
                 events_by_id.pop(rid, None)
         return snapshot
 
@@ -2462,7 +2474,10 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             req_id = task.get("request_id")
             if req_id is None:
                 continue
-            event = events_by_id.get(str(req_id))
+            entry = events_by_id.get(str(req_id))
+            if not isinstance(entry, dict):
+                continue
+            event = entry.get("event")
             if isinstance(event, dict):
                 events.append(event)
         return events

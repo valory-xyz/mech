@@ -503,6 +503,7 @@ def test_request_only_event_falls_back_to_now_on_bad_timestamp() -> None:
 
 def test_extract_offchain_events_reads_from_shared_state_by_request_id() -> None:
     """Events are looked up from agent-local ``shared_state[PREDICT_API_EVENTS]`` by request_id."""
+    now = time.time()
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
@@ -517,8 +518,8 @@ def test_extract_offchain_events_reads_from_shared_state_by_request_id() -> None
             context=SimpleNamespace(
                 shared_state={
                     PREDICT_API_EVENTS: {
-                        "r-off": {"src": "off"},
-                        "r-on": {"src": "on"},
+                        "r-off": {"event": {"src": "off"}, "written_at": now},
+                        "r-on": {"event": {"src": "on"}, "written_at": now},
                     }
                 }
             ),

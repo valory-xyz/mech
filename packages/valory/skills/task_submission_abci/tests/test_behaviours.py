@@ -33,6 +33,10 @@ from packages.valory.contracts.complementary_service_metadata.contract import (
 )
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
+from packages.valory.skills.task_execution.behaviours import (
+    PREDICT_API_EVENTS,
+    PREDICT_API_EVENT_TTL_SECONDS,
+)
 from packages.valory.skills.task_submission_abci.behaviours import (
     DONE_TASKS,
     DeliverBehaviour,
@@ -297,6 +301,30 @@ class TestRemoveTasksById:
         b = _DummyBase(name="b", skill_context=ctx)
         b.remove_tasks_by_id(["r-missing"])
         assert ctx.shared_state[DONE_TASKS] == tasks
+
+    def test_stale_predict_api_events_pruned_by_ttl(self) -> None:
+        """Cache entries older than the TTL are dropped on the next prune.
+
+        Safety net for tasks that finalize locally but never route
+        through a primary prune (e.g. FSM branch skips remove_tasks*).
+        Without this the cache leaks 30-60 KB per stranded task.
+        """
+        now = time.time()
+        ctx = _make_ctx(done_tasks=[{"request_id": "r1"}])
+        ctx.shared_state[PREDICT_API_EVENTS] = {
+            "fresh": {"event": {"src": "off"}, "written_at": now - 60},
+            "stale": {
+                "event": {"src": "off"},
+                "written_at": now - PREDICT_API_EVENT_TTL_SECONDS - 60,
+            },
+            "malformed": "not-a-dict",
+        }
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["r1"])
+        surviving = ctx.shared_state[PREDICT_API_EVENTS]
+        assert "fresh" in surviving
+        assert "stale" not in surviving
+        assert "malformed" not in surviving
 
 
 class TestSetGauge:

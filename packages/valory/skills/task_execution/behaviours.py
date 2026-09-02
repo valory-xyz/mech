@@ -88,6 +88,7 @@ LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
 PREDICT_API_EVENTS = "predict_api_events"
+PREDICT_API_EVENT_TTL_SECONDS = 24 * 60 * 60
 # Shared-state keys owned by the MechHttpHandler (handlers.py); mirrored here
 # because the off-chain finalize path writes the response envelope for the
 # ``/fetch_offchain_info`` polling endpoint and clears the buffered request
@@ -1785,7 +1786,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             )
             self.context.shared_state.setdefault(PREDICT_API_EVENTS, {})[
                 str(req_id)
-            ] = event
+            ] = {"event": event, "written_at": time.time()}
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)

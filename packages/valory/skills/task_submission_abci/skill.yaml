@@ -8,7 +8,7 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeiggh2tn6qmkqqnasssaswbvoj7lqmakmv2il3hfqctb2yrjlgg3ni
+  behaviours.py: bafybeig6qy6mnpqqspjpc3e2sgtspxquqnbuim2bab4stsrrpfxwg3nn24
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
@@ -19,11 +19,11 @@ fingerprint:
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeihxi2j5lkdlq3rwydag2bzrv67exegutggxmgku3mq5pmrdth3pjq
-  tests/test_behaviours.py: bafybeibfmlv6gfkwbb5opk4bqol746eyx7zmfg6ii7s743bdke3j2wmadq
+  tests/test_behaviours.py: bafybeiciexlaz2l45xygjwvjfg3esvkwc67dcd4ggq3632kxmjq7zrhyze
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry
-  tests/test_onchain_write_path.py: bafybeicsjleffdofd5hvejfbk4ebbw4aukx6xrq7yyrmc3veqntzdfa3r4
+  tests/test_onchain_write_path.py: bafybeidr7utdstzu7jy3il3rau5sjupexpvsaxatauqrcdih7y2t4et5j4
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_predict_api_events_client.py: bafybeicw2x4bblwf7biuww2b5ddyihpmdpsedcrimbvg4wcqzfyqspq6zm
   tests/test_rounds.py: bafybeid3ncxzxxqkegh256cgz2vqsz3dfrq7cilvm6qhnfqx6a7waaim7m
@@ -46,7 +46,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
-- valory/task_execution:0.1.0:bafybeihiubvh6luy35z4mlf2q552otltuoddmlza6gyrsbz5xwgr4qed6y
+- valory/task_execution:0.1.0:bafybeifribws23ccysd5rakrdjm5nqpxhy2i7xujuoudkvauyviein2ehq
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
   main:
