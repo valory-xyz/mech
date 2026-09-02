@@ -346,20 +346,37 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         if len(submitted_ids) == 0:
             return
 
-        # Emit per-task delivery-time metrics from in-memory state.
-        # A task not found in shared_state[DONE_TASKS] still
-        # contributes to the prune below, but its metric is skipped;
-        # the delivery already landed on-chain, only the timing
-        # dimension is dropped.
+        # Take one snapshot under the lock and prune inline, so the
+        # metrics loop below and the prune both operate on the same
+        # entries. ``shared_state[DONE_TASKS]`` is written concurrently
+        # by the background executor, so an unlocked
+        # ``deepcopy(shared_state[DONE_TASKS])`` can produce a torn
+        # read: a task landing mid-copy would silently fall into the
+        # ``task is None`` skip branch below and its metric would be
+        # dropped, making a real desync indistinguishable from a race.
+        submitted_id_set = set(submitted_ids)
+        with self.done_tasks_lock():
+            shared_snapshot = list(self.context.shared_state.get(DONE_TASKS, []))
+            self.context.shared_state[DONE_TASKS] = [
+                task
+                for task in shared_snapshot
+                if str(task.get("request_id")) not in submitted_id_set
+            ]
+
+        # Emit per-task delivery-time metrics from the snapshot. A
+        # task absent from ``shared_state[DONE_TASKS]`` at snapshot
+        # time still counted toward the prune above; the metric is
+        # skipped only because the timing data isn't locally
+        # available (the delivery already landed on-chain).
         shared_done_tasks_by_id = {
-            str(task.get("request_id")): task for task in self.done_tasks
+            str(task.get("request_id")): task for task in shared_snapshot
         }
         for req_id in submitted_ids:
             task = shared_done_tasks_by_id.get(req_id)
             if task is None:
                 self.context.logger.debug(
                     "tool_delivery_time skipped for request_id=%s: "
-                    "not in shared_state[DONE_TASKS]",
+                    "not in shared_state[DONE_TASKS] snapshot",
                     req_id,
                 )
                 continue
@@ -399,7 +416,6 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             f"The corresponding tx_hash is: {tx_hash}. "
             f"Removing them from the list of tasks to be processed."
         )
-        self.remove_tasks_by_id(submitted_ids)
 
     def check_last_tx_status(self) -> Tuple[bool, str]:
         """Check if the tx in the last round was successful or not"""

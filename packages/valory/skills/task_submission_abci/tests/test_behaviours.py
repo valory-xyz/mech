@@ -723,11 +723,14 @@ class TestHandleSubmittedTasks:
         return contextlib.nullcontext()
 
     def test_status_false_removes_nothing(self) -> None:
-        """Test status false removes nothing."""
+        """A failed prior-tx status leaves ``shared_state[DONE_TASKS]`` untouched."""
         b = self._make_b()
+        seeded = [{"request_id": "r1", "tool": "t1"}]
+        b.context.shared_state[DONE_TASKS] = list(seeded)
         with patch.object(b, "check_last_tx_status", return_value=(False, "")):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
+        assert b.context.shared_state[DONE_TASKS] == seeded
 
     def test_status_true_empty_tasks(self) -> None:
         """Test status true empty tasks."""
@@ -740,7 +743,7 @@ class TestHandleSubmittedTasks:
         assert result is None
 
     def test_status_true_with_tasks_no_block_number(self) -> None:
-        """Test status true with tasks no block number."""
+        """The task is pruned from shared_state and its histogram fires."""
         task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
         b = self._make_b()
         b.context.shared_state[DONE_TASKS] = [task]
@@ -752,6 +755,8 @@ class TestHandleSubmittedTasks:
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
+        # End-to-end contract: the submitted id is gone from shared_state.
+        assert b.context.shared_state[DONE_TASKS] == []
         # Histogram MUST fire for the task in shared_state; a regression
         # that flips the ``if task is None`` guard would silently skip
         # the emit without this assertion.
@@ -760,7 +765,7 @@ class TestHandleSubmittedTasks:
         assert kwargs["tool"] == "t1"
 
     def test_status_true_with_tasks_and_block_number(self) -> None:
-        """Test status true with tasks and block number."""
+        """Same as above but with a block number → gauge fires too."""
         task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
         b = self._make_b()
         b.context.shared_state[DONE_TASKS] = [task]
@@ -771,46 +776,51 @@ class TestHandleSubmittedTasks:
                 b, "_fetch_tx_block_number", side_effect=_gen_returning(12345)
             ),
             patch.object(b, "observe_histogram") as mock_hist,
-            patch.object(b, "set_gauge"),
+            patch.object(b, "set_gauge") as mock_gauge,
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
+        assert b.context.shared_state[DONE_TASKS] == []
         mock_hist.assert_called_once()
         _, kwargs = mock_hist.call_args
         assert kwargs["tool"] == "t1"
+        mock_gauge.assert_called_once()
 
     def test_reads_submitted_request_ids_when_present(self) -> None:
-        """Primary path: the id list drives the prune call."""
+        """Primary path: the id list drives the shared_state prune."""
         task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
+        other = {"request_id": "r2", "tool": "t2", "start_time": time.perf_counter()}
         b = self._make_b()
-        b.context.shared_state[DONE_TASKS] = [task]
+        b.context.shared_state[DONE_TASKS] = [task, other]
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
             self._patch_sd(b, submitted_ids=["r1"]),
             patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
             patch.object(b, "observe_histogram"),
-            patch.object(b, "remove_tasks_by_id") as mock_remove,
         ):
             _run_gen(b.handle_submitted_tasks())
-        mock_remove.assert_called_once_with(["r1"])
+        # r1 pruned, r2 kept.
+        assert b.context.shared_state[DONE_TASKS] == [other]
 
     def test_empty_submitted_ids_is_noop(self) -> None:
-        """An empty id list → early return, no prune call."""
+        """An empty id list → early return, shared_state untouched."""
         b = self._make_b()
+        seeded = [{"request_id": "r1", "tool": "t1"}]
+        b.context.shared_state[DONE_TASKS] = list(seeded)
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
             self._patch_sd(b, submitted_ids=[]),
-            patch.object(b, "remove_tasks_by_id") as mock_remove,
         ):
             _run_gen(b.handle_submitted_tasks())
-        mock_remove.assert_not_called()
+        assert b.context.shared_state[DONE_TASKS] == seeded
 
     def test_histogram_skipped_when_task_absent_from_shared_state(self) -> None:
         """Skip the histogram when the task is absent from shared state.
 
-        The prune still fires because the delivery landed on-chain.
-        Guards the ``if task is None`` continue branch so a regression
-        that flips the guard would surface here instead of silently
+        The prune loop still runs (the delivery landed on-chain);
+        only the timing metric is dropped for that entry. Guards the
+        ``if task is None`` continue branch so a regression that
+        flips the guard would surface here instead of silently
         emitting garbage timings.
         """
         b = self._make_b()
@@ -820,13 +830,11 @@ class TestHandleSubmittedTasks:
             self._patch_sd(b, submitted_ids=["r1"]),
             patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
             patch.object(b, "observe_histogram") as mock_hist,
-            patch.object(b, "remove_tasks_by_id") as mock_remove,
         ):
             _run_gen(b.handle_submitted_tasks())
         mock_hist.assert_not_called()
-        # Prune still runs — delivery landed on-chain, only the timing
-        # metric is dropped.
-        mock_remove.assert_called_once_with(["r1"])
+        # Prune still ran (no-op here since shared_state was empty).
+        assert b.context.shared_state[DONE_TASKS] == []
 
     @pytest.mark.parametrize(
         "task",
@@ -863,11 +871,11 @@ class TestHandleSubmittedTasks:
             self._patch_sd(b, submitted_ids=["r1"]),
             patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
             patch.object(b, "observe_histogram") as mock_hist,
-            patch.object(b, "remove_tasks_by_id") as mock_remove,
         ):
             _run_gen(b.handle_submitted_tasks())
         mock_hist.assert_not_called()
-        mock_remove.assert_called_once_with(["r1"])
+        # Prune still ran end-to-end despite the metric skip.
+        assert b.context.shared_state[DONE_TASKS] == []
 
 
 # ---------------------------------------------------------------------------
