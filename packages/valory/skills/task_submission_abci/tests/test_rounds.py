@@ -24,7 +24,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from packages.valory.skills.abstract_round_abci.base import AbciAppDB
+from packages.valory.skills.abstract_round_abci.base import AbciAppDB, get_name
 from packages.valory.skills.task_submission_abci.payloads import (
     PostTxSettlementPayload,
     TaskPoolingPayload,
@@ -195,6 +195,65 @@ class TestTaskPoolingRound:
         assert result is not None
         data, event = result
         assert event == Event.NO_TASKS
+
+    def test_submitted_request_ids_cleared_on_done(self) -> None:
+        """DONE clears the hand-off from the previous cycle.
+
+        By the time ``end_block`` fires here, every participant's
+        ``TaskPoolingBehaviour.async_act`` has already run
+        ``handle_submitted_tasks`` and pruned its local
+        ``shared_state[DONE_TASKS]``. Clearing the consensus field
+        makes the hand-off one-shot: without this, the next cycle
+        re-runs the "already submitted" block on stale ids every
+        period, and re-swept requests get pruned before they can be
+        pooled.
+        """
+        task = _make_task("req-new")
+        payloads = {
+            "agent-0": _payload_for("agent-0", [task]),
+            "agent-1": _payload_for("agent-1", [task]),
+            "agent-2": _payload_for("agent-2", [task]),
+        }
+        round_ = _make_pooling_round(
+            payloads,
+            **{
+                get_name(SynchronizedData.submitted_request_ids): [
+                    "stale-a",
+                    "stale-b",
+                ]
+            },
+        )
+        result = round_.end_block()
+        assert result is not None
+        data, event = result
+        assert event == Event.DONE
+        assert cast(SynchronizedData, data).submitted_request_ids == []
+
+    def test_submitted_request_ids_cleared_on_no_tasks(self) -> None:
+        """NO_TASKS also clears the hand-off.
+
+        A cycle that produced no new tasks still needs to consume the
+        prior settlement's ids so the next cycle doesn't loop on them.
+        """
+        payloads = {
+            "agent-0": _payload_for("agent-0", []),
+            "agent-1": _payload_for("agent-1", []),
+            "agent-2": _payload_for("agent-2", []),
+        }
+        round_ = _make_pooling_round(
+            payloads,
+            **{
+                get_name(SynchronizedData.submitted_request_ids): [
+                    "stale-a",
+                    "stale-b",
+                ]
+            },
+        )
+        result = round_.end_block()
+        assert result is not None
+        data, event = result
+        assert event == Event.NO_TASKS
+        assert cast(SynchronizedData, data).submitted_request_ids == []
 
     def test_deduplication_by_request_id(self) -> None:
         """Same request_id from multiple agents → deduplicated to one."""
@@ -689,15 +748,30 @@ class TestPostTxSettlementRound:
             "req-b",
         ]
 
-    def test_submitted_request_ids_empty_when_no_done_tasks(self) -> None:
-        """DONE with no done_tasks writes an empty id list, not a missing key."""
+    def test_no_write_when_done_tasks_empty(self) -> None:
+        """DONE with no ``done_tasks`` leaves the hand-off untouched.
+
+        ``PostTxSettlementRound`` is reachable via the delivery-rate
+        settlement path and the settlement-internal ``ResetRound``
+        retry; both arrive with ``done_tasks == []``. Overwriting a
+        still-pending ``submitted_request_ids`` from a prior real
+        settlement in those cases silently loses the prune and the
+        delivered batch is re-pooled next cycle.
+        """
         payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
-        round_ = _make_post_tx_round(payloads)
+        pending_handoff = ["still-pending-a", "still-pending-b"]
+        round_ = _make_post_tx_round(
+            payloads,
+            **{get_name(SynchronizedData.submitted_request_ids): pending_handoff},
+        )
         result = round_.end_block()
         assert result is not None
         new_sync_data, event = result
         assert event == Event.DONE
-        assert cast(SynchronizedData, new_sync_data).submitted_request_ids == []
+        assert (
+            cast(SynchronizedData, new_sync_data).submitted_request_ids
+            == pending_handoff
+        )
 
     def test_submitted_request_ids_normalised_to_str(self) -> None:
         """Ids are ``str``-normalised to match the prune-site lookup key.

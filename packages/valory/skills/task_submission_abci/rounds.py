@@ -219,10 +219,19 @@ class TaskPoolingRound(CollectionRound):
             unique_done_tasks = sorted(
                 unique_objects, key=lambda x: str(x.get("request_id", ""))
             )
+            # Consume the hand-off from the previous cycle. ``handle_submitted_tasks``
+            # ran in every participant's ``TaskPoolingBehaviour.async_act`` before
+            # this round accepted quorum, so the ids have been read and pruned
+            # everywhere by now. Clearing here in consensus makes the field
+            # one-shot per settlement: the next cycle sees ``[]`` and returns
+            # early rather than re-executing the "already submitted" block on
+            # stale data every period (which would silently re-prune re-swept
+            # requests before they can be pooled).
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
                     get_name(SynchronizedData.done_tasks): unique_done_tasks,
+                    get_name(SynchronizedData.submitted_request_ids): [],
                 },
             )
             if len(unique_done_tasks) > 0:
@@ -337,6 +346,20 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
         """Process the end of the block."""
         if self.threshold_reached:
             done_tasks = cast(SynchronizedData, self.synchronized_data).done_tasks
+            if not done_tasks:
+                # ``PostTxSettlementRound`` is also reached from paths
+                # that carry no task batch: the delivery-rate settlement
+                # (``composition.py`` wires ``FinishedTransactionSubmissionRound``
+                # here for every settlement, not just task delivery) and
+                # a settlement-internal ``ResetRound`` retry (which
+                # drops ``done_tasks`` from the DB via ``db.create``'s
+                # allow-list). Writing ``submitted_request_ids = []``
+                # in those cases would clobber a still-pending hand-off
+                # from a prior real settlement, and the delivered batch
+                # would be re-pooled and re-submitted on-chain next
+                # cycle. When we have no task batch to record, leave
+                # any pending hand-off in place.
+                return self.synchronized_data, Event.DONE
             submitted_ids = extract_request_ids(done_tasks)
             return (
                 self.synchronized_data.update(
