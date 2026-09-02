@@ -832,17 +832,36 @@ class TestHandleSubmittedTasks:
         # metric is dropped.
         mock_remove.assert_called_once_with(["r1"])
 
-    def test_histogram_skipped_when_task_missing_tool_or_start_time(self) -> None:
+    @pytest.mark.parametrize(
+        "task",
+        [
+            pytest.param(
+                {"request_id": "r1", "start_time": 0.0},
+                id="tool-missing",
+            ),
+            pytest.param(
+                {"request_id": "r1", "tool": "t1"},
+                id="start_time-missing",
+            ),
+        ],
+    )
+    def test_histogram_skipped_when_task_missing_tool_or_start_time(
+        self, task: Dict[str, Any]
+    ) -> None:
         """Skip the histogram when ``tool`` or ``start_time`` is absent.
 
-        Task-execution failures produce entries without ``tool``;
-        emitting a histogram sample against ``tool=None`` would push
-        a nonsense label into the metric.
+        Task-execution failures produce entries without ``tool``, and
+        early-abort paths can produce entries without ``start_time``.
+        Emitting a histogram sample against either as ``None`` would
+        push a nonsense label / negative duration into the metric.
+        Both halves of the guard are exercised so a mutation that
+        weakens either half surfaces here.
+
+        :param task: parametrised done-task shape (missing ``tool``
+            in one case, missing ``start_time`` in the other).
         """
-        # Task present in shared_state but missing ``tool``.
-        task_missing_tool = {"request_id": "r1", "start_time": time.perf_counter()}
         b = self._make_b()
-        b.context.shared_state[DONE_TASKS] = [task_missing_tool]
+        b.context.shared_state[DONE_TASKS] = [task]
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
             self._patch_sd(b, submitted_ids=["r1"]),

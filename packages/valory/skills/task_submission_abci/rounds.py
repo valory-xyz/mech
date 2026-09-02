@@ -99,9 +99,24 @@ class SynchronizedData(BaseSynchronizedData):
         across periods because it holds per-event request/response
         payload data that would inflate DB serialization.
 
+        The value is validated on read: writers must go through
+        :func:`extract_request_ids` so that only ``str`` ids land in
+        the DB. A future writer that bypasses the helper and stores a
+        non-list or non-``str`` entries surfaces as ``TypeError`` here
+        rather than as silent type drift at the consumer.
+
         :return: the list of request ids from the most recent settlement.
+        :raises TypeError: if the persisted value is not ``list[str]``.
         """
-        return cast(List[str], self.db.get("submitted_request_ids", []))
+        value = self.db.get("submitted_request_ids", [])
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            raise TypeError(
+                "submitted_request_ids must be a list[str]; got "
+                f"{type(value).__name__}={value!r}"
+            )
+        return value
 
     @property
     def final_tx_hash(self) -> str:
