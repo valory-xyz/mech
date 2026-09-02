@@ -1865,11 +1865,13 @@ def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
     # the writer stores under ``str(req_id)``, so every successful off-chain
     # delivery landed in the lake as ``status="failed"``, ``result=None``.
     # Silent failure: the poller still saw the right answer.
-    done_event = done.get("predict_api_event")
-    assert isinstance(done_event, dict), done
+    events = shared_state.get(beh_mod.PREDICT_API_EVENTS, {})
+    done_event = events.get(str(done["request_id"]))
+    assert isinstance(done_event, dict), events
     inner = done_event.get("response", {})
     assert inner.get("status") == "complete", done_event
     assert inner.get("result") == "prediction: yes", done_event
+    assert "predict_api_event" not in done
 
 
 def test_handle_done_task_offchain_invalid_request_recorded_as_failure(
@@ -2026,7 +2028,9 @@ def test_handle_done_task_onchain_end_to_end_predict_api_event(  # noqa: PLR0913
 
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
-    event = done_tasks[0]["predict_api_event"]
+    assert "predict_api_event" not in done_tasks[0]
+    events = shared_state.get(beh_mod.PREDICT_API_EVENTS, {})
+    event = events[str(done_tasks[0]["request_id"])]
     assert event["response"]["result"] == expected_event_result
     assert event["response"]["status"] == expected_event_status
     assert event["response"]["error"] == expected_event_error
@@ -4431,8 +4435,10 @@ def test_finalize_done_task_attaches_predict_api_event_when_use_offchain_on(
     behaviour._finalize_done_task("bafycid")
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
-    assert isinstance(done_tasks[0].get("predict_api_event"), dict)
-    assert done_tasks[0]["predict_api_event"].get("source") == "mech_offchain"
+    assert "predict_api_event" not in done_tasks[0]
+    events = shared_state.get(beh_mod.PREDICT_API_EVENTS, {})
+    event = events[str(done_tasks[0]["request_id"])]
+    assert event.get("source") == "mech_offchain"
 
 
 def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
@@ -4465,8 +4471,10 @@ def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
     behaviour._finalize_done_task("bafycid")
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
-    assert isinstance(done_tasks[0].get("predict_api_event"), dict)
-    assert done_tasks[0]["predict_api_event"].get("source") == "mech_onchain"
+    assert "predict_api_event" not in done_tasks[0]
+    events = shared_state.get(beh_mod.PREDICT_API_EVENTS, {})
+    event = events[str(done_tasks[0]["request_id"])]
+    assert event.get("source") == "mech_onchain"
 
 
 def test_finalize_done_task_omits_predict_api_event_when_use_offchain_off(
@@ -4499,6 +4507,7 @@ def test_finalize_done_task_omits_predict_api_event_when_use_offchain_off(
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
     assert "predict_api_event" not in done_tasks[0]
+    assert not shared_state.get(beh_mod.PREDICT_API_EVENTS)
 
 
 # ---------------------------------------------------------------------------

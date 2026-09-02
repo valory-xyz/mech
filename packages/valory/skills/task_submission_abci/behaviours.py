@@ -67,6 +67,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
+from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import (
@@ -278,6 +279,10 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
                 for task in snapshot
                 if str(task.get("request_id")) not in submitted_id_set
             ]
+        events_by_id = self.context.shared_state.get(PREDICT_API_EVENTS)
+        if isinstance(events_by_id, dict):
+            for rid in submitted_id_set:
+                events_by_id.pop(rid, None)
         return snapshot
 
     @property
@@ -1990,21 +1995,11 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             ``return`` anything.
         """
         if not self.params.use_offchain:
-            # Divergence safety net. ``use_offchain`` is a duplicated
-            # param (declared on both this skill and ``task_execution``);
-            # if an operator flips ``task_execution.use_offchain=true`` but
-            # forgets this one, the ingress side builds
-            # ``predict_api_event`` entries and rides Tendermint
-            # consensus replication for them — and then the egress side
-            # here silently drops the entire batch. Warn loudly when we
-            # can see that has happened so the divergence is alertable
-            # rather than invisible.
-            if any(
-                isinstance(t, dict) and t.get("predict_api_event")
-                for t in cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
-            ):
+            # Divergence safety net: the ingress side wrote events into
+            # local shared_state but the egress side has the flag off.
+            if self.context.shared_state.get(PREDICT_API_EVENTS):
                 self.context.logger.warning(
-                    "predict_api_event entries present in done_tasks but "
+                    "predict_api_event entries present in shared_state but "
                     "task_submission_abci.use_offchain is False — the "
                     "ingress-side (task_execution) and egress-side "
                     "(task_submission_abci) use_offchain flags are "
@@ -2447,30 +2442,29 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         ).inc()
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
-        """Return the ``predict_api_event`` payload from every done_task that carries one.
+        """Return the ``predict_api_event`` payload for every done_task that has one.
 
-        Both off-chain HTTP deliveries (``source = 'mech_offchain'``) and
-        on-chain marketplace deliveries (``source = 'mech_onchain'``) now
-        ride the same predict-api write path; the per-event ``source`` field
-        set inside :py:meth:`task_execution.behaviours._build_predict_api_event`
-        is what disambiguates the two on the predict-api side. The filter
-        here keys on the presence of a ``predict_api_event`` field, which
-        :py:meth:`task_execution.behaviours._finalize_done_task` sets only
-        when ``use_offchain`` is on AND the task is either an off-chain
-        HTTP delivery (``is_offchain=True``) or an on-chain marketplace
-        delivery (``is_marketplace_delivery=True``). On-chain
-        non-marketplace tasks on a legacy mech contract stay out of the
-        lake by construction.
+        Looks each event up in agent-local
+        ``shared_state[PREDICT_API_EVENTS]`` keyed by ``str(request_id)``.
+        Only the agent that executed a task locally has its event; a
+        task another agent executed is skipped here and posted by that
+        agent instead. Predict-api dedups on ``request_id`` so a single
+        POST per task is sufficient.
 
         :return: an ordered list of ``MechEvent``-shaped dicts.
         """
         done_tasks = cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
+        events_by_id: Dict[str, Dict[str, Any]] = self.context.shared_state.get(
+            PREDICT_API_EVENTS, {}
+        )
         events: List[Dict[str, Any]] = []
         for task in done_tasks:
-            event = task.get("predict_api_event")
-            if not isinstance(event, dict):
+            req_id = task.get("request_id")
+            if req_id is None:
                 continue
-            events.append(event)
+            event = events_by_id.get(str(req_id))
+            if isinstance(event, dict):
+                events.append(event)
         return events
 
     def _sweep_pending_undelivered(

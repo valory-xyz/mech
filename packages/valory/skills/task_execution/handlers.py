@@ -88,6 +88,7 @@ LAST_SUCCESSFUL_READ = "last_successful_read"
 LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
+PREDICT_API_EVENTS = "predict_api_events"
 WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
 PAYMENT_MODEL = "payment_model"
 PAYMENT_INFO = "payment_info"
@@ -608,6 +609,7 @@ class ContractHandler(BaseHandler):
         self.context.shared_state[DONE_TASKS] = []
         self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
         self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO] = {}
+        self.context.shared_state[PREDICT_API_EVENTS] = {}
         super().setup()
 
     def set_last_successful_read(self, block_number: Optional[int]) -> None:

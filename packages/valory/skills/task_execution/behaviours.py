@@ -87,6 +87,7 @@ LAST_SUCCESSFUL_EXECUTED_TASK = "last_successful_executed_task"
 LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
+PREDICT_API_EVENTS = "predict_api_events"
 # Shared-state keys owned by the MechHttpHandler (handlers.py); mirrored here
 # because the off-chain finalize path writes the response envelope for the
 # ``/fetch_offchain_info`` polling endpoint and clears the buffered request
@@ -1773,40 +1774,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # pop the data key value as it's bytes which causes issues
         # with json dumps and not required anywhere
         done_task.pop("data", None)
-        # Attach the offchain predict-api event payload before the
-        # IN_MEMORY_REQUESTS pop below; the post-settlement behaviour in
-        # task_submission_abci reads it off ``synchronized_data.done_tasks``
-        # (i.e. after consensus replication) and posts it to the predict-api
-        # data lake, but the buffered request metadata it needs is local
-        # to this agent's shared_state and goes away at the pop.
-        #
-        # Gate the whole event build on ``use_offchain``. When the flag
-        # is off, no payload is built and nothing rides Tendermint
-        # consensus replication — so the ingress-side consensus cost
-        # matches the egress-side HTTP write cost (nothing on either
-        # side). The paired gate in
-        # :py:meth:`task_submission_abci.behaviours.PostTxSettlementBehaviour._do_predict_api_write_best_effort`
-        # additionally warns if it receives events under a locally-off
-        # flag, so a config drift between the two skill copies of
-        # ``use_offchain`` is alertable rather than silent.
-        # Build the event for both off-chain HTTP deliveries
-        # (``is_offchain=True``) and on-chain marketplace deliveries
-        # (``is_offchain=False`` AND ``is_marketplace_delivery=True``).
-        # The ``source`` field on the event (set by
-        # ``_build_predict_api_event``) disambiguates the two paths on
-        # the predict-api side: ``mech_offchain`` for the paid HTTP path,
-        # ``mech_onchain`` for the on-chain rails. See
-        # ``autonolas-marketplace/docs/onchain_write_path_scope.md`` for
-        # the agreed shape.
         predict_api_mode_enabled = self.params.use_offchain
         is_marketplace_delivery = bool(done_task.get("is_marketplace_mech"))
         if predict_api_mode_enabled and (is_offchain or is_marketplace_delivery):
-            done_task["predict_api_event"] = self._build_predict_api_event(
+            event = self._build_predict_api_event(
                 done_task=done_task,
                 cid=cid,
                 executing_task=cast(Dict[str, Any], executing_task),
                 response=response,
             )
+            self.context.shared_state.setdefault(PREDICT_API_EVENTS, {})[
+                str(req_id)
+            ] = event
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)

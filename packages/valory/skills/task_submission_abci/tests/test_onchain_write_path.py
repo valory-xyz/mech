@@ -50,6 +50,7 @@ import time
 from types import SimpleNamespace
 from typing import Any, Dict, List, cast
 
+from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_submission_abci.behaviours import (
     PENDING_TASKS,
     PostTxSettlementBehaviour,
@@ -500,45 +501,42 @@ def test_request_only_event_falls_back_to_now_on_bad_timestamp() -> None:
 # Extract -----------------------------------------------------------------
 
 
-def test_extract_offchain_events_includes_onchain_when_predict_api_event_present() -> (
-    None
-):
-    """The extractor keys on the presence of ``predict_api_event``, not on ``is_offchain``.
-
-    An on-chain marketplace task that carried a ``predict_api_event``
-    (built by the task_execution finalize step) gets included in the
-    batch.
-    """
-    # Build a self_ that exposes synchronized_data.done_tasks; the
-    # extract method is a property-only function.
+def test_extract_offchain_events_reads_from_shared_state_by_request_id() -> None:
+    """Events are looked up from agent-local ``shared_state[PREDICT_API_EVENTS]`` by request_id."""
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
             synchronized_data=SimpleNamespace(
                 done_tasks=[
-                    {"is_offchain": True, "predict_api_event": {"src": "off"}},
-                    {"is_offchain": False, "predict_api_event": {"src": "on"}},
-                    {"is_offchain": False, "predict_api_event": None},  # skipped
-                    {"is_offchain": True, "predict_api_event": "not-a-dict"},  # skipped
+                    {"request_id": "r-off"},
+                    {"request_id": "r-on"},
+                    {"request_id": "r-not-local"},
+                    {"request_id": None},
                 ]
-            )
+            ),
+            context=SimpleNamespace(
+                shared_state={
+                    PREDICT_API_EVENTS: {
+                        "r-off": {"src": "off"},
+                        "r-on": {"src": "on"},
+                    }
+                }
+            ),
         ),
     )
     events = PostTxSettlementBehaviour._extract_offchain_events(self_)
     assert events == [{"src": "off"}, {"src": "on"}]
 
 
-def test_extract_offchain_events_skips_tasks_without_predict_api_event() -> None:
-    """Done tasks without ``predict_api_event`` (e.g. on-chain non-marketplace legacy mech tasks) stay out of the batch."""
+def test_extract_offchain_events_returns_empty_when_shared_state_unset() -> None:
+    """No local events → empty batch (other agents post their own)."""
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
             synchronized_data=SimpleNamespace(
-                done_tasks=[
-                    {"is_offchain": True},  # no predict_api_event at all
-                    {"is_offchain": False},
-                ]
-            )
+                done_tasks=[{"request_id": "r-off"}, {"request_id": "r-on"}]
+            ),
+            context=SimpleNamespace(shared_state={}),
         ),
     )
     events = PostTxSettlementBehaviour._extract_offchain_events(self_)
@@ -559,6 +557,7 @@ def _make_egress_self(
     done_tasks: List[Dict[str, Any]] | None = None,
     warnings_sink: List[str] | None = None,
     debug_sink: List[str] | None = None,
+    predict_api_events: Dict[str, Any] | None = None,
 ) -> PostTxSettlementBehaviour:
     """Build a minimum ``self`` for a ``_do_predict_api_write_best_effort`` call.
 
@@ -577,6 +576,8 @@ def _make_egress_self(
         by the divergence-warning check.
     :param warnings_sink: list to capture WARNING-level log lines.
     :param debug_sink: list to capture DEBUG-level log lines.
+    :param predict_api_events: seed ``shared_state[PREDICT_API_EVENTS]``
+        for the divergence-warning check.
     :return: a fixture typed as :class:`PostTxSettlementBehaviour` for
         the unbound-method call pattern used by every test in this
         module.
@@ -591,8 +592,11 @@ def _make_egress_self(
         error=lambda *a, **k: None,
         debug=lambda msg, *a, **k: debug_sink.append(msg),
     )
+    shared_state: Dict[str, Any] = {}
+    if predict_api_events is not None:
+        shared_state[PREDICT_API_EVENTS] = predict_api_events
     self_ = SimpleNamespace(
-        context=SimpleNamespace(shared_state={}, logger=logger),
+        context=SimpleNamespace(shared_state=shared_state, logger=logger),
         params=SimpleNamespace(
             use_offchain=use_offchain,
             predict_api_events_url=predict_api_events_url,
@@ -666,10 +670,7 @@ def test_egress_gate_off_with_diverged_ingress_emits_divergence_warning() -> Non
     warnings_sink: List[str] = []
     self_ = _make_egress_self(
         use_offchain=False,
-        done_tasks=[
-            {"is_offchain": True, "predict_api_event": {"src": "off"}},
-            {"is_offchain": False},
-        ],
+        predict_api_events={"r1": {"src": "off"}},
         warnings_sink=warnings_sink,
     )
     _drive_generator_once(
