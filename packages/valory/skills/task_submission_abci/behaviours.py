@@ -116,6 +116,9 @@ PAYMENT_TYPE_NATIVE_NVM = (
 PAYMENT_TYPE_TOKEN_NVM = (
     "0d6fd99afa9c4c580fab5e341922c2a5c4b61d880da60506193d7bf88944dd14"  # nosec
 )
+PAYMENT_TYPE_TOKEN_USDC = (
+    "6406bb5f31a732f898e1ce9fdd988a80a808d36ab5d9a4a4805a8be8d197d5e3"  # nosec
+)
 
 IS_MARKETPLACE_MECH_KEY = "is_marketplace_mech"
 
@@ -677,7 +680,11 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 if amount == 0:
                     continue
 
-                if mech_type.hex() in [PAYMENT_TYPE_TOKEN_NVM, PAYMENT_TYPE_TOKEN]:
+                if mech_type.hex() in [
+                    PAYMENT_TYPE_TOKEN_NVM,
+                    PAYMENT_TYPE_TOKEN,
+                    PAYMENT_TYPE_TOKEN_USDC,
+                ]:
                     self.context.logger.info(
                         f"Token type mech detected {mech_address}. Preparing token transfer tx"
                     )

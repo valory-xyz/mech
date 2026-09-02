@@ -2986,6 +2986,59 @@ class TestGetSplitProfitTxsTokenMech:
         assert result is not None
         assert len(result) == 2  # process_tx + token_transfer_tx
 
+    def test_fixed_price_token_usdc_routes_to_erc20_branch(self) -> None:
+        """USDC mech (FixedPriceTokenUSDC paymentType) must take the ERC20 branch.
+
+        Guards against the regression where an unrecognised token-payment
+        paymentType falls through to _get_transfer_tx and encodes a native
+        transfer, which reverts on-chain because the mech contract holds the
+        token but no native balance.
+        """
+        b = self._make_b()
+        from packages.valory.skills.task_submission_abci.behaviours import (
+            PAYMENT_TYPE_TOKEN_USDC,
+        )
+
+        usdc_type = bytes.fromhex(PAYMENT_TYPE_TOKEN_USDC)
+        mech_info = (usdc_type, "0xTRACK", 1000)
+        process_tx = {
+            "to": "0xTRACK",
+            "value": 0,
+            "data": b"\x00",
+            "simulation_ok": True,
+        }
+        split_funds = {"0xSERVICE_OWNER": 900}
+        token_transfer_tx = {"to": "0xMECH", "value": 0, "data": b"\x02"}
+        native_transfer_sentinel = MagicMock(
+            side_effect=AssertionError(
+                "USDC paymentType must not take the native _get_transfer_tx branch"
+            )
+        )
+        with (
+            patch.object(b, "_should_split_profits", side_effect=_gen_returning(True)),
+            patch.object(b, "_get_mech_info", side_effect=_gen_returning(mech_info)),
+            patch.object(b, "_calculate_mech_profits", side_effect=_gen_returning(900)),
+            patch.object(
+                b,
+                "_get_process_payment_tx",
+                side_effect=_gen_returning(dict(process_tx)),
+            ),
+            patch.object(b, "_split_funds", side_effect=_gen_returning(split_funds)),
+            patch.object(
+                b, "_get_token_address", side_effect=_gen_returning("0xTOKEN")
+            ),
+            patch.object(
+                b,
+                "_get_token_transfer_tx",
+                side_effect=_gen_returning(token_transfer_tx),
+            ),
+            patch.object(b, "_get_transfer_tx", native_transfer_sentinel),
+        ):
+            result = _run_gen(b.get_split_profit_txs())
+        assert result is not None
+        assert len(result) == 2  # process_tx + token_transfer_tx (not native)
+        native_transfer_sentinel.assert_not_called()
+
 
 class TestMarketplaceNvmMechPath:
     """Test Marketplace Nvm Mech Path."""
