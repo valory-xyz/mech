@@ -877,6 +877,89 @@ class TestHandleSubmittedTasks:
         # Prune still ran end-to-end despite the metric skip.
         assert b.context.shared_state[DONE_TASKS] == []
 
+    def test_prune_acquires_done_tasks_lock(self) -> None:
+        """The live prune path MUST hold ``done_tasks_lock``.
+
+        Without this, dropping the ``with`` around the prune would
+        pass every other test in the suite silently — the background
+        executor's concurrent append could then torn-read the metrics
+        loop's snapshot. Directly assert the lock is entered.
+        """
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [
+            {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()},
+        ]
+        mock_lock = MagicMock()
+        mock_lock.__enter__ = MagicMock(return_value=None)
+        mock_lock.__exit__ = MagicMock(return_value=None)
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+            patch.object(b, "done_tasks_lock", return_value=mock_lock),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        mock_lock.__enter__.assert_called_once()
+        mock_lock.__exit__.assert_called_once()
+
+    def test_str_normalisation_matches_legacy_int_on_live_path(self) -> None:
+        """Live prune path str-normalises the shared_state side of the match.
+
+        The reviewer flagged that ``0518c00e`` moved the prune inline
+        and the only test guarding the ``str()`` normalisation lived
+        on ``remove_tasks_by_id`` (which the live path used to
+        bypass). After the consolidation the live path calls
+        ``remove_tasks_by_id`` again, but pin it end-to-end here so a
+        future re-inlining that drops the normalisation surfaces.
+        """
+        b = self._make_b()
+        # Shared state carries the legacy ``int`` shape; the incoming
+        # id list is ``List[str]`` per the type contract.
+        b.context.shared_state[DONE_TASKS] = [
+            {"request_id": 5, "tool": "t1", "start_time": time.perf_counter()},
+        ]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["5"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        assert b.context.shared_state[DONE_TASKS] == []
+
+    def test_prune_runs_before_block_number_fetch(self) -> None:
+        """The prune completes before the ``_fetch_tx_block_number`` yield.
+
+        A cancellation at the yield must not leave the delivered
+        batch un-pruned. Sending ``GeneratorExit`` at the first yield
+        would mid-execute the metrics block and prune only if either
+        happens after the yield. Pin the invariant by asserting that
+        with the yield replaced by a raise, ``shared_state`` is
+        already pruned.
+        """
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [
+            {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()},
+        ]
+
+        def _raising_yield(_tx_hash: str) -> Generator[None, None, None]:
+            if False:
+                yield  # pragma: no cover - satisfy typing
+            raise RuntimeError("simulated yield failure")
+
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_raising_yield),
+            patch.object(b, "observe_histogram"),
+        ):
+            with pytest.raises(RuntimeError, match="simulated yield failure"):
+                _run_gen(b.handle_submitted_tasks())
+        # If the prune had been moved below the yield, this would
+        # still be ``[{'request_id': 'r1', ...}]``.
+        assert b.context.shared_state[DONE_TASKS] == []
+
 
 # ---------------------------------------------------------------------------
 # End-to-end hand-off contract (round-side write ↔ behaviour-side read)

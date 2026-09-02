@@ -20,7 +20,6 @@
 """This package contains the rounds of TaskSubmissionAbciApp."""
 
 import json
-import logging
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, cast
 
@@ -118,7 +117,7 @@ class SynchronizedData(BaseSynchronizedData):
         if not isinstance(value, list) or not all(
             isinstance(item, str) for item in value
         ):
-            logging.getLogger(__name__).error(
+            self.db.logger.error(
                 "submitted_request_ids invariant broken: expected list[str], "
                 "got %s=%r; degrading to [] for this cycle",
                 type(value).__name__,
@@ -338,20 +337,21 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            done_tasks = cast(SynchronizedData, self.synchronized_data).done_tasks
+            sd = cast(SynchronizedData, self.synchronized_data)
+            done_tasks = sd.done_tasks
             if not done_tasks:
-                # ``PostTxSettlementRound`` is also reached from paths
-                # that carry no task batch: the delivery-rate settlement
-                # (``composition.py`` wires ``FinishedTransactionSubmissionRound``
-                # here for every settlement, not just task delivery) and
-                # a settlement-internal ``ResetRound`` retry (which
-                # drops ``done_tasks`` from the DB via ``db.create``'s
-                # allow-list). Writing ``submitted_request_ids = []``
-                # in those cases would clobber a still-pending hand-off
-                # from a prior real settlement, and the delivered batch
-                # would be re-pooled and re-submitted on-chain next
-                # cycle. When we have no task batch to record, leave
-                # any pending hand-off in place.
+                # ``composition.py`` wires
+                # ``FinishedTransactionSubmissionRound`` here for every
+                # settlement, not just task delivery, so the
+                # delivery-rate path arrives with ``done_tasks == []``.
+                # Overwriting a still-pending hand-off with ``[]`` here
+                # would clobber a prior real settlement's ids and the
+                # delivered batch would be re-pooled next cycle.
+                sd.db.logger.warning(
+                    "PostTxSettlementRound reached with empty done_tasks; "
+                    "preserving pending hand-off submitted_request_ids=%s",
+                    sd.submitted_request_ids,
+                )
                 return self.synchronized_data, Event.DONE
             submitted_ids = extract_request_ids(done_tasks)
             return (

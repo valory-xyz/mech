@@ -8,18 +8,18 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeieetnponid4kir2e5mtuihtbuk6qlaconf522ovpfjhhvlrq5hp6e
+  behaviours.py: bafybeietlxjecs4czaxbin63wvmwxn5moto2ho5dszgowk6xpmwoytrbjy
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
   models.py: bafybeihi4udsewau7p73t4vqnasywm5kicydrrggxcdz4skxoulfykvl5i
   payloads.py: bafybeiaaelmpfuv6pvuesj7iy2nnxvgxjketigrppurto2pbsoaqjum2ba
   predict_api_events_client.py: bafybeie7yu4ygy4gnpc6yekhnhbtdgtferzzaoyzj4nhenyune7hnhswvm
-  rounds.py: bafybeidpqruiwzm62pwobwg7wuxfywkdo6ypq2z6v7zlyce65ruty4kdsm
+  rounds.py: bafybeigjhv6n4wh4eiqhegqxcgpr2rzntqvexzf5tmbi2rmq26ijhjp2um
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeihxi2j5lkdlq3rwydag2bzrv67exegutggxmgku3mq5pmrdth3pjq
-  tests/test_behaviours.py: bafybeiggxis45rii5wjryqvcfayfmmznn6olxumfet7mq6m5uqrblbamzq
+  tests/test_behaviours.py: bafybeifnbbbicmtyhmb6twbhqd6bttz7ooxuefitovqzcsjqqyarlthil4
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry

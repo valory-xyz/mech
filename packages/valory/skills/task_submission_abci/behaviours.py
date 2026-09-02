@@ -241,20 +241,27 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         """
         self.remove_tasks_by_id(extract_request_ids(submitted_tasks))
 
-    def remove_tasks_by_id(self, submitted_ids: List[str]) -> None:
-        """Pop already-submitted tasks from shared state, matched by request_id.
+    def remove_tasks_by_id(self, submitted_ids: List[str]) -> List[Dict[str, Any]]:
+        """Pop already-submitted tasks from shared state and return the pre-prune snapshot.
+
+        Returning the snapshot lets a caller drive per-task metrics
+        from the same list the prune ran on, without acquiring the
+        lock twice or risking a torn read against the background
+        executor. The snapshot is a ``deepcopy`` of the pre-prune
+        ``shared_state[DONE_TASKS]``.
 
         :param submitted_ids: request ids of tasks already delivered.
+        :return: the pre-prune snapshot of ``shared_state[DONE_TASKS]``.
         """
         submitted_id_set = set(submitted_ids)
         with self.done_tasks_lock():
-            done_tasks = self.done_tasks
-            not_submitted = [
-                done_task
-                for done_task in done_tasks
-                if str(done_task.get("request_id")) not in submitted_id_set
+            snapshot = self.done_tasks
+            self.context.shared_state[DONE_TASKS] = [
+                task
+                for task in snapshot
+                if str(task.get("request_id")) not in submitted_id_set
             ]
-            self.context.shared_state[DONE_TASKS] = not_submitted
+        return snapshot
 
     @property
     def mech_addresses(self) -> List[str]:
@@ -344,28 +351,22 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         if len(submitted_ids) == 0:
             return
 
-        # Take one snapshot under the lock and prune inline, so the
-        # metrics loop below and the prune both operate on the same
-        # entries. ``shared_state[DONE_TASKS]`` is written concurrently
-        # by the background executor, so an unlocked
-        # ``deepcopy(shared_state[DONE_TASKS])`` can produce a torn
-        # read: a task landing mid-copy would silently fall into the
-        # ``task is None`` skip branch below and its metric would be
-        # dropped, making a real desync indistinguishable from a race.
-        submitted_id_set = set(submitted_ids)
-        with self.done_tasks_lock():
-            shared_snapshot = list(self.context.shared_state.get(DONE_TASKS, []))
-            self.context.shared_state[DONE_TASKS] = [
-                task
-                for task in shared_snapshot
-                if str(task.get("request_id")) not in submitted_id_set
-            ]
+        # Prune + snapshot under one lock via ``remove_tasks_by_id``.
+        # Sharing the snapshot with the metrics loop below keeps the
+        # torn-read window closed (the background executor writes
+        # ``shared_state[DONE_TASKS]`` under the same lock) and keeps
+        # both paths on the single tested prune surface.
+        shared_snapshot = self.remove_tasks_by_id(submitted_ids)
+        self.context.logger.info(
+            f"Pruned tasks with ids {submitted_ids} from shared state; "
+            f"tx_hash={tx_hash}."
+        )
 
-        # Emit per-task delivery-time metrics from the snapshot. A
-        # task absent from ``shared_state[DONE_TASKS]`` at snapshot
-        # time still counted toward the prune above; the metric is
-        # skipped only because the timing data isn't locally
-        # available (the delivery already landed on-chain).
+        # Emit per-task delivery-time metrics from the same snapshot.
+        # A task absent from the snapshot still counted toward the
+        # prune above; the metric is skipped only because the local
+        # timing data isn't available (the delivery already landed
+        # on-chain).
         shared_done_tasks_by_id = {
             str(task.get("request_id")): task for task in shared_snapshot
         }
@@ -408,12 +409,6 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             self.set_gauge(
                 self.shared_state.mech_delivery_last_block_number, block_number
             )
-
-        self.context.logger.info(
-            f"Tasks with ids {submitted_ids} have been submitted. "
-            f"The corresponding tx_hash is: {tx_hash}. "
-            f"Removing them from the list of tasks to be processed."
-        )
 
     def check_last_tx_status(self) -> Tuple[bool, str]:
         """Check if the tx in the last round was successful or not"""
