@@ -269,20 +269,16 @@ class TestRemoveTasksById:
         b.remove_tasks_by_id(["r1", "r2"])
         assert ctx.shared_state[DONE_TASKS] == []
 
-    def test_mixed_type_ids_match_normalised(self) -> None:
-        """``str`` / ``int`` id mismatch across boot boundaries still matches.
+    def test_int_shared_state_matches_str_id(self) -> None:
+        """A legacy ``int`` in shared_state is matched by a ``str`` id.
 
-        A shared_state row carrying ``int`` and an incoming id list of
-        ``str`` (or vice versa) both normalise to ``str`` on the
-        equality check.
+        The id list side is typed ``List[str]``; callers must go
+        through :func:`extract_request_ids` which normalises to
+        ``str`` at the write site. The shared_state side, in
+        contrast, may still carry legacy ``int`` request_ids from a
+        pre-fix boot, so this direction of the equality is normalised
+        via ``str(done_task.get("request_id"))`` on lookup.
         """
-        # str shared_state / int id list
-        ctx = _make_ctx(done_tasks=[{"request_id": "5"}])
-        b = _DummyBase(name="b", skill_context=ctx)
-        b.remove_tasks_by_id([5])
-        assert ctx.shared_state[DONE_TASKS] == []
-
-        # int shared_state / str id list
         ctx = _make_ctx(done_tasks=[{"request_id": 5}])
         b = _DummyBase(name="b", skill_context=ctx)
         b.remove_tasks_by_id(["5"])

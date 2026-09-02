@@ -33,7 +33,6 @@ from typing import (
     Generator,
     List,
     Optional,
-    Sequence,
     Set,
     Tuple,
     Type,
@@ -242,15 +241,12 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         """
         self.remove_tasks_by_id(extract_request_ids(submitted_tasks))
 
-    def remove_tasks_by_id(self, submitted_ids: Sequence[Any]) -> None:
+    def remove_tasks_by_id(self, submitted_ids: List[str]) -> None:
         """Pop already-submitted tasks from shared state, matched by request_id.
 
         :param submitted_ids: request ids of tasks already delivered.
-            Accepts ``int`` or ``str`` shapes; both sides are
-            ``str``-normalised on the equality check.
         """
-        # Amount of done tasks is small (<<20); the lock cost is trivial.
-        submitted_id_set = {str(rid) for rid in submitted_ids}
+        submitted_id_set = set(submitted_ids)
         with self.done_tasks_lock():
             done_tasks = self.done_tasks
             not_submitted = [

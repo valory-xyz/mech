@@ -8,25 +8,25 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeibuakf3zsqz2hdtmlnlmbjflefr4g2hyky5hvwkoujjblt7sku574
+  behaviours.py: bafybeiep7dhdvoaplfjhqdn2f34ygmslvfaw7n3l7rk6knezsbaocqwhr4
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
   models.py: bafybeihi4udsewau7p73t4vqnasywm5kicydrrggxcdz4skxoulfykvl5i
   payloads.py: bafybeiaaelmpfuv6pvuesj7iy2nnxvgxjketigrppurto2pbsoaqjum2ba
   predict_api_events_client.py: bafybeie7yu4ygy4gnpc6yekhnhbtdgtferzzaoyzj4nhenyune7hnhswvm
-  rounds.py: bafybeicx52a7eud5qcwoba4rlffb27brbx7gmir4bibn7ico4wvdju22fa
+  rounds.py: bafybeifzl7ogcp3jeq45szysz6tmovc6nxvyydf6zeoajqgbbmp7jxicxm
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeihxi2j5lkdlq3rwydag2bzrv67exegutggxmgku3mq5pmrdth3pjq
-  tests/test_behaviours.py: bafybeiaczsllwrenucnt5fyxeiv5dq5e2lyyiqw4r5o47butw2cd57dnqe
+  tests/test_behaviours.py: bafybeid55ccjl4pj3u7y6dr7ckh2bkoc65dbb66r4bkzbzbusfasiofja4
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry
   tests/test_onchain_write_path.py: bafybeiercklygtxznuqo47xevl2ox4yefbi35maom4iivlbkyiq2elut4y
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_predict_api_events_client.py: bafybeicw2x4bblwf7biuww2b5ddyihpmdpsedcrimbvg4wcqzfyqspq6zm
-  tests/test_rounds.py: bafybeifhsnakzmpboekozkl6pajhfet2j6xujdh2p6p47jeinzh7juineq
+  tests/test_rounds.py: bafybeidszrxy3wz2iailyc5xdbxvyamufdr6o646plmc3ad2cwe2skpc74
   tests/test_tasks.py: bafybeifdnscfudthqjadvnigxiqgy74xzefrn6f3xiowhhwcc5ujztodym
 fingerprint_ignore_patterns: []
 connections: []

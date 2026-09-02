@@ -19,6 +19,7 @@
 """Tests for task_submission_abci.rounds."""
 
 import json
+import logging
 from typing import Any, Union, cast
 from unittest.mock import MagicMock
 
@@ -148,6 +149,36 @@ class TestSynchronizedData:
         ids = ["req-1", "req-2"]
         sd = _make_sync_data(submitted_request_ids=ids)
         assert sd.submitted_request_ids == ids
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [
+            pytest.param("not-a-list", id="non-list"),
+            pytest.param([1, 2, 3], id="non-str-entries"),
+            pytest.param(["ok", 42], id="mixed-str-and-int"),
+        ],
+    )
+    def test_submitted_request_ids_degrades_to_empty_on_bad_shape(
+        self,
+        bad_value: Any,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A malformed value logs an error and yields ``[]``.
+
+        The property is read at the top of every FSM cycle across
+        every participant on the same consensus block. Raising would
+        crash-loop the whole fleet with no in-band recovery because
+        the value is cross-period-persisted (``db.create`` copies it
+        forward). Degrading to ``[]`` keeps the drift detectable via
+        the ``error`` log while the FSM continues.
+        """
+        sd = _make_sync_data(submitted_request_ids=bad_value)
+        with caplog.at_level(logging.ERROR):
+            assert sd.submitted_request_ids == []
+        assert any(
+            "submitted_request_ids invariant broken" in rec.message
+            for rec in caplog.records
+        )
 
 
 # ---------------------------------------------------------------------------
