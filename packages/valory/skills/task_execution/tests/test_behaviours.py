@@ -3984,6 +3984,119 @@ def test_build_predict_api_event_omits_request_tx_hash_on_offchain_task(
     assert event["request"]["request_tx_hash"] is None
 
 
+def test_build_predict_api_event_writes_hex_payment_type_from_shared_state(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """The event's ``payment_type`` is the bytes32 hex of the cached payment_model.
+
+    Predict-api's ``mech_requests.payment_type`` was blank for 100% of
+    rows because upstream contract-event readers did not attach a
+    payment-type key to the task dict, and this build fell back to
+    ``executing_task.get('payment_type')`` which was always absent.
+    Reading from ``shared_state[PAYMENT_MODEL]`` — populated once at
+    startup by the mech-type handler from the ``paymentType()`` view —
+    puts the authoritative on-chain value on the event without a
+    per-event contract call. Consumers (marketplace FE) map the hash to
+    a human label; the pipeline carries the hash unchanged.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
+    """
+    # 32-byte payment-model hash — the shape returned by the mech
+    # contract's ``paymentType()`` view. Value is arbitrary here; the
+    # invariant is that whatever is in shared_state ends up hex-encoded
+    # on the event.
+    payment_model_bytes = bytes.fromhex("ab" * 32)
+    shared_state[beh_mod.PAYMENT_MODEL] = payment_model_bytes
+    request_data = {
+        "prompt": "p",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    # ``bytes.hex()`` returns lowercase hex with no ``0x`` prefix,
+    # matching how the constants in
+    # ``packages/valory/contracts/olas_mech/contract.py`` are declared.
+    assert event["request"]["payment_type"] == "ab" * 32
+
+
+def test_build_predict_api_event_writes_none_payment_type_when_shared_state_empty(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """Startup race: PAYMENT_MODEL not yet cached → ``payment_type`` is None.
+
+    Defensive fallback for the window between agent start and the first
+    ``get_mech_type`` handler response. ``_ensure_payment_model`` gates
+    the ``act`` step on this cache being populated, so in the ordinary
+    flow ``self.payment_model`` is bytes by the time an event is built,
+    but this test pins the None-safe accessor so a regression that
+    dropped the guard would not raise ``AttributeError`` on ``.hex()``.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
+    """
+    shared_state.pop(beh_mod.PAYMENT_MODEL, None)
+    request_data = {
+        "prompt": "p",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["request"]["payment_type"] is None
+
+
+def test_build_predict_api_event_payment_type_ignores_executing_task_key(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """A bogus ``executing_task['payment_type']`` does not shadow shared_state.
+
+    The prior shape read ``executing_task.get('payment_type')`` and
+    coerced through ``str(x or '') or None``. Nothing in the mech's
+    contract readers ever populated that key in production, so the
+    fallback was always None — but the coupling meant any future writer
+    that put a value there would silently override the authoritative
+    cache. Now the cache wins; ``executing_task`` is not consulted for
+    this field.
+
+    :param behaviour: Behaviour under test.
+    :param params_stub: Params-like namespace.
+    :param shared_state: Shared-state mapping the behaviour reads from.
+    """
+    shared_state[beh_mod.PAYMENT_MODEL] = bytes.fromhex("cd" * 32)
+    request_data = {
+        "prompt": "p",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:06.651013Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    # Bogus stray key on the task — must be ignored.
+    executing_task["payment_type"] = "hijacked_value"
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy", executing_task=executing_task
+    )
+    assert event["request"]["payment_type"] == "cd" * 32
+
+
 def test_build_predict_api_event_response_delivery_tx_hash_placeholder(
     behaviour: Any,
     params_stub: Any,
