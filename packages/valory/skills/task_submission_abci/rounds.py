@@ -45,10 +45,11 @@ from packages.valory.skills.task_submission_abci.payloads import (
 def extract_request_ids(tasks: List[Dict[str, Any]]) -> List[str]:
     """Return ``str``-normalised request ids from a task list.
 
-    Falsy ids (missing key, ``None``, empty string) are dropped so
-    they don't collide in downstream match sets. Legit ``0`` (int)
-    is kept via the explicit ``is None or == ""`` check rather than
-    a ``not`` truthiness test.
+    Only two shapes are treated as absent and dropped: the key
+    resolves to ``None``, or to the empty string. Any other value
+    (including ``0`` and ``False``) is kept and stringified — a
+    ``not`` truthiness test would drop those and let a legitimate
+    id disappear silently.
 
     :param tasks: task dicts (each expected to carry ``"request_id"``).
     :return: the ``str``-normalised id list, in input order.
@@ -325,24 +326,8 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     the server scales naturally across agents.
 
     The round always transitions DONE on threshold: a failed predict-api
-    write does NOT block the FSM (the settlement already landed on-chain,
-    the analytics row just arrives later via the replay buffer). The
-    NO_MAJORITY arm only fires if the agents can't agree on having reached
-    this round at all, which is the same shape as every consensus round.
-
-    On DONE the round writes ``submitted_request_ids`` — the id-only
-    hand-off used by the next cycle's
-    :meth:`TaskPoolingBehaviour.handle_submitted_tasks` to prune
-    ``shared_state[DONE_TASKS]``. ``done_tasks`` itself stays in the
-    period it was set and is not carried across; the ID hand-off is
-    what rides consensus between cycles.
-
-    Do NOT mutate ``done_tasks`` here. It is still read by
-    :class:`PostTxSettlementBehaviour` earlier in the same period for
-    the predict-api write and log emission, and the behaviour-side
-    prune in the next cycle depends on ``shared_state[DONE_TASKS]``
-    reflecting only tasks that were not settled — mutating the
-    consensus field here breaks that contract.
+    write does NOT block the FSM. NO_MAJORITY fires only if the agents
+    can't agree on having reached this round at all.
     """
 
     payload_class = PostTxSettlementPayload
@@ -467,21 +452,12 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         [
-            # Hand-off signal only. ``done_tasks`` is intentionally
-            # not cross-period-persisted because its per-entry payload
-            # data is large enough to inflate DB serialization on the
-            # next registration.
             get_name(SynchronizedData.submitted_request_ids),
             get_name(SynchronizedData.final_tx_hash),
         ]
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskPoolingRound: set(),
-        # Entered from composition after settlement. Reads
-        # ``done_tasks`` from the same FSM cycle's earlier
-        # ``TaskPoolingRound`` (present in the current period's DB
-        # slot). end_block writes the id-only
-        # ``submitted_request_ids`` for the next cycle's prune.
         PostTxSettlementRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {

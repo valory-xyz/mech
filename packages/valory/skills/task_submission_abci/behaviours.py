@@ -340,9 +340,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         if not status:
             return
 
-        submitted_ids = cast(
-            SynchronizedData, self.synchronized_data
-        ).submitted_request_ids
+        submitted_ids = self.synchronized_data.submitted_request_ids
         if len(submitted_ids) == 0:
             return
 

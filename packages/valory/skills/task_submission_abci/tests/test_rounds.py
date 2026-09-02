@@ -171,6 +171,11 @@ class TestSynchronizedData:
         the value is cross-period-persisted (``db.create`` copies it
         forward). Degrading to ``[]`` keeps the drift detectable via
         the ``error`` log while the FSM continues.
+
+        :param bad_value: parametrised invalid ``submitted_request_ids``
+            shape (non-list, non-str entries, mixed).
+        :param caplog: captured log records used to assert the error
+            log is emitted.
         """
         sd = _make_sync_data(submitted_request_ids=bad_value)
         with caplog.at_level(logging.ERROR):
