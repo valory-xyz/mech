@@ -1784,9 +1784,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 executing_task=cast(Dict[str, Any], executing_task),
                 response=response,
             )
-            self.context.shared_state.setdefault(PREDICT_API_EVENTS, {})[
-                str(req_id)
-            ] = {"event": event, "written_at": time.time()}
+            events_by_id = self.context.shared_state.setdefault(PREDICT_API_EVENTS, {})
+            # TTL sweep on write bounds cache growth even if settlement
+            # is stuck and no post-settlement prune ever fires.
+            cutoff = time.time() - PREDICT_API_EVENT_TTL_SECONDS
+            stale = [
+                rid
+                for rid, entry in events_by_id.items()
+                if not isinstance(entry, dict)
+                or not isinstance(entry.get("written_at"), (int, float))
+                or float(entry["written_at"]) < cutoff
+            ]
+            for rid in stale:
+                events_by_id.pop(rid, None)
+            events_by_id[str(req_id)] = {
+                "event": event,
+                "written_at": time.time(),
+            }
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)

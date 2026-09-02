@@ -67,10 +67,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
-from packages.valory.skills.task_execution.behaviours import (
-    PREDICT_API_EVENTS,
-    PREDICT_API_EVENT_TTL_SECONDS,
-)
+from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import (
@@ -282,19 +279,6 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
                 for task in snapshot
                 if str(task.get("request_id")) not in submitted_id_set
             ]
-        events_by_id = self.context.shared_state.get(PREDICT_API_EVENTS)
-        if isinstance(events_by_id, dict):
-            for rid in submitted_id_set:
-                events_by_id.pop(rid, None)
-            cutoff = time.time() - PREDICT_API_EVENT_TTL_SECONDS
-            stale = [
-                rid
-                for rid, entry in events_by_id.items()
-                if not isinstance(entry, dict)
-                or float(entry.get("written_at", 0)) < cutoff
-            ]
-            for rid in stale:
-                events_by_id.pop(rid, None)
         return snapshot
 
     @property
@@ -391,6 +375,13 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         # ``shared_state[DONE_TASKS]`` under the same lock) and keeps
         # both paths on the single tested prune surface.
         shared_snapshot = self.remove_tasks_by_id(submitted_ids)
+        # Prune must fire only after ``PostTxSettlementBehaviour`` has
+        # POSTed. Do not move into ``remove_tasks_by_id``: its
+        # pre-settlement caller strands the row otherwise.
+        events_by_id = self.context.shared_state.get(PREDICT_API_EVENTS)
+        if isinstance(events_by_id, dict):
+            for rid in submitted_ids:
+                events_by_id.pop(rid, None)
         self.context.logger.info(
             f"Pruned tasks with ids {submitted_ids} from shared state; "
             f"tx_hash={tx_hash}."
@@ -1951,14 +1942,15 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     agent-local ``shared_state[PREDICT_API_EVENTS]`` (keyed by
     ``str(request_id)``, populated on the offchain path inside
     :py:meth:`task_execution.behaviours._build_predict_api_event`).
-    Each cache entry is a ``{event, written_at}`` wrapper so the sibling
-    TTL sweep in :py:meth:`TaskExecutionBaseBehaviour.remove_tasks_by_id`
-    can drop stale entries. Only the agent that executed a task
-    locally has its event; other agents skip and rely on the executor
-    to POST. The predict-api server is idempotent on ``request_id``,
-    so a single POST per task is sufficient — each agent posts its own
-    events under its own EOA signature; the per-EOA rate limiter on the
-    server keeps the co-owners in separate budgets.
+    Each cache entry is a ``{event, written_at}`` wrapper so the TTL
+    sweep on write in
+    :py:meth:`task_execution.behaviours.TaskExecutionBehaviour._finalize_done_task`
+    can drop stale entries. Only the agent that executed a task locally
+    has its event; other agents skip and rely on the executor to POST.
+    The predict-api server is idempotent on ``request_id``, so a single
+    POST per task is sufficient — each agent posts only the subset it
+    executed, under its own EOA signature; the per-EOA rate limiter on
+    the server keeps the co-owners in separate budgets.
 
     The behaviour is fail-soft by construction. A predict-api outage / 5xx
     / network drop does NOT stop the FSM — the settlement already landed
@@ -2462,14 +2454,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         ).inc()
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
-        """Return the ``predict_api_event`` payload for every done_task that has one.
-
-        Looks each event up in agent-local
-        ``shared_state[PREDICT_API_EVENTS]`` keyed by ``str(request_id)``.
-        Only the agent that executed a task locally has its event; a
-        task another agent executed is skipped here and posted by that
-        agent instead. Predict-api dedups on ``request_id`` so a single
-        POST per task is sufficient.
+        """Return every locally-cached ``predict_api_event`` for the round's done_tasks.
 
         :return: an ordered list of ``MechEvent``-shaped dicts.
         """
@@ -2477,6 +2462,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         events_by_id: Dict[str, Dict[str, Any]] = self.context.shared_state.get(
             PREDICT_API_EVENTS, {}
         )
+        agent_address = self.context.agent_address
         events: List[Dict[str, Any]] = []
         for task in done_tasks:
             req_id = task.get("request_id")
@@ -2486,10 +2472,17 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             event = entry.get("event") if isinstance(entry, dict) else None
             if isinstance(event, dict):
                 events.append(event)
+                continue
+            if task.get("task_executor_address") == agent_address:
+                self.context.logger.warning(
+                    "no local predict_api_event for request_id=%s but this "
+                    "agent executed it — event dropped before POST",
+                    req_id,
+                )
             else:
                 self.context.logger.debug(
                     "no local predict_api_event for request_id=%s; "
-                    "assuming executed by another agent",
+                    "executed by another agent",
                     req_id,
                 )
         return events

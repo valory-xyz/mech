@@ -4483,6 +4483,53 @@ def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
     assert entry["event"].get("source") == "mech_onchain"
 
 
+def test_finalize_done_task_sweeps_stale_predict_api_events_on_write(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A write drops entries older than the TTL and preserves fresh ones.
+
+    Bounds cache growth on agents whose settlement is stuck: the
+    on-write sweep runs regardless of whether a post-settlement
+    prune ever fires. ``malformed`` and ``bad-written-at`` cover
+    the guard branches (F4).
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    now = time.time()
+    shared_state[beh_mod.PREDICT_API_EVENTS] = {
+        "fresh": {"event": {"src": "off"}, "written_at": now - 60},
+        "stale": {
+            "event": {"src": "off"},
+            "written_at": now - beh_mod.PREDICT_API_EVENT_TTL_SECONDS - 60,
+        },
+        "malformed": "not-a-dict",
+        "bad-written-at": {"event": {"src": "off"}, "written_at": "yesterday"},
+    }
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    fresh_req_id = str(behaviour._done_task["request_id"])
+    behaviour._finalize_done_task("bafycid")
+    events = shared_state[beh_mod.PREDICT_API_EVENTS]
+    assert "fresh" in events
+    assert "stale" not in events
+    assert "malformed" not in events
+    assert "bad-written-at" not in events
+    assert fresh_req_id in events
+
+
 def test_finalize_done_task_omits_predict_api_event_when_use_offchain_off(
     behaviour: Any,
     params_stub: Any,
