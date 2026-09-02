@@ -19,12 +19,13 @@
 """Tests for task_submission_abci.rounds."""
 
 import json
+import logging
 from typing import Any, Union, cast
 from unittest.mock import MagicMock
 
 import pytest
 
-from packages.valory.skills.abstract_round_abci.base import AbciAppDB
+from packages.valory.skills.abstract_round_abci.base import AbciAppDB, get_name
 from packages.valory.skills.task_submission_abci.payloads import (
     PostTxSettlementPayload,
     TaskPoolingPayload,
@@ -138,6 +139,52 @@ class TestSynchronizedData:
         with pytest.raises(ValueError):
             _ = sd.final_tx_hash
 
+    def test_submitted_request_ids_defaults_to_empty_list(self) -> None:
+        """``submitted_request_ids`` reads ``[]`` when the key is unset."""
+        sd = _make_sync_data()
+        assert sd.submitted_request_ids == []
+
+    def test_submitted_request_ids_returns_stored_value(self) -> None:
+        """``submitted_request_ids`` reads back the stored list."""
+        ids = ["req-1", "req-2"]
+        sd = _make_sync_data(submitted_request_ids=ids)
+        assert sd.submitted_request_ids == ids
+
+    @pytest.mark.parametrize(
+        "bad_value",
+        [
+            pytest.param("not-a-list", id="non-list"),
+            pytest.param([1, 2, 3], id="non-str-entries"),
+            pytest.param(["ok", 42], id="mixed-str-and-int"),
+        ],
+    )
+    def test_submitted_request_ids_degrades_to_empty_on_bad_shape(
+        self,
+        bad_value: Any,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        """A malformed value logs an error and yields ``[]``.
+
+        The property is read at the top of every FSM cycle across
+        every participant on the same consensus block. Raising would
+        crash-loop the whole fleet with no in-band recovery because
+        the value is cross-period-persisted (``db.create`` copies it
+        forward). Degrading to ``[]`` keeps the drift detectable via
+        the ``error`` log while the FSM continues.
+
+        :param bad_value: parametrised invalid ``submitted_request_ids``
+            shape (non-list, non-str entries, mixed).
+        :param caplog: captured log records used to assert the error
+            log is emitted.
+        """
+        sd = _make_sync_data(submitted_request_ids=bad_value)
+        with caplog.at_level(logging.ERROR):
+            assert sd.submitted_request_ids == []
+        assert any(
+            "submitted_request_ids invariant broken" in rec.message
+            for rec in caplog.records
+        )
+
 
 # ---------------------------------------------------------------------------
 # TaskPoolingRound tests
@@ -184,6 +231,65 @@ class TestTaskPoolingRound:
         assert result is not None
         data, event = result
         assert event == Event.NO_TASKS
+
+    def test_submitted_request_ids_cleared_on_done(self) -> None:
+        """DONE clears the hand-off from the previous cycle.
+
+        By the time ``end_block`` fires here, every participant's
+        ``TaskPoolingBehaviour.async_act`` has already run
+        ``handle_submitted_tasks`` and pruned its local
+        ``shared_state[DONE_TASKS]``. Clearing the consensus field
+        makes the hand-off one-shot: without this, the next cycle
+        re-runs the "already submitted" block on stale ids every
+        period, and re-swept requests get pruned before they can be
+        pooled.
+        """
+        task = _make_task("req-new")
+        payloads = {
+            "agent-0": _payload_for("agent-0", [task]),
+            "agent-1": _payload_for("agent-1", [task]),
+            "agent-2": _payload_for("agent-2", [task]),
+        }
+        round_ = _make_pooling_round(
+            payloads,
+            **{
+                get_name(SynchronizedData.submitted_request_ids): [
+                    "stale-a",
+                    "stale-b",
+                ]
+            },
+        )
+        result = round_.end_block()
+        assert result is not None
+        data, event = result
+        assert event == Event.DONE
+        assert cast(SynchronizedData, data).submitted_request_ids == []
+
+    def test_submitted_request_ids_cleared_on_no_tasks(self) -> None:
+        """NO_TASKS also clears the hand-off.
+
+        A cycle that produced no new tasks still needs to consume the
+        prior settlement's ids so the next cycle doesn't loop on them.
+        """
+        payloads = {
+            "agent-0": _payload_for("agent-0", []),
+            "agent-1": _payload_for("agent-1", []),
+            "agent-2": _payload_for("agent-2", []),
+        }
+        round_ = _make_pooling_round(
+            payloads,
+            **{
+                get_name(SynchronizedData.submitted_request_ids): [
+                    "stale-a",
+                    "stale-b",
+                ]
+            },
+        )
+        result = round_.end_block()
+        assert result is not None
+        data, event = result
+        assert event == Event.NO_TASKS
+        assert cast(SynchronizedData, data).submitted_request_ids == []
 
     def test_deduplication_by_request_id(self) -> None:
         """Same request_id from multiple agents → deduplicated to one."""
@@ -452,8 +558,14 @@ class TestTaskSubmissionAbciApp:
             == 60.0
         )
         assert TaskSubmissionAbciApp.event_to_timeout[Event.ROUND_TIMEOUT] == 60.0
-        assert "done_tasks" in TaskSubmissionAbciApp.cross_period_persisted_keys
+        # ``done_tasks`` is intentionally NOT cross-period-persisted;
+        # the id hand-off rides ``submitted_request_ids`` instead. See
+        # :class:`TestCrossPeriodPersistedKeys` for the schema invariant.
+        assert (
+            "submitted_request_ids" in TaskSubmissionAbciApp.cross_period_persisted_keys
+        )
         assert "final_tx_hash" in TaskSubmissionAbciApp.cross_period_persisted_keys
+        assert "done_tasks" not in TaskSubmissionAbciApp.cross_period_persisted_keys
 
     def test_fsm_transitions(self) -> None:
         """All FSM transitions route to expected destination rounds."""
@@ -633,18 +745,13 @@ class TestPostTxSettlementRound:
         assert event == Event.NO_MAJORITY
 
     def test_done_tasks_preserved_on_done(self) -> None:
-        """Regression pin: ``done_tasks`` MUST survive DONE untouched.
+        """``done_tasks`` MUST survive DONE untouched within the same period.
 
-        ``TaskPoolingBehaviour.handle_submitted_tasks`` reads
-        ``synchronized_data.done_tasks`` at the START of the next cycle to
-        know which ``request_id``s to prune from
-        ``shared_state[DONE_TASKS]``. If this round clears the field on
-        DONE, the next cycle sees an empty list, ``remove_tasks`` is a
-        no-op, and the same batch is re-delivered on every settlement
-        cycle — the Safe tx succeeds but ``mech.deliverMulti`` reverts on
-        the already-delivered ids, burning gas without emitting new
-        Deliver events. Any predict-api re-fire concern on self-loop must be
-        guarded inside the behaviour, not by mutating this field.
+        The behaviour side still reads ``done_tasks`` for predict-api
+        writes and log emission during this round; clearing it here
+        breaks those reads. The id hand-off to the next cycle rides
+        ``submitted_request_ids`` (see the sibling regression test),
+        so ``done_tasks`` doesn't need to leave this period.
         """
         tasks = [_make_task("req-1"), _make_task("req-2")]
         payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
@@ -654,3 +761,129 @@ class TestPostTxSettlementRound:
         new_sync_data, event = result
         assert event == Event.DONE
         assert cast(SynchronizedData, new_sync_data).done_tasks == tasks
+
+    def test_submitted_request_ids_written_on_done(self) -> None:
+        """DONE writes the id list from ``done_tasks`` for the next cycle to prune.
+
+        Ids are extracted from this period's ``done_tasks`` and
+        exposed via
+        :attr:`SynchronizedData.submitted_request_ids`, which
+        the next cycle's
+        :meth:`TaskPoolingBehaviour.handle_submitted_tasks` reads to
+        prune ``shared_state[DONE_TASKS]`` by request_id.
+        """
+        tasks = [_make_task("req-a"), _make_task("req-b")]
+        payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
+        round_ = _make_post_tx_round(payloads, done_tasks=tasks)
+        result = round_.end_block()
+        assert result is not None
+        new_sync_data, event = result
+        assert event == Event.DONE
+        assert cast(SynchronizedData, new_sync_data).submitted_request_ids == [
+            "req-a",
+            "req-b",
+        ]
+
+    def test_no_write_when_done_tasks_empty(self) -> None:
+        """DONE with no ``done_tasks`` leaves the hand-off untouched.
+
+        ``PostTxSettlementRound`` is reachable via the delivery-rate
+        settlement path and the settlement-internal ``ResetRound``
+        retry; both arrive with ``done_tasks == []``. Overwriting a
+        still-pending ``submitted_request_ids`` from a prior real
+        settlement in those cases silently loses the prune and the
+        delivered batch is re-pooled next cycle.
+        """
+        payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
+        pending_handoff = ["still-pending-a", "still-pending-b"]
+        round_ = _make_post_tx_round(
+            payloads,
+            **{get_name(SynchronizedData.submitted_request_ids): pending_handoff},
+        )
+        result = round_.end_block()
+        assert result is not None
+        new_sync_data, event = result
+        assert event == Event.DONE
+        assert (
+            cast(SynchronizedData, new_sync_data).submitted_request_ids
+            == pending_handoff
+        )
+
+    def test_submitted_request_ids_normalised_to_str(self) -> None:
+        """Ids are ``str``-normalised to match the prune-site lookup key.
+
+        Mixed ``int`` / ``str`` request_id shapes can survive an
+        in-place restart. Normalising to ``str`` here keeps parity
+        with the downstream match in
+        :meth:`TaskExecutionBaseBehaviour.remove_tasks_by_id`.
+        """
+        tasks = [_make_task(42), _make_task("req-x")]
+        payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
+        round_ = _make_post_tx_round(payloads, done_tasks=tasks)
+        result = round_.end_block()
+        assert result is not None
+        new_sync_data, event = result
+        assert event == Event.DONE
+        assert cast(SynchronizedData, new_sync_data).submitted_request_ids == [
+            "42",
+            "req-x",
+        ]
+
+    def test_submitted_request_ids_skips_falsy_ids(self) -> None:
+        """A missing / empty ``request_id`` is dropped from the id list.
+
+        Mirrors the falsy-id skip in
+        :meth:`TaskPoolingRound.end_block`. Legit ``0`` (int) is
+        deliberately kept via the explicit ``is None or == ""``
+        check rather than a ``not`` truthiness test.
+        """
+        tasks = [
+            {"request_id": 0, "tool": "t0"},  # legit id, keep
+            {"request_id": None, "tool": "t-drop"},  # missing, skip
+            {"request_id": "", "tool": "t-drop2"},  # empty, skip
+            _make_task("req-keep"),
+        ]
+        payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
+        round_ = _make_post_tx_round(payloads, done_tasks=tasks)
+        result = round_.end_block()
+        assert result is not None
+        new_sync_data, event = result
+        assert event == Event.DONE
+        assert cast(SynchronizedData, new_sync_data).submitted_request_ids == [
+            "0",
+            "req-keep",
+        ]
+
+
+# ---------------------------------------------------------------------------
+# TaskSubmissionAbciApp — schema-level invariants
+# ---------------------------------------------------------------------------
+
+
+class TestCrossPeriodPersistedKeys:
+    """Schema invariants on which fields ride cross-period consensus carry."""
+
+    def test_submitted_request_ids_is_cross_period_persisted(self) -> None:
+        """``submitted_request_ids`` MUST be cross-period-persisted.
+
+        The next cycle's
+        :meth:`TaskPoolingBehaviour.handle_submitted_tasks` reads it
+        via the framework's cross-period carry to prune
+        ``shared_state[DONE_TASKS]``. Removing it from
+        ``cross_period_persisted_keys`` would silently drop the id
+        hand-off and let already-delivered tasks re-enter the next
+        pooling round.
+        """
+        keys = TaskSubmissionAbciApp.cross_period_persisted_keys
+        assert "submitted_request_ids" in keys
+
+    def test_done_tasks_is_not_cross_period_persisted(self) -> None:
+        """``done_tasks`` MUST NOT be cross-period-persisted.
+
+        ``done_tasks`` carries per-event request/response payload data.
+        Persisting it across periods would inflate DB serialization on
+        the next :class:`RegistrationRound` entry. The id hand-off
+        rides ``submitted_request_ids`` instead.
+        """
+        keys = TaskSubmissionAbciApp.cross_period_persisted_keys
+        assert "done_tasks" not in keys

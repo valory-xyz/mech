@@ -220,20 +220,12 @@ class TestRemoveTasks:
     def test_remove_submitted_task_mixed_types(self) -> None:
         """``remove_tasks`` matches across the ``str`` / ``int`` split.
 
-        Post the ingress coercion in :mod:`task_execution.handlers`,
-        off-chain ``done_tasks`` carry ``request_id`` as ``int``. But a
-        mech resuming with pre-fix off-chain rows in shared state at
-        redeploy time would have ``str`` there, while the newly-emitted
-        ``submitted_tasks`` for the same round carry ``int``. Without
-        the ``str()`` normalization added to the equality check in
-        :meth:`TaskExecutionBaseBehaviour.remove_tasks`, the pre-fix
-        ``str`` row would silently escape removal and be re-emitted next
-        round — the same class of silent-double-delivery bug the dedup
-        normalization in :mod:`task_submission_abci.rounds` prevents.
+        Mixed ``request_id`` types (``str`` vs ``int``) can survive
+        an in-place restart. Both sides are ``str``-normalised on the
+        equality check so a delivered task doesn't silently escape
+        removal and get re-emitted.
         """
-        # Pre-fix ``str`` row survives from an old boot; new
-        # ``submitted_tasks`` for the same request_id comes back as
-        # ``int``.
+        # ``str`` in shared_state; ``int`` in submitted.
         done_tasks_str: List[Dict[str, Any]] = [{"request_id": "5"}]
         ctx = _make_ctx(done_tasks=done_tasks_str)
         b = _DummyBase(name="b", skill_context=ctx)
@@ -246,6 +238,65 @@ class TestRemoveTasks:
         b = _DummyBase(name="b", skill_context=ctx)
         b.remove_tasks([{"request_id": "5"}])
         assert ctx.shared_state[DONE_TASKS] == []
+
+
+class TestRemoveTasksById:
+    """Tests for :meth:`TaskExecutionBaseBehaviour.remove_tasks_by_id`."""
+
+    def test_removes_matching_task(self) -> None:
+        """Passing an id list prunes matching tasks and leaves the rest."""
+        tasks = [{"request_id": "r1"}, {"request_id": "r2"}]
+        ctx = _make_ctx(done_tasks=tasks)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["r1"])
+        remaining = ctx.shared_state[DONE_TASKS]
+        assert len(remaining) == 1
+        assert remaining[0]["request_id"] == "r2"
+
+    def test_empty_id_list_is_noop(self) -> None:
+        """An empty id list leaves shared_state untouched."""
+        tasks = [{"request_id": "r1"}]
+        ctx = _make_ctx(done_tasks=tasks)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id([])
+        assert ctx.shared_state[DONE_TASKS] == tasks
+
+    def test_all_ids_leaves_empty(self) -> None:
+        """Passing every id present clears shared_state."""
+        tasks = [{"request_id": "r1"}, {"request_id": "r2"}]
+        ctx = _make_ctx(done_tasks=tasks)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["r1", "r2"])
+        assert ctx.shared_state[DONE_TASKS] == []
+
+    def test_int_shared_state_matches_str_id(self) -> None:
+        """A legacy ``int`` in shared_state is matched by a ``str`` id.
+
+        The id list side is typed ``List[str]``; callers must go
+        through :func:`extract_request_ids` which normalises to
+        ``str`` at the write site. The shared_state side, in
+        contrast, may still carry legacy ``int`` request_ids from a
+        pre-fix boot, so this direction of the equality is normalised
+        via ``str(done_task.get("request_id"))`` on lookup.
+        """
+        ctx = _make_ctx(done_tasks=[{"request_id": 5}])
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["5"])
+        assert ctx.shared_state[DONE_TASKS] == []
+
+    def test_id_not_in_shared_state_is_noop(self) -> None:
+        """An id absent from shared_state doesn't affect other entries.
+
+        Guards the case where the executor lost state (restart or
+        prune-race) between the on-chain settle and the next prune.
+        The id is still valid for the marketplace side; we just skip
+        the pop safely.
+        """
+        tasks = [{"request_id": "r1"}]
+        ctx = _make_ctx(done_tasks=tasks)
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["r-missing"])
+        assert ctx.shared_state[DONE_TASKS] == tasks
 
 
 class TestSetGauge:
@@ -659,57 +710,319 @@ class TestHandleSubmittedTasks:
         b = _DummyPooling(name="b", skill_context=ctx)
         return b
 
-    def _patch_sd(self, b: Any, done_tasks: Any) -> Any:
+    def _patch_sd(self, b: Any, submitted_ids: List[str]) -> Any:
+        """Wire the mocked synchronized_data with a fixed id list.
+
+        :param b: the behaviour under test to attach the mock onto.
+        :param submitted_ids: value the property returns.
+        :return: a no-op context manager so the caller's ``with`` block stays uniform.
+        """
         mock_sd = MagicMock()
-        mock_sd.done_tasks = done_tasks
+        mock_sd.submitted_request_ids = submitted_ids
         b._synchronized_data = mock_sd
         return contextlib.nullcontext()
 
     def test_status_false_removes_nothing(self) -> None:
-        """Test status false removes nothing."""
+        """A failed prior-tx status leaves ``shared_state[DONE_TASKS]`` untouched."""
         b = self._make_b()
+        seeded = [{"request_id": "r1", "tool": "t1"}]
+        b.context.shared_state[DONE_TASKS] = list(seeded)
         with patch.object(b, "check_last_tx_status", return_value=(False, "")):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
+        assert b.context.shared_state[DONE_TASKS] == seeded
 
     def test_status_true_empty_tasks(self) -> None:
         """Test status true empty tasks."""
         b = self._make_b()
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, []),
+            self._patch_sd(b, submitted_ids=[]),
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
 
     def test_status_true_with_tasks_no_block_number(self) -> None:
-        """Test status true with tasks no block number."""
+        """The task is pruned from shared_state and its histogram fires."""
         task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
         b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task]
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, [task]),
+            self._patch_sd(b, submitted_ids=["r1"]),
             patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
-            patch.object(b, "observe_histogram"),
+            patch.object(b, "observe_histogram") as mock_hist,
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
+        # End-to-end contract: the submitted id is gone from shared_state.
+        assert b.context.shared_state[DONE_TASKS] == []
+        # Histogram MUST fire for the task in shared_state; a regression
+        # that flips the ``if task is None`` guard would silently skip
+        # the emit without this assertion.
+        mock_hist.assert_called_once()
+        _, kwargs = mock_hist.call_args
+        assert kwargs["tool"] == "t1"
 
     def test_status_true_with_tasks_and_block_number(self) -> None:
-        """Test status true with tasks and block number."""
+        """Same as above but with a block number → gauge fires too."""
         task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
         b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task]
         with (
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            self._patch_sd(b, [task]),
+            self._patch_sd(b, submitted_ids=["r1"]),
             patch.object(
                 b, "_fetch_tx_block_number", side_effect=_gen_returning(12345)
             ),
-            patch.object(b, "observe_histogram"),
-            patch.object(b, "set_gauge"),
+            patch.object(b, "observe_histogram") as mock_hist,
+            patch.object(b, "set_gauge") as mock_gauge,
         ):
             result = _run_gen(b.handle_submitted_tasks())
         assert result is None
+        assert b.context.shared_state[DONE_TASKS] == []
+        mock_hist.assert_called_once()
+        _, kwargs = mock_hist.call_args
+        assert kwargs["tool"] == "t1"
+        mock_gauge.assert_called_once()
+
+    def test_reads_submitted_request_ids_when_present(self) -> None:
+        """Primary path: the id list drives the shared_state prune."""
+        task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
+        other = {"request_id": "r2", "tool": "t2", "start_time": time.perf_counter()}
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task, other]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        # r1 pruned, r2 kept.
+        assert b.context.shared_state[DONE_TASKS] == [other]
+
+    def test_empty_submitted_ids_is_noop(self) -> None:
+        """An empty id list → early return, shared_state untouched."""
+        b = self._make_b()
+        seeded = [{"request_id": "r1", "tool": "t1"}]
+        b.context.shared_state[DONE_TASKS] = list(seeded)
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=[]),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        assert b.context.shared_state[DONE_TASKS] == seeded
+
+    def test_histogram_skipped_when_task_absent_from_shared_state(self) -> None:
+        """Skip the histogram when the task is absent from shared state.
+
+        The prune loop still runs (the delivery landed on-chain);
+        only the timing metric is dropped for that entry. Guards the
+        ``if task is None`` continue branch so a regression that
+        flips the guard would surface here instead of silently
+        emitting garbage timings.
+        """
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = []  # id present in ids, absent here
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram") as mock_hist,
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        mock_hist.assert_not_called()
+        # Prune still ran (no-op here since shared_state was empty).
+        assert b.context.shared_state[DONE_TASKS] == []
+
+    @pytest.mark.parametrize(
+        "task",
+        [
+            pytest.param(
+                {"request_id": "r1", "start_time": 0.0},
+                id="tool-missing",
+            ),
+            pytest.param(
+                {"request_id": "r1", "tool": "t1"},
+                id="start_time-missing",
+            ),
+        ],
+    )
+    def test_histogram_skipped_when_task_missing_tool_or_start_time(
+        self, task: Dict[str, Any]
+    ) -> None:
+        """Skip the histogram when ``tool`` or ``start_time`` is absent.
+
+        Task-execution failures produce entries without ``tool``, and
+        early-abort paths can produce entries without ``start_time``.
+        Emitting a histogram sample against either as ``None`` would
+        push a nonsense label / negative duration into the metric.
+        Both halves of the guard are exercised so a mutation that
+        weakens either half surfaces here.
+
+        :param task: parametrised done-task shape (missing ``tool``
+            in one case, missing ``start_time`` in the other).
+        """
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram") as mock_hist,
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        mock_hist.assert_not_called()
+        # Prune still ran end-to-end despite the metric skip.
+        assert b.context.shared_state[DONE_TASKS] == []
+
+    def test_prune_acquires_done_tasks_lock(self) -> None:
+        """The live prune path MUST hold ``done_tasks_lock``.
+
+        Without this, dropping the ``with`` around the prune would
+        pass every other test in the suite silently — the background
+        executor's concurrent append could then torn-read the metrics
+        loop's snapshot. Directly assert the lock is entered.
+        """
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [
+            {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()},
+        ]
+        mock_lock = MagicMock()
+        mock_lock.__enter__ = MagicMock(return_value=None)
+        mock_lock.__exit__ = MagicMock(return_value=None)
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+            patch.object(b, "done_tasks_lock", return_value=mock_lock),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        mock_lock.__enter__.assert_called_once()
+        mock_lock.__exit__.assert_called_once()
+
+    def test_str_normalisation_matches_legacy_int_on_live_path(self) -> None:
+        """Live prune path str-normalises the shared_state side of the match.
+
+        The reviewer flagged that ``0518c00e`` moved the prune inline
+        and the only test guarding the ``str()`` normalisation lived
+        on ``remove_tasks_by_id`` (which the live path used to
+        bypass). After the consolidation the live path calls
+        ``remove_tasks_by_id`` again, but pin it end-to-end here so a
+        future re-inlining that drops the normalisation surfaces.
+        """
+        b = self._make_b()
+        # Shared state carries the legacy ``int`` shape; the incoming
+        # id list is ``List[str]`` per the type contract.
+        b.context.shared_state[DONE_TASKS] = [
+            {"request_id": 5, "tool": "t1", "start_time": time.perf_counter()},
+        ]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["5"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        assert b.context.shared_state[DONE_TASKS] == []
+
+    def test_prune_runs_before_block_number_fetch(self) -> None:
+        """The prune completes before the ``_fetch_tx_block_number`` yield.
+
+        A cancellation at the yield must not leave the delivered
+        batch un-pruned. Sending ``GeneratorExit`` at the first yield
+        would mid-execute the metrics block and prune only if either
+        happens after the yield. Pin the invariant by asserting that
+        with the yield replaced by a raise, ``shared_state`` is
+        already pruned.
+        """
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [
+            {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()},
+        ]
+
+        def _raising_yield(_tx_hash: str) -> Generator[None, None, None]:
+            if False:
+                yield  # pragma: no cover - satisfy typing
+            raise RuntimeError("simulated yield failure")
+
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_raising_yield),
+            patch.object(b, "observe_histogram"),
+        ):
+            with pytest.raises(RuntimeError, match="simulated yield failure"):
+                _run_gen(b.handle_submitted_tasks())
+        # If the prune had been moved below the yield, this would
+        # still be ``[{'request_id': 'r1', ...}]``.
+        assert b.context.shared_state[DONE_TASKS] == []
+
+
+# ---------------------------------------------------------------------------
+# End-to-end hand-off contract (round-side write ↔ behaviour-side read)
+# ---------------------------------------------------------------------------
+
+
+class TestSubmittedRequestIdsRoundTrip:
+    """Pins the write→read hand-off using real ``SynchronizedData``.
+
+    The other behaviour-side tests replace ``synchronized_data`` with
+    a ``MagicMock``; that leaves the real property (including its
+    ``list[str]`` validation) unexercised on the behaviour path, so a
+    rename or deletion of the property would pass silently. This
+    class exercises the actual round writer, feeds the resulting
+    synced data to the behaviour, and asserts the prune reaches
+    ``shared_state[DONE_TASKS]``.
+    """
+
+    def _make_sync_data_with_ids(self, ids: List[str]) -> Any:
+        """Build a real ``SynchronizedData`` carrying ``submitted_request_ids``."""
+        from packages.valory.skills.abstract_round_abci.base import (
+            AbciAppDB,
+            get_name,
+        )
+        from packages.valory.skills.task_submission_abci.rounds import (
+            SynchronizedData,
+        )
+
+        data: dict = {
+            "participants": [["agent-0", "agent-1", "agent-2"]],
+            "consensus_threshold": [3],
+            "all_participants": [["agent-0", "agent-1", "agent-2"]],
+            get_name(SynchronizedData.final_tx_hash): ["0xhash"],
+            get_name(SynchronizedData.submitted_request_ids): [ids],
+        }
+        return SynchronizedData(AbciAppDB(data))
+
+    def test_end_to_end_prune_using_real_synchronized_data(self) -> None:
+        """A real ``SynchronizedData`` drives the prune to shared_state.
+
+        Round writer → behaviour reader → shared_state prune. If the
+        property name or ``list[str]`` validation changes, this test
+        catches the drift.
+        """
+        ctx = _make_full_ctx()
+        ctx.shared_state["mech_delivery_last_block_number"] = MagicMock()
+        b = _DummyPooling(name="b", skill_context=ctx)
+        b._synchronized_data = self._make_sync_data_with_ids(["req-a", "req-b"])
+        b.context.shared_state[DONE_TASKS] = [
+            {"request_id": "req-a", "tool": "t1", "start_time": time.perf_counter()},
+            {"request_id": "req-b", "tool": "t2", "start_time": time.perf_counter()},
+            {"request_id": "req-keep", "tool": "t3"},
+        ]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        remaining_ids = [
+            task["request_id"] for task in b.context.shared_state[DONE_TASKS]
+        ]
+        assert remaining_ids == ["req-keep"]
 
 
 # ---------------------------------------------------------------------------

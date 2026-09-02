@@ -41,6 +41,25 @@ from packages.valory.skills.task_submission_abci.payloads import (
 )
 
 
+def extract_request_ids(tasks: List[Dict[str, Any]]) -> List[str]:
+    """Return ``str``-normalised request ids from a task list.
+
+    Only two shapes are treated as absent and dropped: the key
+    resolves to ``None``, or to the empty string. Any other value
+    (including ``0`` and ``False``) is kept and stringified — a
+    ``not`` truthiness test would drop those and let a legitimate
+    id disappear silently.
+
+    :param tasks: task dicts (each expected to carry ``"request_id"``).
+    :return: the ``str``-normalised id list, in input order.
+    """
+    return [
+        str(task["request_id"])
+        for task in tasks
+        if task.get("request_id") is not None and task.get("request_id") != ""
+    ]
+
+
 class Event(Enum):
     """TaskSubmissionAbciApp Events"""
 
@@ -68,6 +87,44 @@ class SynchronizedData(BaseSynchronizedData):
     def done_tasks(self) -> List[Dict[str, Any]]:
         """Done tasks."""
         return cast(List[Dict[str, Any]], self.db.get("done_tasks", []))
+
+    @property
+    def submitted_request_ids(self) -> List[str]:
+        """Return request ids of tasks submitted in the most recent settlement.
+
+        Written by :class:`PostTxSettlementRound` end_block and read by
+        :meth:`TaskPoolingBehaviour.handle_submitted_tasks` next period
+        to prune ``shared_state[DONE_TASKS]`` of already-delivered
+        entries. Cross-period-persisted because it's small and the next
+        cycle needs it; the full ``done_tasks`` list is not carried
+        across periods because it holds per-event request/response
+        payload data that would inflate DB serialization.
+
+        Writers must go through :func:`extract_request_ids` so that
+        only ``str`` ids land in the DB. A future writer that bypasses
+        the helper and stores a non-list or non-``str`` entries logs
+        an error and yields ``[]`` here: raising would crash-loop
+        every participant on the same consensus block (the value is
+        byte-identical across the fleet and cross-period-persisted,
+        so ``db.create`` copies it forward across resets), with no
+        in-band recovery. Returning ``[]`` degrades to "prune nothing
+        this cycle", which is the same shape as a period with no
+        settlement to consume.
+
+        :return: the list of request ids from the most recent settlement.
+        """
+        value = self.db.get("submitted_request_ids", [])
+        if not isinstance(value, list) or not all(
+            isinstance(item, str) for item in value
+        ):
+            self.db.logger.error(
+                "submitted_request_ids invariant broken: expected list[str], "
+                "got %s=%r; degrading to [] for this cycle",
+                type(value).__name__,
+                value,
+            )
+            return []
+        return value
 
     @property
     def final_tx_hash(self) -> str:
@@ -170,10 +227,19 @@ class TaskPoolingRound(CollectionRound):
             unique_done_tasks = sorted(
                 unique_objects, key=lambda x: str(x.get("request_id", ""))
             )
+            # Consume the hand-off from the previous cycle. ``handle_submitted_tasks``
+            # ran in every participant's ``TaskPoolingBehaviour.async_act`` before
+            # this round accepted quorum, so the ids have been read and pruned
+            # everywhere by now. Clearing here in consensus makes the field
+            # one-shot per settlement: the next cycle sees ``[]`` and returns
+            # early rather than re-executing the "already submitted" block on
+            # stale data every period (which would silently re-prune re-swept
+            # requests before they can be pooled).
             synchronized_data = self.synchronized_data.update(
                 synchronized_data_class=SynchronizedData,
                 **{
                     get_name(SynchronizedData.done_tasks): unique_done_tasks,
+                    get_name(SynchronizedData.submitted_request_ids): [],
                 },
             )
             if len(unique_done_tasks) > 0:
@@ -259,23 +325,8 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     the server scales naturally across agents.
 
     The round always transitions DONE on threshold: a failed predict-api
-    write does NOT block the FSM (the settlement already landed on-chain,
-    the analytics row just arrives later via the replay buffer). The
-    NO_MAJORITY arm only fires if the agents can't agree on having reached
-    this round at all, which is the same shape as every consensus round.
-
-    ``done_tasks`` MUST survive this round untouched. It is in
-    ``cross_period_persisted_keys`` because
-    ``TaskPoolingBehaviour.handle_submitted_tasks`` reads it at the START
-    of the next cycle to know which ``request_id``s to prune from
-    ``shared_state[DONE_TASKS]``. Clearing here on DONE strands the
-    delivered tasks in shared state, so every subsequent cycle re-pools
-    and re-delivers the same batch — the Safe tx succeeds each time but
-    the inner ``mech.deliverMulti`` reverts on the already-delivered
-    ids, burning gas without emitting new Deliver events. Any re-fire
-    concern on the NO_MAJORITY / ROUND_TIMEOUT self-loop must be handled
-    inside the behaviour (idempotence flag) rather than by mutating a
-    field the next behaviour depends on.
+    write does NOT block the FSM. NO_MAJORITY fires only if the agents
+    can't agree on having reached this round at all.
     """
 
     payload_class = PostTxSettlementPayload
@@ -286,7 +337,32 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
         if self.threshold_reached:
-            return self.synchronized_data, Event.DONE
+            sd = cast(SynchronizedData, self.synchronized_data)
+            done_tasks = sd.done_tasks
+            if not done_tasks:
+                # ``composition.py`` wires
+                # ``FinishedTransactionSubmissionRound`` here for every
+                # settlement, not just task delivery, so the
+                # delivery-rate path arrives with ``done_tasks == []``.
+                # Overwriting a still-pending hand-off with ``[]`` here
+                # would clobber a prior real settlement's ids and the
+                # delivered batch would be re-pooled next cycle.
+                sd.db.logger.warning(
+                    "PostTxSettlementRound reached with empty done_tasks; "
+                    "preserving pending hand-off submitted_request_ids=%s",
+                    sd.submitted_request_ids,
+                )
+                return self.synchronized_data, Event.DONE
+            submitted_ids = extract_request_ids(done_tasks)
+            return (
+                self.synchronized_data.update(
+                    synchronized_data_class=SynchronizedData,
+                    **{
+                        get_name(SynchronizedData.submitted_request_ids): submitted_ids,
+                    },
+                ),
+                Event.DONE,
+            )
         if not self.is_majority_possible(
             self.collection, self.synchronized_data.nb_participants
         ):
@@ -376,16 +452,12 @@ class TaskSubmissionAbciApp(AbciApp[Event]):
     }
     cross_period_persisted_keys: FrozenSet[str] = frozenset(
         [
-            get_name(SynchronizedData.done_tasks),
+            get_name(SynchronizedData.submitted_request_ids),
             get_name(SynchronizedData.final_tx_hash),
         ]
     )
     db_pre_conditions: Dict[AppState, Set[str]] = {
         TaskPoolingRound: set(),
-        # Entered from composition after settlement; relies on done_tasks
-        # being on synchronized_data from the prior TaskPoolingRound cycle
-        # (cross_period_persisted_keys above keeps it alive). No additional
-        # pre-condition fields beyond what the FSM already carries.
         PostTxSettlementRound: set(),
     }
     db_post_conditions: Dict[AppState, Set[str]] = {

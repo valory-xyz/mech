@@ -27,7 +27,17 @@ from collections import defaultdict
 from copy import deepcopy
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, Generator, List, Optional, Set, Tuple, Type, cast
+from typing import (
+    Any,
+    Dict,
+    Generator,
+    List,
+    Optional,
+    Set,
+    Tuple,
+    Type,
+    cast,
+)
 
 from aea.helpers.cid import CID, to_v1
 from prometheus_client import Counter, Gauge, Histogram
@@ -75,6 +85,7 @@ from packages.valory.skills.task_submission_abci.rounds import (
     TaskPoolingRound,
     TaskSubmissionAbciApp,
     TransactionPreparationRound,
+    extract_request_ids,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
     hash_payload_to_hex,
@@ -228,31 +239,29 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
 
         :param submitted_tasks: the done tasks that have already been submitted
         """
-        # run this in a lock
-        # the amount of done tasks will always be relatively low (<<20)
-        # we can afford to do this in a lock
+        self.remove_tasks_by_id(extract_request_ids(submitted_tasks))
+
+    def remove_tasks_by_id(self, submitted_ids: List[str]) -> List[Dict[str, Any]]:
+        """Pop already-submitted tasks from shared state and return the pre-prune snapshot.
+
+        Returning the snapshot lets a caller drive per-task metrics
+        from the same list the prune ran on, without acquiring the
+        lock twice or risking a torn read against the background
+        executor. The snapshot is a ``deepcopy`` of the pre-prune
+        ``shared_state[DONE_TASKS]``.
+
+        :param submitted_ids: request ids of tasks already delivered.
+        :return: the pre-prune snapshot of ``shared_state[DONE_TASKS]``.
+        """
+        submitted_id_set = set(submitted_ids)
         with self.done_tasks_lock():
-            done_tasks = self.done_tasks
-            not_submitted = []
-            # Normalize both sides to ``str`` before comparing so a mix of
-            # ``int`` (on-chain requestId) and ``str`` (pre-ingress-fix
-            # off-chain requestId) doesn't silently fail equality and leave
-            # a delivered task stuck in ``done_tasks`` for the next round to
-            # re-emit. Post the :mod:`task_execution.handlers` ingress fix
-            # both sides are ``int`` and the ``str`` cast is a no-op; the
-            # cast is retained for the same restart-transition reason
-            # called out in :meth:`task_submission_abci.rounds.
-            # TaskPoolingRound.end_block`.
-            for done_task in done_tasks:
-                done_key = str(done_task["request_id"])
-                is_submitted = False
-                for submitted_task in submitted_tasks:
-                    if str(submitted_task["request_id"]) == done_key:
-                        is_submitted = True
-                        break
-                if not is_submitted:
-                    not_submitted.append(done_task)
-            self.context.shared_state[DONE_TASKS] = not_submitted
+            snapshot = self.done_tasks
+            self.context.shared_state[DONE_TASKS] = [
+                task
+                for task in snapshot
+                if str(task.get("request_id")) not in submitted_id_set
+            ]
+        return snapshot
 
     @property
     def mech_addresses(self) -> List[str]:
@@ -323,43 +332,83 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         return []
 
     def handle_submitted_tasks(self) -> Generator[None, None, None]:
-        """Handle tasks that have been already submitted before (in a prev. period)."""
+        """Handle tasks that have been already submitted before (in a prev. period).
+
+        Reads ``submitted_request_ids`` for the id list and prunes
+        ``shared_state[DONE_TASKS]`` accordingly. Per-task
+        ``tool_delivery_time`` metrics are read from
+        ``shared_state[DONE_TASKS]`` since the id-only hand-off
+        doesn't carry tool / start_time.
+
+        :yield: AEA protocol messages while fetching the tx block number.
+        """
         status, tx_hash = self.check_last_tx_status()
         self.context.logger.info(f"Last tx status is: {status}")
-        if status:
-            submitted_tasks = cast(
-                List[Dict[str, Any]], self.synchronized_data.done_tasks
-            )
-            if len(submitted_tasks) > 0:
-                for task in submitted_tasks:
-                    req_id = task["request_id"]
-                    tool = task["tool"]
-                    start_time = task["start_time"]
-                    tool_delivery_time_duration = time.perf_counter() - start_time
-                    self.context.logger.info(
-                        f"Request id: {req_id} with tool: {tool} took {tool_delivery_time_duration} seconds to complete delivery"
-                    )
-                    self.observe_histogram(
-                        self.shared_state.tool_delivery_time,
-                        tool_delivery_time_duration,
-                        tool=tool,
-                    )
+        if not status:
+            return
 
-                block_number = yield from self._fetch_tx_block_number(tx_hash)
-                self.context.logger.info(
-                    f"Block number for tx hash: {tx_hash} is {block_number}"
+        submitted_ids = self.synchronized_data.submitted_request_ids
+        if len(submitted_ids) == 0:
+            return
+
+        # Prune + snapshot under one lock via ``remove_tasks_by_id``.
+        # Sharing the snapshot with the metrics loop below keeps the
+        # torn-read window closed (the background executor writes
+        # ``shared_state[DONE_TASKS]`` under the same lock) and keeps
+        # both paths on the single tested prune surface.
+        shared_snapshot = self.remove_tasks_by_id(submitted_ids)
+        self.context.logger.info(
+            f"Pruned tasks with ids {submitted_ids} from shared state; "
+            f"tx_hash={tx_hash}."
+        )
+
+        # Emit per-task delivery-time metrics from the same snapshot.
+        # A task absent from the snapshot still counted toward the
+        # prune above; the metric is skipped only because the local
+        # timing data isn't available (the delivery already landed
+        # on-chain).
+        shared_done_tasks_by_id = {
+            str(task.get("request_id")): task for task in shared_snapshot
+        }
+        for req_id in submitted_ids:
+            task = shared_done_tasks_by_id.get(req_id)
+            if task is None:
+                self.context.logger.debug(
+                    "tool_delivery_time skipped for request_id=%s: "
+                    "not in shared_state[DONE_TASKS] snapshot",
+                    req_id,
                 )
-                if block_number:
-                    self.set_gauge(
-                        self.shared_state.mech_delivery_last_block_number, block_number
-                    )
-
+                continue
+            tool = task.get("tool")
+            start_time = task.get("start_time")
+            if tool is None or start_time is None:
+                self.context.logger.debug(
+                    "tool_delivery_time skipped for request_id=%s: "
+                    "missing field(s) tool=%r start_time=%r",
+                    req_id,
+                    tool,
+                    start_time,
+                )
+                continue
+            tool_delivery_time_duration = time.perf_counter() - float(start_time)
             self.context.logger.info(
-                f"Tasks {submitted_tasks} has already been submitted. The corresponding tx_hash is: {tx_hash}. "
-                f"Removing them from the list of tasks to be processed."
+                f"Request id: {req_id} with tool: {tool} took "
+                f"{tool_delivery_time_duration} seconds to complete delivery"
+            )
+            self.observe_histogram(
+                self.shared_state.tool_delivery_time,
+                tool_delivery_time_duration,
+                tool=tool,
             )
 
-            self.remove_tasks(submitted_tasks)
+        block_number = yield from self._fetch_tx_block_number(tx_hash)
+        self.context.logger.info(
+            f"Block number for tx hash: {tx_hash} is {block_number}"
+        )
+        if block_number:
+            self.set_gauge(
+                self.shared_state.mech_delivery_last_block_number, block_number
+            )
 
     def check_last_tx_status(self) -> Tuple[bool, str]:
         """Check if the tx in the last round was successful or not"""
