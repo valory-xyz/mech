@@ -2112,7 +2112,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     executing_task.get("priority_mech") or delivery_mech
                 ),
                 "delivery_mech": delivery_mech,
-                "payment_type": str(executing_task.get("payment_type") or "") or None,
+                "payment_type": (
+                    self.payment_model.hex() if self.payment_model else None
+                ),
                 "delivery_rate": delivery_rate_str,
                 "nonce": nonce_int,
                 "content_cid": executing_task.get("request_cid") or cid,

@@ -2986,6 +2986,143 @@ class TestGetSplitProfitTxsTokenMech:
         assert result is not None
         assert len(result) == 2  # process_tx + token_transfer_tx
 
+    def test_fixed_price_token_usdc_routes_to_erc20_branch(self) -> None:
+        """USDC mech (FixedPriceTokenUSDC paymentType) must take the ERC20 branch.
+
+        Guards against the regression where an unrecognised token-payment
+        paymentType falls through to _get_transfer_tx and encodes a native
+        transfer, which reverts on-chain because the mech contract holds the
+        token but no native balance.
+        """
+        b = self._make_b()
+        from packages.valory.skills.task_submission_abci.behaviours import (
+            PAYMENT_TYPE_TOKEN_USDC,
+        )
+
+        usdc_type = bytes.fromhex(PAYMENT_TYPE_TOKEN_USDC)
+        mech_info = (usdc_type, "0xTRACK", 1000)
+        process_tx = {
+            "to": "0xTRACK",
+            "value": 0,
+            "data": b"\x00",
+            "simulation_ok": True,
+        }
+        split_funds = {"0xSERVICE_OWNER": 900}
+        token_transfer_tx = {"to": "0xMECH", "value": 0, "data": b"\x02"}
+        native_transfer_sentinel = MagicMock()
+        with (
+            patch.object(b, "_should_split_profits", side_effect=_gen_returning(True)),
+            patch.object(b, "_get_mech_info", side_effect=_gen_returning(mech_info)),
+            patch.object(b, "_calculate_mech_profits", side_effect=_gen_returning(900)),
+            patch.object(
+                b,
+                "_get_process_payment_tx",
+                side_effect=_gen_returning(dict(process_tx)),
+            ),
+            patch.object(b, "_split_funds", side_effect=_gen_returning(split_funds)),
+            patch.object(
+                b, "_get_token_address", side_effect=_gen_returning("0xTOKEN")
+            ),
+            patch.object(
+                b,
+                "_get_token_transfer_tx",
+                side_effect=_gen_returning(token_transfer_tx),
+            ),
+            patch.object(b, "_get_transfer_tx", native_transfer_sentinel),
+        ):
+            result = _run_gen(b.get_split_profit_txs())
+        assert result is not None
+        assert len(result) == 2  # process_tx + token_transfer_tx (not native)
+        native_transfer_sentinel.assert_not_called()
+
+    def test_unrecognised_payment_type_warns_before_native_fallback(self) -> None:
+        """Unknown paymentType falls back to native transfer AND logs a warning.
+
+        Guards against the regression where a new token rail is added to
+        the ``PAYMENT_TYPE_*`` constants but forgotten in
+        ``TOKEN_PAYMENT_TYPES`` — the withdraw path silently reverts
+        on-chain with GS013. The warning surfaces the misconfiguration
+        in agent logs before the on-chain revert lands.
+        """
+        b = self._make_b()
+        unknown_type = bytes.fromhex(
+            "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+        )
+        mech_info = (unknown_type, "0xTRACK", 1000)
+        process_tx = {
+            "to": "0xTRACK",
+            "value": 0,
+            "data": b"\x00",
+            "simulation_ok": True,
+        }
+        split_funds = {"0xSERVICE_OWNER": 900}
+        native_transfer_tx = {"to": "0xSERVICE_OWNER", "value": 900, "data": b""}
+        warn_spy = MagicMock()
+        b.context.logger.warning = warn_spy  # type: ignore[assignment]
+        with (
+            patch.object(b, "_should_split_profits", side_effect=_gen_returning(True)),
+            patch.object(b, "_get_mech_info", side_effect=_gen_returning(mech_info)),
+            patch.object(b, "_calculate_mech_profits", side_effect=_gen_returning(900)),
+            patch.object(
+                b,
+                "_get_process_payment_tx",
+                side_effect=_gen_returning(dict(process_tx)),
+            ),
+            patch.object(b, "_split_funds", side_effect=_gen_returning(split_funds)),
+            patch.object(
+                b, "_get_transfer_tx", side_effect=_gen_returning(native_transfer_tx)
+            ),
+        ):
+            result = _run_gen(b.get_split_profit_txs())
+        assert result is not None
+        warn_spy.assert_called_once()
+        warn_msg = warn_spy.call_args[0][0]
+        assert "Unrecognised mech_type" in warn_msg
+        assert unknown_type.hex() in warn_msg
+        assert "TOKEN_PAYMENT_TYPES" in warn_msg
+
+    def test_known_native_payment_type_does_not_warn(self) -> None:
+        """Legitimate ``PAYMENT_TYPE_NATIVE`` mechs must not trip the warning.
+
+        The unrecognised-mech-type warning is scoped to hashes outside
+        both ``TOKEN_PAYMENT_TYPES`` and ``KNOWN_NATIVE_PAYMENT_TYPES``;
+        a plain native rail is the intended path.
+        """
+        b = self._make_b()
+        from packages.valory.skills.task_submission_abci.behaviours import (
+            PAYMENT_TYPE_NATIVE,
+        )
+
+        native_type = bytes.fromhex(PAYMENT_TYPE_NATIVE)
+        mech_info = (native_type, "0xTRACK", 1000)
+        process_tx = {
+            "to": "0xTRACK",
+            "value": 0,
+            "data": b"\x00",
+            "simulation_ok": True,
+        }
+        split_funds = {"0xSERVICE_OWNER": 900}
+        native_transfer_tx = {"to": "0xSERVICE_OWNER", "value": 900, "data": b""}
+        warn_spy = MagicMock()
+        b.context.logger.warning = warn_spy  # type: ignore[assignment]
+        with (
+            patch.object(b, "_should_split_profits", side_effect=_gen_returning(True)),
+            patch.object(b, "_get_mech_info", side_effect=_gen_returning(mech_info)),
+            patch.object(b, "_calculate_mech_profits", side_effect=_gen_returning(900)),
+            patch.object(
+                b,
+                "_get_process_payment_tx",
+                side_effect=_gen_returning(dict(process_tx)),
+            ),
+            patch.object(b, "_split_funds", side_effect=_gen_returning(split_funds)),
+            patch.object(
+                b, "_get_transfer_tx", side_effect=_gen_returning(native_transfer_tx)
+            ),
+        ):
+            result = _run_gen(b.get_split_profit_txs())
+        assert result is not None
+        warn_spy.assert_not_called()
+
 
 class TestMarketplaceNvmMechPath:
     """Test Marketplace Nvm Mech Path."""

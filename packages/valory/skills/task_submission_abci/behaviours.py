@@ -116,6 +116,23 @@ PAYMENT_TYPE_NATIVE_NVM = (
 PAYMENT_TYPE_TOKEN_NVM = (
     "0d6fd99afa9c4c580fab5e341922c2a5c4b61d880da60506193d7bf88944dd14"  # nosec
 )
+PAYMENT_TYPE_TOKEN_USDC = (
+    "6406bb5f31a732f898e1ce9fdd988a80a808d36ab5d9a4a4805a8be8d197d5e3"  # nosec
+)
+
+# Payment types that settle via ERC20 transfer. A new token rail must
+# be added here alongside its ``PAYMENT_TYPE_*`` constant, otherwise
+# the withdraw path falls through to the native branch and reverts
+# on-chain with GS013 (the exact regression this list gates against).
+TOKEN_PAYMENT_TYPES = frozenset(
+    {PAYMENT_TYPE_TOKEN, PAYMENT_TYPE_TOKEN_NVM, PAYMENT_TYPE_TOKEN_USDC}
+)
+# Payment types that legitimately settle via a native transfer.
+# Anything outside both sets is an unrecognised rail — the withdraw
+# path still falls back to native but logs a warning so a new
+# ``PAYMENT_TYPE_*`` constant added without a matching update to
+# ``TOKEN_PAYMENT_TYPES`` surfaces before it reverts on-chain.
+KNOWN_NATIVE_PAYMENT_TYPES = frozenset({PAYMENT_TYPE_NATIVE, PAYMENT_TYPE_NATIVE_NVM})
 
 IS_MARKETPLACE_MECH_KEY = "is_marketplace_mech"
 
@@ -677,7 +694,7 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                 if amount == 0:
                     continue
 
-                if mech_type.hex() in [PAYMENT_TYPE_TOKEN_NVM, PAYMENT_TYPE_TOKEN]:
+                if mech_type.hex() in TOKEN_PAYMENT_TYPES:
                     self.context.logger.info(
                         f"Token type mech detected {mech_address}. Preparing token transfer tx"
                     )
@@ -698,6 +715,12 @@ class FundsSplittingBehaviour(DeliverBehaviour, ABC):
                         mech_address, token_address, receiver_address, amount
                     )
                 else:
+                    if mech_type.hex() not in KNOWN_NATIVE_PAYMENT_TYPES:
+                        self.context.logger.warning(
+                            f"Unrecognised mech_type {mech_type.hex()} for {mech_address}; "
+                            f"falling back to native transfer. If this is a new token rail, "
+                            f"add it to TOKEN_PAYMENT_TYPES to avoid a GS013 revert on-chain."
+                        )
                     tx = yield from self._get_transfer_tx(
                         mech_address, receiver_address, amount
                     )
