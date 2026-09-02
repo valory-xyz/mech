@@ -879,6 +879,70 @@ class TestHandleSubmittedTasks:
 
 
 # ---------------------------------------------------------------------------
+# End-to-end hand-off contract (round-side write ↔ behaviour-side read)
+# ---------------------------------------------------------------------------
+
+
+class TestSubmittedRequestIdsRoundTrip:
+    """Pins the write→read hand-off using real ``SynchronizedData``.
+
+    The other behaviour-side tests replace ``synchronized_data`` with
+    a ``MagicMock``; that leaves the real property (including its
+    ``list[str]`` validation) unexercised on the behaviour path, so a
+    rename or deletion of the property would pass silently. This
+    class exercises the actual round writer, feeds the resulting
+    synced data to the behaviour, and asserts the prune reaches
+    ``shared_state[DONE_TASKS]``.
+    """
+
+    def _make_sync_data_with_ids(self, ids: List[str]) -> Any:
+        """Build a real ``SynchronizedData`` carrying ``submitted_request_ids``."""
+        from packages.valory.skills.abstract_round_abci.base import (
+            AbciAppDB,
+            get_name,
+        )
+        from packages.valory.skills.task_submission_abci.rounds import (
+            SynchronizedData,
+        )
+
+        data: dict = {
+            "participants": [["agent-0", "agent-1", "agent-2"]],
+            "consensus_threshold": [3],
+            "all_participants": [["agent-0", "agent-1", "agent-2"]],
+            get_name(SynchronizedData.final_tx_hash): ["0xhash"],
+            get_name(SynchronizedData.submitted_request_ids): [ids],
+        }
+        return SynchronizedData(AbciAppDB(data))
+
+    def test_end_to_end_prune_using_real_synchronized_data(self) -> None:
+        """A real ``SynchronizedData`` drives the prune to shared_state.
+
+        Round writer → behaviour reader → shared_state prune. If the
+        property name or ``list[str]`` validation changes, this test
+        catches the drift.
+        """
+        ctx = _make_full_ctx()
+        ctx.shared_state["mech_delivery_last_block_number"] = MagicMock()
+        b = _DummyPooling(name="b", skill_context=ctx)
+        b._synchronized_data = self._make_sync_data_with_ids(["req-a", "req-b"])
+        b.context.shared_state[DONE_TASKS] = [
+            {"request_id": "req-a", "tool": "t1", "start_time": time.perf_counter()},
+            {"request_id": "req-b", "tool": "t2", "start_time": time.perf_counter()},
+            {"request_id": "req-keep", "tool": "t3"},
+        ]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        remaining_ids = [
+            task["request_id"] for task in b.context.shared_state[DONE_TASKS]
+        ]
+        assert remaining_ids == ["req-keep"]
+
+
+# ---------------------------------------------------------------------------
 # DeliverBehaviour._get_current_delivery_report
 # ---------------------------------------------------------------------------
 
