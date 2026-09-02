@@ -61,6 +61,7 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
+from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
@@ -88,7 +89,6 @@ LAST_SUCCESSFUL_READ = "last_successful_read"
 LAST_READ_ATTEMPT_TS = "last_read_attempt_ts"
 INFLIGHT_READ_TS = "inflight_read_ts"
 REQUEST_ID_TO_DELIVERY_RATE_INFO = "request_id_to_delivery_rate_info"
-PREDICT_API_EVENTS = "predict_api_events"
 WAS_LAST_READ_SUCCESSFUL = "was_last_read_successful"
 PAYMENT_MODEL = "payment_model"
 PAYMENT_INFO = "payment_info"

@@ -521,7 +521,8 @@ def test_extract_offchain_events_reads_from_shared_state_by_request_id() -> None
                         "r-off": {"event": {"src": "off"}, "written_at": now},
                         "r-on": {"event": {"src": "on"}, "written_at": now},
                     }
-                }
+                },
+                logger=_make_logger(),
             ),
         ),
     )
@@ -537,11 +538,37 @@ def test_extract_offchain_events_returns_empty_when_shared_state_unset() -> None
             synchronized_data=SimpleNamespace(
                 done_tasks=[{"request_id": "r-off"}, {"request_id": "r-on"}]
             ),
-            context=SimpleNamespace(shared_state={}),
+            context=SimpleNamespace(shared_state={}, logger=_make_logger()),
         ),
     )
     events = PostTxSettlementBehaviour._extract_offchain_events(self_)
     assert events == []
+
+
+def test_extract_offchain_events_logs_debug_when_local_miss() -> None:
+    """Each done_task without a matching local event emits a DEBUG log.
+
+    Separates the "executed by another agent" case (normal) from a
+    silent drop caused by an ingress-side bug in ``_finalize_done_task``.
+    Without the log both look identical in production.
+    """
+    debug_sink: List[str] = []
+    logger = SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+        debug=lambda msg, *a, **k: debug_sink.append(msg % a if a else msg),
+    )
+    self_ = cast(
+        PostTxSettlementBehaviour,
+        SimpleNamespace(
+            synchronized_data=SimpleNamespace(done_tasks=[{"request_id": "r-missing"}]),
+            context=SimpleNamespace(shared_state={}, logger=logger),
+        ),
+    )
+    events = PostTxSettlementBehaviour._extract_offchain_events(self_)
+    assert events == []
+    assert any("r-missing" in line for line in debug_sink), debug_sink
 
 
 # ---------------------------------------------------------------------------
@@ -657,14 +684,14 @@ def test_egress_gate_off_short_circuits_without_http_call() -> None:
 
 
 def test_egress_gate_off_with_diverged_ingress_emits_divergence_warning() -> None:
-    """``use_offchain=False`` but ``done_tasks`` carries predict_api_events: WARN and drop.
+    """``use_offchain=False`` but ``shared_state[PREDICT_API_EVENTS]`` populated: WARN and drop.
 
     The two ``use_offchain`` copies (on ``task_execution`` and
     ``task_submission_abci``) are independent env-overridable params —
     an operator can flip one but forget the other. If the ingress side
-    is on but this side is off, ``done_tasks`` will already carry
-    ``predict_api_event`` entries at consensus-replication cost, and
-    dropping them silently (as the pre-fix shape did) is invisible to
+    is on but this side is off, agent-local
+    ``shared_state[PREDICT_API_EVENTS]`` will already carry entries
+    from finalized tasks, and dropping them silently is invisible to
     alerting. The safety net here fires a WARNING so the misconfig
     surfaces in ops logs.
     """

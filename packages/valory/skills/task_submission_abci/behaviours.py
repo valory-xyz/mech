@@ -1946,15 +1946,19 @@ class TransactionPreparationBehaviour(
 class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     """Runs once on-chain settlement of the round's tx confirms.
 
-    Reads ``synchronized_data.done_tasks`` for the just-settled cycle,
-    extracts every entry's pre-built ``predict_api_event`` payload (set on
-    the offchain path inside :py:meth:`task_execution.behaviours._build_predict_api_event`),
-    bundles them into one EIP-712-signed batch, and POSTs the batch to
-    the predict-api data lake at ``params.predict_api_events_url``. The predict-api
-    server is idempotent on ``request_id``, so multi-agent services don't
-    need a keeper pattern: each agent posts its own copy under its own
-    EOA signature; the per-EOA rate limiter on the server keeps the
-    co-owners in separate budgets.
+    Iterates ``synchronized_data.done_tasks`` for the just-settled cycle
+    and, for each entry, looks up its ``predict_api_event`` in
+    agent-local ``shared_state[PREDICT_API_EVENTS]`` (keyed by
+    ``str(request_id)``, populated on the offchain path inside
+    :py:meth:`task_execution.behaviours._build_predict_api_event`).
+    Each cache entry is a ``{event, written_at}`` wrapper so the sibling
+    TTL sweep in :py:meth:`TaskExecutionBaseBehaviour.remove_tasks_by_id`
+    can drop stale entries. Only the agent that executed a task
+    locally has its event; other agents skip and rely on the executor
+    to POST. The predict-api server is idempotent on ``request_id``,
+    so a single POST per task is sufficient — each agent posts its own
+    events under its own EOA signature; the per-EOA rate limiter on the
+    server keeps the co-owners in separate budgets.
 
     The behaviour is fail-soft by construction. A predict-api outage / 5xx
     / network drop does NOT stop the FSM — the settlement already landed
@@ -1998,9 +2002,11 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
 
             1. The feature flag is off (the default during Phase 1).
             2. The skill has no predict-api URL configured.
-            3. The round's done_tasks carry no offchain predict_api_event
-               entries and the pending-task sweep produced no
-               request-only events (a truly quiet round).
+            3. No local ``shared_state[PREDICT_API_EVENTS]`` entries
+               match the round's ``done_tasks`` (this agent didn't
+               execute any of them; other agents will POST their own)
+               and the pending-task sweep produced no request-only
+               events (a truly quiet round).
 
         :yield: AEA protocol messages (signing dialogue, HTTP request) via
             the underlying generator-based helpers; this method does not
@@ -2039,9 +2045,11 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         request_only_events, swept_request_ids = self._sweep_pending_undelivered()
         if not delivered_events and not request_only_events:
             self.context.logger.debug(
-                "No predict_api_event entries in done_tasks and no swept "
-                "pending tasks; post-tx predict-api write is a no-op for "
-                "this round."
+                "No local predict_api_event entries in "
+                "shared_state[PREDICT_API_EVENTS] matched this round's "
+                "done_tasks (executed by other agents or absent) and no "
+                "swept pending tasks; post-tx predict-api write is a "
+                "no-op for this round."
             )
             return
 
@@ -2475,11 +2483,15 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             if req_id is None:
                 continue
             entry = events_by_id.get(str(req_id))
-            if not isinstance(entry, dict):
-                continue
-            event = entry.get("event")
+            event = entry.get("event") if isinstance(entry, dict) else None
             if isinstance(event, dict):
                 events.append(event)
+            else:
+                self.context.logger.debug(
+                    "no local predict_api_event for request_id=%s; "
+                    "assuming executed by another agent",
+                    req_id,
+                )
         return events
 
     def _sweep_pending_undelivered(

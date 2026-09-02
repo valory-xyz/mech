@@ -302,6 +302,26 @@ class TestRemoveTasksById:
         b.remove_tasks_by_id(["r-missing"])
         assert ctx.shared_state[DONE_TASKS] == tasks
 
+    def test_submitted_ids_pruned_from_predict_api_event_cache(self) -> None:
+        """Ids in ``submitted_ids`` are dropped from the event cache too.
+
+        Primary cleanup path on every settlement. Guards against a
+        regression that removes the pop loop but leaves the TTL
+        sweep, silently leaking one 30-60 KB event per delivered
+        task until the 24h TTL fires.
+        """
+        now = time.time()
+        ctx = _make_ctx(done_tasks=[{"request_id": "r1"}, {"request_id": "r2"}])
+        ctx.shared_state[PREDICT_API_EVENTS] = {
+            "r1": {"event": {"src": "off"}, "written_at": now},
+            "r2": {"event": {"src": "off"}, "written_at": now},
+        }
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["r1"])
+        surviving = ctx.shared_state[PREDICT_API_EVENTS]
+        assert "r1" not in surviving
+        assert "r2" in surviving
+
     def test_stale_predict_api_events_pruned_by_ttl(self) -> None:
         """Cache entries older than the TTL are dropped on the next prune.
 
