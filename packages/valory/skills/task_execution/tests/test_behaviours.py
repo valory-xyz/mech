@@ -1607,6 +1607,63 @@ def test_update_pending_tasks_no_pending_tasks(
     behaviour._update_pending_tasks()  # should not raise
 
 
+def test_update_pending_tasks_coerces_request_ids_to_bytes32(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """``request_ids`` reach ``fetch_batch_request_id_status`` as 32-byte bytes.
+
+    The callee encodes them into a ``bytes32[]`` ABI slot. Newer ``eth_abi``
+    versions reject an ``int`` there with ``EncodingTypeError``, so the
+    caller must coerce first. This test seeds a marketplace-hash-derived
+    ``uint256`` id (~1e77) that would fail encoding without the coercion,
+    and asserts the value on the outgoing kwargs is ``bytes`` of length 32.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture used to seed ``PENDING_TASKS``.
+    :param monkeypatch: pytest monkeypatch used to freeze ``time.time`` and
+        replace ``contract_dialogues.create`` with a capturing stub.
+    """
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = False
+    behaviour.last_status_check_time = 0.0
+    monkeypatch.setattr(time, "time", lambda: beh_mod.STATUS_CHECK_INTERVAL + 1.0)
+    huge_id = (
+        100705699761465541306241857262966577157937941808748966974775453031896335917267
+    )
+    small_id = 42
+    shared_state[beh_mod.PENDING_TASKS] = [
+        {"requestId": huge_id},
+        {"requestId": small_id},
+    ]
+    captured: Dict[str, Any] = {}
+
+    def _capture_create(*a: Any, **k: Any) -> Any:
+        """Capture the kwargs passed to ``contract_dialogues.create``."""
+        captured.update(k)
+        return SimpleNamespace(), SimpleNamespace(
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-x", ""))
+        )
+
+    monkeypatch.setattr(behaviour.context.contract_dialogues, "create", _capture_create)
+    behaviour._update_pending_tasks()
+    kwargs = captured.get("kwargs")
+    assert kwargs is not None, "contract_dialogues.create was not called"
+    body = kwargs.body if hasattr(kwargs, "body") else dict(kwargs)
+    request_ids = body["request_ids"]
+    assert len(request_ids) == 2
+    for rid in request_ids:
+        assert isinstance(rid, bytes), f"expected bytes, got {type(rid).__name__}"
+        assert len(rid) == 32, f"expected 32 bytes, got {len(rid)}"
+    assert (
+        int.from_bytes(request_ids[0], "big") == huge_id
+    ), "round-trip must preserve the uint256 value"
+    assert int.from_bytes(request_ids[1], "big") == small_id
+
+
 # ---------------------------------------------------------------------------
 # send_message
 # ---------------------------------------------------------------------------

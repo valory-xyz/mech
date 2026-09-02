@@ -1007,7 +1007,12 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(
             f"Checking status change for {pending_tasks_count} pending tasks..."
         )
-        pending_tasks_request_ids = [t["requestId"] for t in self.pending_tasks]
+        # ``fetch_batch_request_id_status`` encodes each id into a
+        # ``bytes32[]`` ABI slot, which the strict ``BytesEncoder`` rejects
+        # if it receives an int. Coerce to 32-byte big-endian here.
+        pending_tasks_request_ids = [
+            int(t["requestId"]).to_bytes(32, "big") for t in self.pending_tasks
+        ]
 
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
