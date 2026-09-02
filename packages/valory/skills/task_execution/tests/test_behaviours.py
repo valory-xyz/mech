@@ -1865,11 +1865,15 @@ def test_handle_done_task_offchain_skips_ipfs_and_finalizes_locally(
     # the writer stores under ``str(req_id)``, so every successful off-chain
     # delivery landed in the lake as ``status="failed"``, ``result=None``.
     # Silent failure: the poller still saw the right answer.
-    done_event = done.get("predict_api_event")
-    assert isinstance(done_event, dict), done
+    events = shared_state.get(beh_mod.PREDICT_API_EVENTS, {})
+    entry = events.get(str(done["request_id"]))
+    assert isinstance(entry, dict) and "written_at" in entry, events
+    done_event = entry["event"]
+    assert isinstance(done_event, dict), entry
     inner = done_event.get("response", {})
     assert inner.get("status") == "complete", done_event
     assert inner.get("result") == "prediction: yes", done_event
+    assert "predict_api_event" not in done
 
 
 def test_handle_done_task_offchain_invalid_request_recorded_as_failure(
@@ -2026,7 +2030,11 @@ def test_handle_done_task_onchain_end_to_end_predict_api_event(  # noqa: PLR0913
 
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
-    event = done_tasks[0]["predict_api_event"]
+    assert "predict_api_event" not in done_tasks[0]
+    events = shared_state.get(beh_mod.PREDICT_API_EVENTS, {})
+    entry = events[str(done_tasks[0]["request_id"])]
+    assert "written_at" in entry
+    event = entry["event"]
     assert event["response"]["result"] == expected_event_result
     assert event["response"]["status"] == expected_event_status
     assert event["response"]["error"] == expected_event_error
@@ -4431,8 +4439,11 @@ def test_finalize_done_task_attaches_predict_api_event_when_use_offchain_on(
     behaviour._finalize_done_task("bafycid")
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
-    assert isinstance(done_tasks[0].get("predict_api_event"), dict)
-    assert done_tasks[0]["predict_api_event"].get("source") == "mech_offchain"
+    assert "predict_api_event" not in done_tasks[0]
+    events = shared_state.get(beh_mod.PREDICT_API_EVENTS, {})
+    entry = events[str(done_tasks[0]["request_id"])]
+    assert "written_at" in entry
+    assert entry["event"].get("source") == "mech_offchain"
 
 
 def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
@@ -4465,8 +4476,58 @@ def test_finalize_done_task_attaches_predict_api_event_on_marketplace_delivery(
     behaviour._finalize_done_task("bafycid")
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
-    assert isinstance(done_tasks[0].get("predict_api_event"), dict)
-    assert done_tasks[0]["predict_api_event"].get("source") == "mech_onchain"
+    assert "predict_api_event" not in done_tasks[0]
+    events = shared_state.get(beh_mod.PREDICT_API_EVENTS, {})
+    entry = events[str(done_tasks[0]["request_id"])]
+    assert "written_at" in entry
+    assert entry["event"].get("source") == "mech_onchain"
+
+
+def test_finalize_done_task_sweeps_stale_predict_api_events_on_write(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A write drops entries older than the TTL and preserves fresh ones.
+
+    Bounds cache growth on agents whose settlement is stuck: the
+    on-write sweep runs regardless of whether a post-settlement
+    prune ever fires. ``malformed`` and ``bad-written-at`` cover
+    the guard branches (F4).
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    now = time.time()
+    shared_state[beh_mod.PREDICT_API_EVENTS] = {
+        "fresh": {"event": {"src": "off"}, "written_at": now - 60},
+        "stale": {
+            "event": {"src": "off"},
+            "written_at": now - beh_mod.PREDICT_API_EVENT_TTL_SECONDS - 60,
+        },
+        "malformed": "not-a-dict",
+        "bad-written-at": {"event": {"src": "off"}, "written_at": "yesterday"},
+    }
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    fresh_req_id = str(behaviour._done_task["request_id"])
+    behaviour._finalize_done_task("bafycid")
+    events = shared_state[beh_mod.PREDICT_API_EVENTS]
+    assert "fresh" in events
+    assert "stale" not in events
+    assert "malformed" not in events
+    assert "bad-written-at" not in events
+    assert fresh_req_id in events
 
 
 def test_finalize_done_task_omits_predict_api_event_when_use_offchain_off(
@@ -4499,6 +4560,7 @@ def test_finalize_done_task_omits_predict_api_event_when_use_offchain_off(
     done_tasks = shared_state[beh_mod.DONE_TASKS]
     assert len(done_tasks) == 1
     assert "predict_api_event" not in done_tasks[0]
+    assert not shared_state.get(beh_mod.PREDICT_API_EVENTS)
 
 
 # ---------------------------------------------------------------------------

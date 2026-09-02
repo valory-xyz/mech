@@ -61,6 +61,7 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
+from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
@@ -608,6 +609,7 @@ class ContractHandler(BaseHandler):
         self.context.shared_state[DONE_TASKS] = []
         self.context.shared_state[DONE_TASKS_LOCK] = threading.Lock()
         self.context.shared_state[REQUEST_ID_TO_DELIVERY_RATE_INFO] = {}
+        self.context.shared_state[PREDICT_API_EVENTS] = {}
         super().setup()
 
     def set_last_successful_read(self, block_number: Optional[int]) -> None:

@@ -67,6 +67,7 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
+from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import (
@@ -374,6 +375,13 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         # ``shared_state[DONE_TASKS]`` under the same lock) and keeps
         # both paths on the single tested prune surface.
         shared_snapshot = self.remove_tasks_by_id(submitted_ids)
+        # Prune must fire only after ``PostTxSettlementBehaviour`` has
+        # POSTed. Do not move into ``remove_tasks_by_id``: its
+        # pre-settlement caller strands the row otherwise.
+        events_by_id = self.context.shared_state.get(PREDICT_API_EVENTS)
+        if isinstance(events_by_id, dict):
+            for rid in submitted_ids:
+                events_by_id.pop(rid, None)
         self.context.logger.info(
             f"Pruned tasks with ids {submitted_ids} from shared state; "
             f"tx_hash={tx_hash}."
@@ -1929,15 +1937,20 @@ class TransactionPreparationBehaviour(
 class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     """Runs once on-chain settlement of the round's tx confirms.
 
-    Reads ``synchronized_data.done_tasks`` for the just-settled cycle,
-    extracts every entry's pre-built ``predict_api_event`` payload (set on
-    the offchain path inside :py:meth:`task_execution.behaviours._build_predict_api_event`),
-    bundles them into one EIP-712-signed batch, and POSTs the batch to
-    the predict-api data lake at ``params.predict_api_events_url``. The predict-api
-    server is idempotent on ``request_id``, so multi-agent services don't
-    need a keeper pattern: each agent posts its own copy under its own
-    EOA signature; the per-EOA rate limiter on the server keeps the
-    co-owners in separate budgets.
+    Iterates ``synchronized_data.done_tasks`` for the just-settled cycle
+    and, for each entry, looks up its ``predict_api_event`` in
+    agent-local ``shared_state[PREDICT_API_EVENTS]`` (keyed by
+    ``str(request_id)``, populated on the offchain path inside
+    :py:meth:`task_execution.behaviours._build_predict_api_event`).
+    Each cache entry is a ``{event, written_at}`` wrapper so the TTL
+    sweep on write in
+    :py:meth:`task_execution.behaviours.TaskExecutionBehaviour._finalize_done_task`
+    can drop stale entries. Only the agent that executed a task locally
+    has its event; other agents skip and rely on the executor to POST.
+    The predict-api server is idempotent on ``request_id``, so a single
+    POST per task is sufficient — each agent posts only the subset it
+    executed, under its own EOA signature; the per-EOA rate limiter on
+    the server keeps the co-owners in separate budgets.
 
     The behaviour is fail-soft by construction. A predict-api outage / 5xx
     / network drop does NOT stop the FSM — the settlement already landed
@@ -1981,30 +1994,22 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
 
             1. The feature flag is off (the default during Phase 1).
             2. The skill has no predict-api URL configured.
-            3. The round's done_tasks carry no offchain predict_api_event
-               entries and the pending-task sweep produced no
-               request-only events (a truly quiet round).
+            3. No local ``shared_state[PREDICT_API_EVENTS]`` entries
+               match the round's ``done_tasks`` (this agent didn't
+               execute any of them; other agents will POST their own)
+               and the pending-task sweep produced no request-only
+               events (a truly quiet round).
 
         :yield: AEA protocol messages (signing dialogue, HTTP request) via
             the underlying generator-based helpers; this method does not
             ``return`` anything.
         """
         if not self.params.use_offchain:
-            # Divergence safety net. ``use_offchain`` is a duplicated
-            # param (declared on both this skill and ``task_execution``);
-            # if an operator flips ``task_execution.use_offchain=true`` but
-            # forgets this one, the ingress side builds
-            # ``predict_api_event`` entries and rides Tendermint
-            # consensus replication for them — and then the egress side
-            # here silently drops the entire batch. Warn loudly when we
-            # can see that has happened so the divergence is alertable
-            # rather than invisible.
-            if any(
-                isinstance(t, dict) and t.get("predict_api_event")
-                for t in cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
-            ):
+            # Divergence safety net: the ingress side wrote events into
+            # local shared_state but the egress side has the flag off.
+            if self.context.shared_state.get(PREDICT_API_EVENTS):
                 self.context.logger.warning(
-                    "predict_api_event entries present in done_tasks but "
+                    "predict_api_event entries present in shared_state but "
                     "task_submission_abci.use_offchain is False — the "
                     "ingress-side (task_execution) and egress-side "
                     "(task_submission_abci) use_offchain flags are "
@@ -2032,9 +2037,11 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         request_only_events, swept_request_ids = self._sweep_pending_undelivered()
         if not delivered_events and not request_only_events:
             self.context.logger.debug(
-                "No predict_api_event entries in done_tasks and no swept "
-                "pending tasks; post-tx predict-api write is a no-op for "
-                "this round."
+                "No local predict_api_event entries in "
+                "shared_state[PREDICT_API_EVENTS] matched this round's "
+                "done_tasks (executed by other agents or absent) and no "
+                "swept pending tasks; post-tx predict-api write is a "
+                "no-op for this round."
             )
             return
 
@@ -2447,30 +2454,37 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         ).inc()
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
-        """Return the ``predict_api_event`` payload from every done_task that carries one.
-
-        Both off-chain HTTP deliveries (``source = 'mech_offchain'``) and
-        on-chain marketplace deliveries (``source = 'mech_onchain'``) now
-        ride the same predict-api write path; the per-event ``source`` field
-        set inside :py:meth:`task_execution.behaviours._build_predict_api_event`
-        is what disambiguates the two on the predict-api side. The filter
-        here keys on the presence of a ``predict_api_event`` field, which
-        :py:meth:`task_execution.behaviours._finalize_done_task` sets only
-        when ``use_offchain`` is on AND the task is either an off-chain
-        HTTP delivery (``is_offchain=True``) or an on-chain marketplace
-        delivery (``is_marketplace_delivery=True``). On-chain
-        non-marketplace tasks on a legacy mech contract stay out of the
-        lake by construction.
+        """Return every locally-cached ``predict_api_event`` for the round's done_tasks.
 
         :return: an ordered list of ``MechEvent``-shaped dicts.
         """
         done_tasks = cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
+        events_by_id: Dict[str, Dict[str, Any]] = self.context.shared_state.get(
+            PREDICT_API_EVENTS, {}
+        )
+        agent_address = self.context.agent_address
         events: List[Dict[str, Any]] = []
         for task in done_tasks:
-            event = task.get("predict_api_event")
-            if not isinstance(event, dict):
+            req_id = task.get("request_id")
+            if req_id is None:
                 continue
-            events.append(event)
+            entry = events_by_id.get(str(req_id))
+            event = entry.get("event") if isinstance(entry, dict) else None
+            if isinstance(event, dict):
+                events.append(event)
+                continue
+            if task.get("task_executor_address") == agent_address:
+                self.context.logger.warning(
+                    "no local predict_api_event for request_id=%s but this "
+                    "agent executed it — event dropped before POST",
+                    req_id,
+                )
+            else:
+                self.context.logger.debug(
+                    "no local predict_api_event for request_id=%s; "
+                    "executed by another agent",
+                    req_id,
+                )
         return events
 
     def _sweep_pending_undelivered(

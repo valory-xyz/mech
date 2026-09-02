@@ -50,6 +50,7 @@ import time
 from types import SimpleNamespace
 from typing import Any, Dict, List, cast
 
+from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_submission_abci.behaviours import (
     PENDING_TASKS,
     PostTxSettlementBehaviour,
@@ -500,49 +501,142 @@ def test_request_only_event_falls_back_to_now_on_bad_timestamp() -> None:
 # Extract -----------------------------------------------------------------
 
 
-def test_extract_offchain_events_includes_onchain_when_predict_api_event_present() -> (
-    None
-):
-    """The extractor keys on the presence of ``predict_api_event``, not on ``is_offchain``.
-
-    An on-chain marketplace task that carried a ``predict_api_event``
-    (built by the task_execution finalize step) gets included in the
-    batch.
-    """
-    # Build a self_ that exposes synchronized_data.done_tasks; the
-    # extract method is a property-only function.
+def test_extract_offchain_events_reads_from_shared_state_by_request_id() -> None:
+    """Events are looked up from agent-local ``shared_state[PREDICT_API_EVENTS]`` by request_id."""
+    now = time.time()
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
             synchronized_data=SimpleNamespace(
                 done_tasks=[
-                    {"is_offchain": True, "predict_api_event": {"src": "off"}},
-                    {"is_offchain": False, "predict_api_event": {"src": "on"}},
-                    {"is_offchain": False, "predict_api_event": None},  # skipped
-                    {"is_offchain": True, "predict_api_event": "not-a-dict"},  # skipped
+                    {"request_id": "r-off"},
+                    {"request_id": "r-on"},
+                    {"request_id": "r-not-local"},
+                    {"request_id": None},
                 ]
-            )
+            ),
+            context=SimpleNamespace(
+                agent_address="0xSELF",
+                shared_state={
+                    PREDICT_API_EVENTS: {
+                        "r-off": {"event": {"src": "off"}, "written_at": now},
+                        "r-on": {"event": {"src": "on"}, "written_at": now},
+                    }
+                },
+                logger=_make_logger(),
+            ),
         ),
     )
     events = PostTxSettlementBehaviour._extract_offchain_events(self_)
     assert events == [{"src": "off"}, {"src": "on"}]
 
 
-def test_extract_offchain_events_skips_tasks_without_predict_api_event() -> None:
-    """Done tasks without ``predict_api_event`` (e.g. on-chain non-marketplace legacy mech tasks) stay out of the batch."""
+def test_extract_offchain_events_matches_int_request_id_against_str_key() -> None:
+    """``done_task["request_id"]`` is int in production; cache key is str.
+
+    Pins the ``str(req_id)`` coercion so a regression that drops the
+    cast fails here rather than silently in production (both sides use
+    literal str keys in every other test).
+    """
+    now = time.time()
+    self_ = cast(
+        PostTxSettlementBehaviour,
+        SimpleNamespace(
+            synchronized_data=SimpleNamespace(done_tasks=[{"request_id": 42}]),
+            context=SimpleNamespace(
+                agent_address="0xSELF",
+                shared_state={
+                    PREDICT_API_EVENTS: {
+                        "42": {"event": {"src": "off"}, "written_at": now},
+                    }
+                },
+                logger=_make_logger(),
+            ),
+        ),
+    )
+    events = PostTxSettlementBehaviour._extract_offchain_events(self_)
+    assert events == [{"src": "off"}]
+
+
+def test_extract_offchain_events_returns_empty_when_shared_state_unset() -> None:
+    """No local events → empty batch (other agents post their own)."""
+    self_ = cast(
+        PostTxSettlementBehaviour,
+        SimpleNamespace(
+            synchronized_data=SimpleNamespace(
+                done_tasks=[{"request_id": "r-off"}, {"request_id": "r-on"}]
+            ),
+            context=SimpleNamespace(
+                agent_address="0xSELF",
+                shared_state={},
+                logger=_make_logger(),
+            ),
+        ),
+    )
+    events = PostTxSettlementBehaviour._extract_offchain_events(self_)
+    assert events == []
+
+
+def test_extract_offchain_events_logs_debug_when_other_agent_executed() -> None:
+    """A missing local event for a task another agent executed → DEBUG (normal)."""
+    debug_sink: List[str] = []
+    warn_sink: List[str] = []
+    logger = SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda msg, *a, **k: warn_sink.append(msg % a if a else msg),
+        error=lambda *a, **k: None,
+        debug=lambda msg, *a, **k: debug_sink.append(msg % a if a else msg),
+    )
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
             synchronized_data=SimpleNamespace(
                 done_tasks=[
-                    {"is_offchain": True},  # no predict_api_event at all
-                    {"is_offchain": False},
+                    {"request_id": "r-other", "task_executor_address": "0xOTHER"}
                 ]
-            )
+            ),
+            context=SimpleNamespace(
+                agent_address="0xSELF", shared_state={}, logger=logger
+            ),
         ),
     )
     events = PostTxSettlementBehaviour._extract_offchain_events(self_)
     assert events == []
+    assert any("r-other" in line for line in debug_sink), debug_sink
+    assert warn_sink == []
+
+
+def test_extract_offchain_events_logs_warning_when_self_executor_has_no_cache_entry() -> (
+    None
+):
+    """A missing local event for a task THIS agent executed → WARNING (bug).
+
+    Separates the "another agent posts it" normal case from a real
+    ingress-side drop in ``_finalize_done_task``.
+    """
+    debug_sink: List[str] = []
+    warn_sink: List[str] = []
+    logger = SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda msg, *a, **k: warn_sink.append(msg % a if a else msg),
+        error=lambda *a, **k: None,
+        debug=lambda msg, *a, **k: debug_sink.append(msg % a if a else msg),
+    )
+    self_ = cast(
+        PostTxSettlementBehaviour,
+        SimpleNamespace(
+            synchronized_data=SimpleNamespace(
+                done_tasks=[{"request_id": "r-self", "task_executor_address": "0xSELF"}]
+            ),
+            context=SimpleNamespace(
+                agent_address="0xSELF", shared_state={}, logger=logger
+            ),
+        ),
+    )
+    events = PostTxSettlementBehaviour._extract_offchain_events(self_)
+    assert events == []
+    assert any("r-self" in line for line in warn_sink), warn_sink
+    assert debug_sink == []
 
 
 # ---------------------------------------------------------------------------
@@ -559,6 +653,7 @@ def _make_egress_self(
     done_tasks: List[Dict[str, Any]] | None = None,
     warnings_sink: List[str] | None = None,
     debug_sink: List[str] | None = None,
+    predict_api_events: Dict[str, Any] | None = None,
 ) -> PostTxSettlementBehaviour:
     """Build a minimum ``self`` for a ``_do_predict_api_write_best_effort`` call.
 
@@ -577,6 +672,8 @@ def _make_egress_self(
         by the divergence-warning check.
     :param warnings_sink: list to capture WARNING-level log lines.
     :param debug_sink: list to capture DEBUG-level log lines.
+    :param predict_api_events: seed ``shared_state[PREDICT_API_EVENTS]``
+        for the divergence-warning check.
     :return: a fixture typed as :class:`PostTxSettlementBehaviour` for
         the unbound-method call pattern used by every test in this
         module.
@@ -591,8 +688,11 @@ def _make_egress_self(
         error=lambda *a, **k: None,
         debug=lambda msg, *a, **k: debug_sink.append(msg),
     )
+    shared_state: Dict[str, Any] = {}
+    if predict_api_events is not None:
+        shared_state[PREDICT_API_EVENTS] = predict_api_events
     self_ = SimpleNamespace(
-        context=SimpleNamespace(shared_state={}, logger=logger),
+        context=SimpleNamespace(shared_state=shared_state, logger=logger),
         params=SimpleNamespace(
             use_offchain=use_offchain,
             predict_api_events_url=predict_api_events_url,
@@ -652,24 +752,23 @@ def test_egress_gate_off_short_circuits_without_http_call() -> None:
 
 
 def test_egress_gate_off_with_diverged_ingress_emits_divergence_warning() -> None:
-    """``use_offchain=False`` but ``done_tasks`` carries predict_api_events: WARN and drop.
+    """``use_offchain=False`` but ``shared_state[PREDICT_API_EVENTS]`` populated: WARN and drop.
 
     The two ``use_offchain`` copies (on ``task_execution`` and
     ``task_submission_abci``) are independent env-overridable params —
     an operator can flip one but forget the other. If the ingress side
-    is on but this side is off, ``done_tasks`` will already carry
-    ``predict_api_event`` entries at consensus-replication cost, and
-    dropping them silently (as the pre-fix shape did) is invisible to
+    is on but this side is off, agent-local
+    ``shared_state[PREDICT_API_EVENTS]`` will already carry entries
+    from finalized tasks, and dropping them silently is invisible to
     alerting. The safety net here fires a WARNING so the misconfig
     surfaces in ops logs.
     """
     warnings_sink: List[str] = []
     self_ = _make_egress_self(
         use_offchain=False,
-        done_tasks=[
-            {"is_offchain": True, "predict_api_event": {"src": "off"}},
-            {"is_offchain": False},
-        ],
+        predict_api_events={
+            "r1": {"event": {"src": "off"}, "written_at": time.time()},
+        },
         warnings_sink=warnings_sink,
     )
     _drive_generator_once(
@@ -683,7 +782,7 @@ def test_egress_gate_off_with_diverged_ingress_emits_divergence_warning() -> Non
 
 
 def test_egress_gate_off_with_no_events_stays_silent() -> None:
-    """``use_offchain=False`` and empty ``done_tasks``: no warning fires.
+    """``use_offchain=False`` and empty ``shared_state[PREDICT_API_EVENTS]``: no warning.
 
     Guards against the divergence warning becoming its own boot-noise
     source on production mechs that ship dark by default (both flags

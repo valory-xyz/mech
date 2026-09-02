@@ -33,6 +33,7 @@ from packages.valory.contracts.complementary_service_metadata.contract import (
 )
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
+from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_submission_abci.behaviours import (
     DONE_TASKS,
     DeliverBehaviour,
@@ -297,6 +298,28 @@ class TestRemoveTasksById:
         b = _DummyBase(name="b", skill_context=ctx)
         b.remove_tasks_by_id(["r-missing"])
         assert ctx.shared_state[DONE_TASKS] == tasks
+
+    def test_pre_settlement_remove_tasks_preserves_predict_api_cache(self) -> None:
+        """``remove_tasks_by_id`` does not prune ``PREDICT_API_EVENTS``.
+
+        The event cache prune belongs to ``handle_submitted_tasks``
+        (post-settlement). The pre-settlement caller
+        ``TransactionPreparationBehaviour.get_payload_content`` also
+        calls ``remove_tasks_by_id`` on the simulation-skip path;
+        popping the cache there strands the event because the task
+        row is still present in the consensus ``done_tasks``.
+        """
+        now = time.time()
+        ctx = _make_ctx(done_tasks=[{"request_id": "r1"}, {"request_id": "r2"}])
+        ctx.shared_state[PREDICT_API_EVENTS] = {
+            "r1": {"event": {"src": "off"}, "written_at": now},
+            "r2": {"event": {"src": "off"}, "written_at": now},
+        }
+        b = _DummyBase(name="b", skill_context=ctx)
+        b.remove_tasks_by_id(["r1"])
+        surviving = ctx.shared_state[PREDICT_API_EVENTS]
+        assert "r1" in surviving
+        assert "r2" in surviving
 
 
 class TestSetGauge:
@@ -813,6 +836,34 @@ class TestHandleSubmittedTasks:
         ):
             _run_gen(b.handle_submitted_tasks())
         assert b.context.shared_state[DONE_TASKS] == seeded
+
+    def test_submitted_ids_pruned_from_predict_api_event_cache(self) -> None:
+        """Post-settlement path drops submitted ids from ``PREDICT_API_EVENTS``.
+
+        Anchors the prune to ``handle_submitted_tasks`` (the only
+        caller that has proof ``PostTxSettlementBehaviour`` already
+        POSTed). Guards against a regression that removes the pop
+        loop and silently leaks one 30-60 KB event per delivered
+        task until the 24h TTL fires.
+        """
+        now = time.time()
+        task = {"request_id": "r1", "tool": "t1", "start_time": time.perf_counter()}
+        b = self._make_b()
+        b.context.shared_state[DONE_TASKS] = [task]
+        b.context.shared_state[PREDICT_API_EVENTS] = {
+            "r1": {"event": {"src": "off"}, "written_at": now},
+            "r2": {"event": {"src": "off"}, "written_at": now},
+        }
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            self._patch_sd(b, submitted_ids=["r1"]),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        surviving = b.context.shared_state[PREDICT_API_EVENTS]
+        assert "r1" not in surviving
+        assert "r2" in surviving
 
     def test_histogram_skipped_when_task_absent_from_shared_state(self) -> None:
         """Skip the histogram when the task is absent from shared state.
