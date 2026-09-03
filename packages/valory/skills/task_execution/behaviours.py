@@ -72,6 +72,7 @@ from packages.valory.skills.task_execution.utils.ipfs import (
     to_multihash,
 )
 from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
+from packages.valory.skills.task_execution.utils.request_id import to_request_id_bytes32
 from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
@@ -278,21 +279,6 @@ def _iso_z(dt: datetime) -> str:
     if dt.tzinfo is None:
         raise ValueError("_iso_z requires a timezone-aware datetime; got a naive value")
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
-
-
-def _to_bytes32(value: Any) -> bytes:
-    """Coerce a marketplace ``requestId`` to a 32-byte big-endian value.
-
-    :param value: the raw ``requestId`` (``int`` or ``bytes``/``bytearray``).
-    :return: a ``bytes`` value of length exactly 32.
-    :raises ValueError: if a ``bytes`` value longer than 32 bytes is passed.
-    """
-    if isinstance(value, (bytes, bytearray)):
-        raw = bytes(value)
-        if len(raw) > 32:
-            raise ValueError(f"requestId is {len(raw)} bytes, expected <= 32")
-        return raw.rjust(32, b"\x00")
-    return int(value).to_bytes(32, "big")
 
 
 # Cap on the JSON-serialised size of each ``raw_content`` blob attached to
@@ -1014,22 +1000,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if self.last_status_check + STATUS_CHECK_INTERVAL > time.time():
             return
 
-        pending_tasks_count = len(self.pending_tasks)
         # no pending tasks to check
-        if pending_tasks_count == 0:
+        if len(self.pending_tasks) == 0:
             return
 
-        self.context.logger.info(
-            f"Checking status change for {pending_tasks_count} pending tasks..."
-        )
         pending_tasks_request_ids = [
-            _to_bytes32(t["requestId"])
+            to_request_id_bytes32(t["requestId"])
             for t in self.pending_tasks
             if not t.get("is_offchain")
         ]
+        # All-offchain queue: nothing to send but stamp the throttle so
+        # ``act()`` doesn't re-enter every tick.
         if not pending_tasks_request_ids:
+            self.last_status_check_time = time.time()
             return
 
+        self.context.logger.info(
+            f"Checking status change for {len(pending_tasks_request_ids)} "
+            "pending tasks..."
+        )
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.mech_marketplace_address,

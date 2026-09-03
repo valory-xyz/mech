@@ -1282,10 +1282,20 @@ def test_contract_handler_updates_pending_list_based_on_delivered_request_status
     assert params.in_flight_req is False
 
 
-def test_contract_handler_doesnot_updates_pending_list_based_on_undelivered_request_status(
+def test_contract_handler_prunes_pending_list_on_empty_undelivered_request_status(
     handler_context: SimpleNamespace,
 ) -> None:
-    """Does not update pending list based on request id status based on marketplace contract data"""
+    """Empty ``request_ids`` list means all pending on-chain tasks were delivered.
+
+    ``fetch_batch_request_id_status`` returns only the undelivered subset
+    of the ids it was called with, so an empty response is a legitimate
+    "everything was delivered" answer and the queue must be pruned. A
+    previous ``body.get(...)`` truthiness check silently skipped the
+    prune on this exact input and left delivered tasks in the queue for
+    ``_execute_task`` to re-run.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    """
     params: Any = handler_context.params
     params.in_flight_req = True
     params.num_agents = 1
@@ -1293,10 +1303,8 @@ def test_contract_handler_doesnot_updates_pending_list_based_on_undelivered_requ
     params.req_type = "marketplace"
     params.req_params.from_block["marketplace"] = 0
 
-    # Make priorityMech match our mech so it goes to pending_tasks (not wait list)
     my_mech = params.agent_mech_contract_addresses[0]
 
-    # Build marketplace-shaped body: each item has arrays requestIds/requestDatas
     reqs: List[Dict[str, Any]] = [
         {
             "tx_hash": "0xaaa",
@@ -1341,9 +1349,8 @@ def test_contract_handler_doesnot_updates_pending_list_based_on_undelivered_requ
     )
     ch.handle(msg)
 
-    assert len(ch.pending_tasks) == 2
-
-    # in_flight flag must be cleared
+    # Empty response = every id was delivered = queue must be pruned.
+    assert len(ch.pending_tasks) == 0
     assert params.in_flight_req is False
 
 
@@ -5959,21 +5966,11 @@ def test_update_pending_list_preserves_offchain_tasks(
 
 
 def test_update_pending_list_retains_retried_int_task_matched_by_bytes_response(
-    handler_context: Any, monkeypatch: Any
+    handler_context: Any,
 ) -> None:
-    """A retried task carrying ``requestId`` as ``int`` is retained when the on-chain response returns the same id as ``bytes32``.
-
-    Fresh marketplace ingest stores the id as ``bytes`` (from
-    ``codec.decode(["bytes32[]"], ...)``); ``_execute_task`` rewrites
-    it to ``int`` on pop, and ``_handle_timeout_task`` re-enqueues it
-    still as ``int``. The on-chain status response body always carries
-    ``bytes``. Without normalising both sides of the membership test,
-    ``int in [bytes, ...]`` is always False and the retried task is
-    silently pruned right after the contract confirmed it is still
-    undelivered. This test pins that both shapes match.
+    """A retried ``int`` requestId is retained against a ``bytes32`` response.
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
-    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
     """
     ch = ContractHandler(name="contract", skill_context=handler_context)
     ch.setup()

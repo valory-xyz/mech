@@ -7,15 +7,15 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiddgrfcoxgz6syq5kyhf2k4dor4ewhr3xiyqrpro4c5idhfqjifsu
-  behaviours.py: bafybeicqjdiwmcb5qbnbpmp22amy765msu4itfr6tit5ve7v7uhfewl3aq
+  behaviours.py: bafybeigi4v6r536dcjnq66e5qbaw3srkmwlztffd5pa2n2nc7c4uuuv4bm
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
-  handlers.py: bafybeifvjv7sg7nsfllbg7rjbhtifk3ev5jn5oj5f35v5yignknqftvuu4
+  handlers.py: bafybeideunxa3pfdhobq2pioay2ze6msshvkij63qnxwlmway2xweslfl4
   models.py: bafybeibf6crcay7rqwwcmwx2eyl4knxikr6rtfjszx4ndfhmltmhxowb6i
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeiahjndbwygeufbb72aud765lg554dltrmvwc5yc42nyfm5gxeuhmq
-  tests/test_behaviours.py: bafybeiht27ctik7gastdqhtntrffu2nwccbezcnllhvtjnh4ennik3zazq
+  tests/test_behaviours.py: bafybeie257ksgzjhp63sn4ff6jnv3gsxlldz643aha4gwze2uryeeyziju
   tests/test_dialogues.py: bafybeig2phgjrv7ugdx4olviuclaxegvyzkcw7t2ztzrp3xcj2ygqs4344
-  tests/test_handlers.py: bafybeifrlxsineq3gb25joeuage4j4jtni73be4bnpk6lt6g6klv7nnsme
+  tests/test_handlers.py: bafybeiaemsiqql5yk4vyzlwmowxhwdephtyppyvobzranatglpzx5qipay
   tests/test_models.py: bafybeidyzmub74c3m6zopwgxy43o2mx5tvig4wmahgyhoiur4qz55jgwaq
   tests/test_preimage_buffer.py: bafybeidc6w52c6r27ntwmg4ow3rrvmgwq22fkcvxrvv3y7o5isvktkzuqy
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
@@ -36,7 +36,7 @@ fingerprint:
   utils/ipfs.py: bafybeiagbhhgvyo7mjdqvs5wrxy27bpzydd4aim7ntspv2ebygt7ewitra
   utils/local_cid.py: bafybeiey64eaq533wjyrbyhjlswvvfwtsaa7wyatr5ylpdgtqfqsrr4hlq
   utils/preimage.py: bafybeigdbtby7nts4nsr5icnxqh76nkwoz4xn6jqb2br53lrylh47elmfe
-  utils/request_id.py: bafybeialhunybutndayr3bjsir4j2cqdadqy5zhpqyipemsyvpnnftbfsa
+  utils/request_id.py: bafybeicwblxcbomhomwqkscf4k6o2pxl6gji32vkefwqrjd4jjjha2ehqa
   utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
 fingerprint_ignore_patterns: []
 connections:

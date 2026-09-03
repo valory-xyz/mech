@@ -32,6 +32,9 @@ import pytest
 from prometheus_client import REGISTRY
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
+from packages.valory.skills.task_execution.utils.request_id import (
+    to_request_id_bytes32,
+)
 
 
 def _dispatch_target(cb: Any) -> Any:
@@ -1683,11 +1686,6 @@ def test_update_pending_tasks_carves_out_offchain_tasks(
 ) -> None:
     """Off-chain tasks are filtered out of the on-chain batch status check.
 
-    Off-chain request ids do not exist on chain until settlement, so
-    querying the marketplace for their status is a wasted call and
-    (until F4) enlarged the outgoing ``bytes32[]``. Also verify the
-    all-off-chain case short-circuits without opening a dialogue.
-
     :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture.
     :param shared_state: shared_state fixture used to seed ``PENDING_TASKS``.
@@ -1719,23 +1717,41 @@ def test_update_pending_tasks_carves_out_offchain_tasks(
     assert len(request_ids) == 1
     assert int.from_bytes(request_ids[0], "big") == onchain_id
 
-    # Now: an all-offchain queue must not create a dialogue at all.
+    # An all-offchain queue must not create a dialogue AND must stamp
+    # the throttle so the next tick doesn't re-enter and log-flood.
+    # Reset ``in_flight_req`` first — the previous call set it True on
+    # dialogue create, and without this reset the ``in_flight_req``
+    # guard short-circuits before the carve-out branch is reached.
     captured.clear()
+    params_stub.in_flight_req = False
+    behaviour.last_status_check_time = 0.0
     shared_state[beh_mod.PENDING_TASKS] = [
         {"requestId": 1, "is_offchain": True},
         {"requestId": 2, "is_offchain": True},
     ]
-    behaviour.last_status_check_time = 0.0
     behaviour._update_pending_tasks()
     assert (
         captured == {}
     ), "contract_dialogues.create must not fire for all-offchain queue"
+    assert (
+        behaviour.last_status_check_time == beh_mod.STATUS_CHECK_INTERVAL + 1.0
+    ), "throttle must be stamped so the next tick does not re-enter"
 
 
-def test_to_bytes32_raises_on_oversized_bytes() -> None:
-    """A ``bytes`` value longer than 32 bytes raises rather than silently truncating."""
-    with pytest.raises(ValueError, match="expected <= 32"):
-        beh_mod._to_bytes32(b"\xff" * 33)
+def test_to_request_id_bytes32_raises_on_wrong_length_bytes() -> None:
+    """A ``bytes`` value of length != 32 raises rather than silently padding or truncating."""
+    with pytest.raises(ValueError, match="expected 32"):
+        to_request_id_bytes32(b"\xff" * 33)
+    with pytest.raises(ValueError, match="expected 32"):
+        to_request_id_bytes32(b"\xff" * 20)
+
+
+def test_to_request_id_bytes32_raises_on_out_of_range_int() -> None:
+    """An int outside the uint256 range raises via ``_encode_uint256``."""
+    with pytest.raises(ValueError, match="uint256 range"):
+        to_request_id_bytes32(-1)
+    with pytest.raises(ValueError, match="uint256 range"):
+        to_request_id_bytes32(2**256)
 
 
 # ---------------------------------------------------------------------------
