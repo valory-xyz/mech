@@ -283,15 +283,15 @@ def _iso_z(dt: datetime) -> str:
 def _to_bytes32(value: Any) -> bytes:
     """Coerce a marketplace ``requestId`` to a 32-byte big-endian value.
 
-    Handles the two shapes that coexist in the pending-tasks queue: fresh
-    marketplace ingest stores the id as ``bytes`` (from the on-chain
-    ``bytes32`` decode), and execution-pop rewrites it to ``int``.
-
     :param value: the raw ``requestId`` (``int`` or ``bytes``/``bytearray``).
     :return: a ``bytes`` value of length exactly 32.
+    :raises ValueError: if a ``bytes`` value longer than 32 bytes is passed.
     """
     if isinstance(value, (bytes, bytearray)):
-        return bytes(value).rjust(32, b"\x00")[-32:]
+        raw = bytes(value)
+        if len(raw) > 32:
+            raise ValueError(f"requestId is {len(raw)} bytes, expected <= 32")
+        return raw.rjust(32, b"\x00")
     return int(value).to_bytes(32, "big")
 
 
@@ -1022,16 +1022,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self.context.logger.info(
             f"Checking status change for {pending_tasks_count} pending tasks..."
         )
-        # ``fetch_batch_request_id_status`` encodes each id into a
-        # ``bytes32[]`` ABI slot, which the strict ``BytesEncoder`` rejects
-        # if it receives an int. Fresh marketplace ingest stores
-        # ``requestId`` as ``bytes`` (see ``mech_marketplace/contract.py``);
-        # execution-pop converts it to ``int`` (see
-        # ``_extract_request_data_from_task``). Both shapes may coexist in
-        # the queue, so coerce either into a 32-byte big-endian value.
         pending_tasks_request_ids = [
-            _to_bytes32(t["requestId"]) for t in self.pending_tasks
+            _to_bytes32(t["requestId"])
+            for t in self.pending_tasks
+            if not t.get("is_offchain")
         ]
+        if not pending_tasks_request_ids:
+            return
 
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,

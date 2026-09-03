@@ -61,7 +61,10 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
-from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
+from packages.valory.skills.task_execution.behaviours import (
+    PREDICT_API_EVENTS,
+    _to_bytes32,
+)
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import Params
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
@@ -770,12 +773,16 @@ class ContractHandler(BaseHandler):
         :param body: the on-chain status response body.
         """
         before = len(self.pending_tasks)
-        on_chain_ids = body[BodyKey.REQUEST_IDS.value]
+        # ``on_chain_ids`` is ``List[bytes]`` from ``codec.decode(["bytes32[]"], ...)``;
+        # ``req["requestId"]`` may be ``int`` on tasks re-queued after execution.
+        # Normalise both to 32-byte bytes so a retried task doesn't get pruned
+        # against a set of a different type.
+        on_chain_ids = {_to_bytes32(rid) for rid in body[BodyKey.REQUEST_IDS.value]}
         self.context.shared_state[PENDING_TASKS] = [
             req
             for req in self.pending_tasks
             if req.get(RequestKey.IS_OFFCHAIN.value)
-            or req[RequestKey.REQUEST_ID_CAMEL.value] in on_chain_ids
+            or _to_bytes32(req[RequestKey.REQUEST_ID_CAMEL.value]) in on_chain_ids
         ]
         after = len(self.pending_tasks)
         self.context.logger.info(

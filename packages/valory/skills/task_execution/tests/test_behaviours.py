@@ -25,7 +25,7 @@ import re
 import time
 from concurrent.futures import Future
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, Generator, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 from unittest.mock import MagicMock
 
 import pytest
@@ -1614,16 +1614,21 @@ _BYTES32_HIGH_BIT = b"\xaa" * 32
 
 
 @pytest.mark.parametrize(
-    "seeded, expected_int",
+    "seeded, expected_ints",
     [
-        pytest.param(_HUGE_UINT256, _HUGE_UINT256, id="int-hash-derived-uint256"),
-        pytest.param(42, 42, id="int-small-legacy"),
+        pytest.param([_HUGE_UINT256], [_HUGE_UINT256], id="int-hash-derived-uint256"),
+        pytest.param([42], [42], id="int-small-legacy"),
         pytest.param(
-            _BYTES32_HIGH_BIT,
-            int.from_bytes(_BYTES32_HIGH_BIT, "big"),
+            [_BYTES32_HIGH_BIT],
+            [int.from_bytes(_BYTES32_HIGH_BIT, "big")],
             id="bytes32-fresh-marketplace-ingest",
         ),
-        pytest.param(b"\x00" * 32, 0, id="bytes32-zero"),
+        pytest.param([b"\x00" * 32], [0], id="bytes32-zero"),
+        pytest.param(
+            [_HUGE_UINT256, _BYTES32_HIGH_BIT, 42],
+            [_HUGE_UINT256, int.from_bytes(_BYTES32_HIGH_BIT, "big"), 42],
+            id="mixed-int-and-bytes",
+        ),
     ],
 )
 def test_update_pending_tasks_coerces_request_ids_to_bytes32(
@@ -1631,32 +1636,24 @@ def test_update_pending_tasks_coerces_request_ids_to_bytes32(
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
-    seeded: Any,
-    expected_int: int,
+    seeded: List[Any],
+    expected_ints: List[int],
 ) -> None:
     """``request_ids`` reach ``fetch_batch_request_id_status`` as 32-byte bytes.
-
-    The callee encodes them into a ``bytes32[]`` ABI slot. Newer ``eth_abi``
-    versions reject an ``int`` there with ``EncodingTypeError``, so the
-    caller must coerce first. Fresh marketplace ingest stores the id as
-    ``bytes`` (from the on-chain ``bytes32[]`` decode in
-    ``mech_marketplace/contract.py``); execution-pop rewrites it to
-    ``int``. Both shapes may coexist in the queue at status-check time, so
-    the coercion has to accept either.
 
     :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture.
     :param shared_state: shared_state fixture used to seed ``PENDING_TASKS``.
     :param monkeypatch: pytest monkeypatch used to freeze ``time.time`` and
         replace ``contract_dialogues.create`` with a capturing stub.
-    :param seeded: value stashed on ``t["requestId"]`` (``int`` or ``bytes``).
-    :param expected_int: uint256 the round-trip must recover.
+    :param seeded: list of values to stash on ``t["requestId"]``.
+    :param expected_ints: uint256s each ``seeded`` element must round-trip to.
     """
     params_stub.use_mech_marketplace = True
     params_stub.in_flight_req = False
     behaviour.last_status_check_time = 0.0
     monkeypatch.setattr(time, "time", lambda: beh_mod.STATUS_CHECK_INTERVAL + 1.0)
-    shared_state[beh_mod.PENDING_TASKS] = [{"requestId": seeded}]
+    shared_state[beh_mod.PENDING_TASKS] = [{"requestId": s} for s in seeded]
     captured: Dict[str, Any] = {}
 
     def _capture_create(*a: Any, **k: Any) -> Any:
@@ -1670,28 +1667,26 @@ def test_update_pending_tasks_coerces_request_ids_to_bytes32(
     behaviour._update_pending_tasks()
     kwargs = captured.get("kwargs")
     assert kwargs is not None, "contract_dialogues.create was not called"
-    body = kwargs.body if hasattr(kwargs, "body") else dict(kwargs)
-    request_ids = body["request_ids"]
-    assert len(request_ids) == 1
-    rid = request_ids[0]
-    assert isinstance(rid, bytes), f"expected bytes, got {type(rid).__name__}"
-    assert len(rid) == 32, f"expected 32 bytes, got {len(rid)}"
-    assert (
-        int.from_bytes(rid, "big") == expected_int
-    ), "round-trip must preserve the uint256 value"
+    request_ids = kwargs.body["request_ids"]
+    assert len(request_ids) == len(expected_ints)
+    for rid, expected in zip(request_ids, expected_ints):
+        assert isinstance(rid, bytes), f"expected bytes, got {type(rid).__name__}"
+        assert len(rid) == 32, f"expected 32 bytes, got {len(rid)}"
+        assert int.from_bytes(rid, "big") == expected
 
 
-def test_update_pending_tasks_coerces_mixed_int_and_bytes(
+def test_update_pending_tasks_carves_out_offchain_tasks(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
     monkeypatch: Any,
 ) -> None:
-    """A queue holding both int and bytes ids in the same batch coerces cleanly.
+    """Off-chain tasks are filtered out of the on-chain batch status check.
 
-    The realistic production shape: fresh marketplace ingest (``bytes``)
-    plus a re-enqueued task after execution-pop (``int``) can sit
-    side-by-side in ``PENDING_TASKS`` when a status-check tick fires.
+    Off-chain request ids do not exist on chain until settlement, so
+    querying the marketplace for their status is a wasted call and
+    (until F4) enlarged the outgoing ``bytes32[]``. Also verify the
+    all-off-chain case short-circuits without opening a dialogue.
 
     :param behaviour: TaskExecutionBehaviour fixture.
     :param params_stub: params fixture.
@@ -1703,10 +1698,11 @@ def test_update_pending_tasks_coerces_mixed_int_and_bytes(
     params_stub.in_flight_req = False
     behaviour.last_status_check_time = 0.0
     monkeypatch.setattr(time, "time", lambda: beh_mod.STATUS_CHECK_INTERVAL + 1.0)
+    onchain_id = _HUGE_UINT256
+    offchain_id = 42
     shared_state[beh_mod.PENDING_TASKS] = [
-        {"requestId": _HUGE_UINT256},
-        {"requestId": _BYTES32_HIGH_BIT},
-        {"requestId": 42},
+        {"requestId": offchain_id, "is_offchain": True},
+        {"requestId": onchain_id},
     ]
     captured: Dict[str, Any] = {}
 
@@ -1719,16 +1715,27 @@ def test_update_pending_tasks_coerces_mixed_int_and_bytes(
 
     monkeypatch.setattr(behaviour.context.contract_dialogues, "create", _capture_create)
     behaviour._update_pending_tasks()
-    kwargs = captured.get("kwargs")
-    assert kwargs is not None
-    body = kwargs.body if hasattr(kwargs, "body") else dict(kwargs)
-    request_ids = body["request_ids"]
-    assert len(request_ids) == 3
-    for rid in request_ids:
-        assert isinstance(rid, bytes) and len(rid) == 32
-    assert int.from_bytes(request_ids[0], "big") == _HUGE_UINT256
-    assert request_ids[1] == _BYTES32_HIGH_BIT
-    assert int.from_bytes(request_ids[2], "big") == 42
+    request_ids = captured["kwargs"].body["request_ids"]
+    assert len(request_ids) == 1
+    assert int.from_bytes(request_ids[0], "big") == onchain_id
+
+    # Now: an all-offchain queue must not create a dialogue at all.
+    captured.clear()
+    shared_state[beh_mod.PENDING_TASKS] = [
+        {"requestId": 1, "is_offchain": True},
+        {"requestId": 2, "is_offchain": True},
+    ]
+    behaviour.last_status_check_time = 0.0
+    behaviour._update_pending_tasks()
+    assert (
+        captured == {}
+    ), "contract_dialogues.create must not fire for all-offchain queue"
+
+
+def test_to_bytes32_raises_on_oversized_bytes() -> None:
+    """A ``bytes`` value longer than 32 bytes raises rather than silently truncating."""
+    with pytest.raises(ValueError, match="expected <= 32"):
+        beh_mod._to_bytes32(b"\xff" * 33)
 
 
 # ---------------------------------------------------------------------------

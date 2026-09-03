@@ -5944,17 +5944,50 @@ def test_update_pending_list_preserves_offchain_tasks(
     """
     ch = ContractHandler(name="contract", skill_context=handler_context)
     ch.setup()
+    onchain_rid = (200).to_bytes(32, "big")
     handler_context.shared_state[hmod.PENDING_TASKS] = [
         {"requestId": 100, "is_offchain": True},
-        {"requestId": 200, "is_offchain": False},
+        {"requestId": onchain_rid, "is_offchain": False},
         {"requestId": 300},
     ]
-    body = {hmod.BodyKey.REQUEST_IDS.value: [200]}
+    body = {hmod.BodyKey.REQUEST_IDS.value: [onchain_rid]}
     ch._update_pending_list(body)
     survivors = [
         t["requestId"] for t in handler_context.shared_state[hmod.PENDING_TASKS]
     ]
-    assert survivors == [100, 200]
+    assert survivors == [100, onchain_rid]
+
+
+def test_update_pending_list_retains_retried_int_task_matched_by_bytes_response(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """A retried task carrying ``requestId`` as ``int`` is retained when the on-chain response returns the same id as ``bytes32``.
+
+    Fresh marketplace ingest stores the id as ``bytes`` (from
+    ``codec.decode(["bytes32[]"], ...)``); ``_execute_task`` rewrites
+    it to ``int`` on pop, and ``_handle_timeout_task`` re-enqueues it
+    still as ``int``. The on-chain status response body always carries
+    ``bytes``. Without normalising both sides of the membership test,
+    ``int in [bytes, ...]`` is always False and the retried task is
+    silently pruned right after the contract confirmed it is still
+    undelivered. This test pins that both shapes match.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+    rid_int = 200
+    rid_bytes = rid_int.to_bytes(32, "big")
+    handler_context.shared_state[hmod.PENDING_TASKS] = [
+        {"requestId": rid_int, "is_offchain": False},
+    ]
+    body = {hmod.BodyKey.REQUEST_IDS.value: [rid_bytes]}
+    ch._update_pending_list(body)
+    survivors = [
+        t["requestId"] for t in handler_context.shared_state[hmod.PENDING_TASKS]
+    ]
+    assert survivors == [rid_int], "retried int-shaped id must not be pruned"
 
 
 def test_sender_resolution_failure_returns_distinct_reason(
