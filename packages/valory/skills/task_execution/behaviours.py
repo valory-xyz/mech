@@ -280,6 +280,21 @@ def _iso_z(dt: datetime) -> str:
     return dt.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+def _to_bytes32(value: Any) -> bytes:
+    """Coerce a marketplace ``requestId`` to a 32-byte big-endian value.
+
+    Handles the two shapes that coexist in the pending-tasks queue: fresh
+    marketplace ingest stores the id as ``bytes`` (from the on-chain
+    ``bytes32`` decode), and execution-pop rewrites it to ``int``.
+
+    :param value: the raw ``requestId`` (``int`` or ``bytes``/``bytearray``).
+    :return: a ``bytes`` value of length exactly 32.
+    """
+    if isinstance(value, (bytes, bytearray)):
+        return bytes(value).rjust(32, b"\x00")[-32:]
+    return int(value).to_bytes(32, "big")
+
+
 # Cap on the JSON-serialised size of each ``raw_content`` blob attached to
 # a predict-api event. The blob rides Tendermint consensus replication into
 # ``synchronized_data`` on every agent and the field is requester-influenced
@@ -1009,9 +1024,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         # ``fetch_batch_request_id_status`` encodes each id into a
         # ``bytes32[]`` ABI slot, which the strict ``BytesEncoder`` rejects
-        # if it receives an int. Coerce to 32-byte big-endian here.
+        # if it receives an int. Fresh marketplace ingest stores
+        # ``requestId`` as ``bytes`` (see ``mech_marketplace/contract.py``);
+        # execution-pop converts it to ``int`` (see
+        # ``_extract_request_data_from_task``). Both shapes may coexist in
+        # the queue, so coerce either into a 32-byte big-endian value.
         pending_tasks_request_ids = [
-            int(t["requestId"]).to_bytes(32, "big") for t in self.pending_tasks
+            _to_bytes32(t["requestId"]) for t in self.pending_tasks
         ]
 
         contract_api_msg, _ = self.context.contract_dialogues.create(
