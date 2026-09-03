@@ -72,6 +72,7 @@ from packages.valory.skills.task_execution.utils.ipfs import (
     to_multihash,
 )
 from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
+from packages.valory.skills.task_execution.utils.request_id import to_request_id_bytes32
 from packages.valory.skills.task_execution.utils.task import AnyToolAsTask
 
 PENDING_TASKS = "pending_tasks"
@@ -999,16 +1000,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         if self.last_status_check + STATUS_CHECK_INTERVAL > time.time():
             return
 
-        pending_tasks_count = len(self.pending_tasks)
         # no pending tasks to check
-        if pending_tasks_count == 0:
+        if len(self.pending_tasks) == 0:
+            return
+
+        pending_tasks_request_ids = [
+            to_request_id_bytes32(t["requestId"])
+            for t in self.pending_tasks
+            if not t.get("is_offchain")
+        ]
+        # All-offchain queue: nothing to send but stamp the throttle so
+        # ``act()`` doesn't re-enter every tick.
+        if not pending_tasks_request_ids:
+            self.last_status_check_time = time.time()
             return
 
         self.context.logger.info(
-            f"Checking status change for {pending_tasks_count} pending tasks..."
+            f"Checking status change for {len(pending_tasks_request_ids)} "
+            "pending tasks..."
         )
-        pending_tasks_request_ids = [t["requestId"] for t in self.pending_tasks]
-
         contract_api_msg, _ = self.context.contract_dialogues.create(
             performative=ContractApiMessage.Performative.GET_STATE,
             contract_address=self.params.mech_marketplace_address,

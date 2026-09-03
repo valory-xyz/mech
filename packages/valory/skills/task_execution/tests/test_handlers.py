@@ -1282,10 +1282,20 @@ def test_contract_handler_updates_pending_list_based_on_delivered_request_status
     assert params.in_flight_req is False
 
 
-def test_contract_handler_doesnot_updates_pending_list_based_on_undelivered_request_status(
+def test_contract_handler_prunes_pending_list_on_empty_undelivered_request_status(
     handler_context: SimpleNamespace,
 ) -> None:
-    """Does not update pending list based on request id status based on marketplace contract data"""
+    """Empty ``request_ids`` list means all pending on-chain tasks were delivered.
+
+    ``fetch_batch_request_id_status`` returns only the undelivered subset
+    of the ids it was called with, so an empty response is a legitimate
+    "everything was delivered" answer and the queue must be pruned. A
+    previous ``body.get(...)`` truthiness check silently skipped the
+    prune on this exact input and left delivered tasks in the queue for
+    ``_execute_task`` to re-run.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    """
     params: Any = handler_context.params
     params.in_flight_req = True
     params.num_agents = 1
@@ -1293,10 +1303,8 @@ def test_contract_handler_doesnot_updates_pending_list_based_on_undelivered_requ
     params.req_type = "marketplace"
     params.req_params.from_block["marketplace"] = 0
 
-    # Make priorityMech match our mech so it goes to pending_tasks (not wait list)
     my_mech = params.agent_mech_contract_addresses[0]
 
-    # Build marketplace-shaped body: each item has arrays requestIds/requestDatas
     reqs: List[Dict[str, Any]] = [
         {
             "tx_hash": "0xaaa",
@@ -1341,9 +1349,8 @@ def test_contract_handler_doesnot_updates_pending_list_based_on_undelivered_requ
     )
     ch.handle(msg)
 
-    assert len(ch.pending_tasks) == 2
-
-    # in_flight flag must be cleared
+    # Empty response = every id was delivered = queue must be pruned.
+    assert len(ch.pending_tasks) == 0
     assert params.in_flight_req is False
 
 
@@ -5944,17 +5951,40 @@ def test_update_pending_list_preserves_offchain_tasks(
     """
     ch = ContractHandler(name="contract", skill_context=handler_context)
     ch.setup()
+    onchain_rid = (200).to_bytes(32, "big")
     handler_context.shared_state[hmod.PENDING_TASKS] = [
         {"requestId": 100, "is_offchain": True},
-        {"requestId": 200, "is_offchain": False},
+        {"requestId": onchain_rid, "is_offchain": False},
         {"requestId": 300},
     ]
-    body = {hmod.BodyKey.REQUEST_IDS.value: [200]}
+    body = {hmod.BodyKey.REQUEST_IDS.value: [onchain_rid]}
     ch._update_pending_list(body)
     survivors = [
         t["requestId"] for t in handler_context.shared_state[hmod.PENDING_TASKS]
     ]
-    assert survivors == [100, 200]
+    assert survivors == [100, onchain_rid]
+
+
+def test_update_pending_list_retains_retried_int_task_matched_by_bytes_response(
+    handler_context: Any,
+) -> None:
+    """A retried ``int`` requestId is retained against a ``bytes32`` response.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    """
+    ch = ContractHandler(name="contract", skill_context=handler_context)
+    ch.setup()
+    rid_int = 200
+    rid_bytes = rid_int.to_bytes(32, "big")
+    handler_context.shared_state[hmod.PENDING_TASKS] = [
+        {"requestId": rid_int, "is_offchain": False},
+    ]
+    body = {hmod.BodyKey.REQUEST_IDS.value: [rid_bytes]}
+    ch._update_pending_list(body)
+    survivors = [
+        t["requestId"] for t in handler_context.shared_state[hmod.PENDING_TASKS]
+    ]
+    assert survivors == [rid_int], "retried int-shaped id must not be pruned"
 
 
 def test_sender_resolution_failure_returns_distinct_reason(

@@ -27,7 +27,7 @@ marketplace would produce.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Any, Optional
 
 from eth_account import Account
 from eth_keys.exceptions import BadSignature
@@ -63,6 +63,27 @@ def _encode_bytes32(value: bytes) -> bytes:
     if len(value) > 32:
         raise ValueError(f"bytes32 value longer than 32: len={len(value)}")
     return value + b"\x00" * (32 - len(value))
+
+
+def to_request_id_bytes32(value: Any) -> bytes:
+    """Coerce a marketplace ``request_id`` to its 32-byte on-chain form.
+
+    Accepts the two shapes that coexist in the pending-tasks queue:
+    ``int`` (execution-pop rewrite) and 32-byte ``bytes``/``bytearray``
+    (fresh on-chain event decode). Delegates to :func:`_encode_uint256`
+    for the int path so the uint256 range guard is shared.
+
+    :param value: the raw ``request_id`` (``int`` or 32-byte bytes-like).
+    :return: a ``bytes`` value of length exactly 32.
+    :raises ValueError: if ``value`` is a bytes-like of length != 32, or
+        an int outside the uint256 range.
+    """
+    if isinstance(value, (bytes, bytearray)):
+        raw = bytes(value)
+        if len(raw) != 32:
+            raise ValueError(f"request_id bytes length {len(raw)}, expected 32")
+        return raw
+    return _encode_uint256(value)
 
 
 def compute_request_id(

@@ -25,13 +25,16 @@ import re
 import time
 from concurrent.futures import Future
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, Generator, Optional, Tuple
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple
 from unittest.mock import MagicMock
 
 import pytest
 from prometheus_client import REGISTRY
 
 import packages.valory.skills.task_execution.behaviours as beh_mod
+from packages.valory.skills.task_execution.utils.request_id import (
+    to_request_id_bytes32,
+)
 
 
 def _dispatch_target(cb: Any) -> Any:
@@ -1605,6 +1608,150 @@ def test_update_pending_tasks_no_pending_tasks(
     behaviour.last_status_check_time = 0.0
     monkeypatch.setattr(time, "time", lambda: beh_mod.STATUS_CHECK_INTERVAL + 1.0)
     behaviour._update_pending_tasks()  # should not raise
+
+
+_HUGE_UINT256 = (
+    100705699761465541306241857262966577157937941808748966974775453031896335917267
+)
+_BYTES32_HIGH_BIT = b"\xaa" * 32
+
+
+@pytest.mark.parametrize(
+    "seeded, expected_ints",
+    [
+        pytest.param([_HUGE_UINT256], [_HUGE_UINT256], id="int-hash-derived-uint256"),
+        pytest.param([42], [42], id="int-small-legacy"),
+        pytest.param(
+            [_BYTES32_HIGH_BIT],
+            [int.from_bytes(_BYTES32_HIGH_BIT, "big")],
+            id="bytes32-fresh-marketplace-ingest",
+        ),
+        pytest.param([b"\x00" * 32], [0], id="bytes32-zero"),
+        pytest.param(
+            [_HUGE_UINT256, _BYTES32_HIGH_BIT, 42],
+            [_HUGE_UINT256, int.from_bytes(_BYTES32_HIGH_BIT, "big"), 42],
+            id="mixed-int-and-bytes",
+        ),
+    ],
+)
+def test_update_pending_tasks_coerces_request_ids_to_bytes32(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    seeded: List[Any],
+    expected_ints: List[int],
+) -> None:
+    """``request_ids`` reach ``fetch_batch_request_id_status`` as 32-byte bytes.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture used to seed ``PENDING_TASKS``.
+    :param monkeypatch: pytest monkeypatch used to freeze ``time.time`` and
+        replace ``contract_dialogues.create`` with a capturing stub.
+    :param seeded: list of values to stash on ``t["requestId"]``.
+    :param expected_ints: uint256s each ``seeded`` element must round-trip to.
+    """
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = False
+    behaviour.last_status_check_time = 0.0
+    monkeypatch.setattr(time, "time", lambda: beh_mod.STATUS_CHECK_INTERVAL + 1.0)
+    shared_state[beh_mod.PENDING_TASKS] = [{"requestId": s} for s in seeded]
+    captured: Dict[str, Any] = {}
+
+    def _capture_create(*a: Any, **k: Any) -> Any:
+        """Capture the kwargs passed to ``contract_dialogues.create``."""
+        captured.update(k)
+        return SimpleNamespace(), SimpleNamespace(
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-x", ""))
+        )
+
+    monkeypatch.setattr(behaviour.context.contract_dialogues, "create", _capture_create)
+    behaviour._update_pending_tasks()
+    kwargs = captured.get("kwargs")
+    assert kwargs is not None, "contract_dialogues.create was not called"
+    request_ids = kwargs.body["request_ids"]
+    assert len(request_ids) == len(expected_ints)
+    for rid, expected in zip(request_ids, expected_ints):
+        assert isinstance(rid, bytes), f"expected bytes, got {type(rid).__name__}"
+        assert len(rid) == 32, f"expected 32 bytes, got {len(rid)}"
+        assert int.from_bytes(rid, "big") == expected
+
+
+def test_update_pending_tasks_carves_out_offchain_tasks(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Off-chain tasks are filtered out of the on-chain batch status check.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture used to seed ``PENDING_TASKS``.
+    :param monkeypatch: pytest monkeypatch used to freeze ``time.time`` and
+        replace ``contract_dialogues.create`` with a capturing stub.
+    """
+    params_stub.use_mech_marketplace = True
+    params_stub.in_flight_req = False
+    behaviour.last_status_check_time = 0.0
+    monkeypatch.setattr(time, "time", lambda: beh_mod.STATUS_CHECK_INTERVAL + 1.0)
+    onchain_id = _HUGE_UINT256
+    offchain_id = 42
+    shared_state[beh_mod.PENDING_TASKS] = [
+        {"requestId": offchain_id, "is_offchain": True},
+        {"requestId": onchain_id},
+    ]
+    captured: Dict[str, Any] = {}
+
+    def _capture_create(*a: Any, **k: Any) -> Any:
+        """Capture the kwargs passed to ``contract_dialogues.create``."""
+        captured.update(k)
+        return SimpleNamespace(), SimpleNamespace(
+            dialogue_label=SimpleNamespace(dialogue_reference=("nonce-x", ""))
+        )
+
+    monkeypatch.setattr(behaviour.context.contract_dialogues, "create", _capture_create)
+    behaviour._update_pending_tasks()
+    request_ids = captured["kwargs"].body["request_ids"]
+    assert len(request_ids) == 1
+    assert int.from_bytes(request_ids[0], "big") == onchain_id
+
+    # An all-offchain queue must not create a dialogue AND must stamp
+    # the throttle so the next tick doesn't re-enter and log-flood.
+    # Reset ``in_flight_req`` first — the previous call set it True on
+    # dialogue create, and without this reset the ``in_flight_req``
+    # guard short-circuits before the carve-out branch is reached.
+    captured.clear()
+    params_stub.in_flight_req = False
+    behaviour.last_status_check_time = 0.0
+    shared_state[beh_mod.PENDING_TASKS] = [
+        {"requestId": 1, "is_offchain": True},
+        {"requestId": 2, "is_offchain": True},
+    ]
+    behaviour._update_pending_tasks()
+    assert (
+        captured == {}
+    ), "contract_dialogues.create must not fire for all-offchain queue"
+    assert (
+        behaviour.last_status_check_time == beh_mod.STATUS_CHECK_INTERVAL + 1.0
+    ), "throttle must be stamped so the next tick does not re-enter"
+
+
+def test_to_request_id_bytes32_raises_on_wrong_length_bytes() -> None:
+    """A ``bytes`` value of length != 32 raises rather than silently padding or truncating."""
+    with pytest.raises(ValueError, match="expected 32"):
+        to_request_id_bytes32(b"\xff" * 33)
+    with pytest.raises(ValueError, match="expected 32"):
+        to_request_id_bytes32(b"\xff" * 20)
+
+
+def test_to_request_id_bytes32_raises_on_out_of_range_int() -> None:
+    """An int outside the uint256 range raises via ``_encode_uint256``."""
+    with pytest.raises(ValueError, match="uint256 range"):
+        to_request_id_bytes32(-1)
+    with pytest.raises(ValueError, match="uint256 range"):
+        to_request_id_bytes32(2**256)
 
 
 # ---------------------------------------------------------------------------

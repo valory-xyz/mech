@@ -76,6 +76,7 @@ from packages.valory.skills.task_execution.utils.local_cid import compute_cidv1
 from packages.valory.skills.task_execution.utils.request_id import (
     compute_request_id,
     recover_eoa_signer,
+    to_request_id_bytes32,
 )
 
 PENDING_TASKS = "pending_tasks"
@@ -682,8 +683,11 @@ class ContractHandler(BaseHandler):
         ):
             # handle the undelivered requests response from data and wait_for_timeout_tasks
             self._handle_get_undelivered_reqs(body)
-        if body.get(BodyKey.REQUEST_IDS.value):
+        if BodyKey.REQUEST_IDS.value in body:
             # handle the request id status check response
+            # ``fetch_batch_request_id_status`` returns only the undelivered
+            # subset, so an empty list is a valid "all delivered" answer that
+            # must still prune the queue.
             self._update_pending_list(body)
         if body.get(BodyKey.MECH_TYPE.value):
             # handle the mech type response
@@ -770,12 +774,15 @@ class ContractHandler(BaseHandler):
         :param body: the on-chain status response body.
         """
         before = len(self.pending_tasks)
-        on_chain_ids = body[BodyKey.REQUEST_IDS.value]
+        on_chain_ids = {
+            to_request_id_bytes32(rid) for rid in body[BodyKey.REQUEST_IDS.value]
+        }
         self.context.shared_state[PENDING_TASKS] = [
             req
             for req in self.pending_tasks
             if req.get(RequestKey.IS_OFFCHAIN.value)
-            or req[RequestKey.REQUEST_ID_CAMEL.value] in on_chain_ids
+            or to_request_id_bytes32(req[RequestKey.REQUEST_ID_CAMEL.value])
+            in on_chain_ids
         ]
         after = len(self.pending_tasks)
         self.context.logger.info(
