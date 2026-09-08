@@ -41,11 +41,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
 - valory/delivery_rate_abci:0.1.0:bafybeifjiazvf3qhr2264i55u4tlvmyf6ztgak2ndqolujt4kw6jiy7l3m
-- valory/mech_abci:0.1.0:bafybeif6k33s2t26pramiy7ltullpb6w2fogg5h52xwq4ieoouxckwgwta
+- valory/mech_abci:0.1.0:bafybeib6fe2v3mvcey454zgu4exkuci2or2c374cyxvesbki546ejfjpri
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeifsbxo53323ffmhk26lb723q26fdvli3g4rfr7eqwtp362urequ5q
-- valory/task_submission_abci:0.1.0:bafybeigrruk55bttjddyc5mkcpgwxkc7oafai4th6hsw44zcxsosiacqdi
+- valory/task_execution:0.1.0:bafybeicrkwz2m2qnwngxiues2rywm3twcj67cq4pyhfrgzp5dxiwbzuntm
+- valory/task_submission_abci:0.1.0:bafybeid3rhrgxtiqfhsh4dip53q6u6ct7vfg3vhgs53vb4vhk7qkhxqaiq
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m
@@ -241,6 +241,7 @@ models:
       polygon_ledger_rpc: ${str:http://localhost:8545}
       base_ledger_rpc: ${str:http://localhost:8545}
       optimism_ledger_rpc: ${str:http://localhost:8545}
+      robinhood_ledger_rpc: ${str:http://localhost:8545}
 ---
 public_id: valory/ledger:0.19.0
 type: connection
@@ -264,6 +265,11 @@ config:
     optimism:
       address: ${str:http://localhost:8545}
       chain_id: ${int:10}
+      poa_chain: ${bool:false}
+      default_gas_price_strategy: ${str:eip1559}
+    robinhood:
+      address: ${str:http://localhost:8545}
+      chain_id: ${int:4663}
       poa_chain: ${bool:false}
       default_gas_price_strategy: ${str:eip1559}
 ---
