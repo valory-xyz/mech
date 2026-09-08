@@ -1025,6 +1025,8 @@ def test_fetch_offchain_request_info_not_found(
         ("gnosis", "http://gnosis-rpc", 100),
         ("polygon", "http://polygon-rpc", 137),
         ("base", "http://base-rpc", 8453),
+        ("optimism", "http://optimism-rpc", 10),
+        ("robinhood", "http://robinhood-rpc", 4663),
     ],
 )
 def test_get_ledger_settings_supported_chains(

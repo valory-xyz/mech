@@ -409,6 +409,7 @@ class ChainId(int, Enum):
     POLYGON = 137
     BASE = 8453
     OPTIMISM = 10
+    ROBINHOOD = 4663
 
 
 class BodyKey(str, Enum):
