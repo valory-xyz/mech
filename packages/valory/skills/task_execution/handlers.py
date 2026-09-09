@@ -2791,6 +2791,10 @@ class MechHttpHandler(AbstractResponseHandler):
             RequestKey.IS_OFFCHAIN.value: True,
             RequestKey.REQUEST_DELIVERY_RATE.value: request_delivery_rate,
             **{k: v for k, v in data.items() if k not in reserved_keys},
+            # Receipt time, same key the on-chain path stamps in
+            # ``filter_requests``; it is the predict-api ``requested_at``
+            # fallback when the request body carries no timestamp.
+            "enqueued_at_local": time.time(),
         }
         try:
             self.pending_tasks.append(req)

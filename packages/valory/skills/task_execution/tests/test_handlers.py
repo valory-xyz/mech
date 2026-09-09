@@ -2245,6 +2245,38 @@ def test_signed_requests_accepts_zero_delivery_rate(
     assert len(handler_context.shared_state["pending_tasks"]) == 1
 
 
+def test_signed_requests_stamps_receipt_time_on_enqueued_task(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """An accepted off-chain task carries the mech's receipt time as ``enqueued_at_local``.
+
+    The predict-api ``requested_at`` is derived from this stamp, so it
+    must be the handler's clock at accept time and a client-supplied
+    ``enqueued_at_local`` body key must not replace it.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+
+    body = _make_signed_request_body(request_id="8")
+    body["enqueued_at_local"] = "1"
+    before = time.time()
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    after = time.time()
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    task = handler_context.shared_state["pending_tasks"][0]
+    assert isinstance(task["enqueued_at_local"], float)
+    assert before <= task["enqueued_at_local"] <= after
+
+
 def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(
     handler_context: Any, http_dialogue: Any, monkeypatch: Any
 ) -> None:

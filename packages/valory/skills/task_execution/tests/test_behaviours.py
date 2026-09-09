@@ -3884,6 +3884,292 @@ def test_build_predict_api_event_unix_executed_at_out_of_range_falls_back(
     assert event["response"]["executed_at"].endswith("Z")
 
 
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        (1782393546, "2026-06-25T13:19:06Z"),
+        (1782393546.5, "2026-06-25T13:19:06.500000Z"),
+        ("2026-06-25T13:19:06Z", "2026-06-25T13:19:06Z"),
+        ("2026-06-25T13:19:06+00:00", "2026-06-25T13:19:06Z"),
+        ("2026-06-25T18:49:06+05:30", "2026-06-25T13:19:06Z"),
+        ("2026-06-25T13:19:06", "2026-06-25T13:19:06Z"),
+        (None, None),
+        ("", None),
+        (True, None),
+        (float("nan"), None),
+        (float("inf"), None),
+        (99_999_999_999_999, None),
+        ("not-a-timestamp", None),
+        ("9999-12-31T23:59:59-14:00", None),
+        ("0001-01-01T00:00:00+14:00", None),
+        ([1782393546], None),
+    ],
+    ids=[
+        "unix_int",
+        "unix_float",
+        "iso_z",
+        "iso_utc_offset",
+        "iso_non_utc_offset",
+        "iso_naive_as_utc",
+        "none",
+        "empty",
+        "bool",
+        "nan",
+        "inf",
+        "unix_out_of_range",
+        "garbage",
+        "iso_overflow_high",
+        "iso_overflow_low",
+        "wrong_type",
+    ],
+)
+def test_parse_timestamp(value: Any, expected: Optional[str]) -> None:
+    """``_parse_timestamp`` yields an aware UTC datetime or ``None``, never raises."""
+    parsed = beh_mod._parse_timestamp(value)
+    if expected is None:
+        assert parsed is None
+    else:
+        assert parsed is not None
+        assert parsed.tzinfo is not None
+        assert beh_mod._iso_z(parsed) == expected
+
+
+@pytest.mark.parametrize(
+    "bad_requested_at",
+    ["9999-12-31T23:59:59-14:00", "0001-01-01T00:00:00+14:00"],
+    ids=["overflow_high", "overflow_low"],
+)
+def test_build_predict_api_event_extreme_offset_requested_at_falls_back(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    bad_requested_at: str,
+) -> None:
+    """A body timestamp that overflows on UTC conversion falls back instead of raising."""
+    request_data = {
+        "prompt": "edge of time",
+        "tool": "prediction-offline",
+        "requested_at": bad_requested_at,
+    }
+    response_data = {
+        "result": "p_yes=0.7",
+        "schema_version": "2.0",
+        "executed_at": "2026-06-25T13:19:36Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data, response_data=response_data
+    )
+    event = behaviour._build_predict_api_event(
+        done_task=done_task,
+        cid="bafy-cid",
+        executing_task=executing_task,
+        response=response_data,
+    )
+    assert event["request"]["requested_at"] == "2026-06-25T13:19:36Z"
+
+
+def test_build_predict_api_event_preserves_iso_executed_at(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """The ISO ``executed_at`` stamped by ``_handle_done_task`` is kept verbatim."""
+    # ``_handle_done_task`` writes ``executed_at`` as an ISO string; the
+    # event must carry that instant, not the later build time.
+    request_data = {
+        "prompt": "iso executed",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:19:00Z",
+    }
+    response_data = {
+        "result": "p_yes=0.7",
+        "schema_version": "2.0",
+        "executed_at": "2026-06-25T13:19:06.953661Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data, response_data=response_data
+    )
+    event = behaviour._build_predict_api_event(
+        done_task=done_task,
+        cid="bafy-cid",
+        executing_task=executing_task,
+        response=response_data,
+    )
+    assert event["response"]["executed_at"] == "2026-06-25T13:19:06.953661Z"
+    assert event["response"]["delivered_at"] != event["response"]["executed_at"]
+
+
+def test_build_predict_api_event_malformed_iso_executed_at_falls_back(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """A non-ISO ``executed_at`` string falls back to the build time."""
+    request_data = {"prompt": "bad executed", "tool": "prediction-offline"}
+    response_data = {
+        "result": "p_yes=0.7",
+        "schema_version": "2.0",
+        "executed_at": "not-a-timestamp",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data, response_data=response_data
+    )
+    event = behaviour._build_predict_api_event(
+        done_task=done_task,
+        cid="bafy-cid",
+        executing_task=executing_task,
+        response=response_data,
+    )
+    assert event["response"]["executed_at"].endswith("Z")
+    assert event["response"]["executed_at"] == event["response"]["delivered_at"]
+
+
+def test_build_predict_api_event_requested_at_falls_back_to_enqueue_time(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """Without a body timestamp, ``requested_at`` is the handler's enqueue time."""
+    # Off-chain bodies carry no timestamp (tool, prompt, nonce only), so
+    # the receipt time stamped by the handler is the request time.
+    request_data = {"prompt": "no timestamp", "tool": "prediction-offline"}
+    response_data = {
+        "result": "p_yes=0.7",
+        "schema_version": "2.0",
+        "executed_at": "2026-06-25T13:19:36Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data, response_data=response_data
+    )
+    executing_task["enqueued_at_local"] = 1782393546.0  # 2026-06-25T13:19:06Z
+    event = behaviour._build_predict_api_event(
+        done_task=done_task,
+        cid="bafy-cid",
+        executing_task=executing_task,
+        response=response_data,
+    )
+    assert event["request"]["requested_at"] == "2026-06-25T13:19:06Z"
+    assert event["response"]["executed_at"] == "2026-06-25T13:19:36Z"
+
+
+def test_build_predict_api_event_enqueue_time_wins_over_body_requested_at(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """The mech's receipt time takes precedence over a requester-supplied timestamp."""
+    request_data = {
+        "prompt": "both present",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:18:00Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    executing_task["enqueued_at_local"] = 1782393546.0  # 2026-06-25T13:19:06Z
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+    assert event["request"]["requested_at"] == "2026-06-25T13:19:06Z"
+
+
+def test_build_predict_api_event_bad_enqueue_time_falls_back_to_body(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """An unusable enqueue stamp falls back to the body timestamp."""
+    request_data = {
+        "prompt": "bad stamp",
+        "tool": "prediction-offline",
+        "requested_at": "2026-06-25T13:18:00Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data
+    )
+    executing_task["enqueued_at_local"] = "yesterday"
+    event = behaviour._build_predict_api_event(
+        done_task=done_task, cid="bafy-cid", executing_task=executing_task
+    )
+    assert event["request"]["requested_at"] == "2026-06-25T13:18:00Z"
+
+
+def test_build_predict_api_event_no_timestamps_falls_back_to_executed_at(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+) -> None:
+    """With neither body timestamp nor enqueue time, ``requested_at`` equals ``executed_at``."""
+    request_data = {"prompt": "nothing", "tool": "prediction-offline"}
+    response_data = {
+        "result": "p_yes=0.7",
+        "schema_version": "2.0",
+        "executed_at": "2026-06-25T13:19:36Z",
+    }
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data, response_data=response_data
+    )
+    assert "enqueued_at_local" not in executing_task
+    event = behaviour._build_predict_api_event(
+        done_task=done_task,
+        cid="bafy-cid",
+        executing_task=executing_task,
+        response=response_data,
+    )
+    assert event["request"]["requested_at"] == "2026-06-25T13:19:36Z"
+
+
+@pytest.mark.parametrize(
+    "metadata, expected",
+    [
+        ({"execution_latency_ms": 1234}, 1234),
+        ({"execution_latency_ms": 0}, 0),
+        ({"execution_latency_ms": 12.9}, 12),
+        ({"execution_latency_ms": -5}, None),
+        ({"execution_latency_ms": True}, None),
+        ({"execution_latency_ms": "fast"}, None),
+        ({}, None),
+        (None, None),
+    ],
+    ids=[
+        "int",
+        "zero",
+        "float_truncates",
+        "negative_dropped",
+        "bool_dropped",
+        "string_dropped",
+        "missing_key",
+        "no_metadata",
+    ],
+)
+def test_build_predict_api_event_execution_latency_ms_from_metadata(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    metadata: Optional[Dict[str, Any]],
+    expected: Optional[int],
+) -> None:
+    """``execution_latency_ms`` is taken from the response metadata when valid."""
+    request_data = {"prompt": "latency", "tool": "prediction-offline"}
+    response_data: Dict[str, Any] = {
+        "result": "p_yes=0.7",
+        "schema_version": "2.0",
+        "executed_at": "2026-06-25T13:19:36Z",
+    }
+    if metadata is not None:
+        response_data["metadata"] = metadata
+    done_task, executing_task = _predict_api_event_setup(
+        behaviour, shared_state, request_data, response_data=response_data
+    )
+    event = behaviour._build_predict_api_event(
+        done_task=done_task,
+        cid="bafy-cid",
+        executing_task=executing_task,
+        response=response_data,
+    )
+    assert event["response"]["execution_latency_ms"] == expected
+
+
 def test_build_predict_api_event_malformed_requested_at_falls_back(
     behaviour: Any,
     params_stub: Any,
