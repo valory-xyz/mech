@@ -41,11 +41,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
 - valory/delivery_rate_abci:0.1.0:bafybeifjiazvf3qhr2264i55u4tlvmyf6ztgak2ndqolujt4kw6jiy7l3m
-- valory/mech_abci:0.1.0:bafybeidr524ulvodrpn7iv6kn3lnelypsrtbsiprurjxedbrnmsgsnuinu
+- valory/mech_abci:0.1.0:bafybeibhqogmgftabt3phagqgqugacrbikfydh7jpq5sgjbluqwwdm4s3q
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeif6szdxrbbz5o25h7ic3mnn4lysku5qu4nxjg6j52242pfzyqw3re
-- valory/task_submission_abci:0.1.0:bafybeicywnfw4ezm7f45arhgyife5gjfug3zudovkzies2vrs2rvtfbx2q
+- valory/task_execution:0.1.0:bafybeib3umcep42dftcmhuhdbxdhmtmajevvavnzk7bh7kxqfgdmarkomi
+- valory/task_submission_abci:0.1.0:bafybeifiorptqmoup5o2yiump23x654m7mq6aysfuhl26ox7xlgn2kr5ri
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m

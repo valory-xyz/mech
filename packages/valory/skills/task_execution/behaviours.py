@@ -1989,7 +1989,15 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # stamp existed fall back to a timestamp the requester put in the
         # body (``datetime`` / ``requested_at``, Unix seconds or ISO 8601),
         # and finally to ``executed_at``.
-        requested_at_dt = _parse_timestamp(executing_task.get("enqueued_at_local"))
+        enqueued_at_raw = executing_task.get("enqueued_at_local")
+        requested_at_dt = _parse_timestamp(enqueued_at_raw)
+        if requested_at_dt is None and enqueued_at_raw is not None:
+            self.context.logger.warning(
+                "enqueued_at_local=%r for req_id=%s is not a usable timestamp; "
+                "falling back to the request body timestamp.",
+                enqueued_at_raw,
+                req_id,
+            )
         if requested_at_dt is None:
             requested_at_raw = request_data.get("datetime") or request_data.get(
                 "requested_at"
@@ -2095,6 +2103,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             and latency_raw >= 0
         ):
             execution_latency_ms = int(latency_raw)
+        elif latency_raw is not None:
+            self.context.logger.warning(
+                "execution_latency_ms=%r for req_id=%s is not a non-negative "
+                "finite number; writing NULL.",
+                latency_raw,
+                req_id,
+            )
 
         return {
             "request": {

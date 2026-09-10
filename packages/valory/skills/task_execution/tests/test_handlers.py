@@ -2252,7 +2252,9 @@ def test_signed_requests_stamps_receipt_time_on_enqueued_task(
 
     The predict-api ``requested_at`` is derived from this stamp, so it
     must be the handler's clock at accept time and a client-supplied
-    ``enqueued_at_local`` body key must not replace it.
+    ``enqueued_at_local`` body key must not replace it. The key is
+    reserved, so the drop is also reported on the reserved-keys log line
+    rather than passing unnoticed.
 
     :param handler_context: pytest fixture, mech HTTP handler test context.
     :param http_dialogue: pytest fixture, HTTP dialogue stub.
@@ -2262,6 +2264,12 @@ def test_signed_requests_stamps_receipt_time_on_enqueued_task(
     monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
     _install_balance_ok(mh, monkeypatch)
     mh.setup()
+    info_lines: List[str] = []
+    monkeypatch.setattr(
+        handler_context.logger,
+        "info",
+        lambda msg, *args, **_: info_lines.append(msg % args if args else msg),
+    )
 
     body = _make_signed_request_body(request_id="8")
     body["enqueued_at_local"] = "1"
@@ -2275,6 +2283,11 @@ def test_signed_requests_stamps_receipt_time_on_enqueued_task(
     task = handler_context.shared_state["pending_tasks"][0]
     assert isinstance(task["enqueued_at_local"], float)
     assert before <= task["enqueued_at_local"] <= after
+    dropped = [ln for ln in info_lines if "Dropping client-supplied reserved" in ln]
+    assert dropped == [
+        "Dropping client-supplied reserved keys from offchain request '8': "
+        "['enqueued_at_local']"
+    ]
 
 
 def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(

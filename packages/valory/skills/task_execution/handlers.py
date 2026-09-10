@@ -2765,6 +2765,7 @@ class MechHttpHandler(AbstractResponseHandler):
             "request_id_nonce",
             "requestIdWithNonce",
             "tool",
+            "enqueued_at_local",
         }
         # ``RequestKey.REQUEST_ID.value`` is mandatory on the body (read at
         # ``_handle_signed_requests`` and 400 on missing), so it is present
@@ -2792,8 +2793,10 @@ class MechHttpHandler(AbstractResponseHandler):
             RequestKey.REQUEST_DELIVERY_RATE.value: request_delivery_rate,
             **{k: v for k, v in data.items() if k not in reserved_keys},
             # Receipt time, same key the on-chain path stamps in
-            # ``filter_requests``; it is the predict-api ``requested_at``
-            # fallback when the request body carries no timestamp.
+            # ``filter_requests``; it becomes the predict-api ``requested_at``.
+            # Must stay last in this literal: a later key wins on duplicates,
+            # so the stamp overrides any client-supplied value even if the
+            # reserved-keys filter above ever stops covering it.
             "enqueued_at_local": time.time(),
         }
         try:
