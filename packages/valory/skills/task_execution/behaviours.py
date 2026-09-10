@@ -21,6 +21,7 @@
 
 import functools
 import json
+import math
 import threading
 import time
 from asyncio import Future
@@ -251,6 +252,33 @@ def _discard_outstanding_nonce(
     entries.discard(wire_nonce)
     if not entries:
         target.pop(sender_key, None)
+
+
+def _parse_timestamp(value: Any) -> Optional[datetime]:
+    """Parse Unix seconds or an ISO 8601 string into an aware UTC datetime.
+
+    :param value: the raw timestamp from a request body, a response or a task dict.
+    :return: the parsed datetime, or ``None`` when the value is not usable.
+    """
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        try:
+            return datetime.fromtimestamp(value, tz=timezone.utc)
+        except (ValueError, OverflowError, OSError):
+            return None
+    if isinstance(value, str) and value:
+        try:
+            # Python 3.10's ``fromisoformat`` rejects a trailing ``Z``.
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            # ``astimezone`` overflows for wall-clock values at the edge of
+            # the representable range combined with a large offset.
+            return parsed.astimezone(timezone.utc)
+        except (ValueError, OverflowError):
+            return None
+    return None
 
 
 def _iso_z(dt: datetime) -> str:
@@ -1830,6 +1858,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         _release_outstanding_nonce(self.context.shared_state, executing_task)
         self._reset_executing_task()
 
+    def _parse_timestamp_field(
+        self, value: Any, field: str, req_id: Any
+    ) -> Optional[datetime]:
+        """Parse a timestamp field, warning when it is present but unusable.
+
+        :param value: the raw value; ``None`` and ``""`` count as absent.
+        :param field: the field name for the warning line.
+        :param req_id: the request id for the warning line.
+        :return: the parsed datetime, or ``None`` when absent or unusable.
+        """
+        parsed = _parse_timestamp(value)
+        if parsed is None and value is not None and value != "":
+            self.context.logger.warning(
+                "%s=%r for req_id=%s is not a usable timestamp.", field, value, req_id
+            )
+        return parsed
+
     def _build_predict_api_event(
         self,
         *,
@@ -1933,87 +1978,26 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # All three timestamps go through ``_iso_z`` so the canonical-JSON
         # bytes match the server's Pydantic round-trip (see helper docstring).
         now_iso = _iso_z(datetime.now(timezone.utc))
-        # ``datetime.fromtimestamp`` raises ``OverflowError`` (and on some
-        # libcs ``OSError``) for values past the platform's representable
-        # range, plus ``ValueError`` for NaN. The ``executed_at`` field
-        # comes from tool plumbing on the mech itself, but it still rides
-        # the FSM consensus channel and a buggy tool returning a wild
-        # value would otherwise crash the round; fall back to ``now_iso``.
-        executed_at_unix = response_data.get("executed_at")
-        if isinstance(executed_at_unix, (int, float)):
-            try:
-                executed_at_iso = _iso_z(
-                    datetime.fromtimestamp(executed_at_unix, tz=timezone.utc)
-                )
-            except (ValueError, OverflowError, OSError):
-                self.context.logger.warning(
-                    "executed_at=%r for req_id=%s is out of range; "
-                    "falling back to now_iso.",
-                    executed_at_unix,
-                    req_id,
-                )
-                executed_at_iso = now_iso
-        else:
-            executed_at_iso = now_iso
-        # Requested_at: prefer the signed timestamp on the buffered request;
-        # the handler validates and stores it before enqueueing. Fall back to
-        # the executed_at on the response so the time-leading index entry is
-        # always populated for an offchain row. The requester can store the
-        # value as a Unix int or as an ISO 8601 string — ``str(int)`` would
-        # produce ``"1700000000"`` which the predict-api's ``AwareDatetime``
-        # parser rejects with a 422, so coerce int / float explicitly.
-        requested_at_raw = request_data.get("datetime") or request_data.get(
-            "requested_at"
+        executed_at_dt = self._parse_timestamp_field(
+            response_data.get("executed_at"), "executed_at", req_id
         )
-        if isinstance(requested_at_raw, (int, float)):
-            # ``datetime.fromtimestamp`` raises ``OverflowError`` /
-            # ``OSError`` for values past the platform's representable
-            # range and ``ValueError`` for NaN. ``requested_at`` comes
-            # from a requester-controlled field, so the fallback closes
-            # the round-crash path on a malformed integer the same way
-            # the string branch handles a malformed ISO 8601 string.
-            try:
-                requested_at_iso = _iso_z(
-                    datetime.fromtimestamp(requested_at_raw, tz=timezone.utc)
-                )
-            except (ValueError, OverflowError, OSError):
-                self.context.logger.warning(
-                    "requested_at=%r for req_id=%s is out of range; "
-                    "falling back to executed_at.",
-                    requested_at_raw,
-                    req_id,
-                )
-                requested_at_iso = executed_at_iso
-        elif isinstance(requested_at_raw, str) and requested_at_raw:
-            # Parse the requester-provided ISO 8601 string and re-emit via
-            # ``_iso_z`` so a non-UTC offset (``…+05:30``, ``…-08:00``) gets
-            # converted to the canonical UTC ``Z`` form. A plain
-            # ``.replace("+00:00", "Z")`` would leave non-UTC offsets
-            # untouched and reintroduce the ``batch_hash`` mismatch the
-            # canonicalisation is meant to close. Malformed strings fall
-            # through to ``now_iso`` rather than crashing the FSM round.
-            #
-            # The trailing-``Z`` rewrite is needed because
-            # ``datetime.fromisoformat`` rejects ``…Z`` on Python 3.10;
-            # the canonical-``Z`` form is what the server emits and what
-            # JavaScript's ``Date.prototype.toISOString()`` produces, so
-            # a requester re-using the server's own timestamp shape
-            # would otherwise silently fall back to ``executed_at`` and
-            # lose the real request time.
-            try:
-                requested_at_iso = _iso_z(
-                    datetime.fromisoformat(requested_at_raw.replace("Z", "+00:00"))
-                )
-            except ValueError:
-                self.context.logger.warning(
-                    "requested_at=%r for req_id=%s is not parsable ISO 8601; "
-                    "falling back to executed_at.",
-                    requested_at_raw,
-                    req_id,
-                )
-                requested_at_iso = executed_at_iso
-        else:
+        executed_at_iso = now_iso if executed_at_dt is None else _iso_z(executed_at_dt)
+        requested_at_dt = self._parse_timestamp_field(
+            executing_task.get("enqueued_at_local"), "enqueued_at_local", req_id
+        )
+        if requested_at_dt is None:
+            requested_at_dt = self._parse_timestamp_field(
+                request_data.get("datetime") or request_data.get("requested_at"),
+                "requested_at",
+                req_id,
+            )
+        if requested_at_dt is None:
+            self.context.logger.warning(
+                "No usable requested_at for req_id=%s; using executed_at.", req_id
+            )
             requested_at_iso = executed_at_iso
+        else:
+            requested_at_iso = _iso_z(requested_at_dt)
 
         # ``or``-chain would discard a legitimate ``0`` value (which is
         # both falsy and a valid nonce / delivery rate); use an explicit
@@ -2089,6 +2073,27 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             if isinstance(done_task.get("cost_dict"), dict)
             else None
         )
+        # Tool run time measured in ``_handle_done_task`` and carried on the
+        # response metadata; absent on the failure arm.
+        metadata = response_data.get("metadata")
+        latency_raw = (
+            metadata.get("execution_latency_ms") if isinstance(metadata, dict) else None
+        )
+        execution_latency_ms: Optional[int] = None
+        if (
+            isinstance(latency_raw, (int, float))
+            and not isinstance(latency_raw, bool)
+            and math.isfinite(latency_raw)
+            and latency_raw >= 0
+        ):
+            execution_latency_ms = int(latency_raw)
+        elif latency_raw is not None:
+            self.context.logger.warning(
+                "execution_latency_ms=%r for req_id=%s is not a non-negative "
+                "finite number; writing NULL.",
+                latency_raw,
+                req_id,
+            )
 
         return {
             "request": {
@@ -2164,7 +2169,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "cost_dict": cost_dict,
                 "is_offchain": is_offchain_task,
                 "tool_hash": tool_hash,
-                "execution_latency_ms": None,
+                "execution_latency_ms": execution_latency_ms,
                 "params_used": (
                     done_task.get("used_params")
                     if isinstance(done_task.get("used_params"), dict)

@@ -321,6 +321,23 @@ def test_sweep_leaves_tasks_without_enqueued_stamp() -> None:
     ]
 
 
+def test_sweep_skips_offchain_tasks() -> None:
+    """A stale off-chain task is never swept, even if its body names a priority mech and requester."""
+    offchain = _make_pending_task("r-offchain", age_seconds=999)
+    offchain["is_offchain"] = True
+    self_ = _make_self(
+        pending=[offchain, _make_pending_task("r-stale", age_seconds=999)],
+        max_age=60.0,
+    )
+    events, swept = PostTxSettlementBehaviour._sweep_pending_undelivered(self_)
+    assert [e["request"]["request_id"] for e in events] == ["r-stale"]
+    assert swept == ["r-stale"]
+    assert [t["requestId"] for t in self_.context.shared_state[PENDING_TASKS]] == [
+        "r-offchain",
+        "r-stale",
+    ]
+
+
 def test_sweep_leaves_non_dict_entries_alone() -> None:
     """Whatever bug puts non-dict entries in PENDING_TASKS is not the sweep's problem; leave them as-is rather than dropping silently."""
     self_ = _make_self(

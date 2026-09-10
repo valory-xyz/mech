@@ -1545,6 +1545,57 @@ def test_contract_handler_handle_get_undelivered_reqs_empty(
     assert len(ch.pending_tasks) == 0
 
 
+def test_contract_handler_handle_get_undelivered_reqs_stamps_timed_out(
+    handler_context: SimpleNamespace,
+) -> None:
+    """Timed-out requests loaded from the contract are stamped with the handler's clock."""
+    params: Any = handler_context.params
+    params.req_type = "marketplace"
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
+    ch.setup()
+    req: Dict[str, Any] = {
+        "requestId": b"\x07" * 32,
+        "priorityMech": "0xOther",
+        "status": 2,
+    }
+
+    before = time.time()
+    ch._handle_get_undelivered_reqs(
+        {"data": [], "wait_for_timeout_tasks": [], "timed_out_requests": [req]}
+    )
+    after = time.time()
+
+    assert ch.unprocessed_timed_out_tasks == [req]
+    assert before <= req["enqueued_at_local"] <= after
+
+
+def test_contract_handler_handle_get_undelivered_reqs_keeps_existing_stamp(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A timed-out request echoed back by a later poll keeps its first stamp."""
+    params: Any = handler_context.params
+    params.req_type = "marketplace"
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
+    ch.setup()
+    req: Dict[str, Any] = {
+        "requestId": b"\x07" * 32,
+        "priorityMech": "0xOther",
+        "status": 2,
+        "enqueued_at_local": 1000.0,
+    }
+
+    ch._handle_get_undelivered_reqs(
+        {"data": [], "wait_for_timeout_tasks": [], "timed_out_requests": [req]}
+    )
+
+    assert ch.unprocessed_timed_out_tasks == [req]
+    assert req["enqueued_at_local"] == 1000.0
+
+
 def test_contract_handler_wait_for_timeout_status(
     handler_context: SimpleNamespace,
 ) -> None:
@@ -2010,6 +2061,67 @@ def test_filter_requests_mixed_batch(
     assert len(ch.wait_for_timeout_tasks) == 1
 
 
+def test_filter_requests_stamps_enqueued_at_local(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A pending request for my mech carries the handler's clock as ``enqueued_at_local``."""
+    my_mech: str = handler_context.params.agent_mech_contract_addresses[0]
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(priorityMech=my_mech, status=1)
+
+    before = time.time()
+    ch.filter_requests([req])
+    after = time.time()
+
+    assert ch.pending_tasks == [req]
+    assert before <= req["enqueued_at_local"] <= after
+
+
+def test_filter_requests_stamps_enqueued_at_local_on_timed_out(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A timed-out request from another mech is stamped when queued for step-in."""
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(priorityMech="0xOther", status=hmod.TIMED_OUT_STATUS)
+
+    before = time.time()
+    ch.filter_requests([req])
+    after = time.time()
+
+    assert ch.unprocessed_timed_out_tasks == [req]
+    assert before <= req["enqueued_at_local"] <= after
+
+
+EARLIER_STAMP = 1000.0  # a stamp left by a previous poll
+
+
+@pytest.mark.parametrize(
+    "mine, status",
+    [(True, 1), (False, hmod.TIMED_OUT_STATUS)],
+    ids=["pending_for_my_mech", "timed_out_step_in"],
+)
+def test_filter_requests_keeps_existing_enqueued_at_local(
+    handler_context: SimpleNamespace, mine: bool, status: int
+) -> None:
+    """A request seen on an earlier poll keeps its first ``enqueued_at_local``.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param mine: whether the request names this mech as priority mech.
+    :param status: the on-chain request status.
+    """
+    my_mech: str = handler_context.params.agent_mech_contract_addresses[0]
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(
+        priorityMech=my_mech if mine else "0xOther",
+        status=status,
+        enqueued_at_local=EARLIER_STAMP,
+    )
+
+    ch.filter_requests([req])
+
+    assert req["enqueued_at_local"] == EARLIER_STAMP
+
+
 def test_filter_requests_empty_list(
     handler_context: SimpleNamespace,
 ) -> None:
@@ -2243,6 +2355,45 @@ def test_signed_requests_accepts_zero_delivery_rate(
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.OK_CODE.value
     assert len(handler_context.shared_state["pending_tasks"]) == 1
+
+
+def test_signed_requests_stamps_receipt_time_on_enqueued_task(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """An accepted off-chain task carries the handler's clock as ``enqueued_at_local``; a body value is dropped and logged.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param http_dialogue: pytest fixture, HTTP dialogue stub.
+    :param monkeypatch: pytest fixture, per-test monkeypatch helper.
+    """
+    mh = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    _install_balance_ok(mh, monkeypatch)
+    mh.setup()
+    info_lines: List[str] = []
+    monkeypatch.setattr(
+        handler_context.logger,
+        "info",
+        lambda msg, *args, **_: info_lines.append(msg % args if args else msg),
+    )
+
+    body = _make_signed_request_body(request_id="8")
+    body["enqueued_at_local"] = "1"
+    before = time.time()
+    http_msg: Any = make_http_msg(body)
+    mh._handle_signed_requests(http_msg, http_dialogue)
+    after = time.time()
+
+    resp = handler_context.outbox.sent[-1]
+    assert resp.status_code == HttpCode.OK_CODE.value
+    task = handler_context.shared_state["pending_tasks"][0]
+    assert isinstance(task["enqueued_at_local"], float)
+    assert before <= task["enqueued_at_local"] <= after
+    dropped = [ln for ln in info_lines if "Dropping client-supplied reserved" in ln]
+    assert dropped == [
+        "Dropping client-supplied reserved keys from offchain request '8': "
+        "['enqueued_at_local']"
+    ]
 
 
 def test_enqueue_offchain_request_reserved_keys_filter_blocks_body_overrides(

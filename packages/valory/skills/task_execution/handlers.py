@@ -720,9 +720,11 @@ class ContractHandler(BaseHandler):
         # Reset lists.
         self.context.shared_state[INFLIGHT_READ_TS] = None
         self.wait_for_timeout_tasks.clear()
-        self.unprocessed_timed_out_tasks = body.get(
-            BodyKey.TIMED_OUT_REQUESTS.value, []
-        )
+        timed_out_reqs = body.get(BodyKey.TIMED_OUT_REQUESTS.value, [])
+        now = time.time()
+        for req in timed_out_reqs:
+            req.setdefault("enqueued_at_local", now)
+        self.unprocessed_timed_out_tasks = timed_out_reqs
         self.set_last_successful_read(self.from_block)
 
         self.context.logger.info(
@@ -821,6 +823,7 @@ class ContractHandler(BaseHandler):
                 self.pending_tasks.append(req)
 
             elif status == TIMED_OUT_STATUS:
+                req.setdefault("enqueued_at_local", time.time())
                 self.context.logger.info(
                     f"Adding request with id {rid} to unprocessed_timed_out_tasks."
                 )
@@ -2765,6 +2768,7 @@ class MechHttpHandler(AbstractResponseHandler):
             "request_id_nonce",
             "requestIdWithNonce",
             "tool",
+            "enqueued_at_local",
         }
         # ``RequestKey.REQUEST_ID.value`` is mandatory on the body (read at
         # ``_handle_signed_requests`` and 400 on missing), so it is present
@@ -2791,6 +2795,8 @@ class MechHttpHandler(AbstractResponseHandler):
             RequestKey.IS_OFFCHAIN.value: True,
             RequestKey.REQUEST_DELIVERY_RATE.value: request_delivery_rate,
             **{k: v for k, v in data.items() if k not in reserved_keys},
+            # Receipt time; kept last so it also wins if the filter above lapses.
+            "enqueued_at_local": time.time(),
         }
         try:
             self.pending_tasks.append(req)
