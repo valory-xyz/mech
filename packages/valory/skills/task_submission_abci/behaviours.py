@@ -2527,7 +2527,8 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         roll this out independently from the delivered-event write
         (which is what ``use_offchain`` already gates). A
         request-only event always carries ``source='mech_onchain'``;
-        the off-chain path doesn't produce them by construction.
+        off-chain tasks are skipped, since they have no on-chain request
+        to report as undelivered.
 
         :return: a ``(events, swept_request_ids)`` tuple. ``events`` is
             an ordered list of request-only event dicts ready to append
@@ -2557,6 +2558,8 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 # Anything that isn't a dict shouldn't be in
                 # pending_tasks. Leave it alone — whatever bug put it
                 # there is not this sweep's problem.
+                continue
+            if task.get(IS_OFFCHAIN):
                 continue
             enqueued_at = task.get("enqueued_at_local")
             if not isinstance(enqueued_at, (int, float)):

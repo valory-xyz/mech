@@ -3730,11 +3730,7 @@ def _predict_api_event_setup(
 
 
 def _capture_warnings(behaviour: Any, monkeypatch: Any) -> List[str]:
-    """Replace the no-op logger warning with a recorder; return the record.
-
-    Each entry is the fully ``%``-formatted message, so a test can match
-    the exact rejected value with ``startswith("key=<repr> ")`` rather
-    than only checking that something was logged.
+    """Record the ``%``-formatted warnings logged by ``behaviour``; return the record.
 
     :param behaviour: the behaviour whose context logger is patched
     :param monkeypatch: pytest monkeypatch fixture
@@ -3849,61 +3845,6 @@ def test_build_predict_api_event_z_suffix_requested_at_is_parsed(
     assert event["request"]["requested_at"] == "2026-06-25T13:19:06.651013Z"
 
 
-def test_build_predict_api_event_unix_requested_at_out_of_range_falls_back(
-    behaviour: Any,
-    params_stub: Any,
-    shared_state: Dict[str, Any],
-) -> None:
-    """An out-of-range Unix requested_at falls back to executed_at."""
-    # ``datetime.fromtimestamp`` raises ``OverflowError`` (or ``OSError``
-    # on some libcs) for values past the platform's representable range.
-    # The Unix branch catches it the same way the string branch catches
-    # malformed ISO 8601, so a malformed integer can't drop the delivery.
-    request_data = {
-        "prompt": "wild number",
-        "tool": "prediction-offline",
-        # 99,999,999,999,999 seconds since epoch ≈ year 5138 — past the
-        # range Python's datetime can represent on a 64-bit platform.
-        "requested_at": 99_999_999_999_999,
-    }
-    done_task, executing_task = _predict_api_event_setup(
-        behaviour, shared_state, request_data
-    )
-    event = behaviour._build_predict_api_event(
-        done_task=done_task, cid="bafy-cid", executing_task=executing_task
-    )
-    # Fallback ends in Z because executed_at does.
-    assert event["request"]["requested_at"].endswith("Z")
-
-
-def test_build_predict_api_event_unix_executed_at_out_of_range_falls_back(
-    behaviour: Any,
-    params_stub: Any,
-    shared_state: Dict[str, Any],
-) -> None:
-    """An out-of-range Unix executed_at falls back to now_iso."""
-    # Same defensive shape on the response side. ``executed_at`` comes
-    # from tool plumbing, but it still rides FSM consensus so a buggy
-    # tool returning a wild value can't take the round down with it.
-    request_data = {
-        "prompt": "wild executed",
-        "tool": "prediction-offline",
-        "requested_at": "2026-06-25T13:19:06Z",
-    }
-    response_data = {
-        "result": "p_yes=0.7",
-        "schema_version": "2.0",
-        "executed_at": 99_999_999_999_999,  # past representable range
-    }
-    done_task, executing_task = _predict_api_event_setup(
-        behaviour, shared_state, request_data, response_data=response_data
-    )
-    event = behaviour._build_predict_api_event(
-        done_task=done_task, cid="bafy-cid", executing_task=executing_task
-    )
-    assert event["response"]["executed_at"].endswith("Z")
-
-
 @pytest.mark.parametrize(
     "value, expected",
     [
@@ -3958,22 +3899,88 @@ ENQUEUE_TS = 1782393546.0  # 2026-06-25T13:19:06Z
 ENQUEUE_ISO = "2026-06-25T13:19:06Z"
 BODY_ISO = "2026-06-25T13:18:00Z"
 EXECUTED_ISO = "2026-06-25T13:19:36.953661Z"
-# "now": the event builder's own clock, used when a value is unusable.
-NOW = "now"
+# Unix seconds past the range ``datetime`` can represent on a 64-bit host.
+UNIX_OUT_OF_RANGE = 99_999_999_999_999
+NOW = "now"  # the builder's own clock, used when ``executed_at`` is unusable
+NO_REQUESTED_AT = "No usable requested_at for req_id=req-z"
 
 
 @pytest.mark.parametrize(
-    "body_requested_at, enqueued_at_local, executed_at, want_requested_at, want_executed_at",
+    "body_requested_at, enqueued_at_local, executed_at, "
+    "want_requested_at, want_executed_at, want_warnings",
     [
-        (None, ENQUEUE_TS, EXECUTED_ISO, ENQUEUE_ISO, EXECUTED_ISO),
-        (BODY_ISO, ENQUEUE_TS, EXECUTED_ISO, ENQUEUE_ISO, EXECUTED_ISO),
-        (BODY_ISO, "yesterday", EXECUTED_ISO, BODY_ISO, EXECUTED_ISO),
-        (BODY_ISO, None, EXECUTED_ISO, BODY_ISO, EXECUTED_ISO),
-        (None, None, EXECUTED_ISO, EXECUTED_ISO, EXECUTED_ISO),
-        ("9999-12-31T23:59:59-14:00", None, EXECUTED_ISO, EXECUTED_ISO, EXECUTED_ISO),
-        ("0001-01-01T00:00:00+14:00", None, EXECUTED_ISO, EXECUTED_ISO, EXECUTED_ISO),
-        (None, ENQUEUE_TS, "not-a-timestamp", ENQUEUE_ISO, NOW),
-        (None, None, "not-a-timestamp", NOW, NOW),
+        (None, ENQUEUE_TS, EXECUTED_ISO, ENQUEUE_ISO, EXECUTED_ISO, ()),
+        (BODY_ISO, ENQUEUE_TS, EXECUTED_ISO, ENQUEUE_ISO, EXECUTED_ISO, ()),
+        (
+            BODY_ISO,
+            "yesterday",
+            EXECUTED_ISO,
+            BODY_ISO,
+            EXECUTED_ISO,
+            ("enqueued_at_local='yesterday' ",),
+        ),
+        (BODY_ISO, None, EXECUTED_ISO, BODY_ISO, EXECUTED_ISO, ()),
+        (None, None, EXECUTED_ISO, EXECUTED_ISO, EXECUTED_ISO, (NO_REQUESTED_AT,)),
+        (
+            "not-a-timestamp",
+            "yesterday",
+            EXECUTED_ISO,
+            EXECUTED_ISO,
+            EXECUTED_ISO,
+            (
+                "enqueued_at_local='yesterday' ",
+                "requested_at='not-a-timestamp' ",
+                NO_REQUESTED_AT,
+            ),
+        ),
+        (
+            "9999-12-31T23:59:59-14:00",
+            None,
+            EXECUTED_ISO,
+            EXECUTED_ISO,
+            EXECUTED_ISO,
+            ("requested_at='9999-12-31T23:59:59-14:00' ", NO_REQUESTED_AT),
+        ),
+        (
+            "0001-01-01T00:00:00+14:00",
+            None,
+            EXECUTED_ISO,
+            EXECUTED_ISO,
+            EXECUTED_ISO,
+            ("requested_at='0001-01-01T00:00:00+14:00' ", NO_REQUESTED_AT),
+        ),
+        (
+            UNIX_OUT_OF_RANGE,
+            None,
+            EXECUTED_ISO,
+            EXECUTED_ISO,
+            EXECUTED_ISO,
+            (f"requested_at={UNIX_OUT_OF_RANGE} ", NO_REQUESTED_AT),
+        ),
+        (
+            BODY_ISO,
+            None,
+            UNIX_OUT_OF_RANGE,
+            BODY_ISO,
+            NOW,
+            (f"executed_at={UNIX_OUT_OF_RANGE} ",),
+        ),
+        (
+            None,
+            ENQUEUE_TS,
+            "not-a-timestamp",
+            ENQUEUE_ISO,
+            NOW,
+            ("executed_at='not-a-timestamp' ",),
+        ),
+        (
+            None,
+            None,
+            "not-a-timestamp",
+            NOW,
+            NOW,
+            ("executed_at='not-a-timestamp' ", NO_REQUESTED_AT),
+        ),
     ],
     ids=[
         "enqueue_stamp_only",
@@ -3981,8 +3988,11 @@ NOW = "now"
         "bad_stamp_falls_back_to_body",
         "no_stamp_uses_body",
         "nothing_uses_executed_at",
+        "bad_stamp_and_bad_body_uses_executed_at",
         "body_overflow_high_uses_executed_at",
         "body_overflow_low_uses_executed_at",
+        "body_unix_out_of_range_uses_executed_at",
+        "executed_at_unix_out_of_range_uses_now",
         "bad_executed_at_uses_now",
         "nothing_and_bad_executed_at_uses_now",
     ],
@@ -3991,27 +4001,28 @@ def test_build_predict_api_event_timestamp_precedence(
     behaviour: Any,
     params_stub: Any,
     shared_state: Dict[str, Any],
-    body_requested_at: Optional[str],
+    monkeypatch: Any,
+    body_requested_at: Any,
     enqueued_at_local: Any,
-    executed_at: str,
+    executed_at: Any,
     want_requested_at: str,
     want_executed_at: str,
+    want_warnings: Tuple[str, ...],
 ) -> None:
-    """``requested_at`` prefers the enqueue stamp, then the body, then ``executed_at``.
-
-    ``executed_at`` keeps the ISO value stamped at tool completion and only
-    falls back to the build time when it is unusable; ``delivered_at`` is
-    always the build time, so ``NOW`` is checked as equality with it.
+    """``requested_at`` prefers the enqueue stamp, then the body, then ``executed_at``, warning on each fallback.
 
     :param behaviour: behaviour under test
     :param params_stub: params fixture (unused, keeps the context wired)
     :param shared_state: shared state fixture
+    :param monkeypatch: pytest monkeypatch fixture
     :param body_requested_at: ``requested_at`` in the request body, or absent
     :param enqueued_at_local: receipt stamp on the executing task, or absent
     :param executed_at: ``executed_at`` in the stored response
     :param want_requested_at: expected ``requested_at`` or ``NOW``
     :param want_executed_at: expected ``executed_at`` or ``NOW``
+    :param want_warnings: expected warning prefixes, in emission order
     """
+    warnings = _capture_warnings(behaviour, monkeypatch)
     request_data: Dict[str, Any] = {
         "prompt": "precedence",
         "tool": "prediction-offline",
@@ -4047,6 +4058,9 @@ def test_build_predict_api_event_timestamp_precedence(
         assert got_requested == delivered_at
     else:
         assert got_requested == want_requested_at
+    assert len(warnings) == len(want_warnings), warnings
+    for got, want in zip(warnings, want_warnings):
+        assert got.startswith(want), got
 
 
 @pytest.mark.parametrize(
@@ -4087,10 +4101,6 @@ def test_build_predict_api_event_execution_latency_ms_from_metadata(
 ) -> None:
     """``execution_latency_ms`` comes from the metadata when valid, else NULL plus a warning.
 
-    A present but unusable value (negative, bool, string, NaN, inf) must
-    not be dropped silently: the lake row ends up NULL and the only trace
-    of why is the warning line.
-
     :param behaviour: behaviour under test
     :param params_stub: params fixture (unused, keeps the context wired)
     :param shared_state: shared state fixture
@@ -4124,30 +4134,6 @@ def test_build_predict_api_event_execution_latency_ms_from_metadata(
         assert len(latency_warnings) == 1 and latency_warnings[0].startswith(prefix)
     else:
         assert latency_warnings == []
-
-
-def test_build_predict_api_event_warns_on_unusable_enqueue_stamp(
-    behaviour: Any,
-    params_stub: Any,
-    shared_state: Dict[str, Any],
-    monkeypatch: Any,
-) -> None:
-    """An unusable ``enqueued_at_local`` is logged, not silently skipped."""
-    # Symmetric with the body-timestamp warning: without this line a bad
-    # stamp would quietly shift requested_at to the body value and the
-    # latency numbers would drift with no trace in the logs.
-    warnings = _capture_warnings(behaviour, monkeypatch)
-    request_data = {"prompt": "stamp", "tool": "prediction-offline"}
-    done_task, executing_task = _predict_api_event_setup(
-        behaviour, shared_state, request_data
-    )
-    executing_task["enqueued_at_local"] = "yesterday"
-    behaviour._build_predict_api_event(
-        done_task=done_task, cid="bafy-cid", executing_task=executing_task
-    )
-    stamp_warnings = [w for w in warnings if w.startswith("enqueued_at_local=")]
-    assert len(stamp_warnings) == 1
-    assert stamp_warnings[0].startswith("enqueued_at_local='yesterday' ")
 
 
 def test_build_predict_api_event_malformed_requested_at_falls_back(

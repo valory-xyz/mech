@@ -255,16 +255,10 @@ def _discard_outstanding_nonce(
 
 
 def _parse_timestamp(value: Any) -> Optional[datetime]:
-    """Parse a Unix-seconds number or an ISO 8601 string into an aware UTC datetime.
+    """Parse Unix seconds or an ISO 8601 string into an aware UTC datetime.
 
-    Returns ``None`` for anything that is not a usable timestamp: ``None``,
-    empty strings, non-numeric / non-ISO text, NaN, and values outside the
-    platform's representable range. A trailing ``Z`` is accepted (Python
-    3.10's ``fromisoformat`` rejects it) and any offset is rotated to UTC.
-
-    :param value: the raw timestamp as found in a request body, a response
-        envelope or a task dict.
-    :return: the parsed datetime, or ``None`` when it cannot be used.
+    :param value: the raw timestamp from a request body, a response or a task dict.
+    :return: the parsed datetime, or ``None`` when the value is not usable.
     """
     if isinstance(value, bool):
         return None
@@ -275,6 +269,7 @@ def _parse_timestamp(value: Any) -> Optional[datetime]:
             return None
     if isinstance(value, str) and value:
         try:
+            # Python 3.10's ``fromisoformat`` rejects a trailing ``Z``.
             parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
             if parsed.tzinfo is None:
                 parsed = parsed.replace(tzinfo=timezone.utc)
@@ -1863,6 +1858,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         _release_outstanding_nonce(self.context.shared_state, executing_task)
         self._reset_executing_task()
 
+    def _parse_timestamp_field(
+        self, value: Any, field: str, req_id: Any
+    ) -> Optional[datetime]:
+        """Parse a timestamp field, warning when it is present but unusable.
+
+        :param value: the raw value; ``None`` and ``""`` count as absent.
+        :param field: the field name for the warning line.
+        :param req_id: the request id for the warning line.
+        :return: the parsed datetime, or ``None`` when absent or unusable.
+        """
+        parsed = _parse_timestamp(value)
+        if parsed is None and value is not None and value != "":
+            self.context.logger.warning(
+                "%s=%r for req_id=%s is not a usable timestamp.", field, value, req_id
+            )
+        return parsed
+
     def _build_predict_api_event(
         self,
         *,
@@ -1966,51 +1978,23 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # All three timestamps go through ``_iso_z`` so the canonical-JSON
         # bytes match the server's Pydantic round-trip (see helper docstring).
         now_iso = _iso_z(datetime.now(timezone.utc))
-        # ``executed_at`` is stamped as an ISO string in ``_handle_done_task``
-        # when the tool result arrives; a Unix number is accepted as well.
-        # Anything unusable falls back to ``now_iso`` rather than crashing
-        # the round, since the value rides the FSM consensus channel.
-        executed_at_raw = response_data.get("executed_at")
-        executed_at_dt = _parse_timestamp(executed_at_raw)
-        if executed_at_dt is None:
-            if executed_at_raw is not None:
-                self.context.logger.warning(
-                    "executed_at=%r for req_id=%s is not a usable timestamp; "
-                    "falling back to now_iso.",
-                    executed_at_raw,
-                    req_id,
-                )
-            executed_at_iso = now_iso
-        else:
-            executed_at_iso = _iso_z(executed_at_dt)
-        # ``requested_at`` is the time this mech received the request: the
-        # ``enqueued_at_local`` stamp the handler puts on the task on both
-        # the off-chain and the on-chain path. Tasks enqueued before that
-        # stamp existed fall back to a timestamp the requester put in the
-        # body (``datetime`` / ``requested_at``, Unix seconds or ISO 8601),
-        # and finally to ``executed_at``.
-        enqueued_at_raw = executing_task.get("enqueued_at_local")
-        requested_at_dt = _parse_timestamp(enqueued_at_raw)
-        if requested_at_dt is None and enqueued_at_raw is not None:
-            self.context.logger.warning(
-                "enqueued_at_local=%r for req_id=%s is not a usable timestamp; "
-                "falling back to the request body timestamp.",
-                enqueued_at_raw,
+        executed_at_dt = self._parse_timestamp_field(
+            response_data.get("executed_at"), "executed_at", req_id
+        )
+        executed_at_iso = now_iso if executed_at_dt is None else _iso_z(executed_at_dt)
+        requested_at_dt = self._parse_timestamp_field(
+            executing_task.get("enqueued_at_local"), "enqueued_at_local", req_id
+        )
+        if requested_at_dt is None:
+            requested_at_dt = self._parse_timestamp_field(
+                request_data.get("datetime") or request_data.get("requested_at"),
+                "requested_at",
                 req_id,
             )
         if requested_at_dt is None:
-            requested_at_raw = request_data.get("datetime") or request_data.get(
-                "requested_at"
+            self.context.logger.warning(
+                "No usable requested_at for req_id=%s; using executed_at.", req_id
             )
-            requested_at_dt = _parse_timestamp(requested_at_raw)
-            if requested_at_dt is None and requested_at_raw not in (None, ""):
-                self.context.logger.warning(
-                    "requested_at=%r for req_id=%s is not a usable timestamp; "
-                    "falling back to executed_at.",
-                    requested_at_raw,
-                    req_id,
-                )
-        if requested_at_dt is None:
             requested_at_iso = executed_at_iso
         else:
             requested_at_iso = _iso_z(requested_at_dt)
