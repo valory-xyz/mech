@@ -1571,6 +1571,31 @@ def test_contract_handler_handle_get_undelivered_reqs_stamps_timed_out(
     assert before <= req["enqueued_at_local"] <= after
 
 
+def test_contract_handler_handle_get_undelivered_reqs_keeps_existing_stamp(
+    handler_context: SimpleNamespace,
+) -> None:
+    """A timed-out request echoed back by a later poll keeps its first stamp."""
+    params: Any = handler_context.params
+    params.req_type = "marketplace"
+    ch: ContractHandler = ContractHandler(
+        name="contract", skill_context=handler_context
+    )
+    ch.setup()
+    req: Dict[str, Any] = {
+        "requestId": b"\x07" * 32,
+        "priorityMech": "0xOther",
+        "status": 2,
+        "enqueued_at_local": 1000.0,
+    }
+
+    ch._handle_get_undelivered_reqs(
+        {"data": [], "wait_for_timeout_tasks": [], "timed_out_requests": [req]}
+    )
+
+    assert ch.unprocessed_timed_out_tasks == [req]
+    assert req["enqueued_at_local"] == 1000.0
+
+
 def test_contract_handler_wait_for_timeout_status(
     handler_context: SimpleNamespace,
 ) -> None:
@@ -2065,6 +2090,36 @@ def test_filter_requests_stamps_enqueued_at_local_on_timed_out(
 
     assert ch.unprocessed_timed_out_tasks == [req]
     assert before <= req["enqueued_at_local"] <= after
+
+
+EARLIER_STAMP = 1000.0  # a stamp left by a previous poll
+
+
+@pytest.mark.parametrize(
+    "mine, status",
+    [(True, 1), (False, hmod.TIMED_OUT_STATUS)],
+    ids=["pending_for_my_mech", "timed_out_step_in"],
+)
+def test_filter_requests_keeps_existing_enqueued_at_local(
+    handler_context: SimpleNamespace, mine: bool, status: int
+) -> None:
+    """A request seen on an earlier poll keeps its first ``enqueued_at_local``.
+
+    :param handler_context: pytest fixture, mech HTTP handler test context.
+    :param mine: whether the request names this mech as priority mech.
+    :param status: the on-chain request status.
+    """
+    my_mech: str = handler_context.params.agent_mech_contract_addresses[0]
+    ch = _make_contract_handler(handler_context)
+    req = _base_req(
+        priorityMech=my_mech if mine else "0xOther",
+        status=status,
+        enqueued_at_local=EARLIER_STAMP,
+    )
+
+    ch.filter_requests([req])
+
+    assert req["enqueued_at_local"] == EARLIER_STAMP
 
 
 def test_filter_requests_empty_list(
