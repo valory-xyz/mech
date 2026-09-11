@@ -69,6 +69,7 @@ from packages.valory.skills.task_execution.utils.cost_calculation import (
 )
 from packages.valory.skills.task_execution.utils.ipfs import (
     ComponentPackageLoader,
+    ensure_v1,
     get_ipfs_file_hash,
     to_multihash,
 )
@@ -978,7 +979,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._invalid_request = True
                 return
             try:
-                task_data["request_cid"] = to_v1(get_ipfs_file_hash(task_data["data"]))
+                task_data["request_cid"] = ensure_v1(
+                    get_ipfs_file_hash(task_data["data"])
+                )
             except Exception as e:  # pylint: disable=W0718
                 self.context.logger.warning(
                     f"Could not derive request CID for offchain request "
@@ -1001,7 +1004,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._invalid_request = True
             return
         try:
-            task_data["request_cid"] = to_v1(ipfs_hash)
+            task_data["request_cid"] = ensure_v1(ipfs_hash)
         except Exception as e:  # pylint: disable=W0718
             self.context.logger.warning(
                 f"Could not normalise request CID for request {request_id}: {e}."

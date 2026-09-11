@@ -26,9 +26,13 @@ import yaml
 from packages.valory.skills.task_execution.utils.ipfs import (
     CID_PREFIX,
     ComponentPackageLoader,
+    ensure_v1,
     get_ipfs_file_hash,
     to_multihash,
 )
+
+SAMPLE_CID_V0 = "QmYwAPJzv5CZsnA625s3Xf2nemtYgPpHdWEz79ojWnPbdG"
+SAMPLE_CID_V0_AS_V1 = "bafybeie5nqv6kd3qnfjupgvz34woh3oksc3iau6abmyajn7qvtf6d2ho34"
 
 # ---------------------------------------------------------------------------
 # get_ipfs_file_hash
@@ -75,6 +79,39 @@ class TestGetIpfsFileHash:
     def test_cid_prefix_constant(self) -> None:
         """Test CID_PREFIX has the expected value."""
         assert CID_PREFIX == "f01701220"
+
+    def test_raw_digest_returns_v1_cid(self) -> None:
+        """A raw 32-byte digest (what request events carry) yields a v1 CID."""
+        result = get_ipfs_file_hash(b"\xab" * 32)
+        assert result.startswith("bafy")
+
+
+# ---------------------------------------------------------------------------
+# ensure_v1
+# ---------------------------------------------------------------------------
+
+
+class TestEnsureV1:
+    """Tests for ensure_v1."""
+
+    def test_converts_v0(self) -> None:
+        """A v0 CID is converted to its v1 form."""
+        assert ensure_v1(SAMPLE_CID_V0) == SAMPLE_CID_V0_AS_V1
+
+    def test_returns_v1_unchanged(self) -> None:
+        """A v1 CID is returned as-is instead of raising like ``to_v1``."""
+        assert ensure_v1(SAMPLE_CID_V0_AS_V1) == SAMPLE_CID_V0_AS_V1
+
+    def test_accepts_get_ipfs_file_hash_output(self) -> None:
+        """The request CID derived from a raw digest passes through unchanged."""
+        request_cid = get_ipfs_file_hash(b"\xab" * 32)
+        assert ensure_v1(request_cid) == request_cid
+
+    @pytest.mark.parametrize("bad", ["", "not-a-cid", "Qm"])
+    def test_invalid_input_raises(self, bad: str) -> None:
+        """Malformed input raises so callers' fallbacks still run."""
+        with pytest.raises(ValueError):
+            ensure_v1(bad)
 
 
 # ---------------------------------------------------------------------------
