@@ -114,6 +114,19 @@ class TestTokenCounterCallbackCall:
         ) + TokenCounterCallback.token_to_cost(500, MODEL, "output")
         assert cb.cost_dict["total_cost"] == pytest.approx(expected_total)
 
+    def test_zero_priced_model_is_supported_and_costs_nothing(self) -> None:
+        """A self-hosted model priced at zero must deliver, not raise.
+
+        The entry exists so `__call__` does not reject the model: it raises
+        AFTER the LLM call has already been paid for, so a missing key fails
+        every delivery of a tool that serves the model.
+        """
+        cb = TokenCounterCallback()
+        cb("qwen-14b-sft", _dummy_counter, input_tokens=1000, output_tokens=500)
+        assert cb.actual_model == "qwen-14b-sft"
+        assert cb.cost_dict["total_tokens"] == 1500
+        assert cb.cost_dict["total_cost"] == 0
+
     def test_unsupported_model_raises_value_error(self) -> None:
         """Test __call__ raises ValueError for unsupported model."""
         cb = TokenCounterCallback()
