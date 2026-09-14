@@ -56,6 +56,10 @@ class TokenCounterCallback:
         "google/gemini-2.5-flash:online": {"input": 0.0003, "output": 0.0025},
         "anthropic/claude-haiku-4.5:online": {"input": 0.001, "output": 0.005},
         "anthropic/claude-sonnet-4:online": {"input": 0.003, "output": 0.015},
+        # Self-hosted, so this is not a provider list price: it is the hosted
+        # market rate for a 14B model, used as the per-token stand-in for a
+        # server whose real cost is a flat hourly rate.
+        "olas-predict-r1-14b": {"input": 0.0002, "output": 0.0002},
     }
 
     def __init__(self) -> None:
