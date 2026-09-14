@@ -316,6 +316,7 @@ def patch_ipfs_multihash(monkeypatch: Any) -> Callable[[str], None]:
         """Apply monkeypatches for IPFS helper functions."""
         monkeypatch.setattr(beh_mod, "get_ipfs_file_hash", lambda data: file_hash)
         monkeypatch.setattr(beh_mod, "to_v1", lambda cid: cid)
+        monkeypatch.setattr(beh_mod, "ensure_v1", lambda cid: cid)
         monkeypatch.setattr(beh_mod, "to_multihash", lambda cid: f"mh:{cid}")
 
     return _apply

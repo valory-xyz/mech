@@ -1588,6 +1588,83 @@ def test_execute_task_offchain_stamps_request_cid_on_executing_task(
     assert behaviour._executing_task["request_cid"] == "bafyREQUESTcidOFF"
 
 
+RAW_REQUEST_DIGEST = bytes.fromhex(
+    "5f0e7c0b1f9a8e4d3c2b1a09f8e7d6c5b4a39281706f5e4d3c2b1a0918273645"
+)
+RAW_REQUEST_DIGEST_CID = "bafybeic7bz6awh42rzgtyky2bh4opvwfwsrzfalqn5pe2pbldierqjzwiu"
+
+
+def test_execute_task_offchain_request_cid_with_real_cid_helpers(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Off-chain request CID is derived with the real CID helpers, not stubs.
+
+    ``get_ipfs_file_hash`` already returns a v1 CID, so a plain ``to_v1`` call
+    raised and left ``request_cid`` as None. The predict-api event then fell
+    back to the response CID for ``content_cid``.
+
+    :param behaviour: task_execution behaviour under test.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture used to enqueue the pending task.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.in_flight_req = False
+    task: Dict[str, Any] = {
+        "requestId": 316,
+        "request_delivery_rate": 100,
+        "data": RAW_REQUEST_DIGEST,
+        "is_offchain": True,
+        "ipfs_data": json.dumps({"prompt": "p", "tool": "prediction-offline"}),
+        "contract_address": "0xmech",
+    }
+    shared_state[beh_mod.PENDING_TASKS].append(task)
+    monkeypatch.setattr(behaviour, "_handle_get_task", lambda *a, **k: None)
+    behaviour._execute_task()
+    assert behaviour._executing_task["request_cid"] == RAW_REQUEST_DIGEST_CID
+
+
+def test_execute_task_onchain_request_cid_with_real_cid_helpers(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    fake_dialogue: Any,
+    monkeypatch: Any,
+) -> None:
+    """On-chain request CID is derived without hitting the warning fallback.
+
+    :param behaviour: task_execution behaviour under test.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture used to enqueue the pending task.
+    :param fake_dialogue: dialogue fixture consumed by the stubbed
+        ``_build_ipfs_get_file_req``.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    warnings: List[str] = []
+    monkeypatch.setattr(
+        behaviour.context.logger, "warning", lambda msg, *a, **k: warnings.append(msg)
+    )
+    params_stub.in_flight_req = False
+    task: Dict[str, Any] = {
+        "requestId": 317,
+        "request_delivery_rate": 100,
+        "data": RAW_REQUEST_DIGEST,
+        "contract_address": "0xmech",
+    }
+    shared_state[beh_mod.PENDING_TASKS].append(task)
+    monkeypatch.setattr(
+        behaviour,
+        "_build_ipfs_get_file_req",
+        lambda h, timeout=None: (object(), fake_dialogue),
+    )
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    behaviour._execute_task()
+    assert behaviour._executing_task["request_cid"] == RAW_REQUEST_DIGEST_CID
+    assert warnings == []
+
+
 # ---------------------------------------------------------------------------
 # _update_pending_tasks
 # ---------------------------------------------------------------------------

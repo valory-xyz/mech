@@ -21,7 +21,7 @@
 from typing import Any, Dict, Tuple
 
 import yaml
-from aea.helpers.cid import CID
+from aea.helpers.cid import CID, to_v1
 from aea.helpers.multiformat import multibase_decode, multicodec_remove_prefix
 
 CID_PREFIX = "f01701220"
@@ -37,6 +37,13 @@ def get_ipfs_file_hash(data: bytes) -> str:
         file_hash = CID_PREFIX + file_hash
         file_hash = str(CID.from_string(file_hash))
         return file_hash
+
+
+def ensure_v1(hash_string: str) -> str:
+    """Return the CID as v1. Unlike ``to_v1``, v1 input is returned unchanged."""
+    if CID.from_string(hash_string).version == 1:
+        return hash_string
+    return to_v1(hash_string)
 
 
 def to_multihash(hash_string: str) -> str:
