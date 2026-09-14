@@ -114,6 +114,18 @@ class TestTokenCounterCallbackCall:
         ) + TokenCounterCallback.token_to_cost(500, MODEL, "output")
         assert cb.cost_dict["total_cost"] == pytest.approx(expected_total)
 
+    def test_self_hosted_model_is_supported_and_priced(self) -> None:
+        """The self-hosted model must deliver and accrue cost, not raise.
+
+        `__call__` raises AFTER the LLM call has already been paid for, so a
+        missing key fails every delivery of a tool that serves the model.
+        """
+        cb = TokenCounterCallback()
+        cb("olas-predict-r1-14b", _dummy_counter, input_tokens=1000, output_tokens=500)
+        assert cb.actual_model == "olas-predict-r1-14b"
+        assert cb.cost_dict["total_tokens"] == 1500
+        assert cb.cost_dict["total_cost"] == pytest.approx(0.0002 * 1.5)
+
     def test_every_jury_voter_model_is_priced(self) -> None:
         """resolve_market_jury's voter models must all be keys in the table.
 
