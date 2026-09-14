@@ -126,6 +126,22 @@ class TestTokenCounterCallbackCall:
         assert cb.cost_dict["total_tokens"] == 1500
         assert cb.cost_dict["total_cost"] == pytest.approx(0.0002 * 1.5)
 
+    def test_every_jury_voter_model_is_priced(self) -> None:
+        """resolve_market_jury's voter models must all be keys in the table.
+
+        The tool swallows the callback's ValueError, so an unpriced voter does
+        not fail the delivery -- its cost is silently dropped from cost_dict
+        instead, and the mech under-bills for that request.
+        """
+        jury_models = (
+            "openai/gpt-4.1:online",
+            "x-ai/grok-4.3:online",
+            "google/gemini-2.5-flash:online",
+            "anthropic/claude-haiku-4.5:online",
+        )
+        missing = [m for m in jury_models if m not in TokenCounterCallback.TOKEN_PRICES]
+        assert not missing, f"unpriced jury voter models: {missing}"
+
     def test_unsupported_model_raises_value_error(self) -> None:
         """Test __call__ raises ValueError for unsupported model."""
         cb = TokenCounterCallback()
