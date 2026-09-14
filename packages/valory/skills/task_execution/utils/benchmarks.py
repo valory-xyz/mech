@@ -53,12 +53,11 @@ class TokenCounterCallback:
         },
         "openai/gpt-4.1:online": {"input": 0.002, "output": 0.008},
         "x-ai/grok-4.1-fast:online": {"input": 0.0002, "output": 0.0005},
-        # Used by resolve_market_jury's VOTER_MODEL_GROK. Priced at the
-        # 4.1-fast rate: that tool passes OpenRouter's billed `call_cost`, and
-        # the surcharge is `max(0, call_cost - token_cost)`, so an entry at or
-        # below the real rate is trued up to what was actually billed while one
-        # above it would over-bill with no correction.
-        "x-ai/grok-4.3:online": {"input": 0.0002, "output": 0.0005},
+        # Used by resolve_market_jury's VOTER_MODEL_GROK. OpenRouter's listed
+        # rate for x-ai/grok-4.3 ($1.25/$2.50 per MTok), matching how the other
+        # `:online` entries here are priced. The `:online` web-search fee is not
+        # a token cost; it arrives via `call_cost` and lands in `extra_cost`.
+        "x-ai/grok-4.3:online": {"input": 0.00125, "output": 0.0025},
         "google/gemini-2.5-flash:online": {"input": 0.0003, "output": 0.0025},
         "anthropic/claude-haiku-4.5:online": {"input": 0.001, "output": 0.005},
         "anthropic/claude-sonnet-4:online": {"input": 0.003, "output": 0.015},
