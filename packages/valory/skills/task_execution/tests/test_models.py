@@ -172,3 +172,55 @@ def test_params_empty_mech_to_config_raises_value_error(
     params_kwargs["mech_to_config"] = {}
     with pytest.raises(ValueError, match="No mech contract addresses found"):
         m.Params(name="params", **params_kwargs)
+
+
+@pytest.mark.parametrize(
+    "mech_to_config, fallback, expected",
+    [
+        (
+            {
+                "0xlegacy": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=False
+                ),
+                "0xmarket": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=True
+                ),
+            },
+            "0xlegacy",
+            "0xmarket",
+        ),
+        (
+            {
+                "0xlegacy": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=False
+                )
+            },
+            "0xlegacy",
+            "0xlegacy",
+        ),
+        ({}, "0xonly", "0xonly"),
+    ],
+    ids=["prefers-marketplace-mech", "falls-back-to-first", "empty-config"],
+)
+def test_metrics_mech_address_prefers_marketplace_mech(
+    mech_to_config: Dict[str, Any], fallback: str, expected: str
+) -> None:
+    """The label picks the marketplace mech, else the first configured mech.
+
+    :param mech_to_config: the per-mech config map.
+    :param fallback: ``agent_mech_contract_address``.
+    :param expected: the label value.
+    """
+    from types import SimpleNamespace
+
+    params = SimpleNamespace(
+        mech_to_config=mech_to_config, agent_mech_contract_address=fallback
+    )
+    assert m.metrics_mech_address(params) == expected
+
+
+def test_metrics_mech_address_tolerates_bare_stub() -> None:
+    """A stub with neither attribute yields an empty label rather than raising."""
+    from types import SimpleNamespace
+
+    assert m.metrics_mech_address(SimpleNamespace()) == ""

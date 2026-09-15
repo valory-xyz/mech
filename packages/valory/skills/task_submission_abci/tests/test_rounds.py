@@ -21,11 +21,12 @@
 import json
 import logging
 from typing import Any, Union, cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB, get_name
+from packages.valory.skills.task_submission_abci import rounds as rounds_mod
 from packages.valory.skills.task_submission_abci.payloads import (
     PostTxSettlementPayload,
     TaskPoolingPayload,
@@ -42,6 +43,8 @@ from packages.valory.skills.task_submission_abci.rounds import (
     TaskPoolingRound,
     TaskSubmissionAbciApp,
     TransactionPreparationRound,
+    decode_tx_payload,
+    encode_tx_payload,
 )
 
 # ---------------------------------------------------------------------------
@@ -178,12 +181,39 @@ class TestSynchronizedData:
             log is emitted.
         """
         sd = _make_sync_data(submitted_request_ids=bad_value)
-        with caplog.at_level(logging.ERROR):
+        with (
+            caplog.at_level(logging.ERROR),
+            patch.object(
+                rounds_mod.mech_sync_invariant_violation_total, "labels"
+            ) as mock_labels,
+        ):
             assert sd.submitted_request_ids == []
         assert any(
             "submitted_request_ids invariant broken" in rec.message
             for rec in caplog.records
         )
+        # The log alone is not alertable from Grafana; the counter is.
+        mock_labels.assert_called_once_with(field="submitted_request_ids")
+        mock_labels.return_value.inc.assert_called_once_with()
+
+    def test_tx_included_request_ids_bad_shape_counts_its_own_field(self) -> None:
+        """Each synced field reports under its own ``field`` label."""
+        sd = _make_sync_data(tx_included_request_ids=[1, 2])
+        with patch.object(
+            rounds_mod.mech_sync_invariant_violation_total, "labels"
+        ) as mock_labels:
+            assert sd.tx_included_request_ids == []
+        mock_labels.assert_called_once_with(field="tx_included_request_ids")
+
+    def test_well_formed_list_does_not_count_a_violation(self) -> None:
+        """A valid ``list[str]`` never touches the violation counter."""
+        sd = _make_sync_data(submitted_request_ids=["a"], tx_included_request_ids=[])
+        with patch.object(
+            rounds_mod.mech_sync_invariant_violation_total, "labels"
+        ) as mock_labels:
+            assert sd.submitted_request_ids == ["a"]
+            assert sd.tx_included_request_ids == []
+        mock_labels.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +320,24 @@ class TestTaskPoolingRound:
         data, event = result
         assert event == Event.NO_TASKS
         assert cast(SynchronizedData, data).submitted_request_ids == []
+
+    def test_tx_included_request_ids_cleared_on_pooling(self) -> None:
+        """A new cycle starts with no included ids from the previous tx-prep.
+
+        ``PostTxSettlementRound`` hands off whatever ``tx_included_request_ids``
+        holds; a stale value surviving into a period whose tx-prep never
+        runs (NO_TASKS) would otherwise be re-handed-off as submitted.
+        """
+        task = _make_task("req-new")
+        payloads = {p: _payload_for(p, [task]) for p in _PARTICIPANTS}
+        round_ = _make_pooling_round(
+            payloads,
+            **{get_name(SynchronizedData.tx_included_request_ids): ["stale-a"]},
+        )
+        result = round_.end_block()
+        assert result is not None
+        data, _ = result
+        assert cast(SynchronizedData, data).tx_included_request_ids == []
 
     def test_deduplication_by_request_id(self) -> None:
         """Same request_id from multiple agents → deduplicated to one."""
@@ -485,20 +533,20 @@ class TestTransactionPreparationRound:
         assert round_.end_block() is None
 
     def test_threshold_with_valid_hash_returns_done(self) -> None:
-        """Test end_block returns DONE event with valid tx hash at threshold."""
+        """A voted envelope writes both the tx hash and the included id list."""
         tx_hash = "0xabcdef"
-        payloads = {
-            "agent-0": self._tx_payload("agent-0", tx_hash),
-            "agent-1": self._tx_payload("agent-1", tx_hash),
-            "agent-2": self._tx_payload("agent-2", tx_hash),
-        }
+        content = encode_tx_payload(tx_hash, ["req-1", "req-2"])
+        payloads = {p: self._tx_payload(p, content) for p in _PARTICIPANTS}
         round_ = _make_tx_round(payloads)
         result = round_.end_block()
         assert result is not None
         data, event = result
         assert event == Event.DONE
         sd = cast(SynchronizedData, data)
+        # The settlement app reads ``most_voted_tx_hash`` verbatim, so the
+        # envelope must be unwrapped here and never forwarded as-is.
         assert sd.most_voted_tx_hash == tx_hash
+        assert sd.tx_included_request_ids == ["req-1", "req-2"]
 
     def test_threshold_with_error_payload_returns_error(self) -> None:
         """Test end_block returns ERROR event when all payloads are error."""
@@ -507,14 +555,48 @@ class TestTransactionPreparationRound:
             "agent-1": self._tx_payload("agent-1", "error"),
             "agent-2": self._tx_payload("agent-2", "error"),
         }
+        round_ = _make_tx_round(
+            payloads,
+            done_tasks=[_make_task("req-1")],
+            **{get_name(SynchronizedData.tx_included_request_ids): ["stale"]},
+        )
+        result = round_.end_block()
+        assert result is not None
+        data, event = result
+        assert event == Event.ERROR
+        # done_tasks and the included-id list are cleared on error
+        sd = cast(SynchronizedData, data)
+        assert sd.done_tasks == []
+        assert sd.tx_included_request_ids == []
+
+    @pytest.mark.parametrize(
+        "bad_content",
+        [
+            "0xabcdef",  # pre-envelope bare hash
+            "not json",
+            json.dumps(["0xabc"]),  # wrong top-level shape
+            json.dumps({"tx_hash": "", "included_request_ids": []}),  # empty hash
+            json.dumps({"tx_hash": "0xabc"}),  # ids missing
+            json.dumps({"tx_hash": "0xabc", "included_request_ids": [1]}),  # non-str id
+        ],
+        ids=["bare-hash", "not-json", "list", "empty-hash", "no-ids", "int-id"],
+    )
+    def test_undecodable_payload_is_treated_as_error(self, bad_content: str) -> None:
+        """A malformed envelope must not reach the settlement app as a tx hash.
+
+        :param bad_content: the voted payload content.
+        """
+        payloads = {p: self._tx_payload(p, bad_content) for p in _PARTICIPANTS}
         round_ = _make_tx_round(payloads, done_tasks=[_make_task("req-1")])
         result = round_.end_block()
         assert result is not None
         data, event = result
         assert event == Event.ERROR
-        # done_tasks are cleared on error
         sd = cast(SynchronizedData, data)
         assert sd.done_tasks == []
+        assert sd.tx_included_request_ids == []
+        with pytest.raises(ValueError):
+            _ = sd.most_voted_tx_hash
 
     def test_no_majority_possible_returns_no_majority(self) -> None:
         """All agents vote differently → majority impossible → NO_MAJORITY."""
@@ -523,13 +605,40 @@ class TestTransactionPreparationRound:
             "agent-1": self._tx_payload("agent-1", "0xhash-b"),
             "agent-2": self._tx_payload("agent-2", "0xhash-c"),
         }
-        round_ = _make_tx_round(payloads)
+        round_ = _make_tx_round(
+            payloads,
+            **{get_name(SynchronizedData.tx_included_request_ids): ["stale"]},
+        )
         result = round_.end_block()
         assert result is not None
         data, event = result
         assert event == Event.NO_MAJORITY
         sd = cast(SynchronizedData, data)
         assert sd.done_tasks == []
+        assert sd.tx_included_request_ids == []
+
+
+class TestTxPayloadCodec:
+    """``encode_tx_payload`` / ``decode_tx_payload`` round-trip and rejection."""
+
+    def test_round_trip_preserves_hash_and_stringifies_ids(self) -> None:
+        """Ids are stringified on encode so int/str mixes settle to one shape."""
+        content = encode_tx_payload("0xabc", ["r1", cast(str, 42)])
+        assert decode_tx_payload(content) == {
+            "tx_hash": "0xabc",
+            "included_request_ids": ["r1", "42"],
+        }
+
+    def test_encode_is_canonical(self) -> None:
+        """Byte-identical output for identical input (consensus keys on the string)."""
+        a = encode_tx_payload("0xabc", ["r1", "r2"])
+        b = encode_tx_payload("0xabc", ["r1", "r2"])
+        assert a == b
+        assert a == '{"included_request_ids":["r1","r2"],"tx_hash":"0xabc"}'
+
+    def test_error_sentinel_is_not_an_envelope(self) -> None:
+        """The bare ``ERROR_PAYLOAD`` string must not decode as a valid vote."""
+        assert decode_tx_payload(TransactionPreparationRound.ERROR_PAYLOAD) is None
 
 
 # ---------------------------------------------------------------------------
@@ -763,18 +872,27 @@ class TestPostTxSettlementRound:
         assert cast(SynchronizedData, new_sync_data).done_tasks == tasks
 
     def test_submitted_request_ids_written_on_done(self) -> None:
-        """DONE writes the id list from ``done_tasks`` for the next cycle to prune.
+        """DONE hands off the ids that were in the settled tx for the next cycle to prune.
 
-        Ids are extracted from this period's ``done_tasks`` and
-        exposed via
-        :attr:`SynchronizedData.submitted_request_ids`, which
-        the next cycle's
-        :meth:`TaskPoolingBehaviour.handle_submitted_tasks` reads to
-        prune ``shared_state[DONE_TASKS]`` by request_id.
+        The list comes from :attr:`SynchronizedData.tx_included_request_ids`
+        (written by ``TransactionPreparationRound`` from the voted
+        envelope) and is exposed via
+        :attr:`SynchronizedData.submitted_request_ids`, which the next
+        cycle's :meth:`TaskPoolingBehaviour.handle_submitted_tasks` reads
+        to prune ``shared_state[DONE_TASKS]`` by request_id.
         """
         tasks = [_make_task("req-a"), _make_task("req-b")]
         payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
-        round_ = _make_post_tx_round(payloads, done_tasks=tasks)
+        round_ = _make_post_tx_round(
+            payloads,
+            done_tasks=tasks,
+            **{
+                get_name(SynchronizedData.tx_included_request_ids): [
+                    "req-a",
+                    "req-b",
+                ]
+            },
+        )
         result = round_.end_block()
         assert result is not None
         new_sync_data, event = result
@@ -783,6 +901,61 @@ class TestPostTxSettlementRound:
             "req-a",
             "req-b",
         ]
+
+    def test_skipped_task_is_not_handed_off_as_submitted(self) -> None:
+        """Only ids actually in the tx are pruned; a sim-skipped task survives.
+
+        Regression for the silent-unpaid-work bug: ``done_tasks`` still
+        holds every pooled task, including one whose deliver simulation
+        failed and was left out of the multisend. Handing off all of
+        ``done_tasks`` pruned that task next period as though it had
+        settled, so it was never retried and never paid for.
+        """
+        tasks = [_make_task("req-a"), _make_task("req-skipped"), _make_task("req-b")]
+        payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
+        round_ = _make_post_tx_round(
+            payloads,
+            done_tasks=tasks,
+            **{
+                get_name(SynchronizedData.tx_included_request_ids): [
+                    "req-a",
+                    "req-b",
+                ]
+            },
+        )
+        result = round_.end_block()
+        assert result is not None
+        new_sync_data, event = result
+        assert event == Event.DONE
+        sd = cast(SynchronizedData, new_sync_data)
+        assert sd.submitted_request_ids == ["req-a", "req-b"]
+        assert "req-skipped" not in sd.submitted_request_ids
+
+    def test_no_write_when_nothing_included_even_with_done_tasks(self) -> None:
+        """A settlement that skipped every deliver leaves the hand-off untouched.
+
+        ``done_tasks`` is non-empty but nothing made it into the tx (all
+        simulations failed). Writing ``[]`` here would clobber a pending
+        hand-off; writing the done ids would prune unpaid work.
+        """
+        payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
+        pending_handoff = ["still-pending-a"]
+        round_ = _make_post_tx_round(
+            payloads,
+            done_tasks=[_make_task("req-skipped")],
+            **{
+                get_name(SynchronizedData.submitted_request_ids): pending_handoff,
+                get_name(SynchronizedData.tx_included_request_ids): [],
+            },
+        )
+        result = round_.end_block()
+        assert result is not None
+        new_sync_data, event = result
+        assert event == Event.DONE
+        assert (
+            cast(SynchronizedData, new_sync_data).submitted_request_ids
+            == pending_handoff
+        )
 
     def test_no_write_when_done_tasks_empty(self) -> None:
         """DONE with no ``done_tasks`` leaves the hand-off untouched.
@@ -809,50 +982,31 @@ class TestPostTxSettlementRound:
             == pending_handoff
         )
 
-    def test_submitted_request_ids_normalised_to_str(self) -> None:
-        """Ids are ``str``-normalised to match the prune-site lookup key.
+    def test_included_ids_degrade_to_no_write_on_bad_shape(self) -> None:
+        """A malformed ``tx_included_request_ids`` reads as ``[]`` and preserves the hand-off.
 
-        Mixed ``int`` / ``str`` request_id shapes can survive an
-        in-place restart. Normalising to ``str`` here keeps parity
-        with the downstream match in
-        :meth:`TaskExecutionBaseBehaviour.remove_tasks_by_id`.
+        Same crash-loop rationale as ``submitted_request_ids``: raising in
+        ``end_block`` on a byte-identical bad value would take every
+        participant down on the same block.
         """
-        tasks = [_make_task(42), _make_task("req-x")]
         payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
-        round_ = _make_post_tx_round(payloads, done_tasks=tasks)
+        pending_handoff = ["still-pending-a"]
+        round_ = _make_post_tx_round(
+            payloads,
+            done_tasks=[_make_task("req-a")],
+            **{
+                get_name(SynchronizedData.submitted_request_ids): pending_handoff,
+                get_name(SynchronizedData.tx_included_request_ids): [1, 2],
+            },
+        )
         result = round_.end_block()
         assert result is not None
         new_sync_data, event = result
         assert event == Event.DONE
-        assert cast(SynchronizedData, new_sync_data).submitted_request_ids == [
-            "42",
-            "req-x",
-        ]
-
-    def test_submitted_request_ids_skips_falsy_ids(self) -> None:
-        """A missing / empty ``request_id`` is dropped from the id list.
-
-        Mirrors the falsy-id skip in
-        :meth:`TaskPoolingRound.end_block`. Legit ``0`` (int) is
-        deliberately kept via the explicit ``is None or == ""``
-        check rather than a ``not`` truthiness test.
-        """
-        tasks = [
-            {"request_id": 0, "tool": "t0"},  # legit id, keep
-            {"request_id": None, "tool": "t-drop"},  # missing, skip
-            {"request_id": "", "tool": "t-drop2"},  # empty, skip
-            _make_task("req-keep"),
-        ]
-        payloads = {p: _post_tx_payload_for(p) for p in _PARTICIPANTS}
-        round_ = _make_post_tx_round(payloads, done_tasks=tasks)
-        result = round_.end_block()
-        assert result is not None
-        new_sync_data, event = result
-        assert event == Event.DONE
-        assert cast(SynchronizedData, new_sync_data).submitted_request_ids == [
-            "0",
-            "req-keep",
-        ]
+        assert (
+            cast(SynchronizedData, new_sync_data).submitted_request_ids
+            == pending_handoff
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -887,3 +1041,17 @@ class TestCrossPeriodPersistedKeys:
         """
         keys = TaskSubmissionAbciApp.cross_period_persisted_keys
         assert "done_tasks" not in keys
+
+    def test_tx_included_request_ids_is_not_cross_period_persisted(self) -> None:
+        """``tx_included_request_ids`` is consumed within its own period.
+
+        It is written by ``TransactionPreparationRound`` and read by
+        ``PostTxSettlementRound`` in the same cycle; carrying it forward
+        would let a stale list be re-handed-off after a NO_TASKS period.
+        It also must stay out of ``db_pre_conditions`` for
+        ``PostTxSettlementRound``: the delivery-rate settlement leg
+        reaches that round without ever writing it.
+        """
+        keys = TaskSubmissionAbciApp.cross_period_persisted_keys
+        assert "tx_included_request_ids" not in keys
+        assert TaskSubmissionAbciApp.db_pre_conditions[PostTxSettlementRound] == set()

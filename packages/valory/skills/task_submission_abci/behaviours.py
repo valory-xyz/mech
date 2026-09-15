@@ -32,6 +32,7 @@ from typing import (
     Dict,
     Generator,
     List,
+    Literal,
     Optional,
     Set,
     Tuple,
@@ -67,7 +68,14 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
     BaseBehaviour,
 )
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
-from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
+from packages.valory.skills.task_execution.behaviours import (
+    PREDICT_API_EVENTS,
+    SOURCE_OFFCHAIN,
+    SOURCE_ONCHAIN,
+    Source,
+    _discard_settling_nonce,
+)
+from packages.valory.skills.task_execution.models import metrics_mech_address
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import (
@@ -86,6 +94,7 @@ from packages.valory.skills.task_submission_abci.rounds import (
     TaskPoolingRound,
     TaskSubmissionAbciApp,
     TransactionPreparationRound,
+    encode_tx_payload,
     extract_request_ids,
 )
 from packages.valory.skills.transaction_settlement_abci.payload_tools import (
@@ -164,6 +173,62 @@ mech_predict_api_events_total = Counter(
     "predict-api analytics-write batch outcomes",
     labelnames=["batch_label", "outcome"],
 )
+
+# Settlement outcome counter, one increment per task. Labels:
+#
+# * ``outcome``: ``"settled"`` (the deliver landed in a confirmed Safe
+#   tx and the task was pruned), ``"sim_failed"`` (deliver simulation
+#   failed at tx-prep; the task stays in ``done_tasks`` for a retry
+#   next period), ``"dropped"`` (off-chain only: sim failed
+#   ``MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS`` times, task removed locally,
+#   never paid), ``"contract_error"`` (the deliver-data contract call
+#   itself failed, the whole batch for that path was abandoned this
+#   period).
+# * ``source``: ``"offchain"`` / ``"onchain"`` (``task_execution.behaviours.Source``).
+#
+# Granularity caveat: the mech simulates one call per requester (off-chain)
+# or per mech (on-chain marketplace), so a ``sim_failed`` burst of N is
+# usually one failing group, not N independent failures.
+#
+# ``SettlementOutcome`` is a ``Literal`` so a misspelt outcome fails mypy
+# instead of silently minting a new label value.
+SettlementOutcome = Literal["settled", "sim_failed", "dropped", "contract_error"]
+SETTLEMENT_OUTCOME_SETTLED: SettlementOutcome = "settled"
+SETTLEMENT_OUTCOME_SIM_FAILED: SettlementOutcome = "sim_failed"
+SETTLEMENT_OUTCOME_DROPPED: SettlementOutcome = "dropped"
+SETTLEMENT_OUTCOME_CONTRACT_ERROR: SettlementOutcome = "contract_error"
+mech_settlement_total = Counter(
+    "mech_settlement_total",
+    "Per-task delivery settlement outcomes (see behaviours.py for label semantics)",
+    labelnames=["outcome", "source", "chain", "mech_address"],
+)
+# Off-chain tasks whose result the user can already fetch but whose
+# deliver has not yet landed on-chain (the mech has not been paid).
+# Sampled from the local ``done_tasks`` at pooling time.
+mech_offchain_unsettled_delivered = Gauge(
+    "mech_offchain_unsettled_delivered",
+    "Off-chain results served to the user but not yet settled on-chain",
+    labelnames=["chain", "mech_address"],
+)
+mech_offchain_unsettled_oldest_age_seconds = Gauge(
+    "mech_offchain_unsettled_oldest_age_seconds",
+    "Age of the oldest off-chain result still awaiting on-chain settlement",
+    labelnames=["chain", "mech_address"],
+)
+# Per-task local bookkeeping key: how many tx-prep rounds have skipped
+# this off-chain task because its deliver simulation failed. Stamped on
+# the executing agent's ``shared_state[DONE_TASKS]`` entry only (other
+# agents do not hold the task locally), never on the synced copy.
+SETTLEMENT_ATTEMPTS_KEY = "settlement_attempts"
+MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS = 3
+# Wall-clock receive stamp set by ``task_execution.handlers`` on every
+# off-chain pending task; survives into ``done_tasks`` via the
+# ``**executing_task`` spread in ``_finalize_done_task``.
+ENQUEUED_AT_LOCAL = "enqueued_at_local"
+# Grouping-dict key holding the raw ``str`` request ids of a deliver
+# group (parallel to the ABI-encoded fields), so the tx builders can
+# report which ids actually made it into the multisend.
+REQUEST_IDS_KEY = "request_ids"
 MECH_ADDRESS = "mech_address"
 LAST_TX = "last_tx"
 
@@ -302,6 +367,139 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         else:
             metric.observe(value)
 
+    def count_settlement(
+        self,
+        outcome: SettlementOutcome,
+        source: Source,
+        mech_address: str,
+        amount: int = 1,
+    ) -> None:
+        """Increment ``mech_settlement_total`` by ``amount`` tasks.
+
+        :param outcome: one of the ``SETTLEMENT_OUTCOME_*`` constants.
+        :param source: ``SOURCE_OFFCHAIN`` or ``SOURCE_ONCHAIN``.
+        :param mech_address: the mech the deliver targets.
+        :param amount: number of tasks sharing this outcome.
+        """
+        if amount <= 0:
+            return
+        mech_settlement_total.labels(
+            outcome=outcome,
+            source=source,
+            chain=self.params.default_chain_id,
+            mech_address=mech_address,
+        ).inc(amount)
+
+    def metrics_mech_label(self) -> str:
+        """Return the ``mech_address`` label shared with the task_execution metrics.
+
+        :return: the marketplace mech when one is configured, else the first mech.
+        """
+        return metrics_mech_address(self.params)
+
+    def local_request_ids(self, request_ids: List[str]) -> Set[str]:
+        """Return the subset of ``request_ids`` this agent holds in ``shared_state[DONE_TASKS]``.
+
+        Every agent in the service runs the tx-prep behaviour over the same
+        synced ``done_tasks``, but only the agent that executed a task holds
+        it locally. Counting settlement outcomes only for local tasks keeps
+        ``mech_settlement_total`` at one increment per task fleet-wide
+        instead of one per agent.
+
+        :param request_ids: candidate ``str`` request ids.
+        :return: the ids present in this agent's local done tasks.
+        """
+        wanted = set(request_ids)
+        if not wanted:
+            return set()
+        with self.done_tasks_lock():
+            local = self.context.shared_state.get(DONE_TASKS, [])
+            return {
+                str(task.get("request_id"))
+                for task in local
+                if str(task.get("request_id")) in wanted
+            }
+
+    def count_local_settlement(
+        self,
+        outcome: SettlementOutcome,
+        source: Source,
+        mech_address: str,
+        request_ids: List[str],
+    ) -> None:
+        """Count ``outcome`` for the tasks in ``request_ids`` this agent executed.
+
+        :param outcome: one of the ``SETTLEMENT_OUTCOME_*`` constants.
+        :param source: ``SOURCE_OFFCHAIN`` or ``SOURCE_ONCHAIN``.
+        :param mech_address: the mech the deliver targets.
+        :param request_ids: the task ids sharing this outcome.
+        """
+        self.count_settlement(
+            outcome, source, mech_address, len(self.local_request_ids(request_ids))
+        )
+
+    def note_offchain_settlement_skipped(
+        self, request_ids: List[str], mech_address: str
+    ) -> None:
+        """Record a failed off-chain deliver simulation for ``request_ids``.
+
+        The tasks are left in ``synchronized_data.done_tasks`` this period
+        (so ``PostTxSettlementRound`` does not prune them) and, on the agent
+        that executed them, their local ``shared_state[DONE_TASKS]`` entry is
+        stamped with ``SETTLEMENT_ATTEMPTS_KEY``. Once a task has been
+        skipped ``MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS`` times it is removed
+        locally, its wire nonce is released from the settling set, and it is
+        counted as ``dropped``: the user already has the result, the mech
+        will not be paid for it, and retrying forever would hold the
+        requester's nonce slot indefinitely.
+
+        Agents that did not execute the task hold no local copy, change
+        nothing, and count nothing: the executing agent is the single
+        accountant for each task's settlement outcomes.
+
+        :param request_ids: ``str`` request ids in the skipped sender group.
+        :param mech_address: the ``mech_address`` label value.
+        """
+        skipped = set(request_ids)
+        if not skipped:
+            return
+        dropped: List[Dict[str, Any]] = []
+        retried = 0
+        with self.done_tasks_lock():
+            local_tasks = self.context.shared_state.get(DONE_TASKS, [])
+            survivors: List[Dict[str, Any]] = []
+            for task in local_tasks:
+                if str(task.get("request_id")) not in skipped:
+                    survivors.append(task)
+                    continue
+                attempts = int(task.get(SETTLEMENT_ATTEMPTS_KEY, 0)) + 1
+                task[SETTLEMENT_ATTEMPTS_KEY] = attempts
+                if attempts >= MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS:
+                    dropped.append(task)
+                    continue
+                retried += 1
+                survivors.append(task)
+            if dropped:
+                self.context.shared_state[DONE_TASKS] = survivors
+        for task in dropped:
+            _discard_settling_nonce(self.context.shared_state, task)
+            self.context.logger.warning(
+                "Off-chain request_id=%s (sender=%s nonce=%s tool=%s) dropped after "
+                "%d failed deliver simulations; result was served to the user but "
+                "the delivery will not be settled on-chain.",
+                task.get("request_id"),
+                task.get(SENDER),
+                task.get(NONCE),
+                task.get("tool"),
+                MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS,
+            )
+        self.count_settlement(
+            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, mech_address, len(dropped)
+        )
+        self.count_settlement(
+            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_OFFCHAIN, mech_address, retried
+        )
+
 
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     """TaskPoolingBehaviour"""
@@ -332,7 +530,34 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
     def get_payload_content(self) -> Generator[None, None, str]:
         """Get the payload content."""
         done_tasks = yield from self.get_done_tasks(self.params.task_wait_timeout)
+        self.update_offchain_unsettled_gauges(done_tasks)
         return json.dumps(done_tasks)
+
+    def update_offchain_unsettled_gauges(
+        self, done_tasks: List[Dict[str, Any]]
+    ) -> None:
+        """Publish the delivered-but-unsettled off-chain backlog.
+
+        Every off-chain entry in ``done_tasks`` has already had its result
+        written for ``/fetch_offchain_info`` but has not yet been paid for
+        on-chain; the gauge pair makes a stuck settlement visible before
+        the retry cap drops anything.
+
+        :param done_tasks: this agent's local done-task snapshot.
+        """
+        offchain = [t for t in done_tasks if t.get(IS_OFFCHAIN)]
+        labels = {
+            "chain": self.params.default_chain_id,
+            "mech_address": self.metrics_mech_label(),
+        }
+        self.set_gauge(mech_offchain_unsettled_delivered, len(offchain), **labels)
+        stamps = [
+            float(t[ENQUEUED_AT_LOCAL])
+            for t in offchain
+            if isinstance(t.get(ENQUEUED_AT_LOCAL), (int, float))
+        ]
+        oldest_age = int(time.time() - min(stamps)) if stamps else 0
+        self.set_gauge(mech_offchain_unsettled_oldest_age_seconds, oldest_age, **labels)
 
     def get_done_tasks(self, timeout: float) -> Generator[None, None, List[Dict]]:
         """Wait for tasks to get done in the specified timeout."""
@@ -404,6 +629,9 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                     req_id,
                 )
                 continue
+            source: Source = (
+                SOURCE_OFFCHAIN if task.get(IS_OFFCHAIN) else SOURCE_ONCHAIN
+            )
             tool = task.get("tool")
             start_time = task.get("start_time")
             if tool is None or start_time is None:
@@ -424,6 +652,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                 self.shared_state.tool_delivery_time,
                 tool_delivery_time_duration,
                 tool=tool,
+                source=source,
             )
 
         block_number = yield from self._fetch_tx_block_number(tx_hash)
@@ -1434,8 +1663,15 @@ class TransactionPreparationBehaviour(
         self.set_done()
 
     def get_payload_content(self) -> Generator[None, None, str]:
-        """Prepare the transaction"""
+        """Prepare the transaction.
+
+        :return: ``TransactionPreparationRound.ERROR_PAYLOAD`` on failure,
+            otherwise the :func:`encode_tx_payload` envelope carrying the
+            multisend hex and the request ids whose deliver it contains.
+        :yield: AEA protocol messages while building the deliver txs.
+        """
         all_txs = []
+        included_request_ids: List[str] = []
         update_hash_tx = yield from self.get_mech_update_hash_tx()
         if update_hash_tx is not None:
             # in case of None, the agent should not update the hash
@@ -1450,10 +1686,14 @@ class TransactionPreparationBehaviour(
             # of the txs. The error will be logged.
             all_txs.extend(split_profit_txs)
 
-        offchain_deliver_txs = yield from self._get_offchain_tasks_deliver_data()
+        (
+            offchain_deliver_txs,
+            offchain_included_ids,
+        ) = yield from self._get_offchain_tasks_deliver_data()
         if offchain_deliver_txs is not None:
             # in case of None, the agent will procced ahead as there are no offchain tasks to deliver
             all_txs.extend(offchain_deliver_txs)
+            included_request_ids.extend(offchain_included_ids)
 
         # filter out all the marketplace done tasks
         marketplace_done_tasks = [
@@ -1461,12 +1701,14 @@ class TransactionPreparationBehaviour(
             for done_task in self.synchronized_data.done_tasks
             if done_task.get(IS_MARKETPLACE_MECH_KEY) and not done_task.get(IS_OFFCHAIN)
         ]
-        marketplace_deliver_txs = yield from self._get_marketplace_tasks_deliver_data(
-            marketplace_done_tasks
-        )
+        (
+            marketplace_deliver_txs,
+            marketplace_included_ids,
+        ) = yield from self._get_marketplace_tasks_deliver_data(marketplace_done_tasks)
         if marketplace_deliver_txs is not None:
             # in case of None, the agent will procced ahead as there are no marketplace tasks to deliver
             all_txs.extend(marketplace_deliver_txs)
+            included_request_ids.extend(marketplace_included_ids)
 
         # filter out the remaining tasks
         remaining_tasks = [
@@ -1487,11 +1729,18 @@ class TransactionPreparationBehaviour(
                 self.context.logger.warning(
                     f"Deliver tx simulation failed for task {task}. Skipping this deliver."
                 )
+                self.count_local_settlement(
+                    SETTLEMENT_OUTCOME_SIM_FAILED,
+                    SOURCE_ONCHAIN,
+                    str(task.get(MECH_ADDRESS) or self.metrics_mech_label()),
+                    extract_request_ids([task]),
+                )
                 # remove the task from the list of done tasks
                 self.remove_tasks([task])
                 continue
 
             all_txs.append(deliver_tx)
+            included_request_ids.extend(extract_request_ids([task]))
             response_tx = task.get("transaction", None)
             if response_tx is not None:
                 all_txs.append(response_tx)
@@ -1508,7 +1757,7 @@ class TransactionPreparationBehaviour(
             # something went wrong, respond with ERROR payload for now
             return TransactionPreparationRound.ERROR_PAYLOAD
 
-        return multisend_tx_str
+        return encode_tx_payload(multisend_tx_str, included_request_ids)
 
     def _to_multisend(
         self, transactions: List[Dict]
@@ -1675,7 +1924,16 @@ class TransactionPreparationBehaviour(
 
     def _get_offchain_tasks_deliver_data(
         self,
-    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+    ) -> Generator[None, None, Tuple[Optional[List[Dict[str, Any]]], List[str]]]:
+        """Build the off-chain deliver txs, one per requester.
+
+        :return: ``(tx_list, included_request_ids)``. ``tx_list`` is ``None``
+            when the deliver-data contract call failed (the whole off-chain
+            batch is abandoned this period); ``included_request_ids`` holds
+            only the ids whose deliver simulation passed and is therefore
+            in the returned txs.
+        :yield: AEA protocol messages while simulating each requester's deliver.
+        """
         done_tasks_list = self.synchronized_data.done_tasks
         offchain_done_tasks_list = [
             done_task
@@ -1683,6 +1941,7 @@ class TransactionPreparationBehaviour(
             if done_task.get(IS_OFFCHAIN) is True
         ]
         tx_list = []
+        included_request_ids: List[str] = []
 
         if len(offchain_done_tasks_list) > 0:
             self.context.logger.info(
@@ -1697,12 +1956,16 @@ class TransactionPreparationBehaviour(
                 lambda: {
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value: [],
                     OffchainKeys.DELIVERY_RATES.value: [],
+                    REQUEST_IDS_KEY: [],
                 }
             )
+            # uses the first mech in config as marketplace mech
+            mech_address = self.mech_addresses[0]
             for data in tx_list_sorted_by_nonce:
                 sender = data[SENDER]
-                # uses the first mech in config as marketplace mech
-                mech_address = self.mech_addresses[0]
+                offchain_list_by_sender[sender][REQUEST_IDS_KEY].append(
+                    str(data["request_id"])
+                )
                 offchain_list_by_sender[sender][
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value
                 ].append(
@@ -1758,15 +2021,30 @@ class TransactionPreparationBehaviour(
                     self.context.logger.warning(
                         f"get_offchain_deliver_data unsuccessful!: {contract_api_msg}"
                     )
-                    return None
+                    # Every off-chain task in this period's batch is
+                    # abandoned (including groups already appended to
+                    # ``tx_list``, since the caller discards it on None).
+                    self.count_local_settlement(
+                        SETTLEMENT_OUTCOME_CONTRACT_ERROR,
+                        SOURCE_OFFCHAIN,
+                        self.metrics_mech_label(),
+                        extract_request_ids(offchain_done_tasks_list),
+                    )
+                    return None, []
 
                 data_ = cast(bytes, contract_api_msg.state.body["data"])
                 simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+                group_request_ids = details[REQUEST_IDS_KEY]
                 if not simulation_ok:
                     self.context.logger.info(
-                        f"Simulation failed for offchain dropping the transaction: {contract_data}"
+                        f"Simulation failed for offchain deliver of request_ids="
+                        f"{group_request_ids}; skipping this period: {contract_data}"
+                    )
+                    self.note_offchain_settlement_skipped(
+                        group_request_ids, self.metrics_mech_label()
                     )
                     continue
+                included_request_ids.extend(group_request_ids)
                 tx_list.append(
                     {
                         "to": mech_address,
@@ -1776,7 +2054,7 @@ class TransactionPreparationBehaviour(
                     }
                 )
 
-        return tx_list
+        return tx_list, included_request_ids
 
     def _get_is_nvm_mech(self, mech: str) -> Generator[None, None, Optional[bool]]:
         contract_api_msg = yield from self.get_contract_api_response(
@@ -1825,8 +2103,16 @@ class TransactionPreparationBehaviour(
 
     def _get_marketplace_tasks_deliver_data(
         self, marketplace_done_tasks: List[Dict[str, Any]]
-    ) -> Generator[None, None, Optional[List[Dict[str, Any]]]]:
+    ) -> Generator[None, None, Tuple[Optional[List[Dict[str, Any]]], List[str]]]:
+        """Build the on-chain marketplace deliver txs, one per mech.
+
+        :param marketplace_done_tasks: on-chain marketplace done tasks.
+        :return: ``(tx_list, included_request_ids)``; same contract as
+            :meth:`_get_offchain_tasks_deliver_data`.
+        :yield: AEA protocol messages while simulating each mech's deliver.
+        """
         tx_list = []
+        included_request_ids: List[str] = []
         if len(marketplace_done_tasks) > 0:
             self.context.logger.info(
                 f"{len(marketplace_done_tasks)} Marketplace Tasks Found. Preparing deliver onchain tx(s)"
@@ -1837,6 +2123,7 @@ class TransactionPreparationBehaviour(
                     MarketplaceKeys.REQUEST_IDS.value: [],
                     MarketplaceKeys.DATAS.value: [],
                     MarketplaceKeys.DELIVERY_RATES.value: [],
+                    REQUEST_IDS_KEY: [],
                 }
             )
 
@@ -1846,6 +2133,9 @@ class TransactionPreparationBehaviour(
 
             for data in marketplace_done_tasks:
                 mech = data[MECH_ADDRESS]
+                marketplace_deliver_by_mech[mech][REQUEST_IDS_KEY].append(
+                    str(data["request_id"])
+                )
                 marketplace_deliver_by_mech[mech][
                     MarketplaceKeys.REQUEST_IDS.value
                 ].append(_num_to_bytes(data[MarketplaceData.REQUEST_ID.value]))
@@ -1913,15 +2203,37 @@ class TransactionPreparationBehaviour(
                     self.context.logger.warning(
                         f"get_marketplace_deliver_data unsuccessful!: {contract_api_msg}"
                     )
-                    return None
+                    for (
+                        failed_mech,
+                        failed_details,
+                    ) in marketplace_deliver_by_mech.items():
+                        self.count_local_settlement(
+                            SETTLEMENT_OUTCOME_CONTRACT_ERROR,
+                            SOURCE_ONCHAIN,
+                            failed_mech,
+                            failed_details[REQUEST_IDS_KEY],
+                        )
+                    return None, []
 
                 data_ = cast(bytes, contract_api_msg.state.body["data"])
                 simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
+                group_request_ids = details[REQUEST_IDS_KEY]
                 if not simulation_ok:
+                    # On-chain requests stay undelivered on the contract and
+                    # are re-fetched by the undelivered-requests read, so no
+                    # local retry cap is needed here; just count and skip.
                     self.context.logger.info(
-                        f"Simulation failed for onchain dropping the transaction: {contract_data}"
+                        f"Simulation failed for onchain deliver of request_ids="
+                        f"{group_request_ids}; skipping this period: {contract_data}"
+                    )
+                    self.count_local_settlement(
+                        SETTLEMENT_OUTCOME_SIM_FAILED,
+                        SOURCE_ONCHAIN,
+                        mech,
+                        group_request_ids,
                     )
                     continue
+                included_request_ids.extend(group_request_ids)
                 tx_list.append(
                     {
                         "to": mech,
@@ -1931,7 +2243,7 @@ class TransactionPreparationBehaviour(
                     }
                 )
 
-        return tx_list
+        return tx_list, included_request_ids
 
 
 class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
@@ -1964,8 +2276,9 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     matching_round: Type[AbstractRound] = PostTxSettlementRound
 
     def async_act(self) -> Generator:
-        """Build, sign, and POST the offchain-events batch, then advance."""
+        """Count settled deliveries, POST the offchain-events batch, then advance."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            self.count_settled_from_synced_data()
             yield from self._do_predict_api_write_best_effort()
             payload = PostTxSettlementPayload(
                 sender=self.context.agent_address, content="done"
@@ -1975,6 +2288,33 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
+
+    def count_settled_from_synced_data(self) -> None:
+        """Count ``settled`` for the tasks this agent executed in the confirmed tx.
+
+        Reads the synced ``done_tasks`` and ``tx_included_request_ids`` rather
+        than the local ``shared_state[DONE_TASKS]``: the local queue is
+        in-memory and empties on a process restart, whereas the synced copy
+        carries ``task_executor_address`` for the rest of the period. Each
+        task is still counted exactly once fleet-wide, by its executor.
+        """
+        included = set(self.synchronized_data.tx_included_request_ids)
+        if not included:
+            return
+        me = self.context.agent_address
+        for task in self.synchronized_data.done_tasks:
+            if str(task.get("request_id")) not in included:
+                continue
+            if task.get("task_executor_address") != me:
+                continue
+            source: Source = (
+                SOURCE_OFFCHAIN if task.get(IS_OFFCHAIN) else SOURCE_ONCHAIN
+            )
+            self.count_settlement(
+                SETTLEMENT_OUTCOME_SETTLED,
+                source,
+                str(task.get(MECH_ADDRESS) or self.metrics_mech_label()),
+            )
 
     # Note on the two ``mech_events_chain_id`` params: task_execution's
     # copy powers delivered events; task_submission_abci's copy powers
@@ -2454,11 +2794,17 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         ).inc()
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
-        """Return every locally-cached ``predict_api_event`` for the round's done_tasks.
+        """Return every locally-cached ``predict_api_event`` for the round's settled tasks.
+
+        Only tasks whose deliver was actually included in this period's
+        multisend (``synchronized_data.tx_included_request_ids``) are
+        reported: a task skipped at tx-prep because its simulation failed
+        is still in ``done_tasks`` but was not delivered under this tx hash.
 
         :return: an ordered list of ``MechEvent``-shaped dicts.
         """
         done_tasks = cast(List[Dict[str, Any]], self.synchronized_data.done_tasks)
+        included_ids = set(self.synchronized_data.tx_included_request_ids)
         events_by_id: Dict[str, Dict[str, Any]] = self.context.shared_state.get(
             PREDICT_API_EVENTS, {}
         )
@@ -2467,6 +2813,13 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         for task in done_tasks:
             req_id = task.get("request_id")
             if req_id is None:
+                continue
+            if str(req_id) not in included_ids:
+                self.context.logger.debug(
+                    "request_id=%s not in this period's settled tx; "
+                    "predict-api delivered event deferred",
+                    req_id,
+                )
                 continue
             entry = events_by_id.get(str(req_id))
             event = entry.get("event") if isinstance(entry, dict) else None

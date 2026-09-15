@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
+from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple, cast
 
 from aea.helpers.cid import to_v1
 from aea.mail.base import EnvelopeContext
@@ -60,7 +60,7 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
-from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.models import Params, metrics_mech_address
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
@@ -113,6 +113,28 @@ OUTSTANDING_NONCES_BY_SENDER = ACCEPTED_NONCES_BY_SENDER
 # constants shared across the accept and finalize sides.
 _SENDER_KEY = "sender"
 _NONCE_KEY = "nonce"
+# Wall-clock receive stamp set by ``handlers._enqueue_offchain_request`` on
+# every off-chain pending task (``time.time()``); used for the end-to-end
+# off-chain latency histogram. Never mix with the ``perf_counter`` fields.
+ENQUEUED_AT_LOCAL = "enqueued_at_local"
+# ``source`` label values for the per-tool task metrics. Single
+# definition for the whole agent: ``task_submission_abci`` imports these
+# rather than restating them, so the two skills cannot drift.
+Source = Literal["onchain", "offchain"]
+SOURCE_ONCHAIN: Source = "onchain"
+SOURCE_OFFCHAIN: Source = "offchain"
+# Bounded ``reason`` label values for ``mech_tasks_failed_total``. The log
+# line keeps the full human-readable message (with request id / prices);
+# the label must not, or every failure mints a new time series.
+FAILURE_REASON_TOOL_NOT_INSTALLED = "tool_not_installed"
+FAILURE_REASON_PRICING_INVALID = "pricing_invalid"
+FAILURE_REASON_TOOL_INVALID = "tool_invalid"
+FAILURE_REASON_EXECUTION_FAILED = "execution_failed"
+# Bounded ``reason`` label values for ``mech_offchain_failures_total``.
+OFFCHAIN_FAILURE_EXECUTION_FAILED = "execution_failed"
+OFFCHAIN_FAILURE_CID_FAILED = "cid_failed"
+OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED = "tool_not_installed"
+OFFCHAIN_FAILURE_INVALID_DONE_TASK = "invalid_done_task"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
@@ -255,6 +277,59 @@ def _discard_outstanding_nonce(
         target.pop(sender_key, None)
 
 
+def _discard_settling_nonce(
+    shared_state: Dict[str, Any],
+    done_task: Optional[Dict[str, Any]],
+) -> None:
+    """Drop the sender+nonce from the settling set.
+
+    Counterpart of :func:`_discard_outstanding_nonce` for a task that
+    already went through ``_finalize_done_task`` (its nonce sits in
+    ``settling``, not ``accepted``) and is then abandoned before the
+    chain ever consumes the slot: the tx-prep retry cap in
+    ``task_submission_abci`` gives up on an off-chain deliver whose
+    simulation keeps failing. Leaving the entry in ``settling`` would
+    keep the admission gate's next-expected slot one ahead of the
+    on-chain ``mapNonces`` for that sender, so their next legitimate
+    request would be rejected as ``NONCE_BELOW_EXPECTED`` until the
+    reconcile pass happens to drain it.
+
+    :param shared_state: the AEA shared-state dict.
+    :param done_task: the abandoned done-task dict (or None).
+    """
+    if not done_task:
+        return
+    sender = done_task.get(_SENDER_KEY)
+    nonce = done_task.get(_NONCE_KEY)
+    if sender is None or nonce is None:
+        return
+    try:
+        wire_nonce = int(nonce)
+    except (TypeError, ValueError):
+        return
+    target = shared_state.get(SETTLING_NONCES_BY_SENDER)
+    if not target:
+        return
+    sender_key = _find_sender_key(target, sender)
+    if sender_key is None:
+        return
+    entries = target[sender_key]
+    entries.discard(wire_nonce)
+    if not entries:
+        target.pop(sender_key, None)
+
+
+def _source_label(task: Optional[Dict[str, Any]]) -> Source:
+    """Return the ``source`` label value for a task dict.
+
+    :param task: a pending / executing / done task dict (or None).
+    :return: ``SOURCE_OFFCHAIN`` when the task carries ``is_offchain``, else ``SOURCE_ONCHAIN``.
+    """
+    if task and task.get("is_offchain"):
+        return SOURCE_OFFCHAIN
+    return SOURCE_ONCHAIN
+
+
 def _parse_timestamp(value: Any) -> Optional[datetime]:
     """Parse Unix seconds or an ISO 8601 string into an aware UTC datetime.
 
@@ -384,6 +459,13 @@ class MechMetrics:
     mech_tasks_inflight: Gauge
     mech_tool_preparation_time: Histogram
     mech_tool_execution_time: Histogram
+    mech_offchain_pending_requests: Gauge
+    mech_offchain_pending_oldest_age_seconds: Gauge
+    mech_offchain_deliveries_total: Counter
+    mech_offchain_failures_total: Counter
+    mech_offchain_delivery_latency_seconds: Histogram
+
+    DURATION_BUCKETS = (0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600)
 
     def __init__(self) -> None:
         """Define Prometheus metrics"""
@@ -400,20 +482,23 @@ class MechMetrics:
         self.mech_tasks_started_total = Counter(
             "mech_tasks_started_total", "Total tasks worked on by the mech"
         )
+        # ``source`` (onchain / offchain) splits every per-tool series by
+        # request path; see ``_source_label``.
         self.mech_tasks_completed_total = Counter(
             "mech_tasks_completed_total",
             "Total tasks completed by the mech",
-            labelnames=["tool"],
+            labelnames=["tool", "source"],
         )
         self.mech_tasks_failed_total = Counter(
             "mech_tasks_failed_total",
-            "Total tasks failed in mech with tool and reason",
-            labelnames=["tool", "reason"],
+            "Total tasks failed in mech with tool and reason "
+            "(reason is one of the FAILURE_REASON_* constants)",
+            labelnames=["tool", "reason", "source"],
         )
         self.mech_tasks_timed_out_total = Counter(
             "mech_tasks_timed_out_total",
             "Total tasks timed out during execution",
-            labelnames=["tool"],
+            labelnames=["tool", "source"],
         )
         self.mech_tasks_inflight = Gauge(
             "mech_tasks_inflight",
@@ -422,14 +507,44 @@ class MechMetrics:
         self.mech_tool_preparation_time = Histogram(
             "mech_tool_preparation_time",
             "Duration taken by tool from preparation till execution",
-            labelnames=["tool"],
-            buckets=(0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600),
+            labelnames=["tool", "source"],
+            buckets=self.DURATION_BUCKETS,
         )
         self.mech_tool_execution_time = Histogram(
             "mech_tool_execution_time",
             "Duration taken by tool from execution till completion",
-            labelnames=["tool"],
-            buckets=(0.1, 0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300, 600),
+            labelnames=["tool", "source"],
+            buckets=self.DURATION_BUCKETS,
+        )
+        # Off-chain (HTTP) request path. ``chain`` / ``mech_address`` line the
+        # series up with mech-scanner's per-mech on-chain metrics.
+        self.mech_offchain_pending_requests = Gauge(
+            "mech_offchain_pending_requests",
+            "Accepted off-chain requests waiting for execution",
+            labelnames=["chain", "mech_address"],
+        )
+        self.mech_offchain_pending_oldest_age_seconds = Gauge(
+            "mech_offchain_pending_oldest_age_seconds",
+            "Age of the oldest off-chain request still waiting for execution",
+            labelnames=["chain", "mech_address"],
+        )
+        self.mech_offchain_deliveries_total = Counter(
+            "mech_offchain_deliveries_total",
+            "Off-chain results made available to the requester via /fetch_offchain_info "
+            "(not yet settled on-chain; see mech_settlement_total)",
+            labelnames=["tool", "chain", "mech_address"],
+        )
+        self.mech_offchain_failures_total = Counter(
+            "mech_offchain_failures_total",
+            "Off-chain requests that ended in a rejection after being accepted "
+            "(reason is one of the OFFCHAIN_FAILURE_* constants)",
+            labelnames=["reason", "chain", "mech_address"],
+        )
+        self.mech_offchain_delivery_latency_seconds = Histogram(
+            "mech_offchain_delivery_latency_seconds",
+            "Wall-clock seconds from HTTP receipt to the result being fetchable",
+            labelnames=["tool", "chain", "mech_address"],
+            buckets=self.DURATION_BUCKETS,
         )
 
     def set_gauge(self, metric: Gauge, value: int, **labels: Any) -> None:
@@ -893,8 +1008,53 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Deadline set to {self._request_handling_deadline} for task {self._executing_task}."
             )
 
+    def _offchain_metric_labels(self) -> Dict[str, str]:
+        """Return the ``chain`` / ``mech_address`` labels shared by the off-chain metrics.
+
+        :return: the label kwargs.
+        """
+        return {
+            "chain": str(self.params.default_chain_id),
+            "mech_address": metrics_mech_address(self.params),
+        }
+
+    def _update_queue_gauges(self) -> None:
+        """Publish queue depths, including the off-chain split.
+
+        Runs on every ``act`` tick, before the in-flight early returns, so
+        the gauges do not go stale for the duration of a long tool run.
+        """
+        pending = self.pending_tasks
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_pending_queue_len, len(pending)
+        )
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_timed_out_queue_len, len(self.timed_out_tasks)
+        )
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_wait_for_time_out_queue_len,
+            len(self.wait_for_timeout_tasks),
+        )
+        offchain = [t for t in pending if t.get("is_offchain")]
+        labels = self._offchain_metric_labels()
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_offchain_pending_requests, len(offchain), **labels
+        )
+        stamps = [
+            float(t[ENQUEUED_AT_LOCAL])
+            for t in offchain
+            if isinstance(t.get(ENQUEUED_AT_LOCAL), (int, float))
+        ]
+        oldest_age = int(time.time() - min(stamps)) if stamps else 0
+        self.mech_metrics.set_gauge(
+            self.mech_metrics.mech_offchain_pending_oldest_age_seconds,
+            oldest_age,
+            **labels,
+        )
+
     def _execute_task(self) -> None:
         """Execute tasks."""
+        self._update_queue_gauges()
         # check if there is a task already executing
         if self.params.in_flight_req:
             # there is an in flight request
@@ -925,17 +1085,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             elif self._has_executing_task_timed_out():
                 self._handle_timeout_task()
             return
-
-        self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_pending_queue_len, len(self.pending_tasks)
-        )
-        self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_timed_out_queue_len, len(self.timed_out_tasks)
-        )
-        self.mech_metrics.set_gauge(
-            self.mech_metrics.mech_wait_for_time_out_queue_len,
-            len(self.wait_for_timeout_tasks),
-        )
 
         if len(self.pending_tasks) == 0:
             if len(self.timed_out_tasks) == 0:
@@ -1221,21 +1370,24 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         # reset the time counter used to measure time taken to execute the task
         self.tool_execution_start_time = 0.0
+        source = _source_label(executing_task)
         self.mech_metrics.observe_histogram(
             self.mech_metrics.mech_tool_execution_time,
             tool_exec_time_duration,
             tool=tool,
+            source=source,
         )
         # Start the time counter to measure time taken to deliver the task
         self.tool_deliver_start_time = time.perf_counter()
         self.mech_metrics.inc_counter(
-            self.mech_metrics.mech_tasks_completed_total, tool=tool
+            self.mech_metrics.mech_tasks_completed_total, tool=tool, source=source
         )
         if self._invalid_request:
             self.mech_metrics.inc_counter(
                 metric=self.mech_metrics.mech_tasks_failed_total,
                 tool=tool,
-                reason=response["result"],
+                reason=FAILURE_REASON_EXECUTION_FAILED,
+                source=source,
             )
 
         if is_offchain:
@@ -1256,6 +1408,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self._record_offchain_failure(
                     str(req_id),
                     cast(str, response.get("result") or "task execution failed"),
+                    metric_reason=OFFCHAIN_FAILURE_EXECUTION_FAILED,
                 )
                 return
             try:
@@ -1282,7 +1435,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     f"Off-chain CID computation failed for request {req_id}: {exc}"
                 )
                 self._record_offchain_failure(
-                    str(req_id), f"cid computation failed: {exc}"
+                    str(req_id),
+                    f"cid computation failed: {exc}",
+                    metric_reason=OFFCHAIN_FAILURE_CID_FAILED,
                 )
                 return
             self.context.logger.info(
@@ -1314,6 +1469,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "content_cid": local_cid,
                 "response": response,
             }
+            self._record_offchain_delivery(executing_task, tool)
             # Mirror the (request, response) preimage into the durable buffer
             # after the in-memory return channel is populated. The response
             # stays private (not on IPFS), so this is the operator's only audit
@@ -1393,7 +1549,9 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             f"Task {req_id} has timed out {self.request_id_to_num_timeouts[req_id]} times."
         )
         self.mech_metrics.inc_counter(
-            metric=self.mech_metrics.mech_tasks_timed_out_total, tool=tool
+            metric=self.mech_metrics.mech_tasks_timed_out_total,
+            tool=tool,
+            source=_source_label(executing_task),
         )
         if self._async_result:
             async_result = cast(Future, self._async_result)
@@ -1530,13 +1688,18 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.mech_metrics.inc_counter(
                 metric=self.mech_metrics.mech_tasks_failed_total,
                 tool=tool_name,
-                reason=reason,
+                reason=FAILURE_REASON_TOOL_NOT_INSTALLED,
+                source=_source_label(executing_task),
             )
             if bool(executing_task.get("is_offchain", False)):
                 # Definitive rejection + nonce release + slot reset in
                 # one call. Reads sender / nonce off ``_executing_task``
                 # before the reset clears it.
-                self._record_offchain_failure(str(rid), reason)
+                self._record_offchain_failure(
+                    str(rid),
+                    reason,
+                    metric_reason=OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED,
+                )
                 self.tool_preparation_start_time = 0.0
                 return
             # Prometheus has no way to remove/clear metrics, so we set to default 0
@@ -1561,7 +1724,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     self.mech_metrics.inc_counter(
                         metric=self.mech_metrics.mech_tasks_failed_total,
                         tool=tool_name,
-                        reason=reason,
+                        reason=FAILURE_REASON_PRICING_INVALID,
+                        source=_source_label(executing_task),
                     )
                     self._invalid_request = True
                     # reset the time counter used to measure time taken to prepare the task
@@ -1582,6 +1746,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 self.mech_metrics.mech_tool_preparation_time,
                 tool_prep_time_duration,
                 tool=tool_name,
+                source=_source_label(executing_task),
             )
             # Start the time counter to measure time taken to execute the task
             self.tool_execution_start_time = time.perf_counter()
@@ -1594,7 +1759,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.mech_metrics.inc_counter(
                 metric=self.mech_metrics.mech_tasks_failed_total,
                 tool=tool_name,
-                reason=reason,
+                reason=FAILURE_REASON_TOOL_INVALID,
+                source=_source_label(executing_task),
             )
             self._invalid_request = True
             # reset the time counter used to measure time taken to prepare the task
@@ -1790,7 +1956,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # On-chain has other fallbacks; off-chain the polling client would
                 # otherwise never learn this failed, so emit a definitive
                 # rejection (which also resets the task slot).
-                self._record_offchain_failure(str(req_id), "invalid done task")
+                self._record_offchain_failure(
+                    str(req_id),
+                    "invalid done task",
+                    metric_reason=OFFCHAIN_FAILURE_INVALID_DONE_TASK,
+                )
                 return
             self._reset_executing_task()
             return
@@ -2226,7 +2396,49 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._request_handling_deadline = None
         self._async_result = None
 
-    def _record_offchain_failure(self, req_id: str, reason: str) -> None:
+    def _record_offchain_delivery(
+        self, executing_task: Dict[str, Any], tool: Optional[str]
+    ) -> None:
+        """Count an off-chain result becoming fetchable and observe its latency.
+
+        Latency is wall-clock from the HTTP receive stamp
+        (``ENQUEUED_AT_LOCAL``) to now. Skipped, not zeroed, when the stamp
+        is missing or malformed so a bad row cannot drag the histogram.
+
+        :param executing_task: the task whose response was just stored.
+        :param tool: the tool that produced the result.
+        """
+        labels = self._offchain_metric_labels()
+        self.mech_metrics.inc_counter(
+            self.mech_metrics.mech_offchain_deliveries_total,
+            1,
+            tool=str(tool or "unknown"),
+            chain=labels["chain"],
+            mech_address=labels["mech_address"],
+        )
+        received_at = executing_task.get(ENQUEUED_AT_LOCAL)
+        if not isinstance(received_at, (int, float)):
+            self.context.logger.debug(
+                "offchain delivery latency skipped for request %s: no receive stamp",
+                executing_task.get("requestId"),
+            )
+            return
+        latency = time.time() - float(received_at)
+        if latency < 0:
+            return
+        self.mech_metrics.observe_histogram(
+            self.mech_metrics.mech_offchain_delivery_latency_seconds,
+            latency,
+            tool=str(tool or "unknown"),
+            **labels,
+        )
+
+    def _record_offchain_failure(
+        self,
+        req_id: str,
+        reason: str,
+        metric_reason: str = OFFCHAIN_FAILURE_EXECUTION_FAILED,
+    ) -> None:
         """Record an off-chain request failure and reset the task slot.
 
         Writes the same ``{request_id, status, reason}`` shape the HTTP handler's
@@ -2235,6 +2447,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         :param req_id: the off-chain request id that failed.
         :param reason: a short human-readable failure reason.
+        :param metric_reason: bounded ``reason`` label value (one of the
+            ``OFFCHAIN_FAILURE_*`` constants) for ``mech_offchain_failures_total``.
         """
         # setdefault / get keep this safe if the handler-owned shared-state keys
         # were never initialised (e.g. on-chain-only deployments, unit tests).
@@ -2243,17 +2457,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             "status": "rejected",
             "reason": reason,
         }
+        labels = self._offchain_metric_labels()
+        self.mech_metrics.inc_counter(
+            self.mech_metrics.mech_offchain_failures_total,
+            1,
+            reason=metric_reason,
+            chain=labels["chain"],
+            mech_address=labels["mech_address"],
+        )
         # Capture the rejection in the durable preimage buffer (no-op unless
         # off-chain preimage retention is enabled).
         self._buffer_preimage_settlement(
             req_id, reason, None, preimage_buffer.STATUS_REJECTED
         )
         self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
-        # Drop from both accepted and settling on the rejection path.
-        # A rejected task will never settle, so leaving anything in
-        # ``settling`` would keep the admission-gate slot count
-        # inflated until the pruner eventually removes it (or, if the
-        # sender never sends again, forever).
+        # Release the accepted-set entry: every caller runs before
+        # ``_finalize_done_task``, so the nonce has not moved to ``settling``
+        # yet. A rejection after finalize would need
+        # ``_discard_settling_nonce`` instead (see the retry-cap drop in
+        # ``task_submission_abci``).
         _discard_outstanding_nonce(self.context.shared_state, self._executing_task)
         self._reset_executing_task()
 

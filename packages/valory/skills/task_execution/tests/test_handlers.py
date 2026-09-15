@@ -6262,3 +6262,292 @@ def test_mapnonces_deterministic_failure_returns_unrecoverable_reason(
     resp = handler_context.outbox.sent[-1]
     assert resp.status_code == HttpCode.SERVICE_UNAVAILABLE_CODE.value
     assert stored["reason"] == hmod.NONCE_READ_UNRECOVERABLE
+
+
+# ---------------------------------------------------------------------------
+# Off-chain ingress / poll outcome counters
+# ---------------------------------------------------------------------------
+
+_EXPECTED_METRIC_LABELS = {"chain": "gnosis", "mech_address": "0xmechaddr"}
+
+
+def _msg(body: Dict[str, str]) -> Any:
+    """Build a request message typed as ``Any`` for the handler's ``HttpMessage`` slots."""
+    return make_http_msg(body)
+
+
+def _rejecting_verdict(reason: str, is_infra: bool = False) -> Any:
+    """Return a callable producing a failing ``SignatureVerdict``."""
+    return lambda **_kwargs: hmod.SignatureVerdict(
+        ok=False, reason=reason, is_infra=is_infra
+    )
+
+
+def _balance_stub(status: str, available_offset: int) -> Any:
+    """Return a ``_check_offchain_requester_balance`` stub."""
+    return lambda sender, delivery_rate: {
+        "status": status,
+        "required_amount": int(delivery_rate),
+        "available_amount": int(delivery_rate) + available_offset,
+        "reason": "stub",
+        "balance_tracker_address": "0xBalanceTracker",
+        "payment_type": "0xpaymenttype",
+        "chain_id": 100,
+    }
+
+
+def _setup_accepted(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    _install_balance_ok(mh, monkeypatch)
+    return _make_signed_request_body(request_id="1")
+
+
+def _setup_bad_request(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    _install_balance_ok(mh, monkeypatch)
+    return _make_signed_request_body(request_id="not-a-number")
+
+
+def _setup_disabled(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    mh.context.params.use_offchain = False
+    return _make_signed_request_body(request_id="1")
+
+
+def _setup_signature_rejected(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    _install_balance_ok(mh, monkeypatch)
+    monkeypatch.setattr(
+        mh, "_verify_offchain_request_signature", _rejecting_verdict("bad sig")
+    )
+    return _make_signed_request_body(request_id="1")
+
+
+def _setup_payload_rejected(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    _install_balance_ok(mh, monkeypatch)
+    # ``ipfs_hash`` no longer commits to ``ipfs_data`` -> CID binding fails.
+    return _make_signed_request_body(request_id="1", ipfs_data='{"tool": "tampered"}')
+
+
+def _setup_sender_unresolved(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    _install_balance_ok(mh, monkeypatch)
+    monkeypatch.setattr(mh, "_resolve_sender_checksum", lambda sender: None)
+    return _make_signed_request_body(request_id="1")
+
+
+def _setup_nonce_rejected(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    _install_balance_ok(mh, monkeypatch)
+    monkeypatch.setattr(
+        mh, "_bind_wire_nonce_to_chain", _rejecting_verdict(hmod.NONCE_BELOW_EXPECTED)
+    )
+    return _make_signed_request_body(request_id="1")
+
+
+def _setup_balance_unavailable(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    _install_verify_ok(mh, monkeypatch)
+    monkeypatch.setattr(
+        mh, "_check_offchain_requester_balance", _balance_stub("unavailable", 0)
+    )
+    return _make_signed_request_body(request_id="1")
+
+
+def _setup_insufficient_balance(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    _install_verify_ok(mh, monkeypatch)
+    monkeypatch.setattr(
+        mh, "_check_offchain_requester_balance", _balance_stub("ok", -1)
+    )
+    return _make_signed_request_body(request_id="1")
+
+
+def _setup_internal_error(mh: Any, monkeypatch: Any) -> Dict[str, str]:
+    _install_balance_ok(mh, monkeypatch)
+    monkeypatch.setattr(
+        mh,
+        "_build_payment_receipt_header",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("header boom")),
+    )
+    return _make_signed_request_body(request_id="1")
+
+
+@pytest.mark.parametrize(
+    "setup, expected_outcome",
+    [
+        (_setup_accepted, hmod.REQUEST_OUTCOME_ACCEPTED),
+        (_setup_bad_request, hmod.REQUEST_OUTCOME_BAD_REQUEST),
+        (_setup_disabled, hmod.REQUEST_OUTCOME_DISABLED),
+        (_setup_signature_rejected, hmod.REQUEST_OUTCOME_SIGNATURE_REJECTED),
+        (_setup_payload_rejected, hmod.REQUEST_OUTCOME_PAYLOAD_REJECTED),
+        (_setup_sender_unresolved, hmod.REQUEST_OUTCOME_SENDER_UNRESOLVED),
+        (_setup_nonce_rejected, hmod.REQUEST_OUTCOME_NONCE_REJECTED),
+        (_setup_balance_unavailable, hmod.REQUEST_OUTCOME_BALANCE_UNAVAILABLE),
+        (_setup_insufficient_balance, hmod.REQUEST_OUTCOME_INSUFFICIENT_BALANCE),
+        (_setup_internal_error, hmod.REQUEST_OUTCOME_INTERNAL_ERROR),
+    ],
+    ids=[
+        "accepted",
+        "bad_request",
+        "disabled",
+        "signature_rejected",
+        "payload_rejected",
+        "sender_unresolved",
+        "nonce_rejected",
+        "balance_unavailable",
+        "insufficient_balance",
+        "internal_error",
+    ],
+)
+def test_signed_requests_counts_exactly_one_bounded_outcome(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    setup: Any,
+    expected_outcome: str,
+) -> None:
+    """Every terminal branch of the accept path counts one bounded outcome.
+
+    A branch that counts nothing goes dark on the dashboard; a branch
+    that counts twice (e.g. accepted AND internal_error when the OK
+    sender raises after enqueue) double-books the request.
+
+    :param handler_context: the handler context fixture.
+    :param http_dialogue: the HTTP dialogue fixture.
+    :param monkeypatch: the pytest monkeypatch fixture.
+    :param setup: installs the scenario on the handler; returns the body.
+    :param expected_outcome: the ``REQUEST_OUTCOME_*`` value the branch must emit.
+    """
+    mh = _http_handler(handler_context, monkeypatch)
+    body = setup(mh, monkeypatch)
+    with patch.object(hmod.mech_offchain_requests_total, "labels") as mock_labels:
+        mh._handle_signed_requests(_msg(body), http_dialogue)
+    mock_labels.assert_called_once_with(
+        outcome=expected_outcome, **_EXPECTED_METRIC_LABELS
+    )
+    mock_labels.return_value.inc.assert_called_once_with()
+
+
+def test_signed_requests_second_post_counts_duplicate(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """Re-posting an accepted request counts ``duplicate``, not a second ``accepted``."""
+    mh = _http_handler(handler_context, monkeypatch)
+    body = _setup_accepted(mh, monkeypatch)
+    with patch.object(hmod.mech_offchain_requests_total, "labels") as mock_labels:
+        mh._handle_signed_requests(_msg(body), http_dialogue)
+        mh._handle_signed_requests(_msg(body), http_dialogue)
+    outcomes = [c.kwargs["outcome"] for c in mock_labels.call_args_list]
+    assert outcomes == [
+        hmod.REQUEST_OUTCOME_ACCEPTED,
+        hmod.REQUEST_OUTCOME_DUPLICATE,
+    ]
+
+
+def test_unhandled_accept_path_error_counts_internal_error(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The defensive 503 backstop is counted like any other rejection."""
+    mh = _http_handler(handler_context, monkeypatch)
+    monkeypatch.setattr(
+        mh,
+        "_handle_signed_requests_impl",
+        lambda *a, **k: (_ for _ in ()).throw(OSError("reset")),
+    )
+    with patch.object(hmod.mech_offchain_requests_total, "labels") as mock_labels:
+        mh._handle_signed_requests(
+            _msg(_make_signed_request_body(request_id="1")), http_dialogue
+        )
+    mock_labels.assert_called_once_with(
+        outcome=hmod.REQUEST_OUTCOME_INTERNAL_ERROR, **_EXPECTED_METRIC_LABELS
+    )
+
+
+def test_rejection_sender_without_tag_counts_rejected_other(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A future rejection site that forgets ``outcome`` still lands in a bounded bucket."""
+    mh = _http_handler(handler_context, monkeypatch)
+    with patch.object(hmod.mech_offchain_requests_total, "labels") as mock_labels:
+        mh._send_rejection_response(
+            _msg({"request_id": "r"}),
+            http_dialogue,
+            "r",
+            reason="free text with id 12345",
+            status_code=hmod.HttpCode.UNAUTHORIZED_CODE.value,
+            status_text="Unauthorized",
+        )
+    mock_labels.assert_called_once_with(
+        outcome=hmod.REQUEST_OUTCOME_REJECTED_OTHER, **_EXPECTED_METRIC_LABELS
+    )
+
+
+def test_bad_request_without_route_counts_nothing(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """``_handle_bad_request`` is shared; only route-tagged calls are counted."""
+    mh = _http_handler(handler_context, monkeypatch)
+    with (
+        patch.object(hmod.mech_offchain_requests_total, "labels") as req_labels,
+        patch.object(hmod.mech_offchain_fetches_total, "labels") as fetch_labels,
+    ):
+        mh._handle_bad_request(_msg({}), http_dialogue)
+    req_labels.assert_not_called()
+    fetch_labels.assert_not_called()
+
+
+def _fetch_setup_delivered(handler_context: Any) -> Dict[str, str]:
+    handler_context.shared_state["offchain_request_responses"] = {
+        "7": {"request_id": "7", "status": "ok", "response": {}}
+    }
+    return {"request_id": "7"}
+
+
+def _fetch_setup_rejected(handler_context: Any) -> Dict[str, str]:
+    handler_context.shared_state["offchain_request_responses"] = {
+        "7": {"request_id": "7", "status": "rejected", "reason": "x"}
+    }
+    return {"request_id": "7"}
+
+
+def _fetch_setup_done_task_fallback(handler_context: Any) -> Dict[str, str]:
+    handler_context.shared_state["offchain_request_responses"] = {}
+    handler_context.shared_state[hmod.DONE_TASKS] = [{"request_id": 7}]
+    return {"request_id": "7"}
+
+
+def _fetch_setup_not_found(handler_context: Any) -> Dict[str, str]:
+    handler_context.shared_state["offchain_request_responses"] = {}
+    handler_context.shared_state[hmod.DONE_TASKS] = []
+    return {"request_id": "7"}
+
+
+def _fetch_setup_bad_request(handler_context: Any) -> Dict[str, str]:
+    return {"not_request_id": "7"}
+
+
+@pytest.mark.parametrize(
+    "setup, expected_outcome",
+    [
+        (_fetch_setup_delivered, hmod.FETCH_OUTCOME_DELIVERED),
+        (_fetch_setup_rejected, hmod.FETCH_OUTCOME_REJECTED),
+        (_fetch_setup_done_task_fallback, hmod.FETCH_OUTCOME_DONE_TASK_FALLBACK),
+        (_fetch_setup_not_found, hmod.FETCH_OUTCOME_NOT_FOUND),
+        (_fetch_setup_bad_request, hmod.FETCH_OUTCOME_BAD_REQUEST),
+    ],
+    ids=["delivered", "rejected", "done_task_fallback", "not_found", "bad_request"],
+)
+def test_fetch_offchain_info_counts_exactly_one_bounded_outcome(
+    handler_context: Any,
+    http_dialogue: Any,
+    monkeypatch: Any,
+    setup: Any,
+    expected_outcome: str,
+) -> None:
+    """Every branch of the poll endpoint counts one bounded outcome."""
+    mh = _http_handler(handler_context, monkeypatch)
+    body = setup(handler_context)
+    with (
+        patch.object(hmod.mech_offchain_fetches_total, "labels") as fetch_labels,
+        patch.object(hmod.mech_offchain_requests_total, "labels") as req_labels,
+    ):
+        mh._handle_offchain_request_info(_msg(body), http_dialogue)
+    fetch_labels.assert_called_once_with(
+        outcome=expected_outcome, **_EXPECTED_METRIC_LABELS
+    )
+    fetch_labels.return_value.inc.assert_called_once_with()
+    # A poll must never be booked on the ingress counter.
+    req_labels.assert_not_called()

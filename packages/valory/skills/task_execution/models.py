@@ -59,6 +59,27 @@ class RequestParams:
     )
 
 
+def metrics_mech_address(params: Any) -> str:
+    """Return the mech address used as the ``mech_address`` Prometheus label.
+
+    Off-chain requests are always delivered through the marketplace mech,
+    so prefer the first ``mech_to_config`` entry flagged
+    ``is_marketplace_mech``; fall back to the first configured mech so
+    legacy single-mech deployments still get a stable label.
+
+    Duck-typed on purpose: the skill tests hand behaviours a
+    ``SimpleNamespace`` in place of :class:`Params`.
+
+    :param params: the skill params (or a stub exposing ``mech_to_config``
+        and ``agent_mech_contract_address``).
+    :return: the label value.
+    """
+    for mech, config in getattr(params, "mech_to_config", {}).items():
+        if getattr(config, "is_marketplace_mech", False):
+            return str(mech)
+    return str(getattr(params, "agent_mech_contract_address", ""))
+
+
 class Params(Model):
     """A model to represent params for multiple abci apps."""
 

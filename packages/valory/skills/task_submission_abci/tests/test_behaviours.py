@@ -22,8 +22,8 @@ import contextlib
 import json
 import time
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Type
-from unittest.mock import MagicMock, patch
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Type, cast
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from aea_ledger_ethereum import EthereumApi
@@ -33,13 +33,19 @@ from packages.valory.contracts.complementary_service_metadata.contract import (
 )
 from packages.valory.contracts.hash_checkpoint.contract import HashCheckpointContract
 from packages.valory.skills.abstract_round_abci.base import AbstractRound
-from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
+from packages.valory.skills.task_execution.behaviours import (
+    PREDICT_API_EVENTS,
+    SETTLING_NONCES_BY_SENDER,
+)
+from packages.valory.skills.task_submission_abci import behaviours as beh_mod
 from packages.valory.skills.task_submission_abci.behaviours import (
     DONE_TASKS,
     DeliverBehaviour,
+    ENQUEUED_AT_LOCAL,
     FundsSplittingBehaviour,
     IS_OFFCHAIN,
     LAST_TX,
+    MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS,
     MECH_ADDRESS,
     MarketplaceData,
     MarketplaceKeys,
@@ -49,6 +55,13 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     OffchainKeys,
     PAYMENT_MODEL,
     SENDER,
+    SETTLEMENT_ATTEMPTS_KEY,
+    SETTLEMENT_OUTCOME_CONTRACT_ERROR,
+    SETTLEMENT_OUTCOME_DROPPED,
+    SETTLEMENT_OUTCOME_SETTLED,
+    SETTLEMENT_OUTCOME_SIM_FAILED,
+    SOURCE_OFFCHAIN,
+    SOURCE_ONCHAIN,
     TaskExecutionBaseBehaviour,
     TaskPoolingBehaviour,
     TaskSubmissionRoundBehaviour,
@@ -56,6 +69,7 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     ZERO_ADDRESS,
     ZERO_IPFS_HASH,
 )
+from packages.valory.skills.task_submission_abci.rounds import decode_tx_payload
 from packages.valory.skills.task_submission_abci.tests.conftest import (
     _error_contract_msg,
     _error_ledger_msg,
@@ -1074,6 +1088,390 @@ class TestSubmittedRequestIdsRoundTrip:
             task["request_id"] for task in b.context.shared_state[DONE_TASKS]
         ]
         assert remaining_ids == ["req-keep"]
+
+    def test_skipped_task_survives_settlement_end_to_end(self) -> None:
+        """Round writer → behaviour reader: a sim-skipped task is NOT pruned.
+
+        ``PostTxSettlementRound`` hands off only ``tx_included_request_ids``.
+        A task that was pooled but left out of the multisend must still be
+        in ``shared_state[DONE_TASKS]`` afterwards so it is re-pooled.
+        """
+        from packages.valory.skills.abstract_round_abci.base import (
+            AbciAppDB,
+            get_name,
+        )
+        from packages.valory.skills.task_submission_abci.payloads import (
+            PostTxSettlementPayload,
+        )
+        from packages.valory.skills.task_submission_abci.rounds import (
+            PostTxSettlementRound,
+            SynchronizedData,
+        )
+
+        participants = ["agent-0", "agent-1", "agent-2"]
+        done = [{"request_id": "req-a"}, {"request_id": "req-skipped"}]
+        db = AbciAppDB(
+            {
+                "participants": [participants],
+                "consensus_threshold": [3],
+                "all_participants": [participants],
+                get_name(SynchronizedData.final_tx_hash): ["0xhash"],
+                get_name(SynchronizedData.done_tasks): [done],
+                get_name(SynchronizedData.tx_included_request_ids): [["req-a"]],
+            }
+        )
+        round_ = PostTxSettlementRound(
+            synchronized_data=SynchronizedData(db), context=MagicMock()
+        )
+        round_.collection = {
+            p: PostTxSettlementPayload(sender=p, content="done") for p in participants
+        }
+        result = round_.end_block()
+        assert result is not None
+        new_sd, _ = result
+
+        ctx = _make_full_ctx()
+        ctx.shared_state["mech_delivery_last_block_number"] = MagicMock()
+        b = _DummyPooling(name="b", skill_context=ctx)
+        b._synchronized_data = new_sd
+        b.context.shared_state[DONE_TASKS] = [
+            {"request_id": "req-a", "tool": "t1", "start_time": time.perf_counter()},
+            {
+                "request_id": "req-skipped",
+                "tool": "t2",
+                "start_time": time.perf_counter(),
+            },
+        ]
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram"),
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        remaining_ids = [
+            task["request_id"] for task in b.context.shared_state[DONE_TASKS]
+        ]
+        assert remaining_ids == ["req-skipped"]
+
+
+class TestHandleSubmittedTasksMetrics:
+    """``handle_submitted_tasks`` labels settlement metrics by path."""
+
+    def _make_b(self, tasks: List[Dict[str, Any]]) -> "_DummyPooling":
+        ctx = _make_full_ctx()
+        ctx.shared_state["mech_delivery_last_block_number"] = MagicMock()
+        b = _DummyPooling(name="b", skill_context=ctx)
+        b.context.shared_state[DONE_TASKS] = tasks
+        mock_sd = MagicMock()
+        mock_sd.submitted_request_ids = [str(t["request_id"]) for t in tasks]
+        b._synchronized_data = mock_sd
+        return b
+
+    @pytest.mark.parametrize(
+        "is_offchain, expected_source",
+        [(True, SOURCE_OFFCHAIN), (False, SOURCE_ONCHAIN), (None, SOURCE_ONCHAIN)],
+        ids=["offchain", "onchain", "flag-missing"],
+    )
+    def test_delivery_time_carries_source(
+        self, is_offchain: Optional[bool], expected_source: str
+    ) -> None:
+        """The delivery-time histogram splits by ``source``.
+
+        :param is_offchain: the task's ``is_offchain`` flag (``None`` = absent).
+        :param expected_source: the label value that must be emitted.
+        """
+        task: Dict[str, Any] = {
+            "request_id": "r1",
+            "tool": "t1",
+            "start_time": time.perf_counter(),
+            MECH_ADDRESS: "0xMECH",
+        }
+        if is_offchain is not None:
+            task[IS_OFFCHAIN] = is_offchain
+        b = self._make_b([task])
+        with (
+            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
+            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
+            patch.object(b, "observe_histogram") as mock_hist,
+        ):
+            _run_gen(b.handle_submitted_tasks())
+        _, kwargs = mock_hist.call_args
+        assert kwargs["source"] == expected_source
+
+
+class TestCountSettledFromSyncedData:
+    """``settled`` is counted from synced data so it survives an executor restart."""
+
+    _ME = "0xSELF"
+
+    def _make_self(self, done_tasks: List[Dict[str, Any]], included: List[str]) -> Any:
+        self_ = SimpleNamespace(
+            synchronized_data=SimpleNamespace(
+                done_tasks=done_tasks, tx_included_request_ids=included
+            ),
+            context=SimpleNamespace(agent_address=self._ME),
+            count_settlement=MagicMock(),
+            metrics_mech_label=lambda: "0xLABEL",
+        )
+        return self_
+
+    @staticmethod
+    def _task(rid: str, executor: str, **extra: Any) -> Dict[str, Any]:
+        return {"request_id": rid, "task_executor_address": executor, **extra}
+
+    def test_counts_own_included_tasks_with_source_and_mech(self) -> None:
+        """Only this agent's tasks that were in the tx are counted, once each."""
+        done = [
+            self._task("r-off", self._ME, is_offchain=True, mech_address="0xM1"),
+            self._task("r-on", self._ME),
+            self._task("r-other", "0xOTHER", is_offchain=True),
+            self._task("r-skipped", self._ME, is_offchain=True),
+        ]
+        self_ = self._make_self(done, included=["r-off", "r-on", "r-other"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        assert self_.count_settlement.call_args_list == [
+            call(SETTLEMENT_OUTCOME_SETTLED, SOURCE_OFFCHAIN, "0xM1"),
+            call(SETTLEMENT_OUTCOME_SETTLED, SOURCE_ONCHAIN, "0xLABEL"),
+        ]
+
+    def test_nothing_included_counts_nothing(self) -> None:
+        """Delivery-rate settlement and all-skipped periods count no settled tasks."""
+        self_ = self._make_self([self._task("r1", self._ME)], included=[])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        self_.count_settlement.assert_not_called()
+
+    def test_int_request_id_matches_str_included_id(self) -> None:
+        """On-chain ids are ``int`` on the task and ``str`` in the envelope."""
+        self_ = self._make_self([self._task(cast(str, 42), self._ME)], included=["42"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        self_.count_settlement.assert_called_once()
+
+    def test_missing_executor_address_is_not_counted(self) -> None:
+        """A task without an executor stamp is nobody's to count."""
+        self_ = self._make_self([{"request_id": "r1"}], included=["r1"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        self_.count_settlement.assert_not_called()
+
+
+class TestCountSettlement:
+    """``count_settlement`` forwards bounded labels to the module counter."""
+
+    def test_increments_with_chain_and_mech_labels(self) -> None:
+        """Labels come from params + the caller; ``amount`` is the increment."""
+        b = _DummyPooling(name="b", skill_context=_make_full_ctx())
+        with patch.object(beh_mod.mech_settlement_total, "labels") as mock_labels:
+            b.count_settlement(SETTLEMENT_OUTCOME_SETTLED, SOURCE_OFFCHAIN, "0xM", 3)
+        mock_labels.assert_called_once_with(
+            outcome=SETTLEMENT_OUTCOME_SETTLED,
+            source=SOURCE_OFFCHAIN,
+            chain="100",
+            mech_address="0xM",
+        )
+        mock_labels.return_value.inc.assert_called_once_with(3)
+
+    @pytest.mark.parametrize("amount", [0, -1])
+    def test_non_positive_amount_is_noop(self, amount: int) -> None:
+        """A zero / negative count never touches the counter.
+
+        :param amount: the increment to request.
+        """
+        b = _DummyPooling(name="b", skill_context=_make_full_ctx())
+        with patch.object(beh_mod.mech_settlement_total, "labels") as mock_labels:
+            b.count_settlement(
+                SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_ONCHAIN, "0xM", amount
+            )
+        mock_labels.assert_not_called()
+
+
+class TestLocalSettlementCounting:
+    """Settlement outcomes are attributed only to the agent that executed the task."""
+
+    def _make_b(self, local_ids: List[str]) -> "_DummyTransPrep":
+        ctx = _make_full_ctx(done_tasks=[{"request_id": rid} for rid in local_ids])
+        return _DummyTransPrep(name="b", skill_context=ctx)
+
+    def test_local_request_ids_filters_to_locally_held_tasks(self) -> None:
+        """Only ids present in this agent's DONE_TASKS come back, as ``str``."""
+        b = self._make_b(["r1", "r3"])
+        assert b.local_request_ids(["r1", "r2", "r3", "r4"]) == {"r1", "r3"}
+        assert b.local_request_ids([]) == set()
+
+    def test_count_local_settlement_uses_local_subset_size(self) -> None:
+        """The increment is the number of locally held ids, not the batch size."""
+        b = self._make_b(["r1"])
+        with patch.object(b, "count_settlement") as mock_count:
+            b.count_local_settlement(
+                SETTLEMENT_OUTCOME_CONTRACT_ERROR, SOURCE_OFFCHAIN, "0xM", ["r1", "r2"]
+            )
+        mock_count.assert_called_once_with(
+            SETTLEMENT_OUTCOME_CONTRACT_ERROR, SOURCE_OFFCHAIN, "0xM", 1
+        )
+
+    def test_metrics_mech_label_prefers_marketplace_mech(self) -> None:
+        """The label matches the task_execution side: marketplace mech first."""
+        ctx = _make_full_ctx(
+            mech_to_config={
+                "0xlegacy": SimpleNamespace(is_marketplace_mech=False),
+                "0xmarket": SimpleNamespace(is_marketplace_mech=True),
+            }
+        )
+        b = _DummyTransPrep(name="b", skill_context=ctx)
+        assert b.metrics_mech_label() == "0xmarket"
+
+
+class TestNoteOffchainSettlementSkipped:
+    """Retry stamp / drop cap for off-chain tasks whose deliver simulation failed."""
+
+    @staticmethod
+    def _task(request_id: str, attempts: Optional[int] = None) -> Dict[str, Any]:
+        task: Dict[str, Any] = {
+            "request_id": request_id,
+            IS_OFFCHAIN: True,
+            SENDER: "0xSENDER",
+            NONCE: 7,
+            "tool": "t1",
+        }
+        if attempts is not None:
+            task[SETTLEMENT_ATTEMPTS_KEY] = attempts
+        return task
+
+    def _make_b(self, local_tasks: List[Dict[str, Any]]) -> "_DummyTransPrep":
+        ctx = _make_full_ctx(done_tasks=local_tasks)
+        ctx.shared_state[SETTLING_NONCES_BY_SENDER] = {"0xSENDER": {7, 8}}
+        return _DummyTransPrep(name="b", skill_context=ctx)
+
+    def test_first_skip_stamps_attempt_and_keeps_task(self) -> None:
+        """One failure: attempt count becomes 1, task stays, counted as sim_failed."""
+        b = self._make_b([self._task("r1")])
+        with patch.object(b, "count_settlement") as mock_count:
+            b.note_offchain_settlement_skipped(["r1"], "0xMECH")
+        local = b.context.shared_state[DONE_TASKS]
+        assert [t["request_id"] for t in local] == ["r1"]
+        assert local[0][SETTLEMENT_ATTEMPTS_KEY] == 1
+        assert b.context.shared_state[SETTLING_NONCES_BY_SENDER] == {"0xSENDER": {7, 8}}
+        mock_count.assert_any_call(
+            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_OFFCHAIN, "0xMECH", 1
+        )
+        mock_count.assert_any_call(
+            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, "0xMECH", 0
+        )
+
+    def test_reaching_the_cap_drops_task_and_releases_settling_nonce(self) -> None:
+        """The Nth failure removes the task locally and frees its nonce slot."""
+        b = self._make_b(
+            [
+                self._task("r1", attempts=MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS - 1),
+                self._task("r-other"),
+            ]
+        )
+        with patch.object(b, "count_settlement") as mock_count:
+            b.note_offchain_settlement_skipped(["r1"], "0xMECH")
+        local = b.context.shared_state[DONE_TASKS]
+        assert [t["request_id"] for t in local] == ["r-other"]
+        # Only the dropped task's nonce (7) is released; 8 belongs to another task.
+        assert b.context.shared_state[SETTLING_NONCES_BY_SENDER] == {"0xSENDER": {8}}
+        mock_count.assert_any_call(
+            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, "0xMECH", 1
+        )
+        mock_count.assert_any_call(
+            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_OFFCHAIN, "0xMECH", 0
+        )
+
+    def test_below_cap_does_not_drop(self) -> None:
+        """Attempts at cap-2 become cap-1 after this skip: still retried next period."""
+        b = self._make_b(
+            [self._task("r1", attempts=MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS - 2)]
+        )
+        with patch.object(b, "count_settlement"):
+            b.note_offchain_settlement_skipped(["r1"], "0xMECH")
+        local = b.context.shared_state[DONE_TASKS]
+        assert len(local) == 1
+        assert local[0][SETTLEMENT_ATTEMPTS_KEY] == MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS - 1
+
+    def test_non_owner_agent_changes_nothing_and_counts_nothing(self) -> None:
+        """An agent without the task locally leaves shared state alone and counts 0.
+
+        Every agent runs tx-prep over the same synced done_tasks; letting each
+        one count the skip would inflate ``sim_failed`` by the agent count.
+        """
+        b = self._make_b([self._task("r-unrelated")])
+        with patch.object(b, "count_settlement") as mock_count:
+            b.note_offchain_settlement_skipped(["r1", "r2"], "0xMECH")
+        local = b.context.shared_state[DONE_TASKS]
+        assert [t["request_id"] for t in local] == ["r-unrelated"]
+        assert SETTLEMENT_ATTEMPTS_KEY not in local[0]
+        amounts = {c.args[0]: c.args[3] for c in mock_count.call_args_list}
+        assert amounts == {
+            SETTLEMENT_OUTCOME_DROPPED: 0,
+            SETTLEMENT_OUTCOME_SIM_FAILED: 0,
+        }
+
+    def test_empty_id_list_is_noop(self) -> None:
+        """Nothing skipped → nothing stamped, nothing counted."""
+        b = self._make_b([self._task("r1")])
+        with patch.object(b, "count_settlement") as mock_count:
+            b.note_offchain_settlement_skipped([], "0xMECH")
+        assert SETTLEMENT_ATTEMPTS_KEY not in b.context.shared_state[DONE_TASKS][0]
+        mock_count.assert_not_called()
+
+
+class TestOffchainUnsettledGauges:
+    """The delivered-but-unsettled backlog gauges published at pooling time."""
+
+    def _make_b(self) -> "_DummyPooling":
+        return _DummyPooling(name="b", skill_context=_make_full_ctx())
+
+    def test_counts_only_offchain_and_reports_oldest_age(self) -> None:
+        """On-chain tasks are ignored; age is measured from the oldest stamp."""
+        b = self._make_b()
+        now = time.time()
+        done = [
+            {"request_id": "on", IS_OFFCHAIN: False, ENQUEUED_AT_LOCAL: now - 999},
+            {"request_id": "a", IS_OFFCHAIN: True, ENQUEUED_AT_LOCAL: now - 120},
+            {"request_id": "b", IS_OFFCHAIN: True, ENQUEUED_AT_LOCAL: now - 30},
+        ]
+        with patch.object(b, "set_gauge") as mock_gauge:
+            b.update_offchain_unsettled_gauges(done)
+        calls = {c.args[0]: (c.args[1], c.kwargs) for c in mock_gauge.call_args_list}
+        count_value, count_labels = calls[beh_mod.mech_offchain_unsettled_delivered]
+        age_value, _ = calls[beh_mod.mech_offchain_unsettled_oldest_age_seconds]
+        assert count_value == 2
+        assert count_labels == {"chain": "100", "mech_address": "0xMECH"}
+        assert 119 <= age_value <= 121
+
+    def test_empty_backlog_publishes_zeros(self) -> None:
+        """No off-chain tasks → both gauges 0 (not stale, not skipped)."""
+        b = self._make_b()
+        with patch.object(b, "set_gauge") as mock_gauge:
+            b.update_offchain_unsettled_gauges([{"request_id": "on"}])
+        values = {c.args[0]: c.args[1] for c in mock_gauge.call_args_list}
+        assert values[beh_mod.mech_offchain_unsettled_delivered] == 0
+        assert values[beh_mod.mech_offchain_unsettled_oldest_age_seconds] == 0
+
+    def test_missing_stamp_does_not_break_age(self) -> None:
+        """A task without a receive stamp still counts but is ignored for age."""
+        b = self._make_b()
+        done = [
+            {"request_id": "a", IS_OFFCHAIN: True},
+            {"request_id": "b", IS_OFFCHAIN: True, ENQUEUED_AT_LOCAL: "bad"},
+        ]
+        with patch.object(b, "set_gauge") as mock_gauge:
+            b.update_offchain_unsettled_gauges(done)
+        values = {c.args[0]: c.args[1] for c in mock_gauge.call_args_list}
+        assert values[beh_mod.mech_offchain_unsettled_delivered] == 2
+        assert values[beh_mod.mech_offchain_unsettled_oldest_age_seconds] == 0
+
+    def test_get_payload_content_publishes_gauges(self) -> None:
+        """The pooling payload path is what refreshes the gauges each period."""
+        b = self._make_b()
+        done = [{"request_id": "a", IS_OFFCHAIN: True}]
+        with (
+            patch.object(b, "get_done_tasks", side_effect=_gen_returning(done)),
+            patch.object(b, "update_offchain_unsettled_gauges") as mock_update,
+        ):
+            payload = _run_gen(b.get_payload_content())
+        assert json.loads(payload) == done
+        mock_update.assert_called_once_with(done)
 
 
 # ---------------------------------------------------------------------------
@@ -2244,50 +2642,74 @@ class TestGetOffchainTasksDeliverData:
         b._synchronized_data = mock_sd
         return contextlib.nullcontext()
 
+    @staticmethod
+    def _offchain_task(
+        request_id: str, sender: str = "0xSENDER", nonce: int = 1
+    ) -> Dict:
+        return {
+            "request_id": request_id,
+            "is_offchain": True,
+            "nonce": nonce,
+            "sender": sender,
+            "ipfs_hash": "0x" + "ab" * 16,
+            "signature": "0x" + "cd" * 32,
+            "task_result": "de" * 16,
+            "delivery_rate": 100,
+        }
+
     def test_returns_empty_list_when_no_offchain_tasks(self) -> None:
         """Test returns empty list when no offchain tasks."""
         b = self._make_b()
         non_offchain = [{"request_id": "r1", "is_offchain": False}]
         with self._patch_sd(b, non_offchain):
             result = _run_gen(b._get_offchain_tasks_deliver_data())
-        assert result == []
+        assert result == ([], [])
 
     def test_skips_tasks_with_failed_simulation(self) -> None:
-        """Test skips tasks with failed simulation."""
+        """A sim-failed sender group is left out of both the txs and the included ids."""
         b = self._make_b()
-        task = {
-            "request_id": "r1",
-            "is_offchain": True,
-            "nonce": 1,
-            "sender": "0xSENDER",
-            "ipfs_hash": "0x" + "ab" * 16,
-            "signature": "0x" + "cd" * 32,
-            "task_result": "de" * 16,
-            "delivery_rate": 100,
-        }
+        task = self._offchain_task("r1")
         msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": False})
         with (
             self._patch_sd(b, [task]),
             patch.object(
                 b, "get_contract_api_response", side_effect=_gen_returning(msg)
             ),
+            patch.object(b, "note_offchain_settlement_skipped") as mock_skip,
         ):
             result = _run_gen(b._get_offchain_tasks_deliver_data())
-        assert result == []
+        assert result == ([], [])
+        # The skip bookkeeping (retry stamp / drop cap / metric) fires for
+        # exactly the ids in the failed group.
+        mock_skip.assert_called_once_with(["r1"], "0xMECH")
+
+    def test_sim_failure_only_excludes_the_failing_sender_group(self) -> None:
+        """Two senders, one fails simulation: the other's ids are still included."""
+        b = self._make_b()
+        ok_task = self._offchain_task("r-ok", sender="0xOK")
+        bad_task = self._offchain_task("r-bad", sender="0xBAD")
+        by_requester = {
+            "0xOK": _state_contract_msg({"data": b"\x01", "simulation_ok": True}),
+            "0xBAD": _state_contract_msg({"data": b"\x02", "simulation_ok": False}),
+        }
+
+        def _respond(*_args: Any, **kwargs: Any) -> Any:
+            return _gen_returning(by_requester[kwargs["requester"]])()
+
+        with (
+            self._patch_sd(b, [ok_task, bad_task]),
+            patch.object(b, "get_contract_api_response", side_effect=_respond),
+            patch.object(b, "note_offchain_settlement_skipped") as mock_skip,
+        ):
+            tx_list, included = _run_gen(b._get_offchain_tasks_deliver_data())
+        assert [tx["data"] for tx in tx_list] == [b"\x01"]
+        assert included == ["r-ok"]
+        mock_skip.assert_called_once_with(["r-bad"], "0xMECH")
 
     def test_appends_tx_when_simulation_ok(self) -> None:
         """Test appends tx when simulation ok."""
         b = self._make_b()
-        task = {
-            "request_id": "r1",
-            "is_offchain": True,
-            "nonce": 1,
-            "sender": "0xSENDER",
-            "ipfs_hash": "0x" + "ab" * 16,
-            "signature": "0x" + "cd" * 32,
-            "task_result": "de" * 16,
-            "delivery_rate": 100,
-        }
+        task = self._offchain_task("r1")
         msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
         with (
             self._patch_sd(b, [task]),
@@ -2295,9 +2717,10 @@ class TestGetOffchainTasksDeliverData:
                 b, "get_contract_api_response", side_effect=_gen_returning(msg)
             ),
         ):
-            result = _run_gen(b._get_offchain_tasks_deliver_data())
-        assert len(result) == 1
-        assert result[0]["to"] == "0xMECH"
+            tx_list, included = _run_gen(b._get_offchain_tasks_deliver_data())
+        assert len(tx_list) == 1
+        assert tx_list[0]["to"] == "0xMECH"
+        assert included == ["r1"]
 
 
 # ---------------------------------------------------------------------------
@@ -2364,13 +2787,14 @@ class TestGetMarketplaceTasksDeliverData:
         """Test returns empty list for no marketplace tasks."""
         b = self._make_b()
         result = _run_gen(b._get_marketplace_tasks_deliver_data([]))
-        assert result == []
+        assert result == ([], [])
 
     def test_appends_tx_for_non_nvm_mech_with_simulation_ok(self) -> None:
         """Test appends tx for non nvm mech with simulation ok."""
         b = self._make_b()
         task = {
             "mech_address": "0xMECH",
+            "request_id": 12345,
             "requestId": 12345,
             "task_result": "de" * 16,
         }
@@ -2384,14 +2808,45 @@ class TestGetMarketplaceTasksDeliverData:
                 b, "get_contract_api_response", side_effect=_gen_returning(msg_deliver)
             ),
         ):
-            result = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
-        assert len(result) == 1
+            tx_list, included = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
+        assert len(tx_list) == 1
+        # Reported as the ``str`` form the prune site keys on, not bytes32.
+        assert included == ["12345"]
 
     def test_skips_tasks_with_failed_simulation(self) -> None:
-        """Test skips tasks with failed simulation."""
+        """A sim-failed mech group is left out of txs and ids and counted, not dropped."""
         b = self._make_b()
         task = {
             "mech_address": "0xMECH",
+            "request_id": 12345,
+            "requestId": 12345,
+            "task_result": "de" * 16,
+        }
+        mock_sd = MagicMock()
+        mock_sd.safe_contract_address = "0xSAFE"
+        b._synchronized_data = mock_sd
+        msg_deliver = _state_contract_msg({"data": b"\xdd", "simulation_ok": False})
+        # This agent executed the task, so it is the one that counts it.
+        b.context.shared_state[DONE_TASKS] = [dict(task)]
+        with (
+            patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
+            patch.object(
+                b, "get_contract_api_response", side_effect=_gen_returning(msg_deliver)
+            ),
+            patch.object(b, "count_settlement") as mock_count,
+        ):
+            result = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
+        assert result == ([], [])
+        mock_count.assert_called_once_with(
+            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_ONCHAIN, "0xMECH", 1
+        )
+
+    def test_failed_simulation_is_not_counted_by_non_executing_agent(self) -> None:
+        """An agent that did not execute the task skips it but counts 0 (no fleet inflation)."""
+        b = self._make_b()
+        task = {
+            "mech_address": "0xMECH",
+            "request_id": 12345,
             "requestId": 12345,
             "task_result": "de" * 16,
         }
@@ -2404,9 +2859,13 @@ class TestGetMarketplaceTasksDeliverData:
             patch.object(
                 b, "get_contract_api_response", side_effect=_gen_returning(msg_deliver)
             ),
+            patch.object(b, "count_settlement") as mock_count,
         ):
             result = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
-        assert result == []
+        assert result == ([], [])
+        mock_count.assert_called_once_with(
+            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_ONCHAIN, "0xMECH", 0
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -2749,10 +3208,14 @@ class TestTransactionPreparationGetPayloadContent:
             ),
             patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
             patch.object(
-                b, "_get_offchain_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_offchain_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
-                b, "_get_marketplace_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_marketplace_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(b, "get_update_usage_tx", side_effect=_gen_returning(None)),
         ):
@@ -2774,10 +3237,14 @@ class TestTransactionPreparationGetPayloadContent:
             ),
             patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
             patch.object(
-                b, "_get_offchain_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_offchain_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
-                b, "_get_marketplace_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_marketplace_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
                 b, "get_update_usage_tx", side_effect=_gen_returning(usage_tx)
@@ -2803,10 +3270,14 @@ class TestTransactionPreparationGetPayloadContent:
             ),
             patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
             patch.object(
-                b, "_get_offchain_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_offchain_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
-                b, "_get_marketplace_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_marketplace_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
                 b, "get_update_usage_tx", side_effect=_gen_returning(usage_tx)
@@ -2816,7 +3287,85 @@ class TestTransactionPreparationGetPayloadContent:
             ),
         ):
             result = _run_gen(b.get_payload_content())
-        assert result == "encoded_multisend"
+        # The vote is the envelope, never the bare multisend string.
+        assert result != "encoded_multisend"
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded_multisend",
+            "included_request_ids": [],
+        }
+
+    def test_included_ids_aggregate_across_all_three_deliver_paths(self) -> None:
+        """Off-chain, marketplace and legacy ids all land in the envelope, in that order."""
+        b = self._make_b()
+        legacy = {"is_marketplace_mech": False, "request_id": "r-legacy"}
+        b._synchronized_data.done_tasks = [legacy]
+        deliver_tx = {
+            "to": "0xMECH",
+            "value": 0,
+            "data": b"\x00",
+            "simulation_ok": True,
+        }
+        usage_tx = {"to": "0xHASH", "value": 0, "data": b"\x00"}
+        with (
+            self._patch_sd(b),
+            patch.object(
+                b, "get_mech_update_hash_tx", side_effect=_gen_returning(None)
+            ),
+            patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
+            patch.object(
+                b,
+                "_get_offchain_tasks_deliver_data",
+                side_effect=_gen_returning(([{"to": "0xA"}], ["r-off"])),
+            ),
+            patch.object(
+                b,
+                "_get_marketplace_tasks_deliver_data",
+                side_effect=_gen_returning(([{"to": "0xB"}], ["r-mkt"])),
+            ),
+            patch.object(
+                b, "_get_deliver_tx", side_effect=_gen_returning(dict(deliver_tx))
+            ),
+            patch.object(
+                b, "get_update_usage_tx", side_effect=_gen_returning(usage_tx)
+            ),
+            patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
+        ):
+            result = _run_gen(b.get_payload_content())
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": ["r-off", "r-mkt", "r-legacy"],
+        }
+
+    def test_abandoned_offchain_batch_contributes_no_ids(self) -> None:
+        """A ``(None, [])`` off-chain result adds nothing to the envelope."""
+        b = self._make_b()
+        usage_tx = {"to": "0xHASH", "value": 0, "data": b"\x00"}
+        with (
+            self._patch_sd(b),
+            patch.object(
+                b, "get_mech_update_hash_tx", side_effect=_gen_returning(None)
+            ),
+            patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
+            patch.object(
+                b,
+                "_get_offchain_tasks_deliver_data",
+                side_effect=_gen_returning((None, [])),
+            ),
+            patch.object(
+                b,
+                "_get_marketplace_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
+            ),
+            patch.object(
+                b, "get_update_usage_tx", side_effect=_gen_returning(usage_tx)
+            ),
+            patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
+        ):
+            result = _run_gen(b.get_payload_content())
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": [],
+        }
 
     def test_returns_error_when_deliver_tx_is_none(self) -> None:
         """Test returns error when deliver tx is none."""
@@ -2832,10 +3381,14 @@ class TestTransactionPreparationGetPayloadContent:
             ),
             patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
             patch.object(
-                b, "_get_offchain_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_offchain_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
-                b, "_get_marketplace_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_marketplace_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(b, "_get_deliver_tx", side_effect=_gen_returning(None)),
             patch.object(
@@ -2854,6 +3407,7 @@ class TestTransactionPreparationGetPayloadContent:
         b = self._make_b()
         task = {"is_marketplace_mech": False, "request_id": "r1"}
         b._synchronized_data.done_tasks = [task]
+        b.context.shared_state[DONE_TASKS] = [dict(task)]
         deliver_tx = {
             "to": "0xMECH",
             "value": 0,
@@ -2868,10 +3422,14 @@ class TestTransactionPreparationGetPayloadContent:
             ),
             patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
             patch.object(
-                b, "_get_offchain_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_offchain_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
-                b, "_get_marketplace_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_marketplace_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
                 b, "_get_deliver_tx", side_effect=_gen_returning(dict(deliver_tx))
@@ -2880,9 +3438,18 @@ class TestTransactionPreparationGetPayloadContent:
                 b, "get_update_usage_tx", side_effect=_gen_returning(usage_tx)
             ),
             patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
+            patch.object(b, "count_settlement") as mock_count,
         ):
             result = _run_gen(b.get_payload_content())
-        assert result == "encoded"  # deliver skipped but completed
+        # deliver skipped but the vote still completes, with the skipped
+        # id absent from the envelope so it is not pruned as settled.
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": [],
+        }
+        mock_count.assert_called_once_with(
+            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_ONCHAIN, "0xMECH", 1
+        )
 
     def test_appends_response_tx_when_present(self) -> None:
         """Test appends response tx when present."""
@@ -2908,10 +3475,14 @@ class TestTransactionPreparationGetPayloadContent:
             ),
             patch.object(b, "get_split_profit_txs", side_effect=_gen_returning([])),
             patch.object(
-                b, "_get_offchain_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_offchain_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
-                b, "_get_marketplace_tasks_deliver_data", side_effect=_gen_returning([])
+                b,
+                "_get_marketplace_tasks_deliver_data",
+                side_effect=_gen_returning(([], [])),
             ),
             patch.object(
                 b, "_get_deliver_tx", side_effect=_gen_returning(dict(deliver_tx))
@@ -2922,7 +3493,10 @@ class TestTransactionPreparationGetPayloadContent:
             patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
         ):
             result = _run_gen(b.get_payload_content())
-        assert result == "encoded"
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": ["r1"],
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -3188,6 +3762,7 @@ class TestMarketplaceNvmMechPath:
         b = self._make_b()
         task = {
             "mech_address": "0xMECH",
+            "request_id": 12345,
             "requestId": 12345,
             "task_result": "de" * 16,
         }
@@ -3208,8 +3783,10 @@ class TestMarketplaceNvmMechPath:
                 b, "get_contract_api_response", side_effect=_gen_returning(msg_deliver)
             ),
         ):
-            result = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
-        assert len(result) == 1
+            tx_list, included = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
+        assert len(tx_list) == 1
+        # NVM encoding rewrites the ABI ids; the reported ids stay the raw ones.
+        assert included == ["12345"]
 
 
 # ---------------------------------------------------------------------------
@@ -3801,6 +4378,7 @@ class TestTransPrepContractErrors:
         """Error from get_offchain_deliver_data returns None."""
         b = self._make_b()
         offchain_task = {
+            "request_id": "r1",
             IS_OFFCHAIN: True,
             NONCE: 1,
             SENDER: "0xSENDER",
@@ -3813,13 +4391,21 @@ class TestTransPrepContractErrors:
             safe_contract_address="0xSAFE",
             done_tasks=[offchain_task],
         )
-        with patch.object(
-            b,
-            "get_contract_api_response",
-            side_effect=_gen_returning(_error_contract_msg()),
+        b.context.shared_state[DONE_TASKS] = [dict(offchain_task)]
+        with (
+            patch.object(
+                b,
+                "get_contract_api_response",
+                side_effect=_gen_returning(_error_contract_msg()),
+            ),
+            patch.object(b, "count_settlement") as mock_count,
         ):
             result = _run_gen(b._get_offchain_tasks_deliver_data())
-        assert result is None
+        assert result == (None, [])
+        # The whole off-chain batch is abandoned this period: count every task.
+        mock_count.assert_called_once_with(
+            SETTLEMENT_OUTCOME_CONTRACT_ERROR, SOURCE_OFFCHAIN, "0xMECH", 1
+        )
 
     def test_get_is_nvm_mech_contract_error(self) -> None:
         """Error from get_is_nvm_mech returns None."""
@@ -3849,6 +4435,7 @@ class TestTransPrepContractErrors:
         marketplace_tasks = [
             {
                 MECH_ADDRESS: "0xMECH",
+                "request_id": 1,
                 MarketplaceData.REQUEST_ID.value: 1,
                 MarketplaceData.TASK_RESULT.value: "aa" * 16,
             }
@@ -3868,9 +4455,16 @@ class TestTransPrepContractErrors:
             # Second call: get_marketplace_deliver_data → ERROR
             return _gen_returning(_error_contract_msg())(*args, **kwargs)
 
-        with patch.object(b, "get_contract_api_response", side_effect=_side_effect):
+        b.context.shared_state[DONE_TASKS] = [dict(marketplace_tasks[0])]
+        with (
+            patch.object(b, "get_contract_api_response", side_effect=_side_effect),
+            patch.object(b, "count_settlement") as mock_count,
+        ):
             result = _run_gen(b._get_marketplace_tasks_deliver_data(marketplace_tasks))
-        assert result is None
+        assert result == (None, [])
+        mock_count.assert_called_once_with(
+            SETTLEMENT_OUTCOME_CONTRACT_ERROR, SOURCE_ONCHAIN, "0xMECH", 1
+        )
 
 
 # ---------------------------------------------------------------------------
