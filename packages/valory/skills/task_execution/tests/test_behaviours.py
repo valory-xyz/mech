@@ -5232,3 +5232,303 @@ def test_reset_executing_task_noop_on_onchain_task(
     }
     behaviour._reset_executing_task()
     assert shared_state[beh_mod.ACCEPTED_NONCES_BY_SENDER] == {sender: {9}}
+
+
+# ---------------------------------------------------------------------------
+# Off-chain metrics: source label, deliveries / failures / latency, queue gauges
+# ---------------------------------------------------------------------------
+
+_OFFCHAIN_LABELS = {"chain": "gnosis", "mech_address": "0xmechaddr"}
+
+
+@pytest.mark.parametrize(
+    "task, expected",
+    [
+        (None, beh_mod.SOURCE_ONCHAIN),
+        ({}, beh_mod.SOURCE_ONCHAIN),
+        ({"is_offchain": False}, beh_mod.SOURCE_ONCHAIN),
+        ({"is_offchain": True}, beh_mod.SOURCE_OFFCHAIN),
+    ],
+    ids=["none", "no-flag", "flag-false", "flag-true"],
+)
+def test_source_label_values(task: Any, expected: str) -> None:
+    """Only an explicit truthy ``is_offchain`` maps to the off-chain label.
+
+    :param task: the task dict under test.
+    :param expected: the label value.
+    """
+    assert beh_mod._source_label(task) == expected
+
+
+def test_mech_metrics_per_tool_series_carry_source_label() -> None:
+    """The per-tool collectors must declare ``source`` or every call site raises."""
+    metrics = beh_mod.MechMetrics()
+    for collector in (
+        metrics.mech_tasks_completed_total,
+        metrics.mech_tasks_failed_total,
+        metrics.mech_tasks_timed_out_total,
+        metrics.mech_tool_preparation_time,
+        metrics.mech_tool_execution_time,
+    ):
+        assert "source" in collector._labelnames
+        assert "tool" in collector._labelnames
+    for collector in (
+        metrics.mech_offchain_deliveries_total,
+        metrics.mech_offchain_failures_total,
+        metrics.mech_offchain_delivery_latency_seconds,
+        metrics.mech_offchain_pending_requests,
+        metrics.mech_offchain_pending_oldest_age_seconds,
+    ):
+        assert {"chain", "mech_address"} <= set(collector._labelnames)
+
+
+def test_record_offchain_delivery_counts_and_observes_latency(
+    behaviour: Any, monkeypatch: Any
+) -> None:
+    """A stamped task increments deliveries and observes receive→ready latency."""
+    inc = MagicMock()
+    obs = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", obs)
+    task = {"requestId": 7, beh_mod.ENQUEUED_AT_LOCAL: time.time() - 5.0}
+
+    behaviour._record_offchain_delivery(task, "mytool")
+
+    inc.assert_called_once_with(
+        behaviour.mech_metrics.mech_offchain_deliveries_total,
+        1,
+        tool="mytool",
+        **_OFFCHAIN_LABELS,
+    )
+    obs.assert_called_once()
+    args, kwargs = obs.call_args
+    assert args[0] is behaviour.mech_metrics.mech_offchain_delivery_latency_seconds
+    assert 4.5 <= args[1] <= 6.0
+    assert kwargs == {"tool": "mytool", **_OFFCHAIN_LABELS}
+
+
+@pytest.mark.parametrize(
+    "task",
+    [
+        {"requestId": 7},
+        {"requestId": 7, beh_mod.ENQUEUED_AT_LOCAL: "not-a-number"},
+        {"requestId": 7, beh_mod.ENQUEUED_AT_LOCAL: time.time() + 3600},
+    ],
+    ids=["no-stamp", "bad-stamp", "future-stamp"],
+)
+def test_record_offchain_delivery_skips_latency_without_valid_stamp(
+    behaviour: Any, monkeypatch: Any, task: Dict[str, Any]
+) -> None:
+    """The delivery is still counted; the histogram is skipped, never fed junk."""
+    inc = MagicMock()
+    obs = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", obs)
+
+    behaviour._record_offchain_delivery(task, None)
+
+    inc.assert_called_once()
+    assert inc.call_args.kwargs["tool"] == "unknown"
+    obs.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "metric_reason",
+    [
+        None,
+        beh_mod.OFFCHAIN_FAILURE_CID_FAILED,
+        beh_mod.OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED,
+    ],
+    ids=["default", "cid_failed", "tool_not_installed"],
+)
+def test_record_offchain_failure_counts_bounded_reason(
+    behaviour: Any, shared_state: Dict[str, Any], monkeypatch: Any, metric_reason: Any
+) -> None:
+    """The failures counter gets the bounded label, never the free-text reason."""
+    inc = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    behaviour._executing_task = {"requestId": 9, "is_offchain": True}
+    free_text = "Cannot step in. Tool x is not installed. Ignoring request 9."
+
+    if metric_reason is None:
+        behaviour._record_offchain_failure("9", free_text)
+        expected = beh_mod.OFFCHAIN_FAILURE_EXECUTION_FAILED
+    else:
+        behaviour._record_offchain_failure("9", free_text, metric_reason=metric_reason)
+        expected = metric_reason
+
+    inc.assert_called_once_with(
+        behaviour.mech_metrics.mech_offchain_failures_total,
+        1,
+        reason=expected,
+        **_OFFCHAIN_LABELS,
+    )
+    # The human-readable reason still reaches the requester unchanged.
+    assert shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["9"]["reason"] == free_text
+
+
+def _metric_calls(mock: MagicMock, metric: Any) -> List[Any]:
+    """Return the kwargs of every call of ``mock`` targeting ``metric``."""
+    out = []
+    for c in mock.call_args_list:
+        target = c.args[0] if c.args else c.kwargs.get("metric")
+        if target is metric:
+            out.append({k: v for k, v in c.kwargs.items() if k != "metric"})
+    return out
+
+
+def test_handle_done_task_offchain_success_emits_source_and_delivery_metrics(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The off-chain success path tags per-tool series ``offchain`` and counts the delivery."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id=11)
+    behaviour._executing_task[beh_mod.ENQUEUED_AT_LOCAL] = time.time() - 2.0
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    inc = MagicMock()
+    obs = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", obs)
+
+    behaviour._handle_done_task(task_result=_make_success_result())
+
+    m = behaviour.mech_metrics
+    assert _metric_calls(inc, m.mech_tasks_completed_total) == [
+        {"tool": "mytool", "source": beh_mod.SOURCE_OFFCHAIN}
+    ]
+    assert _metric_calls(obs, m.mech_tool_execution_time)[0]["source"] == (
+        beh_mod.SOURCE_OFFCHAIN
+    )
+    assert len(_metric_calls(inc, m.mech_offchain_deliveries_total)) == 1
+    assert len(_metric_calls(obs, m.mech_offchain_delivery_latency_seconds)) == 1
+    assert _metric_calls(inc, m.mech_tasks_failed_total) == []
+
+
+def test_handle_done_task_invalid_request_uses_bounded_failure_reason(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """``mech_tasks_failed_total`` gets ``execution_failed``, not the tool's error text."""
+    _seed_executing_task(behaviour, params_stub, is_offchain=True, req_id="req-15")
+    behaviour._invalid_request = True
+    behaviour._ipfs_error_reason = "tool boom for request req-15"
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: None)
+    inc = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "observe_histogram", MagicMock())
+
+    behaviour._handle_done_task(task_result=None)
+
+    m = behaviour.mech_metrics
+    assert _metric_calls(inc, m.mech_tasks_failed_total) == [
+        {
+            "tool": "mytool",
+            "reason": beh_mod.FAILURE_REASON_EXECUTION_FAILED,
+            "source": beh_mod.SOURCE_OFFCHAIN,
+        }
+    ]
+    # Off-chain failure counted once, delivery not counted.
+    assert _metric_calls(inc, m.mech_offchain_failures_total) == [
+        {"reason": beh_mod.OFFCHAIN_FAILURE_EXECUTION_FAILED, **_OFFCHAIN_LABELS}
+    ]
+    assert _metric_calls(inc, m.mech_offchain_deliveries_total) == []
+
+
+@pytest.mark.parametrize(
+    "is_offchain, expected_source",
+    [(True, beh_mod.SOURCE_OFFCHAIN), (False, beh_mod.SOURCE_ONCHAIN)],
+    ids=["offchain", "onchain"],
+)
+def test_handle_timeout_task_tags_timed_out_counter_with_source(
+    behaviour: Any,
+    params_stub: Any,
+    monkeypatch: Any,
+    is_offchain: bool,
+    expected_source: str,
+) -> None:
+    """Timeouts split by request path like every other per-tool series."""
+    behaviour._executing_task = {
+        "requestId": 7,
+        "request_delivery_rate": 100,
+        "tool": "mytool",
+        "is_offchain": is_offchain,
+    }
+    behaviour._async_result = None
+    params_stub.request_id_to_num_timeouts[7] = 0
+    params_stub.timeout_limit = 3
+    monkeypatch.setattr(beh_mod, "ProcessPool", lambda max_workers: MagicMock())
+    inc = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "inc_counter", inc)
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", MagicMock())
+
+    behaviour._handle_timeout_task()
+
+    assert _metric_calls(inc, behaviour.mech_metrics.mech_tasks_timed_out_total) == [
+        {"tool": "mytool", "source": expected_source}
+    ]
+
+
+def test_update_queue_gauges_splits_offchain_and_reports_oldest_age(
+    behaviour: Any, shared_state: Dict[str, Any], monkeypatch: Any
+) -> None:
+    """Off-chain pending count and oldest age come from the stamped subset only."""
+    now = time.time()
+    shared_state[beh_mod.PENDING_TASKS].extend(
+        [
+            {"requestId": 1},  # on-chain, no stamp
+            {"requestId": 2, "is_offchain": True, beh_mod.ENQUEUED_AT_LOCAL: now - 100},
+            {"requestId": 3, "is_offchain": True, beh_mod.ENQUEUED_AT_LOCAL: now - 10},
+            {
+                "requestId": 4,
+                "is_offchain": True,
+            },  # accepted pre-stamp, ignored for age
+        ]
+    )
+    gauge = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", gauge)
+
+    behaviour._update_queue_gauges()
+
+    m = behaviour.mech_metrics
+    values = {c.args[0]: (c.args[1], c.kwargs) for c in gauge.call_args_list}
+    assert values[m.mech_pending_queue_len] == (4, {})
+    assert values[m.mech_offchain_pending_requests] == (3, _OFFCHAIN_LABELS)
+    age, labels = values[m.mech_offchain_pending_oldest_age_seconds]
+    assert 99 <= age <= 101
+    assert labels == _OFFCHAIN_LABELS
+
+
+def test_update_queue_gauges_empty_queue_publishes_zeros(
+    behaviour: Any, monkeypatch: Any
+) -> None:
+    """No pending work → the off-chain gauges read 0, not a stale prior value."""
+    gauge = MagicMock()
+    monkeypatch.setattr(behaviour.mech_metrics, "set_gauge", gauge)
+
+    behaviour._update_queue_gauges()
+
+    m = behaviour.mech_metrics
+    values = {c.args[0]: c.args[1] for c in gauge.call_args_list}
+    assert values[m.mech_offchain_pending_requests] == 0
+    assert values[m.mech_offchain_pending_oldest_age_seconds] == 0
+
+
+def test_execute_task_refreshes_gauges_while_request_in_flight(
+    behaviour: Any, params_stub: Any, monkeypatch: Any
+) -> None:
+    """Gauges refresh before the in-flight early return, so they never go stale mid-task."""
+    params_stub.in_flight_req = True
+    behaviour._executing_task = None
+    refresh = MagicMock()
+    monkeypatch.setattr(behaviour, "_update_queue_gauges", refresh)
+
+    behaviour._execute_task()
+
+    refresh.assert_called_once_with()
