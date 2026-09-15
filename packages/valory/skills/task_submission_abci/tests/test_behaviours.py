@@ -3251,7 +3251,10 @@ class TestTransactionPreparationGetPayloadContent:
             result = _run_gen(b.get_payload_content())
         # The vote is the envelope, never the bare multisend string.
         assert result != "encoded_multisend"
-        assert decode_tx_payload(result) == ("encoded_multisend", [])
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded_multisend",
+            "included_request_ids": [],
+        }
 
     def test_included_ids_aggregate_across_all_three_deliver_paths(self) -> None:
         """Off-chain, marketplace and legacy ids all land in the envelope, in that order."""
@@ -3290,7 +3293,10 @@ class TestTransactionPreparationGetPayloadContent:
             patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
         ):
             result = _run_gen(b.get_payload_content())
-        assert decode_tx_payload(result) == ("encoded", ["r-off", "r-mkt", "r-legacy"])
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": ["r-off", "r-mkt", "r-legacy"],
+        }
 
     def test_abandoned_offchain_batch_contributes_no_ids(self) -> None:
         """A ``(None, [])`` off-chain result adds nothing to the envelope."""
@@ -3318,7 +3324,10 @@ class TestTransactionPreparationGetPayloadContent:
             patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
         ):
             result = _run_gen(b.get_payload_content())
-        assert decode_tx_payload(result) == ("encoded", [])
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": [],
+        }
 
     def test_returns_error_when_deliver_tx_is_none(self) -> None:
         """Test returns error when deliver tx is none."""
@@ -3396,7 +3405,10 @@ class TestTransactionPreparationGetPayloadContent:
             result = _run_gen(b.get_payload_content())
         # deliver skipped but the vote still completes, with the skipped
         # id absent from the envelope so it is not pruned as settled.
-        assert decode_tx_payload(result) == ("encoded", [])
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": [],
+        }
         mock_count.assert_called_once_with(
             SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_ONCHAIN, "0xMECH", 1
         )
@@ -3443,7 +3455,10 @@ class TestTransactionPreparationGetPayloadContent:
             patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
         ):
             result = _run_gen(b.get_payload_content())
-        assert decode_tx_payload(result) == ("encoded", ["r1"])
+        assert decode_tx_payload(result) == {
+            "tx_hash": "encoded",
+            "included_request_ids": ["r1"],
+        }
 
 
 # ---------------------------------------------------------------------------

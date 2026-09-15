@@ -32,6 +32,7 @@ from typing import (
     Dict,
     Generator,
     List,
+    Literal,
     Optional,
     Set,
     Tuple,
@@ -69,6 +70,9 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_execution.behaviours import (
     PREDICT_API_EVENTS,
+    SOURCE_OFFCHAIN,
+    SOURCE_ONCHAIN,
+    Source,
     _discard_settling_nonce,
 )
 from packages.valory.skills.task_execution.models import metrics_mech_address
@@ -180,17 +184,19 @@ mech_predict_api_events_total = Counter(
 #   never paid), ``"contract_error"`` (the deliver-data contract call
 #   itself failed, the whole batch for that path was abandoned this
 #   period).
-# * ``source``: ``"offchain"`` / ``"onchain"``.
+# * ``source``: ``"offchain"`` / ``"onchain"`` (``task_execution.behaviours.Source``).
 #
 # Granularity caveat: the mech simulates one call per requester (off-chain)
 # or per mech (on-chain marketplace), so a ``sim_failed`` burst of N is
 # usually one failing group, not N independent failures.
-SOURCE_OFFCHAIN = "offchain"
-SOURCE_ONCHAIN = "onchain"
-SETTLEMENT_OUTCOME_SETTLED = "settled"
-SETTLEMENT_OUTCOME_SIM_FAILED = "sim_failed"
-SETTLEMENT_OUTCOME_DROPPED = "dropped"
-SETTLEMENT_OUTCOME_CONTRACT_ERROR = "contract_error"
+#
+# ``SettlementOutcome`` is a ``Literal`` so a misspelt outcome fails mypy
+# instead of silently minting a new label value.
+SettlementOutcome = Literal["settled", "sim_failed", "dropped", "contract_error"]
+SETTLEMENT_OUTCOME_SETTLED: SettlementOutcome = "settled"
+SETTLEMENT_OUTCOME_SIM_FAILED: SettlementOutcome = "sim_failed"
+SETTLEMENT_OUTCOME_DROPPED: SettlementOutcome = "dropped"
+SETTLEMENT_OUTCOME_CONTRACT_ERROR: SettlementOutcome = "contract_error"
 mech_settlement_total = Counter(
     "mech_settlement_total",
     "Per-task delivery settlement outcomes (see behaviours.py for label semantics)",
@@ -362,7 +368,11 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
             metric.observe(value)
 
     def count_settlement(
-        self, outcome: str, source: str, mech_address: str, amount: int = 1
+        self,
+        outcome: SettlementOutcome,
+        source: Source,
+        mech_address: str,
+        amount: int = 1,
     ) -> None:
         """Increment ``mech_settlement_total`` by ``amount`` tasks.
 
@@ -411,7 +421,11 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
             }
 
     def count_local_settlement(
-        self, outcome: str, source: str, mech_address: str, request_ids: List[str]
+        self,
+        outcome: SettlementOutcome,
+        source: Source,
+        mech_address: str,
+        request_ids: List[str],
     ) -> None:
         """Count ``outcome`` for the tasks in ``request_ids`` this agent executed.
 
@@ -615,7 +629,9 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
                     req_id,
                 )
                 continue
-            source = SOURCE_OFFCHAIN if task.get(IS_OFFCHAIN) else SOURCE_ONCHAIN
+            source: Source = (
+                SOURCE_OFFCHAIN if task.get(IS_OFFCHAIN) else SOURCE_ONCHAIN
+            )
             self.count_settlement(
                 SETTLEMENT_OUTCOME_SETTLED,
                 source,

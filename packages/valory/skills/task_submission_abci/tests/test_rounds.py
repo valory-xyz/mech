@@ -596,7 +596,10 @@ class TestTxPayloadCodec:
     def test_round_trip_preserves_hash_and_stringifies_ids(self) -> None:
         """Ids are stringified on encode so int/str mixes settle to one shape."""
         content = encode_tx_payload("0xabc", ["r1", cast(str, 42)])
-        assert decode_tx_payload(content) == ("0xabc", ["r1", "42"])
+        assert decode_tx_payload(content) == {
+            "tx_hash": "0xabc",
+            "included_request_ids": ["r1", "42"],
+        }
 
     def test_encode_is_canonical(self) -> None:
         """Byte-identical output for identical input (consensus keys on the string)."""

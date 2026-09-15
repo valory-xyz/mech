@@ -29,7 +29,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, cast
+from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple, cast
 
 from aea.helpers.cid import to_v1
 from aea.mail.base import EnvelopeContext
@@ -117,9 +117,12 @@ _NONCE_KEY = "nonce"
 # every off-chain pending task (``time.time()``); used for the end-to-end
 # off-chain latency histogram. Never mix with the ``perf_counter`` fields.
 ENQUEUED_AT_LOCAL = "enqueued_at_local"
-# ``source`` label values for the per-tool task metrics.
-SOURCE_ONCHAIN = "onchain"
-SOURCE_OFFCHAIN = "offchain"
+# ``source`` label values for the per-tool task metrics. Single
+# definition for the whole agent: ``task_submission_abci`` imports these
+# rather than restating them, so the two skills cannot drift.
+Source = Literal["onchain", "offchain"]
+SOURCE_ONCHAIN: Source = "onchain"
+SOURCE_OFFCHAIN: Source = "offchain"
 # Bounded ``reason`` label values for ``mech_tasks_failed_total``. The log
 # line keeps the full human-readable message (with request id / prices);
 # the label must not, or every failure mints a new time series.
@@ -316,7 +319,7 @@ def _discard_settling_nonce(
         target.pop(sender_key, None)
 
 
-def _source_label(task: Optional[Dict[str, Any]]) -> str:
+def _source_label(task: Optional[Dict[str, Any]]) -> Source:
     """Return the ``source`` label value for a task dict.
 
     :param task: a pending / executing / done task dict (or None).

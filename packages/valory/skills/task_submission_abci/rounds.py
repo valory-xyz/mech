@@ -21,7 +21,7 @@
 
 import json
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, cast
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, TypedDict, cast
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp,
@@ -67,8 +67,27 @@ def extract_request_ids(tasks: List[Dict[str, Any]]) -> List[str]:
 # ``done_task``) as submitted. Tasks skipped at tx-prep time (deliver
 # simulation failed) stay in ``done_tasks`` and are re-pooled next
 # period instead of being pruned as though they had settled.
-TX_PAYLOAD_HASH_KEY = "tx_hash"
-TX_PAYLOAD_INCLUDED_IDS_KEY = "included_request_ids"
+class TxPayloadEnvelope(TypedDict):
+    """The tx-prep vote: the multisend hex and the request ids it delivers.
+
+    The wire form is the canonical JSON of this mapping (sorted keys, no
+    whitespace) so every agent producing the same content votes the same
+    bytes. Producers build it through :func:`encode_tx_payload`; consumers
+    only ever see it through :func:`decode_tx_payload`, which enforces the
+    shape at runtime since JSON carries no types.
+    """
+
+    tx_hash: str
+    included_request_ids: List[str]
+
+
+def _is_str_list(value: Any) -> bool:
+    """Return True when ``value`` is a ``list`` whose items are all ``str``.
+
+    :param value: the candidate.
+    :return: whether it is a ``list[str]``.
+    """
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
 
 
 def encode_tx_payload(tx_hash: str, included_request_ids: List[str]) -> str:
@@ -78,23 +97,19 @@ def encode_tx_payload(tx_hash: str, included_request_ids: List[str]) -> str:
     :param included_request_ids: ``str`` request ids whose deliver call is in the multisend.
     :return: the JSON payload string voted on in ``TransactionPreparationRound``.
     """
-    return json.dumps(
-        {
-            TX_PAYLOAD_HASH_KEY: tx_hash,
-            TX_PAYLOAD_INCLUDED_IDS_KEY: [str(rid) for rid in included_request_ids],
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-    )
+    envelope: TxPayloadEnvelope = {
+        "tx_hash": tx_hash,
+        "included_request_ids": [str(rid) for rid in included_request_ids],
+    }
+    return json.dumps(envelope, sort_keys=True, separators=(",", ":"))
 
 
-def decode_tx_payload(content: str) -> Optional[Tuple[str, List[str]]]:
+def decode_tx_payload(content: str) -> Optional[TxPayloadEnvelope]:
     """Parse a ``TransactionPreparationRound`` vote.
 
     :param content: the voted payload string.
-    :return: ``(tx_hash, included_request_ids)`` or ``None`` if the
-        content is not a well-formed envelope (non-JSON, wrong shape,
-        non-``str`` hash, non-``list[str]`` ids).
+    :return: the envelope, or ``None`` if the content is not well-formed
+        (non-JSON, wrong shape, empty / non-``str`` hash, non-``list[str]`` ids).
     """
     try:
         parsed = json.loads(content)
@@ -102,13 +117,36 @@ def decode_tx_payload(content: str) -> Optional[Tuple[str, List[str]]]:
         return None
     if not isinstance(parsed, dict):
         return None
-    tx_hash = parsed.get(TX_PAYLOAD_HASH_KEY)
-    ids = parsed.get(TX_PAYLOAD_INCLUDED_IDS_KEY)
-    if not isinstance(tx_hash, str) or not tx_hash:
+    tx_hash = parsed.get("tx_hash")
+    ids = parsed.get("included_request_ids")
+    if not isinstance(tx_hash, str) or not tx_hash or not _is_str_list(ids):
         return None
-    if not isinstance(ids, list) or not all(isinstance(rid, str) for rid in ids):
-        return None
-    return tx_hash, ids
+    return {"tx_hash": tx_hash, "included_request_ids": cast(List[str], ids)}
+
+
+def _validated_str_list(db: Any, key: str) -> List[str]:
+    """Read ``key`` from the synced db, degrading a malformed value to ``[]``.
+
+    Raising here would crash-loop every participant on the same consensus
+    block (the value is byte-identical across the fleet), with no in-band
+    recovery. An empty list degrades to "nothing to hand off / prune this
+    cycle", which is the same shape as a period with no settlement.
+
+    :param db: the ``AbciAppDB``.
+    :param key: the db key holding a ``list[str]``.
+    :return: the stored list, or ``[]`` when it is not a ``list[str]``.
+    """
+    value = db.get(key, [])
+    if not _is_str_list(value):
+        db.logger.error(
+            "%s invariant broken: expected list[str], got %s=%r; "
+            "degrading to [] for this cycle",
+            key,
+            type(value).__name__,
+            value,
+        )
+        return []
+    return cast(List[str], value)
 
 
 class Event(Enum):
@@ -154,28 +192,11 @@ class SynchronizedData(BaseSynchronizedData):
         Writers must go through :func:`extract_request_ids` so that
         only ``str`` ids land in the DB. A future writer that bypasses
         the helper and stores a non-list or non-``str`` entries logs
-        an error and yields ``[]`` here: raising would crash-loop
-        every participant on the same consensus block (the value is
-        byte-identical across the fleet and cross-period-persisted,
-        so ``db.create`` copies it forward across resets), with no
-        in-band recovery. Returning ``[]`` degrades to "prune nothing
-        this cycle", which is the same shape as a period with no
-        settlement to consume.
+        an error and yields ``[]`` here (see :func:`_validated_str_list`).
 
         :return: the list of request ids from the most recent settlement.
         """
-        value = self.db.get("submitted_request_ids", [])
-        if not isinstance(value, list) or not all(
-            isinstance(item, str) for item in value
-        ):
-            self.db.logger.error(
-                "submitted_request_ids invariant broken: expected list[str], "
-                "got %s=%r; degrading to [] for this cycle",
-                type(value).__name__,
-                value,
-            )
-            return []
-        return value
+        return _validated_str_list(self.db, "submitted_request_ids")
 
     @property
     def tx_included_request_ids(self) -> List[str]:
@@ -194,18 +215,7 @@ class SynchronizedData(BaseSynchronizedData):
 
         :return: the ``str`` request ids included in the prepared tx.
         """
-        value = self.db.get("tx_included_request_ids", [])
-        if not isinstance(value, list) or not all(
-            isinstance(item, str) for item in value
-        ):
-            self.db.logger.error(
-                "tx_included_request_ids invariant broken: expected list[str], "
-                "got %s=%r; degrading to [] for this cycle",
-                type(value).__name__,
-                value,
-            )
-            return []
-        return value
+        return _validated_str_list(self.db, "tx_included_request_ids")
 
     @property
     def final_tx_hash(self) -> str:
@@ -372,14 +382,13 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
                 )
                 return self._error_state(), Event.ERROR
 
-            tx_hash, included_request_ids = decoded
             state = self.synchronized_data.update(
                 synchronized_data_class=self.synchronized_data_class,
                 **{
-                    get_name(SynchronizedData.most_voted_tx_hash): tx_hash,
-                    get_name(
-                        SynchronizedData.tx_included_request_ids
-                    ): included_request_ids,
+                    get_name(SynchronizedData.most_voted_tx_hash): decoded["tx_hash"],
+                    get_name(SynchronizedData.tx_included_request_ids): decoded[
+                        "included_request_ids"
+                    ],
                 },
             )
             return state, Event.DONE
