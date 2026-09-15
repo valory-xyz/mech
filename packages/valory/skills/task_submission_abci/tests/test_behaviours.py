@@ -22,8 +22,8 @@ import contextlib
 import json
 import time
 from types import SimpleNamespace
-from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Type
-from unittest.mock import MagicMock, patch
+from typing import Any, Callable, Dict, Generator, List, Optional, Tuple, Type, cast
+from unittest.mock import MagicMock, call, patch
 
 import pytest
 from aea_ledger_ethereum import EthereumApi
@@ -1172,10 +1172,10 @@ class TestHandleSubmittedTasksMetrics:
         [(True, SOURCE_OFFCHAIN), (False, SOURCE_ONCHAIN), (None, SOURCE_ONCHAIN)],
         ids=["offchain", "onchain", "flag-missing"],
     )
-    def test_delivery_time_and_settled_counter_carry_source(
+    def test_delivery_time_carries_source(
         self, is_offchain: Optional[bool], expected_source: str
     ) -> None:
-        """Both the histogram and the settled counter split by ``source``.
+        """The delivery-time histogram splits by ``source``.
 
         :param is_offchain: the task's ``is_offchain`` flag (``None`` = absent).
         :param expected_source: the label value that must be emitted.
@@ -1193,26 +1193,64 @@ class TestHandleSubmittedTasksMetrics:
             patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
             patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
             patch.object(b, "observe_histogram") as mock_hist,
-            patch.object(b, "count_settlement") as mock_count,
         ):
             _run_gen(b.handle_submitted_tasks())
         _, kwargs = mock_hist.call_args
         assert kwargs["source"] == expected_source
-        mock_count.assert_called_once_with(
-            SETTLEMENT_OUTCOME_SETTLED, expected_source, "0xMECH"
-        )
 
-    def test_settled_counter_not_incremented_for_unknown_task(self) -> None:
-        """An id not in the local snapshot (executed elsewhere) counts nothing here."""
-        b = self._make_b([])
-        b._synchronized_data.submitted_request_ids = ["r-elsewhere"]
-        with (
-            patch.object(b, "check_last_tx_status", return_value=(True, "0xhash")),
-            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
-            patch.object(b, "count_settlement") as mock_count,
-        ):
-            _run_gen(b.handle_submitted_tasks())
-        mock_count.assert_not_called()
+
+class TestCountSettledFromSyncedData:
+    """``settled`` is counted from synced data so it survives an executor restart."""
+
+    _ME = "0xSELF"
+
+    def _make_self(self, done_tasks: List[Dict[str, Any]], included: List[str]) -> Any:
+        self_ = SimpleNamespace(
+            synchronized_data=SimpleNamespace(
+                done_tasks=done_tasks, tx_included_request_ids=included
+            ),
+            context=SimpleNamespace(agent_address=self._ME),
+            count_settlement=MagicMock(),
+            metrics_mech_label=lambda: "0xLABEL",
+        )
+        return self_
+
+    @staticmethod
+    def _task(rid: str, executor: str, **extra: Any) -> Dict[str, Any]:
+        return {"request_id": rid, "task_executor_address": executor, **extra}
+
+    def test_counts_own_included_tasks_with_source_and_mech(self) -> None:
+        """Only this agent's tasks that were in the tx are counted, once each."""
+        done = [
+            self._task("r-off", self._ME, is_offchain=True, mech_address="0xM1"),
+            self._task("r-on", self._ME),
+            self._task("r-other", "0xOTHER", is_offchain=True),
+            self._task("r-skipped", self._ME, is_offchain=True),
+        ]
+        self_ = self._make_self(done, included=["r-off", "r-on", "r-other"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        assert self_.count_settlement.call_args_list == [
+            call(SETTLEMENT_OUTCOME_SETTLED, SOURCE_OFFCHAIN, "0xM1"),
+            call(SETTLEMENT_OUTCOME_SETTLED, SOURCE_ONCHAIN, "0xLABEL"),
+        ]
+
+    def test_nothing_included_counts_nothing(self) -> None:
+        """Delivery-rate settlement and all-skipped periods count no settled tasks."""
+        self_ = self._make_self([self._task("r1", self._ME)], included=[])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        self_.count_settlement.assert_not_called()
+
+    def test_int_request_id_matches_str_included_id(self) -> None:
+        """On-chain ids are ``int`` on the task and ``str`` in the envelope."""
+        self_ = self._make_self([self._task(cast(str, 42), self._ME)], included=["42"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        self_.count_settlement.assert_called_once()
+
+    def test_missing_executor_address_is_not_counted(self) -> None:
+        """A task without an executor stamp is nobody's to count."""
+        self_ = self._make_self([{"request_id": "r1"}], included=["r1"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        self_.count_settlement.assert_not_called()
 
 
 class TestCountSettlement:

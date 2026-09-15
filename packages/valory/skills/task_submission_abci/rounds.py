@@ -23,6 +23,8 @@ import json
 from enum import Enum
 from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, TypedDict, cast
 
+from prometheus_client import Counter
+
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp,
     AbciAppTransitionFunction,
@@ -124,6 +126,18 @@ def decode_tx_payload(content: str) -> Optional[TxPayloadEnvelope]:
     return {"tx_hash": tx_hash, "included_request_ids": cast(List[str], ids)}
 
 
+# A synced-db field that is not the ``list[str]`` its writer guarantees.
+# The read degrades to ``[]`` (see ``_validated_str_list``), which makes
+# every period look like "nothing settled"; this counter lets an alert
+# separate that from genuine deliver-simulation failures, which land on
+# ``mech_settlement_total`` instead.
+mech_sync_invariant_violation_total = Counter(
+    "mech_sync_invariant_violation_total",
+    "Synced-db fields read with a shape their writer never produces",
+    labelnames=["field"],
+)
+
+
 def _validated_str_list(db: Any, key: str) -> List[str]:
     """Read ``key`` from the synced db, degrading a malformed value to ``[]``.
 
@@ -138,6 +152,7 @@ def _validated_str_list(db: Any, key: str) -> List[str]:
     """
     value = db.get(key, [])
     if not _is_str_list(value):
+        mech_sync_invariant_violation_total.labels(field=key).inc()
         db.logger.error(
             "%s invariant broken: expected list[str], got %s=%r; "
             "degrading to [] for this cycle",

@@ -632,11 +632,6 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             source: Source = (
                 SOURCE_OFFCHAIN if task.get(IS_OFFCHAIN) else SOURCE_ONCHAIN
             )
-            self.count_settlement(
-                SETTLEMENT_OUTCOME_SETTLED,
-                source,
-                str(task.get(MECH_ADDRESS) or self.metrics_mech_label()),
-            )
             tool = task.get("tool")
             start_time = task.get("start_time")
             if tool is None or start_time is None:
@@ -2281,8 +2276,9 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
     matching_round: Type[AbstractRound] = PostTxSettlementRound
 
     def async_act(self) -> Generator:
-        """Build, sign, and POST the offchain-events batch, then advance."""
+        """Count settled deliveries, POST the offchain-events batch, then advance."""
         with self.context.benchmark_tool.measure(self.behaviour_id).local():
+            self.count_settled_from_synced_data()
             yield from self._do_predict_api_write_best_effort()
             payload = PostTxSettlementPayload(
                 sender=self.context.agent_address, content="done"
@@ -2292,6 +2288,33 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             yield from self.send_a2a_transaction(payload)
             yield from self.wait_until_round_end()
             self.set_done()
+
+    def count_settled_from_synced_data(self) -> None:
+        """Count ``settled`` for the tasks this agent executed in the confirmed tx.
+
+        Reads the synced ``done_tasks`` and ``tx_included_request_ids`` rather
+        than the local ``shared_state[DONE_TASKS]``: the local queue is
+        in-memory and empties on a process restart, whereas the synced copy
+        carries ``task_executor_address`` for the rest of the period. Each
+        task is still counted exactly once fleet-wide, by its executor.
+        """
+        included = set(self.synchronized_data.tx_included_request_ids)
+        if not included:
+            return
+        me = self.context.agent_address
+        for task in self.synchronized_data.done_tasks:
+            if str(task.get("request_id")) not in included:
+                continue
+            if task.get("task_executor_address") != me:
+                continue
+            source: Source = (
+                SOURCE_OFFCHAIN if task.get(IS_OFFCHAIN) else SOURCE_ONCHAIN
+            )
+            self.count_settlement(
+                SETTLEMENT_OUTCOME_SETTLED,
+                source,
+                str(task.get(MECH_ADDRESS) or self.metrics_mech_label()),
+            )
 
     # Note on the two ``mech_events_chain_id`` params: task_execution's
     # copy powers delivered events; task_submission_abci's copy powers

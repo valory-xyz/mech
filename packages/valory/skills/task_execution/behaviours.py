@@ -2471,11 +2471,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             req_id, reason, None, preimage_buffer.STATUS_REJECTED
         )
         self.context.shared_state.get(IN_MEMORY_REQUESTS, {}).pop(req_id, None)
-        # Drop from both accepted and settling on the rejection path.
-        # A rejected task will never settle, so leaving anything in
-        # ``settling`` would keep the admission-gate slot count
-        # inflated until the pruner eventually removes it (or, if the
-        # sender never sends again, forever).
+        # Release the accepted-set entry: every caller runs before
+        # ``_finalize_done_task``, so the nonce has not moved to ``settling``
+        # yet. A rejection after finalize would need
+        # ``_discard_settling_nonce`` instead (see the retry-cap drop in
+        # ``task_submission_abci``).
         _discard_outstanding_nonce(self.context.shared_state, self._executing_task)
         self._reset_executing_task()
 

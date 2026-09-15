@@ -21,11 +21,12 @@
 import json
 import logging
 from typing import Any, Union, cast
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from packages.valory.skills.abstract_round_abci.base import AbciAppDB, get_name
+from packages.valory.skills.task_submission_abci import rounds as rounds_mod
 from packages.valory.skills.task_submission_abci.payloads import (
     PostTxSettlementPayload,
     TaskPoolingPayload,
@@ -180,12 +181,39 @@ class TestSynchronizedData:
             log is emitted.
         """
         sd = _make_sync_data(submitted_request_ids=bad_value)
-        with caplog.at_level(logging.ERROR):
+        with (
+            caplog.at_level(logging.ERROR),
+            patch.object(
+                rounds_mod.mech_sync_invariant_violation_total, "labels"
+            ) as mock_labels,
+        ):
             assert sd.submitted_request_ids == []
         assert any(
             "submitted_request_ids invariant broken" in rec.message
             for rec in caplog.records
         )
+        # The log alone is not alertable from Grafana; the counter is.
+        mock_labels.assert_called_once_with(field="submitted_request_ids")
+        mock_labels.return_value.inc.assert_called_once_with()
+
+    def test_tx_included_request_ids_bad_shape_counts_its_own_field(self) -> None:
+        """Each synced field reports under its own ``field`` label."""
+        sd = _make_sync_data(tx_included_request_ids=[1, 2])
+        with patch.object(
+            rounds_mod.mech_sync_invariant_violation_total, "labels"
+        ) as mock_labels:
+            assert sd.tx_included_request_ids == []
+        mock_labels.assert_called_once_with(field="tx_included_request_ids")
+
+    def test_well_formed_list_does_not_count_a_violation(self) -> None:
+        """A valid ``list[str]`` never touches the violation counter."""
+        sd = _make_sync_data(submitted_request_ids=["a"], tx_included_request_ids=[])
+        with patch.object(
+            rounds_mod.mech_sync_invariant_violation_total, "labels"
+        ) as mock_labels:
+            assert sd.submitted_request_ids == ["a"]
+            assert sd.tx_included_request_ids == []
+        mock_labels.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
