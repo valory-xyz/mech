@@ -67,6 +67,23 @@ def _make_logger() -> SimpleNamespace:
     )
 
 
+def _sd(
+    done_tasks: List[Dict[str, Any]], included: List[str] | None = None
+) -> SimpleNamespace:
+    """Synchronized-data stub for the extractor.
+
+    :param done_tasks: this period's ``done_tasks``.
+    :param included: ``tx_included_request_ids`` override; defaults to every
+        done id, i.e. "everything settled in this tx".
+    :return: the namespace the extractor reads.
+    """
+    if included is None:
+        included = [
+            str(t["request_id"]) for t in done_tasks if t.get("request_id") is not None
+        ]
+    return SimpleNamespace(done_tasks=done_tasks, tx_included_request_ids=included)
+
+
 def _make_self(
     *,
     pending: List[Any] | None = None,
@@ -524,8 +541,8 @@ def test_extract_offchain_events_reads_from_shared_state_by_request_id() -> None
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
-            synchronized_data=SimpleNamespace(
-                done_tasks=[
+            synchronized_data=_sd(
+                [
                     {"request_id": "r-off"},
                     {"request_id": "r-on"},
                     {"request_id": "r-not-local"},
@@ -548,6 +565,45 @@ def test_extract_offchain_events_reads_from_shared_state_by_request_id() -> None
     assert events == [{"src": "off"}, {"src": "on"}]
 
 
+def test_extract_offchain_events_skips_tasks_not_in_settled_tx() -> None:
+    """A done task left out of the multisend is not reported as delivered.
+
+    The delivered event carries this period's tx hash; a task whose
+    deliver simulation failed is still in ``done_tasks`` but was not in
+    that tx, so reporting it would tell the analytics lake it settled.
+    """
+    now = time.time()
+    debug_sink: List[str] = []
+    logger = SimpleNamespace(
+        info=lambda *a, **k: None,
+        warning=lambda *a, **k: None,
+        error=lambda *a, **k: None,
+        debug=lambda msg, *a, **k: debug_sink.append(msg % a if a else msg),
+    )
+    self_ = cast(
+        PostTxSettlementBehaviour,
+        SimpleNamespace(
+            synchronized_data=_sd(
+                [{"request_id": "r-settled"}, {"request_id": "r-skipped"}],
+                included=["r-settled"],
+            ),
+            context=SimpleNamespace(
+                agent_address="0xSELF",
+                shared_state={
+                    PREDICT_API_EVENTS: {
+                        "r-settled": {"event": {"src": "a"}, "written_at": now},
+                        "r-skipped": {"event": {"src": "b"}, "written_at": now},
+                    }
+                },
+                logger=logger,
+            ),
+        ),
+    )
+    events = PostTxSettlementBehaviour._extract_offchain_events(self_)
+    assert events == [{"src": "a"}]
+    assert any("r-skipped" in line for line in debug_sink), debug_sink
+
+
 def test_extract_offchain_events_matches_int_request_id_against_str_key() -> None:
     """``done_task["request_id"]`` is int in production; cache key is str.
 
@@ -559,7 +615,7 @@ def test_extract_offchain_events_matches_int_request_id_against_str_key() -> Non
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
-            synchronized_data=SimpleNamespace(done_tasks=[{"request_id": 42}]),
+            synchronized_data=_sd([{"request_id": 42}]),
             context=SimpleNamespace(
                 agent_address="0xSELF",
                 shared_state={
@@ -580,9 +636,7 @@ def test_extract_offchain_events_returns_empty_when_shared_state_unset() -> None
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
-            synchronized_data=SimpleNamespace(
-                done_tasks=[{"request_id": "r-off"}, {"request_id": "r-on"}]
-            ),
+            synchronized_data=_sd([{"request_id": "r-off"}, {"request_id": "r-on"}]),
             context=SimpleNamespace(
                 agent_address="0xSELF",
                 shared_state={},
@@ -607,10 +661,8 @@ def test_extract_offchain_events_logs_debug_when_other_agent_executed() -> None:
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
-            synchronized_data=SimpleNamespace(
-                done_tasks=[
-                    {"request_id": "r-other", "task_executor_address": "0xOTHER"}
-                ]
+            synchronized_data=_sd(
+                [{"request_id": "r-other", "task_executor_address": "0xOTHER"}]
             ),
             context=SimpleNamespace(
                 agent_address="0xSELF", shared_state={}, logger=logger
@@ -642,8 +694,8 @@ def test_extract_offchain_events_logs_warning_when_self_executor_has_no_cache_en
     self_ = cast(
         PostTxSettlementBehaviour,
         SimpleNamespace(
-            synchronized_data=SimpleNamespace(
-                done_tasks=[{"request_id": "r-self", "task_executor_address": "0xSELF"}]
+            synchronized_data=_sd(
+                [{"request_id": "r-self", "task_executor_address": "0xSELF"}]
             ),
             context=SimpleNamespace(
                 agent_address="0xSELF", shared_state={}, logger=logger
