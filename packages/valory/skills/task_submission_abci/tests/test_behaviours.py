@@ -1290,7 +1290,7 @@ class TestCountSettlement:
             outcome=SETTLEMENT_OUTCOME_SETTLED,
             source=SOURCE_OFFCHAIN,
             chain="100",
-            mech_address="0xM",
+            mech_address="0xm",
         )
         mock_labels.return_value.inc.assert_called_once_with(3)
 
@@ -1524,7 +1524,7 @@ class TestOffchainUnsettledGauges:
         count_value, count_labels = calls[beh_mod.mech_offchain_unsettled_delivered]
         age_value, _ = calls[beh_mod.mech_offchain_unsettled_oldest_age_seconds]
         assert count_value == 2
-        assert count_labels == {"chain": "100", "mech_address": "0xMECH"}
+        assert count_labels == {"chain": "100", "mech_address": "0xmech"}
         assert 119 <= age_value <= 121
 
     def test_empty_backlog_publishes_zeros(self) -> None:
@@ -3553,7 +3553,7 @@ class TestTransactionPreparationGetPayloadContent:
             "included_request_ids": [],
         }
         mock_skip.assert_called_once_with(
-            ["r1"], SOURCE_ONCHAIN, "0xMECH", b.synchronized_data.period_count
+            ["r1"], SOURCE_ONCHAIN, "0xmech", b.synchronized_data.period_count
         )
 
     def test_appends_response_tx_when_present(self) -> None:

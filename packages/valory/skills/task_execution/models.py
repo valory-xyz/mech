@@ -78,15 +78,18 @@ def metrics_mech_address(params: MetricsParams) -> str:
     Off-chain requests are always delivered through the marketplace mech,
     so prefer the first ``mech_to_config`` entry flagged
     ``is_marketplace_mech``; fall back to the first configured mech so
-    legacy single-mech deployments still get a stable label.
+    legacy single-mech deployments still get a stable label. Lower-cased:
+    ``task_execution.Params`` lower-cases its mech keys and
+    ``task_submission_abci.Params`` keeps the configured case, and one
+    mech must be one label value across both skills.
 
     :param params: the skill params.
     :return: the label value.
     """
     for mech, config in params.mech_to_config.items():
         if config.is_marketplace_mech:
-            return str(mech)
-    return str(params.agent_mech_contract_address)
+            return str(mech).lower()
+    return str(params.agent_mech_contract_address).lower()
 
 
 def offchain_metric_labels(params: MetricsParams) -> Dict[str, str]:

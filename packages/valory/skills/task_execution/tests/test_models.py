@@ -244,3 +244,35 @@ def test_offchain_metric_labels_pairs_chain_with_marketplace_mech() -> None:
         "chain": "100",
         "mech_address": "0xmarket",
     }
+
+
+def test_metrics_mech_address_is_lower_cased_regardless_of_config_case() -> None:
+    """A checksummed address in config must not split one mech into two label values.
+
+    task_execution lower-cases its mech keys and task_submission_abci keeps the
+    configured case; both go through this helper, so it normalises.
+    """
+    from types import SimpleNamespace
+
+    params = cast(
+        m.MetricsParams,
+        SimpleNamespace(
+            mech_to_config={
+                "0xFf82123dFB52ab75C417195c5fDB87630145ae81": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=True
+                )
+            },
+            agent_mech_contract_address="0xAbC",
+            default_chain_id="gnosis",
+        ),
+    )
+    assert (
+        m.metrics_mech_address(params) == "0xff82123dfb52ab75c417195c5fdb87630145ae81"
+    )
+    fallback = cast(
+        m.MetricsParams,
+        SimpleNamespace(
+            mech_to_config={}, agent_mech_contract_address="0xAbC", default_chain_id="1"
+        ),
+    )
+    assert m.metrics_mech_address(fallback) == "0xabc"

@@ -374,7 +374,8 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
 
         :param outcome: one of the ``SETTLEMENT_OUTCOME_*`` constants.
         :param source: ``SOURCE_OFFCHAIN`` or ``SOURCE_ONCHAIN``.
-        :param mech_address: the mech the deliver targets.
+        :param mech_address: the mech the deliver targets; lower-cased for the
+            label so it matches the task_execution series.
         :param amount: number of tasks sharing this outcome.
         """
         if amount <= 0:
@@ -383,7 +384,7 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
             outcome=outcome,
             source=source,
             chain=self.params.default_chain_id,
-            mech_address=mech_address,
+            mech_address=mech_address.lower(),
         ).inc(amount)
 
     def metrics_mech_label(self) -> str:
@@ -501,7 +502,7 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
                 dropped.get(SENDER),
                 dropped.get(NONCE),
                 dropped.get("tool"),
-                MAX_SETTLEMENT_ATTEMPTS,
+                dropped.get(SETTLEMENT_ATTEMPTS_KEY),
             )
         self.count_settlement(
             SETTLEMENT_OUTCOME_DROPPED, source, mech_address, 1 if dropped else 0
