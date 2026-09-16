@@ -44,7 +44,11 @@ The project consists of three components:
   - Allows Mech owners to create new workers.
   - Allows users to request work from an existing worker.
 
-_Note that Mechs which were deployed before the Mech Marketplace contracts (called legacy Mechs) receive request and deliver services directly via their Mech contract._
+_Mechs deployed before the Mech Marketplace contracts existed (legacy Mechs) receive requests and deliver directly through their own Mech contract. Every Mech deployed since registers on the Marketplace._
+
+## Terms
+
+Each Mech is run by its own operator. An operator that publishes terms identifies them in the `termsUrl` field of the Mech's on-chain metadata. Mechs operated by Valory are subject to the [Valory Mech Terms](https://www.valory.xyz/terms/mechs). Sending a request to a Mech means you accept its operator's terms.
 
 ## Requirements
 
