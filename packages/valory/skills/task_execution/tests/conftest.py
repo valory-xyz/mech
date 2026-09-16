@@ -190,6 +190,7 @@ def params_stub() -> SimpleNamespace:
         # Offchain path enabled for the tests that exercise it; the
         # default-off gate is covered by a dedicated test.
         use_offchain=True,
+        mech_terms_url="https://www.valory.xyz/terms/mechs",
         # Preimage buffer off by default here; the dedicated preimage tests flip
         # it on, matching the ship-dark default.
         preimage_retention_enabled=False,
