@@ -20,6 +20,7 @@
 """This package contains round behaviours of TaskSubmissionAbciApp."""
 
 import json
+import sys
 import threading
 import time
 from abc import ABC
@@ -69,13 +70,17 @@ from packages.valory.skills.abstract_round_abci.behaviours import (
 )
 from packages.valory.skills.abstract_round_abci.io_.store import SupportedFiletype
 from packages.valory.skills.task_execution.behaviours import (
+    ENQUEUED_AT_LOCAL,
     PREDICT_API_EVENTS,
     SOURCE_OFFCHAIN,
     SOURCE_ONCHAIN,
     Source,
     _discard_settling_nonce,
 )
-from packages.valory.skills.task_execution.models import metrics_mech_address
+from packages.valory.skills.task_execution.models import (
+    metrics_mech_address,
+    offchain_metric_labels,
+)
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import (
@@ -174,22 +179,6 @@ mech_predict_api_events_total = Counter(
     labelnames=["batch_label", "outcome"],
 )
 
-# Settlement outcome counter, one increment per task. Labels:
-#
-# * ``outcome``: ``"settled"`` (the deliver landed in a confirmed Safe
-#   tx and the task was pruned), ``"sim_failed"`` (deliver simulation
-#   failed at tx-prep; the task stays in ``done_tasks`` for a retry
-#   next period), ``"dropped"`` (off-chain only: sim failed
-#   ``MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS`` times, task removed locally,
-#   never paid), ``"contract_error"`` (the deliver-data contract call
-#   itself failed, the whole batch for that path was abandoned this
-#   period).
-# * ``source``: ``"offchain"`` / ``"onchain"`` (``task_execution.behaviours.Source``).
-#
-# Granularity caveat: the mech simulates one call per requester (off-chain)
-# or per mech (on-chain marketplace), so a ``sim_failed`` burst of N is
-# usually one failing group, not N independent failures.
-#
 # ``SettlementOutcome`` is a ``Literal`` so a misspelt outcome fails mypy
 # instead of silently minting a new label value.
 SettlementOutcome = Literal["settled", "sim_failed", "dropped", "contract_error"]
@@ -199,15 +188,20 @@ SETTLEMENT_OUTCOME_DROPPED: SettlementOutcome = "dropped"
 SETTLEMENT_OUTCOME_CONTRACT_ERROR: SettlementOutcome = "contract_error"
 mech_settlement_total = Counter(
     "mech_settlement_total",
-    "Per-task delivery settlement outcomes (see behaviours.py for label semantics)",
+    "Per-task delivery settlement outcomes, counted once by the executing agent. "
+    "outcome=settled: deliver landed in a confirmed Safe tx. "
+    "sim_failed: deliver simulation failed this period, task kept for retry. "
+    "dropped: skipped MAX_SETTLEMENT_ATTEMPTS periods, removed unpaid "
+    "(one task per group per period, so the count includes collateral from "
+    "a group-wide simulation failure). "
+    "contract_error: deliver-data contract call failed, batch abandoned this period. "
+    "A sim_failed burst of N is usually one failing requester or mech group.",
     labelnames=["outcome", "source", "chain", "mech_address"],
 )
-# Off-chain tasks whose result the user can already fetch but whose
-# deliver has not yet landed on-chain (the mech has not been paid).
-# Sampled from the local ``done_tasks`` at pooling time.
 mech_offchain_unsettled_delivered = Gauge(
     "mech_offchain_unsettled_delivered",
-    "Off-chain results served to the user but not yet settled on-chain",
+    "Off-chain results served to the user but not yet settled on-chain, "
+    "sampled from the local done tasks at pooling time",
     labelnames=["chain", "mech_address"],
 )
 mech_offchain_unsettled_oldest_age_seconds = Gauge(
@@ -215,19 +209,21 @@ mech_offchain_unsettled_oldest_age_seconds = Gauge(
     "Age of the oldest off-chain result still awaiting on-chain settlement",
     labelnames=["chain", "mech_address"],
 )
-# Per-task local bookkeeping key: how many tx-prep rounds have skipped
-# this off-chain task because its deliver simulation failed. Stamped on
-# the executing agent's ``shared_state[DONE_TASKS]`` entry only (other
-# agents do not hold the task locally), never on the synced copy.
+# Local retry bookkeeping on the executing agent's ``shared_state[DONE_TASKS]``
+# entry. The keys also ride into the synced ``done_tasks`` through the
+# pooling payload, but nothing reads them there.
 SETTLEMENT_ATTEMPTS_KEY = "settlement_attempts"
-MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS = 3
-# Wall-clock receive stamp set by ``task_execution.handlers`` on every
-# off-chain pending task; survives into ``done_tasks`` via the
-# ``**executing_task`` spread in ``_finalize_done_task``.
-ENQUEUED_AT_LOCAL = "enqueued_at_local"
-# Grouping-dict key holding the raw ``str`` request ids of a deliver
-# group (parallel to the ABI-encoded fields), so the tx builders can
-# report which ids actually made it into the multisend.
+SETTLEMENT_ATTEMPT_PERIOD_KEY = "settlement_attempt_period"
+# Deliver simulation runs once per requester (off-chain) or per mech
+# (on-chain), so a failure charges an attempt to every task in that group.
+# At the cap only one task per group is dropped per period, so a group
+# poisoned by a single request recovers within ``len(group)`` periods at
+# the cost of up to that many good tasks.
+MAX_SETTLEMENT_ATTEMPTS = 3
+# Shared-state key holding the tx hash whose settled tasks were last
+# counted, so a re-entered post-settlement round does not count twice.
+SETTLED_COUNTED_TX_KEY = "settled_counted_tx_hash"
+# Grouping-dict key for the raw ``str`` request ids of a deliver group.
 REQUEST_IDS_KEY = "request_ids"
 MECH_ADDRESS = "mech_address"
 LAST_TX = "last_tx"
@@ -438,67 +434,93 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
             outcome, source, mech_address, len(self.local_request_ids(request_ids))
         )
 
-    def note_offchain_settlement_skipped(
-        self, request_ids: List[str], mech_address: str
+    def note_settlement_skipped(
+        self,
+        request_ids: List[str],
+        source: Source,
+        mech_address: str,
+        period: int,
     ) -> None:
-        """Record a failed off-chain deliver simulation for ``request_ids``.
+        """Record a failed deliver simulation for ``request_ids`` this period.
 
-        The tasks are left in ``synchronized_data.done_tasks`` this period
-        (so ``PostTxSettlementRound`` does not prune them) and, on the agent
-        that executed them, their local ``shared_state[DONE_TASKS]`` entry is
-        stamped with ``SETTLEMENT_ATTEMPTS_KEY``. Once a task has been
-        skipped ``MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS`` times it is removed
-        locally, its wire nonce is released from the settling set, and it is
-        counted as ``dropped``: the user already has the result, the mech
-        will not be paid for it, and retrying forever would hold the
-        requester's nonce slot indefinitely.
+        The tasks stay in ``synchronized_data.done_tasks`` (so
+        ``PostTxSettlementRound`` does not prune them) and, on the agent that
+        executed them, the local ``shared_state[DONE_TASKS]`` entry is charged
+        one attempt per ``period``. The tx-prep round can re-run within a
+        period (it self-loops on timeout), so a task already charged for
+        ``period`` is left untouched and not counted again.
 
-        Agents that did not execute the task hold no local copy, change
-        nothing, and count nothing: the executing agent is the single
-        accountant for each task's settlement outcomes.
+        Once a task reaches ``MAX_SETTLEMENT_ATTEMPTS`` it is a candidate for
+        dropping; only one candidate per call is removed (the lowest wire
+        nonce, else the first), its settling nonce is released, and it is
+        counted ``dropped``. The rest are counted ``sim_failed`` and retried.
 
-        :param request_ids: ``str`` request ids in the skipped sender group.
+        Agents that did not execute a task hold no local copy, change
+        nothing, and count nothing.
+
+        :param request_ids: ``str`` request ids in the skipped group.
+        :param source: ``SOURCE_OFFCHAIN`` or ``SOURCE_ONCHAIN``.
         :param mech_address: the ``mech_address`` label value.
+        :param period: the current ``synchronized_data.period_count``.
         """
         skipped = set(request_ids)
         if not skipped:
             return
-        dropped: List[Dict[str, Any]] = []
+        dropped: Optional[Dict[str, Any]] = None
         retried = 0
         with self.done_tasks_lock():
             local_tasks = self.context.shared_state.get(DONE_TASKS, [])
-            survivors: List[Dict[str, Any]] = []
-            for task in local_tasks:
+            candidates: List[Tuple[int, int, Dict[str, Any]]] = []
+            for position, task in enumerate(local_tasks):
                 if str(task.get("request_id")) not in skipped:
-                    survivors.append(task)
                     continue
+                if task.get(SETTLEMENT_ATTEMPT_PERIOD_KEY) == period:
+                    continue
+                task[SETTLEMENT_ATTEMPT_PERIOD_KEY] = period
                 attempts = int(task.get(SETTLEMENT_ATTEMPTS_KEY, 0)) + 1
                 task[SETTLEMENT_ATTEMPTS_KEY] = attempts
-                if attempts >= MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS:
-                    dropped.append(task)
-                    continue
-                retried += 1
-                survivors.append(task)
-            if dropped:
-                self.context.shared_state[DONE_TASKS] = survivors
-        for task in dropped:
-            _discard_settling_nonce(self.context.shared_state, task)
+                if attempts >= MAX_SETTLEMENT_ATTEMPTS:
+                    candidates.append((_nonce_order(task), position, task))
+                else:
+                    retried += 1
+            if candidates:
+                candidates.sort(key=lambda item: item[:2])
+                dropped = candidates[0][2]
+                retried += len(candidates) - 1
+                self.context.shared_state[DONE_TASKS] = [
+                    task for task in local_tasks if task is not dropped
+                ]
+        if dropped is not None:
+            _discard_settling_nonce(self.context.shared_state, dropped)
             self.context.logger.warning(
-                "Off-chain request_id=%s (sender=%s nonce=%s tool=%s) dropped after "
-                "%d failed deliver simulations; result was served to the user but "
-                "the delivery will not be settled on-chain.",
-                task.get("request_id"),
-                task.get(SENDER),
-                task.get(NONCE),
-                task.get("tool"),
-                MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS,
+                "%s request_id=%s (sender=%s nonce=%s tool=%s) dropped after %d "
+                "periods of failed deliver simulations; the delivery will not be "
+                "settled on-chain.",
+                source,
+                dropped.get("request_id"),
+                dropped.get(SENDER),
+                dropped.get(NONCE),
+                dropped.get("tool"),
+                MAX_SETTLEMENT_ATTEMPTS,
             )
         self.count_settlement(
-            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, mech_address, len(dropped)
+            SETTLEMENT_OUTCOME_DROPPED, source, mech_address, 1 if dropped else 0
         )
         self.count_settlement(
-            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_OFFCHAIN, mech_address, retried
+            SETTLEMENT_OUTCOME_SIM_FAILED, source, mech_address, retried
         )
+
+
+def _nonce_order(task: Dict[str, Any]) -> int:
+    """Return the task's wire nonce for drop ordering, or a sentinel when absent.
+
+    :param task: a done-task dict.
+    :return: ``int(nonce)`` when present and numeric, else ``sys.maxsize``.
+    """
+    try:
+        return int(task[NONCE])
+    except (KeyError, TypeError, ValueError):
+        return sys.maxsize
 
 
 class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
@@ -546,10 +568,7 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         :param done_tasks: this agent's local done-task snapshot.
         """
         offchain = [t for t in done_tasks if t.get(IS_OFFCHAIN)]
-        labels = {
-            "chain": self.params.default_chain_id,
-            "mech_address": self.metrics_mech_label(),
-        }
+        labels = offchain_metric_labels(self.params)
         self.set_gauge(mech_offchain_unsettled_delivered, len(offchain), **labels)
         stamps = [
             float(t[ENQUEUED_AT_LOCAL])
@@ -1729,14 +1748,12 @@ class TransactionPreparationBehaviour(
                 self.context.logger.warning(
                     f"Deliver tx simulation failed for task {task}. Skipping this deliver."
                 )
-                self.count_local_settlement(
-                    SETTLEMENT_OUTCOME_SIM_FAILED,
+                self.note_settlement_skipped(
+                    extract_request_ids([task]),
                     SOURCE_ONCHAIN,
                     str(task.get(MECH_ADDRESS) or self.metrics_mech_label()),
-                    extract_request_ids([task]),
+                    self.synchronized_data.period_count,
                 )
-                # remove the task from the list of done tasks
-                self.remove_tasks([task])
                 continue
 
             all_txs.append(deliver_tx)
@@ -1942,6 +1959,7 @@ class TransactionPreparationBehaviour(
         ]
         tx_list = []
         included_request_ids: List[str] = []
+        counted_request_ids: Set[str] = set()
 
         if len(offchain_done_tasks_list) > 0:
             self.context.logger.info(
@@ -2023,12 +2041,17 @@ class TransactionPreparationBehaviour(
                     )
                     # Every off-chain task in this period's batch is
                     # abandoned (including groups already appended to
-                    # ``tx_list``, since the caller discards it on None).
+                    # ``tx_list``, since the caller discards it on None),
+                    # except ids already counted ``sim_failed`` above.
                     self.count_local_settlement(
                         SETTLEMENT_OUTCOME_CONTRACT_ERROR,
                         SOURCE_OFFCHAIN,
-                        self.metrics_mech_label(),
-                        extract_request_ids(offchain_done_tasks_list),
+                        mech_address,
+                        [
+                            rid
+                            for rid in extract_request_ids(offchain_done_tasks_list)
+                            if rid not in counted_request_ids
+                        ],
                     )
                     return None, []
 
@@ -2040,9 +2063,13 @@ class TransactionPreparationBehaviour(
                         f"Simulation failed for offchain deliver of request_ids="
                         f"{group_request_ids}; skipping this period: {contract_data}"
                     )
-                    self.note_offchain_settlement_skipped(
-                        group_request_ids, self.metrics_mech_label()
+                    self.note_settlement_skipped(
+                        group_request_ids,
+                        SOURCE_OFFCHAIN,
+                        mech_address,
+                        self.synchronized_data.period_count,
                     )
+                    counted_request_ids.update(group_request_ids)
                     continue
                 included_request_ids.extend(group_request_ids)
                 tx_list.append(
@@ -2113,6 +2140,7 @@ class TransactionPreparationBehaviour(
         """
         tx_list = []
         included_request_ids: List[str] = []
+        counted_request_ids: Set[str] = set()
         if len(marketplace_done_tasks) > 0:
             self.context.logger.info(
                 f"{len(marketplace_done_tasks)} Marketplace Tasks Found. Preparing deliver onchain tx(s)"
@@ -2211,7 +2239,11 @@ class TransactionPreparationBehaviour(
                             SETTLEMENT_OUTCOME_CONTRACT_ERROR,
                             SOURCE_ONCHAIN,
                             failed_mech,
-                            failed_details[REQUEST_IDS_KEY],
+                            [
+                                rid
+                                for rid in failed_details[REQUEST_IDS_KEY]
+                                if rid not in counted_request_ids
+                            ],
                         )
                     return None, []
 
@@ -2219,19 +2251,17 @@ class TransactionPreparationBehaviour(
                 simulation_ok = cast(bool, contract_api_msg.state.body["simulation_ok"])
                 group_request_ids = details[REQUEST_IDS_KEY]
                 if not simulation_ok:
-                    # On-chain requests stay undelivered on the contract and
-                    # are re-fetched by the undelivered-requests read, so no
-                    # local retry cap is needed here; just count and skip.
                     self.context.logger.info(
                         f"Simulation failed for onchain deliver of request_ids="
                         f"{group_request_ids}; skipping this period: {contract_data}"
                     )
-                    self.count_local_settlement(
-                        SETTLEMENT_OUTCOME_SIM_FAILED,
+                    self.note_settlement_skipped(
+                        group_request_ids,
                         SOURCE_ONCHAIN,
                         mech,
-                        group_request_ids,
+                        self.synchronized_data.period_count,
                     )
+                    counted_request_ids.update(group_request_ids)
                     continue
                 included_request_ids.extend(group_request_ids)
                 tx_list.append(
@@ -2296,11 +2326,18 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         than the local ``shared_state[DONE_TASKS]``: the local queue is
         in-memory and empties on a process restart, whereas the synced copy
         carries ``task_executor_address`` for the rest of the period. Each
-        task is still counted exactly once fleet-wide, by its executor.
+        task is still counted exactly once fleet-wide, by its executor, and
+        once per confirmed tx hash on that agent.
         """
         included = set(self.synchronized_data.tx_included_request_ids)
         if not included:
             return
+        # The round self-loops on NO_MAJORITY / timeout and re-runs this
+        # behaviour; the confirmed tx hash is stable across those re-entries.
+        tx_hash = self.synchronized_data.final_tx_hash
+        if self.context.shared_state.get(SETTLED_COUNTED_TX_KEY) == tx_hash:
+            return
+        self.context.shared_state[SETTLED_COUNTED_TX_KEY] = tx_hash
         me = self.context.agent_address
         for task in self.synchronized_data.done_tasks:
             if str(task.get("request_id")) not in included:

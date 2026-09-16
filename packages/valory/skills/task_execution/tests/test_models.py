@@ -19,7 +19,7 @@
 
 """Tests for the task_execution skill's models."""
 
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import pytest
 from aea.exceptions import AEAEnforceError
@@ -213,14 +213,34 @@ def test_metrics_mech_address_prefers_marketplace_mech(
     """
     from types import SimpleNamespace
 
-    params = SimpleNamespace(
-        mech_to_config=mech_to_config, agent_mech_contract_address=fallback
+    params = cast(
+        m.MetricsParams,
+        SimpleNamespace(
+            mech_to_config=mech_to_config,
+            agent_mech_contract_address=fallback,
+            default_chain_id="gnosis",
+        ),
     )
     assert m.metrics_mech_address(params) == expected
 
 
-def test_metrics_mech_address_tolerates_bare_stub() -> None:
-    """A stub with neither attribute yields an empty label rather than raising."""
+def test_offchain_metric_labels_pairs_chain_with_marketplace_mech() -> None:
+    """One helper feeds every off-chain series so the two skills cannot drift."""
     from types import SimpleNamespace
 
-    assert m.metrics_mech_address(SimpleNamespace()) == ""
+    params = cast(
+        m.MetricsParams,
+        SimpleNamespace(
+            mech_to_config={
+                "0xmarket": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=True
+                )
+            },
+            agent_mech_contract_address="0xother",
+            default_chain_id=100,
+        ),
+    )
+    assert m.offchain_metric_labels(params) == {
+        "chain": "100",
+        "mech_address": "0xmarket",
+    }

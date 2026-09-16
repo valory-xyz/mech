@@ -33,6 +33,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     NamedTuple,
     Optional,
     Set,
@@ -63,7 +64,10 @@ from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
-from packages.valory.skills.task_execution.models import Params, metrics_mech_address
+from packages.valory.skills.task_execution.models import (
+    Params,
+    offchain_metric_labels,
+)
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.eip1271 import (
     Eip1271Verdict,
@@ -140,20 +144,34 @@ PROMETHEUS_PORT = 9000
 # mech-scanner's on-chain series so panels can be laid side by side.
 #
 # ``/send_signed_requests`` outcomes:
-REQUEST_OUTCOME_ACCEPTED = "accepted"
-REQUEST_OUTCOME_DUPLICATE = "duplicate"  # 200, already enqueued
-REQUEST_OUTCOME_DISABLED = "disabled"  # 503, use_offchain=false
-REQUEST_OUTCOME_BAD_REQUEST = "bad_request"  # 400, malformed body / fields
-REQUEST_OUTCOME_SIGNATURE_REJECTED = "signature_rejected"  # 401 / 503 infra
-REQUEST_OUTCOME_PAYLOAD_REJECTED = "payload_rejected"  # 400, CID <-> body mismatch
-REQUEST_OUTCOME_SENDER_UNRESOLVED = "sender_unresolved"  # 503
-REQUEST_OUTCOME_NONCE_REJECTED = "nonce_rejected"  # 401 / 503 infra
-REQUEST_OUTCOME_BALANCE_UNAVAILABLE = "balance_unavailable"  # 503
-REQUEST_OUTCOME_INSUFFICIENT_BALANCE = "insufficient_balance"  # 402
-REQUEST_OUTCOME_INTERNAL_ERROR = "internal_error"  # 500 / defensive 503
-REQUEST_OUTCOME_REJECTED_OTHER = (
-    "rejected_other"  # rejection sender called without a tag
+RequestOutcome = Literal[
+    "accepted",
+    "duplicate",
+    "disabled",
+    "bad_request",
+    "signature_rejected",
+    "payload_rejected",
+    "sender_unresolved",
+    "nonce_rejected",
+    "balance_unavailable",
+    "insufficient_balance",
+    "internal_error",
+    "rejected_other",
+]
+REQUEST_OUTCOME_ACCEPTED: RequestOutcome = "accepted"
+REQUEST_OUTCOME_DUPLICATE: RequestOutcome = "duplicate"  # 200, already enqueued
+REQUEST_OUTCOME_DISABLED: RequestOutcome = "disabled"  # 503, use_offchain=false
+REQUEST_OUTCOME_BAD_REQUEST: RequestOutcome = "bad_request"  # 400
+REQUEST_OUTCOME_SIGNATURE_REJECTED: RequestOutcome = "signature_rejected"  # 401 / 503
+REQUEST_OUTCOME_PAYLOAD_REJECTED: RequestOutcome = (
+    "payload_rejected"  # 400, CID mismatch
 )
+REQUEST_OUTCOME_SENDER_UNRESOLVED: RequestOutcome = "sender_unresolved"  # 503
+REQUEST_OUTCOME_NONCE_REJECTED: RequestOutcome = "nonce_rejected"  # 401 / 503
+REQUEST_OUTCOME_BALANCE_UNAVAILABLE: RequestOutcome = "balance_unavailable"  # 503
+REQUEST_OUTCOME_INSUFFICIENT_BALANCE: RequestOutcome = "insufficient_balance"  # 402
+REQUEST_OUTCOME_INTERNAL_ERROR: RequestOutcome = "internal_error"  # 500 / 503
+REQUEST_OUTCOME_REJECTED_OTHER: RequestOutcome = "rejected_other"  # untagged
 mech_offchain_requests_total = Counter(
     "mech_offchain_requests_total",
     "Off-chain /send_signed_requests calls by outcome "
@@ -161,13 +179,14 @@ mech_offchain_requests_total = Counter(
     labelnames=["outcome", "chain", "mech_address"],
 )
 # ``/fetch_offchain_info`` outcomes:
-FETCH_OUTCOME_DELIVERED = "delivered"  # stored response with status ok
-FETCH_OUTCOME_REJECTED = "rejected"  # stored response with a rejection
-FETCH_OUTCOME_DONE_TASK_FALLBACK = (
-    "done_task_fallback"  # no stored response, done_task served
-)
-FETCH_OUTCOME_NOT_FOUND = "not_found"  # still processing / unknown id
-FETCH_OUTCOME_BAD_REQUEST = "bad_request"
+FetchOutcome = Literal[
+    "delivered", "rejected", "done_task_fallback", "not_found", "bad_request"
+]
+FETCH_OUTCOME_DELIVERED: FetchOutcome = "delivered"  # stored response, status ok
+FETCH_OUTCOME_REJECTED: FetchOutcome = "rejected"  # stored response, rejection
+FETCH_OUTCOME_DONE_TASK_FALLBACK: FetchOutcome = "done_task_fallback"
+FETCH_OUTCOME_NOT_FOUND: FetchOutcome = "not_found"  # still processing / unknown
+FETCH_OUTCOME_BAD_REQUEST: FetchOutcome = "bad_request"
 mech_offchain_fetches_total = Counter(
     "mech_offchain_fetches_total",
     "Off-chain /fetch_offchain_info polls by outcome "
@@ -1160,12 +1179,9 @@ class MechHttpHandler(AbstractResponseHandler):
 
         :return: the label kwargs.
         """
-        return {
-            "chain": str(self.params.default_chain_id),
-            "mech_address": metrics_mech_address(self.params),
-        }
+        return offchain_metric_labels(self.params)
 
-    def _count_request_outcome(self, outcome: str) -> None:
+    def _count_request_outcome(self, outcome: RequestOutcome) -> None:
         """Increment ``mech_offchain_requests_total`` for one ``/send_signed_requests`` call.
 
         :param outcome: one of the ``REQUEST_OUTCOME_*`` constants.
@@ -1174,7 +1190,7 @@ class MechHttpHandler(AbstractResponseHandler):
             outcome=outcome, **self._offchain_metric_labels()
         ).inc()
 
-    def _count_fetch_outcome(self, outcome: str) -> None:
+    def _count_fetch_outcome(self, outcome: FetchOutcome) -> None:
         """Increment ``mech_offchain_fetches_total`` for one ``/fetch_offchain_info`` call.
 
         :param outcome: one of the ``FETCH_OUTCOME_*`` constants.
@@ -2567,7 +2583,7 @@ class MechHttpHandler(AbstractResponseHandler):
         extra_headers: str = "",
         body_extras: Optional[Dict[str, Any]] = None,
         record_response: bool = False,
-        outcome: str = REQUEST_OUTCOME_REJECTED_OTHER,
+        outcome: RequestOutcome = REQUEST_OUTCOME_REJECTED_OTHER,
     ) -> None:
         """Build a rejection payload, optionally persist it, and reply.
 

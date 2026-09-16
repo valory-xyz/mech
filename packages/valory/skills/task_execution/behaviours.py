@@ -60,7 +60,10 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
-from packages.valory.skills.task_execution.models import Params, metrics_mech_address
+from packages.valory.skills.task_execution.models import (
+    Params,
+    offchain_metric_labels,
+)
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
@@ -126,15 +129,21 @@ SOURCE_OFFCHAIN: Source = "offchain"
 # Bounded ``reason`` label values for ``mech_tasks_failed_total``. The log
 # line keeps the full human-readable message (with request id / prices);
 # the label must not, or every failure mints a new time series.
-FAILURE_REASON_TOOL_NOT_INSTALLED = "tool_not_installed"
-FAILURE_REASON_PRICING_INVALID = "pricing_invalid"
-FAILURE_REASON_TOOL_INVALID = "tool_invalid"
-FAILURE_REASON_EXECUTION_FAILED = "execution_failed"
+FailureReason = Literal[
+    "tool_not_installed", "pricing_invalid", "tool_invalid", "execution_failed"
+]
+FAILURE_REASON_TOOL_NOT_INSTALLED: FailureReason = "tool_not_installed"
+FAILURE_REASON_PRICING_INVALID: FailureReason = "pricing_invalid"
+FAILURE_REASON_TOOL_INVALID: FailureReason = "tool_invalid"
+FAILURE_REASON_EXECUTION_FAILED: FailureReason = "execution_failed"
 # Bounded ``reason`` label values for ``mech_offchain_failures_total``.
-OFFCHAIN_FAILURE_EXECUTION_FAILED = "execution_failed"
-OFFCHAIN_FAILURE_CID_FAILED = "cid_failed"
-OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED = "tool_not_installed"
-OFFCHAIN_FAILURE_INVALID_DONE_TASK = "invalid_done_task"
+OffchainFailureReason = Literal[
+    "execution_failed", "cid_failed", "tool_not_installed", "invalid_done_task"
+]
+OFFCHAIN_FAILURE_EXECUTION_FAILED: OffchainFailureReason = "execution_failed"
+OFFCHAIN_FAILURE_CID_FAILED: OffchainFailureReason = "cid_failed"
+OFFCHAIN_FAILURE_TOOL_NOT_INSTALLED: OffchainFailureReason = "tool_not_installed"
+OFFCHAIN_FAILURE_INVALID_DONE_TASK: OffchainFailureReason = "invalid_done_task"
 INITIAL_DEADLINE = 1200.0  # 20mins of deadline
 SUBSEQUENT_DEADLINE = 300.0  # 5min of deadline
 STATUS_CHECK_INTERVAL = 600.0  # 10min interval
@@ -1013,10 +1022,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
         :return: the label kwargs.
         """
-        return {
-            "chain": str(self.params.default_chain_id),
-            "mech_address": metrics_mech_address(self.params),
-        }
+        return offchain_metric_labels(self.params)
 
     def _update_queue_gauges(self) -> None:
         """Publish queue depths, including the off-chain split.
@@ -2437,7 +2443,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self,
         req_id: str,
         reason: str,
-        metric_reason: str = OFFCHAIN_FAILURE_EXECUTION_FAILED,
+        metric_reason: OffchainFailureReason = OFFCHAIN_FAILURE_EXECUTION_FAILED,
     ) -> None:
         """Record an off-chain request failure and reset the task slot.
 

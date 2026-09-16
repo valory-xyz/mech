@@ -45,7 +45,7 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     FundsSplittingBehaviour,
     IS_OFFCHAIN,
     LAST_TX,
-    MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS,
+    MAX_SETTLEMENT_ATTEMPTS,
     MECH_ADDRESS,
     MarketplaceData,
     MarketplaceKeys,
@@ -55,7 +55,9 @@ from packages.valory.skills.task_submission_abci.behaviours import (
     OffchainKeys,
     PAYMENT_MODEL,
     SENDER,
+    SETTLED_COUNTED_TX_KEY,
     SETTLEMENT_ATTEMPTS_KEY,
+    SETTLEMENT_ATTEMPT_PERIOD_KEY,
     SETTLEMENT_OUTCOME_CONTRACT_ERROR,
     SETTLEMENT_OUTCOME_DROPPED,
     SETTLEMENT_OUTCOME_SETTLED,
@@ -1204,12 +1206,19 @@ class TestCountSettledFromSyncedData:
 
     _ME = "0xSELF"
 
-    def _make_self(self, done_tasks: List[Dict[str, Any]], included: List[str]) -> Any:
+    def _make_self(
+        self,
+        done_tasks: List[Dict[str, Any]],
+        included: List[str],
+        tx_hash: str = "0xTX",
+    ) -> Any:
         self_ = SimpleNamespace(
             synchronized_data=SimpleNamespace(
-                done_tasks=done_tasks, tx_included_request_ids=included
+                done_tasks=done_tasks,
+                tx_included_request_ids=included,
+                final_tx_hash=tx_hash,
             ),
-            context=SimpleNamespace(agent_address=self._ME),
+            context=SimpleNamespace(agent_address=self._ME, shared_state={}),
             count_settlement=MagicMock(),
             metrics_mech_label=lambda: "0xLABEL",
         )
@@ -1251,6 +1260,22 @@ class TestCountSettledFromSyncedData:
         self_ = self._make_self([{"request_id": "r1"}], included=["r1"])
         beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
         self_.count_settlement.assert_not_called()
+
+    def test_round_re_entry_counts_the_same_tx_once(self) -> None:
+        """The post-settlement round self-loops; the same tx hash is counted once."""
+        self_ = self._make_self([self._task("r1", self._ME)], included=["r1"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        self_.count_settlement.assert_called_once()
+        assert self_.context.shared_state[SETTLED_COUNTED_TX_KEY] == "0xTX"
+
+    def test_a_new_tx_hash_is_counted_again(self) -> None:
+        """The guard is per confirmed tx, not a one-shot latch."""
+        self_ = self._make_self([self._task("r1", self._ME)], included=["r1"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        self_.synchronized_data.final_tx_hash = "0xTX2"
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        assert self_.count_settlement.call_count == 2
 
 
 class TestCountSettlement:
@@ -1319,16 +1344,20 @@ class TestLocalSettlementCounting:
         assert b.metrics_mech_label() == "0xmarket"
 
 
-class TestNoteOffchainSettlementSkipped:
-    """Retry stamp / drop cap for off-chain tasks whose deliver simulation failed."""
+class TestNoteSettlementSkipped:
+    """Per-period retry charge and one-at-a-time drop for tasks whose deliver simulation failed."""
+
+    PERIOD = 5
 
     @staticmethod
-    def _task(request_id: str, attempts: Optional[int] = None) -> Dict[str, Any]:
+    def _task(
+        request_id: str, attempts: Optional[int] = None, nonce: int = 7
+    ) -> Dict[str, Any]:
         task: Dict[str, Any] = {
             "request_id": request_id,
             IS_OFFCHAIN: True,
             SENDER: "0xSENDER",
-            NONCE: 7,
+            NONCE: nonce,
             "tool": "t1",
         }
         if attempts is not None:
@@ -1340,68 +1369,128 @@ class TestNoteOffchainSettlementSkipped:
         ctx.shared_state[SETTLING_NONCES_BY_SENDER] = {"0xSENDER": {7, 8}}
         return _DummyTransPrep(name="b", skill_context=ctx)
 
+    def _skip(self, b: Any, ids: List[str], period: int = PERIOD) -> MagicMock:
+        with patch.object(b, "count_settlement") as mock_count:
+            b.note_settlement_skipped(ids, SOURCE_OFFCHAIN, "0xMECH", period)
+        return mock_count
+
+    @staticmethod
+    def _amounts(mock_count: MagicMock) -> Dict[str, int]:
+        return {c.args[0]: c.args[3] for c in mock_count.call_args_list}
+
     def test_first_skip_stamps_attempt_and_keeps_task(self) -> None:
         """One failure: attempt count becomes 1, task stays, counted as sim_failed."""
         b = self._make_b([self._task("r1")])
-        with patch.object(b, "count_settlement") as mock_count:
-            b.note_offchain_settlement_skipped(["r1"], "0xMECH")
+        mock_count = self._skip(b, ["r1"])
         local = b.context.shared_state[DONE_TASKS]
         assert [t["request_id"] for t in local] == ["r1"]
         assert local[0][SETTLEMENT_ATTEMPTS_KEY] == 1
+        assert local[0][SETTLEMENT_ATTEMPT_PERIOD_KEY] == self.PERIOD
         assert b.context.shared_state[SETTLING_NONCES_BY_SENDER] == {"0xSENDER": {7, 8}}
-        mock_count.assert_any_call(
-            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_OFFCHAIN, "0xMECH", 1
-        )
-        mock_count.assert_any_call(
-            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, "0xMECH", 0
-        )
+        assert self._amounts(mock_count) == {
+            SETTLEMENT_OUTCOME_SIM_FAILED: 1,
+            SETTLEMENT_OUTCOME_DROPPED: 0,
+        }
+
+    def test_re_entry_in_the_same_period_charges_nothing(self) -> None:
+        """A tx-prep round re-run at the same height must not burn a second attempt.
+
+        The round self-loops on its 60s timeout and the framework rebuilds the
+        behaviour, so the whole builder runs again against the same local task.
+        """
+        b = self._make_b([self._task("r1")])
+        self._skip(b, ["r1"])
+        second = self._skip(b, ["r1"])
+        local = b.context.shared_state[DONE_TASKS]
+        assert local[0][SETTLEMENT_ATTEMPTS_KEY] == 1
+        assert self._amounts(second) == {
+            SETTLEMENT_OUTCOME_SIM_FAILED: 0,
+            SETTLEMENT_OUTCOME_DROPPED: 0,
+        }
+
+    def test_next_period_charges_a_second_attempt(self) -> None:
+        """A new period is a new attempt."""
+        b = self._make_b([self._task("r1")])
+        self._skip(b, ["r1"], period=1)
+        self._skip(b, ["r1"], period=2)
+        assert b.context.shared_state[DONE_TASKS][0][SETTLEMENT_ATTEMPTS_KEY] == 2
+
+    def test_cap_burns_only_across_periods_never_within_one(self) -> None:
+        """MAX re-entries in one period leave the task queued at attempt 1."""
+        b = self._make_b([self._task("r1")])
+        for _ in range(MAX_SETTLEMENT_ATTEMPTS + 1):
+            self._skip(b, ["r1"])
+        local = b.context.shared_state[DONE_TASKS]
+        assert [t["request_id"] for t in local] == ["r1"]
+        assert local[0][SETTLEMENT_ATTEMPTS_KEY] == 1
 
     def test_reaching_the_cap_drops_task_and_releases_settling_nonce(self) -> None:
-        """The Nth failure removes the task locally and frees its nonce slot."""
+        """The Nth period removes the task locally and frees its nonce slot."""
         b = self._make_b(
             [
-                self._task("r1", attempts=MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS - 1),
-                self._task("r-other"),
+                self._task("r1", attempts=MAX_SETTLEMENT_ATTEMPTS - 1),
+                self._task("r-other", nonce=8),
             ]
         )
-        with patch.object(b, "count_settlement") as mock_count:
-            b.note_offchain_settlement_skipped(["r1"], "0xMECH")
+        mock_count = self._skip(b, ["r1"])
         local = b.context.shared_state[DONE_TASKS]
         assert [t["request_id"] for t in local] == ["r-other"]
         # Only the dropped task's nonce (7) is released; 8 belongs to another task.
         assert b.context.shared_state[SETTLING_NONCES_BY_SENDER] == {"0xSENDER": {8}}
-        mock_count.assert_any_call(
-            SETTLEMENT_OUTCOME_DROPPED, SOURCE_OFFCHAIN, "0xMECH", 1
+        assert self._amounts(mock_count) == {
+            SETTLEMENT_OUTCOME_DROPPED: 1,
+            SETTLEMENT_OUTCOME_SIM_FAILED: 0,
+        }
+
+    def test_only_the_lowest_nonce_at_cap_is_dropped_per_period(self) -> None:
+        """A whole group at the cap loses one task per period, lowest nonce first."""
+        b = self._make_b(
+            [
+                self._task("r-late", attempts=MAX_SETTLEMENT_ATTEMPTS - 1, nonce=9),
+                self._task("r-early", attempts=MAX_SETTLEMENT_ATTEMPTS - 1, nonce=7),
+                self._task("r-young", attempts=0, nonce=8),
+            ]
         )
-        mock_count.assert_any_call(
-            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_OFFCHAIN, "0xMECH", 0
-        )
+        mock_count = self._skip(b, ["r-late", "r-early", "r-young"])
+        local = b.context.shared_state[DONE_TASKS]
+        assert [t["request_id"] for t in local] == ["r-late", "r-young"]
+        # The survivor at the cap keeps its count and is retried, not reset.
+        assert local[0][SETTLEMENT_ATTEMPTS_KEY] == MAX_SETTLEMENT_ATTEMPTS
+        assert self._amounts(mock_count) == {
+            SETTLEMENT_OUTCOME_DROPPED: 1,
+            SETTLEMENT_OUTCOME_SIM_FAILED: 2,
+        }
+
+    def test_onchain_task_without_nonce_is_dropped_by_position(self) -> None:
+        """On-chain groups have no wire nonce; the first candidate goes."""
+        first = {"request_id": 1, SETTLEMENT_ATTEMPTS_KEY: MAX_SETTLEMENT_ATTEMPTS - 1}
+        second = {"request_id": 2, SETTLEMENT_ATTEMPTS_KEY: MAX_SETTLEMENT_ATTEMPTS - 1}
+        b = self._make_b([first, second])
+        with patch.object(b, "count_settlement") as mock_count:
+            b.note_settlement_skipped(["1", "2"], SOURCE_ONCHAIN, "0xMECH", self.PERIOD)
+        assert [t["request_id"] for t in b.context.shared_state[DONE_TASKS]] == [2]
+        assert self._amounts(mock_count) == {
+            SETTLEMENT_OUTCOME_DROPPED: 1,
+            SETTLEMENT_OUTCOME_SIM_FAILED: 1,
+        }
+        assert mock_count.call_args_list[0].args[1] == SOURCE_ONCHAIN
 
     def test_below_cap_does_not_drop(self) -> None:
         """Attempts at cap-2 become cap-1 after this skip: still retried next period."""
-        b = self._make_b(
-            [self._task("r1", attempts=MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS - 2)]
-        )
-        with patch.object(b, "count_settlement"):
-            b.note_offchain_settlement_skipped(["r1"], "0xMECH")
+        b = self._make_b([self._task("r1", attempts=MAX_SETTLEMENT_ATTEMPTS - 2)])
+        self._skip(b, ["r1"])
         local = b.context.shared_state[DONE_TASKS]
         assert len(local) == 1
-        assert local[0][SETTLEMENT_ATTEMPTS_KEY] == MAX_OFFCHAIN_SETTLEMENT_ATTEMPTS - 1
+        assert local[0][SETTLEMENT_ATTEMPTS_KEY] == MAX_SETTLEMENT_ATTEMPTS - 1
 
     def test_non_owner_agent_changes_nothing_and_counts_nothing(self) -> None:
-        """An agent without the task locally leaves shared state alone and counts 0.
-
-        Every agent runs tx-prep over the same synced done_tasks; letting each
-        one count the skip would inflate ``sim_failed`` by the agent count.
-        """
+        """An agent without the task locally leaves shared state alone and counts 0."""
         b = self._make_b([self._task("r-unrelated")])
-        with patch.object(b, "count_settlement") as mock_count:
-            b.note_offchain_settlement_skipped(["r1", "r2"], "0xMECH")
+        mock_count = self._skip(b, ["r1", "r2"])
         local = b.context.shared_state[DONE_TASKS]
         assert [t["request_id"] for t in local] == ["r-unrelated"]
         assert SETTLEMENT_ATTEMPTS_KEY not in local[0]
-        amounts = {c.args[0]: c.args[3] for c in mock_count.call_args_list}
-        assert amounts == {
+        assert self._amounts(mock_count) == {
             SETTLEMENT_OUTCOME_DROPPED: 0,
             SETTLEMENT_OUTCOME_SIM_FAILED: 0,
         }
@@ -1409,8 +1498,7 @@ class TestNoteOffchainSettlementSkipped:
     def test_empty_id_list_is_noop(self) -> None:
         """Nothing skipped → nothing stamped, nothing counted."""
         b = self._make_b([self._task("r1")])
-        with patch.object(b, "count_settlement") as mock_count:
-            b.note_offchain_settlement_skipped([], "0xMECH")
+        mock_count = self._skip(b, [])
         assert SETTLEMENT_ATTEMPTS_KEY not in b.context.shared_state[DONE_TASKS][0]
         mock_count.assert_not_called()
 
@@ -2675,13 +2763,15 @@ class TestGetOffchainTasksDeliverData:
             patch.object(
                 b, "get_contract_api_response", side_effect=_gen_returning(msg)
             ),
-            patch.object(b, "note_offchain_settlement_skipped") as mock_skip,
+            patch.object(b, "note_settlement_skipped") as mock_skip,
         ):
             result = _run_gen(b._get_offchain_tasks_deliver_data())
         assert result == ([], [])
         # The skip bookkeeping (retry stamp / drop cap / metric) fires for
         # exactly the ids in the failed group.
-        mock_skip.assert_called_once_with(["r1"], "0xMECH")
+        mock_skip.assert_called_once_with(
+            ["r1"], SOURCE_OFFCHAIN, "0xMECH", b.synchronized_data.period_count
+        )
 
     def test_sim_failure_only_excludes_the_failing_sender_group(self) -> None:
         """Two senders, one fails simulation: the other's ids are still included."""
@@ -2699,12 +2789,14 @@ class TestGetOffchainTasksDeliverData:
         with (
             self._patch_sd(b, [ok_task, bad_task]),
             patch.object(b, "get_contract_api_response", side_effect=_respond),
-            patch.object(b, "note_offchain_settlement_skipped") as mock_skip,
+            patch.object(b, "note_settlement_skipped") as mock_skip,
         ):
             tx_list, included = _run_gen(b._get_offchain_tasks_deliver_data())
         assert [tx["data"] for tx in tx_list] == [b"\x01"]
         assert included == ["r-ok"]
-        mock_skip.assert_called_once_with(["r-bad"], "0xMECH")
+        mock_skip.assert_called_once_with(
+            ["r-bad"], SOURCE_OFFCHAIN, "0xMECH", b.synchronized_data.period_count
+        )
 
     def test_appends_tx_when_simulation_ok(self) -> None:
         """Test appends tx when simulation ok."""
@@ -2814,7 +2906,7 @@ class TestGetMarketplaceTasksDeliverData:
         assert included == ["12345"]
 
     def test_skips_tasks_with_failed_simulation(self) -> None:
-        """A sim-failed mech group is left out of txs and ids and counted, not dropped."""
+        """A sim-failed mech group is left out of txs and ids and charged one attempt."""
         b = self._make_b()
         task = {
             "mech_address": "0xMECH",
@@ -2824,48 +2916,60 @@ class TestGetMarketplaceTasksDeliverData:
         }
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
+        mock_sd.period_count = 4
         b._synchronized_data = mock_sd
         msg_deliver = _state_contract_msg({"data": b"\xdd", "simulation_ok": False})
-        # This agent executed the task, so it is the one that counts it.
-        b.context.shared_state[DONE_TASKS] = [dict(task)]
         with (
             patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
             patch.object(
                 b, "get_contract_api_response", side_effect=_gen_returning(msg_deliver)
             ),
-            patch.object(b, "count_settlement") as mock_count,
+            patch.object(b, "note_settlement_skipped") as mock_skip,
         ):
             result = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
         assert result == ([], [])
-        mock_count.assert_called_once_with(
-            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_ONCHAIN, "0xMECH", 1
-        )
+        mock_skip.assert_called_once_with(["12345"], SOURCE_ONCHAIN, "0xMECH", 4)
 
-    def test_failed_simulation_is_not_counted_by_non_executing_agent(self) -> None:
-        """An agent that did not execute the task skips it but counts 0 (no fleet inflation)."""
+    def test_contract_error_after_sim_failure_does_not_recount_those_ids(self) -> None:
+        """Ids already charged sim_failed are excluded from the contract_error count."""
         b = self._make_b()
-        task = {
-            "mech_address": "0xMECH",
-            "request_id": 12345,
-            "requestId": 12345,
-            "task_result": "de" * 16,
+        bad = {
+            "mech_address": "0xBAD",
+            "request_id": 1,
+            "requestId": 1,
+            "task_result": "aa",
+        }
+        good = {
+            "mech_address": "0xGOOD",
+            "request_id": 2,
+            "requestId": 2,
+            "task_result": "bb",
         }
         mock_sd = MagicMock()
         mock_sd.safe_contract_address = "0xSAFE"
         b._synchronized_data = mock_sd
-        msg_deliver = _state_contract_msg({"data": b"\xdd", "simulation_ok": False})
+        b.context.shared_state[DONE_TASKS] = [dict(bad), dict(good)]
+        responses = {
+            "0xBAD": _state_contract_msg({"data": b"\x01", "simulation_ok": False}),
+            "0xGOOD": _error_contract_msg(),
+        }
+
+        def _respond(*_args: Any, **kwargs: Any) -> Any:
+            return _gen_returning(responses[kwargs["contract_address"]])()
+
         with (
             patch.object(b, "_get_is_nvm_mech", side_effect=_gen_returning(False)),
-            patch.object(
-                b, "get_contract_api_response", side_effect=_gen_returning(msg_deliver)
-            ),
+            patch.object(b, "get_contract_api_response", side_effect=_respond),
             patch.object(b, "count_settlement") as mock_count,
         ):
-            result = _run_gen(b._get_marketplace_tasks_deliver_data([task]))
-        assert result == ([], [])
-        mock_count.assert_called_once_with(
-            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_ONCHAIN, "0xMECH", 0
-        )
+            result = _run_gen(b._get_marketplace_tasks_deliver_data([bad, good]))
+        assert result == (None, [])
+        by_outcome = {
+            (c.args[0], c.args[2]): c.args[3] for c in mock_count.call_args_list
+        }
+        assert by_outcome[(SETTLEMENT_OUTCOME_SIM_FAILED, "0xBAD")] == 1
+        assert by_outcome[(SETTLEMENT_OUTCOME_CONTRACT_ERROR, "0xBAD")] == 0
+        assert by_outcome[(SETTLEMENT_OUTCOME_CONTRACT_ERROR, "0xGOOD")] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -3438,17 +3542,18 @@ class TestTransactionPreparationGetPayloadContent:
                 b, "get_update_usage_tx", side_effect=_gen_returning(usage_tx)
             ),
             patch.object(b, "_to_multisend", side_effect=_gen_returning("encoded")),
-            patch.object(b, "count_settlement") as mock_count,
+            patch.object(b, "note_settlement_skipped") as mock_skip,
         ):
             result = _run_gen(b.get_payload_content())
         # deliver skipped but the vote still completes, with the skipped
-        # id absent from the envelope so it is not pruned as settled.
+        # id absent from the envelope so it is not pruned as settled. The
+        # task is retried through the same cap as the other two paths.
         assert decode_tx_payload(result) == {
             "tx_hash": "encoded",
             "included_request_ids": [],
         }
-        mock_count.assert_called_once_with(
-            SETTLEMENT_OUTCOME_SIM_FAILED, SOURCE_ONCHAIN, "0xMECH", 1
+        mock_skip.assert_called_once_with(
+            ["r1"], SOURCE_ONCHAIN, "0xMECH", b.synchronized_data.period_count
         )
 
     def test_appends_response_tx_when_present(self) -> None:

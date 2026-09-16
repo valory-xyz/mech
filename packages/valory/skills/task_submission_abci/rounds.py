@@ -62,13 +62,6 @@ def extract_request_ids(tasks: List[Dict[str, Any]]) -> List[str]:
     ]
 
 
-# ``TransactionPreparationRound`` payload format. The behaviour used to
-# vote on the bare multisend hex; it now votes on a JSON envelope that
-# also carries the request ids that made it into the multisend, so
-# ``PostTxSettlementRound`` can record exactly those (and not every
-# ``done_task``) as submitted. Tasks skipped at tx-prep time (deliver
-# simulation failed) stay in ``done_tasks`` and are re-pooled next
-# period instead of being pruned as though they had settled.
 class TxPayloadEnvelope(TypedDict):
     """The tx-prep vote: the multisend hex and the request ids it delivers.
 
