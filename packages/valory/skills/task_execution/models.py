@@ -146,8 +146,10 @@ class Params(Model):
         self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
         # Terms link the off-chain HTTP server advertises: as ``termsUrl`` in
         # the 402 challenge body and as a ``Link: <url>; rel="terms-of-service"``
-        # header on the 402 and the 200. Empty means nothing is advertised.
-        # Operators keep it equal to the ``termsUrl`` in the mech's metadata.
+        # header on the 402 and the 200. The skill default is the Valory Mech
+        # Terms; an operator running their own mech sets it to their own terms,
+        # or blank to advertise nothing. Keep it equal to the ``termsUrl`` in
+        # the mech's published metadata.
         self.mech_terms_url: str = str(kwargs.get("mech_terms_url", "") or "").strip()
         # Off-chain preimage retention. Ships dark like use_offchain: False keeps
         # today's behaviour (no durable preimage buffer). When enabled, each

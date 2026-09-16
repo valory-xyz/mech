@@ -10,7 +10,7 @@ fingerprint:
   behaviours.py: bafybeihq2u6zzkhimo7dyaw23qmowd5zfba2tkgoltgj2koc4nyteodco4
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
   handlers.py: bafybeiaw67uifwffufhniioozu2jwv7ujncnhujtdioqzsgvgzfdumc54y
-  models.py: bafybeicfcia4xot7bjzboibcitly6ro52q4iyqipdtzvg2cvazw72ohkkq
+  models.py: bafybeiger67n3wxgvvdfhicgcctl33xws2ia7i22i3isc4uszzvbwkllzq
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
   tests/conftest.py: bafybeied6cnsr5xbupuc6tkv2a3tnj75x6rz42u3b7fuqpl32tsegehbym
   tests/test_behaviours.py: bafybeibb6ripn6qo3ynaaezbsavw4ib3n6pecnagfh5artfr5ffc25a6wa
@@ -105,7 +105,7 @@ models:
       max_block_window: 500
       mech_events_chain_id: 0
       mech_marketplace_address: '0x0000000000000000000000000000000000000000'
-      mech_terms_url: ''
+      mech_terms_url: https://www.valory.xyz/terms/mechs
       mech_to_config: {}
       mech_to_max_delivery_rate: {}
       num_agents: 4
