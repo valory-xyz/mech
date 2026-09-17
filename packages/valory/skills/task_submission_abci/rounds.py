@@ -21,7 +21,9 @@
 
 import json
 from enum import Enum
-from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, cast
+from typing import Any, Dict, FrozenSet, List, Optional, Set, Tuple, TypedDict, cast
+
+from prometheus_client import Counter
 
 from packages.valory.skills.abstract_round_abci.base import (
     AbciApp,
@@ -58,6 +60,101 @@ def extract_request_ids(tasks: List[Dict[str, Any]]) -> List[str]:
         for task in tasks
         if task.get("request_id") is not None and task.get("request_id") != ""
     ]
+
+
+class TxPayloadEnvelope(TypedDict):
+    """The tx-prep vote: the multisend hex and the request ids it delivers.
+
+    The wire form is the canonical JSON of this mapping (sorted keys, no
+    whitespace) so every agent producing the same content votes the same
+    bytes. Producers build it through :func:`encode_tx_payload`; consumers
+    only ever see it through :func:`decode_tx_payload`, which enforces the
+    shape at runtime since JSON carries no types.
+    """
+
+    tx_hash: str
+    included_request_ids: List[str]
+
+
+def _is_str_list(value: Any) -> bool:
+    """Return True when ``value`` is a ``list`` whose items are all ``str``.
+
+    :param value: the candidate.
+    :return: whether it is a ``list[str]``.
+    """
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def encode_tx_payload(tx_hash: str, included_request_ids: List[str]) -> str:
+    """Serialise the tx-prep vote: multisend hash plus the ids it delivers.
+
+    :param tx_hash: the multisend payload hex produced by ``_to_multisend``.
+    :param included_request_ids: ``str`` request ids whose deliver call is in the multisend.
+    :return: the JSON payload string voted on in ``TransactionPreparationRound``.
+    """
+    envelope: TxPayloadEnvelope = {
+        "tx_hash": tx_hash,
+        "included_request_ids": [str(rid) for rid in included_request_ids],
+    }
+    return json.dumps(envelope, sort_keys=True, separators=(",", ":"))
+
+
+def decode_tx_payload(content: str) -> Optional[TxPayloadEnvelope]:
+    """Parse a ``TransactionPreparationRound`` vote.
+
+    :param content: the voted payload string.
+    :return: the envelope, or ``None`` if the content is not well-formed
+        (non-JSON, wrong shape, empty / non-``str`` hash, non-``list[str]`` ids).
+    """
+    try:
+        parsed = json.loads(content)
+    except (TypeError, ValueError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    tx_hash = parsed.get("tx_hash")
+    ids = parsed.get("included_request_ids")
+    if not isinstance(tx_hash, str) or not tx_hash or not _is_str_list(ids):
+        return None
+    return {"tx_hash": tx_hash, "included_request_ids": cast(List[str], ids)}
+
+
+# A synced-db field that is not the ``list[str]`` its writer guarantees.
+# The read degrades to ``[]`` (see ``_validated_str_list``), which makes
+# every period look like "nothing settled"; this counter lets an alert
+# separate that from genuine deliver-simulation failures, which land on
+# ``mech_settlement_total`` instead.
+mech_sync_invariant_violation_total = Counter(
+    "mech_sync_invariant_violation_total",
+    "Synced-db fields read with a shape their writer never produces",
+    labelnames=["field"],
+)
+
+
+def _validated_str_list(db: Any, key: str) -> List[str]:
+    """Read ``key`` from the synced db, degrading a malformed value to ``[]``.
+
+    Raising here would crash-loop every participant on the same consensus
+    block (the value is byte-identical across the fleet), with no in-band
+    recovery. An empty list degrades to "nothing to hand off / prune this
+    cycle", which is the same shape as a period with no settlement.
+
+    :param db: the ``AbciAppDB``.
+    :param key: the db key holding a ``list[str]``.
+    :return: the stored list, or ``[]`` when it is not a ``list[str]``.
+    """
+    value = db.get(key, [])
+    if not _is_str_list(value):
+        mech_sync_invariant_violation_total.labels(field=key).inc()
+        db.logger.error(
+            "%s invariant broken: expected list[str], got %s=%r; "
+            "degrading to [] for this cycle",
+            key,
+            type(value).__name__,
+            value,
+        )
+        return []
+    return cast(List[str], value)
 
 
 class Event(Enum):
@@ -103,28 +200,30 @@ class SynchronizedData(BaseSynchronizedData):
         Writers must go through :func:`extract_request_ids` so that
         only ``str`` ids land in the DB. A future writer that bypasses
         the helper and stores a non-list or non-``str`` entries logs
-        an error and yields ``[]`` here: raising would crash-loop
-        every participant on the same consensus block (the value is
-        byte-identical across the fleet and cross-period-persisted,
-        so ``db.create`` copies it forward across resets), with no
-        in-band recovery. Returning ``[]`` degrades to "prune nothing
-        this cycle", which is the same shape as a period with no
-        settlement to consume.
+        an error and yields ``[]`` here (see :func:`_validated_str_list`).
 
         :return: the list of request ids from the most recent settlement.
         """
-        value = self.db.get("submitted_request_ids", [])
-        if not isinstance(value, list) or not all(
-            isinstance(item, str) for item in value
-        ):
-            self.db.logger.error(
-                "submitted_request_ids invariant broken: expected list[str], "
-                "got %s=%r; degrading to [] for this cycle",
-                type(value).__name__,
-                value,
-            )
-            return []
-        return value
+        return _validated_str_list(self.db, "submitted_request_ids")
+
+    @property
+    def tx_included_request_ids(self) -> List[str]:
+        """Return the request ids whose deliver call is in this period's multisend.
+
+        Written by :class:`TransactionPreparationRound` end_block from the
+        voted payload envelope (see :func:`decode_tx_payload`) and read by
+        :class:`PostTxSettlementRound` to decide which ids to hand off as
+        ``submitted_request_ids``. Differs from ``done_tasks``: a task whose
+        deliver simulation failed at tx-prep time is in ``done_tasks`` but
+        not here, and must not be pruned as settled.
+
+        Same shape guard and degrade-to-``[]`` rationale as
+        :attr:`submitted_request_ids`. Not cross-period persisted: it is
+        consumed within the period that produced it.
+
+        :return: the ``str`` request ids included in the prepared tx.
+        """
+        return _validated_str_list(self.db, "tx_included_request_ids")
 
     @property
     def final_tx_hash(self) -> str:
@@ -240,6 +339,7 @@ class TaskPoolingRound(CollectionRound):
                 **{
                     get_name(SynchronizedData.done_tasks): unique_done_tasks,
                     get_name(SynchronizedData.submitted_request_ids): [],
+                    get_name(SynchronizedData.tx_included_request_ids): [],
                 },
             )
             if len(unique_done_tasks) > 0:
@@ -259,26 +359,44 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
 
     ERROR_PAYLOAD = "error"
 
+    def _error_state(self) -> BaseSynchronizedData:
+        """Zero the per-period task keys so nothing is accounted as done or included.
+
+        :return: the updated synchronized data.
+        """
+        return self.synchronized_data.update(
+            synchronized_data_class=SynchronizedData,
+            **{
+                get_name(SynchronizedData.done_tasks): [],
+                get_name(SynchronizedData.tx_included_request_ids): [],
+            },
+        )
+
     def end_block(self) -> Optional[Tuple[BaseSynchronizedData, Enum]]:
         """Process the end of the block."""
         if self.threshold_reached:
             if self.most_voted_payload == self.ERROR_PAYLOAD:
-                return (
-                    self.synchronized_data.update(
-                        synchronized_data_class=SynchronizedData,
-                        **{
-                            get_name(SynchronizedData.done_tasks): [],
-                        },
-                    ),
-                    Event.ERROR,
+                return self._error_state(), Event.ERROR
+
+            decoded = decode_tx_payload(self.most_voted_payload)
+            if decoded is None:
+                # A malformed envelope cannot be handed to the settlement
+                # app (it reads ``most_voted_tx_hash`` verbatim), so treat
+                # it like an ERROR vote rather than forwarding garbage.
+                self.context.logger.error(
+                    "TransactionPreparationRound: undecodable payload %r; "
+                    "treating as error",
+                    self.most_voted_payload[:128],
                 )
+                return self._error_state(), Event.ERROR
 
             state = self.synchronized_data.update(
                 synchronized_data_class=self.synchronized_data_class,
                 **{
-                    get_name(
-                        SynchronizedData.most_voted_tx_hash
-                    ): self.most_voted_payload,
+                    get_name(SynchronizedData.most_voted_tx_hash): decoded["tx_hash"],
+                    get_name(SynchronizedData.tx_included_request_ids): decoded[
+                        "included_request_ids"
+                    ],
                 },
             )
             return state, Event.DONE
@@ -286,15 +404,7 @@ class TransactionPreparationRound(CollectSameUntilThresholdRound):
             self.collection, self.synchronized_data.nb_participants
         ):
             # in case we cant submit this tx, we need to make sure we don't account the tasks as done
-            return (
-                self.synchronized_data.update(
-                    synchronized_data_class=SynchronizedData,
-                    **{
-                        get_name(SynchronizedData.done_tasks): [],
-                    },
-                ),
-                Event.NO_MAJORITY,
-            )
+            return self._error_state(), Event.NO_MAJORITY
 
         return None
 
@@ -338,22 +448,26 @@ class PostTxSettlementRound(CollectSameUntilThresholdRound):
         """Process the end of the block."""
         if self.threshold_reached:
             sd = cast(SynchronizedData, self.synchronized_data)
-            done_tasks = sd.done_tasks
-            if not done_tasks:
+            submitted_ids = sd.tx_included_request_ids
+            if not submitted_ids:
                 # ``composition.py`` wires
                 # ``FinishedTransactionSubmissionRound`` here for every
                 # settlement, not just task delivery, so the
-                # delivery-rate path arrives with ``done_tasks == []``.
-                # Overwriting a still-pending hand-off with ``[]`` here
-                # would clobber a prior real settlement's ids and the
-                # delivered batch would be re-pooled next cycle.
+                # delivery-rate path arrives with nothing included. The
+                # same holds when every deliver was skipped at tx-prep
+                # (simulation failed): those tasks stay in the local
+                # ``done_tasks`` for a retry next period. Overwriting a
+                # still-pending hand-off with ``[]`` here would clobber a
+                # prior real settlement's ids and the delivered batch
+                # would be re-pooled next cycle.
                 sd.db.logger.warning(
-                    "PostTxSettlementRound reached with empty done_tasks; "
-                    "preserving pending hand-off submitted_request_ids=%s",
+                    "PostTxSettlementRound reached with no included request ids "
+                    "(done_tasks=%d); preserving pending hand-off "
+                    "submitted_request_ids=%s",
+                    len(sd.done_tasks),
                     sd.submitted_request_ids,
                 )
                 return self.synchronized_data, Event.DONE
-            submitted_ids = extract_request_ids(done_tasks)
             return (
                 self.synchronized_data.update(
                     synchronized_data_class=SynchronizedData,

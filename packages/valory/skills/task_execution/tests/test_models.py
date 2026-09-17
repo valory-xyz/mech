@@ -19,7 +19,7 @@
 
 """Tests for the task_execution skill's models."""
 
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import pytest
 from aea.exceptions import AEAEnforceError
@@ -172,6 +172,110 @@ def test_params_empty_mech_to_config_raises_value_error(
     params_kwargs["mech_to_config"] = {}
     with pytest.raises(ValueError, match="No mech contract addresses found"):
         m.Params(name="params", **params_kwargs)
+
+
+@pytest.mark.parametrize(
+    "mech_to_config, fallback, expected",
+    [
+        (
+            {
+                "0xlegacy": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=False
+                ),
+                "0xmarket": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=True
+                ),
+            },
+            "0xlegacy",
+            "0xmarket",
+        ),
+        (
+            {
+                "0xlegacy": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=False
+                )
+            },
+            "0xlegacy",
+            "0xlegacy",
+        ),
+        ({}, "0xonly", "0xonly"),
+    ],
+    ids=["prefers-marketplace-mech", "falls-back-to-first", "empty-config"],
+)
+def test_metrics_mech_address_prefers_marketplace_mech(
+    mech_to_config: Dict[str, Any], fallback: str, expected: str
+) -> None:
+    """The label picks the marketplace mech, else the first configured mech.
+
+    :param mech_to_config: the per-mech config map.
+    :param fallback: ``agent_mech_contract_address``.
+    :param expected: the label value.
+    """
+    from types import SimpleNamespace
+
+    params = cast(
+        m.MetricsParams,
+        SimpleNamespace(
+            mech_to_config=mech_to_config,
+            agent_mech_contract_address=fallback,
+            default_chain_id="gnosis",
+        ),
+    )
+    assert m.metrics_mech_address(params) == expected
+
+
+def test_offchain_metric_labels_pairs_chain_with_marketplace_mech() -> None:
+    """One helper feeds every off-chain series so the two skills cannot drift."""
+    from types import SimpleNamespace
+
+    params = cast(
+        m.MetricsParams,
+        SimpleNamespace(
+            mech_to_config={
+                "0xmarket": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=True
+                )
+            },
+            agent_mech_contract_address="0xother",
+            default_chain_id=100,
+        ),
+    )
+    assert m.offchain_metric_labels(params) == {
+        "chain": "100",
+        "mech_address": "0xmarket",
+    }
+
+
+def test_metrics_mech_address_is_lower_cased_regardless_of_config_case() -> None:
+    """A checksummed address in config must not split one mech into two label values.
+
+    task_execution lower-cases its mech keys and task_submission_abci keeps the
+    configured case; both go through this helper, so it normalises.
+    """
+    from types import SimpleNamespace
+
+    params = cast(
+        m.MetricsParams,
+        SimpleNamespace(
+            mech_to_config={
+                "0xFf82123dFB52ab75C417195c5fDB87630145ae81": m.MechConfig(
+                    use_dynamic_pricing=False, is_marketplace_mech=True
+                )
+            },
+            agent_mech_contract_address="0xAbC",
+            default_chain_id="gnosis",
+        ),
+    )
+    assert (
+        m.metrics_mech_address(params) == "0xff82123dfb52ab75c417195c5fdb87630145ae81"
+    )
+    fallback = cast(
+        m.MetricsParams,
+        SimpleNamespace(
+            mech_to_config={}, agent_mech_contract_address="0xAbC", default_chain_id="1"
+        ),
+    )
+    assert m.metrics_mech_address(fallback) == "0xabc"
 
 
 @pytest.mark.parametrize(

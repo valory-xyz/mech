@@ -75,6 +75,8 @@ def _make_ctx(
             profit_split_balance=100,
             on_chain_service_id=1,
             agent_mech_contract_addresses=agent_mech_addresses or ["0xMECH"],
+            agent_mech_contract_address=(agent_mech_addresses or ["0xMECH"])[0],
+            mech_to_config={},
             task_wait_timeout=0.1,
             default_chain_id="100",
         ),
@@ -111,6 +113,7 @@ def _make_full_ctx(
     )
     defaults = dict(
         agent_mech_contract_address="0xMECH",
+        mech_to_config={},
         hash_checkpoint_address="0xHASH",
         mech_marketplace_address="0xMARKET",
         complementary_service_metadata_address="0xMETA",

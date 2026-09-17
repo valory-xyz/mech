@@ -21,7 +21,7 @@
 
 import dataclasses
 from collections import defaultdict
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Protocol
 
 from aea.exceptions import enforce
 from aea.skills.base import Model
@@ -57,6 +57,51 @@ class RequestParams:
     last_polling: Dict[str, Optional[float]] = dataclasses.field(
         default_factory=lambda: {"legacy": None, "marketplace": None}
     )
+
+
+class MetricsParams(Protocol):
+    """The subset of skill params the Prometheus label helpers read.
+
+    Both ``task_execution.Params`` and ``task_submission_abci.Params``
+    satisfy it structurally, and so does a test stub carrying these three
+    attributes.
+    """
+
+    mech_to_config: Dict[str, "MechConfig"]
+    agent_mech_contract_address: str
+    default_chain_id: str
+
+
+def metrics_mech_address(params: MetricsParams) -> str:
+    """Return the mech address used as the ``mech_address`` Prometheus label.
+
+    Off-chain requests are always delivered through the marketplace mech,
+    so prefer the first ``mech_to_config`` entry flagged
+    ``is_marketplace_mech``; fall back to the first configured mech so
+    legacy single-mech deployments still get a stable label. Lower-cased:
+    ``task_execution.Params`` lower-cases its mech keys and
+    ``task_submission_abci.Params`` keeps the configured case, and one
+    mech must be one label value across both skills.
+
+    :param params: the skill params.
+    :return: the label value.
+    """
+    for mech, config in params.mech_to_config.items():
+        if config.is_marketplace_mech:
+            return str(mech).lower()
+    return str(params.agent_mech_contract_address).lower()
+
+
+def offchain_metric_labels(params: MetricsParams) -> Dict[str, str]:
+    """Return the ``chain`` / ``mech_address`` labels shared by every off-chain series.
+
+    :param params: the skill params.
+    :return: the label kwargs.
+    """
+    return {
+        "chain": str(params.default_chain_id),
+        "mech_address": metrics_mech_address(params),
+    }
 
 
 class Params(Model):

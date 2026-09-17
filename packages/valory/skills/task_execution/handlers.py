@@ -33,6 +33,7 @@ from typing import (
     Callable,
     Dict,
     List,
+    Literal,
     NamedTuple,
     Optional,
     Set,
@@ -44,7 +45,7 @@ from typing import (
 from aea.protocols.base import Message
 from aea.skills.base import Handler
 from aea_ledger_ethereum import EthereumApi
-from prometheus_client import start_http_server
+from prometheus_client import Counter, start_http_server
 from requests.exceptions import RequestException
 from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3RPCError
 
@@ -63,7 +64,10 @@ from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
 from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
-from packages.valory.skills.task_execution.models import Params
+from packages.valory.skills.task_execution.models import (
+    Params,
+    offchain_metric_labels,
+)
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.eip1271 import (
     Eip1271Verdict,
@@ -132,6 +136,63 @@ TIMED_OUT_STATUS = 2
 WAIT_FOR_TIMEOUT_STATUS = 1
 DELIVERED_STATUS = 3
 PROMETHEUS_PORT = 9000
+
+# Off-chain HTTP ingress / poll outcome counters. One increment per HTTP
+# call, ``outcome`` is always one of the bounded constants below (never a
+# free-text reason). ``chain`` / ``mech_address`` match the labels on the
+# execution-side off-chain metrics in ``behaviours.MechMetrics`` and on
+# mech-scanner's on-chain series so panels can be laid side by side.
+#
+# ``/send_signed_requests`` outcomes:
+RequestOutcome = Literal[
+    "accepted",
+    "duplicate",
+    "disabled",
+    "bad_request",
+    "signature_rejected",
+    "payload_rejected",
+    "sender_unresolved",
+    "nonce_rejected",
+    "balance_unavailable",
+    "insufficient_balance",
+    "internal_error",
+    "rejected_other",
+]
+REQUEST_OUTCOME_ACCEPTED: RequestOutcome = "accepted"
+REQUEST_OUTCOME_DUPLICATE: RequestOutcome = "duplicate"  # 200, already enqueued
+REQUEST_OUTCOME_DISABLED: RequestOutcome = "disabled"  # 503, use_offchain=false
+REQUEST_OUTCOME_BAD_REQUEST: RequestOutcome = "bad_request"  # 400
+REQUEST_OUTCOME_SIGNATURE_REJECTED: RequestOutcome = "signature_rejected"  # 401 / 503
+REQUEST_OUTCOME_PAYLOAD_REJECTED: RequestOutcome = (
+    "payload_rejected"  # 400, CID mismatch
+)
+REQUEST_OUTCOME_SENDER_UNRESOLVED: RequestOutcome = "sender_unresolved"  # 503
+REQUEST_OUTCOME_NONCE_REJECTED: RequestOutcome = "nonce_rejected"  # 401 / 503
+REQUEST_OUTCOME_BALANCE_UNAVAILABLE: RequestOutcome = "balance_unavailable"  # 503
+REQUEST_OUTCOME_INSUFFICIENT_BALANCE: RequestOutcome = "insufficient_balance"  # 402
+REQUEST_OUTCOME_INTERNAL_ERROR: RequestOutcome = "internal_error"  # 500 / 503
+REQUEST_OUTCOME_REJECTED_OTHER: RequestOutcome = "rejected_other"  # untagged
+mech_offchain_requests_total = Counter(
+    "mech_offchain_requests_total",
+    "Off-chain /send_signed_requests calls by outcome "
+    "(see handlers.py REQUEST_OUTCOME_* for the values)",
+    labelnames=["outcome", "chain", "mech_address"],
+)
+# ``/fetch_offchain_info`` outcomes:
+FetchOutcome = Literal[
+    "delivered", "rejected", "done_task_fallback", "not_found", "bad_request"
+]
+FETCH_OUTCOME_DELIVERED: FetchOutcome = "delivered"  # stored response, status ok
+FETCH_OUTCOME_REJECTED: FetchOutcome = "rejected"  # stored response, rejection
+FETCH_OUTCOME_DONE_TASK_FALLBACK: FetchOutcome = "done_task_fallback"
+FETCH_OUTCOME_NOT_FOUND: FetchOutcome = "not_found"  # still processing / unknown
+FETCH_OUTCOME_BAD_REQUEST: FetchOutcome = "bad_request"
+mech_offchain_fetches_total = Counter(
+    "mech_offchain_fetches_total",
+    "Off-chain /fetch_offchain_info polls by outcome "
+    "(see handlers.py FETCH_OUTCOME_* for the values)",
+    labelnames=["outcome", "chain", "mech_address"],
+)
 
 # Off-chain HTTP hardening
 MAX_HTTP_BODY_BYTES = 1_048_576  # 1MB cap on inbound HTTP bodies
@@ -1115,6 +1176,31 @@ class MechHttpHandler(AbstractResponseHandler):
         """Get ipfs_tasks."""
         return self.context.shared_state[IPFS_TASKS]
 
+    def _offchain_metric_labels(self) -> Dict[str, str]:
+        """Return the ``chain`` / ``mech_address`` labels for the off-chain counters.
+
+        :return: the label kwargs.
+        """
+        return offchain_metric_labels(self.params)
+
+    def _count_request_outcome(self, outcome: RequestOutcome) -> None:
+        """Increment ``mech_offchain_requests_total`` for one ``/send_signed_requests`` call.
+
+        :param outcome: one of the ``REQUEST_OUTCOME_*`` constants.
+        """
+        mech_offchain_requests_total.labels(
+            outcome=outcome, **self._offchain_metric_labels()
+        ).inc()
+
+    def _count_fetch_outcome(self, outcome: FetchOutcome) -> None:
+        """Increment ``mech_offchain_fetches_total`` for one ``/fetch_offchain_info`` call.
+
+        :param outcome: one of the ``FETCH_OUTCOME_*`` constants.
+        """
+        mech_offchain_fetches_total.labels(
+            outcome=outcome, **self._offchain_metric_labels()
+        ).inc()
+
     @property
     def offchain_request_responses(self) -> Dict[str, Dict[str, Any]]:
         """Get stored off-chain request responses by request id."""
@@ -1751,6 +1837,7 @@ class MechHttpHandler(AbstractResponseHandler):
                     reason="internal error",
                     status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
                     status_text="Service unavailable",
+                    outcome=REQUEST_OUTCOME_INTERNAL_ERROR,
                 )
             except Exception:  # pylint: disable=broad-exception-caught
                 # The rejection sender itself failed — nothing more we
@@ -1792,6 +1879,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 ),
             )
             self.context.outbox.put_message(message=http_response)
+            self._count_request_outcome(REQUEST_OUTCOME_DISABLED)
             return
 
         try:
@@ -1815,7 +1903,9 @@ class MechHttpHandler(AbstractResponseHandler):
                 f"Error processing signed request. body_len={len(http_msg.body)} "
                 f"error={str(e)}."
             )
-            self._handle_bad_request(http_msg, http_dialogue)
+            self._handle_bad_request(
+                http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
             return
 
         # ``request_id`` on the wire is the decimal encoding of the uint256
@@ -1827,10 +1917,14 @@ class MechHttpHandler(AbstractResponseHandler):
         # docstring for the rationale on the alphabet regex plus the
         # length short-circuit before ``int()``.
         if not self._reject_unless_uint256_decimal(request_id, "request_id"):
-            self._handle_bad_request(http_msg, http_dialogue)
+            self._handle_bad_request(
+                http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
             return
         if not self._reject_unless_uint256_decimal(wire_nonce, "nonce"):
-            self._handle_bad_request(http_msg, http_dialogue)
+            self._handle_bad_request(
+                http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
             return
 
         if not IPFS_HASH_RE.match(ipfs_hash):
@@ -1838,7 +1932,9 @@ class MechHttpHandler(AbstractResponseHandler):
                 f"Rejecting offchain request {request_id}: invalid ipfs_hash "
                 f"format (len={len(ipfs_hash)})."
             )
-            self._handle_bad_request(http_msg, http_dialogue)
+            self._handle_bad_request(
+                http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
             return
 
         # ``signature`` on the wire is the one signed field with no format
@@ -1858,7 +1954,9 @@ class MechHttpHandler(AbstractResponseHandler):
                 f"[{SIGNATURE_BYTES_MIN}, {SIGNATURE_BYTES_MAX}] bytes "
                 f"(len={len(signature_hex) if signature_hex else 0})."
             )
-            self._handle_bad_request(http_msg, http_dialogue)
+            self._handle_bad_request(
+                http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
             return
 
         if not ADDRESS_RE.fullmatch(sender or ""):
@@ -1867,7 +1965,9 @@ class MechHttpHandler(AbstractResponseHandler):
                 f"0x-prefixed 20-byte hex address "
                 f"(len={len(sender) if sender else 0})."
             )
-            self._handle_bad_request(http_msg, http_dialogue)
+            self._handle_bad_request(
+                http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
             return
 
         if (
@@ -1879,7 +1979,9 @@ class MechHttpHandler(AbstractResponseHandler):
                 f"request_delivery_rate={request_delivery_rate} out of range "
                 f"[{MIN_DELIVERY_RATE}, {MAX_DELIVERY_RATE}]."
             )
-            self._handle_bad_request(http_msg, http_dialogue)
+            self._handle_bad_request(
+                http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
             return
 
         self.context.logger.info(
@@ -1923,6 +2025,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason=sig_verdict.reason,
                 status_code=status_code,
                 status_text=status_text,
+                outcome=REQUEST_OUTCOME_SIGNATURE_REJECTED,
             )
             return
 
@@ -1946,6 +2049,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason=cid_reject_reason,
                 status_code=HttpCode.BAD_REQUEST_CODE.value,
                 status_text="Bad request",
+                outcome=REQUEST_OUTCOME_PAYLOAD_REJECTED,
             )
             return
 
@@ -1974,6 +2078,7 @@ class MechHttpHandler(AbstractResponseHandler):
                     ResponseKey.REASON.value: REQUEST_ALREADY_ACCEPTED,
                 },
             )
+            self._count_request_outcome(REQUEST_OUTCOME_DUPLICATE)
             return
 
         # Admission gate: bind the wire nonce to the sender's
@@ -2003,6 +2108,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason=SENDER_RESOLUTION_FAILED,
                 status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
                 status_text="Service unavailable",
+                outcome=REQUEST_OUTCOME_SENDER_UNRESOLVED,
             )
             return
         nonce_verdict = self._bind_wire_nonce_to_chain(
@@ -2024,6 +2130,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason=nonce_verdict.reason,
                 status_code=status_code,
                 status_text=status_text,
+                outcome=REQUEST_OUTCOME_NONCE_REJECTED,
             )
             return
 
@@ -2044,6 +2151,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 reason="balance check unavailable",
                 status_code=HttpCode.SERVICE_UNAVAILABLE_CODE.value,
                 status_text="Service unavailable",
+                outcome=REQUEST_OUTCOME_BALANCE_UNAVAILABLE,
             )
             return
 
@@ -2082,6 +2190,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 extra_headers=extra_headers,
                 body_extras=challenge_body,
                 record_response=True,
+                outcome=REQUEST_OUTCOME_INSUFFICIENT_BALANCE,
             )
             return
 
@@ -2115,7 +2224,9 @@ class MechHttpHandler(AbstractResponseHandler):
             self.context.logger.error(
                 f"Error enqueuing offchain request {request_id}: {str(e)}."
             )
-            self._handle_bad_request(http_msg, http_dialogue)
+            self._handle_bad_request(
+                http_msg, http_dialogue, route=Route.SEND_SIGNED_REQUESTS
+            )
             return
 
         self.context.logger.info(
@@ -2135,6 +2246,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 data={RequestKey.REQUEST_ID.value: request_id},
                 extra_headers=receipt_header + self._build_terms_link_header(),
             )
+            self._count_request_outcome(REQUEST_OUTCOME_ACCEPTED)
         except Exception:  # pylint: disable=broad-exception-caught
             # The receipt-header builder / OK sender raise only on malformed
             # internal state. The task is already enqueued, so reply 500 rather
@@ -2347,7 +2459,9 @@ class MechHttpHandler(AbstractResponseHandler):
             request_id = data[RequestKey.REQUEST_ID.value]
         except Exception as e:
             self.context.logger.error(f"Error getting offchain request info: {str(e)}")
-            self._handle_bad_request(http_msg, http_dialogue)
+            self._handle_bad_request(
+                http_msg, http_dialogue, route=Route.FETCH_OFFCHAIN_INFO
+            )
             return
 
         self.context.logger.info(f"Fetching offchain info for {request_id=}.")
@@ -2365,6 +2479,12 @@ class MechHttpHandler(AbstractResponseHandler):
                 http_msg,
                 http_dialogue,
                 data=stored_response,
+            )
+            stored_status = stored_response.get(ResponseKey.STATUS.value)
+            self._count_fetch_outcome(
+                FETCH_OUTCOME_DELIVERED
+                if stored_status == ResponseStatus.OK.value
+                else FETCH_OUTCOME_REJECTED
             )
             return
 
@@ -2385,15 +2505,25 @@ class MechHttpHandler(AbstractResponseHandler):
             http_dialogue,
             data=requested_done_tasks_list[0] if requested_done_tasks_list else {},
         )
+        self._count_fetch_outcome(
+            FETCH_OUTCOME_DONE_TASK_FALLBACK
+            if requested_done_tasks_list
+            else FETCH_OUTCOME_NOT_FOUND
+        )
 
     def _handle_bad_request(
-        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+        self,
+        http_msg: HttpMessage,
+        http_dialogue: HttpDialogue,
+        route: Optional[Route] = None,
     ) -> None:
         """
         Handle a Http bad request.
 
         :param http_msg: the http message
         :param http_dialogue: the http dialogue
+        :param route: which off-chain route rejected the call, so the 400 is
+            counted on that route's outcome counter; ``None`` counts nothing.
         """
         http_response = http_dialogue.reply(
             performative=HttpMessage.Performative.RESPONSE,
@@ -2408,6 +2538,10 @@ class MechHttpHandler(AbstractResponseHandler):
         # Send response
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
+        if route == Route.SEND_SIGNED_REQUESTS:
+            self._count_request_outcome(REQUEST_OUTCOME_BAD_REQUEST)
+        elif route == Route.FETCH_OFFCHAIN_INFO:
+            self._count_fetch_outcome(FETCH_OUTCOME_BAD_REQUEST)
 
     def _send_ok_response(
         self,
@@ -2454,6 +2588,7 @@ class MechHttpHandler(AbstractResponseHandler):
         extra_headers: str = "",
         body_extras: Optional[Dict[str, Any]] = None,
         record_response: bool = False,
+        outcome: RequestOutcome = REQUEST_OUTCOME_REJECTED_OTHER,
     ) -> None:
         """Build a rejection payload, optionally persist it, and reply.
 
@@ -2465,6 +2600,9 @@ class MechHttpHandler(AbstractResponseHandler):
         :param status_text: the HTTP status text to emit.
         :param extra_headers: optional pre-formatted header block to prepend.
         :param body_extras: optional dict merged into the JSON response body.
+        :param outcome: bounded ``REQUEST_OUTCOME_*`` value counted in
+            ``mech_offchain_requests_total`` once the reply is sent. Never
+            derived from ``reason``, which may carry free text.
         :param record_response: when True, persist the rejection payload in
             ``offchain_request_responses`` keyed by ``request_id`` so the
             polling endpoint can surface it. Callers on pre-authentication
@@ -2502,6 +2640,7 @@ class MechHttpHandler(AbstractResponseHandler):
         )
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
+        self._count_request_outcome(outcome)
 
     def _send_internal_error(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue, request_id: str
@@ -2531,6 +2670,7 @@ class MechHttpHandler(AbstractResponseHandler):
             status_code=HttpCode.INTERNAL_SERVER_ERROR_CODE.value,
             status_text="Internal server error",
             record_response=True,
+            outcome=REQUEST_OUTCOME_INTERNAL_ERROR,
         )
 
     def _build_402_challenge(
