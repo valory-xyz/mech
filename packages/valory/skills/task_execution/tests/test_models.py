@@ -276,3 +276,49 @@ def test_metrics_mech_address_is_lower_cased_regardless_of_config_case() -> None
         ),
     )
     assert m.metrics_mech_address(fallback) == "0xabc"
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ("https://www.valory.xyz/terms/mechs", "https://www.valory.xyz/terms/mechs"),
+        (
+            "  https://www.valory.xyz/terms/mechs  ",
+            "https://www.valory.xyz/terms/mechs",
+        ),
+        ("", ""),
+        ("   ", ""),
+        (None, ""),
+    ],
+    ids=["set", "stripped", "empty", "whitespace", "none"],
+)
+def test_params_mech_terms_url_is_stripped_and_defaults_to_empty(
+    params_kwargs: Dict[str, Any], given: Any, expected: str
+) -> None:
+    """
+    ``mech_terms_url`` is stripped; blank or null means no terms are advertised.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    :param given: the configured value.
+    :type given: Any
+    :param expected: the value Params must expose.
+    :type expected: str
+    """
+    params_kwargs["mech_terms_url"] = given
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.mech_terms_url == expected
+
+
+def test_params_mech_terms_url_absent_means_none_advertised(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """
+    A skill config without the key advertises no terms.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    """
+    params_kwargs.pop("mech_terms_url", None)
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.mech_terms_url == ""

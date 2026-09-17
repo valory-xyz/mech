@@ -6551,3 +6551,71 @@ def test_fetch_offchain_info_counts_exactly_one_bounded_outcome(
     fetch_labels.return_value.inc.assert_called_once_with()
     # A poll must never be booked on the ingress counter.
     req_labels.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# Terms link on off-chain responses
+# ---------------------------------------------------------------------------
+
+
+_TERMS_LINK_LINE = 'Link: <https://www.valory.xyz/terms/mechs>; rel="terms-of-service"'
+
+
+def test_402_carries_the_terms_link_in_header_and_body(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A requester deciding whether to deposit sees the operator's terms."""
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=-1)
+    resp = _send_signed_request(mh, http_dialogue, request_id="4023")
+
+    assert resp.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    assert _TERMS_LINK_LINE in resp.headers.split("\n")
+    # The existing challenge header is untouched by the extra line.
+    assert 'WWW-Authenticate: Payment scheme="olas-prepay"' in resp.headers
+    payload = json.loads(resp.body.decode("utf-8"))
+    assert payload["termsUrl"] == "https://www.valory.xyz/terms/mechs"
+    assert payload["payTo"] == "0xBalanceTracker"
+
+
+def test_200_carries_the_terms_link_header(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The accept response advertises the terms next to the payment receipt."""
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=10)
+    resp = _send_signed_request(mh, http_dialogue, request_id="2001")
+
+    assert resp.status_code == HttpCode.OK_CODE.value
+    header_lines = resp.headers.split("\n")
+    assert _TERMS_LINK_LINE in header_lines
+    assert any(line.startswith("Payment-Receipt:") for line in header_lines)
+
+
+@pytest.mark.parametrize("unset", ["", "   "], ids=["empty", "whitespace"])
+def test_402_and_200_omit_the_terms_link_when_none_is_configured(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any, unset: str
+) -> None:
+    """An operator without terms advertises nothing: no header, no body field."""
+    # Guards the off-path: a future refactor that always emits the header
+    # (with an empty URL) or always writes ``termsUrl`` would fail here.
+    monkeypatch.setattr(handler_context.params, "mech_terms_url", unset.strip())
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=-1)
+    rejected = _send_signed_request(mh, http_dialogue, request_id="4024")
+    assert rejected.status_code == HttpCode.PAYMENT_REQUIRED_CODE.value
+    assert "Link:" not in rejected.headers
+    assert "termsUrl" not in json.loads(rejected.body.decode("utf-8"))
+
+    mh = _patched_handler_for_balance(handler_context, monkeypatch, available_offset=10)
+    accepted = _send_signed_request(mh, http_dialogue, request_id="2002")
+    assert accepted.status_code == HttpCode.OK_CODE.value
+    assert "Link:" not in accepted.headers
+    assert "Payment-Receipt:" in accepted.headers
+
+
+def test_build_terms_link_header_is_newline_terminated_or_empty(
+    handler_context: Any, monkeypatch: Any
+) -> None:
+    """The header builder honours the extra_headers contract of the senders."""
+    mh = _http_handler(handler_context, monkeypatch)
+    assert mh._build_terms_link_header() == _TERMS_LINK_LINE + "\n"
+    monkeypatch.setattr(mh.params, "mech_terms_url", "")
+    assert mh._build_terms_link_header() == ""

@@ -517,6 +517,8 @@ class ResponseKey(str, Enum):
 
 # 402 challenge constants — surfaced so clients can branch on a stable label.
 PAYMENT_SCHEME = "olas-prepay"
+# ``Link`` relation type for the terms header (RFC 8288 registered relation).
+TERMS_LINK_REL = "terms-of-service"
 DEPOSIT_FN_ABI = "depositFor(address requester, uint256 amount)"
 SETTLEMENT_STATUS_PENDING = "pending"
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
@@ -2156,7 +2158,10 @@ class MechHttpHandler(AbstractResponseHandler):
         available_amount = cast(int, balance_check[ResponseKey.AVAILABLE_AMOUNT.value])
         if available_amount < request_delivery_rate:
             try:
-                extra_headers = self._build_www_authenticate_header()
+                extra_headers = (
+                    self._build_www_authenticate_header()
+                    + self._build_terms_link_header()
+                )
                 challenge_body = self._build_402_challenge(
                     balance_check, error_msg="insufficient balance"
                 )
@@ -2239,7 +2244,7 @@ class MechHttpHandler(AbstractResponseHandler):
                 http_msg=http_msg,
                 http_dialogue=http_dialogue,
                 data={RequestKey.REQUEST_ID.value: request_id},
-                extra_headers=receipt_header,
+                extra_headers=receipt_header + self._build_terms_link_header(),
             )
             self._count_request_outcome(REQUEST_OUTCOME_ACCEPTED)
         except Exception:  # pylint: disable=broad-exception-caught
@@ -2696,7 +2701,7 @@ class MechHttpHandler(AbstractResponseHandler):
             str,
             balance_check.get(ResponseKey.ASSET_ADDRESS.value) or ZERO_ADDRESS,
         )
-        return {
+        challenge: Dict[str, Any] = {
             "scheme": PAYMENT_SCHEME,
             "payTo": balance_tracker_address,
             "asset": asset_address,
@@ -2711,6 +2716,22 @@ class MechHttpHandler(AbstractResponseHandler):
             },
             "error": error_msg,
         }
+        # A requester deciding whether to deposit sees the operator's terms in
+        # the same document as the deposit instructions.
+        if self.params.mech_terms_url:
+            challenge["termsUrl"] = self.params.mech_terms_url
+        return challenge
+
+    def _build_terms_link_header(self) -> str:
+        """Build the ``Link`` header line carrying the operator's terms, if any.
+
+        :return: a single header line terminated with newline, or the empty
+            string when no terms link is configured.
+        """
+        terms_url = self.params.mech_terms_url
+        if not terms_url:
+            return ""
+        return f'Link: <{terms_url}>; rel="{TERMS_LINK_REL}"\n'
 
     def _build_www_authenticate_header(self) -> str:
         """Build the ``WWW-Authenticate`` header line for a 402 response.
