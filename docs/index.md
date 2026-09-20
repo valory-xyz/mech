@@ -55,16 +55,15 @@ In order to run a local demo AI agent based on the MechKit:
     autonomy packages sync --update-packages 
     ```
 
-2. Configure the AI agent. You need to create a `.1env` file which contains the AI agent configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
+2. Configure the AI agent. You need to create a `.env` file which contains the AI agent configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
 
     ```bash
-    # Copy the prefilled template
-    cp .example.env .1env
+    cp .example.env .env
 
-    # Edit ".1env" and replace "dummy_api_key" with your OpenAI API key.
+    # Edit ".env" and replace "dummy_api_key" with your OpenAI API key.
 
     # Source the env file
-    source .1env
+    source .env
     ```
 
 3. Run the AI agent.
@@ -75,7 +74,7 @@ In order to run a local demo AI agent based on the MechKit:
         autonomy generate-key ethereum -n 1
         ```
 
-    2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.1env` matches the agent instances address within the file `keys.json`:
+    2. Ensure that the variable `ALL_PARTICIPANTS` in the file `.env` matches the agent instances address within the file `keys.json`:
 
         ```bash
         ALL_PARTICIPANTS='["your_agent_address"]'

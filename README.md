@@ -111,16 +111,16 @@ The old repo is no longer the recommended approach for running and extending the
 
 Follow the instructions below to run the AI Mech demo executing the tool in `./packages/valory/customs/openai_request.py`. Note that AI Mechs can be configured to work in two modes: *polling mode*, which periodically reads the chain, and *websocket mode*, which receives event updates from the chain. The default mode used by the demo is *polling*.
 
-First, you need to configure the worker AI agent. You need to create a `.1env` file which contains the AI agent configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
+First, you need to configure the worker AI agent. You need to create a `.env` file which contains the AI agent configuration parameters. We provide a prefilled template (`.example.env`). You will need to provide or create an [OpenAI API key](https://platform.openai.com/account/api-keys).
 
 ```bash
 # Copy the prefilled template
-cp .example.env .1env
+cp .example.env .env
 
-# Edit ".1env" and replace "dummy_api_key" with your OpenAI API key.
+# Edit ".env" and replace "dummy_api_key" with your OpenAI API key.
 
 # Source the env file
-source .1env
+source .env
 ```
 
 ##### Environment Variables
@@ -232,6 +232,64 @@ A keyfile is just a file with your ethereum private key as a hex-string, example
 ```
 
 Make sure you don't have any extra characters in the file, like newlines or spaces.
+
+## Generating keys.json for service deployment
+
+When deploying a Mech service (especially for local deployment or creating a new Mech), you need a `keys.json` file that contains the private keys for all agent instances in the service.
+
+### Format
+
+The `keys.json` file should be a JSON array where each element is an object with an `address` and `private_key`:
+
+```json
+[
+  {
+    "address": "0x1234567890abcdef1234567890abcdef12345678",
+    "private_key": "0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+  },
+  {
+    "address": "0xabcdef1234567890abcdef1234567890abcdef12",
+    "private_key": "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+  }
+]
+```
+
+### Generating keys.json
+
+You can generate the required keys using the Open Autonomy CLI:
+
+```bash
+# Generate keys for N agents (e.g., 4 agents for the default Mech service)
+autonomy generate-key ethereum -n 4
+
+# This creates 4 key files: ethereum_private_key_0.txt, ethereum_private_key_1.txt, etc.
+```
+
+Then create `keys.json` manually or use this helper script:
+
+```bash
+python3 - <<'EOF'
+import json
+from pathlib import Path
+from eth_account import Account
+
+keys = []
+for i in range(4):  # Adjust range to match your number of agents
+    key_file = Path(f"ethereum_private_key_{i}.txt")
+    if key_file.exists():
+        private_key = key_file.read_text().strip()
+        account = Account.from_key(private_key)
+        keys.append({
+            "address": account.address,
+            "private_key": private_key
+        })
+
+Path("keys.json").write_text(json.dumps(keys, indent=2))
+print(f"Generated keys.json with {len(keys)} keys")
+EOF
+```
+
+For more details on local deployment workflows, see the [Open Autonomy deployment guide](https://docs.autonolas.network/open-autonomy/guides/deploy_service/#local-deployment-full-workflow).
 
 ## Examples of deployed Mechs
 
