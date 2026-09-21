@@ -46,6 +46,31 @@ The project consists of three components:
 
 _Note that Mechs which were deployed before the Mech Marketplace contracts (called legacy Mechs) receive request and deliver services directly via their Mech contract._
 
+## Terms
+
+Each Mech is run by its own operator.
+
+**Mechs operated by Valory.** Requests to a Mech operated by Valory fall under Valory AG's Mech Terms. The notice for these Mechs reads:
+
+```text
+By submitting a request to this Mech, you agree to be bound by Valory AG's Mech Terms (v1.0), available at https://www.valory.xyz/terms/mechs.
+```
+
+**Checking who operates a Mech.** Valory creates one DNS record under `mech.valory.xyz` for each Mech it operates. The name is the Mech address without `0x`, a hyphen, then the chain id. If the name resolves, the Mech is operated by Valory:
+
+```bash
+dig +short c05e7412439bd7e91730a6880e18d5d5873f632c-100.mech.valory.xyz
+```
+
+The zone has no wildcard record, so a Mech that Valory does not operate has no name there.
+
+**Publishing your terms.** A Mech gives its operator's terms link in two places:
+
+- The `termsUrl` field of the Mech's metadata.
+- Its off-chain responses. An accepted request and a payment-required (402) response both carry a `Link` header with `rel="terms-of-service"`, and the 402 body carries `termsUrl` next to the deposit instructions.
+
+The off-chain link comes from the `mech_terms_url` parameter of the `task_execution` skill, which defaults to Valory's Mech Terms. If you run your own Mech, set `mech_terms_url` to your own terms, or leave it empty to send no link.
+
 ## Requirements
 
 This repository contains a demo AI Mech. You can clone and extend the codebase to create your own AI Mech. You need the following requirements installed in your system:
@@ -137,6 +162,7 @@ You may customize the agent's behaviour by setting these environment variables.
 | `MECH_TO_SUBSCRIPTION`     | `dict` | `{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000","tokenId":"1"}}`                                                                                                                                        | Tracks mech's subscription details.                                    |
 | `MECH_TO_CONFIG`           | `dict` | `{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}`                                                                                                                                                          | Tracks mech's config.                                                  |
 | `PROFIT_SPLIT_BALANCE`     | `int`  | 1000000000000000000                                                                                                                                                                                                                                                 | Minimun mech balance to trigger the profit split functionality.        |
+| `SERVICE_ENDPOINT_BASE`    | `str`  | `"https://my-mech.example.com"`                                                                                                                                                                                                                                     | Public URL of the Mech. Its HTTP server answers only requests addressed to this host, a Propel host or localhost. |
 
 :note: The value of `PROFIT_SPLIT_BALANCE` should correspond to the units of payment based on payment model. By default it will trigger at 10^18 units
  - For fixed price mechs, it corresponds to native currency units
