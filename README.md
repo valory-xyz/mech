@@ -53,7 +53,7 @@ Besides on-chain requests through the Mech Marketplace, a Mech can take requests
 **Turning it on.** The off-chain path is off by default. To turn it on:
 
 - Set the `use_offchain` parameter to `true`. Services built on this Mech, such as mech-predict, expose it as the `USE_OFFCHAIN` environment variable.
-- Serve the Mech at a public URL and set `SERVICE_ENDPOINT_BASE` to it. The HTTP server only answers requests addressed to that host, a Propel host or localhost.
+- Serve the Mech at a public URL and set `SERVICE_ENDPOINT_BASE` to it. The HTTP server answers requests whose host matches that host, a Propel host or localhost.
 - Publish the same URL in the `url` field of the Mech's metadata. Clients look for it there.
 - Send all off-chain traffic to one agent instance. Each instance tracks requester nonces on its own, so the Mech logs a warning at startup when it runs with more than one agent.
 
@@ -77,14 +77,14 @@ Besides on-chain requests through the Mech Marketplace, a Mech can take requests
 | `200`  | Accepted. The `Payment-Receipt` header carries the accepted amount, and settlement is `pending`. Sending an accepted request again returns `200` with `"already accepted"`. |
 | `400`  | The request is malformed. |
 | `401`  | The signature is invalid, or the nonce was already used. |
-| `402`  | The balance is too low. The `WWW-Authenticate: Payment scheme="olas-prepay"` header and the body say how to deposit: `payTo`, `asset`, `chainId`, `currentBalance`, `required`, `depositInstructions` and `termsUrl`. |
+| `402`  | The balance is too low. The `WWW-Authenticate: Payment scheme="olas-prepay"` header and the body say how to deposit. The body carries `scheme`, `payTo`, `asset`, `chainId`, `currentBalance`, `required`, `depositInstructions` and `error`, plus `termsUrl` when the Mech has a terms link set. |
 | `503`  | Try again later. The off-chain path is off, the nonce is ahead of the next one, the requester has too many requests in flight, or a chain read failed. |
 
 Accepted and `402` responses also carry the operator's terms link. See [Terms](#terms).
 
 **Paying.** The requester deposits by calling `depositFor(requester, amount)` on the balance tracker given as `payTo` in the `402` response. Accepting a request charges nothing. The balance is charged when the Mech settles the delivered request on-chain.
 
-**Reading the result.** Call `/fetch_offchain_info` with a form-encoded `request_id`. The answer is always `200`:
+**Reading the result.** Call `/fetch_offchain_info` with a form-encoded `request_id`. A request with no readable `request_id` gets `400`. Otherwise the answer is always `200`:
 
 - `{}` while the request is pending.
 - `"status": "ok"`, with the delivery in `response` and its IPFS CID in `content_cid`, once it is delivered.
@@ -111,14 +111,14 @@ By submitting a request to this Mech, you agree to be bound by Valory AG's Mech 
 dig +short c05e7412439bd7e91730a6880e18d5d5873f632c-100.mech.valory.xyz
 ```
 
-The zone has no wildcard record, so a Mech that Valory does not operate has no name there. The lookup is not DNSSEC-validated, so it trusts your resolver to return the public answer.
+If the name does not resolve, the Mech is not operated by Valory. The zone has no wildcard record, so a Mech that Valory does not operate has no name there. If a name you make up at random also resolves, your resolver is answering every name and the result tells you nothing. The lookup is not DNSSEC-validated, so it trusts your resolver to return the public answer.
 
 **Publishing your terms.** A Mech gives its operator's terms link in two places:
 
 - The `termsUrl` field of the Mech's metadata.
 - Its off-chain responses. An accepted request and a payment-required (402) response both carry a `Link` header with `rel="terms-of-service"`, and the 402 body carries `termsUrl` next to the deposit instructions.
 
-The off-chain link comes from the `mech_terms_url` parameter of the `task_execution` skill, which defaults to Valory's Mech Terms. If you run your own Mech, set `mech_terms_url` to your own terms, or leave it empty to send no link.
+The off-chain link comes from the `mech_terms_url` parameter of the `task_execution` skill. The packaged `skill.yaml` sets it to Valory's Mech Terms, so a Mech run by anyone other than Valory must change it: set it to your own terms, or to an empty value to send no link.
 
 ## Requirements
 
@@ -211,7 +211,7 @@ You may customize the agent's behaviour by setting these environment variables.
 | `MECH_TO_SUBSCRIPTION`     | `dict` | `{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000","tokenId":"1"}}`                                                                                                                                        | Tracks mech's subscription details.                                    |
 | `MECH_TO_CONFIG`           | `dict` | `{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}`                                                                                                                                                          | Tracks mech's config.                                                  |
 | `PROFIT_SPLIT_BALANCE`     | `int`  | 1000000000000000000                                                                                                                                                                                                                                                 | Minimun mech balance to trigger the profit split functionality.        |
-| `SERVICE_ENDPOINT_BASE`    | `str`  | `"https://my-mech.example.com"`                                                                                                                                                                                                                                     | Public URL of the Mech. Its HTTP server answers only requests addressed to this host, a Propel host or localhost. |
+| `SERVICE_ENDPOINT_BASE`    | `str`  | `"https://my-mech.example.com"`                                                                                                                                                                                                                                     | Public URL of the Mech. Its HTTP server answers requests whose host matches this host, a Propel host or localhost. |
 
 :note: The value of `PROFIT_SPLIT_BALANCE` should correspond to the units of payment based on payment model. By default it will trigger at 10^18 units
  - For fixed price mechs, it corresponds to native currency units
