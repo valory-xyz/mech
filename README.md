@@ -46,6 +46,55 @@ The project consists of three components:
 
 _Note that Mechs which were deployed before the Mech Marketplace contracts (called legacy Mechs) receive request and deliver services directly via their Mech contract._
 
+## Off-chain requests
+
+Besides on-chain requests through the Mech Marketplace, a Mech can take requests over HTTP. The requester signs the request instead of sending a transaction, and pays from a balance deposited in advance. The Mech settles each delivered request on-chain afterwards. [mech-client](https://github.com/valory-xyz/mech-client) handles the client side. This section describes what the Mech does.
+
+**Turning it on.** The off-chain path is off by default. To turn it on:
+
+- Set the `use_offchain` parameter to `true`. Services built on this Mech, such as mech-predict, expose it as the `USE_OFFCHAIN` environment variable.
+- Serve the Mech at a public URL and set `SERVICE_ENDPOINT_BASE` to it. The HTTP server only answers requests addressed to that host, a Propel host or localhost.
+- Publish the same URL in the `url` field of the Mech's metadata. Clients look for it there.
+- Send all off-chain traffic to one agent instance. Each instance tracks requester nonces on its own, so the Mech logs a warning at startup when it runs with more than one agent.
+
+**Endpoints.**
+
+| Method | Path                    | Purpose                              |
+| ------ | ----------------------- | ------------------------------------ |
+| `POST` | `/send_signed_requests` | Submit a signed request.             |
+| `GET`  | `/fetch_offchain_info`  | Read the result of a request.        |
+| `GET`  | `/healthcheck`          | Check the Mech is up and progressing. |
+
+**Sending a request.** The body of `/send_signed_requests` is form-encoded, with the fields `request_id`, `ipfs_hash`, `ipfs_data`, `sender`, `delivery_rate`, `nonce` and `signature`. Before accepting a request, the Mech checks four things:
+
+- The signature matches the Marketplace request id. It accepts signatures from ordinary accounts and from smart accounts such as Safes, through EIP-1271.
+- `ipfs_data` hashes to `ipfs_hash`.
+- `nonce` is the requester's next nonce. At most 64 requests per requester can be in flight at once.
+- The requester's prepaid balance in the Mech's balance tracker covers `delivery_rate`.
+
+| Status | Meaning |
+| ------ | ------- |
+| `200`  | Accepted. The `Payment-Receipt` header carries the accepted amount, and settlement is `pending`. Sending an accepted request again returns `200` with `"already accepted"`. |
+| `400`  | The request is malformed. |
+| `401`  | The signature is invalid, or the nonce was already used. |
+| `402`  | The balance is too low. The `WWW-Authenticate: Payment scheme="olas-prepay"` header and the body say how to deposit: `payTo`, `asset`, `chainId`, `currentBalance`, `required`, `depositInstructions` and `termsUrl`. |
+| `503`  | Try again later. The off-chain path is off, the nonce is ahead of the next one, the requester has too many requests in flight, or a chain read failed. |
+
+Accepted and `402` responses also carry the operator's terms link. See [Terms](#terms).
+
+**Paying.** The requester deposits by calling `depositFor(requester, amount)` on the balance tracker given as `payTo` in the `402` response. Accepting a request charges nothing. The balance is charged when the Mech settles the delivered request on-chain.
+
+**Reading the result.** Call `/fetch_offchain_info` with a form-encoded `request_id`. The answer is always `200`:
+
+- `{}` while the request is pending.
+- `"status": "ok"`, with the delivery in `response` and its IPFS CID in `content_cid`, once it is delivered.
+- `"status": "rejected"` with a `reason` if it failed, for example because the tool failed or is not installed.
+- The stored `402` body, if the request was rejected for its balance.
+
+**Settlement.** Each period, the Mech settles its delivered off-chain requests with `deliverMarketplaceWithSignatures` on its Mech contract. It sends one call per requester, in nonce order, inside the service Safe's multisend, so the Mech pays the gas. Only delivered requests are settled and charged. A failed request is never charged. If a settlement keeps failing, the Mech retries it. After three failed attempts, it drops that batch's requests one per period without charging for them.
+
+**Metrics.** Prometheus metrics prefixed `mech_offchain_` count accepted and rejected requests and track the pending queue, deliveries, failures, delivery latency and delivered requests that are not yet settled.
+
 ## Terms
 
 Each Mech is run by its own operator.
