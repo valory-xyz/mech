@@ -105,13 +105,13 @@ Each Mech is run by its own operator.
 By submitting a request to this Mech, you agree to be bound by Valory AG's Mech Terms (v1.0), available at https://www.valory.xyz/terms/mechs.
 ```
 
-**Checking who operates a Mech.** Valory creates one DNS record under `mech.valory.xyz` for each Mech it operates. The name is the Mech address without `0x`, a hyphen, then the chain id. If the name resolves, the Mech is operated by Valory:
+**Checking who operates a Mech.** Valory creates one DNS record under `mech.valory.xyz` for each Mech it operates, and for no other Mech. The name is the Mech address without `0x`, a hyphen, then the chain id. If the name resolves to an address in the public DNS, the Mech is operated by Valory:
 
 ```bash
 dig +short c05e7412439bd7e91730a6880e18d5d5873f632c-100.mech.valory.xyz
 ```
 
-The zone has no wildcard record, so a Mech that Valory does not operate has no name there.
+The zone has no wildcard record, so a Mech that Valory does not operate has no name there. The lookup is not DNSSEC-validated, so it trusts your resolver to return the public answer.
 
 **Publishing your terms.** A Mech gives its operator's terms link in two places:
 
