@@ -46,6 +46,80 @@ The project consists of three components:
 
 _Note that Mechs which were deployed before the Mech Marketplace contracts (called legacy Mechs) receive request and deliver services directly via their Mech contract._
 
+## Off-chain requests
+
+Besides on-chain requests through the Mech Marketplace, a Mech can take requests over HTTP. The requester signs the request instead of sending a transaction, and pays from a balance deposited in advance. The Mech settles each delivered request on-chain afterwards. [mech-client](https://github.com/valory-xyz/mech-client) handles the client side. This section describes what the Mech does.
+
+**Turning it on.** The off-chain path is off by default. To turn it on:
+
+- Set the `use_offchain` parameter to `true`. Services built on this Mech, such as mech-predict, expose it as the `USE_OFFCHAIN` environment variable.
+- Serve the Mech at a public URL and set `SERVICE_ENDPOINT_BASE` to it. The HTTP server answers requests whose host matches that host, a Propel host or localhost.
+- Publish the same URL in the `url` field of the Mech's metadata. Clients look for it there.
+- Send all off-chain traffic to one agent instance. Each instance tracks requester nonces on its own, so the Mech logs a warning at startup when it runs with more than one agent.
+
+**Endpoints.**
+
+| Method | Path                    | Purpose                              |
+| ------ | ----------------------- | ------------------------------------ |
+| `POST` | `/send_signed_requests` | Submit a signed request.             |
+| `GET`  | `/fetch_offchain_info`  | Read the result of a request.        |
+| `GET`  | `/healthcheck`          | Check the Mech is up and progressing. |
+
+**Sending a request.** The body of `/send_signed_requests` is form-encoded, with the fields `request_id`, `ipfs_hash`, `ipfs_data`, `sender`, `delivery_rate`, `nonce` and `signature`. Before accepting a request, the Mech checks four things:
+
+- The signature matches the Marketplace request id. It accepts signatures from ordinary accounts and from smart accounts such as Safes, through EIP-1271.
+- `ipfs_data` hashes to `ipfs_hash`.
+- `nonce` is the requester's next nonce. At most 64 requests per requester can be in flight at once.
+- The requester's prepaid balance in the Mech's balance tracker covers `delivery_rate`.
+
+| Status | Meaning |
+| ------ | ------- |
+| `200`  | Accepted. The `Payment-Receipt` header carries the accepted amount, and settlement is `pending`. Sending an accepted request again returns `200` with `"already accepted"`. |
+| `400`  | The request is malformed. |
+| `401`  | The signature is invalid, or the nonce was already used. |
+| `402`  | The balance is too low. The `WWW-Authenticate: Payment scheme="olas-prepay"` header and the body say how to deposit. The body carries `scheme`, `payTo`, `asset`, `chainId`, `currentBalance`, `required`, `depositInstructions` and `error`, plus `termsUrl` when the Mech has a terms link set. |
+| `503`  | Try again later. The off-chain path is off, the nonce is ahead of the next one, the requester has too many requests in flight, or a chain read failed. |
+
+Accepted and `402` responses also carry the operator's terms link. See [Terms](#terms).
+
+**Paying.** The requester deposits by calling `depositFor(requester, amount)` on the balance tracker given as `payTo` in the `402` response. Accepting a request charges nothing. The balance is charged when the Mech settles the delivered request on-chain.
+
+**Reading the result.** Call `/fetch_offchain_info` with a form-encoded `request_id`. A request with no readable `request_id` gets `400`. Otherwise the answer is always `200`:
+
+- `{}` while the request is pending.
+- `"status": "ok"`, with the delivery in `response` and its IPFS CID in `content_cid`, once it is delivered.
+- `"status": "rejected"` with a `reason` if it failed, for example because the tool failed or is not installed.
+- The stored `402` body, if the request was rejected for its balance.
+
+**Settlement.** Each period, the Mech settles its delivered off-chain requests with `deliverMarketplaceWithSignatures` on its Mech contract. It sends one call per requester, in nonce order, inside the service Safe's multisend, so the Mech pays the gas. Only delivered requests are settled and charged. A failed request is never charged. If a settlement keeps failing, the Mech retries it. After three failed attempts, it drops that batch's requests one per period without charging for them.
+
+**Metrics.** Prometheus metrics prefixed `mech_offchain_` count accepted and rejected requests and track the pending queue, deliveries, failures, delivery latency and delivered requests that are not yet settled.
+
+## Terms
+
+Each Mech is run by its own operator.
+
+**Mechs operated by Valory.** Requests to a Mech operated by Valory fall under Valory AG's Mech Terms. The notice for these Mechs reads:
+
+```text
+By submitting a request to this Mech, you agree to be bound by Valory AG's Mech Terms (v1.0), available at https://www.valory.xyz/terms/mechs.
+```
+
+**Checking who operates a Mech.** Valory creates one DNS record under `mech.valory.xyz` for each Mech it operates, and for no other Mech. The name is the Mech address without `0x`, a hyphen, then the chain id. If the name resolves to an address in the public DNS, the Mech is operated by Valory:
+
+```bash
+dig +short c05e7412439bd7e91730a6880e18d5d5873f632c-100.mech.valory.xyz
+```
+
+If the name does not resolve, the Mech is not operated by Valory. The zone has no wildcard record, so a Mech that Valory does not operate has no name there. If a name you make up at random also resolves, your resolver is answering every name and the result tells you nothing. The lookup is not DNSSEC-validated, so it trusts your resolver to return the public answer.
+
+**Publishing your terms.** A Mech gives its operator's terms link in two places:
+
+- The `termsUrl` field of the Mech's metadata.
+- Its off-chain responses. An accepted request and a payment-required (402) response both carry a `Link` header with `rel="terms-of-service"`, and the 402 body carries `termsUrl` next to the deposit instructions.
+
+The off-chain link comes from the `mech_terms_url` parameter of the `task_execution` skill. The packaged `skill.yaml` sets it to Valory's Mech Terms, so a Mech run by anyone other than Valory must change it: set it to your own terms, or to an empty value to send no link.
+
 ## Requirements
 
 This repository contains a demo AI Mech. You can clone and extend the codebase to create your own AI Mech. You need the following requirements installed in your system:
@@ -137,6 +211,7 @@ You may customize the agent's behaviour by setting these environment variables.
 | `MECH_TO_SUBSCRIPTION`     | `dict` | `{"0x77af31De935740567Cf4fF1986D04B2c964A786a":{"tokenAddress":"0x0000000000000000000000000000000000000000","tokenId":"1"}}`                                                                                                                                        | Tracks mech's subscription details.                                    |
 | `MECH_TO_CONFIG`           | `dict` | `{"0xFf82123dFB52ab75C417195c5fDB87630145ae81":{"use_dynamic_pricing":false,"is_marketplace_mech":false}}`                                                                                                                                                          | Tracks mech's config.                                                  |
 | `PROFIT_SPLIT_BALANCE`     | `int`  | 1000000000000000000                                                                                                                                                                                                                                                 | Minimun mech balance to trigger the profit split functionality.        |
+| `SERVICE_ENDPOINT_BASE`    | `str`  | `"https://my-mech.example.com"`                                                                                                                                                                                                                                     | Public URL of the Mech. Its HTTP server answers requests whose host matches this host, a Propel host or localhost. |
 
 :note: The value of `PROFIT_SPLIT_BALANCE` should correspond to the units of payment based on payment model. By default it will trigger at 10^18 units
  - For fixed price mechs, it corresponds to native currency units
