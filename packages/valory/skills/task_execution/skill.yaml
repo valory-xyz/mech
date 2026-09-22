@@ -7,17 +7,17 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiddgrfcoxgz6syq5kyhf2k4dor4ewhr3xiyqrpro4c5idhfqjifsu
-  behaviours.py: bafybeibiio5vuz7427spqim2fwxotnsaptsa5oh5eheuc3cwi3emhaynae
+  behaviours.py: bafybeiaznaklpyqz4qo7drs2h7rnx26hiir7c7gh3yo2vqzypwmezpnvf4
   dialogues.py: bafybeid7bbtq3thsazuheoxwnli2lkpaiwgoeps7pwrw63apqg5dizuomm
-  handlers.py: bafybeieuxoflorhfw5rywi2x4f33f74y6jwbl33wivgjowlxnl6npavzdq
-  models.py: bafybeidaatdthj7mnyxkp2fuetjjymwysb2cml2lda7mfxfvaj6oxob47a
+  handlers.py: bafybeiaig72bsmjwq2ba5oeteqxtuqlicrnqihcvdkjrsko5zmd7ka63rq
+  models.py: bafybeicpoyqyntc5gurxnenx4s724xhd2oze4orfvc2nhelfwwwpi6jh2u
   tests/__init__.py: bafybeieqltdoxt2ipgn7owrfyceylzqug3fpdy6pk6mxhdxyn2mujz4v7q
-  tests/conftest.py: bafybeied6cnsr5xbupuc6tkv2a3tnj75x6rz42u3b7fuqpl32tsegehbym
-  tests/test_behaviours.py: bafybeidmw6o4rlrzst7i42jhfl7b6apjytr35or64rck5t5pxozqh5o2iq
+  tests/conftest.py: bafybeibx6vqfbqg6rhcqtmfcwgnuieiljlxgoan3kyanncu2ccfw76lxaq
+  tests/test_behaviours.py: bafybeih6v5edmbbsgo7pzmol4nw4ozlvngbgatxvlvulwfbiqnh7id5lsy
   tests/test_dialogues.py: bafybeig2phgjrv7ugdx4olviuclaxegvyzkcw7t2ztzrp3xcj2ygqs4344
-  tests/test_handlers.py: bafybeic5wg2wmhm7gohlpkfv2iuot6k6mgaa3dy7freck4byzulajxvdtm
-  tests/test_models.py: bafybeifdcwpcnzdam4qreg7rwlwqizpafo3kn2uanqnnlf2aea5szpnyhq
-  tests/test_preimage_buffer.py: bafybeidc6w52c6r27ntwmg4ow3rrvmgwq22fkcvxrvv3y7o5isvktkzuqy
+  tests/test_handlers.py: bafybeie6yp55a4dg5bgovy6cqfbxju72yftqwccsy5ckb6hifdfa5smota
+  tests/test_models.py: bafybeiauizgoqdxu2j63uuzb5b4cikjacrjowpu6no2otyben7vy564nom
+  tests/test_preimage_buffer.py: bafybeifaw3mdjxsk5qp6s23rn4v2d2osecvntjprxxhe23f6qbdo23bgoa
   tests/utils/__init__.py: bafybeihhmu24bkh47szarsroa5esxjbidkbikmijzydele6jaj7uti2sby
   tests/utils/test_apis.py: bafybeig5ktc6azokzwpisvyse46bylb43vf4vxmgcuuwnkfr3bs7vexw4u
   tests/utils/test_benchmarks.py: bafybeiemmrsmkd6nz6cq4gwxlnj2fwflfte3qfjmdif2adivwq3gfwzhh4
@@ -25,7 +25,7 @@ fingerprint:
   tests/utils/test_eip1271.py: bafybeieat4o4umh6kgxg3qfxkj55xjrd4maz4bgyzh6f233pgyjetgxqiu
   tests/utils/test_ipfs.py: bafybeie6mkn7wbtd6yjwakwhm6qbqsfqrnhuxmxmnk3ysd63vko6amwfoa
   tests/utils/test_local_cid.py: bafybeia6zbo4g6n6ypkccuywmnytvx6scyiw2pjn6eva6d6edg6hb6tmke
-  tests/utils/test_preimage.py: bafybeiaf46s6zkelr4bqhpm7hlnjl7pbivpxaxckwz2bhzoe66wdnxzvza
+  tests/utils/test_preimage.py: bafybeihr7vssjxietyyrpwhzfr3frg3jzyl6bzbedpuhnf7iy6ei5elut4
   tests/utils/test_request_id.py: bafybeiflxnvrw6ld7oku2zrk6tcslhv4lhxamz3maw3hvj6gt5e4ppv2te
   tests/utils/test_task.py: bafybeigdfi37m5taw6jecd7t2bg54ctcv4u3js5u3xd2lyckoazy4efpv4
   utils/__init__.py: bafybeiccdijaigu6e5p2iruwo5mkk224o7ywedc7nr6xeu5fpmhjqgk24e
@@ -35,7 +35,7 @@ fingerprint:
   utils/eip1271.py: bafybeielxzkaiyprowdpdzvvxztnufid5l477li2pbbukqrpvetu6cz2xy
   utils/ipfs.py: bafybeieuj6ysgmrgtpkxr4peuzjqmbih7q64c5fmins5o6nbhwd7nroi74
   utils/local_cid.py: bafybeiey64eaq533wjyrbyhjlswvvfwtsaa7wyatr5ylpdgtqfqsrr4hlq
-  utils/preimage.py: bafybeigdbtby7nts4nsr5icnxqh76nkwoz4xn6jqb2br53lrylh47elmfe
+  utils/preimage.py: bafybeicz6deyfgy6kxzhtt3aiqmw6jmjdo7he4pvudhc4l32kekp6h7ilq
   utils/request_id.py: bafybeicwblxcbomhomwqkscf4k6o2pxl6gji32vkefwqrjd4jjjha2ehqa
   utils/task.py: bafybeicb6nqd475ul6mz4hcexpva33ivkn4fygicgmlb4clu5cuzr34diy
 fingerprint_ignore_patterns: []
@@ -113,6 +113,10 @@ models:
       robinhood_ledger_rpc: http://localhost:8545
       polling_interval: 30.0
       polygon_ledger_rpc: http://localhost:8545
+      preimage_incomplete_cap_seconds: 604800
+      preimage_retention_enabled: true
+      preimage_retention_seconds: 86400
+      preimage_sweep_interval: 3600.0
       serious_slash_unit_amount: 8000000000000000
       slash_cooldown_hours: 3
       slash_threshold_amount: 10000000000000000

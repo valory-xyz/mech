@@ -21,6 +21,7 @@
 
 import base64
 import concurrent.futures
+import copy
 import json
 import re
 import threading
@@ -45,7 +46,7 @@ from typing import (
 from aea.protocols.base import Message
 from aea.skills.base import Handler
 from aea_ledger_ethereum import EthereumApi
-from prometheus_client import Counter, start_http_server
+from prometheus_client import Counter, Gauge, start_http_server
 from requests.exceptions import RequestException
 from web3.exceptions import BadFunctionCallOutput, ContractLogicError, Web3RPCError
 
@@ -62,7 +63,10 @@ from packages.valory.protocols.ipfs import IpfsMessage
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.abstract_round_abci.handlers import AbstractResponseHandler
-from packages.valory.skills.task_execution.behaviours import PREDICT_API_EVENTS
+from packages.valory.skills.task_execution.behaviours import (
+    PREDICT_API_EVENTS,
+    _release_outstanding_nonce,
+)
 from packages.valory.skills.task_execution.dialogues import HttpDialogue
 from packages.valory.skills.task_execution.models import (
     Params,
@@ -192,6 +196,20 @@ mech_offchain_fetches_total = Counter(
     "Off-chain /fetch_offchain_info polls by outcome "
     "(see handlers.py FETCH_OUTCOME_* for the values)",
     labelnames=["outcome", "chain", "mech_address"],
+)
+# Preimage store size, published at the end of every full sweep walk so a
+# stalled sweeper (rows never deleted) or a stalled settlement (incomplete
+# rows piling up toward the cap) is visible without reading the volume.
+mech_preimage_rows = Gauge(
+    "mech_preimage_rows",
+    "Off-chain preimage rows in the kv_store as of the last full sweep",
+    labelnames=["chain", "mech_address"],
+)
+mech_preimage_incomplete_rows = Gauge(
+    "mech_preimage_incomplete_rows",
+    "Delivered preimage rows still missing a follow-up step "
+    "(on-chain settlement / predict-api row) as of the last full sweep",
+    labelnames=["chain", "mech_address"],
 )
 
 # Off-chain HTTP hardening
@@ -997,10 +1015,14 @@ class KvStoreHandler(BaseHandler):
 
         if performative == KvStoreMessage.Performative.LIST_RESPONSE:
             now = time.time()
+            page = dict(kv_msg.data)
+            require_posted = bool(self.params.use_offchain)
             expired = preimage_buffer.expired_keys(
-                dict(kv_msg.data),
+                page,
                 now,
                 self.params.preimage_retention_seconds,
+                incomplete_cap_seconds=self.params.preimage_incomplete_cap_seconds,
+                require_posted=require_posted,
             )
             if expired:
                 shared_state.setdefault(
@@ -1010,6 +1032,19 @@ class KvStoreHandler(BaseHandler):
                     f"Preimage sweep: queued {len(expired)} expired entries "
                     f"for deletion."
                 )
+            # Drainer: every page of the sweep also rehydrates what a restart
+            # wiped from memory. Served answers go back into the fetch map,
+            # and delivered rows still missing a follow-up step are loaded
+            # into PREIMAGE_RECORDS and replayed (see _apply_hydrated_page).
+            fetch_payloads, replay = preimage_buffer.hydrate(
+                shared_state,
+                page,
+                now,
+                self.params.preimage_retention_seconds,
+                self.params.preimage_incomplete_cap_seconds,
+                require_posted,
+            )
+            self._apply_hydrated_page(fetch_payloads, replay, now)
             # The LIST response carries next_cursor when the kv_store has more
             # pages past preimage_list_page_size; the behaviour loop reads
             # this on the next tick to keep paging. Only when the page is
@@ -1023,6 +1058,7 @@ class KvStoreHandler(BaseHandler):
             else:
                 shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
                 shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = now
+                self._publish_sweep_row_counts()
             # Successful LIST reply — reset the consecutive-error counter so a
             # transient failure earlier in the walk doesn't carry over.
             shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = 0
@@ -1045,10 +1081,20 @@ class KvStoreHandler(BaseHandler):
                 records = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {})
                 record = records.get(inflight)
                 write_queue = shared_state.get(preimage_buffer.PREIMAGE_WRITE_QUEUE, [])
+                # A delivered record is also kept until every follow-up
+                # step is stamped (settled on chain, posted to predict-api
+                # when that write is on): the stamps land on the in-memory
+                # copy and each one re-flushes the row, so popping it at
+                # the first terminal write would leave the kv row
+                # permanently incomplete and make the drainer replay work
+                # that already happened.
                 if (
                     record is not None
                     and record.get("settlement_status")
                     in preimage_buffer.TERMINAL_STATUSES
+                    and preimage_buffer.is_complete(
+                        record, bool(self.params.use_offchain)
+                    )
                     and inflight not in write_queue
                 ):
                     records.pop(inflight, None)
@@ -1085,6 +1131,10 @@ class KvStoreHandler(BaseHandler):
                     shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
                     shared_state[preimage_buffer.PREIMAGE_LAST_SWEEP] = time.time()
                     shared_state[preimage_buffer.PREIMAGE_LIST_ATTEMPTS] = 0
+                    # The abandoned walk's partial row counts must not leak
+                    # into the next walk's gauges.
+                    shared_state[preimage_buffer.PREIMAGE_SWEEP_ROW_COUNT] = 0
+                    shared_state[preimage_buffer.PREIMAGE_SWEEP_INCOMPLETE_COUNT] = 0
             elif inflight_op == preimage_buffer.OP_DELETE:
                 # A failed DELETE drops its key batch — the keys were
                 # already sliced off PREIMAGE_DELETE_QUEUE in
@@ -1142,6 +1192,125 @@ class KvStoreHandler(BaseHandler):
         shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
         shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
         self.on_message_handled(message)
+
+    def _apply_hydrated_page(
+        self,
+        fetch_payloads: List[Dict[str, Any]],
+        replay: List[Dict[str, Any]],
+        now: float,
+    ) -> None:
+        """Push one hydrated LIST page back into the live flow.
+
+        * ``fetch_payloads``: restored into ``OFFCHAIN_REQUEST_RESPONSES``
+          when absent, so ``/fetch_offchain_info`` serves answers computed
+          before a restart. Live entries are never overwritten.
+        * ``replay``: delivered rows still missing a follow-up step. A row
+          without an on-chain settlement is re-queued into ``DONE_TASKS``
+          (deduplicated by request id) with its nonce re-registered in the
+          settling set, and its event goes back into ``PREDICT_API_EVENTS``
+          so the normal post-settlement POST picks it up once the deliver
+          lands. A row already settled but not yet posted stays in
+          ``PREIMAGE_RECORDS`` for the settlement skill's replay batch.
+
+        The re-queue is a no-op for a request the FSM already holds
+        (``TaskPoolingRound`` de-duplicates by request id across payloads,
+        and ``handle_submitted_tasks`` prunes it locally once it settles).
+
+        :param fetch_payloads: bodies rebuilt by ``preimage.hydrate``.
+        :param replay: records loaded into memory by ``preimage.hydrate``.
+        :param now: the current epoch time in seconds.
+        """
+        shared_state = self.context.shared_state
+        responses: Dict[str, Dict[str, Any]] = shared_state.setdefault(
+            OFFCHAIN_REQUEST_RESPONSES, {}
+        )
+        restored = 0
+        for payload in fetch_payloads:
+            request_id = str(payload["request_id"])
+            if request_id not in responses:
+                responses[request_id] = payload
+                restored += 1
+        requeued = 0
+        events_restored = 0
+        for record in replay:
+            request_id = str(record.get("request_id"))
+            if record.get(preimage_buffer.FIELD_SETTLED_TX_HASH) is not None:
+                # Settled but not posted: replayed by task_submission_abci
+                # from PREIMAGE_RECORDS; nothing to re-queue here.
+                continue
+            done_task = record.get(preimage_buffer.FIELD_DONE_TASK)
+            if not isinstance(done_task, dict):
+                self.context.logger.warning(
+                    "Preimage drainer: request_id=%s is unsettled but its "
+                    "record carries no done_task; cannot re-queue.",
+                    request_id,
+                )
+                continue
+            if self._requeue_done_task(request_id, done_task):
+                requeued += 1
+            event = record.get(preimage_buffer.FIELD_PREDICT_API_EVENT)
+            if isinstance(event, dict):
+                events_by_id: Dict[str, Any] = shared_state.setdefault(
+                    PREDICT_API_EVENTS, {}
+                )
+                if request_id not in events_by_id:
+                    events_by_id[request_id] = {
+                        "event": copy.deepcopy(event),
+                        "written_at": now,
+                    }
+                    events_restored += 1
+        if restored or replay:
+            self.context.logger.info(
+                "Preimage drainer: restored %d fetch response(s), hydrated %d "
+                "incomplete record(s), re-queued %d for settlement, restored "
+                "%d predict-api event(s).",
+                restored,
+                len(replay),
+                requeued,
+                events_restored,
+            )
+
+    def _requeue_done_task(self, request_id: str, done_task: Dict[str, Any]) -> bool:
+        """Append a hydrated done_task to ``DONE_TASKS`` unless already there.
+
+        :param request_id: the off-chain request id (``str`` form).
+        :param done_task: the record's done_task; a deep copy is queued so
+            the settlement retry bookkeeping cannot mutate the record.
+        :return: ``True`` when the task was appended.
+        """
+        shared_state = self.context.shared_state
+        lock = shared_state.get(DONE_TASKS_LOCK) or threading.Lock()
+        with lock:
+            done_tasks: List[Dict[str, Any]] = shared_state.setdefault(DONE_TASKS, [])
+            if any(str(t.get("request_id")) == request_id for t in done_tasks):
+                return False
+            queued = copy.deepcopy(done_task)
+            done_tasks.append(queued)
+        # Re-register the wire nonce in the settling set so the admission
+        # gate's next-expected slot counts it (the sets are in-memory and
+        # were wiped by the same restart that dropped the task).
+        _release_outstanding_nonce(shared_state, queued)
+        return True
+
+    def _publish_sweep_row_counts(self) -> None:
+        """Publish the row counters of the walk that just finished, then reset."""
+        shared_state = self.context.shared_state
+        labels = offchain_metric_labels(self.params)
+        rows = int(shared_state.get(preimage_buffer.PREIMAGE_SWEEP_ROW_COUNT, 0))
+        incomplete = int(
+            shared_state.get(preimage_buffer.PREIMAGE_SWEEP_INCOMPLETE_COUNT, 0)
+        )
+        mech_preimage_rows.labels(**labels).set(rows)
+        mech_preimage_incomplete_rows.labels(**labels).set(incomplete)
+        shared_state[preimage_buffer.PREIMAGE_SWEEP_ROW_COUNT] = 0
+        shared_state[preimage_buffer.PREIMAGE_SWEEP_INCOMPLETE_COUNT] = 0
+        if incomplete:
+            self.context.logger.info(
+                "Preimage sweep complete: %d row(s), %d still missing a "
+                "follow-up step.",
+                rows,
+                incomplete,
+            )
 
 
 class HttpCode(Enum):
@@ -2481,6 +2650,14 @@ class MechHttpHandler(AbstractResponseHandler):
                 data=stored_response,
             )
             stored_status = stored_response.get(ResponseKey.STATUS.value)
+            if stored_status == ResponseStatus.OK.value:
+                # Visibility stamp on the durable record (first poll only,
+                # no-op unless retention is on). Never gates retention.
+                preimage_buffer.record_stamp(
+                    self.context.shared_state,
+                    str(request_id),
+                    fetched_at=int(time.time()),
+                )
             self._count_fetch_outcome(
                 FETCH_OUTCOME_DELIVERED
                 if stored_status == ResponseStatus.OK.value

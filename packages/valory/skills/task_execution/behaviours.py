@@ -637,8 +637,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_pricing = self.params.tools_to_pricing
         self._keychain = KeyChain(self.params.api_keys)
         # Initialise the off-chain preimage buffer's shared-state keys so the
-        # accept hook (handler side) and the sweeper (here) can read/write them.
-        preimage_buffer.init_shared_state(self.context.shared_state)
+        # accept hook (handler side), the sweeper (here) and the settlement
+        # skill's stamps can read/write them. The retention flag is mirrored
+        # into shared_state because task_submission_abci has no copy of it.
+        preimage_buffer.init_shared_state(
+            self.context.shared_state,
+            retention_enabled=self.params.preimage_retention_enabled,
+        )
 
     def _ensure_payment_model(self) -> bool:
         """Set the mech's payment model."""
@@ -1994,6 +1999,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         done_task.pop("data", None)
         predict_api_mode_enabled = self.params.use_offchain
         is_marketplace_delivery = bool(done_task.get("is_marketplace_mech"))
+        predict_api_event: Optional[Dict[str, Any]] = None
         if predict_api_mode_enabled and (is_offchain or is_marketplace_delivery):
             event = self._build_predict_api_event(
                 done_task=done_task,
@@ -2018,6 +2024,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "event": event,
                 "written_at": time.time(),
             }
+            predict_api_event = event
+        if is_offchain:
+            # Attach the replay inputs to the durable preimage record (no-op
+            # unless retention is enabled) so a restart between here and the
+            # on-chain settlement / predict-api POST can re-run those steps
+            # from disk. Must run before the append below: the done_task is
+            # mutated in place by the settlement retry bookkeeping later.
+            self._buffer_replay_inputs(str(req_id), done_task, predict_api_event)
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
@@ -2515,14 +2529,57 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             time.time(),
         )
 
+    def _buffer_replay_inputs(
+        self,
+        req_id: str,
+        done_task: Dict[str, Any],
+        predict_api_event: Optional[Dict[str, Any]],
+    ) -> None:
+        """Attach JSON copies of the done_task and event to the preimage record.
+
+        No-op unless off-chain preimage retention is enabled. The copies are
+        JSON round-tripped so later in-place mutation of the live dicts (the
+        settlement retry counters, the tx-hash enrichment) cannot leak into
+        the record, and so a non-serialisable value is caught here rather
+        than at flush time.
+
+        :param req_id: the off-chain request id.
+        :param done_task: the consensus-ready done_task dict.
+        :param predict_api_event: the built event, or ``None`` when the
+            predict-api write is off.
+        """
+        if not self.params.preimage_retention_enabled:
+            return
+        try:
+            done_task_copy = json.loads(json.dumps(done_task))
+            event_copy = (
+                json.loads(json.dumps(predict_api_event))
+                if predict_api_event is not None
+                else None
+            )
+        except (TypeError, ValueError) as exc:
+            self.context.logger.warning(
+                "Replay inputs for request_id=%s are not JSON serialisable "
+                "(%s); the record will not be replayable after a restart.",
+                req_id,
+                exc,
+            )
+            return
+        preimage_buffer.record_replay_inputs(
+            self.context.shared_state, req_id, done_task_copy, event_copy
+        )
+
     def _process_preimage_buffer(self) -> None:
         """Flush buffered preimage writes/deletes and periodically sweep.
 
         No-op unless off-chain preimage retention is enabled. At most one
         kv_store request is in flight at a time (a flag separate from the task
         executor's ``in_flight_req``), so this never blocks task execution.
-        Per tick it does the first of: run a due sweep (LIST by prefix), flush a
-        batch of expired deletes, or flush one queued write.
+        Per tick it does the first of: flush one queued write, continue or
+        start a due sweep (LIST by prefix), or flush a batch of expired
+        deletes. Writes go first because they carry settlement-critical
+        state (the delivered record and its stamps); a sweep walk or a large
+        delete backlog must never hold them back.
         """
         if not self.params.preimage_retention_enabled:
             return
@@ -2609,10 +2666,24 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             else:
                 return
 
+        write_queue: List[str] = shared_state.get(
+            preimage_buffer.PREIMAGE_WRITE_QUEUE, []
+        )
+        while write_queue:
+            request_id = write_queue.pop(0)
+            record = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).get(
+                request_id
+            )
+            if record is None:
+                # Already pruned (e.g. duplicate enqueue); skip to the next.
+                continue
+            self._send_kv_write(request_id, record)
+            return
+
         # A non-empty cursor means the previous LIST_RESPONSE returned
         # ``next_cursor`` — i.e. the namespace has more pages. Keep paging on
-        # every tick (deletes/writes wait until the namespace is fully walked)
-        # so retention pruning isn't stuck on the first page when the namespace
+        # every tick (deletes wait until the namespace is fully walked) so
+        # retention pruning isn't stuck on the first page when the namespace
         # has more than preimage_list_page_size entries.
         if shared_state.get(preimage_buffer.PREIMAGE_LIST_CURSOR):
             self._send_kv_list()
@@ -2648,20 +2719,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             keys = delete_queue[:page]
             del delete_queue[:page]
             self._send_kv_delete(keys)
-            return
-
-        write_queue: List[str] = shared_state.get(
-            preimage_buffer.PREIMAGE_WRITE_QUEUE, []
-        )
-        while write_queue:
-            request_id = write_queue.pop(0)
-            record = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).get(
-                request_id
-            )
-            if record is None:
-                # Already pruned (e.g. duplicate enqueue); skip to the next.
-                continue
-            self._send_kv_write(request_id, record)
             return
 
     def _send_kv_write(self, request_id: str, record: Dict[str, Any]) -> None:

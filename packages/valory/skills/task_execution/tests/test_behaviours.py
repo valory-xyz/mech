@@ -5532,3 +5532,70 @@ def test_execute_task_refreshes_gauges_while_request_in_flight(
     behaviour._execute_task()
 
     refresh.assert_called_once_with()
+
+
+def test_finalize_done_task_attaches_replay_inputs_to_preimage_record(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """Off-chain finalize stores the done_task and event on the delivered record.
+
+    A restart after this point must be able to rebuild the deliver tx and
+    the predict-api row from the kv_store alone, so the record has to
+    carry both, JSON-detached from the live dicts.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    from packages.valory.skills.task_execution.utils import preimage
+
+    params_stub.use_offchain = True
+    params_stub.preimage_retention_enabled = True
+    preimage.init_shared_state(shared_state, retention_enabled=True)
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    preimage.record_settlement(
+        shared_state, "req-gate", "{}", "bafycid", preimage.STATUS_DELIVERED, 1.0
+    )
+    behaviour._finalize_done_task("bafycid")
+    record = shared_state[preimage.PREIMAGE_RECORDS]["req-gate"]
+    live_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert record[preimage.FIELD_DONE_TASK]["task_result"] == live_task["task_result"]
+    assert record[preimage.FIELD_DONE_TASK] is not live_task
+    assert record[preimage.FIELD_PREDICT_API_EVENT]["source"] == "mech_offchain"
+    assert "req-gate" in shared_state[preimage.PREIMAGE_WRITE_QUEUE]
+
+
+def test_finalize_done_task_leaves_record_alone_when_retention_disabled(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """With retention off (ship-dark default) no replay inputs are written."""
+    from packages.valory.skills.task_execution.utils import preimage
+
+    params_stub.use_offchain = True
+    params_stub.preimage_retention_enabled = False
+    preimage.init_shared_state(shared_state)
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task("bafycid")
+    assert shared_state[preimage.PREIMAGE_RECORDS] == {}
+    assert shared_state[preimage.PREIMAGE_WRITE_QUEUE] == []
