@@ -1001,6 +1001,11 @@ class KvStoreHandler(BaseHandler):
         # ``(nonce, responder_ref)``. The initiator nonce is the part we
         # generate and the part that uniquely identifies the op, so
         # that's the right thing to compare.
+        # Any reply at all, even one for an op the watchdog gave up on, proves
+        # the connection is wired; clear the no-reply breaker's counters
+        # before the late-reply guard below can return.
+        shared_state[preimage_buffer.PREIMAGE_KV_REPLY_SEEN] = True
+        shared_state[preimage_buffer.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] = 0
         expected = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_DIALOGUE)
         actual = dialogue.dialogue_label.dialogue_reference
         if expected is not None and tuple(actual)[0] != tuple(expected)[0]:
@@ -1012,10 +1017,6 @@ class KvStoreHandler(BaseHandler):
             )
             return
         performative = kv_msg.performative
-        # Any matched reply proves the connection is wired; clear the
-        # no-reply circuit breaker's counters.
-        shared_state[preimage_buffer.PREIMAGE_KV_REPLY_SEEN] = True
-        shared_state[preimage_buffer.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] = 0
 
         if performative == KvStoreMessage.Performative.LIST_RESPONSE:
             now = time.time()

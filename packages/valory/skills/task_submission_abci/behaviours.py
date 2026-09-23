@@ -186,6 +186,11 @@ mech_predict_api_events_total = Counter(
 BATCH_LABEL_DELIVERED = "delivered"
 BATCH_LABEL_SWEEP = "sweep"
 BATCH_LABEL_REPLAY = "replay"
+# Set after the server rejects a replay batch with a 4xx: the next replay
+# batch is a single event, so the rejected row is isolated within a few
+# rounds (a 4xx on a one-event batch marks that row abandoned) instead of
+# the same oldest batch blocking every newer replay. Cleared on a 2xx.
+PREDICT_API_REPLAY_SHRINK = "predict_api_replay_shrink"
 
 # ``SettlementOutcome`` is a ``Literal`` so a misspelt outcome fails mypy
 # instead of silently minting a new label value.
@@ -2839,6 +2844,8 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             mech_predict_api_events_total.labels(
                 batch_label=batch_label, outcome="ok"
             ).inc()
+            if batch_label == BATCH_LABEL_REPLAY:
+                self.context.shared_state.pop(PREDICT_API_REPLAY_SHRINK, None)
             if batch_label in (BATCH_LABEL_DELIVERED, BATCH_LABEL_REPLAY):
                 # Stamp the predict-api row on each durable preimage record
                 # (no-op unless retention is on) so the sweeper can retire
@@ -2910,6 +2917,43 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         mech_predict_api_events_total.labels(
             batch_label=batch_label, outcome="http_error"
         ).inc()
+        if (
+            batch_label == BATCH_LABEL_REPLAY
+            and status is not None
+            and 400 <= status < 500
+        ):
+            self._isolate_rejected_replay(events, status)
+
+    def _isolate_rejected_replay(
+        self, events: List[Dict[str, Any]], status: int
+    ) -> None:
+        """Keep one rejected replay row from blocking every newer one.
+
+        The server writes a batch all-or-nothing, so a 4xx does not say
+        which event it refused. Shrink the next replay batch to one event;
+        once a single-event batch is refused, that row is the culprit and is
+        marked abandoned so it retires on the normal window.
+
+        :param events: the rejected batch.
+        :param status: the HTTP status the server returned.
+        """
+        shared_state = self.context.shared_state
+        if len(events) > 1:
+            shared_state[PREDICT_API_REPLAY_SHRINK] = True
+            return
+        request_id = _event_request_id(events[0]) if events else None
+        if request_id is None:
+            return
+        self.context.logger.warning(
+            "predict-api rejected the replay of request_id=%s on its own "
+            "(status=%s); marking the row abandoned so it stops blocking "
+            "newer replays.",
+            request_id,
+            status,
+        )
+        preimage_buffer.record_stamp(
+            shared_state, request_id, abandoned_at=int(time.time())
+        )
 
     def _replay_events_from_preimage(self) -> List[Dict[str, Any]]:
         """Return the drainer's settled-but-unposted events, tx hash stamped.
@@ -2917,9 +2961,14 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         :return: an ordered list of ``MechEvent``-shaped dicts.
         """
         events: List[Dict[str, Any]] = []
+        limit = (
+            1
+            if self.context.shared_state.get(PREDICT_API_REPLAY_SHRINK)
+            else self.params.predict_api_replay_batch_size
+        )
         for _, event, tx_hash in preimage_buffer.replayable_events(
             self.context.shared_state,
-            limit=self.params.predict_api_replay_batch_size,
+            limit=limit,
         ):
             replayed = deepcopy(event)
             response = replayed.get("response")

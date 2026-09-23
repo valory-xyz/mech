@@ -2751,12 +2751,6 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _disable_retention_unreachable_store(self, timeouts: int) -> None:
         """Switch retention off for this process: the kv_store never answered.
 
-        Retention is on by default, but an agent whose config lacks the
-        ``valory/kv_store`` connection has nowhere to send the writes: each
-        one would sit out the watchdog timeout and the queue would grow with
-        every request. After ``preimage_max_write_attempts`` consecutive
-        timeouts with no reply of any kind since start-up, give up loudly.
-
         :param timeouts: the consecutive timeouts observed.
         """
         shared_state = self.context.shared_state

@@ -1321,3 +1321,18 @@ def test_list_response_final_page_evicts_in_memory_rows_past_the_cap(
     )
     handler.handle(_list_reply({}))
     assert "9" not in ss[preimage.PREIMAGE_RECORDS]
+
+
+def test_a_late_reply_still_proves_the_store_is_reachable(handler_context: Any) -> None:
+    """A reply the late-reply guard discards must still clear the no-reply breaker."""
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] = 4
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    ss[preimage.PREIMAGE_INFLIGHT_DIALOGUE] = ("nonce-0", "")  # a newer op
+    handler.handle(  # stub dialogue update returns initiator "nonce-1": late reply
+        SimpleNamespace(performative=KvStoreMessage.Performative.SUCCESS, message="ok")
+    )
+    assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is True  # guard still ignores it
+    assert ss[preimage.PREIMAGE_KV_REPLY_SEEN] is True
+    assert ss[preimage.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] == 0

@@ -4737,7 +4737,7 @@ class TestPostPredictApiBatchStampsPosted:
                 yield None
             return SimpleNamespace(status_code=status_code, body=b"{}")
 
-        return SimpleNamespace(
+        self_ = SimpleNamespace(
             context=SimpleNamespace(
                 shared_state=shared_state,
                 logger=SimpleNamespace(
@@ -4754,11 +4754,23 @@ class TestPostPredictApiBatchStampsPosted:
             _build_http_request_message=lambda **_k: (object(), object()),
             _drop_swept_from_pending=lambda _ids: None,
         )
+        # Bind the real isolation helper so the unbound-method call resolves.
+        self_._isolate_rejected_replay = lambda events, status: (
+            beh_mod.PostTxSettlementBehaviour._isolate_rejected_replay(
+                cast(beh_mod.PostTxSettlementBehaviour, self_), events, status
+            )
+        )
+        return self_
 
-    def _post(self, self_: SimpleNamespace, batch_label: str) -> None:
+    def _post(
+        self,
+        self_: SimpleNamespace,
+        batch_label: str,
+        events: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
         gen = beh_mod.PostTxSettlementBehaviour._post_predict_api_batch(
             cast(beh_mod.PostTxSettlementBehaviour, self_),
-            events=[self._event(STAMP_REQUEST_ID)],
+            events=events if events is not None else [self._event(STAMP_REQUEST_ID)],
             mech_address="0x" + "11" * 20,  # EIP-712 encoder needs real addresses
             verifying_contract="0x" + "22" * 20,
             predict_api_url="https://example.invalid/events",
@@ -4786,6 +4798,49 @@ class TestPostPredictApiBatchStampsPosted:
         self._post(self_, beh_mod.BATCH_LABEL_SWEEP)
         record = self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
         assert record[preimage.FIELD_POSTED_AT] is None
+
+    def test_4xx_on_a_multi_event_replay_shrinks_the_next_batch(self) -> None:
+        """The server does not say which event it refused, so isolate by shrinking."""
+        self_ = self._make_self(status_code=422)
+        self._post(
+            self_, beh_mod.BATCH_LABEL_REPLAY, [self._event("a"), self._event("b")]
+        )
+        ss = self_.context.shared_state
+        assert ss[beh_mod.PREDICT_API_REPLAY_SHRINK] is True
+        assert (
+            ss[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID][preimage.FIELD_ABANDONED_AT]
+            is None
+        )
+
+    def test_4xx_on_a_single_event_replay_marks_that_row_abandoned(self) -> None:
+        """A refused one-event batch identifies the culprit; it stops blocking newer rows."""
+        self_ = self._make_self(status_code=422)
+        self._post(self_, beh_mod.BATCH_LABEL_REPLAY)
+        record = self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+        assert isinstance(record[preimage.FIELD_ABANDONED_AT], int)
+        assert preimage.is_complete(record, require_posted=True) is True
+
+    def test_2xx_on_replay_clears_the_shrink_flag(self) -> None:
+        """Once a replay batch lands, the batch size goes back to the configured value."""
+        self_ = self._make_self(status_code=200)
+        self_.context.shared_state[beh_mod.PREDICT_API_REPLAY_SHRINK] = True
+        self._post(self_, beh_mod.BATCH_LABEL_REPLAY)
+        assert beh_mod.PREDICT_API_REPLAY_SHRINK not in self_.context.shared_state
+
+    @pytest.mark.parametrize(
+        "batch_label, status_code",
+        [
+            (beh_mod.BATCH_LABEL_REPLAY, 503),  # retryable: no isolation
+            (beh_mod.BATCH_LABEL_DELIVERED, 422),  # delivered batch is not replayed
+        ],
+    )
+    def test_other_failures_do_not_isolate(
+        self, batch_label: str, status_code: int
+    ) -> None:
+        """Only a 4xx on the replay batch triggers isolation."""
+        self_ = self._make_self(status_code=status_code)
+        self._post(self_, batch_label, [self._event("a"), self._event("b")])
+        assert beh_mod.PREDICT_API_REPLAY_SHRINK not in self_.context.shared_state
 
     @pytest.mark.parametrize("status_code", [500, 422, 302])
     def test_non_2xx_never_stamps(self, status_code: int) -> None:
@@ -4982,3 +5037,9 @@ def test_replay_batch_is_capped_by_the_configured_size() -> None:
         cast(beh_mod.PostTxSettlementBehaviour, self_)
     )
     assert [e["response"]["request_id"] for e in events] == ["a", "b"]
+    # After a rejected replay batch the next one is a single event.
+    shared_state[beh_mod.PREDICT_API_REPLAY_SHRINK] = True
+    events = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
+        cast(beh_mod.PostTxSettlementBehaviour, self_)
+    )
+    assert [e["response"]["request_id"] for e in events] == ["a"]
