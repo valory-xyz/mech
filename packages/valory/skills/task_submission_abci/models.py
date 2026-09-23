@@ -172,6 +172,13 @@ class Params(BaseParams):
         self.predict_api_events_timeout_seconds: float = float(
             kwargs.get("predict_api_events_timeout_seconds", 5.0) or 5.0
         )
+        # Upper bound on the drainer's replay batch (rows settled before a
+        # restart and never posted). Chunks a long predict-api outage into
+        # one bounded POST per settled round instead of one ever-growing
+        # request that the server would eventually refuse.
+        self.predict_api_replay_batch_size: int = int(
+            kwargs.get("predict_api_replay_batch_size", 50) or 50
+        )
         # On-chain undelivered-request sweep. The PostTxSettlement
         # behaviour walks ``shared_state[PENDING_TASKS]`` for tasks
         # whose local enqueue stamp is older than

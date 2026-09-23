@@ -43,11 +43,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
 - valory/delivery_rate_abci:0.1.0:bafybeifjiazvf3qhr2264i55u4tlvmyf6ztgak2ndqolujt4kw6jiy7l3m
-- valory/mech_abci:0.1.0:bafybeibu3p46cqgtxnzdabi6ituvmvyqkr5pn4xmrokdncxl5ucexz4zkm
+- valory/mech_abci:0.1.0:bafybeihiuui2gkfmrkwgns2w5n6ns6ea3ziregy6pmw6lnxbuegnapuulm
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeiguz7op5b2nmzxvfiegngsr5ypxbi2p3h7c7zpxfobahklgjidtgy
-- valory/task_submission_abci:0.1.0:bafybeighoiuq2hot4wkt6rbbczragsnon6z3v7pecojjhu5yop4yffxl44
+- valory/task_execution:0.1.0:bafybeigoj47ii5xqkty6t4xtu6ogdg5gcw3imgtfey6ff3oipfgh4z4nj4
+- valory/task_submission_abci:0.1.0:bafybeigxsvnjvodjvdjkthxl2zxmulwhzwbejzajvmsvxghvgm2kkvsji4
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m

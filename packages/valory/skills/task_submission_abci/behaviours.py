@@ -350,34 +350,6 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
             ]
         return snapshot
 
-    def _own_offchain_ids(
-        self, request_ids: List[str], local_snapshot: List[Dict[str, Any]]
-    ) -> List[str]:
-        """Return the ids in ``request_ids`` that are off-chain tasks this agent executed.
-
-        Reads the local done-task snapshot first and the consensus-backed
-        ``synchronized_data.done_tasks`` as fallback, since the local copy
-        is empty after a restart.
-
-        :param request_ids: candidate request ids (``str``).
-        :param local_snapshot: this agent's ``shared_state[DONE_TASKS]`` snapshot.
-        :return: the matching ids, as ``str``.
-        """
-        wanted = {str(rid) for rid in request_ids}
-        me = self.context.agent_address
-        own: Set[str] = set()
-        synced = self.synchronized_data.done_tasks
-        for task in list(local_snapshot) + (
-            list(synced) if isinstance(synced, list) else []
-        ):
-            rid = str(task.get("request_id"))
-            if rid not in wanted or not task.get(IS_OFFCHAIN):
-                continue
-            executor = task.get("task_executor_address")
-            if executor is None or executor == me:
-                own.add(rid)
-        return [rid for rid in request_ids if str(rid) in own]
-
     @property
     def mech_addresses(self) -> List[str]:
         """Get the addresses of the MECHs."""
@@ -700,15 +672,6 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
         if isinstance(events_by_id, dict):
             for rid in submitted_ids:
                 events_by_id.pop(rid, None)
-        # Stamp the on-chain settlement on the durable preimage record so a
-        # restart never replays a deliver that already landed. Only this
-        # agent's off-chain ids have a row in this agent's store; stamping
-        # anything else would park an entry no row ever claims.
-        if self.context.shared_state.get(preimage_buffer.PREIMAGE_RETENTION_ACTIVE):
-            for rid in self._own_offchain_ids(submitted_ids, shared_snapshot):
-                preimage_buffer.record_stamp(
-                    self.context.shared_state, rid, settled_tx_hash=tx_hash
-                )
         self.context.logger.info(
             f"Pruned tasks with ids {submitted_ids} from shared state; "
             f"tx_hash={tx_hash}."
@@ -2435,6 +2398,16 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 source,
                 str(task.get(MECH_ADDRESS) or self.metrics_mech_label()),
             )
+            if task.get(IS_OFFCHAIN):
+                # Stamp the settlement on the durable preimage record now,
+                # in the round that confirmed the tx, so a restart before
+                # the next period's prune cannot replay this deliver. Only
+                # this agent's off-chain rows exist in this agent's store.
+                preimage_buffer.record_stamp(
+                    self.context.shared_state,
+                    str(task.get("request_id")),
+                    settled_tx_hash=tx_hash,
+                )
 
     # Note on the two ``mech_events_chain_id`` params: task_execution's
     # copy powers delivered events; task_submission_abci's copy powers
@@ -2945,7 +2918,8 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         """
         events: List[Dict[str, Any]] = []
         for _, event, tx_hash in preimage_buffer.replayable_events(
-            self.context.shared_state
+            self.context.shared_state,
+            limit=self.params.predict_api_replay_batch_size,
         ):
             replayed = deepcopy(event)
             response = replayed.get("response")

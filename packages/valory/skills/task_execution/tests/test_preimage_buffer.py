@@ -97,7 +97,7 @@ def test_first_tick_sweeps(behaviour: Any) -> None:
     behaviour._process_preimage_buffer()
     assert len(out.sent) == 1
     assert out.sent[0].performative == KvStoreMessage.Performative.LIST_REQUEST
-    assert out.sent[0].key_prefix == "mech_preimage/"
+    assert out.sent[0].key_prefix == "mech_preimage/0xagent/"
     assert behaviour.context.shared_state[preimage.PREIMAGE_KV_IN_FLIGHT] is True
 
 
@@ -113,7 +113,7 @@ def test_flushes_queued_write_when_sweep_not_due(behaviour: Any) -> None:
     assert out.sent[0].performative == (
         KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST
     )
-    assert "mech_preimage/r1" in out.sent[0].data
+    assert "mech_preimage/0xagent/r1" in out.sent[0].data
     assert ss[preimage.PREIMAGE_INFLIGHT_WRITE] == "r1"
     assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is True
 
@@ -131,7 +131,7 @@ def test_flushes_queued_writes_before_deletes(behaviour: Any) -> None:
     assert out.sent[0].performative == (
         KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST
     )
-    assert "mech_preimage/r1" in out.sent[0].data
+    assert "mech_preimage/0xagent/r1" in out.sent[0].data
     assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []
     # the deletes are left queued for a later tick
     assert ss[preimage.PREIMAGE_DELETE_QUEUE] == ["mech_preimage/a", "mech_preimage/b"]
@@ -379,7 +379,7 @@ def test_process_buffer_resets_stuck_kv_in_flight_and_resends(
     assert out.sent[0].performative == (
         KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST
     )
-    assert "mech_preimage/r1" in out.sent[0].data
+    assert "mech_preimage/0xagent/r1" in out.sent[0].data
     assert ss[preimage.PREIMAGE_INFLIGHT_WRITE] == "r1"
     assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is True
     assert ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] > stale
@@ -536,6 +536,9 @@ def test_watchdog_counts_toward_write_attempts_and_drops_at_cap(
     behaviour.context.params.preimage_retention_enabled = True
     behaviour.context.params.preimage_max_write_attempts = 2
     ss = behaviour.context.shared_state
+    # The store has answered before: this is the per-record cap, not the
+    # no-reply circuit breaker (covered separately).
+    ss[preimage.PREIMAGE_KV_REPLY_SEEN] = True
     preimage.record_settlement(
         ss, "r1", "resp", "cid", preimage.STATUS_DELIVERED, now=1.0
     )
@@ -1228,3 +1231,93 @@ def test_list_response_final_page_prunes_parked_stamps_past_retention(
     preimage.record_stamp(ss, "recent", now=now - 10, settled_tx_hash="0x2")
     handler.handle(_list_reply({}))
     assert set(ss[preimage.PREIMAGE_PENDING_STAMPS]) == {"recent"}
+
+
+# --- per-agent namespace, no-reply circuit breaker, in-memory eviction ------
+
+
+def test_keys_and_list_prefix_are_namespaced_by_agent_address(behaviour: Any) -> None:
+    """Agents sharing a volume must not see each other's rows: keys carry the address."""
+    ss = behaviour.context.shared_state
+    behaviour.context.params.preimage_retention_enabled = True
+    out = _CaptureOutbox()
+    behaviour.context.outbox = out
+    behaviour._send_kv_list()
+    assert out.sent[0].key_prefix == "mech_preimage/0xagent/"
+    preimage.record_accept(ss, "r1", "req", now=time.time())
+    behaviour._send_kv_write("r1", ss[preimage.PREIMAGE_RECORDS]["r1"])
+    assert list(out.sent[1].data) == ["mech_preimage/0xagent/r1"]
+
+
+def _time_out_inflight_write(behaviour: Any, request_id: str) -> None:
+    """Put ``request_id`` in flight with a send time older than the watchdog timeout."""
+    ss = behaviour.context.shared_state
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    ss[preimage.PREIMAGE_INFLIGHT_OP] = preimage.OP_WRITE
+    ss[preimage.PREIMAGE_INFLIGHT_WRITE] = request_id
+    ss[preimage.PREIMAGE_INFLIGHT_SENT_AT] = time.time() - 60
+
+
+def test_retention_switches_off_after_repeated_timeouts_with_no_reply_ever(
+    behaviour: Any,
+) -> None:
+    """An agent without the kv_store connection stops queueing writes instead of growing forever."""
+    ss = behaviour.context.shared_state
+    behaviour.context.params.preimage_retention_enabled = True
+    behaviour.context.params.preimage_max_write_attempts = 3
+    behaviour.context.outbox = _CaptureOutbox()
+    ss[preimage.PREIMAGE_LAST_SWEEP] = time.time()
+    for _ in range(3):
+        preimage.record_accept(ss, "r1", "req", now=time.time())
+        _time_out_inflight_write(behaviour, "r1")
+        behaviour._process_preimage_buffer()
+    assert behaviour.context.params.preimage_retention_enabled is False
+    assert ss[preimage.PREIMAGE_RETENTION_ACTIVE] is False
+    assert ss[preimage.PREIMAGE_RECORDS] == {}
+    assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []
+    assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is False
+
+
+def test_timeouts_after_a_reply_never_trip_the_breaker(behaviour: Any) -> None:
+    """A live connection that stalls later is a retry problem, not a wiring problem."""
+    ss = behaviour.context.shared_state
+    behaviour.context.params.preimage_retention_enabled = True
+    behaviour.context.params.preimage_max_write_attempts = 2
+    behaviour.context.outbox = _CaptureOutbox()
+    ss[preimage.PREIMAGE_LAST_SWEEP] = time.time()
+    ss[preimage.PREIMAGE_KV_REPLY_SEEN] = True
+    for _ in range(4):
+        preimage.record_accept(ss, "r1", "req", now=time.time())
+        _time_out_inflight_write(behaviour, "r1")
+        behaviour._process_preimage_buffer()
+    assert behaviour.context.params.preimage_retention_enabled is True
+    assert ss[preimage.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] == 4
+
+
+def test_any_reply_marks_the_store_reachable_and_resets_the_timeout_count(
+    handler_context: Any,
+) -> None:
+    """The first reply of any kind clears the breaker's counters."""
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] = 2
+    ss[preimage.PREIMAGE_KV_IN_FLIGHT] = True
+    handler.handle(
+        SimpleNamespace(performative=KvStoreMessage.Performative.SUCCESS, message="ok")
+    )
+    assert ss[preimage.PREIMAGE_KV_REPLY_SEEN] is True
+    assert ss[preimage.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] == 0
+
+
+def test_list_response_final_page_evicts_in_memory_rows_past_the_cap(
+    handler_context: Any,
+) -> None:
+    """A hydrated row whose follow-up never completes leaves memory at the cap."""
+    handler_context.params.preimage_incomplete_cap_seconds = 100
+    handler = _drainer_handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_RECORDS]["9"] = json.loads(
+        _delivered_row("9", settled_at=time.time() - 500)
+    )
+    handler.handle(_list_reply({}))
+    assert "9" not in ss[preimage.PREIMAGE_RECORDS]

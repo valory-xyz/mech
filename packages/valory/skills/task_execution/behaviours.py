@@ -2599,6 +2599,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # DELETE), and DELETE timeouts have no counter at all.
                 inflight_op = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_OP)
                 inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
+                timeouts = (
+                    shared_state.get(
+                        preimage_buffer.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY, 0
+                    )
+                    + 1
+                )
+                shared_state[preimage_buffer.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] = (
+                    timeouts
+                )
+                if (
+                    not shared_state.get(preimage_buffer.PREIMAGE_KV_REPLY_SEEN)
+                    and timeouts >= self.params.preimage_max_write_attempts
+                ):
+                    shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
+                    shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+                    shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = None
+                    shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
+                    self._disable_retention_unreachable_store(timeouts)
+                    return
                 if inflight is not None:
                     # Mirror the ERROR-branch retry cap so a kv_store that
                     # times out instead of replying ERROR can't bypass the
@@ -2717,13 +2736,55 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._send_kv_delete(keys)
             return
 
+    def _preimage_prefix(self) -> str:
+        """Return this agent's key namespace in the preimage store.
+
+        The operator prefix is extended with the agent's own address so the
+        agents of one service can share a volume (the service deployment
+        mounts the same host directory into every agent) without seeing,
+        replaying or pruning each other's rows.
+
+        :return: the namespaced key prefix, ending in ``/``.
+        """
+        return f"{self.params.preimage_key_prefix}{self.context.agent_address}/"
+
+    def _disable_retention_unreachable_store(self, timeouts: int) -> None:
+        """Switch retention off for this process: the kv_store never answered.
+
+        Retention is on by default, but an agent whose config lacks the
+        ``valory/kv_store`` connection has nowhere to send the writes: each
+        one would sit out the watchdog timeout and the queue would grow with
+        every request. After ``preimage_max_write_attempts`` consecutive
+        timeouts with no reply of any kind since start-up, give up loudly.
+
+        :param timeouts: the consecutive timeouts observed.
+        """
+        shared_state = self.context.shared_state
+        self.context.logger.warning(
+            "Preimage retention disabled for this process: %d consecutive "
+            "kv_store requests got no reply and none ever has. Add the "
+            "valory/kv_store connection to the agent (and a persistent "
+            "volume at its store_path) or set preimage_retention_enabled "
+            "to false to silence this.",
+            timeouts,
+        )
+        self.params.preimage_retention_enabled = False
+        shared_state[preimage_buffer.PREIMAGE_RETENTION_ACTIVE] = False
+        shared_state[preimage_buffer.PREIMAGE_WRITE_QUEUE] = []
+        shared_state[preimage_buffer.PREIMAGE_DELETE_QUEUE] = []
+        shared_state[preimage_buffer.PREIMAGE_RECORDS] = {}
+        shared_state[preimage_buffer.PREIMAGE_PENDING_STAMPS] = {}
+        shared_state[preimage_buffer.PREIMAGE_PENDING_STAMPS_AT] = {}
+        shared_state[preimage_buffer.PREIMAGE_WRITE_ATTEMPTS] = {}
+        shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
+
     def _send_kv_write(self, request_id: str, record: Dict[str, Any]) -> None:
         """Upsert one preimage record into the kv_store.
 
         :param request_id: the off-chain request id (used to build the key).
         :param record: the preimage record to persist.
         """
-        key = preimage_buffer.preimage_key(self.params.preimage_key_prefix, request_id)
+        key = preimage_buffer.preimage_key(self._preimage_prefix(), request_id)
         msg, dlg = self.context.kv_store_dialogues.create(
             counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
             performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
@@ -2787,7 +2848,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         msg, dlg = self.context.kv_store_dialogues.create(
             counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
             performative=KvStoreMessage.Performative.LIST_REQUEST,
-            key_prefix=self.params.preimage_key_prefix,
+            key_prefix=self._preimage_prefix(),
             limit=self.params.preimage_list_page_size,
             cursor=cursor,
         )

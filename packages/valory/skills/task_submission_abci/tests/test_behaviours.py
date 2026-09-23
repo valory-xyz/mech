@@ -4661,106 +4661,6 @@ def _delivered_preimage_state(shared_state: Dict[str, Any]) -> None:
     shared_state[preimage.PREIMAGE_WRITE_QUEUE].clear()
 
 
-class TestHandleSubmittedTasksStampsSettlement:
-    """``handle_submitted_tasks`` stamps ``settled_tx_hash`` on this agent's off-chain ids."""
-
-    ME = "0xME"
-
-    def _make_b(
-        self, local_tasks: Optional[List[Dict[str, Any]]] = None
-    ) -> "_DummyPooling":
-        ctx = _make_full_ctx(done_tasks=list(local_tasks or []))
-        ctx.agent_address = self.ME
-        ctx.shared_state["mech_delivery_last_block_number"] = MagicMock()
-        return _DummyPooling(name="b", skill_context=ctx)
-
-    def _run(
-        self,
-        b: Any,
-        submitted_ids: List[str],
-        synced_done_tasks: Optional[List[Dict[str, Any]]] = None,
-    ) -> None:
-        mock_sd = MagicMock()
-        mock_sd.submitted_request_ids = submitted_ids
-        mock_sd.done_tasks = list(synced_done_tasks or [])
-        b._synchronized_data = mock_sd
-        with (
-            patch.object(b, "check_last_tx_status", return_value=(True, STAMP_TX_HASH)),
-            patch.object(b, "_fetch_tx_block_number", side_effect=_gen_returning(None)),
-            patch.object(b, "observe_histogram"),
-        ):
-            _run_gen(b.handle_submitted_tasks())
-
-    def _own_offchain_task(self, rid: str = STAMP_REQUEST_ID) -> Dict[str, Any]:
-        return {
-            "request_id": rid,
-            IS_OFFCHAIN: True,
-            "task_executor_address": self.ME,
-            "tool": "t",
-            "start_time": time.perf_counter(),
-        }
-
-    def test_submitted_id_gets_the_settlement_tx_hash(self) -> None:
-        """The in-memory record carries the confirmed tx hash and is re-flushed."""
-        b = self._make_b([self._own_offchain_task()])
-        _delivered_preimage_state(b.context.shared_state)
-        self._run(b, [STAMP_REQUEST_ID])
-        record = b.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
-        assert record[preimage.FIELD_SETTLED_TX_HASH] == STAMP_TX_HASH
-        assert b.context.shared_state[preimage.PREIMAGE_WRITE_QUEUE] == [
-            STAMP_REQUEST_ID
-        ]
-
-    def test_own_offchain_id_absent_locally_is_parked_for_hydrate(self) -> None:
-        """After a restart the local queue is empty; the synced copy still identifies the row."""
-        b = self._make_b()  # nothing local, as after a restart
-        preimage.init_shared_state(b.context.shared_state, retention_enabled=True)
-        self._run(
-            b, ["r-unloaded"], synced_done_tasks=[self._own_offchain_task("r-unloaded")]
-        )
-        assert b.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS] == {
-            "r-unloaded": {preimage.FIELD_SETTLED_TX_HASH: STAMP_TX_HASH}
-        }
-
-    @pytest.mark.parametrize(
-        "task",
-        [
-            {"request_id": "r-onchain", "task_executor_address": "0xME"},
-            {
-                "request_id": "r-other",
-                IS_OFFCHAIN: True,
-                "task_executor_address": "0xOTHER",
-            },
-        ],
-        ids=["onchain", "other-agents-offchain"],
-    )
-    def test_ids_without_a_row_in_this_store_are_never_stamped(
-        self, task: Dict[str, Any]
-    ) -> None:
-        """On-chain ids and other agents' off-chain ids have no row here, so nothing is parked."""
-        b = self._make_b([task])
-        preimage.init_shared_state(b.context.shared_state, retention_enabled=True)
-        self._run(b, [task["request_id"]], synced_done_tasks=[task])
-        assert b.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS] == {}
-
-    def test_synced_task_without_executor_field_still_counts(self) -> None:
-        """A synced off-chain task lacking the executor field is treated as this agent's."""
-        b = self._make_b()
-        preimage.init_shared_state(b.context.shared_state, retention_enabled=True)
-        self._run(
-            b, ["r-x"], synced_done_tasks=[{"request_id": "r-x", IS_OFFCHAIN: True}]
-        )
-        assert "r-x" in b.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS]
-
-    def test_nothing_is_stamped_when_retention_is_off(self) -> None:
-        """Ship-dark deployments never accumulate stamps or parked entries."""
-        b = self._make_b()
-        preimage.init_shared_state(b.context.shared_state)
-        self._run(b, [STAMP_REQUEST_ID])
-        assert b.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS] == {}
-        assert b.context.shared_state[preimage.PREIMAGE_RECORDS] == {}
-
-
 class TestRetryCapStampsAbandoned:
     """The tx-prep retry cap marks the dropped deliver on its preimage record."""
 
@@ -4917,7 +4817,9 @@ def test_event_request_id_resolution_order(
 class TestReplayEventsFromPreimage:
     """``_replay_events_from_preimage`` re-sends settled-but-unposted rows."""
 
-    def _make_self(self, shared_state: Dict[str, Any]) -> SimpleNamespace:
+    def _make_self(
+        self, shared_state: Dict[str, Any], batch_size: int = 50
+    ) -> SimpleNamespace:
         infos: List[str] = []
         return SimpleNamespace(
             context=SimpleNamespace(
@@ -4929,6 +4831,7 @@ class TestReplayEventsFromPreimage:
                     error=lambda *a, **k: None,
                 ),
             ),
+            params=SimpleNamespace(predict_api_replay_batch_size=batch_size),
             _infos=infos,
         )
 
@@ -4974,3 +4877,108 @@ class TestReplayEventsFromPreimage:
             == []
         )
         assert self_._infos == []
+
+
+class TestCountSettledStampsSettlement:
+    """``count_settled_from_synced_data`` stamps ``settled_tx_hash`` on own off-chain rows."""
+
+    _ME = "0xSELF"
+
+    def _make_self(self, done_tasks: List[Dict[str, Any]], included: List[str]) -> Any:
+        shared_state: Dict[str, Any] = {}
+        _delivered_preimage_state(shared_state)
+        return SimpleNamespace(
+            synchronized_data=SimpleNamespace(
+                done_tasks=done_tasks,
+                tx_included_request_ids=included,
+                final_tx_hash=STAMP_TX_HASH,
+            ),
+            context=SimpleNamespace(agent_address=self._ME, shared_state=shared_state),
+            count_settlement=MagicMock(),
+            metrics_mech_label=lambda: "0xLABEL",
+        )
+
+    def _record(self, self_: Any) -> Dict[str, Any]:
+        return self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+
+    def test_own_offchain_task_in_the_tx_is_stamped_in_the_confirming_round(
+        self,
+    ) -> None:
+        """The stamp lands as soon as the tx confirms, not a period later."""
+        task = {
+            "request_id": STAMP_REQUEST_ID,
+            "task_executor_address": self._ME,
+            IS_OFFCHAIN: True,
+        }
+        self_ = self._make_self([task], included=[STAMP_REQUEST_ID])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        assert self._record(self_)[preimage.FIELD_SETTLED_TX_HASH] == STAMP_TX_HASH
+        assert self_.context.shared_state[preimage.PREIMAGE_WRITE_QUEUE] == [
+            STAMP_REQUEST_ID
+        ]
+
+    @pytest.mark.parametrize(
+        "task, included",
+        [
+            (
+                {"request_id": STAMP_REQUEST_ID, "task_executor_address": "0xSELF"},
+                [STAMP_REQUEST_ID],
+            ),
+            (
+                {
+                    "request_id": STAMP_REQUEST_ID,
+                    "task_executor_address": "0xOTHER",
+                    IS_OFFCHAIN: True,
+                },
+                [STAMP_REQUEST_ID],
+            ),
+            (
+                {
+                    "request_id": STAMP_REQUEST_ID,
+                    "task_executor_address": "0xSELF",
+                    IS_OFFCHAIN: True,
+                },
+                [],
+            ),
+        ],
+        ids=["onchain", "other-agent", "not-in-tx"],
+    )
+    def test_other_tasks_are_not_stamped(
+        self, task: Dict[str, Any], included: List[str]
+    ) -> None:
+        """On-chain, other agents' and not-yet-settled tasks leave the record alone."""
+        self_ = self._make_self([task], included=included)
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        assert self._record(self_)[preimage.FIELD_SETTLED_TX_HASH] is None
+        assert self_.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS] == {}
+
+    def test_absent_row_parks_the_stamp(self) -> None:
+        """After a restart the row is not in memory yet; the stamp waits for hydrate."""
+        task = {
+            "request_id": "r-late",
+            "task_executor_address": self._ME,
+            IS_OFFCHAIN: True,
+        }
+        self_ = self._make_self([task], included=["r-late"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        assert self_.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS] == {
+            "r-late": {preimage.FIELD_SETTLED_TX_HASH: STAMP_TX_HASH}
+        }
+
+
+def test_replay_batch_is_capped_by_the_configured_size() -> None:
+    """Only ``predict_api_replay_batch_size`` events go out per round, oldest first."""
+    shared_state: Dict[str, Any] = {}
+    preimage.init_shared_state(shared_state, retention_enabled=True)
+    for rid, settled_at in (("c", 3.0), ("a", 1.0), ("b", 2.0)):
+        preimage.record_settlement(
+            shared_state, rid, "{}", "cid", preimage.STATUS_DELIVERED, settled_at
+        )
+        record = shared_state[preimage.PREIMAGE_RECORDS][rid]
+        record[preimage.FIELD_SETTLED_TX_HASH] = "0x" + rid
+        record[preimage.FIELD_PREDICT_API_EVENT] = {"response": {"request_id": rid}}
+    self_ = TestReplayEventsFromPreimage()._make_self(shared_state, batch_size=2)
+    events = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
+        cast(beh_mod.PostTxSettlementBehaviour, self_)
+    )
+    assert [e["response"]["request_id"] for e in events] == ["a", "b"]

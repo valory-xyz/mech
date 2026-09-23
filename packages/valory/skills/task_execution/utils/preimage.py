@@ -149,6 +149,13 @@ PREIMAGE_PENDING_STAMPS_AT = "preimage_pending_stamps_at"  # Dict[str, float]
 # Published by task_submission_abci at setup; read here to decide whether
 # ``posted_at`` is required for a delivered row to count as complete.
 PREDICT_API_WRITE_CONFIGURED = "predict_api_write_configured"  # bool
+# Circuit breaker for a missing / dead kv_store connection. ``REPLY_SEEN``
+# flips to True on the first reply of any kind; ``TIMEOUTS_SINCE_REPLY``
+# counts consecutive watchdog timeouts. When the latter reaches the write
+# retry cap and no reply has ever arrived, the behaviour switches retention
+# off for the process with a WARNING instead of timing out every write.
+PREIMAGE_KV_REPLY_SEEN = "preimage_kv_reply_seen"  # bool
+PREIMAGE_KV_TIMEOUTS_SINCE_REPLY = "preimage_kv_timeouts_since_reply"  # int
 # Row counters accumulated across the pages of one sweep walk; the handler
 # publishes them to the gauges when the final page arrives.
 PREIMAGE_SWEEP_ROW_COUNT = "preimage_sweep_row_count"  # int
@@ -195,6 +202,8 @@ def init_shared_state(
         shared_state[PREIMAGE_RETENTION_ACTIVE] = bool(retention_enabled)
     shared_state.setdefault(PREIMAGE_PENDING_STAMPS, {})
     shared_state.setdefault(PREIMAGE_PENDING_STAMPS_AT, {})
+    shared_state.setdefault(PREIMAGE_KV_REPLY_SEEN, False)
+    shared_state.setdefault(PREIMAGE_KV_TIMEOUTS_SINCE_REPLY, 0)
     shared_state.setdefault(PREIMAGE_SWEEP_ROW_COUNT, 0)
     shared_state.setdefault(PREIMAGE_SWEEP_INCOMPLETE_COUNT, 0)
     shared_state.setdefault(PREIMAGE_RECORDS, {})
@@ -676,6 +685,7 @@ def hydrate(
 
 def replayable_events(
     shared_state: Dict[str, Any],
+    limit: Optional[int] = None,
 ) -> List[Tuple[str, Dict[str, Any], str]]:
     """Return the settled-but-unposted predict-api events held in memory.
 
@@ -683,13 +693,22 @@ def replayable_events(
     happened (so the normal post-settlement path, which only POSTs the
     current round's deliveries, will never pick them up). The settlement
     behaviour POSTs them as a separate replay batch and stamps
-    ``posted_at`` on a 2xx.
+    ``posted_at`` on a 2xx. ``limit`` bounds one batch so a long
+    predict-api outage drains in chunks over successive rounds rather
+    than in one ever-growing request; oldest settled rows go first.
 
     :param shared_state: the skill's shared state dict.
+    :param limit: at most this many events; ``None`` for all of them.
     :return: ``(request_id, event, settled_tx_hash)`` triples.
     """
     out: List[Tuple[str, Dict[str, Any], str]] = []
-    for request_id, record in shared_state.get(PREIMAGE_RECORDS, {}).items():
+    records = shared_state.get(PREIMAGE_RECORDS, {})
+    ordered = sorted(
+        records.items(), key=lambda item: float(item[1].get("settled_at") or 0)
+    )
+    for request_id, record in ordered:
+        if limit is not None and len(out) >= limit:
+            break
         if record.get("settlement_status") != STATUS_DELIVERED:
             continue
         if record.get(FIELD_ABANDONED_AT) is not None:
@@ -798,3 +817,35 @@ def serialize(record: Dict[str, Any]) -> str:
     :return: the JSON string stored in kv_store.
     """
     return json.dumps(record, sort_keys=True)
+
+
+def evict_expired_records(
+    shared_state: Dict[str, Any], now: float, max_age_seconds: float
+) -> int:
+    """Drop in-memory records older than ``max_age_seconds``.
+
+    Mirrors the sweeper's incomplete cap for the in-memory copies: a row
+    hydrated for replay whose follow-up never completes (predict-api down
+    for longer than the cap, a deliver that never lands) would otherwise
+    stay in ``PREIMAGE_RECORDS`` for the life of the process. Age is
+    measured like the sweeper does, from ``settled_at`` else
+    ``accepted_at``; rows with no usable stamp are kept.
+
+    :param shared_state: the skill's shared state dict.
+    :param now: the current epoch time in seconds.
+    :param max_age_seconds: the age past which a record is dropped.
+    :return: the number of records dropped.
+    """
+    records: Dict[str, Dict[str, Any]] = shared_state.setdefault(PREIMAGE_RECORDS, {})
+    stale = [
+        request_id
+        for request_id, record in records.items()
+        if (age := _record_age(record, now)) is not None and age > max_age_seconds
+    ]
+    for request_id in stale:
+        records.pop(request_id, None)
+        shared_state.get(PREIMAGE_WRITE_ATTEMPTS, {}).pop(request_id, None)
+    queue: List[str] = shared_state.setdefault(PREIMAGE_WRITE_QUEUE, [])
+    if stale:
+        queue[:] = [request_id for request_id in queue if request_id not in stale]
+    return len(stale)

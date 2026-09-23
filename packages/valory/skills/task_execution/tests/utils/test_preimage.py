@@ -637,3 +637,34 @@ def test_replayable_events_returns_settled_unposted_rows_with_an_event() -> None
     assert preimage.replayable_events(state) == [
         ("1", {"response": {"request_id": "1"}}, "0xok")
     ]
+
+
+def test_replayable_events_honours_limit_oldest_settled_first() -> None:
+    """A limit returns the oldest settled rows and leaves the rest for the next round."""
+    state = _active_state()
+    for rid, settled_at in (("3", 300.0), ("1", 100.0), ("2", 200.0)):
+        state[preimage.PREIMAGE_RECORDS][rid] = json.loads(
+            _row(rid, 1, settled_tx_hash="0x" + rid, settled_at=settled_at)
+        )
+    assert [rid for rid, _, _ in preimage.replayable_events(state, limit=2)] == [
+        "1",
+        "2",
+    ]
+    assert len(preimage.replayable_events(state)) == 3
+
+
+def test_evict_expired_records_drops_only_rows_past_the_cap() -> None:
+    """In-memory rows older than the cap are dropped, along with their queued writes."""
+    state = _active_state()
+    now = 100_000.0
+    state[preimage.PREIMAGE_RECORDS] = {
+        "1": json.loads(_row("1", CAP + 1, now)),  # past the cap
+        "2": json.loads(_row("2", 10, now)),  # fresh
+        "3": {"request_id": "3", "settlement_status": "delivered"},  # no stamp
+    }
+    state[preimage.PREIMAGE_WRITE_QUEUE] = ["1", "2"]
+    state[preimage.PREIMAGE_WRITE_ATTEMPTS] = {"1": 2}
+    assert preimage.evict_expired_records(state, now, CAP) == 1
+    assert set(state[preimage.PREIMAGE_RECORDS]) == {"2", "3"}
+    assert state[preimage.PREIMAGE_WRITE_QUEUE] == ["2"]
+    assert state[preimage.PREIMAGE_WRITE_ATTEMPTS] == {}

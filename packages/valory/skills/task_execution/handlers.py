@@ -1012,6 +1012,10 @@ class KvStoreHandler(BaseHandler):
             )
             return
         performative = kv_msg.performative
+        # Any matched reply proves the connection is wired; clear the
+        # no-reply circuit breaker's counters.
+        shared_state[preimage_buffer.PREIMAGE_KV_REPLY_SEEN] = True
+        shared_state[preimage_buffer.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] = 0
 
         if performative == KvStoreMessage.Performative.LIST_RESPONSE:
             now = time.time()
@@ -1314,12 +1318,22 @@ class KvStoreHandler(BaseHandler):
         this bounds anything that still slips through.
         """
         shared_state = self.context.shared_state
+        now = time.time()
         dropped = preimage_buffer.prune_parked_stamps(
-            shared_state, time.time(), self.params.preimage_retention_seconds
+            shared_state, now, self.params.preimage_retention_seconds
         )
         if dropped:
             self.context.logger.info(
                 "Preimage sweep: dropped %d parked stamp(s) no row claimed.", dropped
+            )
+        evicted = preimage_buffer.evict_expired_records(
+            shared_state, now, self.params.preimage_incomplete_cap_seconds
+        )
+        if evicted:
+            self.context.logger.warning(
+                "Preimage sweep: dropped %d in-memory record(s) past the "
+                "incomplete cap with a follow-up step still missing.",
+                evicted,
             )
         labels = offchain_metric_labels(self.params)
         rows = int(shared_state.get(preimage_buffer.PREIMAGE_SWEEP_ROW_COUNT, 0))
