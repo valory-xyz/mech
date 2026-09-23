@@ -1016,7 +1016,7 @@ class KvStoreHandler(BaseHandler):
         if performative == KvStoreMessage.Performative.LIST_RESPONSE:
             now = time.time()
             page = dict(kv_msg.data)
-            require_posted = bool(self.params.use_offchain)
+            require_posted = self._require_posted()
             expired = preimage_buffer.expired_keys(
                 page,
                 now,
@@ -1092,9 +1092,7 @@ class KvStoreHandler(BaseHandler):
                     record is not None
                     and record.get("settlement_status")
                     in preimage_buffer.TERMINAL_STATUSES
-                    and preimage_buffer.is_complete(
-                        record, bool(self.params.use_offchain)
-                    )
+                    and preimage_buffer.is_complete(record, self._require_posted())
                     and inflight not in write_queue
                 ):
                     records.pop(inflight, None)
@@ -1292,9 +1290,37 @@ class KvStoreHandler(BaseHandler):
         _release_outstanding_nonce(shared_state, queued)
         return True
 
+    def _require_posted(self) -> bool:
+        """Return whether ``posted_at`` is needed for a delivered row to be complete.
+
+        The settlement skill publishes whether it will actually POST to the
+        predict-api (its own ``use_offchain`` and a non-empty events URL).
+        Before it has, fall back to this skill's ``use_offchain`` flag.
+
+        :return: ``True`` when the predict-api write is configured.
+        """
+        return bool(
+            self.context.shared_state.get(
+                preimage_buffer.PREDICT_API_WRITE_CONFIGURED,
+                self.params.use_offchain,
+            )
+        )
+
     def _publish_sweep_row_counts(self) -> None:
-        """Publish the row counters of the walk that just finished, then reset."""
+        """Publish the row counters of the walk that just finished, then reset.
+
+        Also drops parked stamps that no row claimed within the retention
+        window: the callers gate stamps to this agent's off-chain ids, and
+        this bounds anything that still slips through.
+        """
         shared_state = self.context.shared_state
+        dropped = preimage_buffer.prune_parked_stamps(
+            shared_state, time.time(), self.params.preimage_retention_seconds
+        )
+        if dropped:
+            self.context.logger.info(
+                "Preimage sweep: dropped %d parked stamp(s) no row claimed.", dropped
+            )
         labels = offchain_metric_labels(self.params)
         rows = int(shared_state.get(preimage_buffer.PREIMAGE_SWEEP_ROW_COUNT, 0))
         incomplete = int(

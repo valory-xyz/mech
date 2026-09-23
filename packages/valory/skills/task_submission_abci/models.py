@@ -20,7 +20,7 @@
 """This module contains the shared state for the abci skill of TaskSubmissionAbciApp."""
 
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Type
+from typing import Any, Dict, Optional, Type, cast
 
 from aea.exceptions import enforce
 from prometheus_client import Gauge, Histogram
@@ -41,6 +41,9 @@ from packages.valory.skills.abstract_round_abci.models import (
 )
 from packages.valory.skills.abstract_round_abci.utils import check_type
 from packages.valory.skills.task_execution.models import MechConfig
+from packages.valory.skills.task_execution.utils.preimage import (
+    PREDICT_API_WRITE_CONFIGURED,
+)
 from packages.valory.skills.task_submission_abci.rounds import TaskSubmissionAbciApp
 
 
@@ -48,6 +51,15 @@ class SharedState(BaseSharedState):
     """Keep the current shared state of the skill."""
 
     abci_app_cls: Type[AbciApp] = TaskSubmissionAbciApp
+
+    def setup(self) -> None:
+        """Set up the shared state and publish whether the predict-api write is on."""
+        super().setup()
+        params = cast(Params, self.context.params)
+        self.context.shared_state[PREDICT_API_WRITE_CONFIGURED] = bool(
+            params.use_offchain and params.predict_api_events_url
+        )
+
     # Prometheus metrics
     mech_delivery_last_block_number = Gauge(
         "mech_delivery_last_block_number", "Last observed block for a delivery"

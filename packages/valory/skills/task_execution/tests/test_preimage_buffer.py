@@ -1121,6 +1121,7 @@ def test_handler_success_keeps_delivered_record_until_complete_then_pops(
     ss = handler_context.shared_state
     ss[preimage.PREIMAGE_RETENTION_ACTIVE] = True
     preimage.record_settlement(ss, "r1", "resp", "cid", preimage.STATUS_DELIVERED, 1.0)
+    preimage.record_replay_inputs(ss, "r1", {"request_id": 1}, {"response": {}})
     handler.handle(_inflight_success(ss, "r1"))
     assert "r1" in ss[preimage.PREIMAGE_RECORDS]
     preimage.record_stamp(ss, "r1", settled_tx_hash=SETTLED_TX_HASH)
@@ -1181,3 +1182,49 @@ def test_buffer_replay_inputs_is_noop_when_retention_disabled(behaviour: Any) ->
     behaviour._buffer_replay_inputs("r1", {"request_id": 1}, None)
     assert ss[preimage.PREIMAGE_RECORDS] == {}
     assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []
+
+
+def test_handler_success_requires_post_only_when_the_write_is_configured(
+    handler_context: Any,
+) -> None:
+    """The settlement skill's published flag, not ``use_offchain``, decides if posting is required."""
+    handler_context.params.use_offchain = True
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_RETENTION_ACTIVE] = True
+    ss[preimage.PREDICT_API_WRITE_CONFIGURED] = False
+    preimage.record_settlement(ss, "r1", "resp", "cid", preimage.STATUS_DELIVERED, 1.0)
+    preimage.record_replay_inputs(ss, "r1", {"request_id": 1}, {"response": {}})
+    preimage.record_stamp(ss, "r1", settled_tx_hash=SETTLED_TX_HASH)
+    handler.handle(_inflight_success(ss, "r1"))
+    assert "r1" not in ss[preimage.PREIMAGE_RECORDS]
+
+
+def test_handler_success_keeps_settled_row_while_a_post_is_still_due(
+    handler_context: Any,
+) -> None:
+    """With the write configured, a settled but unposted row stays in memory."""
+    handler_context.params.use_offchain = False  # flag wins over the skill param
+    handler = _handler(handler_context)
+    ss = handler_context.shared_state
+    ss[preimage.PREIMAGE_RETENTION_ACTIVE] = True
+    ss[preimage.PREDICT_API_WRITE_CONFIGURED] = True
+    preimage.record_settlement(ss, "r1", "resp", "cid", preimage.STATUS_DELIVERED, 1.0)
+    preimage.record_replay_inputs(ss, "r1", {"request_id": 1}, {"response": {}})
+    preimage.record_stamp(ss, "r1", settled_tx_hash=SETTLED_TX_HASH)
+    handler.handle(_inflight_success(ss, "r1"))
+    assert "r1" in ss[preimage.PREIMAGE_RECORDS]
+
+
+def test_list_response_final_page_prunes_parked_stamps_past_retention(
+    handler_context: Any,
+) -> None:
+    """Parked stamps no row claimed within the retention window are dropped."""
+    handler_context.params.preimage_retention_seconds = 100
+    handler = _drainer_handler(handler_context)
+    ss = handler_context.shared_state
+    now = time.time()
+    preimage.record_stamp(ss, "stale", now=now - 500, settled_tx_hash="0x1")
+    preimage.record_stamp(ss, "recent", now=now - 10, settled_tx_hash="0x2")
+    handler.handle(_list_reply({}))
+    assert set(ss[preimage.PREIMAGE_PENDING_STAMPS]) == {"recent"}

@@ -83,6 +83,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 _logger = logging.getLogger(__name__)
@@ -141,6 +142,13 @@ PREIMAGE_RETENTION_ACTIVE = "preimage_retention_active"  # bool
 # restart, before the sweep hydrated it). Applied by ``hydrate`` when the
 # row is loaded from the kv_store. Dict[request_id, Dict[field, value]].
 PREIMAGE_PENDING_STAMPS = "preimage_pending_stamps"
+# Epoch seconds each parked entry was created, for ``prune_parked_stamps``.
+PREIMAGE_PENDING_STAMPS_AT = "preimage_pending_stamps_at"  # Dict[str, float]
+# True when the settlement skill will actually POST delivered events to the
+# predict-api (``use_offchain`` and a non-empty events URL on that skill).
+# Published by task_submission_abci at setup; read here to decide whether
+# ``posted_at`` is required for a delivered row to count as complete.
+PREDICT_API_WRITE_CONFIGURED = "predict_api_write_configured"  # bool
 # Row counters accumulated across the pages of one sweep walk; the handler
 # publishes them to the gauges when the final page arrives.
 PREIMAGE_SWEEP_ROW_COUNT = "preimage_sweep_row_count"  # int
@@ -186,6 +194,7 @@ def init_shared_state(
     if retention_enabled is not None:
         shared_state[PREIMAGE_RETENTION_ACTIVE] = bool(retention_enabled)
     shared_state.setdefault(PREIMAGE_PENDING_STAMPS, {})
+    shared_state.setdefault(PREIMAGE_PENDING_STAMPS_AT, {})
     shared_state.setdefault(PREIMAGE_SWEEP_ROW_COUNT, 0)
     shared_state.setdefault(PREIMAGE_SWEEP_INCOMPLETE_COUNT, 0)
     shared_state.setdefault(PREIMAGE_RECORDS, {})
@@ -375,7 +384,12 @@ def record_replay_inputs(
     return True
 
 
-def record_stamp(shared_state: Dict[str, Any], request_id: str, **stamps: Any) -> None:
+def record_stamp(
+    shared_state: Dict[str, Any],
+    request_id: str,
+    now: Optional[float] = None,
+    **stamps: Any,
+) -> None:
     """Stamp one or more follow-up steps on a record.
 
     No-op unless retention is active (``PREIMAGE_RETENTION_ACTIVE``). When
@@ -384,13 +398,16 @@ def record_stamp(shared_state: Dict[str, Any], request_id: str, **stamps: Any) -
     row), durable stamps are parked in ``PREIMAGE_PENDING_STAMPS`` and
     applied by :func:`hydrate`; ``fetched_at`` is dropped instead, because
     it is visibility only and a fetch of an already-popped row would
-    otherwise park an entry forever.
+    otherwise park an entry forever. Parked entries are timestamped so
+    :func:`prune_parked_stamps` can drop the ones no row ever claims.
 
     Stamps are write-once: an existing non-``None`` value is kept, so a
     round that re-enters (NO_MAJORITY / timeout) cannot move a stamp.
 
     :param shared_state: the skill's shared state dict.
     :param request_id: the off-chain request id.
+    :param now: the current epoch time in seconds (``time.time()`` when
+        omitted); only used to timestamp a parked entry.
     :param stamps: ``field=value`` pairs; ``field`` must be in ``STAMP_FIELDS``.
     :raises ValueError: on a field name outside ``STAMP_FIELDS``.
     """
@@ -407,9 +424,46 @@ def record_stamp(shared_state: Dict[str, Any], request_id: str, **stamps: Any) -
             slot = pending.setdefault(request_id, {})
             for field, value in durable.items():
                 slot.setdefault(field, value)
+            shared_state.setdefault(PREIMAGE_PENDING_STAMPS_AT, {}).setdefault(
+                request_id, now if now is not None else time.time()
+            )
         return
     if _apply_stamps(record, stamps):
         enqueue_write(shared_state, request_id)
+
+
+def prune_parked_stamps(
+    shared_state: Dict[str, Any], now: float, max_age_seconds: float
+) -> int:
+    """Drop parked stamps older than ``max_age_seconds``.
+
+    A parked stamp is claimed by :func:`hydrate` when its row turns up in
+    this agent's store. A stamp whose row never turns up (the id was not
+    an off-chain request of this agent, or the row was already retired)
+    would otherwise sit in memory for the life of the process. The
+    callers already gate stamps to this agent's off-chain ids; this is
+    the bound behind that gate.
+
+    :param shared_state: the skill's shared state dict.
+    :param now: the current epoch time in seconds.
+    :param max_age_seconds: how long a parked entry may wait for its row.
+    :return: the number of entries dropped.
+    """
+    pending: Dict[str, Dict[str, Any]] = shared_state.setdefault(
+        PREIMAGE_PENDING_STAMPS, {}
+    )
+    pending_at: Dict[str, float] = shared_state.setdefault(
+        PREIMAGE_PENDING_STAMPS_AT, {}
+    )
+    stale = [
+        request_id
+        for request_id in pending
+        if now - pending_at.get(request_id, now) > max_age_seconds
+    ]
+    for request_id in stale:
+        pending.pop(request_id, None)
+        pending_at.pop(request_id, None)
+    return len(stale)
 
 
 def _apply_stamps(record: Dict[str, Any], stamps: Dict[str, Any]) -> bool:
@@ -447,10 +501,15 @@ def is_complete(record: Dict[str, Any], require_posted: bool) -> bool:
     if record.get(FIELD_ABANDONED_AT) is not None:
         return True
     if record.get(FIELD_SETTLED_TX_HASH) is None:
-        return False
-    if require_posted and record.get(FIELD_POSTED_AT) is None:
-        return False
-    return True
+        # Unsettled: replayable only with a done_task to re-queue. A row
+        # without one (older schema, or replay inputs that failed to
+        # attach) can never be settled from here, so it is retired on
+        # the normal window rather than held to the cap.
+        return record.get(FIELD_DONE_TASK) is None
+    if not require_posted or record.get(FIELD_POSTED_AT) is not None:
+        return True
+    # Settled but not posted: replayable only with an event to send.
+    return record.get(FIELD_PREDICT_API_EVENT) is None
 
 
 def fetch_payload(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -559,6 +618,9 @@ def hydrate(
     pending: Dict[str, Dict[str, Any]] = shared_state.setdefault(
         PREIMAGE_PENDING_STAMPS, {}
     )
+    pending_at: Dict[str, float] = shared_state.setdefault(
+        PREIMAGE_PENDING_STAMPS_AT, {}
+    )
     fetch_payloads: List[Dict[str, Any]] = []
     replay: List[Dict[str, Any]] = []
     rows = 0
@@ -576,8 +638,8 @@ def hydrate(
         # Parked stamps are applied before the completeness check so a row
         # whose settlement landed just before the restart is not replayed.
         parked = pending.pop(request_id, None)
-        if parked:
-            _apply_stamps(record, parked)
+        pending_at.pop(request_id, None)
+        merged = bool(parked) and _apply_stamps(record, parked or {})
         complete = is_complete(record, require_posted)
         if not complete:
             incomplete_rows += 1
@@ -585,15 +647,23 @@ def hydrate(
             payload = fetch_payload(record)
             if payload is not None:
                 fetch_payloads.append(payload)
-        if complete or request_id in records:
+        if request_id in records:
+            # Live row: its follow-ups are in progress on the in-memory copy.
             continue
         if age is not None and age > incomplete_cap_seconds:
             # Past the cap: the sweeper deletes it this pass; do not replay.
             continue
-        records[request_id] = record
-        if parked:
-            # The parked stamp changed the row; persist the merge.
+        if merged:
+            # The parked stamp changed the row: load it and persist the merge
+            # even when the stamp is what completed it, or the stored row
+            # would still read incomplete on the next sweep and be replayed
+            # on top of work that already happened. A complete row is popped
+            # by the SUCCESS handler once the write lands.
+            records[request_id] = record
             enqueue_write(shared_state, request_id)
+        if complete:
+            continue
+        records[request_id] = record
         replay.append(record)
     shared_state[PREIMAGE_SWEEP_ROW_COUNT] = (
         shared_state.get(PREIMAGE_SWEEP_ROW_COUNT, 0) + rows

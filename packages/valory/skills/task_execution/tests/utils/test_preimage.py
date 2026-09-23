@@ -170,6 +170,11 @@ SETTLED_TX_HASH = "0x" + "ab" * 32
 SAMPLE_DONE_TASK = {"request_id": 1, "sender": "0xSENDER", "nonce": 7}
 SAMPLE_EVENT = {"response": {"request_id": "1", "delivery_tx_hash": None}}
 NOW = 1_000.0
+_DELIVERED_WITH_INPUTS = {
+    "settlement_status": preimage.STATUS_DELIVERED,
+    preimage.FIELD_DONE_TASK: SAMPLE_DONE_TASK,
+    preimage.FIELD_PREDICT_API_EVENT: SAMPLE_EVENT,
+}
 
 
 def _active_state() -> dict:
@@ -308,27 +313,43 @@ def test_record_stamp_rejects_unknown_field() -> None:
         ({"settlement_status": preimage.STATUS_REJECTED}, True, True),
         ({"settlement_status": preimage.STATUS_PROCESSING}, True, True),
         ({"settlement_status": None}, True, True),  # older schema / unknown
-        ({"settlement_status": preimage.STATUS_DELIVERED}, True, False),
-        ({"settlement_status": preimage.STATUS_DELIVERED}, False, False),
+        # Unsettled with a done_task to re-queue: incomplete either way.
+        ({**_DELIVERED_WITH_INPUTS}, True, False),
+        ({**_DELIVERED_WITH_INPUTS}, False, False),
+        # Unsettled without a done_task (pre-replay schema): nothing to do.
+        ({"settlement_status": preimage.STATUS_DELIVERED}, True, True),
         (
             {
                 "settlement_status": preimage.STATUS_DELIVERED,
-                preimage.FIELD_SETTLED_TX_HASH: SETTLED_TX_HASH,
+                preimage.FIELD_PREDICT_API_EVENT: SAMPLE_EVENT,
             },
+            True,
+            True,
+        ),
+        # Settled, not posted, with an event: incomplete only when a post is required.
+        (
+            {**_DELIVERED_WITH_INPUTS, preimage.FIELD_SETTLED_TX_HASH: SETTLED_TX_HASH},
             True,
             False,
         ),
         (
+            {**_DELIVERED_WITH_INPUTS, preimage.FIELD_SETTLED_TX_HASH: SETTLED_TX_HASH},
+            False,
+            True,
+        ),
+        # Settled, not posted, no event to send: complete.
+        (
             {
                 "settlement_status": preimage.STATUS_DELIVERED,
+                preimage.FIELD_DONE_TASK: SAMPLE_DONE_TASK,
                 preimage.FIELD_SETTLED_TX_HASH: SETTLED_TX_HASH,
             },
-            False,
+            True,
             True,
         ),
         (
             {
-                "settlement_status": preimage.STATUS_DELIVERED,
+                **_DELIVERED_WITH_INPUTS,
                 preimage.FIELD_SETTLED_TX_HASH: SETTLED_TX_HASH,
                 preimage.FIELD_POSTED_AT: 1,
             },
@@ -357,10 +378,28 @@ CAP = 1_000
 
 
 def _delivered_value(age: float, now: float = 100_000.0, **extra: Any) -> str:
-    """Serialize a delivered row settled ``age`` seconds before ``now``."""
-    return _value(
-        settlement_status=preimage.STATUS_DELIVERED, settled_at=now - age, **extra
-    )
+    """Serialize a delivered row with replay inputs, settled ``age`` seconds before ``now``."""
+    fields: dict = {
+        "settlement_status": preimage.STATUS_DELIVERED,
+        "settled_at": now - age,
+        preimage.FIELD_DONE_TASK: SAMPLE_DONE_TASK,
+        preimage.FIELD_PREDICT_API_EVENT: SAMPLE_EVENT,
+    }
+    fields.update(extra)
+    return _value(**fields)
+
+
+def test_expired_keys_retires_pre_replay_delivered_rows_on_the_normal_window() -> None:
+    """A delivered row from before replay inputs existed has nothing to replay."""
+    now = 100_000.0
+    data = {
+        "k/legacy": _value(
+            settlement_status=preimage.STATUS_DELIVERED, settled_at=now - RETENTION - 1
+        )
+    }
+    assert preimage.expired_keys(data, now, RETENTION, incomplete_cap_seconds=CAP) == [
+        "k/legacy"
+    ]
 
 
 def test_expired_keys_keeps_incomplete_delivered_row_past_retention() -> None:
@@ -535,11 +574,44 @@ def test_hydrate_applies_parked_stamps_before_deciding() -> None:
         "1": {preimage.FIELD_SETTLED_TX_HASH: "0x1", preimage.FIELD_POSTED_AT: 5},
         "2": {preimage.FIELD_SETTLED_TX_HASH: "0x2"},
     }
+    state[preimage.PREIMAGE_PENDING_STAMPS_AT] = {"1": 1.0, "2": 1.0}
     _, replay = _hydrate(state, {"k/1": _row("1", 10), "k/2": _row("2", 10)})
     assert [r["request_id"] for r in replay] == ["2"]
     assert replay[0][preimage.FIELD_SETTLED_TX_HASH] == "0x2"
-    assert state[preimage.PREIMAGE_WRITE_QUEUE] == ["2"]  # merged row re-flushed
+    # Both merged rows are written back, including the one the stamp completed:
+    # otherwise the stored row would still read incomplete on the next sweep.
+    assert state[preimage.PREIMAGE_WRITE_QUEUE] == ["1", "2"]
+    assert state[preimage.PREIMAGE_RECORDS]["1"][preimage.FIELD_POSTED_AT] == 5
     assert state[preimage.PREIMAGE_PENDING_STAMPS] == {}
+    assert state[preimage.PREIMAGE_PENDING_STAMPS_AT] == {}
+
+
+def test_hydrate_completed_by_parked_stamp_is_popped_after_its_write_lands() -> None:
+    """The written-back complete row is a terminal, complete record: nothing is replayed twice."""
+    state = _active_state()
+    state[preimage.PREIMAGE_PENDING_STAMPS] = {
+        "1": {preimage.FIELD_SETTLED_TX_HASH: "0x1", preimage.FIELD_POSTED_AT: 5}
+    }
+    _hydrate(state, {"k/1": _row("1", 10)})
+    record = state[preimage.PREIMAGE_RECORDS]["1"]
+    assert preimage.is_complete(record, require_posted=True) is True
+    # A second sweep sees the row already in memory and leaves it alone.
+    _, replay = _hydrate(state, {"k/1": _row("1", 10)})
+    assert replay == []
+
+
+def test_record_stamp_timestamps_parked_entries_and_prune_drops_old_ones() -> None:
+    """Parked stamps carry a timestamp and are dropped once older than the max age."""
+    state = _active_state()
+    preimage.record_stamp(state, "old", now=100.0, settled_tx_hash="0x1")
+    preimage.record_stamp(state, "new", now=900.0, settled_tx_hash="0x2")
+    preimage.record_stamp(
+        state, "old", now=950.0, posted_at=1
+    )  # keeps first stamp time
+    dropped = preimage.prune_parked_stamps(state, now=1_000.0, max_age_seconds=500)
+    assert dropped == 1
+    assert set(state[preimage.PREIMAGE_PENDING_STAMPS]) == {"new"}
+    assert set(state[preimage.PREIMAGE_PENDING_STAMPS_AT]) == {"new"}
 
 
 def test_hydrate_counts_rows_and_incomplete_rows_across_pages() -> None:

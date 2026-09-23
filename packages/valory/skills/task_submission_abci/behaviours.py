@@ -350,6 +350,34 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
             ]
         return snapshot
 
+    def _own_offchain_ids(
+        self, request_ids: List[str], local_snapshot: List[Dict[str, Any]]
+    ) -> List[str]:
+        """Return the ids in ``request_ids`` that are off-chain tasks this agent executed.
+
+        Reads the local done-task snapshot first and the consensus-backed
+        ``synchronized_data.done_tasks`` as fallback, since the local copy
+        is empty after a restart.
+
+        :param request_ids: candidate request ids (``str``).
+        :param local_snapshot: this agent's ``shared_state[DONE_TASKS]`` snapshot.
+        :return: the matching ids, as ``str``.
+        """
+        wanted = {str(rid) for rid in request_ids}
+        me = self.context.agent_address
+        own: Set[str] = set()
+        synced = self.synchronized_data.done_tasks
+        for task in list(local_snapshot) + (
+            list(synced) if isinstance(synced, list) else []
+        ):
+            rid = str(task.get("request_id"))
+            if rid not in wanted or not task.get(IS_OFFCHAIN):
+                continue
+            executor = task.get("task_executor_address")
+            if executor is None or executor == me:
+                own.add(rid)
+        return [rid for rid in request_ids if str(rid) in own]
+
     @property
     def mech_addresses(self) -> List[str]:
         """Get the addresses of the MECHs."""
@@ -501,13 +529,14 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
                 ]
         if dropped is not None:
             _discard_settling_nonce(self.context.shared_state, dropped)
-            # Mark the durable record so the drainer does not re-queue a
-            # deliver the cap already gave up on (no-op unless retention on).
-            preimage_buffer.record_stamp(
-                self.context.shared_state,
-                str(dropped.get("request_id")),
-                abandoned_at=int(time.time()),
-            )
+            if dropped.get(IS_OFFCHAIN):
+                # Mark the durable record so the drainer does not re-queue a
+                # deliver the cap already gave up on.
+                preimage_buffer.record_stamp(
+                    self.context.shared_state,
+                    str(dropped.get("request_id")),
+                    abandoned_at=int(time.time()),
+                )
             self.context.logger.warning(
                 "%s request_id=%s (sender=%s nonce=%s tool=%s) dropped after %d "
                 "periods of failed deliver simulations; the delivery will not be "
@@ -672,12 +701,14 @@ class TaskPoolingBehaviour(TaskExecutionBaseBehaviour, ABC):
             for rid in submitted_ids:
                 events_by_id.pop(rid, None)
         # Stamp the on-chain settlement on the durable preimage record so a
-        # restart never replays a deliver that already landed (no-op unless
-        # retention is on; parked if the row is not in memory yet).
-        for rid in submitted_ids:
-            preimage_buffer.record_stamp(
-                self.context.shared_state, str(rid), settled_tx_hash=tx_hash
-            )
+        # restart never replays a deliver that already landed. Only this
+        # agent's off-chain ids have a row in this agent's store; stamping
+        # anything else would park an entry no row ever claims.
+        if self.context.shared_state.get(preimage_buffer.PREIMAGE_RETENTION_ACTIVE):
+            for rid in self._own_offchain_ids(submitted_ids, shared_snapshot):
+                preimage_buffer.record_stamp(
+                    self.context.shared_state, rid, settled_tx_hash=tx_hash
+                )
         self.context.logger.info(
             f"Pruned tasks with ids {submitted_ids} from shared state; "
             f"tx_hash={tx_hash}."
@@ -2601,13 +2632,8 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 swept_request_ids=None,  # delivered has no queue-side state
             )
         if replay_events:
-            # Third independent batch: rows the drainer hydrated from the
-            # kv_store whose settlement already landed before a restart, so
-            # the delivered batch above (this round's tx only) never sees
-            # them. Each carries its own settlement tx hash from the record.
-            # Isolated from the other two for the same reason they are
-            # isolated from each other: a poison row must not cost fresh
-            # deliveries their POST.
+            # Rows settled before a restart and never posted; isolated like
+            # the other two batches.
             yield from self._post_predict_api_batch(
                 events=replay_events,
                 mech_address=mech_address,
@@ -2914,14 +2940,6 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
 
     def _replay_events_from_preimage(self) -> List[Dict[str, Any]]:
         """Return the drainer's settled-but-unposted events, tx hash stamped.
-
-        The rows come from ``shared_state[PREIMAGE_RECORDS]`` where the
-        task_execution sweep hydrated them from the kv_store after a
-        restart. Each event is deep-copied and its ``delivery_tx_hash``
-        set from the record's own settlement stamp (the settlement
-        happened in an earlier period, so this round's ``final_tx_hash``
-        does not apply). ``posted_at`` is stamped on a 2xx by
-        ``_post_predict_api_batch``.
 
         :return: an ordered list of ``MechEvent``-shaped dicts.
         """

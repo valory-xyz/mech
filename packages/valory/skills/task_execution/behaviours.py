@@ -2537,11 +2537,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     ) -> None:
         """Attach JSON copies of the done_task and event to the preimage record.
 
-        No-op unless off-chain preimage retention is enabled. The copies are
-        JSON round-tripped so later in-place mutation of the live dicts (the
-        settlement retry counters, the tx-hash enrichment) cannot leak into
-        the record, and so a non-serialisable value is caught here rather
-        than at flush time.
+        No-op unless off-chain preimage retention is enabled.
 
         :param req_id: the off-chain request id.
         :param done_task: the consensus-ready done_task dict.

@@ -8,21 +8,21 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeigjqbox54jedim246szymzbddamt3mza76lyscletaa6hgergqyci
+  behaviours.py: bafybeiaipiotm7neh474furj4kt2dhop64methkiksir75sv4mpw3xlx3a
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
-  models.py: bafybeieskkkojku7j7njx6zxt4qb3sp2n2gvni7h5iep6um74oln756z3u
+  models.py: bafybeidv644tvsvok6kqb4cnjoijlisqztnvuyvosyx2eoczmvamnmhyzy
   payloads.py: bafybeiaaelmpfuv6pvuesj7iy2nnxvgxjketigrppurto2pbsoaqjum2ba
   predict_api_events_client.py: bafybeie7yu4ygy4gnpc6yekhnhbtdgtferzzaoyzj4nhenyune7hnhswvm
   rounds.py: bafybeigl6ph55gkcme4edpj4zhyb6ksm67ssr6lmftyqzx4hnllfu4dn5y
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
   tests/conftest.py: bafybeiho3bv6tlto53y4mm5s4fgkb5eymgxo44zwv4ifxmlmrnw3bd5j5m
-  tests/test_behaviours.py: bafybeicix2iavbafgitnr7a6juvdwcny6otndotohrvuhtmmwondllgc3y
+  tests/test_behaviours.py: bafybeibl36xrjjbu657n3xp3yvggzbn2ctsmkkk2epqedjn7tmlju4vo6m
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
-  tests/test_models.py: bafybeifm6u3a7wf5u4srn6wjnduqpynlker3t2xmtwlyyehivcbbtlalry
+  tests/test_models.py: bafybeia3dojxv6suk5eoaspc2yfolpyoxywhgxg6gwgdvgly4nudg544tm
   tests/test_onchain_write_path.py: bafybeialxf5gznjrda2lop2wh75n542bi2xiwy2aw7pv4lta363b6kjt3a
   tests/test_payloads.py: bafybeiasoekzsmrqp4m6w6c35inb54qhrwhe5zixsb7oxmkrnw54uynjpe
   tests/test_predict_api_events_client.py: bafybeicw2x4bblwf7biuww2b5ddyihpmdpsedcrimbvg4wcqzfyqspq6zm
@@ -46,7 +46,7 @@ protocols:
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
-- valory/task_execution:0.1.0:bafybeibe5k6gqhkas4cikkirfvrl2p23xcbhktb4szbc2o5ak54abc7nyy
+- valory/task_execution:0.1.0:bafybeiguz7op5b2nmzxvfiegngsr5ypxbi2p3h7c7zpxfobahklgjidtgy
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
   main:
