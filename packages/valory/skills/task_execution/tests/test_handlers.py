@@ -6619,3 +6619,50 @@ def test_build_terms_link_header_is_newline_terminated_or_empty(
     assert mh._build_terms_link_header() == _TERMS_LINK_LINE + "\n"
     monkeypatch.setattr(mh.params, "mech_terms_url", "")
     assert mh._build_terms_link_header() == ""
+
+
+def test_fetch_offchain_request_info_stamps_fetched_at_on_delivered_response(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """The first successful poll stamps ``fetched_at`` on the durable record."""
+    from packages.valory.skills.task_execution.utils import preimage
+
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    ss = handler_context.shared_state
+    preimage.init_shared_state(ss, retention_enabled=True)
+    preimage.record_settlement(
+        ss, "7", '{"result": 1}', "cid", preimage.STATUS_DELIVERED, 1.0
+    )
+    ss[preimage.PREIMAGE_WRITE_QUEUE].clear()
+    ss["offchain_request_responses"]["7"] = {"request_id": "7", "status": "ok"}
+
+    fetch_msg: Any = make_http_msg({"request_id": "7"})
+    mh._handle_offchain_request_info(fetch_msg, http_dialogue)
+
+    record = ss[preimage.PREIMAGE_RECORDS]["7"]
+    assert isinstance(record[preimage.FIELD_FETCHED_AT], int)
+    assert ss[preimage.PREIMAGE_WRITE_QUEUE] == ["7"]
+
+
+def test_fetch_offchain_request_info_does_not_stamp_a_rejection(
+    handler_context: Any, http_dialogue: Any, monkeypatch: Any
+) -> None:
+    """A rejected response is served but never counted as fetched."""
+    from packages.valory.skills.task_execution.utils import preimage
+
+    mh: MechHttpHandler = MechHttpHandler(name="http", skill_context=handler_context)
+    monkeypatch.setattr(mh, "start_prometheus_server", MagicMock())
+    mh.setup()
+    ss = handler_context.shared_state
+    preimage.init_shared_state(ss, retention_enabled=True)
+    preimage.record_settlement(ss, "7", "reason", None, preimage.STATUS_REJECTED, 1.0)
+    ss[preimage.PREIMAGE_WRITE_QUEUE].clear()
+    ss["offchain_request_responses"]["7"] = {"request_id": "7", "status": "rejected"}
+
+    fetch_msg: Any = make_http_msg({"request_id": "7"})
+    mh._handle_offchain_request_info(fetch_msg, http_dialogue)
+
+    assert ss[preimage.PREIMAGE_RECORDS]["7"][preimage.FIELD_FETCHED_AT] is None
+    assert ss[preimage.PREIMAGE_WRITE_QUEUE] == []

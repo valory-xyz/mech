@@ -4637,3 +4637,409 @@ class TestContractHelpersReturnBytes:
         )
         assert isinstance(result["data"], bytes)
         assert result["data"].hex() == self._SAMPLE_ENCODE_ABI[2:]
+
+
+# ---------------------------------------------------------------------------
+# Durable preimage stamps: the settlement skill marks each follow-up step on
+# the off-chain record so a restart never replays work that already landed.
+# ---------------------------------------------------------------------------
+
+from packages.valory.skills.task_execution.utils import preimage  # noqa: E402
+
+STAMP_REQUEST_ID = "r1"
+STAMP_TX_HASH = "0x" + "cd" * 32
+STAMP_SENDER = "0xSENDER"
+STAMP_NONCE = 7
+
+
+def _delivered_preimage_state(shared_state: Dict[str, Any]) -> None:
+    """Switch retention on and seed one delivered record for ``STAMP_REQUEST_ID``."""
+    preimage.init_shared_state(shared_state, retention_enabled=True)
+    preimage.record_settlement(
+        shared_state, STAMP_REQUEST_ID, "{}", "cid", preimage.STATUS_DELIVERED, 1.0
+    )
+    shared_state[preimage.PREIMAGE_WRITE_QUEUE].clear()
+
+
+class TestRetryCapStampsAbandoned:
+    """The tx-prep retry cap marks the dropped deliver on its preimage record."""
+
+    PERIOD = 3
+
+    def _make_b(self, attempts: int, offchain: bool = True) -> "_DummyTransPrep":
+        task = {
+            "request_id": STAMP_REQUEST_ID,
+            IS_OFFCHAIN: offchain,
+            SENDER: STAMP_SENDER,
+            NONCE: STAMP_NONCE,
+            SETTLEMENT_ATTEMPTS_KEY: attempts,
+        }
+        ctx = _make_full_ctx(done_tasks=[task])
+        ctx.shared_state[SETTLING_NONCES_BY_SENDER] = {STAMP_SENDER: {STAMP_NONCE}}
+        _delivered_preimage_state(ctx.shared_state)
+        return _DummyTransPrep(name="b", skill_context=ctx)
+
+    def _skip(self, b: Any) -> None:
+        with patch.object(b, "count_settlement"):
+            b.note_settlement_skipped(
+                [STAMP_REQUEST_ID], SOURCE_OFFCHAIN, "0xMECH", self.PERIOD
+            )
+
+    def test_dropped_task_is_stamped_abandoned(self) -> None:
+        """Reaching the cap stamps ``abandoned_at`` so the drainer never re-queues it."""
+        b = self._make_b(attempts=MAX_SETTLEMENT_ATTEMPTS - 1)
+        self._skip(b)
+        record = b.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+        assert b.context.shared_state[DONE_TASKS] == []
+        assert isinstance(record[preimage.FIELD_ABANDONED_AT], int)
+        assert preimage.is_complete(record, require_posted=True) is True
+
+    def test_onchain_drop_parks_nothing(self) -> None:
+        """An on-chain task has no preimage row, so its drop never parks a stamp."""
+        b = self._make_b(attempts=MAX_SETTLEMENT_ATTEMPTS - 1, offchain=False)
+        b.context.shared_state[preimage.PREIMAGE_RECORDS].clear()
+        self._skip(b)
+        assert b.context.shared_state[DONE_TASKS] == []
+        assert b.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS] == {}
+
+    def test_retried_task_is_not_stamped(self) -> None:
+        """Below the cap the task stays queued and the record stays replayable."""
+        b = self._make_b(attempts=0)
+        self._skip(b)
+        record = b.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+        assert len(b.context.shared_state[DONE_TASKS]) == 1
+        assert record[preimage.FIELD_ABANDONED_AT] is None
+
+
+class TestPostPredictApiBatchStampsPosted:
+    """A 2xx on the delivered / replay batch stamps ``posted_at`` per event."""
+
+    CHAIN_ID = 100
+
+    @staticmethod
+    def _event(request_id: str) -> Dict[str, Any]:
+        return {
+            "request": {"request_id": request_id, "chain_id": 100},
+            "response": {"request_id": request_id, "delivery_tx_hash": None},
+        }
+
+    def _make_self(self, status_code: int) -> SimpleNamespace:
+        shared_state: Dict[str, Any] = {}
+        _delivered_preimage_state(shared_state)
+
+        def _get_signature(*_a: Any, **_k: Any) -> Generator[None, None, str]:
+            if False:  # pragma: no cover - generator shape only
+                yield None
+            return "0x" + "ab" * 65
+
+        def _do_request(*_a: Any, **_k: Any) -> Generator[None, None, Any]:
+            if False:  # pragma: no cover - generator shape only
+                yield None
+            return SimpleNamespace(status_code=status_code, body=b"{}")
+
+        self_ = SimpleNamespace(
+            context=SimpleNamespace(
+                shared_state=shared_state,
+                logger=SimpleNamespace(
+                    info=lambda *a, **k: None,
+                    warning=lambda *a, **k: None,
+                    error=lambda *a, **k: None,
+                    debug=lambda *a, **k: None,
+                ),
+                agent_address="0xAGENT",
+            ),
+            params=SimpleNamespace(predict_api_events_timeout_seconds=5.0),
+            get_signature=_get_signature,
+            _do_request=_do_request,
+            _build_http_request_message=lambda **_k: (object(), object()),
+            _drop_swept_from_pending=lambda _ids: None,
+        )
+        # Bind the real isolation helper so the unbound-method call resolves.
+        self_._isolate_rejected_replay = lambda events, status: (
+            beh_mod.PostTxSettlementBehaviour._isolate_rejected_replay(
+                cast(beh_mod.PostTxSettlementBehaviour, self_), events, status
+            )
+        )
+        return self_
+
+    def _post(
+        self,
+        self_: SimpleNamespace,
+        batch_label: str,
+        events: Optional[List[Dict[str, Any]]] = None,
+    ) -> None:
+        gen = beh_mod.PostTxSettlementBehaviour._post_predict_api_batch(
+            cast(beh_mod.PostTxSettlementBehaviour, self_),
+            events=events if events is not None else [self._event(STAMP_REQUEST_ID)],
+            mech_address="0x" + "11" * 20,  # EIP-712 encoder needs real addresses
+            verifying_contract="0x" + "22" * 20,
+            predict_api_url="https://example.invalid/events",
+            batch_label=batch_label,
+            swept_request_ids=None,
+        )
+        _run_gen(gen)
+
+    @pytest.mark.parametrize(
+        "batch_label", [beh_mod.BATCH_LABEL_DELIVERED, beh_mod.BATCH_LABEL_REPLAY]
+    )
+    def test_2xx_stamps_posted_at(self, batch_label: str) -> None:
+        """Delivered and replay batches stamp the record on success."""
+        self_ = self._make_self(status_code=200)
+        self._post(self_, batch_label)
+        record = self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+        assert isinstance(record[preimage.FIELD_POSTED_AT], int)
+        assert self_.context.shared_state[preimage.PREIMAGE_WRITE_QUEUE] == [
+            STAMP_REQUEST_ID
+        ]
+
+    def test_sweep_batch_never_stamps(self) -> None:
+        """Request-only sweep events are not deliveries; no posted stamp."""
+        self_ = self._make_self(status_code=200)
+        self._post(self_, beh_mod.BATCH_LABEL_SWEEP)
+        record = self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+        assert record[preimage.FIELD_POSTED_AT] is None
+
+    def test_4xx_on_a_multi_event_replay_shrinks_the_next_batch(self) -> None:
+        """The server does not say which event it refused, so isolate by shrinking."""
+        self_ = self._make_self(status_code=422)
+        self._post(
+            self_, beh_mod.BATCH_LABEL_REPLAY, [self._event("a"), self._event("b")]
+        )
+        ss = self_.context.shared_state
+        assert ss[beh_mod.PREDICT_API_REPLAY_SHRINK] is True
+        assert (
+            ss[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID][preimage.FIELD_ABANDONED_AT]
+            is None
+        )
+
+    def test_4xx_on_a_single_event_replay_marks_that_row_abandoned(self) -> None:
+        """A refused one-event batch identifies the culprit; it stops blocking newer rows."""
+        self_ = self._make_self(status_code=422)
+        self._post(self_, beh_mod.BATCH_LABEL_REPLAY)
+        record = self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+        assert isinstance(record[preimage.FIELD_ABANDONED_AT], int)
+        assert preimage.is_complete(record, require_posted=True) is True
+
+    def test_2xx_on_replay_clears_the_shrink_flag(self) -> None:
+        """Once a replay batch lands, the batch size goes back to the configured value."""
+        self_ = self._make_self(status_code=200)
+        self_.context.shared_state[beh_mod.PREDICT_API_REPLAY_SHRINK] = True
+        self._post(self_, beh_mod.BATCH_LABEL_REPLAY)
+        assert beh_mod.PREDICT_API_REPLAY_SHRINK not in self_.context.shared_state
+
+    @pytest.mark.parametrize(
+        "batch_label, status_code",
+        [
+            (beh_mod.BATCH_LABEL_REPLAY, 503),  # retryable: no isolation
+            (beh_mod.BATCH_LABEL_DELIVERED, 422),  # delivered batch is not replayed
+        ],
+    )
+    def test_other_failures_do_not_isolate(
+        self, batch_label: str, status_code: int
+    ) -> None:
+        """Only a 4xx on the replay batch triggers isolation."""
+        self_ = self._make_self(status_code=status_code)
+        self._post(self_, batch_label, [self._event("a"), self._event("b")])
+        assert beh_mod.PREDICT_API_REPLAY_SHRINK not in self_.context.shared_state
+
+    @pytest.mark.parametrize("status_code", [500, 422, 302])
+    def test_non_2xx_never_stamps(self, status_code: int) -> None:
+        """A rejected or failed POST leaves the record replayable."""
+        self_ = self._make_self(status_code=status_code)
+        self._post(self_, beh_mod.BATCH_LABEL_DELIVERED)
+        record = self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+        assert record[preimage.FIELD_POSTED_AT] is None
+        assert self_.context.shared_state[preimage.PREIMAGE_WRITE_QUEUE] == []
+
+
+@pytest.mark.parametrize(
+    "event, expected",
+    [
+        ({"request_id": 5, "response": {"request_id": "9"}}, "5"),
+        ({"response": {"request_id": 9}}, "9"),
+        ({"request": {"request_id": "3"}, "response": "not-a-dict"}, "3"),
+        ({"request": "not-a-dict", "response": {}}, None),
+        ({}, None),
+    ],
+)
+def test_event_request_id_resolution_order(
+    event: Dict[str, Any], expected: Any
+) -> None:
+    """Top-level id wins, then ``response``, then ``request``; non-dicts are skipped."""
+    assert beh_mod._event_request_id(event) == expected
+
+
+class TestReplayEventsFromPreimage:
+    """``_replay_events_from_preimage`` re-sends settled-but-unposted rows."""
+
+    def _make_self(
+        self, shared_state: Dict[str, Any], batch_size: int = 50
+    ) -> SimpleNamespace:
+        infos: List[str] = []
+        return SimpleNamespace(
+            context=SimpleNamespace(
+                shared_state=shared_state,
+                logger=SimpleNamespace(
+                    info=lambda msg, *a, **k: infos.append(msg % a if a else msg),
+                    warning=lambda *a, **k: None,
+                    debug=lambda *a, **k: None,
+                    error=lambda *a, **k: None,
+                ),
+            ),
+            params=SimpleNamespace(predict_api_replay_batch_size=batch_size),
+            _infos=infos,
+        )
+
+    def test_events_are_copied_and_stamped_with_their_own_tx_hash(self) -> None:
+        """Each replayed event carries the record's settlement hash; the record is untouched."""
+        shared_state: Dict[str, Any] = {}
+        _delivered_preimage_state(shared_state)
+        record = shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+        record[preimage.FIELD_SETTLED_TX_HASH] = STAMP_TX_HASH
+        record[preimage.FIELD_PREDICT_API_EVENT] = {
+            "response": {"request_id": STAMP_REQUEST_ID, "delivery_tx_hash": None}
+        }
+        self_ = self._make_self(shared_state)
+        events = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
+            cast(beh_mod.PostTxSettlementBehaviour, self_)
+        )
+        assert events == [
+            {
+                "response": {
+                    "request_id": STAMP_REQUEST_ID,
+                    "delivery_tx_hash": STAMP_TX_HASH,
+                }
+            }
+        ]
+        assert (
+            record[preimage.FIELD_PREDICT_API_EVENT]["response"]["delivery_tx_hash"]
+            is None
+        )
+        assert self_._infos == [
+            "predict-api replay: 1 settled-but-unposted event(s) recovered from "
+            "the preimage store."
+        ]
+
+    def test_no_rows_means_no_events_and_no_log(self) -> None:
+        """An empty store is a quiet no-op."""
+        shared_state: Dict[str, Any] = {}
+        preimage.init_shared_state(shared_state, retention_enabled=True)
+        self_ = self._make_self(shared_state)
+        assert (
+            beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
+                cast(beh_mod.PostTxSettlementBehaviour, self_)
+            )
+            == []
+        )
+        assert self_._infos == []
+
+
+class TestCountSettledStampsSettlement:
+    """``count_settled_from_synced_data`` stamps ``settled_tx_hash`` on own off-chain rows."""
+
+    _ME = "0xSELF"
+
+    def _make_self(self, done_tasks: List[Dict[str, Any]], included: List[str]) -> Any:
+        shared_state: Dict[str, Any] = {}
+        _delivered_preimage_state(shared_state)
+        return SimpleNamespace(
+            synchronized_data=SimpleNamespace(
+                done_tasks=done_tasks,
+                tx_included_request_ids=included,
+                final_tx_hash=STAMP_TX_HASH,
+            ),
+            context=SimpleNamespace(agent_address=self._ME, shared_state=shared_state),
+            count_settlement=MagicMock(),
+            metrics_mech_label=lambda: "0xLABEL",
+        )
+
+    def _record(self, self_: Any) -> Dict[str, Any]:
+        return self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
+
+    def test_own_offchain_task_in_the_tx_is_stamped_in_the_confirming_round(
+        self,
+    ) -> None:
+        """The stamp lands as soon as the tx confirms, not a period later."""
+        task = {
+            "request_id": STAMP_REQUEST_ID,
+            "task_executor_address": self._ME,
+            IS_OFFCHAIN: True,
+        }
+        self_ = self._make_self([task], included=[STAMP_REQUEST_ID])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        assert self._record(self_)[preimage.FIELD_SETTLED_TX_HASH] == STAMP_TX_HASH
+        assert self_.context.shared_state[preimage.PREIMAGE_WRITE_QUEUE] == [
+            STAMP_REQUEST_ID
+        ]
+
+    @pytest.mark.parametrize(
+        "task, included",
+        [
+            (
+                {"request_id": STAMP_REQUEST_ID, "task_executor_address": "0xSELF"},
+                [STAMP_REQUEST_ID],
+            ),
+            (
+                {
+                    "request_id": STAMP_REQUEST_ID,
+                    "task_executor_address": "0xOTHER",
+                    IS_OFFCHAIN: True,
+                },
+                [STAMP_REQUEST_ID],
+            ),
+            (
+                {
+                    "request_id": STAMP_REQUEST_ID,
+                    "task_executor_address": "0xSELF",
+                    IS_OFFCHAIN: True,
+                },
+                [],
+            ),
+        ],
+        ids=["onchain", "other-agent", "not-in-tx"],
+    )
+    def test_other_tasks_are_not_stamped(
+        self, task: Dict[str, Any], included: List[str]
+    ) -> None:
+        """On-chain, other agents' and not-yet-settled tasks leave the record alone."""
+        self_ = self._make_self([task], included=included)
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        assert self._record(self_)[preimage.FIELD_SETTLED_TX_HASH] is None
+        assert self_.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS] == {}
+
+    def test_absent_row_parks_the_stamp(self) -> None:
+        """After a restart the row is not in memory yet; the stamp waits for hydrate."""
+        task = {
+            "request_id": "r-late",
+            "task_executor_address": self._ME,
+            IS_OFFCHAIN: True,
+        }
+        self_ = self._make_self([task], included=["r-late"])
+        beh_mod.PostTxSettlementBehaviour.count_settled_from_synced_data(self_)
+        assert self_.context.shared_state[preimage.PREIMAGE_PENDING_STAMPS] == {
+            "r-late": {preimage.FIELD_SETTLED_TX_HASH: STAMP_TX_HASH}
+        }
+
+
+def test_replay_batch_is_capped_by_the_configured_size() -> None:
+    """Only ``predict_api_replay_batch_size`` events go out per round, oldest first."""
+    shared_state: Dict[str, Any] = {}
+    preimage.init_shared_state(shared_state, retention_enabled=True)
+    for rid, settled_at in (("c", 3.0), ("a", 1.0), ("b", 2.0)):
+        preimage.record_settlement(
+            shared_state, rid, "{}", "cid", preimage.STATUS_DELIVERED, settled_at
+        )
+        record = shared_state[preimage.PREIMAGE_RECORDS][rid]
+        record[preimage.FIELD_SETTLED_TX_HASH] = "0x" + rid
+        record[preimage.FIELD_PREDICT_API_EVENT] = {"response": {"request_id": rid}}
+    self_ = TestReplayEventsFromPreimage()._make_self(shared_state, batch_size=2)
+    events = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
+        cast(beh_mod.PostTxSettlementBehaviour, self_)
+    )
+    assert [e["response"]["request_id"] for e in events] == ["a", "b"]
+    # After a rejected replay batch the next one is a single event.
+    shared_state[beh_mod.PREDICT_API_REPLAY_SHRINK] = True
+    events = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
+        cast(beh_mod.PostTxSettlementBehaviour, self_)
+    )
+    assert [e["response"]["request_id"] for e in events] == ["a"]

@@ -81,6 +81,7 @@ from packages.valory.skills.task_execution.models import (
     metrics_mech_address,
     offchain_metric_labels,
 )
+from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import (
@@ -178,6 +179,18 @@ mech_predict_api_events_total = Counter(
     "predict-api analytics-write batch outcomes",
     labelnames=["batch_label", "outcome"],
 )
+# ``batch_label`` values. ``delivered`` is this round's settled deliveries,
+# ``sweep`` the request-only events for on-chain tasks that aged out of the
+# pending queue, ``replay`` the drainer's rows (settled before a restart,
+# never posted) re-sent from the durable preimage store.
+BATCH_LABEL_DELIVERED = "delivered"
+BATCH_LABEL_SWEEP = "sweep"
+BATCH_LABEL_REPLAY = "replay"
+# Set after the server rejects a replay batch with a 4xx: the next replay
+# batch is a single event, so the rejected row is isolated within a few
+# rounds (a 4xx on a one-event batch marks that row abandoned) instead of
+# the same oldest batch blocking every newer replay. Cleared on a 2xx.
+PREDICT_API_REPLAY_SHRINK = "predict_api_replay_shrink"
 
 # ``SettlementOutcome`` is a ``Literal`` so a misspelt outcome fails mypy
 # instead of silently minting a new label value.
@@ -493,6 +506,14 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
                 ]
         if dropped is not None:
             _discard_settling_nonce(self.context.shared_state, dropped)
+            if dropped.get(IS_OFFCHAIN):
+                # Mark the durable record so the drainer does not re-queue a
+                # deliver the cap already gave up on.
+                preimage_buffer.record_stamp(
+                    self.context.shared_state,
+                    str(dropped.get("request_id")),
+                    abandoned_at=int(time.time()),
+                )
             self.context.logger.warning(
                 "%s request_id=%s (sender=%s nonce=%s tool=%s) dropped after %d "
                 "periods of failed deliver simulations; the delivery will not be "
@@ -510,6 +531,35 @@ class TaskExecutionBaseBehaviour(BaseBehaviour, ABC):
         self.count_settlement(
             SETTLEMENT_OUTCOME_SIM_FAILED, source, mech_address, retried
         )
+
+
+def _event_request_id(event: Dict[str, Any]) -> Optional[str]:
+    """Return the ``str`` request id a predict-api event is keyed on.
+
+    ``_build_predict_api_event`` carries it under ``response.request_id``
+    (and ``request.request_id``); a request-only sweep event carries the
+    same shape. A top-level ``request_id`` is honoured first for forward
+    compatibility.
+
+    :param event: a ``MechEvent``-shaped dict.
+    :return: the request id as ``str``, or ``None`` when absent.
+    """
+    for candidate in (
+        event.get("request_id"),
+        (
+            (event.get("response") or {}).get("request_id")
+            if isinstance(event.get("response"), dict)
+            else None
+        ),
+        (
+            (event.get("request") or {}).get("request_id")
+            if isinstance(event.get("request"), dict)
+            else None
+        ),
+    ):
+        if candidate is not None:
+            return str(candidate)
+    return None
 
 
 def _nonce_order(task: Dict[str, Any]) -> int:
@@ -2353,6 +2403,16 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 source,
                 str(task.get(MECH_ADDRESS) or self.metrics_mech_label()),
             )
+            if task.get(IS_OFFCHAIN):
+                # Stamp the settlement on the durable preimage record now,
+                # in the round that confirmed the tx, so a restart before
+                # the next period's prune cannot replay this deliver. Only
+                # this agent's off-chain rows exist in this agent's store.
+                preimage_buffer.record_stamp(
+                    self.context.shared_state,
+                    str(task.get("request_id")),
+                    settled_tx_hash=tx_hash,
+                )
 
     # Note on the two ``mech_events_chain_id`` params: task_execution's
     # copy powers delivered events; task_submission_abci's copy powers
@@ -2413,13 +2473,14 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # once the predict-api POST has confirmed a 2xx (or a terminal 4xx —
         # see ``_post_predict_api_batch`` for the poison-drop rationale).
         request_only_events, swept_request_ids = self._sweep_pending_undelivered()
-        if not delivered_events and not request_only_events:
+        replay_events = self._replay_events_from_preimage()
+        if not delivered_events and not request_only_events and not replay_events:
             self.context.logger.debug(
                 "No local predict_api_event entries in "
                 "shared_state[PREDICT_API_EVENTS] matched this round's "
-                "done_tasks (executed by other agents or absent) and no "
-                "swept pending tasks; post-tx predict-api write is a "
-                "no-op for this round."
+                "done_tasks (executed by other agents or absent), no "
+                "swept pending tasks and no drainer replay rows; post-tx "
+                "predict-api write is a no-op for this round."
             )
             return
 
@@ -2545,8 +2606,19 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 mech_address=mech_address,
                 verifying_contract=verifying_contract,
                 predict_api_url=predict_api_url,
-                batch_label="delivered",
+                batch_label=BATCH_LABEL_DELIVERED,
                 swept_request_ids=None,  # delivered has no queue-side state
+            )
+        if replay_events:
+            # Rows settled before a restart and never posted; isolated like
+            # the other two batches.
+            yield from self._post_predict_api_batch(
+                events=replay_events,
+                mech_address=mech_address,
+                verifying_contract=verifying_contract,
+                predict_api_url=predict_api_url,
+                batch_label=BATCH_LABEL_REPLAY,
+                swept_request_ids=None,
             )
         if request_only_events:
             yield from self._post_predict_api_batch(
@@ -2554,7 +2626,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 mech_address=mech_address,
                 verifying_contract=verifying_contract,
                 predict_api_url=predict_api_url,
-                batch_label="sweep",
+                batch_label=BATCH_LABEL_SWEEP,
                 swept_request_ids=swept_request_ids,
             )
 
@@ -2772,6 +2844,21 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             mech_predict_api_events_total.labels(
                 batch_label=batch_label, outcome="ok"
             ).inc()
+            if batch_label == BATCH_LABEL_REPLAY:
+                self.context.shared_state.pop(PREDICT_API_REPLAY_SHRINK, None)
+            if batch_label in (BATCH_LABEL_DELIVERED, BATCH_LABEL_REPLAY):
+                # Stamp the predict-api row on each durable preimage record
+                # (no-op unless retention is on) so the sweeper can retire
+                # the row and the drainer never re-POSTs it.
+                posted_at = int(time.time())
+                for event in events:
+                    request_id = _event_request_id(event)
+                    if request_id is not None:
+                        preimage_buffer.record_stamp(
+                            self.context.shared_state,
+                            request_id,
+                            posted_at=posted_at,
+                        )
             if swept_request_ids:
                 # Server confirmed the batch; drop the swept undelivered
                 # tasks from the pending queue now. Deferring to a
@@ -2830,6 +2917,71 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         mech_predict_api_events_total.labels(
             batch_label=batch_label, outcome="http_error"
         ).inc()
+        if (
+            batch_label == BATCH_LABEL_REPLAY
+            and status is not None
+            and 400 <= status < 500
+        ):
+            self._isolate_rejected_replay(events, status)
+
+    def _isolate_rejected_replay(
+        self, events: List[Dict[str, Any]], status: int
+    ) -> None:
+        """Keep one rejected replay row from blocking every newer one.
+
+        The server writes a batch all-or-nothing, so a 4xx does not say
+        which event it refused. Shrink the next replay batch to one event;
+        once a single-event batch is refused, that row is the culprit and is
+        marked abandoned so it retires on the normal window.
+
+        :param events: the rejected batch.
+        :param status: the HTTP status the server returned.
+        """
+        shared_state = self.context.shared_state
+        if len(events) > 1:
+            shared_state[PREDICT_API_REPLAY_SHRINK] = True
+            return
+        request_id = _event_request_id(events[0]) if events else None
+        if request_id is None:
+            return
+        self.context.logger.warning(
+            "predict-api rejected the replay of request_id=%s on its own "
+            "(status=%s); marking the row abandoned so it stops blocking "
+            "newer replays.",
+            request_id,
+            status,
+        )
+        preimage_buffer.record_stamp(
+            shared_state, request_id, abandoned_at=int(time.time())
+        )
+
+    def _replay_events_from_preimage(self) -> List[Dict[str, Any]]:
+        """Return the drainer's settled-but-unposted events, tx hash stamped.
+
+        :return: an ordered list of ``MechEvent``-shaped dicts.
+        """
+        events: List[Dict[str, Any]] = []
+        limit = (
+            1
+            if self.context.shared_state.get(PREDICT_API_REPLAY_SHRINK)
+            else self.params.predict_api_replay_batch_size
+        )
+        for _, event, tx_hash in preimage_buffer.replayable_events(
+            self.context.shared_state,
+            limit=limit,
+        ):
+            replayed = deepcopy(event)
+            response = replayed.get("response")
+            if isinstance(response, dict):
+                response["delivery_tx_hash"] = tx_hash
+            events.append(replayed)
+        if events:
+            self.context.logger.info(
+                "predict-api replay: %d settled-but-unposted event(s) "
+                "recovered from the preimage store.",
+                len(events),
+            )
+        return events
 
     def _extract_offchain_events(self) -> List[Dict[str, Any]]:
         """Return every locally-cached ``predict_api_event`` for the round's settled tasks.

@@ -191,10 +191,11 @@ def params_stub() -> SimpleNamespace:
         # default-off gate is covered by a dedicated test.
         use_offchain=True,
         mech_terms_url="https://www.valory.xyz/terms/mechs",
-        # Preimage buffer off by default here; the dedicated preimage tests flip
-        # it on, matching the ship-dark default.
+        # Preimage buffer off in the shared stub so unrelated tests never touch
+        # the kv_store path; the dedicated preimage tests flip it on.
         preimage_retention_enabled=False,
         preimage_retention_seconds=86400,
+        preimage_incomplete_cap_seconds=7 * 86400,
         preimage_sweep_interval=3600.0,
         preimage_key_prefix="mech_preimage/",
         preimage_list_page_size=100,

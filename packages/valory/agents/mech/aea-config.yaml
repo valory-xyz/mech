@@ -11,6 +11,7 @@ connections:
 - valory/http_client:0.23.0:bafybeihel6sg2yayxu7lqygaswdgciaxpqrgsbl5rwx74c6znu5qz2edd4
 - valory/http_server:0.22.0:bafybeihs6dufyaa5l4uorplzx3wiyna5qlq2x43tmyl3yonkl265vspdle
 - valory/ipfs:0.1.0:bafybeidob3tcdebjbm4ovwqoz4v2egf7nvoui3hu5on4o3apfchr6rpwwa
+- valory/kv_store:0.1.0:bafybeib2tvoui6kndvrd2gpvs55rizpjee7mqjtjsfbr6fdp5hxslh6gd4
 - valory/ledger:0.19.0:bafybeicynh5l5f5f5jpx72qwzis7jvmxk5p4eqltk32uxbj2pgu2x4rqz4
 - valory/p2p_libp2p_client:0.1.0:bafybeielj3jso3wvrarp5n5rq7llpw4vgxybqiyensgjalb5ubfiawwhhu
 - valory/websocket_client:0.1.0:bafybeid4cnbjpmzcsw3usg7umufgqyod2u3xfw5uso3vukt3n5hfuxvdea
@@ -33,6 +34,7 @@ protocols:
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 - valory/ipfs:0.1.0:bafybeibz5xqhxdbuvba7nuw2w6ardjermtcoqercopnypdplnaekf3joam
+- valory/kv_store:0.1.0:bafybeidlfrgv5rc7m7kj3j6u6umogmpy5bgcdzqtnsy3v75wn3likvyt6m
 - valory/ledger_api:1.0.0:bafybeiecq56phjfws36rgrefw6niyo4ezesloodsfis647mpm5ygqo4ysi
 - valory/tendermint:0.1.0:bafybeihzb7e32f7jcrzvubilqaxzmyk7ea6ss3pg3tliatdlrr76qeknyq
 - valory/websocket_client:0.1.0:bafybeig6omutaqt5rbvidju4zc7pwwdi6tkagwu3dwiirosadyoo534v3q
@@ -41,11 +43,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
 - valory/delivery_rate_abci:0.1.0:bafybeifjiazvf3qhr2264i55u4tlvmyf6ztgak2ndqolujt4kw6jiy7l3m
-- valory/mech_abci:0.1.0:bafybeigpn3tp4aaizeofa3kyyggjxkuikpwkokbd2rsojh3izcw4axzy3y
+- valory/mech_abci:0.1.0:bafybeihitia7ea3k6xai4a3iybbpv2xovuypmgilqnr5mooaj6pc4iwr3y
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeiefkyqpqejppw7r6ux2syowx3273wjj4imamvxcz6qpogvoahnbmq
-- valory/task_submission_abci:0.1.0:bafybeigkgdnvw4bclz7qinskzn6f3yyrkj53f6faida6nhzoovzhuyee4e
+- valory/task_execution:0.1.0:bafybeigxzvqhdi3x5dw634q3suuyompo5534hwu4vniyi645r4v3yrptmu
+- valory/task_submission_abci:0.1.0:bafybeibrvvfbiyktreelkqaxrivr4mwry5w7hihasy2g55uetmpdz5sqz4
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m
@@ -240,6 +242,10 @@ models:
       gnosis_ledger_rpc: ${str:http://localhost:8545}
       polygon_ledger_rpc: ${str:http://localhost:8545}
       base_ledger_rpc: ${str:http://localhost:8545}
+      preimage_retention_enabled: ${bool:true}
+      preimage_retention_seconds: ${int:86400}
+      preimage_incomplete_cap_seconds: ${int:604800}
+      preimage_sweep_interval: ${float:3600.0}
       optimism_ledger_rpc: ${str:http://localhost:8545}
       robinhood_ledger_rpc: ${str:http://localhost:8545}
 ---
@@ -279,4 +285,10 @@ config:
   host: ${str:0.0.0.0}
   target_skill_id: valory/mech_abci:0.1.0
   port: ${int:8000}
+is_abstract: false
+---
+public_id: valory/kv_store:0.1.0
+type: connection
+config:
+  store_path: ${STORE_PATH:str:/data/mech_preimages}
 is_abstract: false

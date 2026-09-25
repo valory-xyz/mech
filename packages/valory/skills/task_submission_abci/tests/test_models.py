@@ -197,3 +197,36 @@ class TestParamsInit:
             p = Params.__new__(Params)
             Params.__init__(p, **kwargs)
         mock_super.assert_called_once()
+
+
+def test_shared_state_setup_publishes_whether_the_predict_api_write_is_configured(
+    monkeypatch: Any,
+) -> None:
+    """The flag is on only when ``use_offchain`` is set and an events URL exists."""
+    from types import SimpleNamespace
+
+    from packages.valory.skills.task_execution.utils.preimage import (
+        PREDICT_API_WRITE_CONFIGURED,
+    )
+    from packages.valory.skills.task_submission_abci import models as models_mod
+
+    monkeypatch.setattr(models_mod.BaseSharedState, "setup", lambda self: None)
+    cases = [
+        (True, "https://x/events", True),
+        (True, "", False),
+        (False, "https://x/events", False),
+    ]
+    for use_offchain, url, expected in cases:
+        ctx = SimpleNamespace(
+            params=SimpleNamespace(
+                use_offchain=use_offchain, predict_api_events_url=url
+            ),
+            shared_state={},
+            is_abstract_component=False,
+        )
+        state = models_mod.SharedState(name="state", skill_context=ctx)
+        state.setup()
+        assert ctx.shared_state[PREDICT_API_WRITE_CONFIGURED] is expected, (
+            use_offchain,
+            url,
+        )

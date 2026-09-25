@@ -322,3 +322,38 @@ def test_params_mech_terms_url_absent_means_none_advertised(
     params_kwargs.pop("mech_terms_url", None)
     p: m.Params = m.Params(name="params", **params_kwargs)
     assert p.mech_terms_url == ""
+
+
+def test_params_preimage_retention_is_on_by_default(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """
+    A skill config without the retention keys gets the durable buffer switched on.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    """
+    for key in (
+        "preimage_retention_enabled",
+        "preimage_retention_seconds",
+        "preimage_incomplete_cap_seconds",
+    ):
+        params_kwargs.pop(key, None)
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.preimage_retention_enabled is True
+    assert p.preimage_retention_seconds == 86400
+    assert p.preimage_incomplete_cap_seconds == 7 * 86400
+
+
+def test_params_preimage_retention_can_be_switched_off(
+    params_kwargs: Dict[str, Any],
+) -> None:
+    """
+    An explicit False opts the mech out of the durable buffer.
+
+    :param params_kwargs: Baseline keyword arguments used to construct Params.
+    :type params_kwargs: Dict[str, Any]
+    """
+    params_kwargs["preimage_retention_enabled"] = False
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert p.preimage_retention_enabled is False
