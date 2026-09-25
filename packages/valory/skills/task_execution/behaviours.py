@@ -1329,7 +1329,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.tool_execution_start_time or time.perf_counter()
         )
 
-        if task_result is not None and len(task_result) >= 5:
+        execution_succeeded = task_result is not None and len(task_result) >= 5
+        if execution_succeeded:
             # task succeeded — unpack based on tuple length
             # 6-tuple: tool returned used_params (new contract)
             # 5-tuple: tool did not return used_params (old contract)
@@ -1408,14 +1409,20 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # path's directory-wrapped CID (see utils/local_cid.py). The on-chain
             # commitment derivation (to_multihash, inside _finalize_done_task) is
             # otherwise identical.
-            if self._invalid_request:
-                # The task ran but produced no valid result, so `response`
-                # carries an error string rather than an answer. Route it through
-                # the same terminal-failure channel as the CID / done-task
-                # failures below instead of serving it as a success: a paying
-                # requester keys refund / retry / dispute on `status`, so a "ran
-                # but failed" delivery must be distinguishable from a successful
-                # one — otherwise the client accepts and pays for a failure.
+            if self._invalid_request or not execution_succeeded:
+                # No usable result, either because the request was rejected
+                # upfront (``_invalid_request``) or because the tool raised /
+                # timed out, which ``_get_executing_task_result`` swallows into
+                # a ``None`` result. ``response`` then carries an error string
+                # rather than an answer.
+                #
+                # Route both through the terminal-failure channel instead of
+                # serving them as a success. Off-chain requesters are charged
+                # only when the delivery settles, and a rejection never
+                # settles, so this is also what stops the mech charging for
+                # work it did not deliver. The on-chain path is deliberately
+                # untouched: those requesters pay at request time, so the
+                # delivery has to go out either way.
                 self._record_offchain_failure(
                     str(req_id),
                     cast(str, response.get("result") or "task execution failed"),
