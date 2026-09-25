@@ -1410,19 +1410,10 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # commitment derivation (to_multihash, inside _finalize_done_task) is
             # otherwise identical.
             if self._invalid_request or not execution_succeeded:
-                # No usable result, either because the request was rejected
-                # upfront (``_invalid_request``) or because the tool raised /
-                # timed out, which ``_get_executing_task_result`` swallows into
-                # a ``None`` result. ``response`` then carries an error string
-                # rather than an answer.
-                #
-                # Route both through the terminal-failure channel instead of
-                # serving them as a success. Off-chain requesters are charged
-                # only when the delivery settles, and a rejection never
-                # settles, so this is also what stops the mech charging for
-                # work it did not deliver. The on-chain path is deliberately
-                # untouched: those requesters pay at request time, so the
-                # delivery has to go out either way.
+                # No usable result: reject rather than deliver. A rejection
+                # never settles, and off-chain requesters are charged on
+                # settlement. The on-chain path below delivers either way,
+                # since those requesters pay at request time.
                 self._record_offchain_failure(
                     str(req_id),
                     cast(str, response.get("result") or "task execution failed"),
