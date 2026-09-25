@@ -5599,3 +5599,83 @@ def test_finalize_done_task_leaves_record_alone_when_retention_disabled(
     behaviour._finalize_done_task("bafycid")
     assert shared_state[preimage.PREIMAGE_RECORDS] == {}
     assert shared_state[preimage.PREIMAGE_WRITE_QUEUE] == []
+
+
+def test_offchain_tool_exception_is_rejected_not_delivered(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """A tool that raises must not be served as a successful off-chain delivery.
+
+    ``_get_executing_task_result`` swallows a tool exception into ``None``
+    without setting ``_invalid_request``, so before this guard the requester
+    received ``status="ok"`` carrying the string "Invalid response", and the
+    task still became a done_task and settled on chain. Off-chain requesters
+    are charged only when the delivery settles, so that billed them for work
+    the mech never delivered.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._invalid_request = False  # the tool raised; the flag stays unset
+    monkeypatch.setattr(behaviour, "_get_executing_task_result", lambda: None)
+
+    behaviour._handle_done_task(None)
+
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
+    assert stored["status"] == "rejected"
+    # Nothing settles, so the requester is never charged for it.
+    assert shared_state[beh_mod.DONE_TASKS] == []
+
+
+def test_onchain_tool_exception_still_delivers(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+    fake_dialogue: Any,
+) -> None:
+    """The on-chain path is unchanged: those requesters paid at request time.
+
+    Pins that the off-chain rejection guard did not leak into the on-chain
+    branch, which must still upload and deliver a failure result.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    :param fake_dialogue: dialogue stub fixture.
+    """
+    params_stub.use_offchain = False
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=False,
+        is_marketplace_mech=True,
+    )
+    behaviour._invalid_request = False
+    sent: List[Any] = []
+    monkeypatch.setattr(behaviour, "send_message", lambda *a, **k: sent.append(a))
+
+    behaviour._handle_done_task(None)
+
+    # The on-chain path still goes to IPFS rather than rejecting. The fixture
+    # pre-seeds the response map, so assert no rejection was written over it.
+    assert sent, "on-chain failure should still be uploaded and delivered"
+    stored = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
+    assert stored.get("status") != "rejected"
