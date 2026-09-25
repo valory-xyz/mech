@@ -26,6 +26,7 @@ against the stub skill context.
 
 import json
 import time
+from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, Generator, List
 
@@ -1336,3 +1337,30 @@ def test_a_late_reply_still_proves_the_store_is_reachable(handler_context: Any) 
     assert ss[preimage.PREIMAGE_KV_IN_FLIGHT] is True  # guard still ignores it
     assert ss[preimage.PREIMAGE_KV_REPLY_SEEN] is True
     assert ss[preimage.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] == 0
+
+
+# --- skill.yaml wiring ------------------------------------------------------
+
+
+def test_skill_yaml_declares_the_kv_store_handler_and_dialogues() -> None:
+    """The preimage buffer's kv_store collaborators must be registered in skill.yaml.
+
+    ``_send_kv_write`` / ``_send_kv_list`` reach for
+    ``self.context.kv_store_dialogues`` and ``KvStoreHandler`` routes the
+    replies. The AEA framework only creates those from the ``models`` and
+    ``handlers`` sections of skill.yaml, so leaving either out makes the
+    agent die with ``AttributeError: 'SkillContext' object has no attribute
+    'kv_store_dialogues'`` on the first preimage op. Unit tests cannot catch
+    that on their own because the test context supplies the stub directly,
+    and the packaging check skips this skill.
+    """
+    import yaml
+
+    skill_yaml = Path(__file__).resolve().parents[1] / "skill.yaml"
+    config = next(
+        section
+        for section in yaml.safe_load_all(skill_yaml.read_text())
+        if isinstance(section, dict) and "handlers" in section
+    )
+    assert config["handlers"]["kv_store_handler"]["class_name"] == "KvStoreHandler"
+    assert config["models"]["kv_store_dialogues"]["class_name"] == "KvStoreDialogues"
