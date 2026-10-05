@@ -4799,9 +4799,15 @@ class TestPostPredictApiBatchStampsPosted:
         record = self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
         assert record[preimage.FIELD_POSTED_AT] is None
 
+    @staticmethod
+    def _server_answered(self_: SimpleNamespace) -> None:
+        """Mark that an earlier POST in this round returned 2xx."""
+        self_.context.shared_state[beh_mod.PREDICT_API_ROUND_SERVER_OK] = True
+
     def test_4xx_on_a_multi_event_replay_shrinks_the_next_batch(self) -> None:
         """The server does not say which event it refused, so isolate by shrinking."""
         self_ = self._make_self(status_code=422)
+        self._server_answered(self_)
         self._post(
             self_, beh_mod.BATCH_LABEL_REPLAY, [self._event("a"), self._event("b")]
         )
@@ -4815,10 +4821,61 @@ class TestPostPredictApiBatchStampsPosted:
     def test_4xx_on_a_single_event_replay_marks_that_row_abandoned(self) -> None:
         """A refused one-event batch identifies the culprit; it stops blocking newer rows."""
         self_ = self._make_self(status_code=422)
+        self._server_answered(self_)
         self._post(self_, beh_mod.BATCH_LABEL_REPLAY)
         record = self_.context.shared_state[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID]
         assert isinstance(record[preimage.FIELD_ABANDONED_AT], int)
         assert preimage.is_complete(record, require_posted=True) is True
+
+    @pytest.mark.parametrize("status_code", [401, 403, 429, 422])
+    def test_rejection_without_a_successful_post_blames_no_row(
+        self, status_code: int
+    ) -> None:
+        """A server-wide rejection answers every batch alike, so no row is at fault.
+
+        Expired credentials, a revoked key or a rate limit refuse the healthy
+        rows too. Attributing those to the single row in flight would retire
+        one good row per round for the length of the outage and lose its
+        analytics, which is the opposite of what the isolation is for.
+
+        :param status_code: the status the server returns for every batch.
+        """
+        self_ = self._make_self(status_code=status_code)
+        self._post(self_, beh_mod.BATCH_LABEL_REPLAY)
+        ss = self_.context.shared_state
+        assert beh_mod.PREDICT_API_REPLAY_SHRINK not in ss
+        assert (
+            ss[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID][preimage.FIELD_ABANDONED_AT]
+            is None
+        )
+
+    def test_a_successful_post_does_not_carry_across_rounds(self) -> None:
+        """The health signal is per round, so a later round cannot inherit it.
+
+        Without the reset, one successful round would license every later
+        round to blame a row for a server-wide rejection.
+        """
+        self_ = self._make_self(status_code=200)
+        self._post(self_, beh_mod.BATCH_LABEL_DELIVERED)
+        assert self_.context.shared_state[beh_mod.PREDICT_API_ROUND_SERVER_OK] is True
+
+        # A fresh round over the same shared state, with nothing to post.
+        next_round = SimpleNamespace(
+            context=self_.context,
+            params=SimpleNamespace(
+                use_offchain=True,
+                predict_api_events_url="https://example.invalid/events",
+            ),
+            _extract_offchain_events=lambda: [],
+            _sweep_pending_undelivered=lambda: ([], []),
+            _replay_events_from_preimage=lambda: [],
+        )
+        _run_gen(
+            beh_mod.PostTxSettlementBehaviour._do_predict_api_write_best_effort(
+                cast(beh_mod.PostTxSettlementBehaviour, next_round)
+            )
+        )
+        assert beh_mod.PREDICT_API_ROUND_SERVER_OK not in self_.context.shared_state
 
     def test_2xx_on_replay_clears_the_shrink_flag(self) -> None:
         """Once a replay batch lands, the batch size goes back to the configured value."""

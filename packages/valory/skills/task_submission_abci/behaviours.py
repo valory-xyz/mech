@@ -191,6 +191,12 @@ BATCH_LABEL_REPLAY = "replay"
 # rounds (a 4xx on a one-event batch marks that row abandoned) instead of
 # the same oldest batch blocking every newer replay. Cleared on a 2xx.
 PREDICT_API_REPLAY_SHRINK = "predict_api_replay_shrink"
+# Set when any predict-api POST in the current round returned 2xx. A 4xx is
+# only attributable to one replay row once the server has answered something
+# successfully in the same round; without that, the rejection is server-wide
+# (expired credentials, rate limit, a schema change) and no row is at fault.
+# Reset at the top of each ``_do_predict_api_write_best_effort``.
+PREDICT_API_ROUND_SERVER_OK = "predict_api_round_server_ok"
 
 # ``SettlementOutcome`` is a ``Literal`` so a misspelt outcome fails mypy
 # instead of silently minting a new label value.
@@ -2474,6 +2480,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # see ``_post_predict_api_batch`` for the poison-drop rationale).
         request_only_events, swept_request_ids = self._sweep_pending_undelivered()
         replay_events = self._replay_events_from_preimage()
+        self.context.shared_state.pop(PREDICT_API_ROUND_SERVER_OK, None)
         if not delivered_events and not request_only_events and not replay_events:
             self.context.logger.debug(
                 "No local predict_api_event entries in "
@@ -2844,6 +2851,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             mech_predict_api_events_total.labels(
                 batch_label=batch_label, outcome="ok"
             ).inc()
+            self.context.shared_state[PREDICT_API_ROUND_SERVER_OK] = True
             if batch_label == BATCH_LABEL_REPLAY:
                 self.context.shared_state.pop(PREDICT_API_REPLAY_SHRINK, None)
             if batch_label in (BATCH_LABEL_DELIVERED, BATCH_LABEL_REPLAY):
@@ -2934,10 +2942,23 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         once a single-event batch is refused, that row is the culprit and is
         marked abandoned so it retires on the normal window.
 
+        Both steps need another POST in the same round to have returned 2xx.
+        A server-wide rejection answers every batch the same way, so without
+        that evidence no row can be blamed and the batch is left to retry at
+        full size.
+
         :param events: the rejected batch.
         :param status: the HTTP status the server returned.
         """
         shared_state = self.context.shared_state
+        if not shared_state.get(PREDICT_API_ROUND_SERVER_OK):
+            self.context.logger.info(
+                "predict-api refused the replay batch (status=%s) and no "
+                "other POST succeeded this round; treating it as a "
+                "server-side problem and retrying in full next round.",
+                status,
+            )
+            return
         if len(events) > 1:
             shared_state[PREDICT_API_REPLAY_SHRINK] = True
             return
