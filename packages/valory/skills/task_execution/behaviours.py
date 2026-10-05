@@ -637,8 +637,13 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         self._tools_to_pricing = self.params.tools_to_pricing
         self._keychain = KeyChain(self.params.api_keys)
         # Initialise the off-chain preimage buffer's shared-state keys so the
-        # accept hook (handler side) and the sweeper (here) can read/write them.
-        preimage_buffer.init_shared_state(self.context.shared_state)
+        # accept hook (handler side), the sweeper (here) and the settlement
+        # skill's stamps can read/write them. The retention flag is mirrored
+        # into shared_state because task_submission_abci has no copy of it.
+        preimage_buffer.init_shared_state(
+            self.context.shared_state,
+            retention_enabled=self.params.preimage_retention_enabled,
+        )
 
     def _ensure_payment_model(self) -> bool:
         """Set the mech's payment model."""
@@ -1324,7 +1329,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self.tool_execution_start_time or time.perf_counter()
         )
 
-        if task_result is not None and len(task_result) >= 5:
+        execution_succeeded = task_result is not None and len(task_result) >= 5
+        if execution_succeeded:
             # task succeeded — unpack based on tuple length
             # 6-tuple: tool returned used_params (new contract)
             # 5-tuple: tool did not return used_params (old contract)
@@ -1403,14 +1409,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             # path's directory-wrapped CID (see utils/local_cid.py). The on-chain
             # commitment derivation (to_multihash, inside _finalize_done_task) is
             # otherwise identical.
-            if self._invalid_request:
-                # The task ran but produced no valid result, so `response`
-                # carries an error string rather than an answer. Route it through
-                # the same terminal-failure channel as the CID / done-task
-                # failures below instead of serving it as a success: a paying
-                # requester keys refund / retry / dispute on `status`, so a "ran
-                # but failed" delivery must be distinguishable from a successful
-                # one — otherwise the client accepts and pays for a failure.
+            if self._invalid_request or not execution_succeeded:
+                # No usable result: reject rather than deliver. A rejection
+                # never settles, and off-chain requesters are charged on
+                # settlement. The on-chain path below delivers either way,
+                # since those requesters pay at request time.
                 self._record_offchain_failure(
                     str(req_id),
                     cast(str, response.get("result") or "task execution failed"),
@@ -1994,6 +1997,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         done_task.pop("data", None)
         predict_api_mode_enabled = self.params.use_offchain
         is_marketplace_delivery = bool(done_task.get("is_marketplace_mech"))
+        predict_api_event: Optional[Dict[str, Any]] = None
         if predict_api_mode_enabled and (is_offchain or is_marketplace_delivery):
             event = self._build_predict_api_event(
                 done_task=done_task,
@@ -2018,6 +2022,14 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "event": event,
                 "written_at": time.time(),
             }
+            predict_api_event = event
+        if is_offchain:
+            # Attach the replay inputs to the durable preimage record (no-op
+            # unless retention is enabled) so a restart between here and the
+            # on-chain settlement / predict-api POST can re-run those steps
+            # from disk. Must run before the append below: the done_task is
+            # mutated in place by the settlement retry bookkeeping later.
+            self._buffer_replay_inputs(str(req_id), done_task, predict_api_event)
         # add to done tasks, in thread safe way
         with self.done_tasks_lock:
             self.done_tasks.append(done_task)
@@ -2515,14 +2527,53 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             time.time(),
         )
 
+    def _buffer_replay_inputs(
+        self,
+        req_id: str,
+        done_task: Dict[str, Any],
+        predict_api_event: Optional[Dict[str, Any]],
+    ) -> None:
+        """Attach JSON copies of the done_task and event to the preimage record.
+
+        No-op unless off-chain preimage retention is enabled.
+
+        :param req_id: the off-chain request id.
+        :param done_task: the consensus-ready done_task dict.
+        :param predict_api_event: the built event, or ``None`` when the
+            predict-api write is off.
+        """
+        if not self.params.preimage_retention_enabled:
+            return
+        try:
+            done_task_copy = json.loads(json.dumps(done_task))
+            event_copy = (
+                json.loads(json.dumps(predict_api_event))
+                if predict_api_event is not None
+                else None
+            )
+        except (TypeError, ValueError) as exc:
+            self.context.logger.warning(
+                "Replay inputs for request_id=%s are not JSON serialisable "
+                "(%s); the record will not be replayable after a restart.",
+                req_id,
+                exc,
+            )
+            return
+        preimage_buffer.record_replay_inputs(
+            self.context.shared_state, req_id, done_task_copy, event_copy
+        )
+
     def _process_preimage_buffer(self) -> None:
         """Flush buffered preimage writes/deletes and periodically sweep.
 
         No-op unless off-chain preimage retention is enabled. At most one
         kv_store request is in flight at a time (a flag separate from the task
         executor's ``in_flight_req``), so this never blocks task execution.
-        Per tick it does the first of: run a due sweep (LIST by prefix), flush a
-        batch of expired deletes, or flush one queued write.
+        Per tick it does the first of: flush one queued write, continue or
+        start a due sweep (LIST by prefix), or flush a batch of expired
+        deletes. Writes go first because they carry settlement-critical
+        state (the delivered record and its stamps); a sweep walk or a large
+        delete backlog must never hold them back.
         """
         if not self.params.preimage_retention_enabled:
             return
@@ -2546,6 +2597,25 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 # DELETE), and DELETE timeouts have no counter at all.
                 inflight_op = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_OP)
                 inflight = shared_state.get(preimage_buffer.PREIMAGE_INFLIGHT_WRITE)
+                timeouts = (
+                    shared_state.get(
+                        preimage_buffer.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY, 0
+                    )
+                    + 1
+                )
+                shared_state[preimage_buffer.PREIMAGE_KV_TIMEOUTS_SINCE_REPLY] = (
+                    timeouts
+                )
+                if (
+                    not shared_state.get(preimage_buffer.PREIMAGE_KV_REPLY_SEEN)
+                    and timeouts >= self.params.preimage_max_write_attempts
+                ):
+                    shared_state[preimage_buffer.PREIMAGE_KV_IN_FLIGHT] = False
+                    shared_state[preimage_buffer.PREIMAGE_INFLIGHT_WRITE] = None
+                    shared_state[preimage_buffer.PREIMAGE_INFLIGHT_OP] = None
+                    shared_state[preimage_buffer.PREIMAGE_INFLIGHT_SENT_AT] = None
+                    self._disable_retention_unreachable_store(timeouts)
+                    return
                 if inflight is not None:
                     # Mirror the ERROR-branch retry cap so a kv_store that
                     # times out instead of replying ERROR can't bypass the
@@ -2609,10 +2679,24 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             else:
                 return
 
+        write_queue: List[str] = shared_state.get(
+            preimage_buffer.PREIMAGE_WRITE_QUEUE, []
+        )
+        while write_queue:
+            request_id = write_queue.pop(0)
+            record = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).get(
+                request_id
+            )
+            if record is None:
+                # Already pruned (e.g. duplicate enqueue); skip to the next.
+                continue
+            self._send_kv_write(request_id, record)
+            return
+
         # A non-empty cursor means the previous LIST_RESPONSE returned
         # ``next_cursor`` — i.e. the namespace has more pages. Keep paging on
-        # every tick (deletes/writes wait until the namespace is fully walked)
-        # so retention pruning isn't stuck on the first page when the namespace
+        # every tick (deletes wait until the namespace is fully walked) so
+        # retention pruning isn't stuck on the first page when the namespace
         # has more than preimage_list_page_size entries.
         if shared_state.get(preimage_buffer.PREIMAGE_LIST_CURSOR):
             self._send_kv_list()
@@ -2650,19 +2734,41 @@ class TaskExecutionBehaviour(SimpleBehaviour):
             self._send_kv_delete(keys)
             return
 
-        write_queue: List[str] = shared_state.get(
-            preimage_buffer.PREIMAGE_WRITE_QUEUE, []
+    def _preimage_prefix(self) -> str:
+        """Return this agent's key namespace in the preimage store.
+
+        The operator prefix is extended with the agent's own address so the
+        agents of one service can share a volume (the service deployment
+        mounts the same host directory into every agent) without seeing,
+        replaying or pruning each other's rows.
+
+        :return: the namespaced key prefix, ending in ``/``.
+        """
+        return f"{self.params.preimage_key_prefix}{self.context.agent_address}/"
+
+    def _disable_retention_unreachable_store(self, timeouts: int) -> None:
+        """Switch retention off for this process: the kv_store never answered.
+
+        :param timeouts: the consecutive timeouts observed.
+        """
+        shared_state = self.context.shared_state
+        self.context.logger.warning(
+            "Preimage retention disabled for this process: %d consecutive "
+            "kv_store requests got no reply and none ever has. Add the "
+            "valory/kv_store connection to the agent (and a persistent "
+            "volume at its store_path) or set preimage_retention_enabled "
+            "to false to silence this.",
+            timeouts,
         )
-        while write_queue:
-            request_id = write_queue.pop(0)
-            record = shared_state.get(preimage_buffer.PREIMAGE_RECORDS, {}).get(
-                request_id
-            )
-            if record is None:
-                # Already pruned (e.g. duplicate enqueue); skip to the next.
-                continue
-            self._send_kv_write(request_id, record)
-            return
+        self.params.preimage_retention_enabled = False
+        shared_state[preimage_buffer.PREIMAGE_RETENTION_ACTIVE] = False
+        shared_state[preimage_buffer.PREIMAGE_WRITE_QUEUE] = []
+        shared_state[preimage_buffer.PREIMAGE_DELETE_QUEUE] = []
+        shared_state[preimage_buffer.PREIMAGE_RECORDS] = {}
+        shared_state[preimage_buffer.PREIMAGE_PENDING_STAMPS] = {}
+        shared_state[preimage_buffer.PREIMAGE_PENDING_STAMPS_AT] = {}
+        shared_state[preimage_buffer.PREIMAGE_WRITE_ATTEMPTS] = {}
+        shared_state[preimage_buffer.PREIMAGE_LIST_CURSOR] = None
 
     def _send_kv_write(self, request_id: str, record: Dict[str, Any]) -> None:
         """Upsert one preimage record into the kv_store.
@@ -2670,7 +2776,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         :param request_id: the off-chain request id (used to build the key).
         :param record: the preimage record to persist.
         """
-        key = preimage_buffer.preimage_key(self.params.preimage_key_prefix, request_id)
+        key = preimage_buffer.preimage_key(self._preimage_prefix(), request_id)
         msg, dlg = self.context.kv_store_dialogues.create(
             counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
             performative=KvStoreMessage.Performative.CREATE_OR_UPDATE_REQUEST,
@@ -2734,7 +2840,7 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         msg, dlg = self.context.kv_store_dialogues.create(
             counterparty=KV_STORE_CONNECTION_PUBLIC_ID,
             performative=KvStoreMessage.Performative.LIST_REQUEST,
-            key_prefix=self.params.preimage_key_prefix,
+            key_prefix=self._preimage_prefix(),
             limit=self.params.preimage_list_page_size,
             cursor=cursor,
         )

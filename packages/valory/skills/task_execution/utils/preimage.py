@@ -56,14 +56,35 @@ Stored value (a JSON string, under key ``f"{prefix}{request_id}"``)::
       "accepted_at": int | None,   # epoch seconds the request was accepted
       "settled_at": int | None,    # epoch seconds it was delivered / rejected
       "settlement_status": "processing" | "delivered" | "rejected",
+      # Replay inputs, captured on the delivered path so a restart can
+      # re-run the follow-up steps (on-chain settlement, requester fetch,
+      # predict-api row) from disk alone:
+      "done_task": dict | None,          # the consensus-ready done_task
+      "predict_api_event": dict | None,  # the built predict-api event
+      # Per-step stamps. ``settled_tx_hash`` + ``posted_at`` (when the
+      # predict-api write is on) make a delivered row *complete*;
+      # ``fetched_at`` is visibility only; ``abandoned_at`` marks a
+      # deliver the settlement retry cap gave up on.
+      "settled_tx_hash": str | None,
+      "fetched_at": int | None,
+      "posted_at": int | None,
+      "abandoned_at": int | None,
     }
+
+Retention treats a row as *complete* (24h retention) when it is rejected,
+never answered (``processing``), abandoned, or delivered with every follow-up
+stamped. A delivered row missing a follow-up is *incomplete*: the sweeper
+keeps it up to ``preimage_incomplete_cap_seconds`` (default 7 days) so the
+drainer (``hydrate``, run on every LIST page of the sweep) can replay the
+missing step, and only deletes it past the cap, with a WARNING.
 """
 
 from __future__ import annotations
 
 import json
 import logging
-from typing import Any, Dict, List, Optional
+import time
+from typing import Any, Dict, List, Optional, Tuple
 
 _logger = logging.getLogger(__name__)
 
@@ -112,6 +133,51 @@ PREIMAGE_WRITE_ATTEMPTS = "preimage_write_attempts"  # Dict[str, int]
 # stamped, and a WARN is emitted so the next sweep_interval is the natural
 # backoff instead of a per-tick hot loop. Reset to 0 on any LIST_RESPONSE.
 PREIMAGE_LIST_ATTEMPTS = "preimage_list_attempts"  # int
+# True when the operator enabled preimage retention. Stamps and replay
+# bookkeeping are no-ops when this is False, so the settlement skill (which
+# has no copy of the retention flag) can call ``record_stamp`` unguarded
+# without leaking pending stamps on deployments that opted out.
+PREIMAGE_RETENTION_ACTIVE = "preimage_retention_active"  # bool
+# Stamps that arrived for a record not held in memory (typically after a
+# restart, before the sweep hydrated it). Applied by ``hydrate`` when the
+# row is loaded from the kv_store. Dict[request_id, Dict[field, value]].
+PREIMAGE_PENDING_STAMPS = "preimage_pending_stamps"
+# Epoch seconds each parked entry was created, for ``prune_parked_stamps``.
+PREIMAGE_PENDING_STAMPS_AT = "preimage_pending_stamps_at"  # Dict[str, float]
+# True when the settlement skill will actually POST delivered events to the
+# predict-api (``use_offchain`` and a non-empty events URL on that skill).
+# Published by task_submission_abci at setup; read here to decide whether
+# ``posted_at`` is required for a delivered row to count as complete.
+PREDICT_API_WRITE_CONFIGURED = "predict_api_write_configured"  # bool
+# Circuit breaker for a missing / dead kv_store connection. ``REPLY_SEEN``
+# flips to True on the first reply of any kind; ``TIMEOUTS_SINCE_REPLY``
+# counts consecutive watchdog timeouts. When the latter reaches the write
+# retry cap and no reply has ever arrived, the behaviour switches retention
+# off for the process with a WARNING instead of timing out every write.
+PREIMAGE_KV_REPLY_SEEN = "preimage_kv_reply_seen"  # bool
+PREIMAGE_KV_TIMEOUTS_SINCE_REPLY = "preimage_kv_timeouts_since_reply"  # int
+# Row counters accumulated across the pages of one sweep walk; the handler
+# publishes them to the gauges when the final page arrives.
+PREIMAGE_SWEEP_ROW_COUNT = "preimage_sweep_row_count"  # int
+PREIMAGE_SWEEP_INCOMPLETE_COUNT = "preimage_sweep_incomplete_count"  # int
+
+# Record field names shared by the writers, the stamps and the drainer.
+FIELD_DONE_TASK = "done_task"
+FIELD_PREDICT_API_EVENT = "predict_api_event"
+FIELD_SETTLED_TX_HASH = "settled_tx_hash"
+FIELD_FETCHED_AT = "fetched_at"
+FIELD_POSTED_AT = "posted_at"
+FIELD_ABANDONED_AT = "abandoned_at"
+STAMP_FIELDS = (
+    FIELD_SETTLED_TX_HASH,
+    FIELD_FETCHED_AT,
+    FIELD_POSTED_AT,
+    FIELD_ABANDONED_AT,
+)
+# Stamps worth remembering for a row that is not in memory. ``fetched_at``
+# is visibility only, so a fetch of an already-popped row is dropped rather
+# than parked forever in ``PREIMAGE_PENDING_STAMPS``.
+DURABLE_STAMP_FIELDS = (FIELD_SETTLED_TX_HASH, FIELD_POSTED_AT, FIELD_ABANDONED_AT)
 
 # settlement_status values.
 STATUS_PROCESSING = "processing"
@@ -121,11 +187,25 @@ STATUS_REJECTED = "rejected"
 TERMINAL_STATUSES = (STATUS_DELIVERED, STATUS_REJECTED)
 
 
-def init_shared_state(shared_state: Dict[str, Any]) -> None:
+def init_shared_state(
+    shared_state: Dict[str, Any], retention_enabled: Optional[bool] = None
+) -> None:
     """Initialise the preimage shared-state keys in place (idempotent).
 
     :param shared_state: the skill's shared state dict.
+    :param retention_enabled: when given, records whether the operator
+        turned preimage retention on (``PREIMAGE_RETENTION_ACTIVE``).
+        ``None`` leaves the existing flag alone (default False).
     """
+    shared_state.setdefault(PREIMAGE_RETENTION_ACTIVE, False)
+    if retention_enabled is not None:
+        shared_state[PREIMAGE_RETENTION_ACTIVE] = bool(retention_enabled)
+    shared_state.setdefault(PREIMAGE_PENDING_STAMPS, {})
+    shared_state.setdefault(PREIMAGE_PENDING_STAMPS_AT, {})
+    shared_state.setdefault(PREIMAGE_KV_REPLY_SEEN, False)
+    shared_state.setdefault(PREIMAGE_KV_TIMEOUTS_SINCE_REPLY, 0)
+    shared_state.setdefault(PREIMAGE_SWEEP_ROW_COUNT, 0)
+    shared_state.setdefault(PREIMAGE_SWEEP_INCOMPLETE_COUNT, 0)
     shared_state.setdefault(PREIMAGE_RECORDS, {})
     shared_state.setdefault(PREIMAGE_WRITE_QUEUE, [])
     shared_state.setdefault(PREIMAGE_DELETE_QUEUE, [])
@@ -181,8 +261,24 @@ def record_accept(
         "accepted_at": int(now),
         "settled_at": None,
         "settlement_status": STATUS_PROCESSING,
+        **_empty_replay_fields(),
     }
     enqueue_write(shared_state, request_id)
+
+
+def _empty_replay_fields() -> Dict[str, Any]:
+    """Return the replay-input and stamp fields, all unset.
+
+    :return: a fresh dict of every replay / stamp field set to ``None``.
+    """
+    return {
+        FIELD_DONE_TASK: None,
+        FIELD_PREDICT_API_EVENT: None,
+        FIELD_SETTLED_TX_HASH: None,
+        FIELD_FETCHED_AT: None,
+        FIELD_POSTED_AT: None,
+        FIELD_ABANDONED_AT: None,
+    }
 
 
 def record_settlement(
@@ -244,6 +340,7 @@ def record_settlement(
         "request_id": request_id,
         "request": None,
         "accepted_at": None,
+        **_empty_replay_fields(),
     }
     record.update(
         {
@@ -257,8 +354,381 @@ def record_settlement(
     enqueue_write(shared_state, request_id)
 
 
+def record_replay_inputs(
+    shared_state: Dict[str, Any],
+    request_id: str,
+    done_task: Optional[Dict[str, Any]],
+    predict_api_event: Optional[Dict[str, Any]],
+) -> bool:
+    """Attach the replay inputs to a delivered record.
+
+    Called from the done path right after the consensus-ready ``done_task``
+    (and, when the predict-api write is on, its event) is built, so the
+    record flushed to the kv_store carries everything a restart needs to
+    re-run settlement and the predict-api POST. Both values must be JSON
+    serialisable; the caller passes JSON round-tripped copies so later
+    in-place mutation of the live dicts cannot leak into the record.
+
+    :param shared_state: the skill's shared state dict.
+    :param request_id: the off-chain request id.
+    :param done_task: the done_task dict, or ``None`` to leave it unset.
+    :param predict_api_event: the built event, or ``None`` to leave it unset.
+    :return: ``True`` when a delivered record was updated, ``False`` when
+        there was no delivered record to attach to (nothing is written).
+    """
+    records = shared_state.setdefault(PREIMAGE_RECORDS, {})
+    record = records.get(request_id)
+    if record is None or record.get("settlement_status") != STATUS_DELIVERED:
+        _logger.warning(
+            "record_replay_inputs: no delivered record for request_id=%s; "
+            "replay inputs dropped.",
+            request_id,
+        )
+        return False
+    if done_task is not None:
+        record[FIELD_DONE_TASK] = done_task
+    if predict_api_event is not None:
+        record[FIELD_PREDICT_API_EVENT] = predict_api_event
+    enqueue_write(shared_state, request_id)
+    return True
+
+
+def record_stamp(
+    shared_state: Dict[str, Any],
+    request_id: str,
+    now: Optional[float] = None,
+    **stamps: Any,
+) -> None:
+    """Stamp one or more follow-up steps on a record.
+
+    No-op unless retention is active (``PREIMAGE_RETENTION_ACTIVE``). When
+    the record is held in memory the stamp is applied and a write queued.
+    When it is not (the process restarted before the sweep hydrated the
+    row), durable stamps are parked in ``PREIMAGE_PENDING_STAMPS`` and
+    applied by :func:`hydrate`; ``fetched_at`` is dropped instead, because
+    it is visibility only and a fetch of an already-popped row would
+    otherwise park an entry forever. Parked entries are timestamped so
+    :func:`prune_parked_stamps` can drop the ones no row ever claims.
+
+    Stamps are write-once: an existing non-``None`` value is kept, so a
+    round that re-enters (NO_MAJORITY / timeout) cannot move a stamp.
+
+    :param shared_state: the skill's shared state dict.
+    :param request_id: the off-chain request id.
+    :param now: the current epoch time in seconds (``time.time()`` when
+        omitted); only used to timestamp a parked entry.
+    :param stamps: ``field=value`` pairs; ``field`` must be in ``STAMP_FIELDS``.
+    :raises ValueError: on a field name outside ``STAMP_FIELDS``.
+    """
+    unknown = set(stamps) - set(STAMP_FIELDS)
+    if unknown:
+        raise ValueError(f"record_stamp: unknown stamp field(s) {sorted(unknown)}")
+    if not shared_state.get(PREIMAGE_RETENTION_ACTIVE):
+        return
+    record = shared_state.setdefault(PREIMAGE_RECORDS, {}).get(request_id)
+    if record is None:
+        durable = {k: v for k, v in stamps.items() if k in DURABLE_STAMP_FIELDS}
+        if durable:
+            pending = shared_state.setdefault(PREIMAGE_PENDING_STAMPS, {})
+            slot = pending.setdefault(request_id, {})
+            for field, value in durable.items():
+                slot.setdefault(field, value)
+            shared_state.setdefault(PREIMAGE_PENDING_STAMPS_AT, {}).setdefault(
+                request_id, now if now is not None else time.time()
+            )
+        return
+    if _apply_stamps(record, stamps):
+        enqueue_write(shared_state, request_id)
+
+
+def prune_parked_stamps(
+    shared_state: Dict[str, Any], now: float, max_age_seconds: float
+) -> int:
+    """Drop parked stamps older than ``max_age_seconds``.
+
+    A parked stamp is claimed by :func:`hydrate` when its row turns up in
+    this agent's store. A stamp whose row never turns up (the id was not
+    an off-chain request of this agent, or the row was already retired)
+    would otherwise sit in memory for the life of the process. The
+    callers already gate stamps to this agent's off-chain ids; this is
+    the bound behind that gate.
+
+    :param shared_state: the skill's shared state dict.
+    :param now: the current epoch time in seconds.
+    :param max_age_seconds: how long a parked entry may wait for its row.
+    :return: the number of entries dropped.
+    """
+    pending: Dict[str, Dict[str, Any]] = shared_state.setdefault(
+        PREIMAGE_PENDING_STAMPS, {}
+    )
+    pending_at: Dict[str, float] = shared_state.setdefault(
+        PREIMAGE_PENDING_STAMPS_AT, {}
+    )
+    stale = [
+        request_id
+        for request_id in pending
+        if now - pending_at.get(request_id, now) > max_age_seconds
+    ]
+    for request_id in stale:
+        pending.pop(request_id, None)
+        pending_at.pop(request_id, None)
+    return len(stale)
+
+
+def _apply_stamps(record: Dict[str, Any], stamps: Dict[str, Any]) -> bool:
+    """Apply write-once stamps to ``record`` in place.
+
+    :param record: the preimage record.
+    :param stamps: ``field=value`` pairs.
+    :return: ``True`` when at least one field changed.
+    """
+    changed = False
+    for field, value in stamps.items():
+        if value is None or record.get(field) is not None:
+            continue
+        record[field] = value
+        changed = True
+    return changed
+
+
+def is_complete(record: Dict[str, Any], require_posted: bool) -> bool:
+    """Return whether every follow-up step for ``record`` is done.
+
+    Only a delivered row can be incomplete: rejected rows, rows that were
+    never answered (``processing``), rows the settlement retry cap gave up
+    on, and rows of an unknown status (older schema) have nothing left to
+    replay. A delivered row is complete once the on-chain settlement is
+    stamped and, when the predict-api write is on, the POST is stamped.
+
+    :param record: the parsed preimage record.
+    :param require_posted: whether the predict-api write is enabled, i.e.
+        whether ``posted_at`` is required for completeness.
+    :return: ``True`` when nothing is left to replay.
+    """
+    if record.get("settlement_status") != STATUS_DELIVERED:
+        return True
+    if record.get(FIELD_ABANDONED_AT) is not None:
+        return True
+    if record.get(FIELD_SETTLED_TX_HASH) is None:
+        # Unsettled: replayable only with a done_task to re-queue. A row
+        # without one (older schema, or replay inputs that failed to
+        # attach) can never be settled from here, so it is retired on
+        # the normal window rather than held to the cap.
+        return record.get(FIELD_DONE_TASK) is None
+    if not require_posted or record.get(FIELD_POSTED_AT) is not None:
+        return True
+    # Settled but not posted: replayable only with an event to send.
+    return record.get(FIELD_PREDICT_API_EVENT) is None
+
+
+def fetch_payload(record: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Rebuild the ``/fetch_offchain_info`` body for a settled record.
+
+    Mirrors the two shapes the writers put in
+    ``shared_state[OFFCHAIN_REQUEST_RESPONSES]``: the delivered shape (the
+    committed response object verbatim under ``response`` plus the CID
+    envelope) and the rejection shape (``status`` + ``reason``).
+
+    :param record: the parsed preimage record.
+    :return: the body to serve, or ``None`` when the record is not settled
+        or its stored response cannot be decoded.
+    """
+    status = record.get("settlement_status")
+    request_id = record.get("request_id")
+    if request_id is None:
+        return None
+    if status == STATUS_REJECTED:
+        return {
+            "request_id": str(request_id),
+            "status": "rejected",
+            "reason": record.get("response") or "rejected",
+        }
+    if status != STATUS_DELIVERED:
+        return None
+    raw = record.get("response")
+    if not isinstance(raw, str):
+        return None
+    try:
+        response = json.loads(raw)
+    except ValueError:
+        return None
+    return {
+        "request_id": str(request_id),
+        "status": "ok",
+        "content_cid": record.get("response_cid"),
+        "response": response,
+    }
+
+
+def _parse_record(raw: str) -> Optional[Dict[str, Any]]:
+    """Parse one kv_store value into a record dict.
+
+    :param raw: the JSON string stored in the kv_store.
+    :return: the record, or ``None`` when it is not a JSON object.
+    """
+    try:
+        record = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    return record if isinstance(record, dict) else None
+
+
+def _record_age(record: Dict[str, Any], now: float) -> Optional[float]:
+    """Return the record's age in seconds, measured like the sweeper does.
+
+    :param record: the parsed preimage record.
+    :param now: the current epoch time in seconds.
+    :return: the age, or ``None`` when the record carries no usable stamp.
+    """
+    stamp = record.get("settled_at")
+    if stamp is None:
+        stamp = record.get("accepted_at")
+    if stamp is None:
+        return None
+    try:
+        return now - float(stamp)
+    except (ValueError, TypeError):
+        return None
+
+
+def hydrate(
+    shared_state: Dict[str, Any],
+    list_data: Dict[str, str],
+    now: float,
+    retention_seconds: int,
+    incomplete_cap_seconds: int,
+    require_posted: bool,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """Load one LIST page back into memory and pick the rows to replay.
+
+    This is the drainer's pure half. For every parseable row it:
+
+    * counts it toward the sweep's row / incomplete-row counters;
+    * returns a fetch payload for every settled row still inside the
+      retention window (the caller restores the in-memory response map
+      from these, so a requester polling after a restart is served);
+    * for a delivered row that is incomplete, not yet in memory and not
+      past the cap, applies any parked stamps, loads it into
+      ``PREIMAGE_RECORDS`` and returns it for replay.
+
+    Rows already held in memory belong to the live flow and are never
+    replayed: their follow-ups are in progress and their stamps land on
+    the in-memory copy. Complete rows are not loaded, only served.
+
+    :param shared_state: the skill's shared state dict.
+    :param list_data: the LIST_RESPONSE key -> JSON value map.
+    :param now: the current epoch time in seconds.
+    :param retention_seconds: the retention window for complete rows.
+    :param incomplete_cap_seconds: the hard cap for incomplete rows.
+    :param require_posted: whether ``posted_at`` counts toward completeness.
+    :return: ``(fetch_payloads, replay_records)``.
+    """
+    records: Dict[str, Dict[str, Any]] = shared_state.setdefault(PREIMAGE_RECORDS, {})
+    pending: Dict[str, Dict[str, Any]] = shared_state.setdefault(
+        PREIMAGE_PENDING_STAMPS, {}
+    )
+    pending_at: Dict[str, float] = shared_state.setdefault(
+        PREIMAGE_PENDING_STAMPS_AT, {}
+    )
+    fetch_payloads: List[Dict[str, Any]] = []
+    replay: List[Dict[str, Any]] = []
+    rows = 0
+    incomplete_rows = 0
+    for raw in list_data.values():
+        record = _parse_record(raw)
+        if record is None:
+            continue
+        rows += 1
+        request_id = record.get("request_id")
+        if request_id is None:
+            continue
+        request_id = str(request_id)
+        age = _record_age(record, now)
+        # Parked stamps are applied before the completeness check so a row
+        # whose settlement landed just before the restart is not replayed.
+        parked = pending.pop(request_id, None)
+        pending_at.pop(request_id, None)
+        merged = bool(parked) and _apply_stamps(record, parked or {})
+        complete = is_complete(record, require_posted)
+        if not complete:
+            incomplete_rows += 1
+        if age is not None and age <= retention_seconds:
+            payload = fetch_payload(record)
+            if payload is not None:
+                fetch_payloads.append(payload)
+        if request_id in records:
+            # Live row: its follow-ups are in progress on the in-memory copy.
+            continue
+        if age is not None and age > incomplete_cap_seconds:
+            # Past the cap: the sweeper deletes it this pass; do not replay.
+            continue
+        if merged:
+            # The parked stamp changed the row: load it and persist the merge
+            # even when the stamp is what completed it, or the stored row
+            # would still read incomplete on the next sweep and be replayed
+            # on top of work that already happened. A complete row is popped
+            # by the SUCCESS handler once the write lands.
+            records[request_id] = record
+            enqueue_write(shared_state, request_id)
+        if complete:
+            continue
+        records[request_id] = record
+        replay.append(record)
+    shared_state[PREIMAGE_SWEEP_ROW_COUNT] = (
+        shared_state.get(PREIMAGE_SWEEP_ROW_COUNT, 0) + rows
+    )
+    shared_state[PREIMAGE_SWEEP_INCOMPLETE_COUNT] = (
+        shared_state.get(PREIMAGE_SWEEP_INCOMPLETE_COUNT, 0) + incomplete_rows
+    )
+    return fetch_payloads, replay
+
+
+def replayable_events(
+    shared_state: Dict[str, Any],
+    limit: Optional[int] = None,
+) -> List[Tuple[str, Dict[str, Any], str]]:
+    """Return the settled-but-unposted predict-api events held in memory.
+
+    These are rows the drainer hydrated whose on-chain settlement already
+    happened (so the normal post-settlement path, which only POSTs the
+    current round's deliveries, will never pick them up). The settlement
+    behaviour POSTs them as a separate replay batch and stamps
+    ``posted_at`` on a 2xx. ``limit`` bounds one batch so a long
+    predict-api outage drains in chunks over successive rounds rather
+    than in one ever-growing request; oldest settled rows go first.
+
+    :param shared_state: the skill's shared state dict.
+    :param limit: at most this many events; ``None`` for all of them.
+    :return: ``(request_id, event, settled_tx_hash)`` triples.
+    """
+    out: List[Tuple[str, Dict[str, Any], str]] = []
+    records = shared_state.get(PREIMAGE_RECORDS, {})
+    ordered = sorted(
+        records.items(), key=lambda item: float(item[1].get("settled_at") or 0)
+    )
+    for request_id, record in ordered:
+        if limit is not None and len(out) >= limit:
+            break
+        if record.get("settlement_status") != STATUS_DELIVERED:
+            continue
+        if record.get(FIELD_ABANDONED_AT) is not None:
+            continue
+        tx_hash = record.get(FIELD_SETTLED_TX_HASH)
+        event = record.get(FIELD_PREDICT_API_EVENT)
+        if not tx_hash or record.get(FIELD_POSTED_AT) is not None:
+            continue
+        if not isinstance(event, dict):
+            continue
+        out.append((str(request_id), event, str(tx_hash)))
+    return out
+
+
 def expired_keys(
-    list_data: Dict[str, str], now: float, retention_seconds: int
+    list_data: Dict[str, str],
+    now: float,
+    retention_seconds: int,
+    incomplete_cap_seconds: Optional[int] = None,
+    require_posted: bool = True,
 ) -> List[str]:
     """Return the kv keys whose preimage is older than the retention window.
 
@@ -266,13 +736,22 @@ def expired_keys(
     Entries with neither timestamp, or whose value can't be parsed, are left
     untouched — the sweeper must never delete a row it doesn't understand.
 
+    A delivered row with a follow-up step still missing (see
+    :func:`is_complete`) is held past ``retention_seconds`` so the drainer
+    can replay it: it expires only past ``incomplete_cap_seconds`` (never,
+    when that is ``None``), and each such deletion is logged at WARNING
+    because it is unpaid / unreported work being dropped.
+
     :param list_data: the LIST_RESPONSE key -> JSON value map.
     :param now: the current epoch time in seconds.
     :param retention_seconds: the retention window, in seconds.
+    :param incomplete_cap_seconds: the hard cap for incomplete rows.
+    :param require_posted: whether ``posted_at`` counts toward completeness.
     :return: the list of keys to delete.
     """
     expired: List[str] = []
     skipped: List[str] = []
+    dropped_incomplete: List[str] = []
     for key, raw in list_data.items():
         try:
             record = json.loads(raw)
@@ -298,8 +777,22 @@ def expired_keys(
             # docstring promises rows we don't understand are left alone.
             skipped.append(key)
             continue
+        if isinstance(record, dict) and not is_complete(record, require_posted):
+            if incomplete_cap_seconds is not None and age > incomplete_cap_seconds:
+                expired.append(key)
+                dropped_incomplete.append(key)
+            continue
         if age > retention_seconds:
             expired.append(key)
+    if dropped_incomplete:
+        _logger.warning(
+            "Preimage sweep: %d delivered entr%s past the %ds incomplete cap "
+            "with a follow-up step still missing; deleting. First key: %r",
+            len(dropped_incomplete),
+            "y" if len(dropped_incomplete) == 1 else "ies",
+            incomplete_cap_seconds,
+            dropped_incomplete[0],
+        )
     if skipped:
         # Silently treating unparseable / timestamp-less rows as
         # "leave alone" is the safe choice (don't delete what we don't
@@ -324,3 +817,35 @@ def serialize(record: Dict[str, Any]) -> str:
     :return: the JSON string stored in kv_store.
     """
     return json.dumps(record, sort_keys=True)
+
+
+def evict_expired_records(
+    shared_state: Dict[str, Any], now: float, max_age_seconds: float
+) -> int:
+    """Drop in-memory records older than ``max_age_seconds``.
+
+    Mirrors the sweeper's incomplete cap for the in-memory copies: a row
+    hydrated for replay whose follow-up never completes (predict-api down
+    for longer than the cap, a deliver that never lands) would otherwise
+    stay in ``PREIMAGE_RECORDS`` for the life of the process. Age is
+    measured like the sweeper does, from ``settled_at`` else
+    ``accepted_at``; rows with no usable stamp are kept.
+
+    :param shared_state: the skill's shared state dict.
+    :param now: the current epoch time in seconds.
+    :param max_age_seconds: the age past which a record is dropped.
+    :return: the number of records dropped.
+    """
+    records: Dict[str, Dict[str, Any]] = shared_state.setdefault(PREIMAGE_RECORDS, {})
+    stale = [
+        request_id
+        for request_id, record in records.items()
+        if (age := _record_age(record, now)) is not None and age > max_age_seconds
+    ]
+    for request_id in stale:
+        records.pop(request_id, None)
+        shared_state.get(PREIMAGE_WRITE_ATTEMPTS, {}).pop(request_id, None)
+    queue: List[str] = shared_state.setdefault(PREIMAGE_WRITE_QUEUE, [])
+    if stale:
+        queue[:] = [request_id for request_id in queue if request_id not in stale]
+    return len(stale)

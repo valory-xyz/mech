@@ -196,14 +196,16 @@ class Params(Model):
         # or blank to advertise nothing. Keep it equal to the ``termsUrl`` in
         # the mech's published metadata.
         self.mech_terms_url: str = str(kwargs.get("mech_terms_url", "") or "").strip()
-        # Off-chain preimage retention. Ships dark like use_offchain: False keeps
-        # today's behaviour (no durable preimage buffer). When enabled, each
-        # off-chain (request, response) pair is mirrored into the kv_store and a
-        # background sweeper prunes entries older than the retention window. Only
-        # meaningful alongside use_offchain (on-chain deliveries are already
-        # public on IPFS).
+        # Off-chain preimage retention. On by default: each off-chain
+        # (request, response) pair is mirrored into the kv_store together
+        # with what a restart needs to replay the follow-up steps (on-chain
+        # settlement, requester fetch, predict-api row), and a background
+        # sweeper prunes entries past the retention window. Only meaningful
+        # alongside use_offchain (on-chain deliveries are already public on
+        # IPFS); the buffer is inert on a mech that takes no off-chain
+        # requests. Set False to run without the durable buffer.
         self.preimage_retention_enabled: bool = kwargs.get(
-            "preimage_retention_enabled", False
+            "preimage_retention_enabled", True
         )
         # Retention window for buffered preimages, in seconds (default 24h).
         # NOTE: this is a storage bound, not a cryptographic-erasure
@@ -214,6 +216,14 @@ class Params(Model):
         # those slots are reused. See preimage.py module docstring.
         self.preimage_retention_seconds: int = kwargs.get(
             "preimage_retention_seconds", 86400
+        )
+        # Hard cap for a delivered preimage whose follow-up steps (on-chain
+        # settlement, predict-api row) are still missing. Such rows are held
+        # past ``preimage_retention_seconds`` so the drainer can replay them
+        # on the sweep; past the cap they are deleted with a WARNING. Only
+        # matters when settlement is broken for that long (default 7 days).
+        self.preimage_incomplete_cap_seconds: int = kwargs.get(
+            "preimage_incomplete_cap_seconds", 7 * 86400
         )
         # How often the sweeper LISTs the namespace to prune expired entries.
         self.preimage_sweep_interval: float = kwargs.get(

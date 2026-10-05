@@ -782,6 +782,7 @@ def _make_egress_self(
         # circuit fires cleanly.
         _extract_offchain_events=lambda: [],
         _sweep_pending_undelivered=lambda: ([], []),
+        _replay_events_from_preimage=lambda _exclude: [],
     )
     # Expose the tracker on the fixture so tests can assert against it.
     self_._egress_build_calls = build_calls  # type: ignore[attr-defined]
@@ -876,6 +877,8 @@ def _make_egress_self_for_enricher(
     info_sink: List[str] | None = None,
     shared_state: Dict[str, Any] | None = None,
     raise_on_read: bool = False,
+    replay_events: List[Dict[str, Any]] | None = None,
+    done_tasks: List[Dict[str, Any]] | None = None,
 ) -> Any:
     """Build a self with a non-empty delivered batch + a stubbed POST helper.
 
@@ -898,6 +901,10 @@ def _make_egress_self_for_enricher(
         defaults to a fresh dict.
     :param raise_on_read: when True the fake ``final_tx_hash`` property
         raises ``ValueError`` — mirrors the cold-entry FSM path.
+    :param replay_events: the list ``_replay_events_from_preimage`` is
+        stubbed to return (the drainer's settled-but-unposted rows).
+    :param done_tasks: value for ``synchronized_data.done_tasks``; the
+        egress path reads it to find which ids are off-chain.
     :return: a ``SimpleNamespace`` shaped like the pieces of
         ``self`` the enricher touches, with ``_post_calls`` attached
         as a captured list of POST invocations.
@@ -913,6 +920,8 @@ def _make_egress_self_for_enricher(
         debug=lambda *a, **k: None,
     )
 
+    round_done_tasks = done_tasks or []
+
     class _SyncData:
         @property
         def final_tx_hash(self) -> str:  # type: ignore[return]
@@ -920,9 +929,14 @@ def _make_egress_self_for_enricher(
                 raise ValueError("final_tx_hash not in sync db")
             return final_tx_hash
 
-        done_tasks: List[Dict[str, Any]] = []
+        done_tasks: List[Dict[str, Any]] = round_done_tasks
 
     post_calls: List[Dict[str, Any]] = []
+    replay_exclude: List[Any] = []
+
+    def _record_exclude(exclude: Any) -> List[Dict[str, Any]]:
+        replay_exclude.append(exclude)
+        return list(replay_events or [])
 
     def _fake_post(**kwargs: Any) -> Any:
         post_calls.append(kwargs)
@@ -945,9 +959,11 @@ def _make_egress_self_for_enricher(
         synchronized_data=_SyncData(),
         _extract_offchain_events=lambda: delivered_events,
         _sweep_pending_undelivered=lambda: ([], []),
+        _replay_events_from_preimage=lambda _exclude: _record_exclude(_exclude),
         _post_predict_api_batch=_fake_post,
     )
     self_._post_calls = post_calls  # type: ignore[attr-defined]
+    self_._replay_exclude = replay_exclude  # type: ignore[attr-defined]
     return self_
 
 
@@ -1104,3 +1120,98 @@ def test_egress_gate_on_with_empty_url_short_circuits_at_debug_level() -> None:
     )
     assert self_._egress_build_calls == []  # type: ignore[attr-defined]
     assert any("predict_api_events_url empty" in msg for msg in debug_sink), debug_sink
+
+
+# ---------------------------------------------------------------------------
+# Replay batch: rows the drainer hydrated (settled before a restart, never
+# posted) are POSTed as their own batch, isolated from delivered and sweep.
+# ---------------------------------------------------------------------------
+
+
+def test_replay_events_are_posted_as_a_separate_batch_after_delivered() -> None:
+    """Delivered first, then replay, each with its own label and events."""
+    delivered: List[Dict[str, Any]] = [
+        {"request": {"request_id": "d1"}, "response": {"delivery_tx_hash": None}}
+    ]
+    replay: List[Dict[str, Any]] = [
+        {"request": {"request_id": "r1"}, "response": {"delivery_tx_hash": "0xold"}}
+    ]
+    self_ = _make_egress_self_for_enricher(
+        delivered_events=delivered, final_tx_hash="0xnew", replay_events=replay
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    calls = self_._post_calls  # type: ignore[attr-defined]
+    assert [c["batch_label"] for c in calls] == ["delivered", "replay"]
+    assert calls[1]["events"] == replay
+    assert calls[1]["swept_request_ids"] is None
+    # The round's tx hash is stamped on delivered events only; replay rows
+    # keep the hash of the settlement they actually belong to.
+    assert delivered[0]["response"]["delivery_tx_hash"] == "0xnew"
+    assert replay[0]["response"]["delivery_tx_hash"] == "0xold"
+
+
+def test_replay_events_alone_still_reach_the_post() -> None:
+    """A quiet round with only drainer rows is not short-circuited as 'no events'."""
+    replay: List[Dict[str, Any]] = [
+        {"request": {"request_id": "r1"}, "response": {"delivery_tx_hash": "0xold"}}
+    ]
+    self_ = _make_egress_self_for_enricher(
+        delivered_events=[], final_tx_hash="0xnew", replay_events=replay
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    calls = self_._post_calls  # type: ignore[attr-defined]
+    assert [c["batch_label"] for c in calls] == ["replay"]
+
+
+def test_replay_batch_excludes_the_rounds_own_deliveries() -> None:
+    """A row this round is delivering must not also go out in the replay batch.
+
+    ``count_settled_from_synced_data`` stamps the settlement before the
+    delivered POST, so every off-chain row the delivered batch is about to
+    send momentarily looks settled-but-unposted. Without the exclusion each
+    one is POSTed twice per round with no restart involved, and the replay
+    log line and metric fire on every round.
+    """
+    delivered: List[Dict[str, Any]] = [
+        {"request": {"request_id": "d1"}, "response": {"delivery_tx_hash": None}},
+        {"request": {"request_id": "d2"}, "response": {"delivery_tx_hash": None}},
+    ]
+    self_ = _make_egress_self_for_enricher(
+        delivered_events=delivered, final_tx_hash="0xnew"
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    exclude = self_._replay_exclude  # type: ignore[attr-defined]
+    assert exclude == [{"d1", "d2"}]
+
+
+def test_delivered_batch_marks_only_offchain_ids_as_stampable() -> None:
+    """Only off-chain requests have a preimage row, so only they can be stamped.
+
+    The delivered batch also carries on-chain marketplace deliveries. Letting
+    those through parks a stamp that no row ever claims, the same leak the
+    settled and abandoned stamps are gated against.
+    """
+    delivered: List[Dict[str, Any]] = [
+        {"request": {"request_id": "off-1"}, "response": {"delivery_tx_hash": None}},
+        {"request": {"request_id": "on-1"}, "response": {"delivery_tx_hash": None}},
+    ]
+    self_ = _make_egress_self_for_enricher(
+        delivered_events=delivered,
+        final_tx_hash="0xnew",
+        done_tasks=[
+            {"request_id": "off-1", "is_offchain": True},
+            {"request_id": "on-1"},
+        ],
+    )
+    _drive_generator_once(
+        PostTxSettlementBehaviour._do_predict_api_write_best_effort(self_)
+    )
+    calls = self_._post_calls  # type: ignore[attr-defined]
+    assert calls[0]["batch_label"] == "delivered"
+    assert calls[0]["stampable_request_ids"] == {"off-1"}
