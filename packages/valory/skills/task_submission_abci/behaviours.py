@@ -197,6 +197,11 @@ PREDICT_API_REPLAY_SHRINK = "predict_api_replay_shrink"
 # (expired credentials, rate limit, a schema change) and no row is at fault.
 # Reset at the top of each ``_do_predict_api_write_best_effort``.
 PREDICT_API_ROUND_SERVER_OK = "predict_api_round_server_ok"
+# Statuses that say the batch's own content is unacceptable, and so can be
+# attributed to the single row in flight. Everything else a server can answer
+# with (auth, rate limiting, timeouts, a wrong path) refuses healthy rows just
+# the same, so those retry instead of retiring a row.
+PREDICT_API_ROW_REJECTION_STATUSES = frozenset({400, 413, 422})
 
 # ``SettlementOutcome`` is a ``Literal`` so a misspelt outcome fails mypy
 # instead of silently minting a new label value.
@@ -2479,7 +2484,19 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         # once the predict-api POST has confirmed a 2xx (or a terminal 4xx —
         # see ``_post_predict_api_batch`` for the poison-drop rationale).
         request_only_events, swept_request_ids = self._sweep_pending_undelivered()
-        replay_events = self._replay_events_from_preimage()
+        delivered_request_ids = {
+            rid
+            for rid in (_event_request_id(e) for e in delivered_events)
+            if rid is not None
+        }
+        # Only off-chain requests have a row in this agent's preimage store.
+        # The delivered batch also carries on-chain marketplace deliveries.
+        offchain_request_ids = {
+            str(task.get("request_id"))
+            for task in self.synchronized_data.done_tasks
+            if isinstance(task, dict) and task.get(IS_OFFCHAIN)
+        }
+        replay_events = self._replay_events_from_preimage(delivered_request_ids)
         self.context.shared_state.pop(PREDICT_API_ROUND_SERVER_OK, None)
         if not delivered_events and not request_only_events and not replay_events:
             self.context.logger.debug(
@@ -2615,6 +2632,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 predict_api_url=predict_api_url,
                 batch_label=BATCH_LABEL_DELIVERED,
                 swept_request_ids=None,  # delivered has no queue-side state
+                stampable_request_ids=offchain_request_ids,
             )
         if replay_events:
             # Rows settled before a restart and never posted; isolated like
@@ -2626,6 +2644,11 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 predict_api_url=predict_api_url,
                 batch_label=BATCH_LABEL_REPLAY,
                 swept_request_ids=None,
+                stampable_request_ids={
+                    rid
+                    for rid in (_event_request_id(e) for e in replay_events)
+                    if rid is not None
+                },
             )
         if request_only_events:
             yield from self._post_predict_api_batch(
@@ -2645,6 +2668,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         predict_api_url: str,
         batch_label: str,
         swept_request_ids: Optional[List[str]],
+        stampable_request_ids: Optional[Set[str]] = None,
     ) -> Generator:
         """Hash, sign, and POST one predict-api batch. Post-write side effects vary by outcome.
 
@@ -2679,6 +2703,10 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         :param batch_label: ``"delivered"`` or ``"sweep"``, used in log lines.
         :param swept_request_ids: request-ids to drop from ``PENDING_TASKS``
             on outcome-appropriate paths. ``None`` for the delivered batch.
+        :param stampable_request_ids: the ids in this batch that have a
+            preimage row in this agent's store, and so can carry a
+            ``posted_at`` stamp. The delivered batch also carries on-chain
+            marketplace deliveries, which have no row.
         :yield: AEA protocol messages (signing dialogue, HTTP request).
         """
         # The EIP-712 domain.chainId binds the signature to one chain. Read
@@ -2859,9 +2887,10 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
                 # (no-op unless retention is on) so the sweeper can retire
                 # the row and the drainer never re-POSTs it.
                 posted_at = int(time.time())
+                stampable = stampable_request_ids or set()
                 for event in events:
                     request_id = _event_request_id(event)
-                    if request_id is not None:
+                    if request_id is not None and request_id in stampable:
                         preimage_buffer.record_stamp(
                             self.context.shared_state,
                             request_id,
@@ -2927,8 +2956,7 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
         ).inc()
         if (
             batch_label == BATCH_LABEL_REPLAY
-            and status is not None
-            and 400 <= status < 500
+            and status in PREDICT_API_ROW_REJECTION_STATUSES
         ):
             self._isolate_rejected_replay(events, status)
 
@@ -2976,9 +3004,18 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             shared_state, request_id, abandoned_at=int(time.time())
         )
 
-    def _replay_events_from_preimage(self) -> List[Dict[str, Any]]:
+    def _replay_events_from_preimage(
+        self, exclude_request_ids: Set[str]
+    ) -> List[Dict[str, Any]]:
         """Return the drainer's settled-but-unposted events, tx hash stamped.
 
+        A row this round is already delivering is excluded: its settlement
+        stamp lands before the delivered POST, so it would otherwise qualify
+        as settled-but-unposted and be sent twice. Rows left over from an
+        earlier round stay eligible, which is what retries a delivered batch
+        that failed then.
+
+        :param exclude_request_ids: request ids the delivered batch is sending.
         :return: an ordered list of ``MechEvent``-shaped dicts.
         """
         events: List[Dict[str, Any]] = []
@@ -2987,10 +3024,12 @@ class PostTxSettlementBehaviour(TaskExecutionBaseBehaviour):
             if self.context.shared_state.get(PREDICT_API_REPLAY_SHRINK)
             else self.params.predict_api_replay_batch_size
         )
-        for _, event, tx_hash in preimage_buffer.replayable_events(
+        for request_id, event, tx_hash in preimage_buffer.replayable_events(
             self.context.shared_state,
             limit=limit,
         ):
+            if request_id in exclude_request_ids:
+                continue
             replayed = deepcopy(event)
             response = replayed.get("response")
             if isinstance(response, dict):

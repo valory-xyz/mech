@@ -4776,6 +4776,15 @@ class TestPostPredictApiBatchStampsPosted:
             predict_api_url="https://example.invalid/events",
             batch_label=batch_label,
             swept_request_ids=None,
+            stampable_request_ids={
+                rid
+                for rid in (
+                    beh_mod._event_request_id(e)
+                    for e in (events if events is not None else [])
+                )
+                if rid is not None
+            }
+            or {STAMP_REQUEST_ID},
         )
         _run_gen(gen)
 
@@ -4827,7 +4836,28 @@ class TestPostPredictApiBatchStampsPosted:
         assert isinstance(record[preimage.FIELD_ABANDONED_AT], int)
         assert preimage.is_complete(record, require_posted=True) is True
 
-    @pytest.mark.parametrize("status_code", [401, 403, 429, 422])
+    @pytest.mark.parametrize("status_code", [401, 403, 404, 408, 429])
+    def test_a_non_content_rejection_blames_no_row(self, status_code: int) -> None:
+        """Statuses that are not about the payload refuse healthy rows too.
+
+        A rate limit or a timeout can accept the delivered POST and refuse the
+        replay POST seconds later, so the in-round 2xx is present and cannot
+        carry the decision on its own. Blaming the row in flight would retire
+        one good row per round for the length of the problem.
+
+        :param status_code: the status the server returns for the replay batch.
+        """
+        self_ = self._make_self(status_code=status_code)
+        self._server_answered(self_)
+        self._post(self_, beh_mod.BATCH_LABEL_REPLAY)
+        ss = self_.context.shared_state
+        assert beh_mod.PREDICT_API_REPLAY_SHRINK not in ss
+        assert (
+            ss[preimage.PREIMAGE_RECORDS][STAMP_REQUEST_ID][preimage.FIELD_ABANDONED_AT]
+            is None
+        )
+
+    @pytest.mark.parametrize("status_code", [400, 413, 422])
     def test_rejection_without_a_successful_post_blames_no_row(
         self, status_code: int
     ) -> None:
@@ -4866,9 +4896,10 @@ class TestPostPredictApiBatchStampsPosted:
                 use_offchain=True,
                 predict_api_events_url="https://example.invalid/events",
             ),
+            synchronized_data=SimpleNamespace(done_tasks=[]),
             _extract_offchain_events=lambda: [],
             _sweep_pending_undelivered=lambda: ([], []),
-            _replay_events_from_preimage=lambda: [],
+            _replay_events_from_preimage=lambda _exclude: [],
         )
         _run_gen(
             beh_mod.PostTxSettlementBehaviour._do_predict_api_write_best_effort(
@@ -4958,7 +4989,7 @@ class TestReplayEventsFromPreimage:
         }
         self_ = self._make_self(shared_state)
         events = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
-            cast(beh_mod.PostTxSettlementBehaviour, self_)
+            cast(beh_mod.PostTxSettlementBehaviour, self_), set()
         )
         assert events == [
             {
@@ -4977,6 +5008,40 @@ class TestReplayEventsFromPreimage:
             "the preimage store."
         ]
 
+    def test_an_excluded_id_is_dropped_but_others_stay_eligible(self) -> None:
+        """An id the delivered batch is sending is skipped; leftovers are not.
+
+        Excluding only this round's deliveries is what stops the double POST
+        while still letting a delivered batch that failed in an earlier round
+        get retried here.
+        """
+        shared_state: Dict[str, Any] = {}
+        _delivered_preimage_state(shared_state)
+        for rid in (STAMP_REQUEST_ID, "r-older"):
+            if rid not in shared_state[preimage.PREIMAGE_RECORDS]:
+                preimage.record_settlement(
+                    shared_state, rid, "{}", "cid", preimage.STATUS_DELIVERED, 1.0
+                )
+            record = shared_state[preimage.PREIMAGE_RECORDS][rid]
+            record[preimage.FIELD_SETTLED_TX_HASH] = STAMP_TX_HASH
+            record[preimage.FIELD_PREDICT_API_EVENT] = {
+                "response": {"request_id": rid, "delivery_tx_hash": None}
+            }
+        self_ = self._make_self(shared_state)
+
+        both = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
+            cast(beh_mod.PostTxSettlementBehaviour, self_), set()
+        )
+        assert {beh_mod._event_request_id(e) for e in both} == {
+            STAMP_REQUEST_ID,
+            "r-older",
+        }
+
+        remaining = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
+            cast(beh_mod.PostTxSettlementBehaviour, self_), {STAMP_REQUEST_ID}
+        )
+        assert [beh_mod._event_request_id(e) for e in remaining] == ["r-older"]
+
     def test_no_rows_means_no_events_and_no_log(self) -> None:
         """An empty store is a quiet no-op."""
         shared_state: Dict[str, Any] = {}
@@ -4984,7 +5049,7 @@ class TestReplayEventsFromPreimage:
         self_ = self._make_self(shared_state)
         assert (
             beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
-                cast(beh_mod.PostTxSettlementBehaviour, self_)
+                cast(beh_mod.PostTxSettlementBehaviour, self_), set()
             )
             == []
         )
@@ -5091,12 +5156,12 @@ def test_replay_batch_is_capped_by_the_configured_size() -> None:
         record[preimage.FIELD_PREDICT_API_EVENT] = {"response": {"request_id": rid}}
     self_ = TestReplayEventsFromPreimage()._make_self(shared_state, batch_size=2)
     events = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
-        cast(beh_mod.PostTxSettlementBehaviour, self_)
+        cast(beh_mod.PostTxSettlementBehaviour, self_), set()
     )
     assert [e["response"]["request_id"] for e in events] == ["a", "b"]
     # After a rejected replay batch the next one is a single event.
     shared_state[beh_mod.PREDICT_API_REPLAY_SHRINK] = True
     events = beh_mod.PostTxSettlementBehaviour._replay_events_from_preimage(
-        cast(beh_mod.PostTxSettlementBehaviour, self_)
+        cast(beh_mod.PostTxSettlementBehaviour, self_), set()
     )
     assert [e["response"]["request_id"] for e in events] == ["a"]
