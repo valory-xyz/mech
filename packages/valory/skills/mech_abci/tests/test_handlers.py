@@ -19,6 +19,8 @@
 
 """Test the handlers.py module of the mech_abci skill."""
 
+import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,7 +32,11 @@ import pytest
 
 import packages.valory.skills.mech_abci.handlers as hmod
 from packages.valory.protocols.http.message import HttpMessage
-from packages.valory.skills.mech_abci.handlers import HttpHandler, HttpMethod
+from packages.valory.skills.mech_abci.handlers import (
+    AGENT_REGISTRATION_PATH,
+    HttpHandler,
+    HttpMethod,
+)
 from packages.valory.skills.mech_abci.tests.conftest import (
     _make_ctx,
     _make_dialogue,
@@ -85,6 +91,9 @@ class TestHttpHandler:
         health_url_regex = rf"{hostname_regex}\/healthcheck"
         send_signed_url = rf"{hostname_regex}\/send_signed_requests"
         fetch_offchain_info_url = rf"{hostname_regex}\/fetch_offchain_info"
+        agent_registration_url = (
+            rf"{hostname_regex}{re.escape(AGENT_REGISTRATION_PATH)}(\?.*)?$"
+        )
 
         assert self.handler.handler_url_regex == rf"{hostname_regex}\/.*"
         assert self.handler.routes == {
@@ -94,6 +103,7 @@ class TestHttpHandler:
                     fetch_offchain_info_url,
                     self.mech_handler._handle_offchain_request_info,
                 ),
+                (agent_registration_url, self.handler._handle_get_agent_registration),
             ],
             (HttpMethod.POST.value,): [
                 (send_signed_url, self.mech_handler._handle_signed_requests)
@@ -130,6 +140,42 @@ class TestHttpHandler:
                 method=HttpMethod.GET.value,
                 expected_handler="_handle_offchain_request_info",
                 is_mech_handler=True,
+            ),
+            GetHandlerTestCase(
+                name="Happy Path: agent registration proof",
+                url="http://localhost:8080/.well-known/agent-registration.json",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_get_agent_registration",
+            ),
+            GetHandlerTestCase(
+                name="Happy Path: agent registration proof, HEAD",
+                url="http://localhost:8080/.well-known/agent-registration.json",
+                method=HttpMethod.HEAD.value,
+                expected_handler="_handle_get_agent_registration",
+            ),
+            GetHandlerTestCase(
+                name="Happy Path: agent registration proof with a query string",
+                url="http://localhost:8080/.well-known/agent-registration.json?probe=1",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_get_agent_registration",
+            ),
+            GetHandlerTestCase(
+                name="Agent registration proof only answers GET and HEAD",
+                url="http://localhost:8080/.well-known/agent-registration.json",
+                method=HttpMethod.POST.value,
+                expected_handler="_handle_bad_request",
+            ),
+            GetHandlerTestCase(
+                name="A suffix after the proof path is not the proof",
+                url="http://localhost:8080/.well-known/agent-registration.jsonx",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_bad_request",
+            ),
+            GetHandlerTestCase(
+                name="The dots in the proof path are literal",
+                url="http://localhost:8080/Xwell-known/agent-registrationXjson",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_bad_request",
             ),
             GetHandlerTestCase(
                 name="No url match",
@@ -323,6 +369,87 @@ class TestHttpHandlerResponseHelpers:
         self.ctx.outbox.put_message.assert_called_once()
         resp = self.dlg.reply.call_args
         assert resp.kwargs["status_code"] == 404
+
+
+# ---------------------------------------------------------------------------
+# _handle_get_agent_registration
+# ---------------------------------------------------------------------------
+
+SAMPLE_AGENT_ID = 2699
+SAMPLE_CHAIN_ID = 100
+DEFAULT_REGISTRY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+
+
+class TestHandleGetAgentRegistration:
+    """Tests for the ERC-8004 domain proof route."""
+
+    def _run(
+        self,
+        agent_id: Optional[int] = SAMPLE_AGENT_ID,
+        chain_id: int = SAMPLE_CHAIN_ID,
+        registry: str = DEFAULT_REGISTRY,
+    ) -> Any:
+        ctx = _make_ctx()
+        ctx.params.erc8004_agent_id = agent_id
+        ctx.params.mech_events_chain_id = chain_id
+        ctx.params.erc8004_identity_registry_address = registry
+        h = _make_handler(ctx)
+        dlg = _make_dialogue()
+        h._handle_get_agent_registration(
+            _make_http_msg(url=f"http://localhost:8080{AGENT_REGISTRATION_PATH}"), dlg
+        )
+        ctx.outbox.put_message.assert_called_once()
+        return dlg.reply.call_args.kwargs
+
+    def test_serves_this_mechs_registration_as_json(self) -> None:
+        """A configured mech lists its own registry and agent id, and nothing else."""
+        reply = self._run()
+
+        assert reply["status_code"] == 200
+        assert reply["headers"].startswith("Content-Type: application/json")
+        assert json.loads(reply["body"]) == {
+            "registrations": [
+                {
+                    "agentRegistry": f"eip155:{SAMPLE_CHAIN_ID}:{DEFAULT_REGISTRY}",
+                    "agentId": SAMPLE_AGENT_ID,
+                }
+            ]
+        }
+
+    def test_uses_the_configured_registry_and_chain(self) -> None:
+        """The registry address and chain id come from params, not constants."""
+        other_registry = "0x" + "ab" * 20
+        reply = self._run(chain_id=8453, registry=other_registry)
+
+        body = json.loads(reply["body"])
+        assert (
+            body["registrations"][0]["agentRegistry"] == f"eip155:8453:{other_registry}"
+        )
+
+    def test_agent_id_zero_is_a_real_id(self) -> None:
+        """Agent id 0 is valid and must not be treated as unset."""
+        reply = self._run(agent_id=0)
+
+        assert reply["status_code"] == 200
+        assert json.loads(reply["body"])["registrations"][0]["agentId"] == 0
+
+    @pytest.mark.parametrize(
+        "agent_id,chain_id",
+        [
+            (None, SAMPLE_CHAIN_ID),
+            (SAMPLE_AGENT_ID, 0),
+            (SAMPLE_AGENT_ID, -1),
+            (None, 0),
+        ],
+    )
+    def test_answers_404_when_not_configured(
+        self, agent_id: Optional[int], chain_id: int
+    ) -> None:
+        """Without an agent id or a chain id the mech publishes no proof."""
+        reply = self._run(agent_id=agent_id, chain_id=chain_id)
+
+        assert reply["status_code"] == 404
+        assert reply["body"] == b""
 
 
 # ---------------------------------------------------------------------------
