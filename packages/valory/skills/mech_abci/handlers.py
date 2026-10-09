@@ -345,18 +345,13 @@ class HttpHandler(BaseHttpHandler):
         """
         Handle GET /.well-known/agent-registration.json, the ERC-8004 domain proof.
 
-        Lists this mech's own ERC-8004 registration so a reader that finds this
-        host named as the operator domain can match it to the agent id. Answers
-        404 when the agent id or the chain id is not configured, so a mech that
-        does not publish a proof reads as "no proof" rather than a wrong one.
-
         :param http_msg: the http message
         :param http_dialogue: the http dialogue
         """
         params = self.context.params
         agent_id = params.erc8004_agent_id
         chain_id = params.mech_events_chain_id
-        if agent_id is None or not chain_id or chain_id <= 0:
+        if agent_id is None or chain_id <= 0:
             self._send_not_found_response(http_msg, http_dialogue)
             return
 

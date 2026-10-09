@@ -37,6 +37,7 @@ from packages.valory.skills.mech_abci.handlers import (
     HttpHandler,
     HttpMethod,
 )
+from packages.valory.skills.mech_abci.models import DEFAULT_ERC8004_IDENTITY_REGISTRY
 from packages.valory.skills.mech_abci.tests.conftest import (
     _make_ctx,
     _make_dialogue,
@@ -377,7 +378,6 @@ class TestHttpHandlerResponseHelpers:
 
 SAMPLE_AGENT_ID = 2699
 SAMPLE_CHAIN_ID = 100
-DEFAULT_REGISTRY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
 
 
 class TestHandleGetAgentRegistration:
@@ -387,7 +387,7 @@ class TestHandleGetAgentRegistration:
         self,
         agent_id: Optional[int] = SAMPLE_AGENT_ID,
         chain_id: int = SAMPLE_CHAIN_ID,
-        registry: str = DEFAULT_REGISTRY,
+        registry: str = DEFAULT_ERC8004_IDENTITY_REGISTRY,
     ) -> Any:
         ctx = _make_ctx()
         ctx.params.erc8004_agent_id = agent_id
@@ -410,7 +410,7 @@ class TestHandleGetAgentRegistration:
         assert json.loads(reply["body"]) == {
             "registrations": [
                 {
-                    "agentRegistry": f"eip155:{SAMPLE_CHAIN_ID}:{DEFAULT_REGISTRY}",
+                    "agentRegistry": f"eip155:{SAMPLE_CHAIN_ID}:{DEFAULT_ERC8004_IDENTITY_REGISTRY}",
                     "agentId": SAMPLE_AGENT_ID,
                 }
             ]
@@ -450,6 +450,34 @@ class TestHandleGetAgentRegistration:
 
         assert reply["status_code"] == 404
         assert reply["body"] == b""
+
+
+MECH_HOST = "c05e7412439bd7e91730a6880e18d5d5873f632c-100.mech.valory.xyz"
+
+
+class TestAgentRegistrationRoutingOnTheMechHost:
+    """The proof is reached on the production host shape, not only on localhost."""
+
+    def setup_method(self) -> None:
+        """Build a handler whose service endpoint is a mech hostname."""
+        ctx = _make_ctx()
+        ctx.params.service_endpoint_base = f"https://{MECH_HOST}/"
+        self.h = _make_handler(ctx)
+
+    def test_routes_the_proof_on_the_mech_host(self) -> None:
+        """A request to the mech's own hostname reaches the proof handler."""
+        handler, _ = self.h._get_handler(
+            f"https://{MECH_HOST}{AGENT_REGISTRATION_PATH}", HttpMethod.GET.value
+        )
+        assert handler == self.h._handle_get_agent_registration
+
+    def test_does_not_route_another_host(self) -> None:
+        """A request naming a different host is not handled here."""
+        other = MECH_HOST.replace("-100.", "-137.")
+        handler, _ = self.h._get_handler(
+            f"https://{other}{AGENT_REGISTRATION_PATH}", HttpMethod.GET.value
+        )
+        assert handler is None
 
 
 # ---------------------------------------------------------------------------

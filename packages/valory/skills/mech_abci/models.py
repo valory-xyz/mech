@@ -50,19 +50,14 @@ from packages.valory.skills.transaction_settlement_abci.rounds import (
 
 TaskExecutionParams = TaskExecutionAbciParams
 
-# ERC-8004 IdentityRegistry, deployed at this address on every chain the
-# mechs run on. Overridable for a chain where it lives elsewhere.
+# ERC-8004 IdentityRegistry. Overridable per deployment.
 DEFAULT_ERC8004_IDENTITY_REGISTRY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
 _ADDRESS_REGEX = re.compile(r"^0x[0-9a-fA-F]{40}$")
 
 
 def parse_erc8004_agent_id(value: Any) -> Optional[int]:
     """
-    Validate the configured ERC-8004 agent id.
-
-    The id is the one the identity registry assigned to this service, which
-    is not in general the Olas service id. ``None`` means the mech publishes
-    no domain proof.
+    Validate the configured ERC-8004 agent id, which is not the Olas service id.
 
     :param value: the raw ``erc8004_agent_id`` param
     :return: the agent id, or None when unset
