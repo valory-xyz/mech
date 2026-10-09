@@ -19,7 +19,7 @@
 
 """This module contains the shared state for the abci skill of Mech."""
 
-from typing import Any
+from typing import Any, Optional
 
 from packages.valory.skills.abstract_round_abci.models import (
     ApiSpecs,
@@ -48,6 +48,26 @@ from packages.valory.skills.transaction_settlement_abci.rounds import (
 )
 
 TaskExecutionParams = TaskExecutionAbciParams
+
+# ERC-8004 IdentityRegistry. Readers accept proofs naming this address only.
+ERC8004_IDENTITY_REGISTRY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+
+
+def parse_erc8004_agent_id(value: Any) -> Optional[int]:
+    """
+    Validate the configured ERC-8004 agent id, which is not the Olas service id.
+
+    :param value: the raw ``erc8004_agent_id`` param
+    :return: the agent id, or None when unset
+    :raises ValueError: when the value is set but is not a non-negative integer
+    """
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError(
+            f"erc8004_agent_id must be a non-negative integer or null, got {value!r}"
+        )
+    return value
 
 
 Requests = BaseRequests
@@ -106,3 +126,21 @@ class SharedState(TaskExecSharedState):
 
 class Params(TaskExecutionParams, SubscriptionParams, TerminationParams):  # type: ignore
     """A model to represent params for multiple abci apps."""
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        """
+        Initialize the params, reading the ERC-8004 domain proof settings.
+
+        :param args: positional arguments
+        :param kwargs: keyword arguments
+        :raises ValueError: when an agent id is set without a chain id
+        """
+        self.erc8004_agent_id: Optional[int] = parse_erc8004_agent_id(
+            kwargs.get("erc8004_agent_id")
+        )
+        super().__init__(*args, **kwargs)
+        if self.erc8004_agent_id is not None and self.mech_events_chain_id <= 0:
+            raise ValueError(
+                "erc8004_agent_id is set but mech_events_chain_id is not; "
+                "the domain proof needs both"
+            )

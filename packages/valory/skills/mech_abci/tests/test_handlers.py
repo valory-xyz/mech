@@ -19,6 +19,8 @@
 
 """Test the handlers.py module of the mech_abci skill."""
 
+import json
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -30,7 +32,12 @@ import pytest
 
 import packages.valory.skills.mech_abci.handlers as hmod
 from packages.valory.protocols.http.message import HttpMessage
-from packages.valory.skills.mech_abci.handlers import HttpHandler, HttpMethod
+from packages.valory.skills.mech_abci.handlers import (
+    AGENT_REGISTRATION_PATH,
+    HttpHandler,
+    HttpMethod,
+)
+from packages.valory.skills.mech_abci.models import ERC8004_IDENTITY_REGISTRY
 from packages.valory.skills.mech_abci.tests.conftest import (
     _make_ctx,
     _make_dialogue,
@@ -85,6 +92,9 @@ class TestHttpHandler:
         health_url_regex = rf"{hostname_regex}\/healthcheck"
         send_signed_url = rf"{hostname_regex}\/send_signed_requests"
         fetch_offchain_info_url = rf"{hostname_regex}\/fetch_offchain_info"
+        agent_registration_url = (
+            rf"{hostname_regex}{re.escape(AGENT_REGISTRATION_PATH)}(\?.*)?$"
+        )
 
         assert self.handler.handler_url_regex == rf"{hostname_regex}\/.*"
         assert self.handler.routes == {
@@ -94,6 +104,7 @@ class TestHttpHandler:
                     fetch_offchain_info_url,
                     self.mech_handler._handle_offchain_request_info,
                 ),
+                (agent_registration_url, self.handler._handle_get_agent_registration),
             ],
             (HttpMethod.POST.value,): [
                 (send_signed_url, self.mech_handler._handle_signed_requests)
@@ -130,6 +141,42 @@ class TestHttpHandler:
                 method=HttpMethod.GET.value,
                 expected_handler="_handle_offchain_request_info",
                 is_mech_handler=True,
+            ),
+            GetHandlerTestCase(
+                name="Happy Path: agent registration proof",
+                url="http://localhost:8080/.well-known/agent-registration.json",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_get_agent_registration",
+            ),
+            GetHandlerTestCase(
+                name="Happy Path: agent registration proof, HEAD",
+                url="http://localhost:8080/.well-known/agent-registration.json",
+                method=HttpMethod.HEAD.value,
+                expected_handler="_handle_get_agent_registration",
+            ),
+            GetHandlerTestCase(
+                name="Happy Path: agent registration proof with a query string",
+                url="http://localhost:8080/.well-known/agent-registration.json?probe=1",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_get_agent_registration",
+            ),
+            GetHandlerTestCase(
+                name="Agent registration proof only answers GET and HEAD",
+                url="http://localhost:8080/.well-known/agent-registration.json",
+                method=HttpMethod.POST.value,
+                expected_handler="_handle_bad_request",
+            ),
+            GetHandlerTestCase(
+                name="A suffix after the proof path is not the proof",
+                url="http://localhost:8080/.well-known/agent-registration.jsonx",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_bad_request",
+            ),
+            GetHandlerTestCase(
+                name="The dots in the proof path are literal",
+                url="http://localhost:8080/Xwell-known/agent-registrationXjson",
+                method=HttpMethod.GET.value,
+                expected_handler="_handle_bad_request",
             ),
             GetHandlerTestCase(
                 name="No url match",
@@ -323,6 +370,112 @@ class TestHttpHandlerResponseHelpers:
         self.ctx.outbox.put_message.assert_called_once()
         resp = self.dlg.reply.call_args
         assert resp.kwargs["status_code"] == 404
+
+
+# ---------------------------------------------------------------------------
+# _handle_get_agent_registration
+# ---------------------------------------------------------------------------
+
+SAMPLE_AGENT_ID = 2699
+SAMPLE_CHAIN_ID = 100
+
+
+class TestHandleGetAgentRegistration:
+    """Tests for the ERC-8004 domain proof route."""
+
+    def _run(
+        self,
+        agent_id: Optional[int] = SAMPLE_AGENT_ID,
+        chain_id: int = SAMPLE_CHAIN_ID,
+    ) -> Any:
+        ctx = _make_ctx()
+        ctx.params.erc8004_agent_id = agent_id
+        ctx.params.mech_events_chain_id = chain_id
+        h = _make_handler(ctx)
+        dlg = _make_dialogue()
+        h._handle_get_agent_registration(
+            _make_http_msg(url=f"http://localhost:8080{AGENT_REGISTRATION_PATH}"), dlg
+        )
+        ctx.outbox.put_message.assert_called_once()
+        return dlg.reply.call_args.kwargs
+
+    def test_serves_this_mechs_registration_as_json(self) -> None:
+        """A configured mech lists its own registry and agent id, and nothing else."""
+        reply = self._run()
+
+        assert reply["status_code"] == 200
+        assert reply["headers"].startswith("Content-Type: application/json")
+        assert json.loads(reply["body"]) == {
+            "registrations": [
+                {
+                    "agentRegistry": f"eip155:{SAMPLE_CHAIN_ID}:{ERC8004_IDENTITY_REGISTRY}",
+                    "agentId": SAMPLE_AGENT_ID,
+                }
+            ]
+        }
+
+    def test_uses_the_configured_chain(self) -> None:
+        """The chain id in the registration comes from params."""
+        reply = self._run(chain_id=8453)
+
+        body = json.loads(reply["body"])
+        assert (
+            body["registrations"][0]["agentRegistry"]
+            == f"eip155:8453:{ERC8004_IDENTITY_REGISTRY}"
+        )
+
+    def test_agent_id_zero_is_a_real_id(self) -> None:
+        """Agent id 0 is valid and must not be treated as unset."""
+        reply = self._run(agent_id=0)
+
+        assert reply["status_code"] == 200
+        assert json.loads(reply["body"])["registrations"][0]["agentId"] == 0
+
+    @pytest.mark.parametrize(
+        "agent_id,chain_id",
+        [
+            (None, SAMPLE_CHAIN_ID),
+            (SAMPLE_AGENT_ID, 0),
+            (SAMPLE_AGENT_ID, -1),
+            (None, 0),
+        ],
+    )
+    def test_answers_404_when_not_configured(
+        self, agent_id: Optional[int], chain_id: int
+    ) -> None:
+        """Without an agent id or a chain id the mech publishes no proof."""
+        reply = self._run(agent_id=agent_id, chain_id=chain_id)
+
+        assert reply["status_code"] == 404
+        assert reply["body"] == b""
+
+
+MECH_HOST = "c05e7412439bd7e91730a6880e18d5d5873f632c-100.mech.valory.xyz"
+
+
+class TestAgentRegistrationRoutingOnTheMechHost:
+    """The proof is reached on the production host shape, not only on localhost."""
+
+    def setup_method(self) -> None:
+        """Build a handler whose service endpoint is a mech hostname."""
+        ctx = _make_ctx()
+        ctx.params.service_endpoint_base = f"https://{MECH_HOST}/"
+        self.h = _make_handler(ctx)
+
+    def test_routes_the_proof_on_the_mech_host(self) -> None:
+        """A request to the mech's own hostname reaches the proof handler."""
+        handler, _ = self.h._get_handler(
+            f"https://{MECH_HOST}{AGENT_REGISTRATION_PATH}", HttpMethod.GET.value
+        )
+        assert handler == self.h._handle_get_agent_registration
+
+    def test_does_not_route_another_host(self) -> None:
+        """A request naming a different host is not handled here."""
+        other = MECH_HOST.replace("-100.", "-137.")
+        handler, _ = self.h._get_handler(
+            f"https://{other}{AGENT_REGISTRATION_PATH}", HttpMethod.GET.value
+        )
+        assert handler is None
 
 
 # ---------------------------------------------------------------------------

@@ -55,6 +55,7 @@ from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
 from packages.valory.skills.mech_abci.dialogues import HttpDialogue, HttpDialogues
+from packages.valory.skills.mech_abci.models import ERC8004_IDENTITY_REGISTRY
 from packages.valory.skills.task_submission_abci.models import (
     SharedState as BaseSharedState,
 )
@@ -86,6 +87,7 @@ TRANSITION_TOLERANCE_FACTOR = (
 LIVENESS_STALL_FACTOR = (
     3.0  # allow up to 3× the expected pause before calling it “stuck”
 )
+AGENT_REGISTRATION_PATH = "/.well-known/agent-registration.json"
 
 
 class HttpCode(Enum):
@@ -126,6 +128,9 @@ class HttpHandler(BaseHttpHandler):
         hostname_regex = rf".*({service_endpoint_base}|{propel_uri_base_hostname}|localhost|127.0.0.1|0.0.0.0)(:\d+)?"
         self.handler_url_regex = rf"{hostname_regex}\/.*"
         health_url_regex = rf"{hostname_regex}\/healthcheck"
+        agent_registration_url_regex = (
+            rf"{hostname_regex}{re.escape(AGENT_REGISTRATION_PATH)}(\?.*)?$"
+        )
 
         # update the route for mech http handler
         routes_data = self.context.shared_state["routes_info"]
@@ -140,6 +145,7 @@ class HttpHandler(BaseHttpHandler):
             (HttpMethod.GET.value, HttpMethod.HEAD.value): [
                 (health_url_regex, self._handle_get_health),
                 (fetch_offchain_info, funcs[1]),
+                (agent_registration_url_regex, self._handle_get_agent_registration),
             ],
             (HttpMethod.POST.value,): [(send_signed_url, funcs[0])],
         }
@@ -333,6 +339,32 @@ class HttpHandler(BaseHttpHandler):
         # Send response
         self.context.logger.info("Responding with: {}".format(http_response))
         self.context.outbox.put_message(message=http_response)
+
+    def _handle_get_agent_registration(
+        self, http_msg: HttpMessage, http_dialogue: HttpDialogue
+    ) -> None:
+        """
+        Handle GET /.well-known/agent-registration.json, the ERC-8004 domain proof.
+
+        :param http_msg: the http message
+        :param http_dialogue: the http dialogue
+        """
+        params = self.context.params
+        agent_id = params.erc8004_agent_id
+        chain_id = params.mech_events_chain_id
+        if agent_id is None or chain_id <= 0:
+            self._send_not_found_response(http_msg, http_dialogue)
+            return
+
+        data = {
+            "registrations": [
+                {
+                    "agentRegistry": f"eip155:{chain_id}:{ERC8004_IDENTITY_REGISTRY}",
+                    "agentId": agent_id,
+                }
+            ]
+        }
+        self._send_ok_response(http_msg, http_dialogue, data)
 
     def _handle_get_health(
         self, http_msg: HttpMessage, http_dialogue: HttpDialogue

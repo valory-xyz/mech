@@ -18,10 +18,18 @@
 # ------------------------------------------------------------------------------
 """Tests for mech_abci.models."""
 
+from typing import Any
 from unittest.mock import patch
 
+import pytest
+
 from packages.valory.skills.mech_abci.composition import MechAbciApp
-from packages.valory.skills.mech_abci.models import MARGIN
+from packages.valory.skills.mech_abci.models import (
+    MARGIN,
+    Params,
+    TaskExecutionParams,
+    parse_erc8004_agent_id,
+)
 from packages.valory.skills.mech_abci.tests.conftest import (
     _make_context,
     _make_shared_state,
@@ -102,3 +110,69 @@ class TestSharedStateSetup:
         with patch.object(TaskExecSharedState, "setup") as mock_super_setup:
             state.setup()
         mock_super_setup.assert_called_once()
+
+
+SAMPLE_AGENT_ID = 25323
+SAMPLE_CHAIN_ID = 100
+
+
+class TestParseErc8004AgentId:
+    """Tests for parse_erc8004_agent_id."""
+
+    @pytest.mark.parametrize("value", [0, 1, SAMPLE_AGENT_ID, 2**64])
+    def test_accepts_non_negative_integers(self, value: int) -> None:
+        """Any non-negative integer is a valid agent id, including 0."""
+        assert parse_erc8004_agent_id(value) == value
+
+    def test_none_means_unset(self) -> None:
+        """An unset agent id means the mech publishes no proof."""
+        assert parse_erc8004_agent_id(None) is None
+
+    @pytest.mark.parametrize("value", [-1, True, False, "25323", 1.0, "", [], {}])
+    def test_rejects_anything_else(self, value: Any) -> None:
+        """Negative numbers, bools, strings and floats are configuration errors."""
+        with pytest.raises(ValueError, match="erc8004_agent_id"):
+            parse_erc8004_agent_id(value)
+
+
+class TestParamsErc8004Settings:
+    """Params reads the agent id and checks it against the chain id."""
+
+    @staticmethod
+    def _make_params(**kwargs: Any) -> Params:
+        def base_init(self: Params, *args: Any, **kw: Any) -> None:
+            self.mech_events_chain_id = int(kw.get("mech_events_chain_id", 0) or 0)
+
+        with patch.object(TaskExecutionParams, "__init__", base_init):
+            return Params(**kwargs)
+
+    def test_reads_the_configured_agent_id(self) -> None:
+        """A configured agent id with a chain id lands on the params object."""
+        params = self._make_params(
+            erc8004_agent_id=SAMPLE_AGENT_ID, mech_events_chain_id=SAMPLE_CHAIN_ID
+        )
+        assert params.erc8004_agent_id == SAMPLE_AGENT_ID
+
+    @pytest.mark.parametrize("chain_id", [0, SAMPLE_CHAIN_ID])
+    def test_no_agent_id_needs_no_chain_id(self, chain_id: int) -> None:
+        """Without an agent id the mech publishes no proof, whatever the chain."""
+        params = self._make_params(mech_events_chain_id=chain_id)
+        assert params.erc8004_agent_id is None
+
+    @pytest.mark.parametrize("chain_id", [0, -1, None])
+    def test_agent_id_without_chain_id_fails_at_startup(self, chain_id: Any) -> None:
+        """An agent id with no chain id would 404 silently, so startup stops instead."""
+        with pytest.raises(ValueError, match="mech_events_chain_id"):
+            self._make_params(
+                erc8004_agent_id=SAMPLE_AGENT_ID, mech_events_chain_id=chain_id
+            )
+
+    def test_agent_id_zero_still_needs_a_chain_id(self) -> None:
+        """Agent id 0 counts as set, so the chain check applies to it too."""
+        with pytest.raises(ValueError, match="mech_events_chain_id"):
+            self._make_params(erc8004_agent_id=0)
+
+    def test_bad_agent_id_fails_at_startup(self) -> None:
+        """A misconfigured agent id stops the agent instead of serving a wrong proof."""
+        with pytest.raises(ValueError, match="erc8004_agent_id"):
+            self._make_params(erc8004_agent_id=-5, mech_events_chain_id=SAMPLE_CHAIN_ID)

@@ -43,7 +43,7 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
 - valory/delivery_rate_abci:0.1.0:bafybeifjiazvf3qhr2264i55u4tlvmyf6ztgak2ndqolujt4kw6jiy7l3m
-- valory/mech_abci:0.1.0:bafybeifuiw3agnco6w46ybbxxslfomfvz4wygu6wdxed6g43thb6u6x46i
+- valory/mech_abci:0.1.0:bafybeifwhrwnxf6kz6zl2deuwvt4mlmygnfjyg7bhzem7fgr77b7yeg7fu
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
 - valory/task_execution:0.1.0:bafybeien4bl2tevynexkpaqzq24ozu2vw4zeurw4elfwhqvkbqh5swe7ta
@@ -194,6 +194,8 @@ models:
       round_timeout_seconds: ${float:30.0}
       reset_period_count: ${int:1000}
       on_chain_service_id: ${int:1}
+      erc8004_agent_id: ${int:null}
+      mech_events_chain_id: ${int:0}
       mech_staking_instance_address: ${str:0x0000000000000000000000000000000000000000}
       mech_marketplace_address: ${str:0x0000000000000000000000000000000000000000}
       complementary_service_metadata_address: ${str:0x0000000000000000000000000000000000000000}
