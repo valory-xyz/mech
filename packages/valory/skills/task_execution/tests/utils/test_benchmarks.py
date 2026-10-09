@@ -150,6 +150,36 @@ class TestTokenCounterCallbackCall:
         missing = [m for m in jury_models if m not in TokenCounterCallback.TOKEN_PRICES]
         assert not missing, f"unpriced jury voter models: {missing}"
 
+    @pytest.mark.parametrize(
+        "model, input_price, output_price",
+        [
+            ("gpt-6.1-sol", 0.002, 0.010),
+            ("gpt-6-luna", 0.0001, 0.0005),
+            ("claude-sonnet-5-5", 0.002, 0.010),
+            ("openai/gpt-6.1-sol:online", 0.002, 0.010),
+            ("anthropic/claude-sonnet-5.5:online", 0.002, 0.010),
+        ],
+    )
+    def test_current_models_are_priced(
+        self, model: str, input_price: float, output_price: float
+    ) -> None:
+        """Pin the USD-per-1k price of each model the prediction tools move to."""
+        assert TokenCounterCallback.TOKEN_PRICES[model] == {
+            "input": input_price,
+            "output": output_price,
+        }
+        callback = TokenCounterCallback()
+        callback(
+            model=model,
+            token_counter=lambda text, _model: len(text),
+            input_tokens=PRICE_NUM_TOKENS,
+            output_tokens=PRICE_NUM_TOKENS,
+        )
+        assert callback.actual_model == model
+        assert callback.cost_dict["total_cost"] == pytest.approx(
+            input_price + output_price
+        )
+
     def test_unsupported_model_raises_value_error(self) -> None:
         """Test __call__ raises ValueError for unsupported model."""
         cb = TokenCounterCallback()

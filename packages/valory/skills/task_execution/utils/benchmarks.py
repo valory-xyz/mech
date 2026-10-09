@@ -38,6 +38,8 @@ class TokenCounterCallback:
         "gpt-4o-2024-08-06": {"input": 0.0025, "output": 0.01},
         "gpt-4.1-2025-04-14": {"input": 0.002, "output": 0.008},
         "gpt-4.1-mini-2025-04-14": {"input": 0.0004, "output": 0.0016},
+        "gpt-6.1-sol": {"input": 0.002, "output": 0.010},
+        "gpt-6-luna": {"input": 0.0001, "output": 0.0005},
         "claude-2": {"input": 0.008, "output": 0.024},
         "claude-3-haiku-20240307": {"input": 0.00025, "output": 0.00125},
         "claude-3-5-sonnet-20240620": {"input": 0.003, "output": 0.015},
@@ -45,6 +47,7 @@ class TokenCounterCallback:
         "claude-3-opus-20240229": {"input": 0.015, "output": 0.075},
         "claude-fable-5": {"input": 0.01, "output": 0.05},
         "claude-sonnet-4-6": {"input": 0.003, "output": 0.015},
+        "claude-sonnet-5-5": {"input": 0.002, "output": 0.010},
         "cohere/command-r-plus": {"input": 0.003, "output": 0.015},
         "databricks/dbrx-instruct:nitro": {"input": 0.0009, "output": 0.0009},
         "nousresearch/nous-hermes-2-mixtral-8x7b-sft": {
@@ -52,11 +55,13 @@ class TokenCounterCallback:
             "output": 0.00054,
         },
         "openai/gpt-4.1:online": {"input": 0.002, "output": 0.008},
+        "openai/gpt-6.1-sol:online": {"input": 0.002, "output": 0.010},
         "x-ai/grok-4.1-fast:online": {"input": 0.0002, "output": 0.0005},
         "x-ai/grok-4.3:online": {"input": 0.00125, "output": 0.0025},
         "google/gemini-2.5-flash:online": {"input": 0.0003, "output": 0.0025},
         "anthropic/claude-haiku-4.5:online": {"input": 0.001, "output": 0.005},
         "anthropic/claude-sonnet-4:online": {"input": 0.003, "output": 0.015},
+        "anthropic/claude-sonnet-5.5:online": {"input": 0.002, "output": 0.010},
         # Self-hosted, so this is not a provider list price: it is the hosted
         # market rate for a 14B model, used as the per-token stand-in for a
         # server whose real cost is a flat hourly rate.
