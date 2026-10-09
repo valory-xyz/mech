@@ -55,6 +55,7 @@ from packages.valory.skills.abstract_round_abci.handlers import (
     TendermintHandler as BaseTendermintHandler,
 )
 from packages.valory.skills.mech_abci.dialogues import HttpDialogue, HttpDialogues
+from packages.valory.skills.mech_abci.models import ERC8004_IDENTITY_REGISTRY
 from packages.valory.skills.task_submission_abci.models import (
     SharedState as BaseSharedState,
 )
@@ -355,11 +356,10 @@ class HttpHandler(BaseHttpHandler):
             self._send_not_found_response(http_msg, http_dialogue)
             return
 
-        registry = params.erc8004_identity_registry_address
         data = {
             "registrations": [
                 {
-                    "agentRegistry": f"eip155:{chain_id}:{registry}",
+                    "agentRegistry": f"eip155:{chain_id}:{ERC8004_IDENTITY_REGISTRY}",
                     "agentId": agent_id,
                 }
             ]

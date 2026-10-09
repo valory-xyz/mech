@@ -25,12 +25,10 @@ import pytest
 
 from packages.valory.skills.mech_abci.composition import MechAbciApp
 from packages.valory.skills.mech_abci.models import (
-    DEFAULT_ERC8004_IDENTITY_REGISTRY,
     MARGIN,
     Params,
     TaskExecutionParams,
     parse_erc8004_agent_id,
-    parse_identity_registry_address,
 )
 from packages.valory.skills.mech_abci.tests.conftest import (
     _make_context,
@@ -115,7 +113,7 @@ class TestSharedStateSetup:
 
 
 SAMPLE_AGENT_ID = 25323
-OTHER_REGISTRY = "0x" + "ab" * 20
+SAMPLE_CHAIN_ID = 100
 
 
 class TestParseErc8004AgentId:
@@ -137,73 +135,44 @@ class TestParseErc8004AgentId:
             parse_erc8004_agent_id(value)
 
 
-class TestParseIdentityRegistryAddress:
-    """Tests for parse_identity_registry_address."""
-
-    @pytest.mark.parametrize("value", [None, ""])
-    def test_unset_falls_back_to_the_default_registry(self, value: Any) -> None:
-        """Without an override the shared registry address is used."""
-        assert (
-            parse_identity_registry_address(value) == DEFAULT_ERC8004_IDENTITY_REGISTRY
-        )
-
-    @pytest.mark.parametrize(
-        "value",
-        [
-            DEFAULT_ERC8004_IDENTITY_REGISTRY,
-            OTHER_REGISTRY,
-            OTHER_REGISTRY.upper().replace("0X", "0x"),
-        ],
-    )
-    def test_accepts_a_hex_address(self, value: str) -> None:
-        """A 0x-prefixed 20-byte hex address is returned unchanged."""
-        assert parse_identity_registry_address(value) == value
-
-    @pytest.mark.parametrize(
-        "value",
-        [
-            "0x" + "ab" * 19,
-            "0x" + "ab" * 21,
-            "ab" * 20,
-            "0x" + "zz" * 20,
-            "eip155:100:" + DEFAULT_ERC8004_IDENTITY_REGISTRY,
-            " " + DEFAULT_ERC8004_IDENTITY_REGISTRY,
-            123,
-        ],
-    )
-    def test_rejects_anything_else(self, value: Any) -> None:
-        """Short, long, unprefixed, non-hex or non-string values are configuration errors."""
-        with pytest.raises(ValueError, match="erc8004_identity_registry_address"):
-            parse_identity_registry_address(value)
-
-
 class TestParamsErc8004Settings:
-    """Params reads and validates the ERC-8004 settings before the base params."""
+    """Params reads the agent id and checks it against the chain id."""
 
     @staticmethod
     def _make_params(**kwargs: Any) -> Params:
-        with patch.object(TaskExecutionParams, "__init__", return_value=None):
+        def base_init(self: Params, *args: Any, **kw: Any) -> None:
+            self.mech_events_chain_id = int(kw.get("mech_events_chain_id", 0) or 0)
+
+        with patch.object(TaskExecutionParams, "__init__", base_init):
             return Params(**kwargs)
 
-    def test_reads_the_configured_values(self) -> None:
-        """Configured values land on the params object."""
+    def test_reads_the_configured_agent_id(self) -> None:
+        """A configured agent id with a chain id lands on the params object."""
         params = self._make_params(
-            erc8004_agent_id=SAMPLE_AGENT_ID,
-            erc8004_identity_registry_address=OTHER_REGISTRY,
+            erc8004_agent_id=SAMPLE_AGENT_ID, mech_events_chain_id=SAMPLE_CHAIN_ID
         )
         assert params.erc8004_agent_id == SAMPLE_AGENT_ID
-        assert params.erc8004_identity_registry_address == OTHER_REGISTRY
 
-    def test_defaults_when_absent(self) -> None:
-        """Absent keys mean no proof and the shared registry."""
-        params = self._make_params()
+    @pytest.mark.parametrize("chain_id", [0, SAMPLE_CHAIN_ID])
+    def test_no_agent_id_needs_no_chain_id(self, chain_id: int) -> None:
+        """Without an agent id the mech publishes no proof, whatever the chain."""
+        params = self._make_params(mech_events_chain_id=chain_id)
         assert params.erc8004_agent_id is None
-        assert (
-            params.erc8004_identity_registry_address
-            == DEFAULT_ERC8004_IDENTITY_REGISTRY
-        )
+
+    @pytest.mark.parametrize("chain_id", [0, -1, None])
+    def test_agent_id_without_chain_id_fails_at_startup(self, chain_id: Any) -> None:
+        """An agent id with no chain id would 404 silently, so startup stops instead."""
+        with pytest.raises(ValueError, match="mech_events_chain_id"):
+            self._make_params(
+                erc8004_agent_id=SAMPLE_AGENT_ID, mech_events_chain_id=chain_id
+            )
+
+    def test_agent_id_zero_still_needs_a_chain_id(self) -> None:
+        """Agent id 0 counts as set, so the chain check applies to it too."""
+        with pytest.raises(ValueError, match="mech_events_chain_id"):
+            self._make_params(erc8004_agent_id=0)
 
     def test_bad_agent_id_fails_at_startup(self) -> None:
         """A misconfigured agent id stops the agent instead of serving a wrong proof."""
         with pytest.raises(ValueError, match="erc8004_agent_id"):
-            self._make_params(erc8004_agent_id=-5)
+            self._make_params(erc8004_agent_id=-5, mech_events_chain_id=SAMPLE_CHAIN_ID)

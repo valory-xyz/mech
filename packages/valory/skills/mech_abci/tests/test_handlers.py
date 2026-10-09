@@ -37,7 +37,7 @@ from packages.valory.skills.mech_abci.handlers import (
     HttpHandler,
     HttpMethod,
 )
-from packages.valory.skills.mech_abci.models import DEFAULT_ERC8004_IDENTITY_REGISTRY
+from packages.valory.skills.mech_abci.models import ERC8004_IDENTITY_REGISTRY
 from packages.valory.skills.mech_abci.tests.conftest import (
     _make_ctx,
     _make_dialogue,
@@ -387,12 +387,10 @@ class TestHandleGetAgentRegistration:
         self,
         agent_id: Optional[int] = SAMPLE_AGENT_ID,
         chain_id: int = SAMPLE_CHAIN_ID,
-        registry: str = DEFAULT_ERC8004_IDENTITY_REGISTRY,
     ) -> Any:
         ctx = _make_ctx()
         ctx.params.erc8004_agent_id = agent_id
         ctx.params.mech_events_chain_id = chain_id
-        ctx.params.erc8004_identity_registry_address = registry
         h = _make_handler(ctx)
         dlg = _make_dialogue()
         h._handle_get_agent_registration(
@@ -410,20 +408,20 @@ class TestHandleGetAgentRegistration:
         assert json.loads(reply["body"]) == {
             "registrations": [
                 {
-                    "agentRegistry": f"eip155:{SAMPLE_CHAIN_ID}:{DEFAULT_ERC8004_IDENTITY_REGISTRY}",
+                    "agentRegistry": f"eip155:{SAMPLE_CHAIN_ID}:{ERC8004_IDENTITY_REGISTRY}",
                     "agentId": SAMPLE_AGENT_ID,
                 }
             ]
         }
 
-    def test_uses_the_configured_registry_and_chain(self) -> None:
-        """The registry address and chain id come from params, not constants."""
-        other_registry = "0x" + "ab" * 20
-        reply = self._run(chain_id=8453, registry=other_registry)
+    def test_uses_the_configured_chain(self) -> None:
+        """The chain id in the registration comes from params."""
+        reply = self._run(chain_id=8453)
 
         body = json.loads(reply["body"])
         assert (
-            body["registrations"][0]["agentRegistry"] == f"eip155:8453:{other_registry}"
+            body["registrations"][0]["agentRegistry"]
+            == f"eip155:8453:{ERC8004_IDENTITY_REGISTRY}"
         )
 
     def test_agent_id_zero_is_a_real_id(self) -> None:

@@ -19,7 +19,6 @@
 
 """This module contains the shared state for the abci skill of Mech."""
 
-import re
 from typing import Any, Optional
 
 from packages.valory.skills.abstract_round_abci.models import (
@@ -50,9 +49,8 @@ from packages.valory.skills.transaction_settlement_abci.rounds import (
 
 TaskExecutionParams = TaskExecutionAbciParams
 
-# ERC-8004 IdentityRegistry. Overridable per deployment.
-DEFAULT_ERC8004_IDENTITY_REGISTRY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
-_ADDRESS_REGEX = re.compile(r"^0x[0-9a-fA-F]{40}$")
+# ERC-8004 IdentityRegistry. Readers accept proofs naming this address only.
+ERC8004_IDENTITY_REGISTRY = "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
 
 
 def parse_erc8004_agent_id(value: Any) -> Optional[int]:
@@ -68,23 +66,6 @@ def parse_erc8004_agent_id(value: Any) -> Optional[int]:
     if isinstance(value, bool) or not isinstance(value, int) or value < 0:
         raise ValueError(
             f"erc8004_agent_id must be a non-negative integer or null, got {value!r}"
-        )
-    return value
-
-
-def parse_identity_registry_address(value: Any) -> str:
-    """
-    Validate the configured ERC-8004 identity registry address.
-
-    :param value: the raw ``erc8004_identity_registry_address`` param
-    :return: the address, or the default registry when unset
-    :raises ValueError: when the value is set but is not a 20-byte hex address
-    """
-    if value is None or value == "":
-        return DEFAULT_ERC8004_IDENTITY_REGISTRY
-    if not isinstance(value, str) or not _ADDRESS_REGEX.match(value):
-        raise ValueError(
-            f"erc8004_identity_registry_address must be a 0x-prefixed 20-byte hex address, got {value!r}"
         )
     return value
 
@@ -147,11 +128,19 @@ class Params(TaskExecutionParams, SubscriptionParams, TerminationParams):  # typ
     """A model to represent params for multiple abci apps."""
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        """Initialize the params, reading the ERC-8004 domain proof settings."""
+        """
+        Initialize the params, reading the ERC-8004 domain proof settings.
+
+        :param args: positional arguments
+        :param kwargs: keyword arguments
+        :raises ValueError: when an agent id is set without a chain id
+        """
         self.erc8004_agent_id: Optional[int] = parse_erc8004_agent_id(
             kwargs.get("erc8004_agent_id")
         )
-        self.erc8004_identity_registry_address: str = parse_identity_registry_address(
-            kwargs.get("erc8004_identity_registry_address")
-        )
         super().__init__(*args, **kwargs)
+        if self.erc8004_agent_id is not None and self.mech_events_chain_id <= 0:
+            raise ValueError(
+                "erc8004_agent_id is set but mech_events_chain_id is not; "
+                "the domain proof needs both"
+            )
