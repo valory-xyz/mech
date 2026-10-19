@@ -824,10 +824,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         # tool for every entry in tools_to_package_hash instead of hitting
         # IPFS. Lets the FSM reach the settlement rounds on a dev chain
         # without needing an API key or IPFS connectivity.
-        if (
-            os.environ.get("MECH_STUB_TOOLS", "").lower() in ("1", "true", "yes")
-            and len(self._tools_to_package_hash) != len(self._all_tools)
-        ):
+        if os.environ.get("MECH_STUB_TOOLS", "").lower() in (
+            "1",
+            "true",
+            "yes",
+        ) and len(self._tools_to_package_hash) != len(self._all_tools):
             stub_py = (
                 "import json\n"
                 "def run(**kwargs):\n"
@@ -852,7 +853,8 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                     self._all_tools[tool_name] = (stub_py, "run", {})
             self.context.logger.info(
                 "MECH_STUB_TOOLS=true — tool downloads short-circuited, "
-                "all %d tools stubbed", len(self._tools_to_package_hash),
+                "all %d tools stubbed",
+                len(self._tools_to_package_hash),
             )
             return
 

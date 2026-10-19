@@ -2066,9 +2066,9 @@ class TransactionPreparationBehaviour(
                 # The per-request value in the signed message is the cap the
                 # requester signed over, so it feeds maxRates. The contract
                 # recomputes requestId with maxRates[i], not deliveryRates[i].
-                offchain_list_by_sender[sender][
-                    OffchainKeys.MAX_RATES.value
-                ].append(int(data[OffchainDataValue.DELIVERY_RATE.value]))
+                offchain_list_by_sender[sender][OffchainKeys.MAX_RATES.value].append(
+                    int(data[OffchainDataValue.DELIVERY_RATE.value])
+                )
 
             for sender, details in offchain_list_by_sender.items():
                 self.context.logger.info(

@@ -556,11 +556,7 @@ class OlasMechContract(Contract):
         maxRates: List[int],
         paymentData: str,
     ) -> JSONLike:
-        """Encode the cap-and-actual 5-arg overload of deliverMarketplaceWithSignatures.
-
-        The signed requestId is computed over maxRates; the contract enforces
-        deliveryRates[i] <= maxRates[i] and charges the actual deliveryRates.
-        """
+        """Get offchain deliver tx data for the cap-and-actual 5-arg overload."""
         ledger_api = cast(EthereumApi, ledger_api)
         contract_instance = cls.get_instance(ledger_api, contract_address)
         # Overloading in Solidity: ethers/web3 can't resolve the function from
