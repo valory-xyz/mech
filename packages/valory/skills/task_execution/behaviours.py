@@ -22,6 +22,7 @@
 import functools
 import json
 import math
+import os
 import threading
 import time
 from asyncio import Future
@@ -819,6 +820,42 @@ class TaskExecutionBehaviour(SimpleBehaviour):
 
     def _download_tools(self) -> None:
         """Download tools."""
+        # Test-only short-circuit: when MECH_STUB_TOOLS=true, inject a canned
+        # tool for every entry in tools_to_package_hash instead of hitting
+        # IPFS. Lets the FSM reach the settlement rounds on a dev chain
+        # without needing an API key or IPFS connectivity.
+        if (
+            os.environ.get("MECH_STUB_TOOLS", "").lower() in ("1", "true", "yes")
+            and len(self._tools_to_package_hash) != len(self._all_tools)
+        ):
+            stub_py = (
+                "import json\n"
+                "def run(**kwargs):\n"
+                "    # 5-tuple shape: (deliver_msg, prompt, transaction,\n"
+                "    # counter_callback, keychain). The mech checks\n"
+                "    # len(result) >= 5 before unpacking.\n"
+                "    counter_callback = kwargs.get('counter_callback', None)\n"
+                "    api_keys = kwargs.get('api_keys', None)\n"
+                "    prompt = kwargs.get('prompt', '')\n"
+                "    if not prompt:\n"
+                "        ipfs_data = kwargs.get('ipfs_data', '')\n"
+                "        if isinstance(ipfs_data, str):\n"
+                "            try:\n"
+                "                prompt = json.loads(ipfs_data).get('prompt', '')\n"
+                "            except Exception:\n"
+                "                pass\n"
+                "    deliver_msg = '[stub-response] ' + str(prompt)[:200]\n"
+                "    return (deliver_msg, prompt, None, counter_callback, api_keys)\n"
+            )
+            for tool_name in self._tools_to_package_hash:
+                if tool_name not in self._all_tools:
+                    self._all_tools[tool_name] = (stub_py, "run", {})
+            self.context.logger.info(
+                "MECH_STUB_TOOLS=true — tool downloads short-circuited, "
+                "all %d tools stubbed", len(self._tools_to_package_hash),
+            )
+            return
+
         if self._inflight_tool_req is not None:
             # there already is a req in flight
             return
