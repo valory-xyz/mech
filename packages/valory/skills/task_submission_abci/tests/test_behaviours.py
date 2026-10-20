@@ -2815,10 +2815,11 @@ class TestGetOffchainTasksDeliverData:
         assert included == ["r1"]
 
     def test_calls_cap_wrapper_with_max_and_delivery_rates(self) -> None:
-        """The behaviour routes to the 5-arg overload wrapper and passes
-        both maxRates (equal to the signed rate on the request) and
-        deliveryRates (one less, clamped at 0). Guards against silently
-        reverting to the 4-arg path, or dropping either array.
+        """Route to the 5-arg overload wrapper with both maxRates and deliveryRates.
+
+        maxRates equals the signed rate on the request; deliveryRates is one
+        less, clamped at 0. Guards against silently reverting to the 4-arg
+        path, or dropping either array.
         """
         b = self._make_b()
         task = self._offchain_task("r1")
