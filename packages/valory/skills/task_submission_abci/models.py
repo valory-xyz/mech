@@ -155,6 +155,13 @@ class Params(BaseParams):
         # out-of-the-box mech does no off-mech HTTP work at settlement
         # time and does not accept offchain requests.
         self.use_offchain: bool = bool(kwargs.get("use_offchain", False))
+        # Route off-chain settlement through the 5-arg cap-and-actual overload
+        # of deliverMarketplaceWithSignatures. Off by default so this branch is
+        # inert in production until the marketplace redeploy ships the overload;
+        # operators flip per-service when ready.
+        self.cap_and_actual_enabled: bool = bool(
+            kwargs.get("cap_and_actual_enabled", False)
+        )
         # predict-api ``POST /mech/events`` endpoint. Empty string = no
         # URL configured; the PostTxSettlement behaviour short-circuits
         # when either this is empty or ``use_offchain`` is False. No

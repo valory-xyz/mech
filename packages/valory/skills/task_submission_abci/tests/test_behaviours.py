@@ -2718,8 +2718,8 @@ class TestSafeTxHashAndMultisend:
 class TestGetOffchainTasksDeliverData:
     """Test Get Offchain Tasks Deliver Data."""
 
-    def _make_b(self) -> "_DummyTransPrep":
-        ctx = _make_full_ctx()
+    def _make_b(self, cap_and_actual_enabled: bool = False) -> "_DummyTransPrep":
+        ctx = _make_full_ctx(cap_and_actual_enabled=cap_and_actual_enabled)
         b = _DummyTransPrep(name="b", skill_context=ctx)
         return b
 
@@ -2814,14 +2814,39 @@ class TestGetOffchainTasksDeliverData:
         assert tx_list[0]["to"] == "0xMECH"
         assert included == ["r1"]
 
-    def test_calls_cap_wrapper_with_max_and_delivery_rates(self) -> None:
-        """Route to the 5-arg overload wrapper with both maxRates and deliveryRates.
-
-        maxRates equals the signed rate on the request; deliveryRates is one
-        less, clamped at 0. Guards against silently reverting to the 4-arg
-        path, or dropping either array.
+    def test_flag_off_routes_to_legacy_four_arg_wrapper(self) -> None:
+        """Default (cap_and_actual_enabled=False) must keep calling the legacy
+        4-arg wrapper with no maxRates key. Protects against the branch
+        drifting on by default and breaking prod against the un-redeployed
+        marketplace.
         """
-        b = self._make_b()
+        b = self._make_b(cap_and_actual_enabled=False)
+        task = self._offchain_task("r1")
+        task["delivery_rate"] = 100
+        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
+        captured: Dict[str, Any] = {}
+
+        def _capture(*_args: Any, **kwargs: Any) -> Any:
+            captured.update(kwargs)
+            return _gen_returning(msg)()
+
+        with (
+            self._patch_sd(b, [task]),
+            patch.object(b, "get_contract_api_response", side_effect=_capture),
+        ):
+            _run_gen(b._get_offchain_tasks_deliver_data())
+
+        assert captured["contract_callable"] == "get_offchain_deliver_data"
+        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [100]
+        assert OffchainKeys.MAX_RATES_CAMEL.value not in captured
+
+    def test_flag_on_routes_to_cap_wrapper_with_max_and_delivery_rates(self) -> None:
+        """cap_and_actual_enabled=True routes to the 5-arg overload wrapper and
+        passes both maxRates (equal to the signed rate on the request) and
+        deliveryRates (one less, clamped at 0). Guards against silently
+        reverting to the 4-arg path, or dropping either array.
+        """
+        b = self._make_b(cap_and_actual_enabled=True)
         task = self._offchain_task("r1")
         task["delivery_rate"] = 100
         msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
@@ -2841,15 +2866,13 @@ class TestGetOffchainTasksDeliverData:
         assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [100]
         assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [99]
 
-    def test_delivery_rate_clamped_at_zero_for_free_requests(self) -> None:
-        """A signed rate of 0 (free task) must not underflow to -1.
-
-        -1 would fail uint256 encoding in the contract wrapper and
-        abandon the whole off-chain batch for the period, including any
-        other requests that happened to be grouped under the same
-        sender.
+    def test_flag_on_clamps_delivery_rate_at_zero_for_free_requests(self) -> None:
+        """A signed rate of 0 (free task) on the flag-on path must not
+        underflow to -1. -1 would fail uint256 encoding in the contract
+        wrapper and abandon the whole off-chain batch for the period,
+        including any other requests grouped under the same sender.
         """
-        b = self._make_b()
+        b = self._make_b(cap_and_actual_enabled=True)
         task = self._offchain_task("r1")
         task["delivery_rate"] = 0
         msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})

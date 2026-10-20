@@ -2079,21 +2079,40 @@ class TransactionPreparationBehaviour(
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value
                 ]
                 max_rates = details[OffchainKeys.MAX_RATES.value]
-                # Fork-test placeholder — real per-tool cost source is tracked
-                # in FORK_TEST_EDGE_CASES.md. Clamp at 0 because
-                # MIN_DELIVERY_RATE = 0 is accepted for free tasks and an
-                # unclamped `m - 1` would be -1, failing uint256 encoding and
-                # abandoning the whole off-chain batch for the period.
-                delivery_rates = [max(max_rate - 1, 0) for max_rate in max_rates]
 
-                contract_data = {
-                    SENDER: self.synchronized_data.safe_contract_address,
-                    REQUESTER_KEY: sender,
-                    OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
-                    OffchainKeys.DELIVERY_RATES_CAMEL.value: delivery_rates,
-                    OffchainKeys.MAX_RATES_CAMEL.value: max_rates,
-                    OffchainKeys.PAYMENT_DATA.value: b"",
-                }
+                # Flag-gated route to the 5-arg cap-and-actual overload. Off by
+                # default, so the mech keeps calling the legacy 4-arg wrapper
+                # (same byte-for-byte behaviour as before this branch landed)
+                # until the marketplace redeploy carries the overload and the
+                # operator flips cap_and_actual_enabled per-service.
+                if self.params.cap_and_actual_enabled:
+                    # Fork-test placeholder — real per-tool cost source is tracked
+                    # in FORK_TEST_EDGE_CASES.md. Clamp at 0 because
+                    # MIN_DELIVERY_RATE = 0 is accepted for free tasks and an
+                    # unclamped `m - 1` would be -1, failing uint256 encoding and
+                    # abandoning the whole off-chain batch for the period.
+                    delivery_rates = [max(m - 1, 0) for m in max_rates]
+                    contract_data = {
+                        SENDER: self.synchronized_data.safe_contract_address,
+                        REQUESTER_KEY: sender,
+                        OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
+                        OffchainKeys.DELIVERY_RATES_CAMEL.value: delivery_rates,
+                        OffchainKeys.MAX_RATES_CAMEL.value: max_rates,
+                        OffchainKeys.PAYMENT_DATA.value: b"",
+                    }
+                    contract_callable = "get_offchain_deliver_data_with_cap"
+                else:
+                    # Legacy 4-arg path: the signed per-request value doubles as
+                    # the charged rate (no cap-and-actual distinction).
+                    contract_data = {
+                        SENDER: self.synchronized_data.safe_contract_address,
+                        REQUESTER_KEY: sender,
+                        OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
+                        OffchainKeys.DELIVERY_RATES_CAMEL.value: max_rates,
+                        OffchainKeys.PAYMENT_DATA.value: b"",
+                    }
+                    contract_callable = "get_offchain_deliver_data"
+
                 self.context.logger.info(
                     f"Preparing deliver with signature data: {contract_data}"
                 )
@@ -2102,7 +2121,7 @@ class TransactionPreparationBehaviour(
                     performative=ContractApiMessage.Performative.GET_STATE,  # type: ignore
                     contract_address=mech_address,
                     contract_id=str(OlasMechContract.contract_id),
-                    contract_callable="get_offchain_deliver_data_with_cap",
+                    contract_callable=contract_callable,
                     **contract_data,
                     chain_id=self.params.default_chain_id,
                 )
@@ -2111,7 +2130,7 @@ class TransactionPreparationBehaviour(
                     != ContractApiMessage.Performative.STATE
                 ):
                     self.context.logger.warning(
-                        f"get_offchain_deliver_data_with_cap unsuccessful!: {contract_api_msg}"
+                        f"{contract_callable} unsuccessful!: {contract_api_msg}"
                     )
                     # Every off-chain task in this period's batch is
                     # abandoned (including groups already appended to

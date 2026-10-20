@@ -8,18 +8,18 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeiexga3pxus3tar5ouib4oq26jp3rcbujepj2scflvdu6holtfjmxi
-  behaviours.py: bafybeid7upx7ksgsbp6se6cddoiebglnycugm5qnozfgoyxgqgm7bdcicm
+  behaviours.py: bafybeibkbdpfxv5ykmqku5cp4itgzcexauzv66o6xoucv2twluglnb33uu
   dialogues.py: bafybeicvqbqqviqhjkj4hfyqepanqzv6oa3nknpjaczs6yjpyxx5ilcbcq
   fsm_specification.yaml: bafybeicswghmdg7xsfhlgznsyr7zhydtunb2575qucxkxmeks6gcos3ut4
   handlers.py: bafybeieikfkrjtnlod35ldqf3veoe3oqha6fnnpqpkxwibi5jyobsnvd4a
-  models.py: bafybeib7i6qrt3vrhjhrpaspcxll7wv3vpmyeq5gzcwmx7ytwj52uh234e
+  models.py: bafybeief7mpkpzec6jz34o4lpdpkngv2jheckndul5o3x4v7vvaafd5v2i
   payloads.py: bafybeiaaelmpfuv6pvuesj7iy2nnxvgxjketigrppurto2pbsoaqjum2ba
   predict_api_events_client.py: bafybeie7yu4ygy4gnpc6yekhnhbtdgtferzzaoyzj4nhenyune7hnhswvm
   rounds.py: bafybeigl6ph55gkcme4edpj4zhyb6ksm67ssr6lmftyqzx4hnllfu4dn5y
   tasks.py: bafybeicu5t5cvfhbndgpxbbtmp4vbmtyb6fba6vsnlewftvuderxp5lwcy
   tests/__init__.py: bafybeicra66y4yt2jcbj35imsfdq3c33xqnbvzfyzn5v3x533nuiidjhpu
-  tests/conftest.py: bafybeiho3bv6tlto53y4mm5s4fgkb5eymgxo44zwv4ifxmlmrnw3bd5j5m
-  tests/test_behaviours.py: bafybeigiabkzf55p2xkizznwrgcutsjjim7gvd76t2qduhr4z3uenlpc7e
+  tests/conftest.py: bafybeidjg26iphsrr4o2iwdet7dzy3x4gz2kkue2hq4av5cpac3vtnp7eq
+  tests/test_behaviours.py: bafybeiaqev45deapfuxvb5wzazu5srvxcsf355mandjeqikdcaotkiu6qi
   tests/test_dialogues.py: bafybeiajjre5yenpy4hdhrsil5vejufk4w444jzqnnxg56l2teegqcfovq
   tests/test_handlers.py: bafybeig74brnwb56rhreqmbkbmblpmbt2xlttavl4xt2anag5dwima7cpm
   tests/test_models.py: bafybeia3dojxv6suk5eoaspc2yfolpyoxywhgxg6gwgdvgly4nudg544tm
@@ -174,6 +174,7 @@ models:
       tendermint_url: http://localhost:26657
       tx_timeout: 10.0
       use_offchain: false
+      cap_and_actual_enabled: false
       use_slashing: false
       use_termination: false
       validate_timeout: 1205
