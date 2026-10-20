@@ -127,8 +127,6 @@ def _make_full_ctx(
         mech_staking_instance_address="0xSTAKE",
         mech_max_delivery_rate=10,
         cap_and_actual_enabled=False,
-        operator_markup_bp=2000,
-        payment_token_decimals=18,
     )
     defaults.update(overrides)
     for attr, val in defaults.items():

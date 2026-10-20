@@ -29,6 +29,9 @@ from aea.skills.base import Model
 from packages.valory.skills.abstract_round_abci.utils import check_type
 
 ZERO_ADDRESS = "0x0000000000000000000000000000000000000000"
+BASIS_POINTS = 10_000
+# fixed_cost_per_request is expressed in USD with this many decimals.
+USD_DECIMALS = 6
 
 
 @dataclasses.dataclass
@@ -257,6 +260,30 @@ class Params(Model):
             self._ensure_same_keys(
                 kwargs, self.tools_to_package_hash, self.tools_to_pricing
             )
+        # Cap-and-actual price inputs. USD amounts scale into the mech's payment
+        # asset by ``payment_token_decimals`` (18 for native coins, 6 for
+        # USDC-style tokens); the asset is assumed to be worth 1 USD.
+        # ``fixed_cost_per_request`` is the fleet-wide hosting share per request
+        # in USD with ``USD_DECIMALS`` decimals. ``marketplace_fee_bp`` is the
+        # marketplace fee taken at payout, grossed up so the mech nets V + F.
+        # ``or`` is avoided throughout so an explicit 0 stays 0.
+        raw_decimals = kwargs.get("payment_token_decimals")
+        self.payment_token_decimals: int = (
+            18 if raw_decimals is None else int(raw_decimals)
+        )
+        enforce(
+            self.payment_token_decimals >= USD_DECIMALS,
+            f"payment_token_decimals must be >= {USD_DECIMALS}",
+        )
+        raw_fixed = kwargs.get("fixed_cost_per_request")
+        self.fixed_cost_per_request: int = 0 if raw_fixed is None else int(raw_fixed)
+        enforce(self.fixed_cost_per_request >= 0, "fixed_cost_per_request must be >= 0")
+        raw_fee = kwargs.get("marketplace_fee_bp")
+        self.marketplace_fee_bp: int = 1500 if raw_fee is None else int(raw_fee)
+        enforce(
+            0 <= self.marketplace_fee_bp < BASIS_POINTS,
+            f"marketplace_fee_bp must be in [0, {BASIS_POINTS})",
+        )
 
         super().__init__(*args, **kwargs)
 

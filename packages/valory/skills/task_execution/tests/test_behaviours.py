@@ -4985,6 +4985,178 @@ def test_finalize_done_task_predict_api_event_carries_cost_dict(
     assert event["event"]["response"]["cost_dict"] == cost_dict
 
 
+CAP_ONE_USD_6DEC = 1_000_000
+
+
+def _priced_task(**extra: Any) -> Dict[str, Any]:
+    """A done task shaped for ``_price_done_task``."""
+    return {"request_id": "r1", **extra}
+
+
+def _set_price_params(
+    params_stub: Any, decimals: int = 6, fixed: int = 0, fee_bp: int = 0
+) -> None:
+    params_stub.payment_token_decimals = decimals
+    params_stub.fixed_cost_per_request = fixed
+    params_stub.marketplace_fee_bp = fee_bp
+
+
+def test_price_is_measured_plus_fixed_grossed_up_for_fee(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """Price is (V + F) / (1 - fee): 0.5 USD spend, 0.012 USD share, 15% fee."""
+    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
+    task = _priced_task(cost_dict={"total_cost": 0.5})
+    # (500_000 + 12_000) * 10_000 / 8_500 = 602_352.9 -> 602_353
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 602_353
+
+
+def test_price_keeps_sub_cent_costs(behaviour: Any, params_stub: Any) -> None:
+    """A 0.002 USD run is exactly 2e15 at 18 decimals, not rounded to a cent."""
+    _set_price_params(params_stub, decimals=18)
+    task = _priced_task(cost_dict={"total_cost": 0.002})
+    assert behaviour._price_done_task(task, 10**18) == 2 * 10**15
+
+
+def test_price_rounds_fee_gross_up_up(behaviour: Any, params_stub: Any) -> None:
+    """A fractional grossed-up unit rounds up, never down."""
+    _set_price_params(params_stub, decimals=6, fee_bp=1500)
+    task = _priced_task(cost_dict={"total_cost": 0.000001})
+    # 1 unit * 10_000 / 8_500 = 1.18 -> 2
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 2
+
+
+def test_price_floor_wins_over_lower_measured_cost(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """A tools_to_pricing floor above the computed price is charged as-is."""
+    _set_price_params(params_stub, decimals=6)
+    task = _priced_task(cost_dict={"total_cost": 0.5}, dynamic_tool_cost=800_000)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 800_000
+
+
+def test_price_measured_wins_over_lower_floor(behaviour: Any, params_stub: Any) -> None:
+    """The computed price is charged when it exceeds the floor."""
+    _set_price_params(params_stub, decimals=6)
+    task = _priced_task(cost_dict={"total_cost": 0.5}, dynamic_tool_cost=10)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 500_000
+
+
+def test_price_clamps_to_cap_and_warns(behaviour: Any, params_stub: Any) -> None:
+    """A price above the signed cap is clamped to the cap and logged."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    task = _priced_task(cost_dict={"total_cost": 0.5})
+    assert behaviour._price_done_task(task, 50) == 50
+    behaviour.context.logger.warning.assert_called_once()
+
+
+def test_price_charges_cap_without_cost_or_floor(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """With no measured cost and no floor the signed cap is charged, with a warning."""
+    _set_price_params(params_stub)
+    behaviour.context.logger = MagicMock()
+    assert behaviour._price_done_task(_priced_task(), CAP_ONE_USD_6DEC) == 1_000_000
+    behaviour.context.logger.warning.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "cost_dict", [{}, {"total_cost": None}, {"input_cost": 0.1}, "not-a-dict", None]
+)
+def test_price_treats_cost_dict_without_total_as_no_cost(
+    behaviour: Any, params_stub: Any, cost_dict: Any
+) -> None:
+    """A cost_dict without total_cost is 'no cost', so the floor applies."""
+    _set_price_params(params_stub)
+    task = _priced_task(cost_dict=cost_dict, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 30
+
+
+def test_price_zero_cost_charges_only_the_fixed_share(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """A reported cost of 0 charges F grossed up, not the cap; 0 when F is 0."""
+    _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
+    task = _priced_task(cost_dict={"total_cost": 0.0})
+    # 12_000 * 10_000 / 8_500 = 14_117.6 -> 14_118
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 14_118
+    _set_price_params(params_stub, decimals=6)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 0
+
+
+def test_price_is_none_without_a_signed_rate(behaviour: Any, params_stub: Any) -> None:
+    """Without a signed rate there is no cap to price against."""
+    _set_price_params(params_stub)
+    task = _priced_task(cost_dict={"total_cost": 0.5})
+    assert behaviour._price_done_task(task, None) is None
+
+
+def test_finalize_done_task_stores_price_and_exposes_it_to_the_poll(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The price lands on the done task and on the off-chain poll envelope.
+
+    The gate fixture signs a cap of 1e16 at 18 decimals; a 0.005 USD run with
+    the 15% fee prices at 5e15 * 10_000 / 8_500, rounded up.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    done_task = shared_state[beh_mod.DONE_TASKS][0]
+    assert done_task["actual_delivery_rate"] == 5_882_352_941_176_471
+    envelope = shared_state[beh_mod.OFFCHAIN_REQUEST_RESPONSES]["req-gate"]
+    assert envelope["delivery_rate"] == 5_882_352_941_176_471
+
+
+def test_finalize_done_task_predict_api_event_carries_price(
+    behaviour: Any,
+    params_stub: Any,
+    shared_state: Dict[str, Any],
+    monkeypatch: Any,
+) -> None:
+    """The predict-api event's response carries the stored price as a string.
+
+    :param behaviour: TaskExecutionBehaviour fixture.
+    :param params_stub: params fixture with ``use_offchain=True``.
+    :param shared_state: shared_state fixture.
+    :param monkeypatch: pytest monkeypatch fixture.
+    """
+    params_stub.use_offchain = True
+    _set_price_params(params_stub, decimals=18, fee_bp=1500)
+    _finalize_gate_setup(
+        behaviour,
+        shared_state,
+        params_stub,
+        monkeypatch,
+        is_offchain=True,
+        is_marketplace_mech=True,
+    )
+    behaviour._finalize_done_task(
+        "bafycid", response={"cost_dict": {"total_cost": 0.005}}
+    )
+    done_tasks = shared_state[beh_mod.DONE_TASKS]
+    event = shared_state[beh_mod.PREDICT_API_EVENTS][str(done_tasks[0]["request_id"])]
+    assert event["event"]["response"]["actual_delivery_rate"] == "5882352941176471"
+
+
 @pytest.mark.parametrize(
     "response", [None, {}, {"cost_dict": None}, {"cost_dict": "not-a-dict"}]
 )

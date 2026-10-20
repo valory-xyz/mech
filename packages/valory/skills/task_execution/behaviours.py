@@ -27,6 +27,7 @@ import time
 from asyncio import Future
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_CEILING
 from enum import Enum
 from types import SimpleNamespace
 from typing import Any, Callable, Dict, List, Literal, Optional, Set, Tuple, cast
@@ -61,15 +62,14 @@ from packages.valory.protocols.ipfs.dialogues import IpfsDialogue
 from packages.valory.protocols.kv_store.message import KvStoreMessage
 from packages.valory.protocols.ledger_api import LedgerApiMessage
 from packages.valory.skills.task_execution.models import (
+    BASIS_POINTS,
     Params,
+    USD_DECIMALS,
     offchain_metric_labels,
 )
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
 from packages.valory.skills.task_execution.utils.apis import KeyChain
 from packages.valory.skills.task_execution.utils.benchmarks import TokenCounterCallback
-from packages.valory.skills.task_execution.utils.cost_calculation import (
-    get_cost_for_done_task,
-)
 from packages.valory.skills.task_execution.utils.ipfs import (
     ComponentPackageLoader,
     ensure_v1,
@@ -1927,6 +1927,61 @@ class TaskExecutionBehaviour(SimpleBehaviour):
         )
         self._finalize_done_task(ipfs_hash, response=response)
 
+    def _measured_cost_in_asset_units(self, done_task: Dict[str, Any]) -> Optional[int]:
+        """Tool spend from ``cost_dict`` in payment-asset units; None if none reported."""
+        cost_dict = done_task.get("cost_dict")
+        if not isinstance(cost_dict, dict) or cost_dict.get("total_cost") is None:
+            return None
+        usd = Decimal(str(cost_dict["total_cost"]))
+        scaled = usd * (10**self.params.payment_token_decimals)
+        return int(scaled.to_integral_value(rounding=ROUND_CEILING))
+
+    def _price_done_task(
+        self, done_task: Dict[str, Any], cap: Optional[int]
+    ) -> Optional[int]:
+        """Rate to charge for a done task, in payment-asset units.
+
+        ``price = (V + F) / (1 - fee)``: the measured tool spend V plus the
+        fleet-wide hosting share F, grossed up for the marketplace fee taken at
+        payout. The tool's ``tools_to_pricing`` entry is a floor. With neither a
+        measured cost nor a floor the signed cap is charged. The result never
+        exceeds the cap the requester signed, since the contract rejects that.
+
+        :param done_task: the done task, carrying ``cost_dict`` and
+            ``dynamic_tool_cost``.
+        :param cap: the rate the requester signed, or None when unknown.
+        :return: the delivery rate, or None when there is no signed rate.
+        """
+        if cap is None:
+            return None
+        request_id = done_task.get("request_id")
+        candidates: List[int] = []
+        measured = self._measured_cost_in_asset_units(done_task)
+        if measured is not None:
+            decimals = self.params.payment_token_decimals
+            fixed = self.params.fixed_cost_per_request * 10 ** (decimals - USD_DECIMALS)
+            net_bp = BASIS_POINTS - self.params.marketplace_fee_bp
+            candidates.append(
+                ((measured + fixed) * BASIS_POINTS + net_bp - 1) // net_bp
+            )
+        floor = done_task.get("dynamic_tool_cost")
+        if floor is not None:
+            candidates.append(int(floor))
+        if not candidates:
+            self.context.logger.warning(
+                f"No measured cost or tool floor for request {request_id}; "
+                f"charging the signed cap {cap}."
+            )
+            return cap
+        price = max(candidates)
+        if price > cap:
+            self.context.logger.warning(
+                f"Price {price} for request {request_id} exceeds the signed cap "
+                f"{cap}; clamping to the cap."
+            )
+            return cap
+        return price
+
     def _finalize_done_task(
         self, cid: str, response: Optional[Dict[str, Any]] = None
     ) -> None:
@@ -1985,9 +2040,22 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 f"Adding dynamic pricing of {dynamic_tool_cost} for request id {req_id}."
             )
             done_task["dynamic_tool_cost"] = dynamic_tool_cost
-        else:
-            cost = get_cost_for_done_task(done_task)
-            self.context.logger.info(f"Cost for task {req_id}: {cost}.")
+        signed_rate = executing_task.get(
+            "request_delivery_rate", executing_task.get("delivery_rate")
+        )
+        actual_delivery_rate = self._price_done_task(
+            done_task, None if signed_rate is None else int(signed_rate)
+        )
+        if actual_delivery_rate is not None:
+            done_task["actual_delivery_rate"] = actual_delivery_rate
+            self.context.logger.info(
+                f"Delivery rate for task {req_id}: {actual_delivery_rate}."
+            )
+            offchain_entry = self.context.shared_state.get(
+                OFFCHAIN_REQUEST_RESPONSES, {}
+            ).get(str(req_id))
+            if offchain_entry is not None:
+                offchain_entry["delivery_rate"] = actual_delivery_rate
         mech_address = self._get_designated_marketplace_mech_address()
         mech_config = self.params.mech_to_config[mech_address.lower()]
         done_task["is_marketplace_mech"] = mech_config.is_marketplace_mech
@@ -2360,6 +2428,11 @@ class TaskExecutionBehaviour(SimpleBehaviour):
                 "error": error_text,
                 "executed_at": executed_at_iso,
                 "cost_dict": cost_dict,
+                "actual_delivery_rate": (
+                    str(done_task["actual_delivery_rate"])
+                    if done_task.get("actual_delivery_rate") is not None
+                    else None
+                ),
                 "is_offchain": is_offchain_task,
                 "tool_hash": tool_hash,
                 "execution_latency_ms": execution_latency_ms,

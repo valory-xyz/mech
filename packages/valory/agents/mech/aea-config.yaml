@@ -43,11 +43,11 @@ skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
 - valory/contract_subscription:0.1.0:bafybeihaaqld7ntndyhoxu2o4jecjocclo4gsvmqdz3dpgmqeckq6j5cb4
 - valory/delivery_rate_abci:0.1.0:bafybeibuu57cfyo7d2twwyu7qzybddfot76idmdyy4phv7q2nkfegbxsji
-- valory/mech_abci:0.1.0:bafybeiheoglxjqwddwn4dj7t6mrddsggmionb5q3er2jafhbq5xiqerj2u
+- valory/mech_abci:0.1.0:bafybeibnhxwbgx2y6v4elubt7nzxeaqgstxml7mmoyljcqgiykop5satae
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeid7qa7hn7bku6eq5wzfnft7vfhkzmaedjd4u5tk35vt3qfqjodlmq
-- valory/task_submission_abci:0.1.0:bafybeibawewfobho54dbnwtx4dyrsnq6pd63rtieqn23ziudkifwwr72vu
+- valory/task_execution:0.1.0:bafybeianj4t4emo6dm5rhmtorvxendbbxbv2l4iza5kskfhgmqgq6kdsq4
+- valory/task_submission_abci:0.1.0:bafybeifmoghyfu7wgqnqm6mkrtjzux5pq4g3jpf7vct3ameghsebo3d2aa
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 - valory/websocket_client:0.1.0:bafybeiht2ify5vkseeulutzjwkw5vcmhcwtun2o5ehn6hya6uz4eanua2m
@@ -215,8 +215,6 @@ models:
       mech_to_max_delivery_rate: ${dict:{}}
       mech_to_config: ${dict:{}}
       cap_and_actual_enabled: ${bool:false}
-      operator_markup_bp: ${int:2000}
-      payment_token_decimals: ${int:18}
       hash_checkpoint_address: ${str:0x694e62BDF7Ff510A4EE66662cf4866A961a31653}
       setup:
         all_participants: ${list:["0x10E867Ac2Fb0Aa156ca81eF440a5cdf373bE1AaC"]}
@@ -241,6 +239,9 @@ models:
       mech_to_config: ${dict:{}}
       tools_to_pricing: ${dict:{}}
       mech_to_max_delivery_rate: ${dict:{}}
+      fixed_cost_per_request: ${int:0}
+      marketplace_fee_bp: ${int:1500}
+      payment_token_decimals: ${int:18}
       timeout_limit: ${int:3}
       max_block_window: ${int:500}
       default_chain_id: ${str:gnosis}

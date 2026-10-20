@@ -82,9 +82,6 @@ from packages.valory.skills.task_execution.models import (
     offchain_metric_labels,
 )
 from packages.valory.skills.task_execution.utils import preimage as preimage_buffer
-from packages.valory.skills.task_execution.utils.cost_calculation import (
-    get_cost_for_done_task,
-)
 from packages.valory.skills.task_execution.utils.ipfs import to_multihash
 from packages.valory.skills.task_submission_abci.models import Params
 from packages.valory.skills.task_submission_abci.payloads import (
@@ -261,9 +258,6 @@ LAST_TX = "last_tx"
 # post-tx behaviour reads, never writes).
 PENDING_TASKS = "pending_tasks"
 PAYMENT_MODEL = "payment_model"
-BASIS_POINTS = 10_000
-# get_cost_for_done_task reports the measured tool cost in USD cents.
-CREDIT_DECIMALS = 2
 
 
 class OffchainKeys(Enum):
@@ -293,6 +287,7 @@ class OffchainDataValue(Enum):
     SIGNATURE = "signature"
     TASK_RESULT = "task_result"
     DELIVERY_RATE = "delivery_rate"
+    ACTUAL_DELIVERY_RATE = "actual_delivery_rate"
 
 
 class MarketplaceKeys(Enum):
@@ -2010,52 +2005,16 @@ class TransactionPreparationBehaviour(
 
         return self._get_agent_mech_deliver_tx(task_data)
 
-    def _measured_cost_in_token_units(self, done_task: Dict[str, Any]) -> Optional[int]:
-        """Measured tool cost in token base units; None if the tool reported none."""
-        cost_dict = done_task.get("cost_dict")
-        if not isinstance(cost_dict, dict) or cost_dict.get("total_cost") is None:
-            return None
-        credits = get_cost_for_done_task(done_task)
-        return credits * 10 ** (self.params.payment_token_decimals - CREDIT_DECIMALS)
-
-    def _compute_actual_delivery_rate(
-        self, done_task: Dict[str, Any], max_rate: int
-    ) -> int:
-        """Return the rate to charge for one off-chain request, never above its cap.
-
-        The measured cost (see :meth:`_measured_cost_in_token_units`) is marked
-        up by ``operator_markup_bp``. A ``tools_to_pricing`` entry for the tool
-        is a floor and is not marked up. With neither source the signed cap is
-        charged in full. The contract rejects a rate over the signed cap and
-        that would abandon the whole batch, so the result is clamped to it.
-
-        :param done_task: the off-chain done task published by task_execution.
-        :param max_rate: the cap the requester signed over, in token base units.
-        :return: the delivery rate to submit, in token base units.
-        """
-        request_id = done_task.get("request_id")
-        candidates: List[int] = []
-        measured = self._measured_cost_in_token_units(done_task)
-        if measured is not None:
-            markup = BASIS_POINTS + self.params.operator_markup_bp
-            candidates.append((measured * markup + BASIS_POINTS - 1) // BASIS_POINTS)
-        floor = done_task.get(MarketplaceData.DYNAMIC_TOOL_COST.value)
-        if floor is not None:
-            candidates.append(int(floor))
-        if not candidates:
+    def _actual_delivery_rate(self, done_task: Dict[str, Any], max_rate: int) -> int:
+        """The stored price for one off-chain request, never above the signed cap."""
+        actual = done_task.get(OffchainDataValue.ACTUAL_DELIVERY_RATE.value)
+        if actual is None:
             self.context.logger.warning(
-                f"No measured cost or tool floor for request {request_id}; "
-                f"charging the signed cap {max_rate}."
+                f"No actual_delivery_rate on done task "
+                f"{done_task.get('request_id')}; charging the signed cap {max_rate}."
             )
             return max_rate
-        actual = max(candidates)
-        if actual > max_rate:
-            self.context.logger.warning(
-                f"Actual rate {actual} for request {request_id} exceeds the "
-                f"signed cap {max_rate}; clamping to the cap."
-            )
-            return max_rate
-        return actual
+        return min(int(actual), max_rate)
 
     def _get_offchain_tasks_deliver_data(
         self,
@@ -2128,7 +2087,7 @@ class TransactionPreparationBehaviour(
                 if self.params.cap_and_actual_enabled:
                     offchain_list_by_sender[sender][
                         OffchainKeys.ACTUAL_RATES.value
-                    ].append(self._compute_actual_delivery_rate(data, max_rate))
+                    ].append(self._actual_delivery_rate(data, max_rate))
 
             for sender, details in offchain_list_by_sender.items():
                 self.context.logger.info(

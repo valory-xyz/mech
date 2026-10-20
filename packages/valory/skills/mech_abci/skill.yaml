@@ -31,8 +31,8 @@ skills:
 - valory/delivery_rate_abci:0.1.0:bafybeibuu57cfyo7d2twwyu7qzybddfot76idmdyy4phv7q2nkfegbxsji
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeid7qa7hn7bku6eq5wzfnft7vfhkzmaedjd4u5tk35vt3qfqjodlmq
-- valory/task_submission_abci:0.1.0:bafybeibawewfobho54dbnwtx4dyrsnq6pd63rtieqn23ziudkifwwr72vu
+- valory/task_execution:0.1.0:bafybeianj4t4emo6dm5rhmtorvxendbbxbv2l4iza5kskfhgmqgq6kdsq4
+- valory/task_submission_abci:0.1.0:bafybeifmoghyfu7wgqnqm6mkrtjzux5pq4g3jpf7vct3ameghsebo3d2aa
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
@@ -138,8 +138,6 @@ models:
       minimum_agent_balance: 100000000000000000
       multisend_address: '0x0000000000000000000000000000000000000000'
       on_chain_service_id: null
-      operator_markup_bp: 2000
-      payment_token_decimals: 18
       polling_interval: 25
       predict_api_events_timeout_seconds: 5.0
       predict_api_events_url: https://mpp.autonolas.tech/mech/events
