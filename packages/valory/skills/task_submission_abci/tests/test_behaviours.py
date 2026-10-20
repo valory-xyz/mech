@@ -2814,31 +2814,38 @@ class TestGetOffchainTasksDeliverData:
         assert tx_list[0]["to"] == "0xMECH"
         assert included == ["r1"]
 
+    def _deliver_calls(
+        self, b: Any, tasks: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Run the deliver-data builder; return the kwargs of each contract call in order."""
+        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
+        calls: List[Dict[str, Any]] = []
+
+        def _capture(*_args: Any, **kwargs: Any) -> Any:
+            calls.append(kwargs)
+            return _gen_returning(msg)()
+
+        with (
+            self._patch_sd(b, tasks),
+            patch.object(b, "get_contract_api_response", side_effect=_capture),
+        ):
+            _run_gen(b._get_offchain_tasks_deliver_data())
+        return calls
+
     def test_flag_off_routes_to_legacy_four_arg_wrapper(self) -> None:
         """Flag off keeps routing to the legacy 4-arg wrapper with no maxRates key.
 
         Protects against the branch drifting on by default and breaking prod
         against the un-redeployed marketplace.
         """
-        b = self._make_b(cap_and_actual_enabled=False)
         task = self._offchain_task("r1")
         task["delivery_rate"] = 100
-        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
-        captured: Dict[str, Any] = {}
-
-        def _capture(*_args: Any, **kwargs: Any) -> Any:
-            captured.update(kwargs)
-            return _gen_returning(msg)()
-
-        with (
-            self._patch_sd(b, [task]),
-            patch.object(b, "get_contract_api_response", side_effect=_capture),
-        ):
-            _run_gen(b._get_offchain_tasks_deliver_data())
-
-        assert captured["contract_callable"] == "get_offchain_deliver_data"
-        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [100]
-        assert OffchainKeys.MAX_RATES_CAMEL.value not in captured
+        (call,) = self._deliver_calls(
+            self._make_b(cap_and_actual_enabled=False), [task]
+        )
+        assert call["contract_callable"] == "get_offchain_deliver_data"
+        assert call[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [100]
+        assert OffchainKeys.MAX_RATES_CAMEL.value not in call
 
     def test_flag_on_routes_to_cap_wrapper_with_max_and_delivery_rates(self) -> None:
         """Flag on routes to the 5-arg wrapper with both maxRates and deliveryRates.
@@ -2847,53 +2854,25 @@ class TestGetOffchainTasksDeliverData:
         task_execution stored on the done task. Guards against silently
         reverting to the 4-arg path, or dropping either array.
         """
-        b = self._make_b(cap_and_actual_enabled=True)
         task = self._offchain_task("r1")
-        task["delivery_rate"] = 100
-        task["actual_delivery_rate"] = 60
-        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
-        captured: Dict[str, Any] = {}
+        task["delivery_rate"], task["actual_delivery_rate"] = 100, 60
+        (call,) = self._deliver_calls(self._make_b(cap_and_actual_enabled=True), [task])
+        assert call["contract_callable"] == "get_offchain_deliver_data_with_cap"
+        assert call[OffchainKeys.MAX_RATES_CAMEL.value] == [100]
+        assert call[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [60]
 
-        def _capture(*_args: Any, **kwargs: Any) -> Any:
-            captured.update(kwargs)
-            return _gen_returning(msg)()
-
-        with (
-            self._patch_sd(b, [task]),
-            patch.object(b, "get_contract_api_response", side_effect=_capture),
-        ):
-            _run_gen(b._get_offchain_tasks_deliver_data())
-
-        assert captured["contract_callable"] == "get_offchain_deliver_data_with_cap"
-        assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [100]
-        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [60]
-
-    def test_flag_on_clamps_delivery_rate_at_zero_for_free_requests(self) -> None:
-        """Flag-on path charges 0 for a signed cap of 0 even when the stored price is higher.
+    def test_flag_on_clamps_stored_price_to_a_zero_cap(self) -> None:
+        """A signed cap of 0 is charged 0 even when the stored price is higher.
 
         A rate above the cap would make the contract reject the whole batch
         for the period, including any other requests grouped under the same
         sender.
         """
-        b = self._make_b(cap_and_actual_enabled=True)
         task = self._offchain_task("r1")
-        task["delivery_rate"] = 0
-        task["actual_delivery_rate"] = 60
-        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
-        captured: Dict[str, Any] = {}
-
-        def _capture(*_args: Any, **kwargs: Any) -> Any:
-            captured.update(kwargs)
-            return _gen_returning(msg)()
-
-        with (
-            self._patch_sd(b, [task]),
-            patch.object(b, "get_contract_api_response", side_effect=_capture),
-        ):
-            _run_gen(b._get_offchain_tasks_deliver_data())
-
-        assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [0]
-        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [0]
+        task["delivery_rate"], task["actual_delivery_rate"] = 0, 60
+        (call,) = self._deliver_calls(self._make_b(cap_and_actual_enabled=True), [task])
+        assert call[OffchainKeys.MAX_RATES_CAMEL.value] == [0]
+        assert call[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [0]
 
     def test_flag_off_does_not_read_stored_price(self) -> None:
         """Flag off never consults the stored price, so the legacy path is byte-identical."""
@@ -2931,28 +2910,43 @@ class TestGetOffchainTasksDeliverData:
         assert b._actual_delivery_rate(task, max_rate=70) == 70
         b.context.logger.warning.assert_called_once()
 
-    def test_two_requests_from_one_sender_keep_their_own_rates(self) -> None:
-        """Per-request rates stay positionally aligned with maxRates within a sender group."""
+    def test_batch_keeps_rates_aligned_per_sender(self) -> None:
+        """Two senders, out-of-order nonces, priced / clamped / unpriced tasks.
+
+        Within each sender group ``deliveryRates[i]`` and ``maxRates[i]`` must
+        line up with ``deliverWithSignatures[i]`` after nonce ordering, and
+        the unpriced task is charged its cap with a warning.
+        """
         b = self._make_b(cap_and_actual_enabled=True)
-        first = self._offchain_task("r1", nonce=1)
-        first["delivery_rate"], first["actual_delivery_rate"] = 100, 60
-        second = self._offchain_task("r2", nonce=2)
-        second["delivery_rate"], second["actual_delivery_rate"] = 200, 150
-        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
-        captured: Dict[str, Any] = {}
+        b.context.logger = MagicMock()
+        a2 = self._offchain_task("a2", sender="0xA", nonce=2)
+        a2["ipfs_hash"], a2["delivery_rate"], a2["actual_delivery_rate"] = (
+            "0x" + "02" * 16,
+            200,
+            150,
+        )
+        a1 = self._offchain_task("a1", sender="0xA", nonce=1)
+        a1["ipfs_hash"], a1["delivery_rate"], a1["actual_delivery_rate"] = (
+            "0x" + "01" * 16,
+            100,
+            300,
+        )
+        b1 = self._offchain_task("b1", sender="0xB", nonce=5)
+        b1["delivery_rate"] = 70
 
-        def _capture(*_args: Any, **kwargs: Any) -> Any:
-            captured.update(kwargs)
-            return _gen_returning(msg)()
+        calls = {c["requester"]: c for c in self._deliver_calls(b, [a2, b1, a1])}
 
-        with (
-            self._patch_sd(b, [second, first]),
-            patch.object(b, "get_contract_api_response", side_effect=_capture),
-        ):
-            _run_gen(b._get_offchain_tasks_deliver_data())
-
-        assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [100, 200]
-        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [60, 150]
+        group_a = calls["0xA"]
+        assert group_a[OffchainKeys.MAX_RATES_CAMEL.value] == [100, 200]
+        assert group_a[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [100, 150]
+        assert [
+            d["requestData"]
+            for d in group_a[OffchainKeys.DELIVER_WITH_SIGNATURES.value]
+        ] == [bytes.fromhex("01" * 16), bytes.fromhex("02" * 16)]
+        group_b = calls["0xB"]
+        assert group_b[OffchainKeys.MAX_RATES_CAMEL.value] == [70]
+        assert group_b[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [70]
+        b.context.logger.warning.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

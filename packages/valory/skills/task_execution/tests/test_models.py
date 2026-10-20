@@ -102,6 +102,61 @@ def test_params_marketplace_flag_true(params_kwargs: Dict[str, Any]) -> None:
     assert p.use_mech_marketplace is True
 
 
+def test_params_price_inputs_default(params_kwargs: Dict[str, Any]) -> None:
+    """Price inputs default to 18 decimals, no fixed share and a 15% fee."""
+    for key in (
+        "payment_token_decimals",
+        "fixed_cost_per_request",
+        "marketplace_fee_bp",
+    ):
+        params_kwargs.pop(key, None)
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert (
+        p.payment_token_decimals,
+        p.fixed_cost_per_request,
+        p.marketplace_fee_bp,
+    ) == (
+        18,
+        0,
+        1500,
+    )
+
+
+def test_params_price_inputs_keep_explicit_zero(params_kwargs: Dict[str, Any]) -> None:
+    """An explicit 0 fee or 0 fixed share stays 0 instead of falling back to the default."""
+    params_kwargs.update(
+        payment_token_decimals=6, fixed_cost_per_request=0, marketplace_fee_bp=0
+    )
+    p: m.Params = m.Params(name="params", **params_kwargs)
+    assert (
+        p.payment_token_decimals,
+        p.fixed_cost_per_request,
+        p.marketplace_fee_bp,
+    ) == (
+        6,
+        0,
+        0,
+    )
+
+
+@pytest.mark.parametrize(
+    "field, value",
+    [
+        ("payment_token_decimals", 5),
+        ("fixed_cost_per_request", -1),
+        ("marketplace_fee_bp", 10_000),
+        ("marketplace_fee_bp", -1),
+    ],
+)
+def test_params_price_inputs_reject_out_of_range(
+    params_kwargs: Dict[str, Any], field: str, value: int
+) -> None:
+    """Decimals below 6, a negative fixed share, or a fee outside [0, 10000) are refused."""
+    params_kwargs[field] = value
+    with pytest.raises(AEAEnforceError, match=field):
+        m.Params(name="params", **params_kwargs)
+
+
 def test_params_tools_pricing_keys_match_ok(params_kwargs: Dict[str, Any]) -> None:
     """
     When tools_to_pricing keys match tools_to_package_hash, initialization succeeds.

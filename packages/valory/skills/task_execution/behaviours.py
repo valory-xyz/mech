@@ -1930,27 +1930,40 @@ class TaskExecutionBehaviour(SimpleBehaviour):
     def _measured_cost_in_asset_units(self, done_task: Dict[str, Any]) -> Optional[int]:
         """Tool spend from ``cost_dict`` in payment-asset units; None if none reported."""
         cost_dict = done_task.get("cost_dict")
-        if not isinstance(cost_dict, dict) or cost_dict.get("total_cost") is None:
+        if not isinstance(cost_dict, dict):
             return None
-        usd = Decimal(str(cost_dict["total_cost"]))
+        total_cost = cost_dict.get("total_cost")
+        if total_cost is None:
+            return None
+        if (
+            isinstance(total_cost, bool)
+            or not isinstance(total_cost, (int, float))
+            or not math.isfinite(total_cost)
+            or total_cost < 0
+        ):
+            self.context.logger.warning(
+                f"Ignoring unusable total_cost {total_cost!r} for request "
+                f"{done_task.get('request_id')}."
+            )
+            return None
+        # A callback the tool never invoked still carries the zeroed default
+        # dict; that is "not measured", not a free run.
+        if total_cost == 0 and not cost_dict.get("total_tokens"):
+            return None
+        usd = Decimal(str(total_cost))
         scaled = usd * (10**self.params.payment_token_decimals)
         return int(scaled.to_integral_value(rounding=ROUND_CEILING))
 
     def _price_done_task(
         self, done_task: Dict[str, Any], cap: Optional[int]
     ) -> Optional[int]:
-        """Rate to charge for a done task, in payment-asset units.
+        """Price for a done task: ``(V + F) / (1 - fee)``, floored and capped.
 
-        ``price = (V + F) / (1 - fee)``: the measured tool spend V plus the
-        fleet-wide hosting share F, grossed up for the marketplace fee taken at
-        payout. The tool's ``tools_to_pricing`` entry is a floor. With neither a
-        measured cost nor a floor the signed cap is charged. The result never
-        exceeds the cap the requester signed, since the contract rejects that.
-
-        :param done_task: the done task, carrying ``cost_dict`` and
-            ``dynamic_tool_cost``.
+        :param done_task: the done task, carrying ``cost_dict`` (V) and
+            ``dynamic_tool_cost`` (the ``tools_to_pricing`` floor).
         :param cap: the rate the requester signed, or None when unknown.
-        :return: the delivery rate, or None when there is no signed rate.
+        :return: the rate in payment-asset units, never above ``cap``; the cap
+            itself with neither a measured cost nor a floor; None without a cap.
         """
         if cap is None:
             return None

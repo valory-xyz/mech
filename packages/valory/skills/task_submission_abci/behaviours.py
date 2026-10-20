@@ -2099,33 +2099,21 @@ class TransactionPreparationBehaviour(
                 ]
                 max_rates = details[OffchainKeys.MAX_RATES.value]
 
-                # Flag-gated route to the 5-arg cap-and-actual overload. Off by
-                # default, so the mech keeps calling the legacy 4-arg wrapper
-                # (same byte-for-byte behaviour as before this branch landed)
-                # until the marketplace redeploy carries the overload and the
-                # operator flips cap_and_actual_enabled per-service.
+                # Flag off: the legacy 4-arg call charges the signed value.
+                contract_data: Dict[str, Any] = {
+                    SENDER: self.synchronized_data.safe_contract_address,
+                    REQUESTER_KEY: sender,
+                    OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
+                    OffchainKeys.DELIVERY_RATES_CAMEL.value: max_rates,
+                    OffchainKeys.PAYMENT_DATA.value: b"",
+                }
+                contract_callable = "get_offchain_deliver_data"
                 if self.params.cap_and_actual_enabled:
-                    delivery_rates = details[OffchainKeys.ACTUAL_RATES.value]
-                    contract_data = {
-                        SENDER: self.synchronized_data.safe_contract_address,
-                        REQUESTER_KEY: sender,
-                        OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
-                        OffchainKeys.DELIVERY_RATES_CAMEL.value: delivery_rates,
-                        OffchainKeys.MAX_RATES_CAMEL.value: max_rates,
-                        OffchainKeys.PAYMENT_DATA.value: b"",
-                    }
+                    contract_data[OffchainKeys.DELIVERY_RATES_CAMEL.value] = details[
+                        OffchainKeys.ACTUAL_RATES.value
+                    ]
+                    contract_data[OffchainKeys.MAX_RATES_CAMEL.value] = max_rates
                     contract_callable = "get_offchain_deliver_data_with_cap"
-                else:
-                    # Legacy 4-arg path: the signed per-request value doubles as
-                    # the charged rate (no cap-and-actual distinction).
-                    contract_data = {
-                        SENDER: self.synchronized_data.safe_contract_address,
-                        REQUESTER_KEY: sender,
-                        OffchainKeys.DELIVER_WITH_SIGNATURES.value: deliver_with_signatures,
-                        OffchainKeys.DELIVERY_RATES_CAMEL.value: max_rates,
-                        OffchainKeys.PAYMENT_DATA.value: b"",
-                    }
-                    contract_callable = "get_offchain_deliver_data"
 
                 self.context.logger.info(
                     f"Preparing deliver with signature data: {contract_data}"

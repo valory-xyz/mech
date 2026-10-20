@@ -36,6 +36,9 @@ _CAP_OVERLOAD_SIGNATURE = (
     "deliverMarketplaceWithSignatures("
     "address,(bytes,bytes,bytes)[],uint256[],uint256[],bytes)"
 )
+_LEGACY_OVERLOAD_SIGNATURE = (
+    "deliverMarketplaceWithSignatures(address,(bytes,bytes,bytes)[],uint256[],bytes)"
+)
 
 
 def _web3_contract() -> object:
@@ -100,3 +103,38 @@ class TestGetOffchainDeliverDataWithCap:
         assert decoded[0].lower() == _REQUESTER.lower()
         assert list(decoded[2]) == [99]
         assert list(decoded[3]) == [100]
+
+
+class TestGetOffchainDeliverDataLegacy:
+    """`get_offchain_deliver_data` keeps resolving the 4-arg overload against the refreshed ABI."""
+
+    def test_calldata_selects_the_four_arg_overload(self) -> None:
+        """First 4 bytes match the legacy 4-arg signature's selector.
+
+        The refreshed ABI carries three overloads; the bare-name lookup the
+        flag-off path relies on must keep picking the 4-arg one.
+        """
+        deliver_with_sigs = [
+            {
+                "requestData": b"\xaa" * 32,
+                "signature": b"\xbb" * 65,
+                "deliveryData": b"\xcc" * 32,
+            }
+        ]
+        with (
+            patch.object(
+                OlasMechContract, "get_instance", return_value=_web3_contract()
+            ),
+            patch.object(OlasMechContract, "simulate_tx", return_value={"data": True}),
+        ):
+            result = OlasMechContract.get_offchain_deliver_data(
+                ledger_api=None,  # patched away via get_instance / simulate_tx
+                contract_address=_MECH,
+                sender=_SENDER,
+                requester=_REQUESTER,
+                deliverWithSignatures=deliver_with_sigs,
+                deliveryRates=[100],
+                paymentData=b"",
+            )
+        expected = Web3().keccak(text=_LEGACY_OVERLOAD_SIGNATURE).hex()[:8]
+        assert result["data"][:4].hex() == expected

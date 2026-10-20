@@ -5026,20 +5026,16 @@ def test_price_rounds_fee_gross_up_up(behaviour: Any, params_stub: Any) -> None:
     assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 2
 
 
-def test_price_floor_wins_over_lower_measured_cost(
-    behaviour: Any, params_stub: Any
+@pytest.mark.parametrize(
+    "floor, expected", [(800_000, 800_000), (10, 500_000), (500_000, 500_000)]
+)
+def test_price_is_the_higher_of_computed_and_floor(
+    behaviour: Any, params_stub: Any, floor: int, expected: int
 ) -> None:
-    """A tools_to_pricing floor above the computed price is charged as-is."""
+    """The tools_to_pricing floor wins when higher; the computed price otherwise."""
     _set_price_params(params_stub, decimals=6)
-    task = _priced_task(cost_dict={"total_cost": 0.5}, dynamic_tool_cost=800_000)
-    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 800_000
-
-
-def test_price_measured_wins_over_lower_floor(behaviour: Any, params_stub: Any) -> None:
-    """The computed price is charged when it exceeds the floor."""
-    _set_price_params(params_stub, decimals=6)
-    task = _priced_task(cost_dict={"total_cost": 0.5}, dynamic_tool_cost=10)
-    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 500_000
+    task = _priced_task(cost_dict={"total_cost": 0.5}, dynamic_tool_cost=floor)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == expected
 
 
 def test_price_clamps_to_cap_and_warns(behaviour: Any, params_stub: Any) -> None:
@@ -5073,16 +5069,41 @@ def test_price_treats_cost_dict_without_total_as_no_cost(
     assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 30
 
 
-def test_price_zero_cost_charges_only_the_fixed_share(
+def test_price_zero_cost_with_tokens_charges_only_the_fixed_share(
     behaviour: Any, params_stub: Any
 ) -> None:
-    """A reported cost of 0 charges F grossed up, not the cap; 0 when F is 0."""
+    """A measured run that cost 0 charges F grossed up, not the cap; 0 when F is 0."""
     _set_price_params(params_stub, decimals=6, fixed=12_000, fee_bp=1500)
-    task = _priced_task(cost_dict={"total_cost": 0.0})
+    task = _priced_task(cost_dict={"total_cost": 0.0, "total_tokens": 120})
     # 12_000 * 10_000 / 8_500 = 14_117.6 -> 14_118
     assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 14_118
     _set_price_params(params_stub, decimals=6)
     assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 0
+
+
+def test_price_treats_an_unused_callback_as_not_measured(
+    behaviour: Any, params_stub: Any
+) -> None:
+    """An untouched callback's zeroed dict is 'not measured': floor or cap, not free."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    pristine = beh_mod.TokenCounterCallback().cost_dict
+    assert behaviour._price_done_task(_priced_task(cost_dict=pristine), 70) == 70
+    behaviour.context.logger.warning.assert_called_once()
+    floored = _priced_task(cost_dict=pristine, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(floored, 70) == 30
+
+
+@pytest.mark.parametrize("total_cost", ["0.5", float("nan"), float("inf"), -0.01, True])
+def test_price_ignores_unusable_total_cost(
+    behaviour: Any, params_stub: Any, total_cost: Any
+) -> None:
+    """Unusable total_cost values are ignored with a warning, never raised on."""
+    _set_price_params(params_stub, decimals=6)
+    behaviour.context.logger = MagicMock()
+    task = _priced_task(cost_dict={"total_cost": total_cost}, dynamic_tool_cost=30)
+    assert behaviour._price_done_task(task, CAP_ONE_USD_6DEC) == 30
+    behaviour.context.logger.warning.assert_called_once()
 
 
 def test_price_is_none_without_a_signed_rate(behaviour: Any, params_stub: Any) -> None:

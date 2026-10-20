@@ -260,13 +260,9 @@ class Params(Model):
             self._ensure_same_keys(
                 kwargs, self.tools_to_package_hash, self.tools_to_pricing
             )
-        # Cap-and-actual price inputs. USD amounts scale into the mech's payment
-        # asset by ``payment_token_decimals`` (18 for native coins, 6 for
-        # USDC-style tokens); the asset is assumed to be worth 1 USD.
-        # ``fixed_cost_per_request`` is the fleet-wide hosting share per request
-        # in USD with ``USD_DECIMALS`` decimals. ``marketplace_fee_bp`` is the
-        # marketplace fee taken at payout, grossed up so the mech nets V + F.
-        # ``or`` is avoided throughout so an explicit 0 stays 0.
+        # Price inputs for TaskExecutionBehaviour._price_done_task. USD amounts
+        # scale by payment_token_decimals (the asset is assumed worth 1 USD);
+        # fixed_cost_per_request is USD with USD_DECIMALS decimals.
         raw_decimals = kwargs.get("payment_token_decimals")
         self.payment_token_decimals: int = (
             18 if raw_decimals is None else int(raw_decimals)

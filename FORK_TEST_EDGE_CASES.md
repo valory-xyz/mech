@@ -9,18 +9,22 @@ mostly in this repo, a few in sister repos.
 
 ## Pricing
 
-- Resolved: on the flag-on path `deliveryRates[i]` is the measured tool cost
-  (`cost_dict.total_cost`, USD cents) scaled by `payment_token_decimals`,
-  marked up by `operator_markup_bp`, floored by the tool's `tools_to_pricing`
-  entry (not marked up), and clamped to the signed cap with a warning. See
-  `TransactionPreparationBehaviour._compute_actual_delivery_rate`.
-- A tool that reports `total_cost == 0` and has no `tools_to_pricing` floor
-  is delivered for free. Operators who want a minimum must set the floor.
-- A tool that reports no cost and has no floor is charged the full cap, with
-  a warning. Worth a Prometheus counter once the metrics follow-up lands.
-- `payment_token_decimals` assumes the payment token trades at 1 USD. A
-  native mech on a non-stable token (POL) needs a price source before the
-  flag is flipped there.
+- `delivery_rates = [max_rate - 1 for max_rate in max_rates]` in
+  `_get_offchain_tasks_deliver_data` is a fork-test value only. It charges
+  every requester 1 wei under their signed cap. Replace with the real
+  per-tool cost — the number already lives in `TokenCounterCallback` /
+  `get_cost_for_done_task` on the task-execution side, just not threaded
+  down to the settlement batch today.
+- Decide the thread. Simplest shape: carry the per-request actual cost on
+  the done-task dict next to `delivery_rate` and read it out in
+  `_get_offchain_tasks_deliver_data`.
+- Floor + markup policy: operator-configurable, probably `models.py` /
+  `skill.yaml`. Open question whether a floor is per-tool, per-mech, or
+  flat.
+- Guard against `actual > max` client-side as well. The contract reverts
+  with `RateOverCap`, which is correct, but the mech should never submit
+  that batch in the first place — add a `clip to cap` or `drop + log`
+  policy.
 
 ## Client-side
 

@@ -22,7 +22,7 @@ connections: []
 contracts:
 - valory/gnosis_safe:0.1.0:bafybeiek7zs3r5c4wspwwuvnhunc2ddvccbsuy3xccedbjffju5eywp3ju
 - valory/multisend:0.1.0:bafybeifqtf24h7lhhbairveqmq2klhvbswajmbpoyqj4xrgye7c22pxubi
-- valory/olas_mech:0.1.0:bafybeihdqquiuqnga2kg3dt7csa4r2gzs4jckofwagisvpgsdflbcky52m
+- valory/olas_mech:0.1.0:bafybeibvafx574szo2ivkmfdi2vglwnszf5anwskbm4joy3ribvwq5anry
 protocols:
 - valory/acn_data_share:0.1.0:bafybeieqisfr6lhaaesq37lk7vyaxza2h6nucshksgyo2djqfyf2saqo4i
 - valory/contract_api:1.0.0:bafybeibld2xb5m7kyluiptkamp4nrt6oeomkohz7a3yppbv2oo7qw2e4la
