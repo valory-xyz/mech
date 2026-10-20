@@ -10,7 +10,7 @@ fingerprint:
   build/AgentMech.json: bafybeidie5a36ane2tei7jkyefnah73eaxcfb7cofxwstifzyakcyvyghy
   contract.py: bafybeiavlv23vom6cppmbandqub2gdzb6s3uu5q6psuhgtliry7v2uv76y
   tests/__init__.py: bafybeigs2gce4kkhgh4tf5e7mls2gcjq6j343d6usa3les75euruwvonre
-  tests/test_contract.py: bafybeiduzmbeesuj5gos4wmhp67kfbmlkbfeyuvcnahwtmvosr4hw5bwd4
+  tests/test_contract.py: bafybeidn4yku76dhfehygjb5p42tjxkzpltzutgqot4qosf3unu6mfqmly
 fingerprint_ignore_patterns: []
 class_name: OlasMechContract
 contract_interface_paths:

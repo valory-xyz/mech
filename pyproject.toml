@@ -68,6 +68,7 @@ override-dependencies = ["cffi<2.1"]
 pytest_targets = [
     "packages/valory/contracts/balance_tracker/tests",
     "packages/valory/contracts/balance_tracker_fixed_price_native/tests",
+    "packages/valory/contracts/olas_mech/tests",
     "packages/valory/skills/mech_abci/tests",
     "packages/valory/skills/task_submission_abci/tests",
     "packages/valory/skills/task_execution/tests",
