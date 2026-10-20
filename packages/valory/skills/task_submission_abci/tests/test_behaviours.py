@@ -2814,6 +2814,59 @@ class TestGetOffchainTasksDeliverData:
         assert tx_list[0]["to"] == "0xMECH"
         assert included == ["r1"]
 
+    def test_calls_cap_wrapper_with_max_and_delivery_rates(self) -> None:
+        """The behaviour routes to the 5-arg overload wrapper and passes
+        both maxRates (equal to the signed rate on the request) and
+        deliveryRates (one less, clamped at 0). Guards against silently
+        reverting to the 4-arg path, or dropping either array.
+        """
+        b = self._make_b()
+        task = self._offchain_task("r1")
+        task["delivery_rate"] = 100
+        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
+        captured: Dict[str, Any] = {}
+
+        def _capture(*_args: Any, **kwargs: Any) -> Any:
+            captured.update(kwargs)
+            return _gen_returning(msg)()
+
+        with (
+            self._patch_sd(b, [task]),
+            patch.object(b, "get_contract_api_response", side_effect=_capture),
+        ):
+            _run_gen(b._get_offchain_tasks_deliver_data())
+
+        assert captured["contract_callable"] == "get_offchain_deliver_data_with_cap"
+        assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [100]
+        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [99]
+
+    def test_delivery_rate_clamped_at_zero_for_free_requests(self) -> None:
+        """A signed rate of 0 (free task) must not underflow to -1.
+
+        -1 would fail uint256 encoding in the contract wrapper and
+        abandon the whole off-chain batch for the period, including any
+        other requests that happened to be grouped under the same
+        sender.
+        """
+        b = self._make_b()
+        task = self._offchain_task("r1")
+        task["delivery_rate"] = 0
+        msg = _state_contract_msg({"data": b"\xdd", "simulation_ok": True})
+        captured: Dict[str, Any] = {}
+
+        def _capture(*_args: Any, **kwargs: Any) -> Any:
+            captured.update(kwargs)
+            return _gen_returning(msg)()
+
+        with (
+            self._patch_sd(b, [task]),
+            patch.object(b, "get_contract_api_response", side_effect=_capture),
+        ):
+            _run_gen(b._get_offchain_tasks_deliver_data())
+
+        assert captured[OffchainKeys.MAX_RATES_CAMEL.value] == [0]
+        assert captured[OffchainKeys.DELIVERY_RATES_CAMEL.value] == [0]
+
 
 # ---------------------------------------------------------------------------
 # TransactionPreparationBehaviour._get_is_nvm_mech / _get_encoded_deliver_data

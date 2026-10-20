@@ -7,8 +7,10 @@ license: Apache-2.0
 aea_version: '>=2.0.0, <3.0.0'
 fingerprint:
   __init__.py: bafybeihlplpj6vl7iovtja5zzrhz6gm2ixtvvhmxgbnvpola3kkj2ma7uq
-  build/AgentMech.json: bafybeigtikt7m5nyhlsxscgfciejkfvot56a7gbwe2og6dziwzvgkvo7hq
+  build/AgentMech.json: bafybeidie5a36ane2tei7jkyefnah73eaxcfb7cofxwstifzyakcyvyghy
   contract.py: bafybeiavlv23vom6cppmbandqub2gdzb6s3uu5q6psuhgtliry7v2uv76y
+  tests/__init__.py: bafybeigs2gce4kkhgh4tf5e7mls2gcjq6j343d6usa3les75euruwvonre
+  tests/test_contract.py: bafybeiduzmbeesuj5gos4wmhp67kfbmlkbfeyuvcnahwtmvosr4hw5bwd4
 fingerprint_ignore_patterns: []
 class_name: OlasMechContract
 contract_interface_paths:

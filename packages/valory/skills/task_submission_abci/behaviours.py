@@ -2079,13 +2079,12 @@ class TransactionPreparationBehaviour(
                     OffchainKeys.DELIVER_WITH_SIGNATURES.value
                 ]
                 max_rates = details[OffchainKeys.MAX_RATES.value]
-                # FORK TEST VALUE ONLY: charge one wei under the signed cap
-                # on every request so the cap-and-actual path is exercised
-                # end-to-end (contract require check + BalanceTracker charging
-                # the actual, not the cap). Replace with the real per-tool
-                # cost from TokenCounterCallback before anything beyond the
-                # fork test — see FORK_TEST_EDGE_CASES.md.
-                delivery_rates = [max_rate - 1 for max_rate in max_rates]
+                # Fork-test placeholder — real per-tool cost source is tracked
+                # in FORK_TEST_EDGE_CASES.md. Clamp at 0 because
+                # MIN_DELIVERY_RATE = 0 is accepted for free tasks and an
+                # unclamped `m - 1` would be -1, failing uint256 encoding and
+                # abandoning the whole off-chain batch for the period.
+                delivery_rates = [max(max_rate - 1, 0) for max_rate in max_rates]
 
                 contract_data = {
                     SENDER: self.synchronized_data.safe_contract_address,

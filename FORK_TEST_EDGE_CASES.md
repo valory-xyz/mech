@@ -49,16 +49,12 @@ mostly in this repo, a few in sister repos.
 
 ## Mech plumbing
 
-- `autonomy packages lock` + `autonomy push-all` once the shape is final.
-  CI `check-hash` fails otherwise. See
-  `~/.claude/rules/autonomy-packages-lock-and-push.md`.
-- ABI refresh — DONE locally. `packages/valory/contracts/olas_mech/build/AgentMech.json`
-  was swapped with the `MechFixedPriceNative` artifact compiled from
-  autonolas-marketplace `origin/main` (commit a939810), picking up all three
-  `deliverMarketplaceWithSignatures` overloads (4-arg legacy, 5-arg cap,
-  6-arg cap+nonces). Original kept at `.bak` for rollback. This swap is
-  temporary — the shipped flow is to refresh the ABI from the artifact the
-  autonolas-marketplace team publishes when the marketplace redeploys.
+- `autonomy packages lock` + `autonomy push-all` after any package change
+  so CI `check-hash` stays green.
+- ABI refresh — the shipped `AgentMech.json` carries the three overloads
+  (4-arg legacy, 5-arg cap, 6-arg cap + nonces) from the compiled
+  `MechFixedPriceNative` artifact; refresh again when the marketplace
+  redeploys and publishes new artifacts.
 - The on-chain marketplace path in `_get_marketplace_tasks_deliver_data`
   (same file) is untouched. If/when on-chain requests also move to
   cap-and-actual, that path needs the same treatment.
@@ -68,14 +64,15 @@ mostly in this repo, a few in sister repos.
 - Settlement retry currently rebuilds the batch; confirm it rebuilds with
   the same `maxRates` the signatures covered, not a recomputed value.
 - No code today reads the preimage buffer back into the deliver batch
-  after a restart. Out of scope here — tracked in the separate kv-store
-  drainer note (ref: `reference_kv_store_durability_note.md`).
+  after a restart. Out of scope here — tracked separately as the kv-store
+  drainer follow-up.
 
 ## Testing surface
 
-- Fork setup: Anvil fork of Gnosis, deploy the updated `MechMarketplace`
-  + `OlasMech` from autonolas-marketplace HEAD, point one dev-mech agent
-  at the fork RPC.
+- Fork setup: Hardhat deploy scripts (in `autonolas-marketplace`) run
+  against a local Anvil node forking Polygon mainnet, point one dev-mech
+  agent at the fork RPC. Details and gotchas: see the comment thread on
+  valory-xyz/mech#501.
 - First assertion: Deliver event emits with the actual rate (one wei
   below the cap), BalanceTracker debit equals the actual.
 - Second assertion: force a `delivery_rate > max_rate` payload (temporary

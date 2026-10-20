@@ -28,11 +28,11 @@ protocols:
 - valory/http:1.0.0:bafybeidxkp3vga7t6x2pbt2tpkgyaxa5bgpdgryao54py7w3yxyzr7neoy
 skills:
 - valory/abstract_round_abci:0.1.0:bafybeifkxnvvgsldkb4rgejsoon2mvrmrnl7asy2nhenwss7hpwg3myflu
-- valory/delivery_rate_abci:0.1.0:bafybeiahpgfjclhjcl7xzmft3wkpzhnmm772e6ubxcthyz2ut6l6wxzsm4
+- valory/delivery_rate_abci:0.1.0:bafybeibnfudd53h42oqnvwmke2cchu4r5qfvsi5dwcdn5x4z3znhhxq264
 - valory/registration_abci:0.1.0:bafybeif4n2esdjvquomdkwktv7eolepskpo5jlqrfda2abxjqzy2ljsxzi
 - valory/reset_pause_abci:0.1.0:bafybeifrnmlscfiki7wojs6zasppefupd2wkjyq6orhdllfppjud7isrxi
-- valory/task_execution:0.1.0:bafybeidfuvaw27wbywi5tf2wmhybh77xqfaagmdqad7z7d2wta765swl4q
-- valory/task_submission_abci:0.1.0:bafybeigokynavdmhq6yfj4o3zxzjb2rya764qo4dzmusqovuil4nclu7mq
+- valory/task_execution:0.1.0:bafybeidelfhaqagvawibopf4nhk6bew7fjz66hhaco5yu46cgyr7vw4iz4
+- valory/task_submission_abci:0.1.0:bafybeifp46cycg3rrzq2j2gfci4gnwiyymupkrjc4ro3nd6r6a6digqj7q
 - valory/termination_abci:0.1.0:bafybeih6sa2ttcvvjk7rcfn7ure2ws23kcfufssb4qmluzcfvednkfpvoi
 - valory/transaction_settlement_abci:0.1.0:bafybeihizaapype5sz7vlosms3nfo6jzfj4ujycuf5uthviq2otvmw6f6m
 behaviours:
